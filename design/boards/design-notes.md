@@ -1126,8 +1126,9 @@ WORK_ITEM_TYPES })`) and compile it — so the **grammar/compiler/board read
   > "Untyped" bucket = the registry's `IS NULL` / not-empty pair, drawn with a
   > faint dashed-circle glyph (`--el-text-faint`). Owned by the new subtask
   > **6.15.5**; the design above (panel 1, the Work type group between Kind and
-  > Status) is its layout authority. (The shipped popover keeps its scrolling
-  > `max-height`; the mock shows the list expanded so the facet is visible.)
+  > Status) is its layout authority. (The popover SCROLLS at a fixed
+  > `max-height` — it does not grow to fit every facet; text + Kind + the start
+  > of Work type are in view, Status / Assignee scroll below the fold.)
 
 - **`IssueAdvancedFilter` / `FilterConditionBuilder`** — the `[Advanced]`
   builder trigger (`i-funnel-plus`), for the structured 6.1 condition builder.

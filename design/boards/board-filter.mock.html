@@ -262,7 +262,7 @@
         overflow: visible;
       }
       .stage.is-pop .page {
-        min-height: 980px;
+        min-height: 560px;
       }
 
       /* ── Page shell — header + toolbar (mirrors app/(authed)/boards/page.tsx) ── */
@@ -465,10 +465,10 @@
         text-decoration: none;
       }
       .fp-body {
-        /* Shipped popover keeps a scrolling cap (~440px); the mock shows the
-           full facet list expanded so every group (incl. the 6.15 Work type
-           facet) is visible in the PNG export. */
-        max-height: 880px;
+        /* The popover SCROLLS at a fixed cap — it does NOT grow to show every
+           facet at once. Text + Kind + the start of the Work type facet are in
+           view; Status / Assignee (and the rest of Work type) are below the fold. */
+        max-height: 440px;
         overflow-y: auto;
         padding: 6px;
       }
