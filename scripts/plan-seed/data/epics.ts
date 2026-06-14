@@ -1887,6 +1887,87 @@ export const EPICS: EpicMeta[] = [
           'declaring the surface list complete.',
       },
       {
+        id: 'bug-filters-directory-name-link-hover-aa-contrast',
+        kind: 'bug',
+        title:
+          'Filters directory (/filters): the filter-name link on a HOVERED row fails AA contrast — --el-link (#0075de) on --el-surface-soft (#fafaf9) is 4.37:1 (needs 4.5:1)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
+          '**Surface:** the saved-filters directory page `/filters` — the ' +
+          '`ApplyNameButton` filter-name cell in ' +
+          '`app/(authed)/filters/_components/FiltersDirectory.tsx` (Story 6.2 · ' +
+          'Subtask 6.2.4) · **Status:** open · **Reported by:** axe sweep in ' +
+          '`tests/e2e/saved-filters.spec.ts` (the dependents-warning test).\n\n' +
+          'The filter-name cell renders the name as a hover-underlined link:\n' +
+          '`<span class="truncate font-medium text-(--el-text) ' +
+          'group-hover:text-(--el-link) group-hover:underline">…</span>` inside a row ' +
+          'with `hover:bg-(--el-surface-soft)`. On HOVER the text turns ' +
+          '`--el-link` (`#0075de`) while the row background turns ' +
+          '`--el-surface-soft` (`#fafaf9`). That pair computes to **4.37:1**, below the ' +
+          'WCAG 2.1 AA threshold of **4.5:1** for normal-weight text at 14px (10.5pt). ' +
+          'axe flags it as a `color-contrast` violation on the name link (e.g. the ' +
+          'built-in "Done issues" row).\n\n' +
+          '**Why it surfaced intermittently (and why it is NOT the modal-clip bug PR).** ' +
+          'The bad colour only applies on `group-hover`, so axe trips ONLY when the ' +
+          'cursor happens to rest on a name row at the moment of the directory a11y ' +
+          'sweep. That is cursor-position-dependent, so the same spec passed on the ' +
+          'green `main` run at the base commit and failed on an UNRELATED PR ' +
+          '(`bug-sprint-report-modal-clipped-burndown`, PR #1036) whose diff touches ' +
+          'only `CompleteSprintDialog` + the sprint-lifecycle spec. The underlying ' +
+          'contrast deficit is a real shipped AA bug; the intermittent trigger is a ' +
+          'separate spec-robustness smell (the directory axe sweep should normalise the ' +
+          'pointer / not depend on a hover state) — fix both.\n\n' +
+          '**Repro.** Open `/filters` (the saved-filters directory), hover any filter ' +
+          'name row, and run an axe `color-contrast` check (or read the rendered colour ' +
+          'pair): `#0075de` on `#fafaf9` = 4.37:1. Deterministic given the hover state.\n\n' +
+          '**Root cause.** `--color-link: #0075de` (globals.css Tier 0) is tuned for AA ' +
+          'on the white page background (`#ffffff`) but NOT on the slightly-darker ' +
+          '`--color-surface-soft: #fafaf9` that the row hover paints behind it. The link ' +
+          'hue and the hover surface were each chosen in isolation; their COMBINATION on ' +
+          'the hovered name cell was never contrast-checked.\n\n' +
+          '**Fix shapes (decide at fix time):**\n' +
+          '1. **Darken `--el-link` (or add a dedicated `--el-link-on-soft`) so the link ' +
+          'clears 4.5:1 on `--el-surface-soft`.** The cross-cutting fix — every ' +
+          'link-on-hovered-row surface benefits — but it shifts the link hue app-wide, ' +
+          'so re-verify the existing link surfaces still read as intended (and check the ' +
+          'dark-theme `#58a6ff` / `#161616` pair too).\n' +
+          '2. **Bold the name link on hover** (`group-hover:font-semibold`) so the 14px ' +
+          'text qualifies for the 3:1 large-text threshold, which 4.37:1 clears. ' +
+          'Contained to the directory cell, but layout-shifts the row on hover unless the ' +
+          'weight is reserved.\n' +
+          '3. **Use `--el-text` (no hue change) on hover and signal the link affordance ' +
+          'with underline only.** Drops the colour cue; least invasive but changes the ' +
+          'visual language.\n\n' +
+          'Plus: make the directory a11y sweep deterministic (reset/blur the pointer ' +
+          'before the axe call, or assert the hover colour pair directly) so the ' +
+          'violation can no longer hide behind cursor position.\n\n' +
+          '## Acceptance criteria\n\n' +
+          '- The `/filters` filter-name link clears WCAG 2.1 AA (≥ 4.5:1 for normal ' +
+          'text, or ≥ 3:1 if it becomes large/bold) in BOTH its rest and HOVERED-row ' +
+          'states, in light AND dark themes.\n' +
+          '- The `saved-filters` directory axe sweep is deterministic — it no longer ' +
+          'passes/fails based on where the cursor happens to be at sweep time.\n' +
+          '- Colour flows through `--el-*` tokens per `motir-core/CLAUDE.md` (no Tier-0 ' +
+          '`--color-*` in component code); if a new token is needed, it is added at ' +
+          'Tier 3.\n\n' +
+          '## Context refs\n\n' +
+          '- `app/(authed)/filters/_components/FiltersDirectory.tsx` — the ' +
+          '`ApplyNameButton` name cell (the flagged `group-hover:text-(--el-link) ' +
+          'group-hover:underline` span) and the row `hover:bg-(--el-surface-soft)`\n' +
+          '- `app/globals.css` — `--color-link: #0075de` / `--el-link` (line ~98/337) ' +
+          'and `--color-surface-soft: #fafaf9` / `--el-surface-soft` (line ~59/327); the ' +
+          'dark values are `#58a6ff` / `#161616`\n' +
+          '- `tests/e2e/saved-filters.spec.ts` — the directory axe sweep that caught it ' +
+          '(the "an admin subscribes, changes owner, and deletes" test)\n' +
+          '- Sibling Epic-6 filters bug ' +
+          '[[bug-filters-directory-builtins-i18n-and-layout]] (same `/filters` table, ' +
+          'different defect) — grep all `ApplyNameButton` consumers when fixing\n' +
+          '- `motir-core/CLAUDE.md` — the `--el-*` colour-token + AA-contrast rules ' +
+          '(finding #35: fix the colour pair, not just one side)',
+      },
+      {
         id: 'bug-zh-dashboards-reports-stale-glossary',
         kind: 'bug',
         title:
