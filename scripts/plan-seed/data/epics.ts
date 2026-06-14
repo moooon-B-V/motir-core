@@ -2202,7 +2202,7 @@ export const EPICS: EpicMeta[] = [
         id: 'bug-promote-sprint-picker-clipped-inside-popover',
         kind: 'bug',
         title:
-          'Triage promote → Active sprint: the sprint Combobox listbox is clipped by the Popover (the searchable sprint dropdown shows the search input + one row, the rest of the sprint list is cut off below the popover edge)',
+          'Combobox listbox is clipped by the parent Popover / Modal at every Combobox-in-dialog site (12 occurrences across 9 files: triage Promote popover ×3 + triage Merge popover + CreateIssueModal ×5 pickers + 5 other settings/filter modals). Reported repro: triage Promote → Active sprint shows the search input + 1 row, rest of sprint list cut off below popover edge.',
         status: 'planned',
         type: 'bug',
         descriptionMd:
@@ -2290,6 +2290,103 @@ export const EPICS: EpicMeta[] = [
           'rect lookup is parent-type-agnostic. Combining the two siblings into one ' +
           "fix Subtask is the natural shape; reference both ids in the fix's Context " +
           'refs.\n\n' +
+          '**Wider impact — full system scan (2026-06-15).** The reported repro ' +
+          '(`PromotePopover.tsx:193`) is ONE of MANY affected sites. A full scan of ' +
+          '`Combobox`-rendered-inside-`Popover` AND `Combobox`-rendered-inside-`Modal` ' +
+          'across the codebase enumerates every surface that hits the same inline-branch ' +
+          'clipping; ALL of them are fixed by the single fix shape above. The fix ' +
+          'Subtask MUST verify each one renders correctly post-fix (the clipping is ' +
+          'load-bearing for keyboard reachability of every clipped option).\n' +
+          '\n' +
+          '_Triage page (the surface in the report):_\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:193` — sprint ' +
+          'Combobox (THE REPORTED ONE, step 2 of the Promote popover after picking ' +
+          '**Active sprint**).\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:217` — epic / story ' +
+          'parent Combobox (step 2 of Promote after picking **Under an epic** or ' +
+          '**Under a story**); same Popover, same clipping.\n' +
+          '- `app/(authed)/triage/_components/PromotePopover.tsx:173` — Top / Bottom ' +
+          'placement Combobox (step 1 of Promote, lives in the FOOTER of the same ' +
+          "popover above the four target rows). Two options only, so it's borderline " +
+          "visually — but it's the same inline-clipped branch and would clip if a third " +
+          'placement option were ever added.\n' +
+          '- `app/(authed)/triage/_components/MergePicker.tsx:78` — query-driven ' +
+          'work-item Combobox (the **Mark duplicate / merge** triage action) ' +
+          'rendered inside a Popover (`width={360}`). The search-driven option list ' +
+          'is taller than the popover when 2+ results land; same clipping shape.\n' +
+          '\n' +
+          '_Other Combobox-in-Modal sites across the system (each is its own ' +
+          'occurrence of the SAME defect; the original `bug-combobox-menu-clipped-' +
+          'inside-modal` only named the Widget-config / Statistic-type case):_\n' +
+          '- `app/(authed)/_components/CreateIssueModal.tsx` — **HIGHEST density** — ' +
+          '5 Combobox-backed pickers + 1 DatePicker stacked in one modal: ' +
+          '`<TypePicker>` (line 193), `<ParentPicker>` (line 211), ' +
+          '`<WorkItemTypePicker>` (line 251), `<ExecutorPicker>` (line 264), ' +
+          '`<PriorityPicker>` (line 331), `<DatePicker>` (line 339). Each picker in ' +
+          '`components/issues/*Picker.tsx` wraps `Combobox`. The lower-half pickers ' +
+          '(`PriorityPicker`, `WorkItemTypePicker`, `ExecutorPicker`) will be MOST ' +
+          'severely clipped because they sit near the bottom of a tall modal — every ' +
+          'option past the first 1–2 is unreachable. ' +
+          '**`components/issues/WorkItemTypePicker.tsx:16` even carries a source ' +
+          'comment acknowledging "Because the create modal is a `role=\\"dialog\\"`, ' +
+          'the Combobox renders [inline]"** — the engineer who wrote the picker knew ' +
+          'about the inline branch but did not realise it clips below the modal floor.\n' +
+          '- `app/(authed)/settings/project/fields/_components/' +
+          'FieldsSettingsEditor.tsx:623` — `<TypePicker>` inside the Create / Edit ' +
+          'custom-field modal (the same TypePicker → Combobox wrap; renders the ' +
+          'custom-field type list).\n' +
+          '- `app/(authed)/filters/_components/ChangeOwnerDialog.tsx:96` — owner ' +
+          'Combobox (workspace member list — can be long; the picker is the ONLY ' +
+          'field in this modal so clipping below the modal floor is the dominant ' +
+          'failure mode).\n' +
+          '- `app/(authed)/filters/_components/SubscribeDialog.tsx:200, 213` — two ' +
+          'stacked Comboboxes (subscription frequency + delivery channel) inside the ' +
+          'subscribe modal.\n' +
+          '- `app/(authed)/settings/organization/members/_components/' +
+          'OrgMembersClient.tsx:479` — role Combobox inside the `<InviteModal>` ' +
+          '(org-roles list — short, but clips when the trigger sits low in the modal). ' +
+          'NOTE: the SAME file has another `<Combobox>` at line 361, but that one is ' +
+          'on the page-level members table row (not inside a modal) — **unaffected**.\n' +
+          '- `app/(authed)/settings/project/components/_components/' +
+          'ComponentsSettingsEditor.tsx:821` — move-target Combobox inside ' +
+          '`<DeleteComponentModal>` (lists every OTHER component in the project as ' +
+          'a re-parent target; clips when a project has many components). NOTE: the ' +
+          'SAME file has a `<Combobox>` at line 413 on the page-level filter bar ' +
+          '(outside the modals) — **unaffected**.\n' +
+          '- `app/(authed)/backlog/_components/CompleteSprintDialog.tsx:321` — ' +
+          'Combobox inside the complete-sprint modal (likely the carry-over target ' +
+          'sprint picker; the open-sprint list).\n' +
+          '- `app/(authed)/dashboard/_components/WidgetConfigModal.tsx:228` — ' +
+          'Statistic-type Combobox. **This is the ORIGINAL repro surface from ' +
+          '`bug-combobox-menu-clipped-inside-modal`** — listed here for completeness ' +
+          'so the fix Subtask covers ALL known occurrences in one sweep.\n' +
+          '\n' +
+          '_Verified safe (no Combobox inside the Modal):_ ' +
+          '`AddWidgetModal.tsx`, `CreateProjectModal.tsx`, `WorkspaceSwitcher.tsx`, ' +
+          '`BoardSwitcher.tsx`, `EditFilterDialog.tsx`, `SaveFilterDialog.tsx`, ' +
+          '`DeleteFilterDialog.tsx`, `StartSprintDialog.tsx` (uses `<DatePicker>` ' +
+          'only, which goes through its OWN Popover — not the Combobox inline ' +
+          'branch), `ReleaseKeyModal.tsx`, `ArchiveProjectModal.tsx`, ' +
+          '`ChangeKeyModal.tsx`, `BoardConfigEditor.tsx`, `WorkflowEditor.tsx`, ' +
+          '`AddWidgetModal.tsx`, `CreateDashboardModal.tsx`, `ShortcutsCheatsheet.tsx`, ' +
+          '`OrgControl.tsx`, `AttachmentPreview.tsx`, `IssueQuickView.tsx`. ' +
+          '`AutomationRuleEditor.tsx` has 9 Comboboxes but is a full-page editor, ' +
+          'NOT a modal — also unaffected.\n' +
+          '\n' +
+          '_Out-of-scope (different primitive, different clipping shape, NOT ' +
+          'covered by this fix):_ `<DatePicker>` inside a Modal opens its OWN ' +
+          '`<Popover>` (not a Combobox), so the inline-vs-portal branch above does ' +
+          "NOT apply — Radix's nested-Popover-inside-Dialog has its own focus-trap " +
+          'and clipping interactions that are out of scope here. If a follow-up ' +
+          'report surfaces DatePicker clipping, log it as a separate bug — same ' +
+          'family, different fix site.\n' +
+          '\n' +
+          '**Total: 12 affected Combobox-in-{Popover,Modal} sites across 9 files, ' +
+          'all fixed by the single inline-branch clamp.** The fix Subtask should ' +
+          'have a regression assertion per AFFECTED FILE (not per Combobox), opening ' +
+          'each modal/popover at a viewport where the menu would have clipped pre-' +
+          "fix and asserting the listbox's bottom-edge fits inside the dialog " +
+          "ancestor's bottom-edge via `getBoundingClientRect`.\n\n" +
           '**Test gap that let it ship.** Same as the Modal sibling — Combobox tests ' +
           "cover the inline branch's opens/closes/keyboard-nav semantics but not its " +
           'rendered geometry inside a constrained parent. The fix MUST add a render ' +
