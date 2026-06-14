@@ -1043,7 +1043,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '5',
     title: 'Collaboration & fields',
-    status: 'in_progress',
+    status: 'done',
     descriptionMd:
       'The layer that turns an issue from a record into a team workspace: **comments**, ' +
       '**@mentions**, **attachments**, **custom fields**, labels / components, assignees / ' +

@@ -104,7 +104,7 @@ import type { PlanStory } from '../types';
 export const story_5_7: PlanStory = {
   id: '5.7',
   title: 'In-app notifications (bell + unread feed)',
-  status: 'in_progress',
+  status: 'done',
   gitBranch: 'feat/PROD-5.7-in-app-notifications',
   descriptionMd:
     'The in-app half of the notification surface — a bell in the shell header with an unread ' +
@@ -897,7 +897,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.12',
       title:
         'Flip the `transitioned` matrix seam to settable + real copy (en/zh) — depends on both channels being real (5.7.10 + 5.7.11)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 16,
