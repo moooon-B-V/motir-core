@@ -613,7 +613,7 @@ export const story_5_7: PlanStory = {
       id: '5.7.7',
       title:
         'Vitest — `Notification` model + fan-in recipients (actor-excluded, mention-deduped, registry-extensible) + the read/mark API + preference gating',
-      status: 'planned',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
