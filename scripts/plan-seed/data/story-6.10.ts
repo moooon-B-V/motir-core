@@ -838,7 +838,7 @@ export const story_6_10: PlanStory = {
     {
       id: '6.10.8',
       title: 'E2E — create an org, attach workspaces, manage cross-workspace members',
-      status: 'planned',
+      status: 'in_progress',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 50,
