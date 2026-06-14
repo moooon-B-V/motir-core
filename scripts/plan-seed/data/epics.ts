@@ -1043,7 +1043,7 @@ export const EPICS: EpicMeta[] = [
   {
     id: '5',
     title: 'Collaboration & fields',
-    status: 'done',
+    status: 'in_progress',
     descriptionMd:
       'The layer that turns an issue from a record into a team workspace: **comments**, ' +
       '**@mentions**, **attachments**, **custom fields**, labels / components, assignees / ' +
@@ -2122,9 +2122,21 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Notification preferences: the "An item you\'re watching changes status" row is still drawn disabled with "Soon" + "Available once issue-watching ships (Story 5.4)" copy, but Story 5.4 (issue-watching) shipped — the row should be settable',
-        status: 'planned',
+        status: 'cancelled',
         type: 'bug',
         descriptionMd:
+          '> **⛔ TOMBSTONED — reclassified as a planning gap (2026-06-14).** This bug self-scoped ' +
+          'as "one boolean + two strings + one assertion." Verifying the runtime against that ' +
+          'claim (decision-ladder rung 2 over the card prose) showed the premise is FALSE: the ' +
+          'watcher transition EMAIL is sent UNGATED (`watcherNotificationsService` never consults ' +
+          'the preference resolver) and the in-app `transitioned` notification is NEVER WRITTEN ' +
+          '(`NOTIFICATION_FAN_IN_REGISTRY` has no `transitioned` descriptor) — so flipping ' +
+          '`settable` alone would ship two DECORATIVE toggles (worse than the disabled state). The ' +
+          'connecting subtasks were never planned (each story deferred the seam to the other; 5.4 ' +
+          'shipped first). Replaced by **Story 5.7 subtasks 5.7.10** (in-app `transitioned` fan-in ' +
+          'delivery), **5.7.11** (watcher-transition email gate), and **5.7.12** (the matrix flip, ' +
+          'blocked on both). Root-cause class + the audit rule are recorded as **notes.html mistake ' +
+          '#40**. The detailed diagnosis below remains accurate as the symptom record.\n\n' +
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
           '**Surfaces:** account settings notification matrix ' +
           '(`/settings/account` — Subtask 5.7.6, `NotificationPreferencesCard.tsx`) · ' +
