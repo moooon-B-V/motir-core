@@ -273,7 +273,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.4',
       title:
         'MCP endpoint — `/api/mcp` (streamable HTTP, official TS SDK), bearer-PAT auth gate, read + dispatch tools (`get_work_item`, `list_ready`, `next_ready`)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
