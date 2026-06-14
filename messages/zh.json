@@ -2489,6 +2489,7 @@
       "workspacesSummary": "{count} 个工作区",
       "membersSummary": "{count} 名成员",
       "billing": "账单与用量",
+      "comingSoon": "即将推出",
       "billingSub": "套餐、点数和用量都归集到组织。",
       "billingNote": "该组织的账单、点数和用量将在此处显示——会在后续版本中推出。目前尚无可用的账单控件；此占位用于固定布局位置。",
       "workspaceConfig": "工作区配置",

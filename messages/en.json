@@ -2489,6 +2489,7 @@
       "workspacesSummary": "{count, plural, one {# workspace} other {# workspaces}}",
       "membersSummary": "{count, plural, one {# member} other {# members}}",
       "billing": "Billing & usage",
+      "comingSoon": "Coming soon",
       "billingSub": "Plan, credits and usage roll up to the organization.",
       "billingNote": "Billing, credits and usage for this organization live here — added in a later release. No billing controls are active yet; this placeholder marks where they’ll sit so the layout stays stable.",
       "workspaceConfig": "Workspace configuration",
