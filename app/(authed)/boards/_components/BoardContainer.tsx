@@ -9,9 +9,11 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
   type Announcements,
+  type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragOverEvent,
@@ -1018,10 +1020,29 @@ function BoardDnd({
   // can ever activate (the cards stay rendered + peekable, just not movable).
   const activeSensors = canEdit ? sensors : [];
 
+  // FLAT board: resolve the drop to the droppable the POINTER is literally
+  // inside (`pointerWithin`), not the nearest corners (`closestCorners`).
+  // closestCorners measures corner distance, so a drop on a TALL EMPTY column
+  // (e.g. an In Review with no cards) loses to a nearby POPULATED column's
+  // small card — the card silently lands in the wrong column (often an illegal
+  // transition → "Move not allowed"), and an empty column becomes un-droppable.
+  // pointerWithin fixes that; fall back to closestCorners only when the pointer
+  // is outside every droppable (a gutter / past the last column) so a drop is
+  // never lost. SWIMLANE mode keeps closestCorners — its (column×lane) grid was
+  // tuned around it (handleDragOver) and is out of scope for this bug.
+  const collisionDetectionStrategy: CollisionDetection = useCallback(
+    (args) => {
+      if (swimlaned) return closestCorners(args);
+      const pointer = pointerWithin(args);
+      return pointer.length > 0 ? pointer : closestCorners(args);
+    },
+    [swimlaned],
+  );
+
   return (
     <DndContext
       sensors={activeSensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetectionStrategy}
       // dnd-kit's built-in auto-scroll handles VERTICAL scrolling inside a tall
       // column (drag a card to a column's top/bottom edge), but its default
       // HORIZONTAL behaviour on the flat column row is too aggressive: its 20%

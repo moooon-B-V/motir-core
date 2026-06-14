@@ -576,3 +576,63 @@ test.describe('board-ui auto-scroll to off-screen columns @smoke', () => {
     expect(cardIdsIn(await getBoard(page.request), 'done')).toContain(item.id);
   });
 });
+
+// Regression for the terminal-column rank 500. The Done/Cancelled columns are
+// displayed ranked by RECENCY (most-recently-resolved first), not by
+// `position` — so two display-adjacent Done cards can be position-INVERTED
+// (the upper one's `position` sorts AFTER the lower one's). Dropping a card
+// between them made `boardsService.moveCard` call keyBetween(prev, next) with
+// prev > next, which threw ("prev >= next") → the move API 500'd and the board
+// showed the generic "Move not allowed" toast. The fix brackets the bounds by
+// their actual key order before keyBetween.
+test.describe('board-ui drop into a recency-ordered Done column @smoke', () => {
+  test('a card drops between two position-inverted Done cards — the move commits, not 500', async ({
+    page,
+  }) => {
+    await signUp(page, OWNER_EMAIL);
+    const { projectId } = await seedActiveProject(OWNER_EMAIL);
+
+    // Two cards resolved to Done IN CREATION ORDER, so their `doneAt` recency is
+    // the REVERSE of their `position` (created first = smaller position, but
+    // resolved first = older = lower in the recency-ranked column). The Done
+    // column therefore shows them position-inverted.
+    const first = await createItem(page.request, projectId, 'done first (older)');
+    const second = await createItem(page.request, projectId, 'done second (newer)');
+    for (const it of [first, second]) {
+      expect((await transition(page.request, it.id, 'in_progress')).status()).toBe(200);
+      expect((await transition(page.request, it.id, 'in_review')).status()).toBe(200);
+      expect((await transition(page.request, it.id, 'done')).status()).toBe(200);
+    }
+    // The mover, parked in In Review (in_review → done is a legal transition).
+    const mover = await createItem(page.request, projectId, 'mover');
+    expect((await transition(page.request, mover.id, 'in_progress')).status()).toBe(200);
+    expect((await transition(page.request, mover.id, 'in_review')).status()).toBe(200);
+
+    const board = await getBoard(page.request);
+    const doneCol = columnByStatus(board, 'done');
+    const moverCard = columnByStatus(board, 'in_review').cards.find((c) => c.id === mover.id)!;
+    // The two Done cards in DISPLAY order; assert they are position-inverted so
+    // the test actually exercises the inverted-neighbour path.
+    const doneDisplay = doneCol.cards;
+    expect(doneDisplay.length).toBe(2);
+    expect(doneDisplay[0]!.position > doneDisplay[1]!.position).toBe(true);
+
+    await openBoard(page); // 1920 wide — Done is on screen, no auto-scroll needed
+
+    // Drop the mover onto the LOWER HALF of the top Done card, so it inserts
+    // BETWEEN the two display cards — i.e. between two position-inverted
+    // neighbours (the case that used to 500).
+    const res = await pointerDrag(
+      page,
+      page.getByTestId(cardTid(moverCard.identifier)),
+      page.getByTestId(cardTid(doneDisplay[0]!.identifier)),
+      0.85,
+    );
+    expect(res.status(), 'the drop into Done commits (200), not 500').toBe(200);
+
+    // It landed in Done and persisted as a real transition.
+    const after = await getBoard(page.request);
+    expect(cardIdsIn(after, 'done')).toContain(mover.id);
+    expect(cardIdsIn(after, 'in_review')).not.toContain(mover.id);
+  });
+});

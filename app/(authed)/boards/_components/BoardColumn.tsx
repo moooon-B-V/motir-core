@@ -90,10 +90,17 @@ export function BoardColumn({
 
   // The card indices to mount: the window, plus the dragged card and its
   // neighbours (so a drag never detaches). Whole list when not windowing.
+  // `range` comes from `useRowWindow` and can lag the card count by a frame:
+  // an optimistic cross-column move removes a card from this column, so `cards`
+  // shrinks before the window re-measures — leaving `range.end` momentarily
+  // PAST the new length. Clamp the upper bound to `cards.length` so a stale
+  // window never indexes a card that no longer exists (the crash the at-scale
+  // board move hit: `cards[index]` undefined → reading `.assigneeId` of
+  // undefined). The `BoardCard` guard below is the same defence per row.
   const indices: number[] = [];
   if (windowing) {
     const set = new Set<number>();
-    for (let i = range.start; i < range.end; i++) set.add(i);
+    for (let i = range.start; i < Math.min(range.end, cards.length); i++) set.add(i);
     if (activeCardId) {
       const ai = cards.findIndex((c) => c.id === activeCardId);
       if (ai >= 0) {
@@ -175,7 +182,11 @@ export function BoardColumn({
               style={windowing ? { height: totalSize } : undefined}
             >
               {indices.map((index) => {
-                const card = cards[index]!;
+                // Defensive: skip an index a stale window left past the (just-
+                // shrunk) card list, so an optimistic move never crashes the
+                // column mid-render (see the index-clamp note above).
+                const card = cards[index];
+                if (!card) return null;
                 return (
                   <div
                     key={card.id}
