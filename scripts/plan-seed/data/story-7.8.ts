@@ -273,7 +273,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.4',
       title:
         'MCP endpoint — `/api/mcp` (streamable HTTP, official TS SDK), bearer-PAT auth gate, read + dispatch tools (`get_work_item`, `list_ready`, `next_ready`)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 65,
@@ -327,7 +327,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.5',
       title:
         'Write tools — `create_work_item` (incl. bug logging), `transition_status`, `add_comment`',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
@@ -372,7 +372,7 @@ export const story_7_8: PlanStory = {
     {
       id: '7.8.6',
       title: 'Search tool — `search_work_items` riding the 6.1.1 versioned FilterAST envelope',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -480,7 +480,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.10',
       title:
         'Sprint tools — `list_sprints` / `create_sprint` / `update_sprint` / `delete_sprint` / `move_to_sprint` / `move_to_backlog` / `start_sprint` / `complete_sprint`',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -548,7 +548,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.11',
       title:
         'Integration-state substrate — `in_review` status, `work_item.session_branch`, integrated-dep readiness, `mark_integrated` / `complete_session` tools',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
