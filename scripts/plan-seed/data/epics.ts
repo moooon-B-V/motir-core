@@ -2952,7 +2952,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Complete-sprint success modal: SprintReport bypasses Modal.Body, so the burndown section is clipped off the bottom with no scroll affordance',
-        status: 'in_progress',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
