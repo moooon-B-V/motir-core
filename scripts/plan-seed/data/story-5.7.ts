@@ -704,5 +704,70 @@ export const story_5_7: PlanStory = {
         'reuseExistingServer), shared-DB flake isolation; finding #57 (the feed stays paged under ' +
         'the journey)',
     },
+    {
+      id: '5.7.9',
+      kind: 'bug',
+      title:
+        "Bug — fan-in Notification.data keys (`workItemKey`/`workItemTitle`) don't match the read API's `NotificationData` DTO (`issueKey`/`title`); the mapper passes data through unmapped, so a fanned-in row reads with `issueKey`/`title` undefined",
+      status: 'planned',
+      type: 'bug',
+      executor: 'coding_agent',
+      estimateMinutes: 16,
+      dependsOn: ['5.7.3', '5.7.4'],
+      descriptionMd:
+        '**Type:** bug (producer↔consumer contract mismatch) · **Parent:** Story 5.7 (in-app ' +
+        'notifications) · **Code surface owned by:** Story **5.7.3** ' +
+        '(`notificationFanInService` — the `NotificationData` it WRITES to `Notification.data`) ' +
+        'crossed with Story **5.7.4** (`lib/dto/notifications.ts` `NotificationData` + ' +
+        '`notificationMappers.toNotificationDto`) · **Status:** open · **Reported by:** the ' +
+        'planner during the 5.7.7 integration build (the fan-in→feed seam test surfaced it; the ' +
+        'per-subtask unit suites masked it — 5.7.4 SEEDS DTO-shaped data, 5.7.3 asserts the RAW ' +
+        'row, so neither read a fanned-in row back through the DTO).\n\n' +
+        'The fan-in (`notificationFanInService.buildMentionData`, 5.7.3) stores the denormalized ' +
+        'render payload under the keys **`kind` / `source` / `workItemKey` / `workItemTitle` / ' +
+        '`excerpt`** (its own `NotificationData` type in `lib/services/notificationFanInService.ts`). ' +
+        "But the READ API's DTO (`lib/dto/notifications.ts` `NotificationData`, 5.7.4) declares a " +
+        'DIFFERENT shape — **`issueKey` / `title` / `excerpt` / `fromStatus` / `toStatus`** — and ' +
+        '`toNotificationDto` does `data: (row.data ?? {}) as NotificationData`, a **blind cast with ' +
+        'NO key mapping**. So a real fanned-in notification, read through ' +
+        '`notificationsService.listNotifications`, exposes the PRODUCER keys verbatim: the typed ' +
+        '`data.issueKey` and `data.title` the future **5.7.5** bell/drawer would read are ' +
+        '**`undefined`** at runtime (only `excerpt`, the one key both shapes share, survives). The ' +
+        'drawer would render a broken deep-link key + empty summary line. It has not surfaced in ' +
+        'the product yet only because 5.7.5 (the consumer UI) is not built.\n\n' +
+        '**Fix (5.7.5-aligned).** Reconcile the two `NotificationData` shapes into ONE contract and ' +
+        'map at the boundary: (1) make `toNotificationDto` (or the fan-in) the single translation ' +
+        'point — either map `workItemKey`→`issueKey` / `workItemTitle`→`title` in the mapper, OR ' +
+        'have the fan-in write the DTO key names directly; AND (2) fold the fan-in extras the ' +
+        'drawer needs (`kind` / `source`, plus the 5.4 `fromStatus`/`toStatus` slot) into the ' +
+        'SHARED DTO `NotificationData` so the type the API exposes matches what is stored — one ' +
+        'source-of-truth type imported by both the writer and the reader, no parallel definitions. ' +
+        'Decision-ladder note: align to whatever **5.7.5**’s design ' +
+        '(`design/notifications/drawer.mock.html`) actually reads — the drawer is the consumer ' +
+        'that pins the field names. Pick the durable shape (one shared `NotificationData`, mapped ' +
+        'once), not a second blind cast.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- There is ONE `NotificationData` contract (no divergent producer/DTO definitions); the ' +
+        'fan-in write and the `toNotificationDto` read agree on the key names, with any rename ' +
+        'mapped explicitly at a single boundary (not a blind `as` cast).\n' +
+        '- A fanned-in `mentioned` row read via `notificationsService.listNotifications` exposes a ' +
+        'populated deep-link key + title (whatever the final field names are) — asserted by ' +
+        'updating the 5.7.7 integration seam test ' +
+        '(`tests/integration/notifications-journey.test.ts`), whose current ' +
+        '`expect(row.data.issueKey).toBeUndefined()` lines DOCUMENT this bug and must flip to ' +
+        'positive assertions when it is fixed.\n' +
+        '- `pnpm test:coverage` keeps the touched 5.7 files ≥90% branch/fn/line (the gate 5.7.7 ' +
+        'extended to the fan-in/service/repo files).\n\n' +
+        '## Context refs\n\n' +
+        '- `lib/services/notificationFanInService.ts` (`NotificationData` + `buildMentionData`, ' +
+        '5.7.3) — the producer shape\n' +
+        '- `lib/dto/notifications.ts` (`NotificationData`) + `lib/mappers/notificationMappers.ts` ' +
+        '(`toNotificationDto`, 5.7.4) — the DTO shape + the unmapped pass-through\n' +
+        '- `tests/integration/notifications-journey.test.ts` (5.7.7) — the seam test that surfaced ' +
+        'it (the ⚠️ FINDING block) + `tests/notifications/notificationsService.test.ts` (which ' +
+        'seeds DTO-shaped `{ issueKey, title }` data, masking the divergence)\n' +
+        '- Story 5.7.5 (the bell/drawer) — the consumer that will read these keys; its design pins ' +
+        'the final names',
+    },
   ],
 };
