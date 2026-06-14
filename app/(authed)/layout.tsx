@@ -20,6 +20,7 @@ import { ShellTierNav } from './_components/ShellTierNav';
 import { CommandPaletteProvider } from './_components/CommandPaletteProvider';
 import { CreateIssueProvider } from './_components/CreateIssueProvider';
 import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
+import { ReportProvider } from './_components/ReportProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
@@ -147,65 +148,72 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
       <CommandPaletteProvider>
         <CreateIssueProvider hasProject={Boolean(activeProject)} canEdit={canEdit}>
           <ProjectAccessProvider canEdit={canEdit}>
-            <AppLayout
-              topNav={
-                <TopNav
-                  activeOrg={activeOrg}
-                  orgs={orgs}
-                  workspaces={workspaces}
-                  activeWorkspaceId={activeWorkspaceId}
-                  user={{ name: session.user.name, email: session.user.email }}
-                  initialUnreadCount={initialUnreadCount}
-                />
-              }
-              sidebar={
-                <SidebarNav
-                  activeProject={activeProject}
-                  projects={projects}
-                  variant="rail"
-                  readyCount={readyCount}
-                  settingsAccess={settingsAccess}
-                />
-              }
-            >
-              <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
-            </AppLayout>
+            {/* ReportProvider (Subtask 6.11.7) owns the in-app report-widget
+                modal + open state, mounted once so the top-nav and inbox-header
+                "Report" triggers drive the same dialog. The widget posts to the
+                6.11.4 intake for the active project; mounted only when there's a
+                project the actor can edit (the intake rejects a viewer 403). */}
+            <ReportProvider projectKey={activeProject?.identifier ?? null} canEdit={canEdit}>
+              <AppLayout
+                topNav={
+                  <TopNav
+                    activeOrg={activeOrg}
+                    orgs={orgs}
+                    workspaces={workspaces}
+                    activeWorkspaceId={activeWorkspaceId}
+                    user={{ name: session.user.name, email: session.user.email }}
+                    initialUnreadCount={initialUnreadCount}
+                  />
+                }
+                sidebar={
+                  <SidebarNav
+                    activeProject={activeProject}
+                    projects={projects}
+                    variant="rail"
+                    readyCount={readyCount}
+                    settingsAccess={settingsAccess}
+                  />
+                }
+              >
+                <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+              </AppLayout>
 
-            {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
+              {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
             drawer is portaled, so it lives at the layout root rather than in an
             AppLayout slot. Its header carries the same tenancy-tier cluster (org
             control + the workspace switcher at ≥2 workspaces) the top nav shows,
             since the drawer replaces the top nav on mobile. */}
-            <SidebarDrawer
-              header={
-                <ShellTierNav
-                  activeOrg={activeOrg}
-                  orgs={orgs}
-                  workspaces={workspaces}
-                  activeWorkspaceId={activeWorkspaceId}
+              <SidebarDrawer
+                header={
+                  <ShellTierNav
+                    activeOrg={activeOrg}
+                    orgs={orgs}
+                    workspaces={workspaces}
+                    activeWorkspaceId={activeWorkspaceId}
+                  />
+                }
+              >
+                <SidebarNav
+                  activeProject={activeProject}
+                  projects={projects}
+                  variant="drawer"
+                  readyCount={readyCount}
+                  settingsAccess={settingsAccess}
                 />
-              }
-            >
-              <SidebarNav
-                activeProject={activeProject}
-                projects={projects}
-                variant="drawer"
-                readyCount={readyCount}
-                settingsAccess={settingsAccess}
-              />
-            </SidebarDrawer>
+              </SidebarDrawer>
 
-            {/* The ⌘K palette UI — fed the same workspace/project data the shell
+              {/* The ⌘K palette UI — fed the same workspace/project data the shell
             above already resolved, so navigation + switch actions stay in sync
             without a second fetch. */}
-            <AppCommandPalette
-              workspaces={workspaces}
-              activeWorkspaceId={activeWorkspaceId}
-              projects={projects}
-              activeProjectId={activeProject?.id ?? null}
-              hasProject={Boolean(activeProject)}
-              settingsAccess={settingsAccess}
-            />
+              <AppCommandPalette
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                projects={projects}
+                activeProjectId={activeProject?.id ?? null}
+                hasProject={Boolean(activeProject)}
+                settingsAccess={settingsAccess}
+              />
+            </ReportProvider>
           </ProjectAccessProvider>
         </CreateIssueProvider>
       </CommandPaletteProvider>

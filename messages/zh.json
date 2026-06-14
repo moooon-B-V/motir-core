@@ -2676,6 +2676,24 @@
       "declined": "已拒绝",
       "unsnoozed": "已返回队列",
       "error": "出了点问题，请重试。"
+    },
+    "widget": {
+      "trigger": "反馈",
+      "heading": "反馈问题",
+      "kindLabel": "你要反馈什么？",
+      "kindBug": "缺陷",
+      "kindFeature": "功能",
+      "titleLabel": "标题",
+      "titlePlaceholder": "简要概括",
+      "titleRequired": "请填写标题。",
+      "titleTooLong": "标题请控制在 {max} 个字符以内。",
+      "descriptionLabel": "发生了什么？",
+      "descriptionHint": "重现步骤、预期与实际——可选",
+      "descriptionPlaceholder": "补充有助于我们重现或理解的细节……",
+      "submit": "提交",
+      "submitted": "已收到你的反馈，谢谢",
+      "submittedDetail": "已记为 {key}，正在等待分流。",
+      "error": "反馈提交失败，请重试。"
     }
   }
 }
