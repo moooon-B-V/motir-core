@@ -132,7 +132,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.1',
       title:
         'API-token (PAT) substrate — `api_token` schema + repository + `apiTokensService` (create-shows-once / list / revoke / verify)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
