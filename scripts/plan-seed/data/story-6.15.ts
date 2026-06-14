@@ -56,16 +56,23 @@ import type { PlanStory } from '../types';
  * subtask (6.15.3) `dependsOn` it and ships `status: 'blocked'` until it lands.
  *
  * Cross-epic dependency audit: clean — every dep points at Epic ≤ 6 (6.1 / 6.2
- * same-epic-earlier; 3.7 / 3.8 earlier epic, both done). No forward-pointing
- * deps. The substrate (6.1 filter AST/compiler, 6.2 saved filters, 3.7 board
- * CRUD, 3.8 bounded/virtualized board load + over-cap) is ALL done, so 6.15.1
- * (design) and 6.15.2 (service) are immediately ready; 6.15.3 (UI) is blocked
- * on both; 6.15.4 (tests) on 6.15.3.
+ * same-epic-earlier; 3.7 / 3.8 earlier epic, both done; 6.15.5 → 6.15.1
+ * same-epic-earlier). No forward-pointing deps. The substrate (6.1 filter
+ * AST/compiler, 6.2 saved filters, 3.7 board CRUD, 3.8 bounded/virtualized board
+ * load + over-cap) is ALL done, so 6.15.1 (design) and 6.15.2 (service) are
+ * immediately ready; 6.15.5 (the quick-filter Work type facet) is blocked on the
+ * 6.15.1 design; 6.15.3 (UI) on 6.15.1 + 6.15.2 + 6.15.5; 6.15.4 (tests) on
+ * 6.15.3.
  *
  * Added per `motir plan` after the board-Filter ownership check (the disabled
- * seam is intentional, but no Epic-6 story owned wiring it). Canonical depth:
- * a board-filter design (6.15.1), the filtered board read (6.15.2), the toolbar
- * filter UI (6.15.3), and the story tests (6.15.4).
+ * seam is intentional, but no Epic-6 story owned wiring it). Re-planned after
+ * Yue flagged the quick filter is missing **Work type** filtering (the
+ * `WorkItemType` field is defined + compiled in the 6.1 registry and reachable
+ * via `[Advanced]`, but absent from the quick-filter facet set) — added 6.15.5
+ * to add that facet to the SHARED `IssueFilterBar` (the board + `/issues` both
+ * gain it). Canonical depth: a board-filter design (6.15.1), the filtered board
+ * read (6.15.2), the toolbar filter UI (6.15.3), the story tests (6.15.4), and
+ * the quick-filter Work type facet (6.15.5).
  */
 export const story_6_15: PlanStory = {
   id: '6.15',
@@ -93,8 +100,17 @@ export const story_6_15: PlanStory = {
     'URL-addressable, reload-safe), and points the over-cap "refine filter" CTA at it. The 3.8 ' +
     'bounded/virtualized load + over-cap `truncated` flag now apply to the **filtered** set, and ' +
     'the 4.5 Scrum sprint-scope filter composes with it (narrow WITHIN the active sprint).\n\n' +
-    '**Out of scope.** The filter grammar/compiler (6.1 owns it — no change); cross-project boards ' +
-    '(still the 3.7 Epic-6 extension); altering the Scrum scope filter (4.5). No new migration.',
+    '**Plus — the missing Work type facet (6.15.5).** The shipped quick filter (`IssueFilterBar`) is ' +
+    'a curated four-facet subset (text · kind · status · assignee); the **Work type** field ' +
+    '(`WorkItemType` — `code/design/test/…` + the nullable **Untyped** bucket) was reachable only via ' +
+    '`[Advanced]`, so a user could not filter the board (or the `/issues` list) by Work type from the ' +
+    'quick popover. The FilterAST + 6.1 registry already DEFINE and COMPILE `type` ' +
+    "(`enumField('type', 'type-select', { nullable, WORK_ITEM_TYPES })`), so this is a missing " +
+    'quick-filter **facet**, not a grammar change — 6.15.5 adds the Work type facet group to the ' +
+    'SHARED `IssueFilterBar` (so `/issues` gains it too), and the board reuses it.\n\n' +
+    '**Out of scope.** The filter grammar/compiler/registry (6.1 owns `type` — already complete, no ' +
+    'change) and the board read (6.15.2 threads whatever AST — `type` already compiles); cross-project ' +
+    'boards (still the 3.7 Epic-6 extension); altering the Scrum scope filter (4.5). No new migration.',
   verificationRecipeMd:
     '- Pull the Story branch, `pnpm install`, `pnpm prisma migrate dev` (reports **"No difference ' +
     'detected"** — this story adds no schema; it reuses the 6.1 filter substrate), `pnpm db:seed`, ' +
@@ -107,6 +123,10 @@ export const story_6_15: PlanStory = {
     '`type = Bug`) or pick a saved filter → the board re-projects so every column shows only ' +
     'matching cards; the active filter shows as a chip/summary; **Clear** restores the full board. ' +
     'The selection survives a reload (it is in the URL).\n' +
+    '- **Work type facet (6.15.5):** open the filter — the popover now shows a **Work type** group ' +
+    '(Code / Design / Test / … + **Untyped**) between Kind and Status; selecting e.g. `Design` ' +
+    'narrows the board to design work items. The SAME facet appears on `/issues` (shared ' +
+    '`IssueFilterBar`).\n' +
     '- **Over-cap CTA:** on a board that exceeds the 3.8 cap, the "refine the board filter" banner’s ' +
     'CTA opens the filter (it no longer points at a dead seam); applying a filter that brings the ' +
     'set under the cap dismisses the banner.\n' +
@@ -220,10 +240,11 @@ export const story_6_15: PlanStory = {
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 34,
-      dependsOn: ['6.15.1', '6.15.2'],
+      dependsOn: ['6.15.1', '6.15.2', '6.15.5'],
       descriptionMd:
         'Replace the disabled `[Filter]` seam with the working board filter, per the 6.15.1 design, ' +
-        'reading through 6.15.2.\n\n' +
+        'reading through 6.15.2. The reused `IssueFilterBar` already carries the Work type facet (6.15.5), ' +
+        'so the board exposes it automatically — no board-specific filter UI.\n\n' +
         '**Enable the toolbar affordance** (`app/(authed)/boards/page.tsx` — drop `disabled` + the ' +
         '`filterComingSoon` tooltip) and mount the SAME filter **builder** + **saved-filter picker** ' +
         'the /issues navigator uses (reuse `IssueFilterBar` + the 6.2 picker — do NOT hand-roll a ' +
@@ -274,14 +295,17 @@ export const story_6_15: PlanStory = {
         'and the **Scrum compose** (the filter `AND`s with the 4.5 sprint scope, never widening it). ' +
         'An unauthorized/invalid saved-filter id → the typed error.\n\n' +
         '**Playwright E2E (`tests/e2e/board-filter.spec.ts`):** on a seeded board, open the toolbar ' +
-        'Filter → apply a quick filter (e.g. `type = Bug`) → assert only matching cards across ' +
-        'columns (wait on the board re-projection response, not the optimistic UI) → apply a saved ' +
-        'filter → Clear restores the full board → the over-cap banner CTA opens the filter; assert ' +
-        'the URL carries the filter and survives reload. **a11y:** strict axe sweep over the filter ' +
-        'affordance (closed / open builder / saved-filter picker / active chips / filtered-empty).\n\n' +
+        'Filter → apply a quick filter (kind `Bug`) → assert only matching cards across ' +
+        'columns (wait on the board re-projection response, not the optimistic UI) → **toggle a Work ' +
+        'type facet (e.g. `Design`) and assert the board re-projects to that work type** (the 6.15.5 ' +
+        'facet) → apply a saved filter → Clear restores the full board → the over-cap banner CTA opens ' +
+        'the filter; assert the URL carries the filter and survives reload. **a11y:** strict axe sweep ' +
+        'over the filter affordance (closed / open builder incl. the Work type group / saved-filter ' +
+        'picker / active chips / filtered-empty).\n\n' +
         '## Acceptance criteria\n\n' +
         '- The read matrix (predicate per column · cap-over-filtered · unfiltered-unchanged · ' +
-        'permission/tenant scope · Scrum compose · typed saved-filter error) is green.\n' +
+        'permission/tenant scope · Scrum compose · **work-type facet narrows the board** · typed ' +
+        'saved-filter error) is green.\n' +
         '- The E2E journey passes in CI’s Playwright lane (async waits via the harness, not sleeps — ' +
         'arm `waitForResponse` before the action, per CLAUDE.md); the axe sweep reports zero ' +
         'violations.\n' +
@@ -293,6 +317,64 @@ export const story_6_15: PlanStory = {
         'patterns to build on) + `tests/helpers/db.ts` (the large-seed fixture for the cap case)\n' +
         '- The E2E selector / "wait on the authoritative signal" memories; the Story 6.15 ' +
         'verification recipe — the checklist this automates',
+    },
+    {
+      id: '6.15.5',
+      title:
+        'Quick-filter Work type facet — add the WorkItemType facet to the shared IssueFilterBar (facet state + facet→AST + i18n); the board + /issues both reuse it',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 30,
+      dependsOn: ['6.15.1'],
+      descriptionMd:
+        'Add the **Work type** facet the quick filter is missing. The shipped quick-filter popover ' +
+        '(`IssueFilterBar`) exposes text · kind · status · assignee; the **`WorkItemType`** field ' +
+        '(`type`) is fully DEFINED + COMPILED in the 6.1 registry ' +
+        "(`enumField('type', 'type-select', { nullable: true, valueWhitelist: WORK_ITEM_TYPES })`) " +
+        'and is reachable via the `[Advanced]` builder — but NOT as a quick facet, so a user cannot ' +
+        'filter by Work type from the popover. Add the facet to the SHARED component (the board and the ' +
+        '`/issues` navigator both gain it). **No grammar/registry/compiler change and no board-read ' +
+        'change** — `type` already compiles; this is purely the quick-filter facet + its state + the ' +
+        'facet→AST conversion.\n\n' +
+        '**Facet state** (`lib/issues/issueListFilter.ts`): add `types: WorkItemType[]` (+ an ' +
+        '`includeUntyped` flag for the registry’s nullable empty bucket) to the `IssueFilter` shape, ' +
+        'mirroring `kinds`/`statuses` — the `DEFAULT` value, the `toggleType` helper, and the ' +
+        '`IssueFilterParams` URL round-trip (encode/decode), so the facet is shareable + reload-safe.\n\n' +
+        '**Facet UI** (`app/(authed)/issues/_components/IssueFilterBar.tsx`): add the **Work type** ' +
+        'group between Kind and Status per the 6.15.1 design — a `role="listbox" ' +
+        'aria-multiselectable` of the 10 `WORK_ITEM_TYPES` (leading glyph = `WorkItemTypeIcon` in the ' +
+        '`--el-type-*` hue, label `labels.workItemType.*`, trailing accent `Check`) + the **Untyped** ' +
+        'row (the IS-NULL bucket). The active-count badge + the applied summary chips include the ' +
+        'Work type values.\n\n' +
+        '**Facet→AST** (`lib/filters/ast.ts` `facetFilterToAst`): push a ' +
+        "`{ field: 'type', operator: 'is_any_of', value }` condition from the selected types, and " +
+        'map the **Untyped** selection to the registry’s empty-bucket token (the same `is_empty` ' +
+        'pattern `assignee`’s Unassigned uses) so the basic→advanced upgrade stays **lossless**. ' +
+        'i18n en + zh (the `labels.workItemType.*` keys exist; add the facet group label, e.g. ' +
+        '`filterWorkType`).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- The quick-filter popover shows a **Work type** facet (the 10 types + **Untyped**); ' +
+        'selecting types narrows the read to matching work types; the facet round-trips through the ' +
+        'URL/params (reload-safe) and feeds the active-count badge + applied chips.\n' +
+        '- `facetFilterToAst` emits the `type` `is_any_of` condition (and maps Untyped → the ' +
+        'empty-bucket operator); the basic→advanced upgrade drops no condition (lossless), proven by a ' +
+        'unit test over the new facet.\n' +
+        '- NO change to the filter grammar/registry/compiler or the board read (they already support ' +
+        '`type`); matches the 6.15.1 design (reuses `WorkItemTypeIcon` — no hand-rolled UI); colour via ' +
+        '`--el-*`, shape via element-semantic tokens; axe-clean; en + zh; component + unit tests; ' +
+        '`pnpm test:coverage` ≥ 90% on changed files.\n\n' +
+        '## Context refs\n\n' +
+        '- `design/boards/board-filter.mock.html` (6.15.1 — the Work type facet layout, panel 1) + ' +
+        '`design/boards/design-notes.md` (the "NET-NEW in 6.15 — the Work type facet" note)\n' +
+        '- `app/(authed)/issues/_components/IssueFilterBar.tsx` (the popover to extend) + ' +
+        '`lib/issues/issueListFilter.ts` (the `IssueFilter` facet state + the param round-trip)\n' +
+        '- `lib/filters/ast.ts` (`facetFilterToAst`) + `lib/filters/registry.ts` (the `type` field def ' +
+        '— already complete) + `lib/issues/executorDefaults.ts` (`WORK_ITEM_TYPES`)\n' +
+        '- `lib/issues/workItemTypeMeta.ts` (`WORK_ITEM_TYPE_META` — glyph + hue) + ' +
+        '`components/issues/WorkItemTypeIcon.tsx`\n' +
+        '- `messages/en.json` + `messages/zh.json` (`labels.workItemType.*` + the new `filterWorkType` ' +
+        'group label); `motir-core/CLAUDE.md` (4-layer; colour/shape tokens)',
     },
   ],
 };
