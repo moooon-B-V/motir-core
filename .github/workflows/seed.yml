@@ -6,10 +6,13 @@ name: Reseed plan on merge
 # OPT-IN, gated on a `[reseed]` marker in the merge commit message:
 #
 #   • STATUS-FLIP seed PRs (the common `motir run` / `motir mark <id> done`
-#     case — flipping a subtask planned→in_progress→done) edit the seed so it
-#     stays the source of truth, but DON'T carry the marker. Yue applies those
-#     status changes by hand in the live tenant (a cheap drag), so this workflow
-#     SKIPS them — that's the Neon compute we're saving.
+#     case — flipping a subtask planned→in_progress→done) keep the seed's
+#     RECORD of the plan current, but DON'T carry the marker — and the seed is
+#     no longer the status source of truth (Subtask 7.8.7: status authority is
+#     the live DB; the seed status is initial-only). Yue applies those status
+#     changes in the live tenant directly (a hand-drag, or the MCP
+#     `transition_status` tool), so this workflow SKIPS them — that's the Neon
+#     compute we're saving.
 #   • PLANNING seed PRs (adding / expanding stories) and BUG-LOGGING seed PRs
 #     (adding a bug item) DO carry `[reseed]` in the PR title — those deltas are
 #     tedious to reproduce by hand, so they get the automated reseed.
@@ -19,10 +22,14 @@ name: Reseed plan on merge
 # github.event.head_commit.message regardless of merge style.
 #
 # The seed clears-and-reseeds ONLY the `moooon`/`motir` workspace (by name,
-# owned by the fixed seed user); no other tenant is touched. Because status-flip
-# PRs keep the seed truthful, a later `[reseed]` regenerates the SAME statuses —
-# the user's manual flips are not reverted (invariant: never skip MERGING a
-# status PR, only its reseed).
+# owned by the fixed seed user); no other tenant is touched. The reseed is safe
+# to run on a PLANNING merge because it PRESERVES the live workflow status of
+# every item that already exists in the tenant (Subtask 7.8.7): the seed status
+# is INITIAL-ONLY — applied to NEW items only — so a `[reseed]` regenerates the
+# plan TREE without reverting the statuses agents/users have set in the live
+# tenant (via the MCP `transition_status` tool or a hand-drag). Status authority
+# lives in the live DB now, not the seed; plan-STRUCTURE authority stays with the
+# seed. (See scripts/plan-seed/preserveStatus.ts for the snapshot/re-apply.)
 #
 # Inert until the SEED_DATABASE_URL secret is set: the guard step below detects
 # the missing secret and SKIPS the reseed (the job stays green with a notice),
