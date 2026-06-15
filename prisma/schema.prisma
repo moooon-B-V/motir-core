@@ -385,6 +385,19 @@ model Project {
   /// (never a blank page), so every existing project backfills to NULL with no
   /// migration data step.
   publicOverviewMd    String?             @map("public_overview_md")
+  /// Public hero subtitle (Story 6.16 · Subtask 6.16.2) — the short tagline
+  /// shown under the project name on the public hero, edited in-place by the
+  /// project admin. A public-SAFE field: it rides the public projection only
+  /// when the project is `public`. Nullable — unset falls back to a generic
+  /// i18n tagline (never a blank subtitle), so every existing project backfills
+  /// to NULL with no migration data step.
+  publicTagline       String?             @map("public_tagline")
+  /// Public hero meta pills (Story 6.16 · Subtask 6.16.2) — the short tags
+  /// shown as pills on the public hero, edited in-place by the project admin. A
+  /// public-SAFE field: it rides the public projection only when the project is
+  /// `public`. Defaults to an empty array — an unset field shows no pills, so
+  /// every existing project backfills to `[]` with no migration data step.
+  publicTags          String[]            @default([]) @map("public_tags")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read
