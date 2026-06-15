@@ -110,6 +110,16 @@ export interface WorkItemDto {
    * seed its toggle from the authoritative value.
    */
   publicChildrenHidden: boolean;
+  /**
+   * The integration branch this item's work currently sits on (Story 7.8 ·
+   * Subtask 7.8.11), or `null`. NON-NULL ⇔ the item is integrated-awaiting-review
+   * (status moved to `in_review` via `mark_integrated`): its work is mergeable,
+   * so it unblocks dependents (the integrated-dep readiness rule) and the issue
+   * detail surfaces it as a read-only line. CLEARED back to null the moment the
+   * item reaches a `done`-category status. Carried on the DTO so the issue detail
+   * + the MCP tool results render the authoritative value.
+   */
+  sessionBranch: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -563,4 +573,33 @@ export interface WorkItemRevisionDto {
   changedAt: string;
   changeKind: 'created' | 'updated' | 'archived' | 'comment_deleted';
   diff: Record<string, { from: unknown; to: unknown }>;
+}
+
+/** The per-item outcome of a `complete_session` bulk close-out (Subtask 7.8.11):
+ *  `completed` (transitioned to done), `already_done` (was already in a done
+ *  status — a no-op, idempotent), or `failed` (the move was rejected — e.g. an
+ *  illegal transition or an unknown done status in a custom workflow; `reason`
+ *  carries the typed error message). */
+export type CompleteSessionOutcome = 'completed' | 'already_done' | 'failed';
+
+export interface CompleteSessionItemResultDto {
+  /** The `PROD-<n>` identifier of the recorded item. */
+  key: string;
+  outcome: CompleteSessionOutcome;
+  /** Present (and only present) on `failed` — the typed error's message. */
+  reason?: string;
+}
+
+/**
+ * The result of `complete_session(sessionBranch)` (Subtask 7.8.11) — the bulk
+ * close-out after a human merges the session PR. Every work item recorded on the
+ * branch is transitioned to done (clearing the branch) in ONE transaction; the
+ * per-item `results` surface partial failures (an item whose workflow has no
+ * legal path to done) without rolling back the items that DID complete. The
+ * legal-transition check runs before any write, so a rejected item leaves the
+ * transaction healthy for the rest.
+ */
+export interface CompleteSessionResultDto {
+  sessionBranch: string;
+  results: CompleteSessionItemResultDto[];
 }

@@ -6,9 +6,13 @@ import type {
   PublicProjectOverviewDto,
   PublicProjectStatsDto,
   PublicRequestMatchDto,
+  PublicRoadmapCardDto,
   PublicWorkItemListItemDto,
 } from '@/lib/dto/publicProjects';
-import type { PublicRequestMatchRow } from '@/lib/repositories/workItemRepository';
+import type {
+  PublicRequestMatchRow,
+  PublicRoadmapRow,
+} from '@/lib/repositories/workItemRepository';
 
 // Prisma row → DTO conversion for the public-project surfaces (Story 6.12).
 // Both the READ projection (6.12.4) and the duplicate-detection read (6.12.5)
@@ -54,6 +58,26 @@ export function toPublicWorkItemListItemDto(
     dto.childrenHidden = true;
   }
   return dto;
+}
+
+/**
+ * Map a roadmap row → the public roadmap card projection (Subtask 6.12.7). Adds
+ * the public `voteCount` (demand signal) + the viewer's `voted` flag to the
+ * stripped public projection; the assignee / estimate / story-point columns on
+ * `row` are deliberately NOT read. `voted` is coerced to a real boolean (the raw
+ * SQL `IS NOT NULL` projection can arrive as a JS boolean already, but the
+ * coercion keeps the DTO total).
+ */
+export function toPublicRoadmapCardDto(row: PublicRoadmapRow): PublicRoadmapCardDto {
+  return {
+    id: row.id,
+    identifier: row.identifier,
+    key: row.key,
+    title: row.title,
+    kind: row.kind as WorkItemKindDto,
+    voteCount: row.voteCount,
+    voted: Boolean(row.voted),
+  };
 }
 
 /**

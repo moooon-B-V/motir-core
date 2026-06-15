@@ -43,6 +43,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     externalSubmitterEmail: null,
     submittedByUserId: null,
     publicChildrenHidden: false,
+    sessionBranch: null,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
     ...overrides,
@@ -117,6 +118,7 @@ describe('toReadyItemDispatchDto', () => {
         assignee: null,
         parent: { identifier: 'PROD-1' },
         contextRefs: ['lib/dto/ready.ts', 'lib/mappers/readyMappers.ts'],
+        sessionBranch: null,
       },
     );
 
@@ -138,6 +140,7 @@ describe('toReadyItemDispatchDto', () => {
       assignee: null,
       parent: null,
       contextRefs: [],
+      sessionBranch: null,
     });
     expect(dto.blockerKeys).toEqual([]);
     expect(dto.parentKey).toBeNull();

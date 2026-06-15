@@ -56,23 +56,30 @@ export const DEFAULT_STATUS_KEYS: ReadonlySet<string> = new Set(STATUS_ORDER.map
 
 // The default transition graph (restricted-mode), as [fromKey, toKey] pairs.
 //
-// NOTE ON COUNT (finding #45): the 2.2.2 card enumerates these FIFTEEN distinct,
+// NOTE ON COUNT (finding #45): the 2.2.2 card enumerated FIFTEEN distinct,
 // individually-justified edges but its running total + the "13-transition"
-// label undercount by exactly the two Reopen edges (done→in_progress,
+// label undercounted by exactly the two Reopen edges (done→in_progress,
 // cancelled→todo) — an arithmetic slip in the card. Every listed edge is
 // justified in the card's prose (reopen explicitly: "cancellation is reversible
 // …"), and dropping two justified edges to hit 13 has no basis. So the seed
-// ships the full enumerated graph: FIFTEEN transitions. (Decision-authority
-// ladder: a self-contradicting card resolved to its substantive enumeration,
-// not its mistaken tally.)
+// ships the full enumerated graph. (Decision-authority ladder: a
+// self-contradicting card resolved to its substantive enumeration, not its
+// mistaken tally.) Subtask 7.8.11 adds ONE more edge — `in_review → blocked`,
+// so an item integrated-awaiting-review can stall on a blocker like any other
+// active state — bringing the total to SIXTEEN. (The matching backfill
+// migration adds this one edge to every EXISTING default-workflow project; the
+// rest of the `in_review` graph already shipped in this constant from 2.2.2, so
+// only this edge needs backfilling.)
 export const DEFAULT_TRANSITIONS: ReadonlyArray<readonly [string, string]> = [
   // Forward main path
   ['todo', 'in_progress'],
   ['in_progress', 'in_review'],
   ['in_review', 'done'],
-  // Block / unblock (block from either active state; unblock to either)
+  // Block / unblock (block from any active state; unblock to either). `in_review`
+  // can be blocked too (7.8.11) — review can stall on an external dependency.
   ['todo', 'blocked'],
   ['in_progress', 'blocked'],
+  ['in_review', 'blocked'],
   ['blocked', 'todo'],
   ['blocked', 'in_progress'],
   // Backward / rework

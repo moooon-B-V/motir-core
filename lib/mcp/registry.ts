@@ -16,12 +16,14 @@ import { MOVE_TO_SPRINT_TOOL_NAME, registerMoveToSprint } from './tools/moveToSp
 import { MOVE_TO_BACKLOG_TOOL_NAME, registerMoveToBacklog } from './tools/moveToBacklog';
 import { START_SPRINT_TOOL_NAME, registerStartSprint } from './tools/startSprint';
 import { COMPLETE_SPRINT_TOOL_NAME, registerCompleteSprint } from './tools/completeSprint';
+import { MARK_INTEGRATED_TOOL_NAME, registerMarkIntegrated } from './tools/markIntegrated';
+import { COMPLETE_SESSION_TOOL_NAME, registerCompleteSession } from './tools/completeSession';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
-// 7.8.10) — the single place that assembles the server's tool surface. This is
-// the SEAM each later subtask extends: add the tool module under `tools/`,
-// import its `register*`, and add one line to `registerMcpTools` — without
-// touching the transport (`app/api/mcp/route.ts`) or the auth gate
+// 7.8.10 / 7.8.11) — the single place that assembles the server's tool surface.
+// This is the SEAM each later subtask extends: add the tool module under
+// `tools/`, import its `register*`, and add one line to `registerMcpTools` —
+// without touching the transport (`app/api/mcp/route.ts`) or the auth gate
 // (`lib/mcp/auth.ts`). Every tool resolves its acting `ServiceContext` through
 // the injected `resolveContext`, so auth lives in exactly one place and the
 // tools stay testable with a fixed-context resolver.
@@ -47,6 +49,8 @@ export const MCP_TOOL_NAMES = [
   MOVE_TO_BACKLOG_TOOL_NAME,
   START_SPRINT_TOOL_NAME,
   COMPLETE_SPRINT_TOOL_NAME,
+  MARK_INTEGRATED_TOOL_NAME,
+  COMPLETE_SESSION_TOOL_NAME,
 ] as const;
 
 /** Register every MCP tool on `server`, wiring each to `resolveContext`. */
@@ -72,6 +76,9 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
   registerMoveToBacklog(server, resolveContext);
   registerStartSprint(server, resolveContext);
   registerCompleteSprint(server, resolveContext);
+  // Integration-state tools (7.8.11) — the 7.9 CLI session loop's write surface.
+  registerMarkIntegrated(server, resolveContext);
+  registerCompleteSession(server, resolveContext);
 }
 
 /**

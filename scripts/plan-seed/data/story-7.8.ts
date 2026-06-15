@@ -239,7 +239,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.3',
       title:
         'API tokens settings UI — Settings → Account → API tokens (list / create-shows-once / revoke)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
@@ -448,7 +448,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.8',
       title:
         'Docs + runbook flip — `docs/mcp.md` (tool catalog, client wiring) + MOTIR.md status-workflow rewrite',
-      status: 'in_progress',
+      status: 'done',
       type: 'content',
       executor: 'coding_agent',
       estimateMinutes: 35,
@@ -555,7 +555,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.11',
       title:
         'Integration-state substrate — `in_review` status, `work_item.session_branch`, integrated-dep readiness, `mark_integrated` / `complete_session` tools',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,

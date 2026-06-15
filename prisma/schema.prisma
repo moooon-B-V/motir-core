@@ -797,6 +797,19 @@ model WorkItem {
   // boolean is the complete state space — migrating to an enum later is a
   // contained change if a third visibility mode is ever added (ADR §1).
   publicChildrenHidden   Boolean                   @default(false)
+  // Integration branch (Story 7.8 · Subtask 7.8.11) — the session branch this
+  // item's work currently sits on after a run integrated it (status moved to
+  // `in_review` via `mark_integrated`). NON-NULL ⇔ the item is integrated-
+  // awaiting-review: its work is mergeable so it UNBLOCKS dependents (the
+  // integrated-dep readiness rule, keyed on THIS field, not the status key —
+  // custom workflows can name review states anything, but the recorded branch
+  // is the ground truth a dependent can build on). CLEARED back to NULL the
+  // moment the item reaches a `done`-category status (the chokepoint is
+  // `applyStatusTransition`; `complete_session` is the bulk close-out after the
+  // human merges the session PR). Indexed for the `complete_session` lookup
+  // (every item recorded on a branch) — a plain `String?` matching this table's
+  // camelCase, no-`@map` columns.
+  sessionBranch          String?
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
 
@@ -891,6 +904,12 @@ model WorkItem {
   // outranks that preference, and the private-epic set is tiny so a plain
   // composite stays cheap.)
   @@index([projectId, publicChildrenHidden])
+  // The `complete_session` bulk close-out (Subtask 7.8.11) reads every item
+  // recorded on a given session branch (`sessionBranch = ?`); this index keeps
+  // that an indexable lookup. `sessionBranch` is highly selective (a branch
+  // names a handful of items) and the column is NULL on the vast majority of
+  // rows, so a plain single-column index stays small.
+  @@index([sessionBranch])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn

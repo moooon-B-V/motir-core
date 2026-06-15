@@ -282,7 +282,7 @@ export const workflowsService = {
 
   /**
    * Seed a project's default workflow (Subtask 2.2.2) — the 6 statuses +
-   * 15 transitions from lib/workflows/defaultWorkflow (finding #45).
+   * 16 transitions from lib/workflows/defaultWorkflow (finding #45 + 7.8.11).
    * NEVER opens its own transaction: `tx` is REQUIRED and supplied by the
    * caller (createProject), so the project insert and its workflow are atomic —
    * a rollback of either rolls back both. Statuses are inserted first to

@@ -16,7 +16,7 @@ import { truncateAuthTables } from '../helpers/db';
 // consolidating what `transition-validation.test.ts` only SAMPLES. Everything
 // is driven through the shipped path — `workItemsService.updateStatus`, which
 // `workflowsService.canTransition` gates — against a `createTestProject`
-// project (auto-seeds the six default statuses + fifteen transitions). Real
+// project (auto-seeds the six default statuses + sixteen transitions). Real
 // Postgres; runs in CI.
 //
 // The legal-edge and illegal-non-edge sets are DERIVED FROM the
@@ -118,7 +118,7 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
     ]);
   });
 
-  it('declares exactly the fifteen default transition edges (finding #45 count)', () => {
+  it('declares exactly the sixteen default transition edges (finding #45 + 7.8.11)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -126,6 +126,8 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'in_review>done',
         'todo>blocked',
         'in_progress>blocked',
+        // Subtask 7.8.11: an integrated-awaiting-review item can stall on a blocker.
+        'in_review>blocked',
         'blocked>todo',
         'blocked>in_progress',
         'in_review>in_progress',
@@ -138,18 +140,18 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'blocked>cancelled',
       ]),
     );
-    expect(EDGES).toHaveLength(15);
+    expect(EDGES).toHaveLength(16);
   });
 
-  it('partitions the 6×6 grid into 15 edges + 6 self-loops + 15 non-edges', () => {
+  it('partitions the 6×6 grid into 16 edges + 6 self-loops + 14 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(15);
+    expect(NON_EDGES).toHaveLength(14);
   });
 });
 
-describe('restricted mode — every default edge is accepted (the full 15-edge sweep)', () => {
+describe('restricted mode — every default edge is accepted (the full 16-edge sweep)', () => {
   it.each(EDGES)(
     '%s → %s transitions and records exactly one "updated" revision',
     async (from, to) => {
