@@ -20,6 +20,7 @@
     "db:seed": "tsx scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx scripts/seed-large.ts",
     "db:seed:collab": "tsx scripts/seed-collab.ts",
+    "db:seed:reporting": "tsx scripts/seed-reporting.ts",
     "db:backfill:boards": "tsx scripts/backfill-default-boards.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
