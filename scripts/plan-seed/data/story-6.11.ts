@@ -109,7 +109,7 @@ import type { PlanStory } from '../types';
 export const story_6_11: PlanStory = {
   id: '6.11',
   title: 'Triage inbox (bug/feature intake → promote)',
-  status: 'planned',
+  status: 'done',
   gitBranch: 'feat/PROD-6.11-triage-inbox',
   descriptionMd:
     'The incoming-work front door for a project. Bug reports and feature ' +
@@ -681,7 +681,7 @@ export const story_6_11: PlanStory = {
     {
       id: '6.11.10',
       title: 'Retire the dropped external-submitter intake — ADR amend + schema column drop',
-      status: 'planned',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
