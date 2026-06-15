@@ -109,7 +109,7 @@ function OptionRow({
       <Check
         aria-hidden
         className={cn(
-          'h-4 w-4 shrink-0 text-(--el-accent)',
+          'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
           selected ? 'opacity-100' : 'opacity-0',
         )}
       />
@@ -268,7 +268,10 @@ export function IssueFilterBar({
       )}
     >
       <SlidersHorizontal
-        className={cn('h-4 w-4', active ? 'text-(--el-accent)' : 'text-(--el-text-muted)')}
+        className={cn(
+          'h-4 w-4',
+          active ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
+        )}
         aria-hidden
       />
       {t('filter')}
@@ -283,7 +286,7 @@ export function IssueFilterBar({
       {superseded ? (
         <span
           aria-label={t('filterSupersededAria')}
-          className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-tint-lavender) text-(--el-accent)"
+          className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-(--radius-badge) bg-(--el-tint-lavender) text-(--el-accent-on-surface)"
         >
           <FunnelPlus className="h-[11px] w-[11px]" aria-hidden />
         </span>

@@ -58,7 +58,7 @@ export function SprintMenuList({
           >
             <span className="min-w-0 flex-1 truncate">{sprint.name}</span>
             {isCurrent ? (
-              <Check className="h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
+              <Check className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
             ) : (
               <Pill status={SPRINT_STATE_TONE[sprint.state]}>
                 {t(`sprintState.${sprint.state}`)}

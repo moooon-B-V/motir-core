@@ -289,7 +289,7 @@ function CreateSprintButton({ onCreated }: { onCreated: () => Promise<void> }) {
       onClick={create}
       disabled={busy}
       data-testid="create-sprint"
-      className="flex w-full items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-control-x) py-3 text-sm font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent) disabled:opacity-60"
+      className="flex w-full items-center justify-center gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) px-(--spacing-control-x) py-3 text-sm font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent-on-surface) disabled:opacity-60"
     >
       <Plus className="h-4 w-4 shrink-0" aria-hidden />
       {busy ? t('creatingSprint') : t('createSprint')}

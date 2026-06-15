@@ -54,7 +54,10 @@ function EyeGlyph({ watching }: { watching: boolean }) {
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn('h-4 w-4', watching ? 'text-(--el-accent)' : 'text-(--el-text-muted)')}
+      className={cn(
+        'h-4 w-4',
+        watching ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
+      )}
       aria-hidden
     >
       <path
@@ -285,7 +288,9 @@ export function WatchControl({
             <span
               className={cn(
                 'tabular-nums',
-                watching ? 'font-semibold text-(--el-accent)' : 'text-(--el-text-secondary)',
+                watching
+                  ? 'font-semibold text-(--el-accent-on-surface)'
+                  : 'text-(--el-text-secondary)',
               )}
             >
               {count}

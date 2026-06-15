@@ -239,7 +239,7 @@ export function PublicSubmitRequestForm({
       {showDedupe ? (
         <div className="flex flex-col gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-3">
           <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-(--el-text-secondary)">
-            <ChevronUp className="h-3.5 w-3.5 text-(--el-accent)" aria-hidden />
+            <ChevronUp className="h-3.5 w-3.5 text-(--el-accent-on-surface)" aria-hidden />
             {t('dedupeHeader', { count: candidates.length })}
           </div>
           <ul className="flex flex-col gap-1.5">

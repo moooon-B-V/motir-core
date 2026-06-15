@@ -28,11 +28,12 @@ under `@theme`. Tailwind v4 exposes them as utility classes automatically
 
 ### Brand & primary
 
-| Token                        | Light     | Dark      | Role                                                                                 |
-| ---------------------------- | --------- | --------- | ------------------------------------------------------------------------------------ |
-| `--color-primary`            | `#5645d4` | `#7b6ce5` | The dominant CTA color. Reserved for the _single_ most important action on any view. |
-| `--color-primary-foreground` | `#ffffff` | `#ffffff` | Text/icons on primary surfaces.                                                      |
-| `--color-primary-pressed`    | `#4534b3` | `#5645d4` | Active/pressed state of primary buttons.                                             |
+| Token                        | Light     | Dark      | Role                                                                                                                                                                                                  |
+| ---------------------------- | --------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--color-primary`            | `#5645d4` | `#7b6ce5` | The dominant CTA color, and the accent used **as text/icon** on a page surface (`--el-accent-on-surface`). Dark value stays bright so it clears AA (4.67:1) as text on the near-black canvas.         |
+| `--color-primary-fill`       | `#5645d4` | `#6c5cdd` | The accent **fill** behind white label text (`--el-accent`) — filled buttons/badges. Dark value darkened so white text on it clears AA (4.99:1). Equals `--color-primary` in light theme. (MOTIR-757) |
+| `--color-primary-foreground` | `#ffffff` | `#ffffff` | Text/icons on primary _fills_ (`--el-accent-text`).                                                                                                                                                   |
+| `--color-primary-pressed`    | `#4534b3` | `#5645d4` | Active/pressed state of primary buttons.                                                                                                                                                              |
 
 ### Surfaces
 

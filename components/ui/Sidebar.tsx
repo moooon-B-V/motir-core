@@ -135,7 +135,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
           'hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           isActive &&
-            'bg-(--el-sidebar-item-bg-active) text-(--el-accent) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
+            'bg-(--el-sidebar-item-bg-active) text-(--el-accent-on-surface) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
         )}
       >
         {glyph}
@@ -188,7 +188,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         aria-hidden
         className={cn(
           'inline-flex shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px]',
-          isActive ? 'text-(--el-accent)' : 'text-(--el-text-muted)',
+          isActive ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
         )}
       >
         {item.icon}

@@ -355,7 +355,7 @@ export function BoardSwitcher({
                     className="flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-[13.5px] text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                   >
                     <Check
-                      className={`h-[15px] w-[15px] shrink-0 text-(--el-accent) ${
+                      className={`h-[15px] w-[15px] shrink-0 text-(--el-accent-on-surface) ${
                         isActive ? '' : 'invisible'
                       }`}
                       aria-hidden
@@ -459,7 +459,7 @@ export function BoardSwitcher({
                     setManageId(null);
                     setNewOpen(true);
                   }}
-                  className="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-[13.5px] font-medium text-(--el-accent) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  className="flex items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-[13.5px] font-medium text-(--el-accent-on-surface) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                 >
                   <Plus className="h-4 w-4 shrink-0" aria-hidden />
                   {t('newBoard')}
@@ -696,7 +696,7 @@ function BoardFormModal({
                     }`}
                   >
                     <Icon
-                      className={`h-4 w-4 shrink-0 ${selected ? 'text-(--el-accent)' : 'text-(--el-text-muted)'}`}
+                      className={`h-4 w-4 shrink-0 ${selected ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)'}`}
                       aria-hidden
                     />
                     {label}

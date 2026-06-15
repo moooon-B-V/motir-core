@@ -88,7 +88,7 @@ export function EpicPrivacyControl({
         <Shield
           className={cn(
             'mt-0.5 h-4 w-4 shrink-0',
-            hidden ? 'text-(--el-accent)' : 'text-(--el-text-muted)',
+            hidden ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
           )}
           aria-hidden
         />

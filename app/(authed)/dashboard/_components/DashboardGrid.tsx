@@ -730,7 +730,7 @@ function DashboardSwitcher({
               <LayoutDashboard className="size-4 shrink-0 text-(--el-text-muted)" aria-hidden />
               <span className="flex-1 truncate">{d.name}</span>
               {d.id === current ? (
-                <Check className="size-4 text-(--el-accent)" aria-hidden />
+                <Check className="size-4 text-(--el-accent-on-surface)" aria-hidden />
               ) : null}
             </Link>
           ))}

@@ -398,7 +398,8 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
 | muted / caption                             | `--el-text-muted`                                                                  |
 | tertiary / footer · faint label             | `--el-text-tertiary` · `--el-text-faint`                                           |
 | text on an ink/accent fill                  | `--el-text-inverted`                                                               |
-| CTA accent · its text · pressed             | `--el-accent` · `--el-accent-text` · `--el-accent-pressed`                         |
+| CTA accent FILL · its text · pressed        | `--el-accent` · `--el-accent-text` · `--el-accent-pressed`                         |
+| accent AS text / icon on a page surface     | `--el-accent-on-surface`                                                           |
 | brand-pink decorative highlight             | `--el-highlight`                                                                   |
 | section surface · quieter · faint fill      | `--el-surface` · `--el-surface-soft` · `--el-muted`                                |
 | border · soft · strong                      | `--el-border` · `--el-border-soft` · `--el-border-strong`                          |
