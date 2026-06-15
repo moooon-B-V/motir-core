@@ -811,7 +811,7 @@ export const story_6_12: PlanStory = {
     {
       id: '6.12.7',
       title: 'The public roadmap view — status tracking (submitted → planned → in_progress → done)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
