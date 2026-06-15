@@ -264,7 +264,7 @@ export const story_6_7: PlanStory = {
       id: '6.7.3',
       title:
         'Search/reporting/automation at scale — indexed filters + SQL-aggregated reports over the corpus, the exactly-once rule storm, and the combined admin a11y sweep',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 30,
