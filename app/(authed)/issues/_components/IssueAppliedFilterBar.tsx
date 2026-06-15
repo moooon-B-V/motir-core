@@ -207,7 +207,7 @@ function NameChip({ applied, onClick }: { applied: AppliedSavedFilter; onClick: 
       aria-label={aria}
       className="inline-flex max-w-full items-center gap-1.5 rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
     >
-      <Bookmark className="h-3.5 w-3.5 shrink-0 text-(--el-accent)" aria-hidden />
+      <Bookmark className="h-3.5 w-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
       <span className="min-w-0 truncate">{applied.name}</span>
       {VisGlyph ? (
         <VisGlyph className="h-3 w-3 shrink-0 text-(--el-text-secondary)" aria-hidden />

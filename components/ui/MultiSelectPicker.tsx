@@ -339,7 +339,7 @@ export function MultiSelectPicker({
                 <Check
                   aria-hidden
                   className={cn(
-                    'h-4 w-4 shrink-0 text-(--el-accent)',
+                    'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
                     selected ? 'opacity-100' : 'opacity-0',
                   )}
                 />
@@ -362,7 +362,7 @@ export function MultiSelectPicker({
                 clampedActive === options.length && 'bg-(--el-surface)',
               )}
             >
-              <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-accent)">
+              <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-accent-on-surface)">
                 <Plus className="h-3.5 w-3.5" aria-hidden />
               </span>
               <span className="min-w-0 flex-1 truncate">

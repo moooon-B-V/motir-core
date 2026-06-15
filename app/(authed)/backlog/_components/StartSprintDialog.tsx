@@ -328,7 +328,7 @@ export function StartSprintDialog({
           />
 
           <div className="flex items-center gap-2 text-sm text-(--el-text-secondary)">
-            <Target className="h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
+            <Target className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
             <span>
               {t('startSprintFlow.committedSummary', {
                 count: sprint.issueCount,

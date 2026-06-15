@@ -405,7 +405,7 @@ function ApplyNameButton({
       aria-label={t('apply', { name })}
       className="group flex w-full min-w-0 items-start gap-2 text-left disabled:opacity-60"
     >
-      <Glyph className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
+      <Glyph className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-medium text-(--el-text) group-hover:text-(--el-link) group-hover:underline">
           {name}

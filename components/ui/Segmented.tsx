@@ -75,7 +75,7 @@ export function Segmented<T extends string>({
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active
-                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-accent) [&_.seg-trail]:text-(--el-accent)'
+                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-accent-on-surface) [&_.seg-trail]:text-(--el-accent-on-surface)'
                 : 'text-(--el-text-secondary) hover:text-(--el-text) [&_.seg-ic]:text-(--el-text-faint) [&_.seg-trail]:text-(--el-text-faint)',
             )}
           >

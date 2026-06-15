@@ -51,6 +51,11 @@
   --color-primary: #5645d4;
   --color-primary-foreground: #ffffff;
   --color-primary-pressed: #4534b3;
+  /* Accent FILL behind white text (filled buttons/badges). In light theme it
+     equals --color-primary; the dark theme darkens it so white label text
+     clears WCAG AA (the brighter --color-primary stays the accent used AS text
+     on the page). See [data-theme='dark']. (MOTIR-757) */
+  --color-primary-fill: #5645d4;
 
   /* Surfaces */
   --color-background: #ffffff; /* canvas */
@@ -229,10 +234,16 @@
   --color-hairline-strong: #3a3a3a;
   --color-border: #2a2a2a;
 
-  /* Primary stays close to brand; lighten slightly for dark contrast. */
+  /* Primary stays close to brand; brightened from the light theme so the accent
+     reads as TEXT/icon on the near-black canvas (#7b6ce5 on #0f0f0f ≈ 4.67:1, AA
+     text). But white text ON this as a FILL is only 4.1:1 — so filled accent
+     buttons use the darker --color-primary-fill below instead (MOTIR-757). */
   --color-primary: #7b6ce5;
   --color-primary-foreground: #ffffff;
   --color-primary-pressed: #5645d4;
+  /* Darker accent fill for dark theme: white label text on #6c5cdd is 4.99:1
+     (AA), while #6c5cdd still clears 3:1 as a fill against the dark canvas. */
+  --color-primary-fill: #6c5cdd;
 
   /* Pastel tints dimmed for dark backgrounds */
   --color-tint-peach: #3a2a1a;
@@ -322,8 +333,13 @@
   --el-text-inverted: var(--color-background); /* text on an ink / accent fill */
 
   /* ── Accent (active CTA identity) + brand highlight ─────────────── */
-  --el-accent: var(--color-primary);
+  /* --el-accent is the FILL behind --el-accent-text (white): filled buttons,
+     badges, toggles. --el-accent-on-surface is the accent used AS text/icon on
+     a page surface. They diverge in dark theme (fill darkens for white-text AA;
+     text stays brand-bright for AA on the near-black canvas) — MOTIR-757. */
+  --el-accent: var(--color-primary-fill);
   --el-accent-text: var(--color-primary-foreground);
+  --el-accent-on-surface: var(--color-primary);
   --el-accent-pressed: var(--color-primary-pressed);
   --el-highlight: var(--color-accent); /* brand pink — decorative accents */
 

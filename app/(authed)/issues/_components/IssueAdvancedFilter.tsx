@@ -153,7 +153,10 @@ export function IssueAdvancedFilter({
           )}
         >
           <FunnelPlus
-            className={cn('h-4 w-4', active ? 'text-(--el-accent)' : 'text-(--el-text-muted)')}
+            className={cn(
+              'h-4 w-4',
+              active ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
+            )}
             aria-hidden
           />
           {t('advanced')}

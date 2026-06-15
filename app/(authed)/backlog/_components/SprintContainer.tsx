@@ -154,7 +154,7 @@ export function SprintContainer({
             disabled={!canStart}
             title={canStart ? undefined : t('startSprintEmpty')}
             onClick={() => setStartOpen(true)}
-            className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent) disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-(--el-border) disabled:hover:text-(--el-text-secondary)"
+            className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent-on-surface) disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-(--el-border) disabled:hover:text-(--el-text-secondary)"
           >
             <Play className="h-3.5 w-3.5" aria-hidden />
             {t('startSprint')}
@@ -167,7 +167,7 @@ export function SprintContainer({
             type="button"
             onClick={() => setCompleteOpen(true)}
             data-testid={`complete-sprint-${sprint.id}`}
-            className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent)"
+            className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:border-(--el-accent) hover:text-(--el-accent-on-surface)"
           >
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
             {t('completeSprint')}

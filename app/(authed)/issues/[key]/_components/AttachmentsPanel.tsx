@@ -525,7 +525,7 @@ export function AttachmentsPanel({
           aria-hidden
           className="border-(--el-accent) bg-(--el-tint-lavender) pointer-events-none absolute inset-1.5 z-10 flex flex-col items-center justify-center gap-2 rounded-(--radius-card) border-2 border-dashed"
         >
-          <Upload className="text-(--el-accent) h-6 w-6" />
+          <Upload className="text-(--el-accent-on-surface) h-6 w-6" />
           <span className="text-(--el-text-strong) font-sans text-[13px] font-semibold">
             {t('dropTitle')}
           </span>

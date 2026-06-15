@@ -86,7 +86,7 @@ export function IssueViewSwitcher({ view, sort, filter }: IssueViewSwitcherProps
               <Icon className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
               <span className="flex-1">{t(opt.labelKey)}</span>
               {isActive ? (
-                <Check className="h-4 w-4 shrink-0 text-(--el-accent)" aria-hidden />
+                <Check className="h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
               ) : null}
             </button>
           );

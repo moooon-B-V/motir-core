@@ -189,7 +189,7 @@ export function SavedFilterDropdown({
           <Bookmark
             className={cn(
               'h-4 w-4',
-              triggerActive ? 'text-(--el-accent)' : 'text-(--el-text-muted)',
+              triggerActive ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
             )}
             aria-hidden
           />
@@ -388,7 +388,7 @@ function OptionShell({
         <Check
           aria-hidden
           className={cn(
-            'h-4 w-4 shrink-0 text-(--el-accent)',
+            'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
             selected ? 'opacity-100' : 'opacity-0',
           )}
         />
