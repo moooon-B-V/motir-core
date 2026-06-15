@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { BookOpen, Columns3, List, Route } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import { cn } from '@/lib/utils/cn';
-import { PublicSubmitRequestButton } from './PublicSubmitRequestButton';
+import { PublicSubmitRequest } from './PublicSubmitRequest';
 
 // The public read-only sub-bar nav (Story 6.12 · Subtask 6.12.4 · design Panel 2
 // `.seg`). Overview / Board / Work items / Roadmap as REAL anchor tabs (link-
@@ -77,7 +77,7 @@ export async function PublicTabNav({
           );
         })}
       </nav>
-      <PublicSubmitRequestButton size="sm" />
+      <PublicSubmitRequest identifier={identifier} size="sm" />
     </div>
   );
 }

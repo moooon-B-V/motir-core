@@ -167,6 +167,14 @@ export interface PublicProjectLinksDto {
 
 /** The public Overview/README landing payload. */
 export interface PublicProjectOverviewDto {
+  /**
+   * The project's GLOBAL id — the address the public WRITE endpoints take
+   * (`/api/public/projects/[projectId]/requests` + `…/duplicates`, ADR §2.2).
+   * Public-safe: it is already the public write-URL segment. The READ surfaces
+   * key off the workspace-scoped `identifier`; the signed-in submit form (6.12.11)
+   * keys off this id.
+   */
+  id: string;
   /** The project's display name (the hero `<h1>`). */
   name: string;
   /** The project key (e.g. "PROD") — the public URL segment + a hero meta. */

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
-import { publicProjectsService } from '@/lib/services/publicProjectsService';
+import { getPublicOverview } from '@/lib/publicProjects/viewerContext';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { derivePublicDescription } from '@/lib/publicProjects/urls';
 import { MarkdownView } from '@/components/ui/MarkdownView';
@@ -29,7 +29,7 @@ export default async function PublicOverviewPage({
 
   let overview;
   try {
-    overview = await publicProjectsService.getOverview(identifier, actorUserId);
+    overview = await getPublicOverview(identifier, actorUserId);
   } catch (err) {
     if (err instanceof ProjectNotFoundError) notFound();
     throw err;
