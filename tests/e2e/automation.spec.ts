@@ -352,11 +352,52 @@ test.describe('automation rules — author → fire → audit', () => {
       },
     });
 
+    // The list's last-run cell has two faint states the success row above does
+    // not reach — "Never run" (no executions) and "No actions" (a no_actions
+    // run). Bug 6.17: both rendered in the decorative `--el-text-faint` token and
+    // failed AA color-contrast. Seed a rule for each so the `list` axe sweep
+    // below actually audits them (the success row alone never did — which is how
+    // the bug slipped this @a11y test and was only caught in the 6.7.3 corpus
+    // sweep).
+    await automationRulesService.create(
+      tenant.projectKey,
+      {
+        name: 'Never-run rule',
+        triggerType: 'created',
+        triggerConfig: {},
+        conditionFilterParam: null,
+        actions: [{ type: 'set_field', field: 'priority', value: 'high' }],
+      },
+      { userId: tenant.ownerId, workspaceId: tenant.workspaceId },
+    );
+    const noActionsRule = await automationRulesService.create(
+      tenant.projectKey,
+      {
+        name: 'No-actions rule',
+        triggerType: 'created',
+        triggerConfig: {},
+        conditionFilterParam: null,
+        actions: [{ type: 'set_field', field: 'priority', value: 'high' }],
+      },
+      { userId: tenant.ownerId, workspaceId: tenant.workspaceId },
+    );
+    await db.automationRuleExecution.create({
+      data: {
+        ruleId: noActionsRule.id,
+        status: 'no_actions',
+        workItemId: null,
+        durationMs: 2,
+        eventId: 'a11y-seed-noactions',
+      },
+    });
+
     await signIn(page, tenant.ownerEmail, PWD);
 
-    // The list.
+    // The list — including the never-run / no-actions last-run labels (6.17).
     await page.goto('/settings/project/automation');
     await expect(page.getByText('Audited rule')).toBeVisible();
+    await expect(page.getByText('Never run')).toBeVisible();
+    await expect(page.getByText('No actions', { exact: false })).toBeVisible();
     await expectAxeClean(page, 'list');
 
     // The editor (every offered trigger/action config kind reachable; open it).
