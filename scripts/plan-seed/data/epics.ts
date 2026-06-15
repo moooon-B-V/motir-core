@@ -2434,7 +2434,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           "Account settings → Notifications: per-row divider lines are visibly broken (gap before the EMAIL column) because each row's border-b is drawn on individual grid cells and the event cell's pr-4 ends the border 1rem short of the toggle columns",
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
