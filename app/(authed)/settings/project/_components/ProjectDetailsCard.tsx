@@ -167,7 +167,15 @@ function EditableDetails({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card header={<CardHead canManage t={td} />} className="p-0">
+      {/* p-0 on Card lets the save-bar footer's border-t extend edge-to-edge; body + header re-pad themselves. */}
+      <Card
+        header={
+          <div className="px-(--spacing-card-padding) pt-(--spacing-card-padding)">
+            <CardHead canManage t={td} />
+          </div>
+        }
+        className="p-0"
+      >
         <div className="flex flex-col p-(--spacing-card-padding)">
           {/* Avatar */}
           <FieldStack
