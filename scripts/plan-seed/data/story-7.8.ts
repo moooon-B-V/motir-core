@@ -239,7 +239,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.3',
       title:
         'API tokens settings UI — Settings → Account → API tokens (list / create-shows-once / revoke)',
-      status: 'blocked',
+      status: 'planned',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,
@@ -625,7 +625,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.12',
       title:
         'Account-settings AREA shell — `accountSettingsNav` registry + rail-swap layout + route split + totality test',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
