@@ -335,6 +335,9 @@ model Workspace {
   // Cascade with the workspace, the comments pattern.
   notifications            Notification[]
   sprintReportEntries      SprintReportEntry[]
+  // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
+  // workspace (the Linear mirror). Cascade with the workspace.
+  apiTokens                ApiToken[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -2559,6 +2562,15 @@ model DashboardWidget {
 model ApiToken {
   id          String    @id @default(cuid())
   userId      String    @map("user_id")
+  /// The workspace this token is BOUND to (Story 7.8 · bug 7.21). A PAT is
+  /// workspace-scoped (the verified Linear mirror: keys are created in, listed
+  /// per, and act within ONE workspace), captured from the creator's ACTIVE
+  /// workspace at mint time. The MCP bearer gate (`verifyMcpToken`) resolves the
+  /// request workspace from THIS column — NOT the owner's default workspace — so
+  /// a token minted in workspace A always acts on A (the bug 7.21 fix). The
+  /// Settings list is filtered to this column, so a token shows only in the
+  /// workspace it belongs to. Cascade: a deleted workspace takes its tokens.
+  workspaceId String    @map("workspace_id")
   /// User-facing name, e.g. "claude-code".
   label       String
   /// sha-256 hex of the full secret — the lookup key. Unique so `verify` is a
@@ -2576,9 +2588,11 @@ model ApiToken {
   revokedAt   DateTime? @map("revoked_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  // The settings-surface read: a user's tokens, newest first.
+  // The settings-surface read: a user's tokens in a workspace, newest first.
   @@index([userId])
+  @@index([workspaceId])
   @@map("api_token")
 }

@@ -4,6 +4,18 @@ import { Prisma, type ApiToken } from '@prisma/client';
  * return shape, so the bearer gate resolves token → user in one round-trip. */
 export type ApiTokenWithUser = Prisma.ApiTokenGetPayload<{ include: { user: true } }>;
 
+/** An `api_token` row with its bound workspace + that workspace's organization
+ * eager-loaded (bug 7.21) — the list/create return shape, so the DTO can label
+ * each token with the org → workspace it belongs to without a second query. */
+export type ApiTokenWithScope = Prisma.ApiTokenGetPayload<{
+  include: { workspace: { include: { organization: true } } };
+}>;
+
+/** The include the list/create reads share to populate {@link ApiTokenWithScope}. */
+const SCOPE_INCLUDE = {
+  workspace: { include: { organization: true } },
+} satisfies Prisma.ApiTokenInclude;
+
 // API-token repository — single Prisma operations on the `api_token` table
 // (Story 7.8 · Subtask 7.8.1). The persistence leaf `apiTokensService` reads
 // (the settings list, the verify lookup) and writes (mint, revoke, the
@@ -19,6 +31,9 @@ export type ApiTokenWithUser = Prisma.ApiTokenGetPayload<{ include: { user: true
 
 export interface CreateApiTokenInput {
   userId: string;
+  /** The workspace this token is bound to (bug 7.21) — its active workspace at
+   * mint time. The verify gate resolves the request workspace from it. */
+  workspaceId: string;
   label: string;
   tokenHash: string;
   tokenPrefix: string;
@@ -26,10 +41,16 @@ export interface CreateApiTokenInput {
 }
 
 export const apiTokenRepository = {
-  /** A user's tokens, newest first — the settings-list read (under
-   * `withUserContext`, so RLS already narrows to the owner). */
-  async findByUser(userId: string, tx: Prisma.TransactionClient): Promise<ApiToken[]> {
-    return tx.apiToken.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
+  /** A user's tokens across ALL their workspaces, newest first — the
+   * account-level settings list (bug 7.21: each row carries its bound workspace
+   * + org so the list labels it). Runs under `withUserContext`, so RLS already
+   * narrows to the owner. */
+  async findByUser(userId: string, tx: Prisma.TransactionClient): Promise<ApiTokenWithScope[]> {
+    return tx.apiToken.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: SCOPE_INCLUDE,
+    });
   },
 
   /** The verify lookup — an equality probe on the unique `token_hash` index
@@ -43,24 +64,38 @@ export const apiTokenRepository = {
   },
 
   /** One token by id, scoped to its owner — the revoke ownership probe
-   * (cross-user id reads as null → the service's 404-not-403). */
+   * (cross-user id reads as null → the service's 404-not-403). Includes the
+   * bound workspace + org so the revoke response maps the scoped DTO. */
   async findByIdForUser(
     tokenId: string,
     userId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<ApiToken | null> {
-    return tx.apiToken.findFirst({ where: { id: tokenId, userId } });
+  ): Promise<ApiTokenWithScope | null> {
+    return tx.apiToken.findFirst({ where: { id: tokenId, userId }, include: SCOPE_INCLUDE });
   },
 
-  /** Persist a freshly-minted token's hash row. Required `tx`. */
-  async create(input: CreateApiTokenInput, tx: Prisma.TransactionClient): Promise<ApiToken> {
-    return tx.apiToken.create({ data: input });
+  /** Persist a freshly-minted token's hash row, returning it with its bound
+   * workspace + org so the service maps the scoped DTO. Required `tx`. */
+  async create(
+    input: CreateApiTokenInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApiTokenWithScope> {
+    return tx.apiToken.create({ data: input, include: SCOPE_INCLUDE });
   },
 
   /** Soft-revoke: stamp `revokedAt`, leaving the row for the audit trail.
-   * Required `tx`. */
-  async revoke(tokenId: string, revokedAt: Date, tx: Prisma.TransactionClient): Promise<ApiToken> {
-    return tx.apiToken.update({ where: { id: tokenId }, data: { revokedAt } });
+   * Returns the row with its bound workspace + org so the service maps the
+   * scoped DTO. Required `tx`. */
+  async revoke(
+    tokenId: string,
+    revokedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<ApiTokenWithScope> {
+    return tx.apiToken.update({
+      where: { id: tokenId },
+      data: { revokedAt },
+      include: SCOPE_INCLUDE,
+    });
   },
 
   /** Stamp `lastUsedAt` — the throttled verify touch. Required `tx`. */

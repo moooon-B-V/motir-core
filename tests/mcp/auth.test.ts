@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP transport-level auth gate (Subtask 7.8.4) over real Postgres. `verifyMcpToken`
@@ -26,9 +27,11 @@ function reqWithBearer(token?: string): Request {
 }
 
 describe('verifyMcpToken', () => {
-  it('resolves a live token to the owning user + active workspace', async () => {
+  it("resolves a live token to the owning user + the token's bound workspace", async () => {
     const fx = await makeWorkItemFixture();
-    const { token } = await apiTokensService.create(fx.ownerId, { label: 'claude-code' });
+    const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+      label: 'claude-code',
+    });
 
     // Explicit bearer (as mcp-handler passes it)…
     const info = await verifyMcpToken(reqWithBearer(), token);
@@ -41,6 +44,21 @@ describe('verifyMcpToken', () => {
     expect(fromHeader?.extra).toMatchObject({ userId: fx.ownerId, workspaceId: fx.workspaceId });
   });
 
+  it('resolves the workspace the token was minted in, NOT the owner’s default workspace (bug 7.21)', async () => {
+    // The owner's first/default workspace is the fixture's; the token is bound
+    // to a SECOND workspace. The gate must resolve the second, not the default.
+    const fx = await makeWorkItemFixture();
+    const { workspace: second } = await createTestWorkspace({
+      ownerUserId: fx.ownerId,
+      name: 'Second',
+    });
+    const { token } = await apiTokensService.create(fx.ownerId, second.id, { label: 'second-ws' });
+
+    const info = await verifyMcpToken(reqWithBearer(), token);
+    expect(info?.extra).toMatchObject({ userId: fx.ownerId, workspaceId: second.id });
+    expect((info?.extra as { workspaceId: string }).workspaceId).not.toBe(fx.workspaceId);
+  });
+
   it('rejects an absent / malformed / unknown token (→ 401)', async () => {
     expect(await verifyMcpToken(reqWithBearer())).toBeUndefined();
     expect(await verifyMcpToken(reqWithBearer('not-a-motir-token'))).toBeUndefined();
@@ -49,14 +67,16 @@ describe('verifyMcpToken', () => {
 
   it('rejects a revoked token', async () => {
     const fx = await makeWorkItemFixture();
-    const { token, dto } = await apiTokensService.create(fx.ownerId, { label: 'revoked' });
+    const { token, dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+      label: 'revoked',
+    });
     await apiTokensService.revoke(fx.ownerId, dto.id);
     expect(await verifyMcpToken(reqWithBearer(), token)).toBeUndefined();
   });
 
   it('rejects an expired token', async () => {
     const fx = await makeWorkItemFixture();
-    const { token } = await apiTokensService.create(fx.ownerId, {
+    const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'expired',
       expiresAt: new Date(Date.now() - 60_000),
     });
