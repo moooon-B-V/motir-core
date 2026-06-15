@@ -125,7 +125,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **16 tools**.
+`initialize` handshake and registers **20 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -248,6 +248,46 @@ MCP-specific wiring.
 | `body` | string | yes      | Comment body (Markdown). Mention with `@[name](userId)`. |
 
 **Output** — `structuredContent`: the created `CommentDTO`.
+
+#### `link_work_items`
+
+Create a relationship between two work items — the primitive for the **dependency
+edges** the plan is built on. The `relationship` is read `fromKey <relationship>
+toKey` and uses the same five UI relationship kinds as the relationships panel
+(`blocked_by` / `blocks` / `relates_to` / `duplicates` / `clones`); `blocks` is
+the inverse direction of `blocked_by`, both stored as the single `is_blocked_by`
+edge. An `is_blocked_by` link removes the blocked item from the ready set
+(`list_ready` / `next_ready` honor it) and renders the inverse edge on the other
+item. Targets may live in **another project in the same workspace**.
+
+Re-creating an existing link is **idempotent** (a success no-op, not an error). A
+**self** link, a dependency **cycle** (`is_blocked_by` only), or a
+**cross-workspace** link returns a typed error naming the violation. The link is
+an edit of the FROM item, so the same Story-6.4 edit gate as the UI applies.
+
+| Input          | Type                                                                   | Required | Notes                                                     |
+| -------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
+| `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"PROD-3"`.             |
+| `toKey`        | string                                                                 | yes      | The second item's identifier (may be in another project). |
+| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | Read `fromKey <relationship> toKey`.                      |
+
+**Output** — `structuredContent`: the created `WorkItemLinkDto` (plus the
+`relationship`). For an idempotent no-op, `{ idempotent: true, relationship }`.
+
+#### `unlink_work_items`
+
+Remove a relationship between two work items, addressed by the same `fromKey` +
+`toKey` + `relationship` used to create it. **Idempotent** — removing a link that
+is already absent succeeds as a no-op. Same edit gate as the UI link path.
+
+| Input          | Type                                                                   | Required | Notes                         |
+| -------------- | ---------------------------------------------------------------------- | -------- | ----------------------------- |
+| `fromKey`      | string                                                                 | yes      | The first item's identifier.  |
+| `toKey`        | string                                                                 | yes      | The second item's identifier. |
+| `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | The relationship to remove.   |
+
+**Output** — `structuredContent`: `{ removed: boolean, relationship }` — `removed`
+is `false` when no such link existed (the idempotent no-op).
 
 ### Search
 

@@ -18,6 +18,11 @@ import { START_SPRINT_TOOL_NAME, registerStartSprint } from './tools/startSprint
 import { COMPLETE_SPRINT_TOOL_NAME, registerCompleteSprint } from './tools/completeSprint';
 import { MARK_INTEGRATED_TOOL_NAME, registerMarkIntegrated } from './tools/markIntegrated';
 import { COMPLETE_SESSION_TOOL_NAME, registerCompleteSession } from './tools/completeSession';
+import {
+  LINK_WORK_ITEMS_TOOL_NAME,
+  UNLINK_WORK_ITEMS_TOOL_NAME,
+  registerLinkWorkItems,
+} from './tools/linkWorkItems';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
 // 7.8.10 / 7.8.11) — the single place that assembles the server's tool surface.
@@ -51,6 +56,8 @@ export const MCP_TOOL_NAMES = [
   COMPLETE_SPRINT_TOOL_NAME,
   MARK_INTEGRATED_TOOL_NAME,
   COMPLETE_SESSION_TOOL_NAME,
+  LINK_WORK_ITEMS_TOOL_NAME,
+  UNLINK_WORK_ITEMS_TOOL_NAME,
 ] as const;
 
 /** Register every MCP tool on `server`, wiring each to `resolveContext`. */
@@ -79,6 +86,8 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
   // Integration-state tools (7.8.11) — the 7.9 CLI session loop's write surface.
   registerMarkIntegrated(server, resolveContext);
   registerCompleteSession(server, resolveContext);
+  // Link tools (7.8.13) — the dependency-edge primitive over the Epic-2 link service.
+  registerLinkWorkItems(server, resolveContext);
 }
 
 /**

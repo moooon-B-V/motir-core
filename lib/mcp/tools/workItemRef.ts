@@ -57,16 +57,46 @@ export async function resolveWorkItemIdsByKeys(
   const projectCache = new Map<string, string>(); // project key → project id
   const ids: string[] = [];
   for (const raw of keys) {
-    const identifier = normalizeIdentifier(raw);
-    const projectKey = projectKeyOf(identifier);
-    let projectId = projectCache.get(projectKey);
-    if (projectId === undefined) {
-      const project = await projectsService.getByKey(projectKey, ctx);
-      projectId = project.id;
-      projectCache.set(projectKey, projectId);
-    }
-    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
-    ids.push(item.id);
+    ids.push(await resolveOneKey(raw, ctx, projectCache));
   }
   return ids;
+}
+
+/**
+ * Resolve a PAIR of `PROD-<n>` keys to a fixed 2-tuple of ids — the shape the
+ * link tools (Subtask 7.8.13) take (`fromKey`, `toKey`). Same per-item project
+ * resolution + cache as {@link resolveWorkItemIdsByKeys}, but the tuple return
+ * gives the caller two DEFINITE ids (no `noUncheckedIndexedAccess` guard on an
+ * array index). The two items may live in different projects of the same
+ * workspace — the link model allows a cross-project edge.
+ */
+export async function resolveWorkItemIdPair(
+  fromKey: string,
+  toKey: string,
+  ctx: ServiceContext,
+): Promise<[string, string]> {
+  const projectCache = new Map<string, string>(); // project key → project id
+  const fromId = await resolveOneKey(fromKey, ctx, projectCache);
+  const toId = await resolveOneKey(toKey, ctx, projectCache);
+  return [fromId, toId];
+}
+
+/** Resolve ONE key to its internal id, memoizing the project lookup in
+ *  `projectCache`. A bad / cross-tenant key throws the service's typed
+ *  not-found error (the 404-not-403 contract), which the caller maps. */
+async function resolveOneKey(
+  raw: string,
+  ctx: ServiceContext,
+  projectCache: Map<string, string>,
+): Promise<string> {
+  const identifier = normalizeIdentifier(raw);
+  const projectKey = projectKeyOf(identifier);
+  let projectId = projectCache.get(projectKey);
+  if (projectId === undefined) {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    projectId = project.id;
+    projectCache.set(projectKey, projectId);
+  }
+  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+  return item.id;
 }
