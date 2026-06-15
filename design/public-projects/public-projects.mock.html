@@ -1881,146 +1881,6 @@
         color: var(--el-text-muted);
       }
 
-      /* the make-it (authoring) editor in settings */
-      .ov-editor {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-input);
-        overflow: hidden;
-        background: var(--el-page-bg);
-      }
-      .ov-editor .toolbar {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 7px 9px;
-        border-bottom: 1px solid var(--el-border);
-        background: var(--el-surface-soft);
-        color: var(--el-text-secondary);
-      }
-      .ov-editor .toolbar .tb {
-        width: 26px;
-        height: 26px;
-        border-radius: var(--radius-control);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 13px;
-        font-weight: 700;
-      }
-      .ov-editor .toolbar .tb .ic {
-        width: 15px;
-        height: 15px;
-      }
-      .ov-editor .body {
-        padding: 13px var(--spacing-input-x);
-        font-size: 13.5px;
-        line-height: 1.6;
-        color: var(--el-text-secondary);
-        min-height: 96px;
-      }
-      .ov-editor .body b {
-        color: var(--el-text);
-      }
-
-      /* settings entry point → opens the dedicated Edit overview view */
-      .ov-entry {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 13px 14px;
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        background: var(--el-surface-soft);
-      }
-      .ov-entry .body {
-        flex: 1;
-        min-width: 0;
-      }
-      .ov-entry .ttl {
-        font-size: 13.5px;
-        font-weight: 600;
-        color: var(--el-text);
-        margin-bottom: 3px;
-      }
-      .ov-entry .snip {
-        font-size: 12px;
-        color: var(--el-text-muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .ov-entry .snip b {
-        color: var(--el-text-secondary);
-        font-weight: 600;
-      }
-
-      /* ── The dedicated "Edit overview" view (split editor + live preview) ── */
-      .editor-shell {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-card);
-        background: var(--el-page-bg);
-        overflow: hidden;
-      }
-      .editor-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--el-border);
-      }
-      .editor-head .titles {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .editor-head .title-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .editor-head h2 {
-        font-family: var(--font-serif);
-        font-size: 20px;
-        font-weight: 600;
-        margin: 0;
-        color: var(--el-text);
-      }
-      .editor-head .sub {
-        margin: 0;
-        font-size: 13px;
-        color: var(--el-text-muted);
-      }
-      .icon-btn {
-        width: var(--height-control);
-        height: var(--height-control);
-        border-radius: var(--radius-control);
-        border: 1px solid var(--el-border);
-        background: var(--el-page-bg);
-        color: var(--el-text-secondary);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        flex: none;
-      }
-      .icon-btn:hover {
-        background: var(--el-surface);
-      }
-      .saved {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12.5px;
-        color: var(--el-success);
-        margin-right: 4px;
-      }
-      .saved .ic {
-        width: 15px;
-        height: 15px;
-      }
-
       .editor-toolbar {
         display: flex;
         align-items: center;
@@ -2059,67 +1919,418 @@
       .editor-toolbar .grow {
         flex: 1;
       }
-      .pane-tag {
-        font-family: var(--font-mono);
-        font-size: 10.5px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--el-text-faint);
+
+      /* ══ 6.16 — in-place public-page editing (authorable hero + readme) ══ */
+
+      /* (1) The admin "Edit page" affordance — shown ONLY to a signed-in
+         project admin viewing their own public page (viewerCanManage). The
+         topbar swaps the anonymous "Sign in / Start free" CTAs for the admin's
+         identity + the Edit-page button; anonymous / non-admin viewers keep the
+         logged-out chrome from Panel 1. */
+      .viewer-admin {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
-      .pane-tag.right {
-        width: 50%;
-        padding-left: 16px;
+      .viewer-admin .who {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .btn-edit-page .ic {
+        color: var(--el-accent-on-surface);
+      }
+      /* a quiet "you can edit this page" hint band under the banner (admin) */
+      .admin-hint {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 14px;
+        background: color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin: 0 0 14px;
+      }
+      .admin-hint .ic {
+        width: 15px;
+        height: 15px;
+        color: var(--el-accent-on-surface);
+        flex: none;
+      }
+      .admin-hint b {
+        color: var(--el-text);
       }
 
-      .editor-split {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        min-height: 420px;
+      /* (2) Edit mode — a light "Editing" mode chip (a live accent dot) that
+         replaces the Public chip while the admin is editing in place. */
+      .pill-editing {
+        background: color-mix(in srgb, var(--el-accent) 9%, var(--el-page-bg));
+        color: var(--el-accent-on-surface);
+        border: 1px solid color-mix(in srgb, var(--el-accent) 32%, transparent);
       }
-      .editor-src {
-        border-right: 1px solid var(--el-border);
-        overflow: auto;
+      .pill-editing .dote {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        flex: none;
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.35;
+        }
+      }
+
+      /* the hero in edit mode — fields get a dashed "editable" affordance ring */
+      .hero.editing {
+        outline: 1px dashed var(--el-border-strong);
+        outline-offset: 4px;
+      }
+      .field-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 6px;
+      }
+      /* the tagline input — a MULTI-LINE field (the tagline wraps to 2–3 lines);
+         placeholder when empty */
+      .tagline-input {
+        width: 100%;
+        max-width: 640px;
+        min-height: calc(var(--height-input) * 1.7);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .tagline-input.focused {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .tagline-input .ph {
+        color: var(--el-text-faint);
+      }
+      /* a blinking caret sits inline at the end of the focused tagline */
+      .tagline-input .caret {
+        display: inline-block;
+        vertical-align: -2px;
+        margin-left: 1px;
+        width: 1px;
+        height: 15px;
+        background: var(--el-text);
+        animation: caret 1s step-end infinite;
+      }
+
+      /* the editable tag chips + add-tag input */
+      .tag-edit {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .tag-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) 8px var(--spacing-chip-y) 10px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .tag-chip.mint {
+        background: var(--el-tint-mint);
+      }
+      .tag-chip.neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+      }
+      .tag-x {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        background: color-mix(in srgb, var(--el-text-strong) 12%, transparent);
+        color: var(--el-text-strong);
+        cursor: pointer;
+        flex: none;
+      }
+      .tag-x .ic {
+        width: 10px;
+        height: 10px;
+      }
+      .tag-add {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        color: var(--el-text-muted);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .tag-add:hover {
+        border-color: var(--el-accent);
+        color: var(--el-accent-on-surface);
+      }
+      .tag-add .ic {
+        width: 13px;
+        height: 13px;
+      }
+      /* clicking the + button swaps it for a SMALL inline input (fixed, compact
+         — not a full-width bar) */
+      .tag-add.input {
+        width: 150px;
+        justify-content: flex-start;
+        border-style: solid;
+        border-color: var(--el-accent);
+        color: var(--el-text);
+        cursor: text;
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .tag-add .caret {
+        width: 1px;
+        height: 14px;
+        background: var(--el-text);
+        animation: caret 1s step-end infinite;
+      }
+      @keyframes caret {
+        50% {
+          opacity: 0;
+        }
+      }
+      .tag-meta {
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+        margin-left: 2px;
+      }
+      .tag-empty {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* the in-place README editor (the shipped MarkdownEditor) */
+      .md-edit {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        overflow: hidden;
         background: var(--el-page-bg);
       }
-      .editor-src pre {
+      .md-edit .ta {
         margin: 0;
-        padding: 16px 18px;
-      }
-      .editor-src code {
+        padding: 14px 16px;
         font-family: var(--font-mono);
         font-size: 12.5px;
         line-height: 1.65;
         color: var(--el-text-secondary);
         white-space: pre-wrap;
         word-break: break-word;
+        min-height: 220px;
       }
-      .editor-prev {
-        position: relative;
-        overflow: auto;
-        background: var(--el-surface-soft);
-        padding: 18px 20px;
-      }
-      .prev-badge {
-        position: absolute;
-        top: 12px;
-        right: 14px;
-        font-size: 10.5px;
+      .md-edit .ta b {
+        color: var(--el-text);
         font-weight: 600;
-        color: var(--el-text-secondary);
-        background: var(--el-page-bg);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-badge);
-        padding: 2px 9px;
       }
-      .md-prev {
+
+      /* the sticky Save / Cancel bar (pinned to the bottom of the viewport while
+         editing; here shown docked at the foot of the page). */
+      .editbar {
+        position: sticky;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 18px;
+        margin-top: 18px;
         background: var(--el-page-bg);
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
-        padding: 18px;
+        box-shadow: var(--shadow-elevated);
       }
-      .md-prev h3:first-child {
-        margin-top: 0;
+      .editbar .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .editbar .status .dotw {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        background: var(--el-warning);
+        flex: none;
+      }
+      .editbar .grow {
+        flex: 1;
+      }
+      /* the small inline spinner on a save-in-flight button */
+      .spin {
+        width: 13px;
+        height: 13px;
+        border-radius: 9999px;
+        border: 2px solid color-mix(in srgb, var(--el-accent-text) 45%, transparent);
+        border-top-color: var(--el-accent-text);
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      /* save error — a rose inline banner above the bar (finding #35) */
+      .save-error {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 10px 12px;
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-card);
+        font-size: 12.5px;
+        line-height: 1.45;
+        margin-top: 14px;
+      }
+      .save-error .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-danger);
+        margin-top: 1px;
+        flex: none;
+      }
+
+      /* the unsaved-changes guard dialog (shown on Cancel / navigate-away) */
+      .guard-scrim {
+        background: color-mix(in srgb, var(--el-text) 28%, transparent);
+        border-radius: var(--radius-card);
+        padding: 40px 20px;
+        display: flex;
+        justify-content: center;
+      }
+      .guard-dialog {
+        width: 100%;
+        max-width: 380px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 20px;
+      }
+      .guard-dialog h4 {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 7px;
+      }
+      .guard-dialog p {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 0 0 16px;
+      }
+      .guard-dialog .row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 9px;
+      }
+
+      /* settings → "Edit on the public page" link row (replaces the embedded
+         editor / the old ov-entry "Edit overview" button) */
+      .ov-link-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .ov-link-row .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .ov-link-row .ttl {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-bottom: 3px;
+      }
+      .ov-link-row .dsc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.45;
+      }
+      .ov-link-row .go {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-link);
+        white-space: nowrap;
+      }
+      .ov-link-row .go .ic {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* the edit-mode state tiles (Panel 1d) */
+      .state-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+      .state-tile {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        padding: 16px;
+      }
+      .state-tile .cap {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 10px;
+      }
+      .state-tile .fallback {
+        font-size: 14.5px;
+        font-style: italic;
+        color: var(--el-text-muted);
+        line-height: 1.5;
       }
 
       /* ════ Build in public (Story 6.17) — reframe + entry + explainer + badge ════ */
@@ -2532,7 +2743,10 @@
         <h1>Public projects — open project management</h1>
         <p>
           Story 6.12 · 6.12.1 — the design gate for 6.12.4 (public view) · 6.12.6 (upvote +
-          comments) · 6.12.7 (roadmap) · 6.12.8 (make-public toggle + share link)
+          comments) · 6.12.7 (roadmap) · 6.12.8 (make-public toggle + share link). Story 6.16 ·
+          6.16.1 — the authorable hero (publicTagline + publicTags) + in-place editing (Panels
+          1b/1c/1d), gating 6.16.4 (render) · 6.16.5 (on-page edit) · 6.16.6 (settings → on-page
+          link).
         </p>
       </div>
       <button
@@ -2550,7 +2764,8 @@
     <div class="panel-label">
       (1) Public landing — the project OVERVIEW / README — a modern intro (hero + authored rich body
       + links / at-a-glance sidebar). The DEFAULT public tab (GitHub puts the README on the repo
-      home)
+      home). This is the ANONYMOUS / non-admin viewer read state — the hero subtitle is the authored
+      `publicTagline`, the meta pills are the authored `publicTags` (6.16); no edit affordances.
     </div>
     <div class="panel">
       <div class="pub-shell">
@@ -2607,12 +2822,14 @@
         </div>
 
         <div class="overview" style="padding: 20px">
-          <!-- the modern hero -->
+          <!-- the modern hero — now fully authorable (6.16): the meta pills are
+               the project's `publicTags`, and the subtitle is `publicTagline`. -->
           <div class="hero">
             <div class="hero-top">
               <span class="hero-logo">M</span>
               <div>
                 <h2>Motir</h2>
+                <!-- publicTags (authored) — replaces the four hardcoded i18n pills -->
                 <div class="hero-meta">
                   <span class="pill pill-lav">Vibe project</span>
                   <span class="pill pill-mint">Open source</span>
@@ -2621,6 +2838,8 @@
                 </div>
               </div>
             </div>
+            <!-- publicTagline (authored) — Motir's line now lives in the field,
+                 no longer at the top of the README body. Unset → generic fallback. -->
             <p class="tagline">
               Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
               and ship it, end to end. You're looking at Motir, built in Motir.
@@ -2790,6 +3009,400 @@
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 1b — admin viewing own public page: the "Edit page" affordance ════════════════ -->
+    <div class="panel-label">
+      (1b) Admin viewing their OWN public page — the on-page <b>"Edit page"</b> affordance
+      (top-right of the chrome + a quiet hint band). Shown ONLY when <code>viewerCanManage</code> (a
+      signed-in project admin); anonymous / non-admin viewers never see it (Panel 1).
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <div>
+              <div class="pub-proj">
+                Motir
+                <span class="pill pill-public" style="margin-left: 6px"
+                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
+                >
+              </div>
+              <span class="pub-key">PROD · moooon</span>
+            </div>
+          </div>
+          <!-- the signed-in project admin: identity + the Edit-page affordance -->
+          <div class="viewer-admin">
+            <span class="who"><span class="avatar">Z</span> Zhu Yue · Admin</span>
+            <button class="btn btn-outline btn-edit-page">
+              <svg class="ic"><use href="#i-edit" /></svg> Edit page
+            </button>
+          </div>
+        </div>
+
+        <div class="pub-banner">
+          <svg class="ic"><use href="#i-globe" /></svg>
+          <span
+            ><b>You're viewing a public project.</b> Anyone can view it — no account needed. Sign in
+            to submit, upvote, or comment on requests.</span
+          >
+          <span class="dot">·</span>
+          <span class="readonly-note"
+            ><svg class="ic"><use href="#i-lock" /></svg> View-only — you can't edit work
+            items</span
+          >
+        </div>
+
+        <div class="pub-subbar">
+          <div class="seg" role="tablist" aria-label="Public views">
+            <button class="on">
+              <svg class="ic"><use href="#i-book" /></svg> Overview
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-columns" /></svg> Board
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-list" /></svg> Work items
+            </button>
+            <button>
+              <svg class="ic"><use href="#i-route" /></svg> Roadmap
+            </button>
+          </div>
+          <button class="btn btn-primary">
+            <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+          </button>
+        </div>
+
+        <div class="overview" style="padding: 20px">
+          <div class="admin-hint">
+            <svg class="ic"><use href="#i-edit" /></svg>
+            <span
+              ><b>You manage this project.</b> Hit <b>Edit page</b> to change the tagline, tags, and
+              overview right here on the public page — what you edit is what visitors see (WYSIWYG).
+              Only you (and other admins) see this; visitors see the page in Panel 1.</span
+            >
+          </div>
+
+          <!-- the same hero as Panel 1 (authored tagline + tags) -->
+          <div class="hero">
+            <div class="hero-top">
+              <span class="hero-logo">M</span>
+              <div>
+                <h2>Motir</h2>
+                <div class="hero-meta">
+                  <span class="pill pill-lav">Vibe project</span>
+                  <span class="pill pill-mint">Open source</span>
+                  <span class="pill pill-neutral">GPL-3.0</span>
+                  <span class="pill pill-neutral">MCP-native</span>
+                </div>
+              </div>
+            </div>
+            <p class="tagline">
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it, end to end. You're looking at Motir, built in Motir.
+            </p>
+            <div class="hero-actions">
+              <button class="btn btn-primary btn-lg">
+                <svg class="ic"><use href="#i-route" /></svg> View the roadmap
+              </button>
+              <button class="btn btn-outline btn-lg">
+                <svg class="ic"><use href="#i-plus" /></svg> Submit a request
+              </button>
+              <button class="btn btn-ghost btn-lg">
+                <svg class="ic"><use href="#i-github" /></svg> GitHub
+              </button>
+            </div>
+            <div class="hero-stats">
+              <div class="hstat">
+                <div class="n">240</div>
+                <div class="l">Public requests</div>
+              </div>
+              <div class="hstat">
+                <div class="n">1.2k</div>
+                <div class="l">Upvotes</div>
+              </div>
+              <div class="hstat">
+                <div class="n">17</div>
+                <div class="l">Planned</div>
+              </div>
+              <div class="hstat">
+                <div class="n">203</div>
+                <div class="l">Shipped</div>
+              </div>
+            </div>
+          </div>
+          <p
+            style="
+              margin: 14px 2px 0;
+              font-size: 12px;
+              color: var(--el-text-faint);
+              font-style: italic;
+            "
+          >
+            (README body + Links / At a glance sidebar unchanged from Panel 1.)
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 1c — EDIT MODE (in place): tagline + tags + readme + sticky Save bar ════════════════ -->
+    <div class="panel-label">
+      (1c) Edit mode — <b>in place</b>, on the real page (WYSIWYG). The tagline becomes an inline
+      input, the tags become removable chips + an "Add tag" input, and the README body becomes the
+      shipped <code>MarkdownEditor</code>. A <b>sticky Save / Cancel</b> bar tracks unsaved changes.
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <div>
+              <div class="pub-proj">
+                Motir
+                <span class="pill pill-editing" style="margin-left: 6px"
+                  ><span class="dote"></span> Editing</span
+                >
+              </div>
+              <span class="pub-key">PROD · moooon</span>
+            </div>
+          </div>
+          <div class="viewer-admin">
+            <span class="who"><span class="avatar">Z</span> Zhu Yue · Admin</span>
+          </div>
+        </div>
+
+        <div class="pub-banner">
+          <svg class="ic"><use href="#i-edit" /></svg>
+          <span
+            ><b>Editing the public page.</b> Changes show live as you type — this is exactly what
+            visitors will see. Save to publish, or Cancel to discard.</span
+          >
+        </div>
+
+        <div class="overview" style="padding: 20px">
+          <!-- the hero, in edit mode (dashed editable affordance ring) -->
+          <div class="hero editing">
+            <div class="hero-top">
+              <span class="hero-logo">M</span>
+              <div style="flex: 1; min-width: 0">
+                <h2>Motir</h2>
+                <!-- tags → removable chips + an Add-tag input -->
+                <span class="field-label" style="margin-top: 10px">Tags</span>
+                <div class="tag-edit">
+                  <span class="tag-chip"
+                    >Vibe project
+                    <span class="tag-x" aria-label="Remove tag"
+                      ><svg class="ic"><use href="#i-x" /></svg></span
+                  ></span>
+                  <span class="tag-chip mint"
+                    >Open source
+                    <span class="tag-x" aria-label="Remove tag"
+                      ><svg class="ic"><use href="#i-x" /></svg></span
+                  ></span>
+                  <span class="tag-chip neutral"
+                    >GPL-3.0
+                    <span class="tag-x" aria-label="Remove tag"
+                      ><svg class="ic"><use href="#i-x" /></svg></span
+                  ></span>
+                  <span class="tag-chip neutral"
+                    >MCP-native
+                    <span class="tag-x" aria-label="Remove tag"
+                      ><svg class="ic"><use href="#i-x" /></svg></span
+                  ></span>
+                  <button class="tag-add">
+                    <svg class="ic"><use href="#i-plus" /></svg> Add tag
+                  </button>
+                  <span class="tag-meta">4 / 8 tags</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- tagline → a multi-line input (wraps to 2–3 lines) -->
+            <span class="field-label" style="margin-top: 16px">Tagline</span>
+            <div class="tagline-input focused">
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it, end to end. You're looking at Motir, built in Motir.<span
+                class="caret"
+              ></span>
+            </div>
+
+            <div class="hero-stats">
+              <div class="hstat">
+                <div class="n">240</div>
+                <div class="l">Public requests</div>
+              </div>
+              <div class="hstat">
+                <div class="n">1.2k</div>
+                <div class="l">Upvotes</div>
+              </div>
+              <div class="hstat">
+                <div class="n">17</div>
+                <div class="l">Planned</div>
+              </div>
+              <div class="hstat">
+                <div class="n">203</div>
+                <div class="l">Shipped</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- the README body → the shipped MarkdownEditor -->
+          <span class="field-label" style="margin: 18px 0 6px">Overview (README · Markdown)</span>
+          <div class="md-edit">
+            <div class="editor-toolbar">
+              <span class="tb" title="Heading">H</span>
+              <span class="tb" title="Bold"><b>B</b></span>
+              <span class="tb" title="Italic" style="font-style: italic">I</span>
+              <span class="tb sep"></span>
+              <span class="tb" title="Link"
+                ><svg class="ic"><use href="#i-link" /></svg
+              ></span>
+              <span class="tb" title="List"
+                ><svg class="ic"><use href="#i-list" /></svg
+              ></span>
+              <span class="tb" title="Numbered list"
+                ><svg class="ic"><use href="#i-list" /></svg
+              ></span>
+              <span class="tb" title="Image"
+                ><svg class="ic"><use href="#i-image" /></svg
+              ></span>
+            </div>
+            <pre class="ta">
+## You're looking at Motir, inside Motir
+
+This is Motir's own project — the live board, roadmap, and backlog we use to
+build Motir. Every feature here started as a work item on this board.
+
+## A self-improving loop — and you're in it
+
+1. You submit a bug or an idea — it enters our triage.
+2. We plan it as a work item on this board.
+3. Motir's coding agent turns it into a pull request.
+4. It ships — and lands as Done on this very roadmap.
+
+## Vibe project
+
+- **An AI planner** turns a conversation into a structured plan.
+- **An AI-native project manager** holds the work — **MCP-native**.
+- **A hosted coding agent** ships the engineering work items.</pre
+            >
+          </div>
+
+          <!-- the sticky Save / Cancel bar -->
+          <div class="editbar">
+            <span class="status"><span class="dotw"></span> Unsaved changes</span>
+            <span class="grow"></span>
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg class="ic"><use href="#i-check-check" /></svg> Save changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 1d — edit-mode states ════════════════ -->
+    <div class="panel-label">
+      (1d) Edit-mode states — empty tagline (→ generic i18n fallback) · zero tags · save-in-flight ·
+      save error · the unsaved-changes guard
+    </div>
+    <div class="panel narrow">
+      <div class="state-grid">
+        <!-- empty tagline → fallback -->
+        <div class="state-tile">
+          <div class="cap">Empty tagline → fallback</div>
+          <div class="tagline-input"><span class="ph">Add a tagline…</span></div>
+          <p class="fallback" style="margin-top: 10px">
+            “Track work, plan sprints, and ship — the open project manager.”
+          </p>
+          <p style="margin: 6px 0 0; font-size: 11.5px; color: var(--el-text-faint)">
+            When <code>publicTagline</code> is unset, the public hero shows the generic i18n line —
+            never a blank subtitle.
+          </p>
+        </div>
+
+        <!-- zero tags -->
+        <div class="state-tile">
+          <div class="cap">Zero tags</div>
+          <div class="tag-edit">
+            <span class="tag-empty"
+              ><svg class="ic" style="width: 14px; height: 14px"><use href="#i-minus" /></svg> No
+              tags yet</span
+            >
+            <button class="tag-add">
+              <svg class="ic"><use href="#i-plus" /></svg> Add tag
+            </button>
+          </div>
+          <p style="margin: 10px 0 0; font-size: 11.5px; color: var(--el-text-faint)">
+            With no tags the public hero simply omits the meta-pill row.
+          </p>
+        </div>
+
+        <!-- adding a tag: the + button → a small inline input -->
+        <div class="state-tile">
+          <div class="cap">Adding a tag</div>
+          <div class="tag-edit">
+            <span class="tag-chip neutral"
+              >GPL-3.0
+              <span class="tag-x" aria-label="Remove tag"
+                ><svg class="ic"><use href="#i-x" /></svg></span
+            ></span>
+            <span class="tag-add input">Self-hosted<span class="caret"></span></span>
+          </div>
+          <p style="margin: 10px 0 0; font-size: 11.5px; color: var(--el-text-faint)">
+            Clicking <b>+ Add tag</b> swaps it for a small inline input — type a tag, press Enter to
+            add (Esc cancels).
+          </p>
+        </div>
+
+        <!-- save in-flight -->
+        <div class="state-tile">
+          <div class="cap">Saving…</div>
+          <div class="editbar" style="position: static; margin-top: 0; box-shadow: none">
+            <span class="status"><span class="dotw"></span> Unsaved changes</span>
+            <span class="grow"></span>
+            <button class="btn btn-ghost" disabled>Cancel</button>
+            <button class="btn btn-primary" disabled><span class="spin"></span> Saving…</button>
+          </div>
+        </div>
+
+        <!-- save error -->
+        <div class="state-tile">
+          <div class="cap">Save error</div>
+          <div class="save-error" style="margin-top: 0">
+            <svg class="ic"><use href="#i-alert" /></svg>
+            <span
+              ><b>Couldn't save your changes.</b> Check your connection and try again — your edits
+              are kept.</span
+            >
+          </div>
+          <div class="editbar" style="position: static; box-shadow: none">
+            <span class="grow"></span>
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg class="ic"><use href="#i-rotate" /></svg> Retry
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- the unsaved-changes guard dialog -->
+      <div class="guard-scrim" style="margin-top: 16px">
+        <div class="guard-dialog">
+          <h4>Discard unsaved changes?</h4>
+          <p>
+            You've edited the tagline, tags, or overview but haven't saved. Leaving now discards
+            those changes.
+          </p>
+          <div class="row">
+            <button class="btn btn-ghost">Keep editing</button>
+            <button class="btn btn-danger">
+              <svg class="ic"><use href="#i-x" /></svg> Discard
+            </button>
           </div>
         </div>
       </div>
@@ -3367,167 +3980,30 @@
           </div>
         </div>
 
-        <!-- the README/Overview authoring entry point → opens the dedicated Edit overview view -->
+        <!-- 6.16: the embedded settings editor is REMOVED. Settings keeps only
+             the access concerns (toggle + link); editing the hero + overview now
+             happens IN PLACE on the public page (Panels 1b/1c). -->
         <div class="sharelink">
-          <div class="section-label">Project overview (public landing)</div>
-          <div class="ov-entry">
+          <div class="section-label">Page content</div>
+          <div class="ov-link-row">
             <div class="body">
-              <div class="ttl">README-style intro for the public Overview tab</div>
-              <div class="snip">
-                <b>## You're looking at Motir, inside Motir</b> · We build Motir with Motir…
+              <div class="ttl">Hero &amp; overview</div>
+              <div class="dsc">
+                Edit the tagline, tags, and README right on the public page — what you change is
+                what visitors see.
               </div>
             </div>
-            <button class="btn btn-outline">
-              <svg class="ic"><use href="#i-edit" /></svg> Edit overview
-            </button>
+            <a class="go" href="#">
+              Edit on the public page
+              <svg class="ic"><use href="#i-arrow-right" /></svg>
+            </a>
           </div>
           <div class="acct-note">
             <svg class="ic"><use href="#i-globe" /></svg>
             <span
-              >This shows on the public <b>Overview</b> tab — the first thing a visitor sees. It's
-              hidden while the project isn't public.</span
+              >Opens the public Overview with the on-page editor (Panels 1b/1c). Available while the
+              project is public; the link is hidden otherwise.</span
             >
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════════════ PANEL 7 — the dedicated "Edit overview" view (split editor + live preview) ════════════════ -->
-    <div class="panel-label">
-      (7) Edit overview — the dedicated authoring view: a split Markdown editor (left) + live
-      preview of the public landing (right). Edits the `publicOverviewMd` body only; hero name/stats
-      are auto, links come from existing project fields
-    </div>
-    <div class="panel">
-      <div class="editor-shell">
-        <div class="editor-head">
-          <div class="titles">
-            <div class="title-row">
-              <button class="icon-btn" aria-label="Back to settings">
-                <svg class="ic"><use href="#i-arrow-left" /></svg>
-              </button>
-              <h2>Edit overview</h2>
-            </div>
-            <p class="sub">
-              Markdown — shown on your public project's <b>Overview</b> tab. Changes save to the
-              live public page.
-            </p>
-          </div>
-          <div class="head-actions">
-            <span class="saved"
-              ><svg class="ic"><use href="#i-check-check" /></svg> Saved</span
-            >
-            <button class="btn btn-ghost">Cancel</button>
-            <button class="btn btn-primary">
-              <svg class="ic"><use href="#i-check-check" /></svg> Save
-            </button>
-          </div>
-        </div>
-
-        <div class="editor-toolbar">
-          <span class="tb" title="Heading">H</span>
-          <span class="tb" title="Bold"><b>B</b></span>
-          <span class="tb" title="Italic" style="font-style: italic">I</span>
-          <span class="tb sep"></span>
-          <span class="tb" title="Link"
-            ><svg class="ic"><use href="#i-link" /></svg
-          ></span>
-          <span class="tb" title="List"
-            ><svg class="ic"><use href="#i-list" /></svg
-          ></span>
-          <span class="tb" title="Numbered list"
-            ><svg class="ic"><use href="#i-list" /></svg
-          ></span>
-          <span class="tb" title="Image"
-            ><svg class="ic"><use href="#i-image" /></svg
-          ></span>
-          <span class="grow"></span>
-          <span class="pane-tag">Markdown</span>
-          <span class="pane-tag right">Preview</span>
-        </div>
-
-        <div class="editor-split">
-          <!-- left: the Markdown source -->
-          <div class="editor-src">
-            <pre><code># Motir
-
-## You're looking at Motir, inside Motir
-
-This is Motir's own project — the live board, roadmap, and backlog we
-use to build Motir. We build Motir with Motir: every feature here
-started as a work item on this board, moved through these columns, and
-was shipped by the same agents that turn work items into code.
-
-## A self-improving loop — and you're in it
-
-The bugs you report and the ideas you upvote land in Motir's triage,
-get planned as work items right here, and are picked up by Motir to
-build the next version of Motir.
-
-1. You submit a bug or an idea — it enters our triage.
-2. We plan it as a work item on this board.
-3. Motir's coding agent turns it into a pull request.
-4. It ships — and lands as Done on this very roadmap.
-
-## Vibe project
-
-You've heard of vibe coding — describe what you want, and the AI writes
-the code. A vibe project takes that to the *whole* project: not just the
-code, but the design, the marketing, the legal, the research…
-
-- **An AI planner** turns a conversation into a structured plan.
-- **An AI-native project manager** holds the work — **MCP-native**.
-- **A hosted coding agent** ships the engineering work items.
-
-That's a vibe project.
-
-## Contribute
-
-Found a bug or have an idea? [Submit a request](#) — the PM core is
-open source (GPL-3.0) on [GitHub](#).
-</code></pre>
-          </div>
-
-          <!-- right: the live preview (rendered) -->
-          <div class="editor-prev">
-            <div class="prev-badge">Live preview</div>
-            <div class="md md-prev">
-              <h3>You're looking at Motir, inside Motir</h3>
-              <p>
-                This is Motir's own project — the live board, roadmap, and backlog we use to build
-                Motir. We build Motir with Motir: every feature here started as a work item on this
-                board…
-              </p>
-              <h3>A self-improving loop — and you're in it</h3>
-              <ol class="loop">
-                <li><span>You submit a bug or an idea — it enters our triage.</span></li>
-                <li><span>We plan it as a work item on this board.</span></li>
-                <li><span>Motir's coding agent turns it into a pull request.</span></li>
-                <li><span>It ships — and lands as Done on this very roadmap.</span></li>
-              </ol>
-              <h3>Vibe project</h3>
-              <p>
-                You've heard of vibe coding — describe what you want, and the AI writes the code. A
-                vibe project takes that to the <i>whole</i> project: not just the code, but the
-                design, the marketing, the legal, the research…
-              </p>
-              <ul class="layers">
-                <li>
-                  <svg class="ic" style="color: var(--el-type-story)"><use href="#i-route" /></svg>
-                  <span><b>An AI planner</b> turns a conversation into a structured plan.</span>
-                </li>
-                <li>
-                  <svg class="ic" style="color: var(--el-type-task)"><use href="#i-columns" /></svg>
-                  <span
-                    ><b>An AI-native project manager</b> holds the work — <b>MCP-native</b>.</span
-                  >
-                </li>
-                <li>
-                  <svg class="ic" style="color: var(--el-accent)"><use href="#i-github" /></svg>
-                  <span><b>A hosted coding agent</b> ships the engineering work items.</span>
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
       </div>
@@ -4476,6 +4952,19 @@ open source (GPL-3.0) on [GitHub](#).
         >
           <path d="m12 19-7-7 7-7" />
           <path d="M19 12H5" />
+        </symbol>
+        <!-- arrow-right -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
         </symbol>
         <!-- image -->
         <symbol

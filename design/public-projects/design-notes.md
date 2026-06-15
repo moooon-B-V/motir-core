@@ -18,6 +18,23 @@ no Pencil→code gap.
 > "account-required, not anonymous" framing for READ, mirrors the 6.13
 > project-square revision, and resolves its anonymous click-through knock-on.
 
+> **⚠️ Model revision (Yue, 2026-06-15 — Story 6.16).** The public hero is now
+> **fully authorable** and overview editing moves **onto the public page itself**
+> (in place, WYSIWYG). Two new project fields back it: **`publicTagline`** (the
+> hero subtitle — unset → the generic i18n line) and **`publicTags`** (the hero
+> meta pills — replacing the four hardcoded i18n pills). A signed-in project admin
+> (`viewerCanManage`) viewing their own public page sees an **"Edit page"**
+> affordance and edits the tagline, tags, and README (`publicOverviewMd`, via the
+> shipped `MarkdownEditor`) right on the page; a **sticky Save / Cancel** bar
+> tracks unsaved changes. **The in-settings editor is REMOVED** — Settings keeps
+> only the access concerns (make-public toggle + share link) and shows an **"Edit
+> on the public page →"** link instead. Motir's own "Vibe your whole project…"
+> line moves OUT of the README body and INTO `publicTagline`. This supersedes the
+> 6.12.8 "Edit overview" split-editor framing below (Panels 6/7) — see the
+> **"In-place public-page editing (Story 6.16)"** section. Mirror (rung 1):
+> Notion / GitHub-profile / Canny in-place "edit this page" authoring; Linear &
+> Productboard public pages edit on the page, not in a buried settings sub-view.
+
 > **⚠️ Reframe (Story 6.17, 2026-06-15).** The `public` access level is now
 > **presented as a status — "Building in public"** — not a bare dropdown option.
 > Nothing about the access MODEL changes (it is still the same 4th
@@ -38,19 +55,27 @@ no Pencil→code gap.
 > surface "make public" / "share" as a first-class action rather than a buried
 > setting.
 
-| Surface                       | Asset                          | Gates                                                                                        |
-| ----------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
-| **Public Overview / README**  | `public-projects.mock.html`    | **6.12.4** (render) + **6.12.8** (the authoring editor)                                      |
-| **Edit overview** (admin)     | `public-projects.mock.html`    | **6.12.8** (split Markdown editor + live preview)                                            |
-| **Public read-only view**     | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                                      |
-| **Public roadmap**            | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                                         |
-| **Submit + duplicate detect** | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                                       |
-| **Request detail**            | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                            |
-| **Make-public + share link**  | `public-projects.mock.html`    | **6.12.8** (the four-level Access control + the link)                                        |
-| **Public work-item DETAIL**   | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)               |
-| **Build-in-public reframe**   | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                       |
-| **Build-in-public entry pt**  | `public-projects.mock.html`    | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10 |
-| **Build-in-public badge**     | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                               |
+> **Note (6.16 ↔ 6.17 interplay):** 6.16's authorable-hero / in-place editing and
+> 6.17's build-in-public reframe are orthogonal and both land on this asset. The
+> 6.16 **admin "Edit page" affordance** (Panels 1b/1c) and the 6.17 **"Build in
+> public" / status badge** both live in the public-page topbar — they coexist
+> (badge + Edit-page button for an admin viewing a public project), and the 6.16
+> in-place editor replaces 6.12.8's settings split editor in BOTH framings.
+
+| Surface                          | Asset                          | Gates                                                                                        |
+| -------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
+| **Public Overview / README**     | `public-projects.mock.html`    | **6.12.4** (render) + **6.16.4** (authorable tagline + tags)                                 |
+| **Admin "Edit page" affordance** | `public-projects.mock.html`    | **6.16.5** (`viewerCanManage` only)                                                          |
+| **In-place edit mode**           | `public-projects.mock.html`    | **6.16.5** (tagline + tags + README via `MarkdownEditor` + sticky Save bar)                  |
+| **Public read-only view**        | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                                      |
+| **Public roadmap**               | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                                         |
+| **Submit + duplicate detect**    | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                                       |
+| **Request detail**               | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                            |
+| **Make-public + share link**     | `public-projects.mock.html`    | **6.12.8** (Access control + link) + **6.16.6** (drop editor → on-page link)                 |
+| **Public work-item DETAIL**      | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)               |
+| **Build-in-public reframe**      | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                       |
+| **Build-in-public entry pt**     | `public-projects.mock.html`    | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10 |
+| **Build-in-public badge**        | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                               |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 `6.12.1` in `dependsOn` and is `blocked` until this asset lands. The
@@ -101,9 +126,24 @@ duplicate-detection portal set.
 ## The asset is multi-panel (review EACH — mistake #31)
 
 1. **(1)** the public **Overview / README** landing — a modern, GitHub-README-
-   style project intro: a hero (logo + name + tagline + meta pills + at-a-glance
-   stats + CTAs) + an authored Markdown body + a links / at-a-glance sidebar. The
-   **default** public tab.
+   style project intro: a hero (logo + name + authored **`publicTagline`** +
+   authored **`publicTags`** meta pills + at-a-glance stats + CTAs) + an authored
+   Markdown body + a links / at-a-glance sidebar. The **default** public tab. This
+   panel is the ANONYMOUS / non-admin viewer read state.
+   1b. **(1b)** the **admin "Edit page" affordance** (Story 6.16) — the same Overview
+   page as a signed-in project admin (`viewerCanManage`) sees it: the topbar swaps
+   the logged-out "Sign in / Start free" CTAs for the admin's identity + an
+   **"Edit page"** button (top-right), plus a quiet hint band. Anonymous / non-admin
+   viewers never see it.
+   1c. **(1c)** **edit mode — in place** (Story 6.16) — entering edit makes the page
+   itself the editor (WYSIWYG): the tagline becomes a multi-line input (placeholder
+   "Add a tagline…"), the tags become removable chips + an "Add tag" input
+   (max-count + empty states), and the README body becomes the shipped
+   `MarkdownEditor`. A **sticky Save / Cancel** bar tracks unsaved changes; the
+   topbar shows an **"Editing"** pill.
+   1d. **(1d)** **edit-mode states** (Story 6.16) — empty tagline (→ generic i18n
+   fallback), zero tags, save-in-flight, save error, and the unsaved-changes guard
+   dialog.
 2. **(2)** the public read-only project view (**Board** tab) — the read-only
    **board** (To Do / In Progress / In Review / Done) as an anonymous (logged-out)
    visitor sees it: NO edit affordances, INTERNAL fields absent, the public-project
@@ -120,10 +160,12 @@ duplicate-detection portal set.
 6. **(6)** project **settings** — the four-level Access control (the Public
    option now reads "anyone can view, no account, indexable by search engines") +
    the shareable public link (copy / disable / rotate) + the no-sign-in-to-view
-   note + **the Overview/README authoring entry point** (opens Panel 7).
-7. **(7)** **Edit overview** — the dedicated authoring view: a **split Markdown
-   editor (left) + live preview (right)** of the public landing; edits the
-   `publicOverviewMd` body only.
+   note + **an "Edit on the public page →" link** (Story 6.16 — the embedded
+   editor is REMOVED; editing now happens in place on the public page, Panels
+   1b/1c).
+7. **(7)** ~~**Edit overview** — the dedicated authoring split editor~~ —
+   **RETIRED (Story 6.16).** Overview/hero editing is now in place on the public
+   page (Panels 1b/1c); this dedicated settings sub-view no longer exists.
 8. **(8)** **states** — empty roadmap, empty request list, the paginated loading
    skeleton, the fetch-error, the rate-limited submit.
 9. **(9)** **SEO + GEO scaffolding** — the fully-public page is server-rendered +
@@ -172,27 +214,33 @@ rich body + a links/stats sidebar, all in the design system.
 
 ### The data — a new project field
 
-The README content is a new nullable project field **`publicOverviewMd`**
-(Markdown). Authored by the project admin in the dedicated **Edit overview** view
-(Panel 7, reached from settings), rendered read-only on this tab via the shipped
-**`MarkdownView`**. It is part of the **public projection** (6.12.4) — a
-public-safe field, served only when the project is public. When empty, the tab
-falls back to a slim auto-intro (name + tagline + stats + CTAs, no body) — never a
-blank page. **Only `publicOverviewMd` (the body) is editable** — the hero
-name/stats are auto, and the Links sidebar pulls from existing project fields
-(website / repo / docs); no new schema beyond `publicOverviewMd`.
+The README content is a nullable project field **`publicOverviewMd`** (Markdown),
+rendered read-only on this tab via the shipped **`MarkdownView`**. **Story 6.16
+adds two more authorable hero fields** — **`publicTagline`** (string, the hero
+subtitle) and **`publicTags`** (string array, the hero meta pills) — and moves
+authoring **onto the public page itself** (in place, WYSIWYG; see the **In-place
+public-page editing** section). All three are part of the **public projection**
+(6.12.4 / 6.16.3) — public-safe, served only when the project is public, and
+threaded with a **`viewerCanManage`** flag (true only for a signed-in project
+admin) that gates the edit affordance. Fallbacks (never a blank surface):
+`publicTagline` unset → the generic i18n line; `publicTags` empty → the meta-pill
+row is omitted; `publicOverviewMd` empty → a slim auto-intro (name + tagline +
+stats + CTAs, no body). The hero name/stats stay auto, and the Links sidebar pulls
+from existing project fields (website / repo / docs).
 
 ### The hero (`.hero`)
 
 A bordered `Card` with a **soft corner-wash** (two radial `--el-hero-wash-*`
 tints over `--el-page-bg` — decorative only; all text sits on `--el-page-bg`, AA-
 safe, NOT a page-level tint — finding #35). Holds: a 52px logo tile
-(`--el-accent`), the project name in the serif display face, **meta `Pill`s**
-("Vibe project" lavender / "Open source" mint / "GPL-3.0" / "MCP-native" neutral),
-the **tagline** (the "vibe your whole project" framing — NOT "AI project
-management"), a **CTA row** (`View the roadmap` primary · `Submit a request`
-outline · `GitHub` ghost), and an **at-a-glance stat strip** (Public requests /
-Upvotes / Planned / Shipped) above a hairline.
+(`--el-accent`), the project name in the serif display face, the **authored
+`publicTags`** rendered as **meta `Pill`s** (Motir seeds "Vibe project" lavender /
+"Open source" mint / "GPL-3.0" / "MCP-native" neutral — but they are now authored,
+not hardcoded), the **authored `publicTagline`** subtitle (Motir's "vibe your
+whole project" framing — NOT "AI project management"; unset → generic i18n line), a
+**CTA row** (`View the roadmap` primary · `Submit a request` outline · `GitHub`
+ghost), and an **at-a-glance stat strip** (Public requests / Upvotes / Planned /
+Shipped) above a hairline.
 
 ### The body + sidebar (`.ov-grid`, 1fr + 312px)
 
@@ -340,39 +388,102 @@ disabled resting state).
   with **no sign-in** (the page is public + crawlable), that visitors sign in only
   to submit / upvote / comment, and that rotating issues a new link without
   changing the project key.
-- **Project overview entry point** (`.ov-entry`): a row showing a one-line snippet
-  of the current `publicOverviewMd` + an **"Edit overview"** button that opens the
-  dedicated editor (Panel 7). The `.acct-note` states it shows on the public
-  **Overview** tab (the first thing a visitor sees) and is hidden while the project
-  isn't public. Project-admin-gated.
+- **Page content → on-page editor link** (`.ov-link-row`, Story 6.16): a row —
+  **"Hero & overview"** + the copy "Edit the tagline, tags, and README right on the
+  public page — what you change is what visitors see" + an **"Edit on the public
+  page →"** link (`.go`, `--el-link`, `i-arrow-right`). **The embedded editor /
+  the old `.ov-entry` "Edit overview" button are REMOVED** — Settings keeps only
+  the access concerns; editing happens in place (the In-place section). The
+  `.acct-note` states the link opens the public Overview with the on-page editor
+  and is hidden while the project isn't public. Project-admin-gated.
 
 ---
 
-## Panel 7 — Edit overview (the 6.12.8 authoring view)
+## Panel 7 — RETIRED (Story 6.16)
 
-The dedicated authoring surface for `publicOverviewMd` — a \*\*split Markdown editor
+The dedicated in-settings **"Edit overview"** split editor (left Markdown source /
+right live preview) is **gone**. Editing the hero (`publicTagline` + `publicTags`)
+and the README (`publicOverviewMd`) now happens **in place on the public page**
+(the In-place section + Panels 1b/1c) — the page itself IS the preview, so a
+separate preview pane is redundant. 6.16.6 deletes the `EditOverview` sub-view; its
+CSS (`.editor-shell` / `.editor-split` / `.editor-src` / `.editor-prev` /
+`.prev-badge` / `.md-prev` / `.ov-editor` / `.ov-entry` / `.pane-tag`) is dropped
+from this asset. (The `.editor-toolbar` / `.tb` toolbar grammar survives — reused
+by the in-place `MarkdownEditor`.)
 
-- live preview\*\*, mirroring GitHub README editing / Canny portal editing (the
-  chosen scope: full editor + preview, body-only). Not a cramped settings box.
+---
 
-* **`.editor-shell`** — a `Card` with a header (`.editor-head`): a back
-  `.icon-btn` (← to settings), the serif **"Edit overview"** title + a subtitle
-  ("Markdown — shown on your public project's Overview tab. Changes save to the
-  live public page."), and the action cluster — a **"Saved"** status
-  (`--el-success` check), **Cancel** (ghost), **Save** (primary).
-* **`.editor-toolbar`** — the `MarkdownEditor` formatting row (heading / bold /
-  italic · separator · link / list / numbered / image) + the **"Markdown"** /
-  **"Preview"** pane tags.
-* **`.editor-split`** (1fr / 1fr) — **left** `.editor-src`: the raw Markdown source
-  in `--font-mono` (`<pre><code>`); **right** `.editor-prev`: the **live preview**
-  rendered with the SAME `.md` primitives as the public Overview (headings, the
-  `ol.loop`, the `ul.layers` with palette-hued icons), framed in an `--el-page-bg`
-  card with a floating **"Live preview"** badge — so the admin sees exactly what
-  ships.
-* **Save** persists `publicOverviewMd` via a service method (the
-  success-response-is-confirmation rule — no whole-tree refresh); project-admin-
-  gated; the public projection re-reads it. Built with `MarkdownEditor` +
-  `MarkdownView` — no new primitive.
+## In-place public-page editing (Story 6.16) — Panels 1b / 1c / 1d
+
+The authorable hero + on-page overview editing. **`viewerCanManage`** (6.16.3) is
+true only for a signed-in **project admin**; everything below is gated on it and is
+absent for anonymous / non-admin viewers (who see Panel 1).
+
+### Panel 1b — the "Edit page" affordance (the 6.16.5 surface)
+
+- The public chrome is unchanged EXCEPT the topbar right side: instead of the
+  logged-out **Sign in / Start free** CTAs, an admin sees their **identity** (an
+  initial-letter `Avatar` + "Name · Admin", `.viewer-admin .who`) + an **"Edit
+  page"** button (`.btn.btn-outline.btn-edit-page`, `i-edit` in
+  `--el-accent-on-surface`), top-right near the CTA row.
+- A quiet **`.admin-hint`** band (a faint `color-mix(--el-accent 7%)` callout)
+  under the public banner: "You manage this project. Hit **Edit page** to change
+  the tagline, tags, and overview right here — what you edit is what visitors see
+  (WYSIWYG). Only you (and other admins) see this." The hero below is identical to
+  Panel 1's authored hero.
+
+### Panel 1c — edit mode, in place (the 6.16.5 surface)
+
+The page becomes the editor (WYSIWYG — no separate preview). The topbar **"Public"**
+chip is replaced by a light **"Editing"** mode chip (`.pill-editing` — a faint
+`color-mix(--el-accent 9%)` tint + accent border + a live **pulsing accent dot**,
+not a heavy filled pill) and the banner reads "Editing the public page. Changes show
+live as you type…". The hero takes a dashed **`.hero.editing`** affordance ring, and
+three regions become editable:
+
+- **Tagline → a MULTI-LINE input** (`.tagline-input`, `--radius-input` +
+  `--spacing-input-*`; `min-height` ≈ 2–3 lines so the tagline wraps — it is a short
+  paragraph, not a one-liner). Focused state = `--el-accent` border + a 3px accent
+  ring + a blinking inline `.caret`. Placeholder **"Add a tagline…"** when empty.
+  Above it a `.field-label` "Tagline".
+- **Tags → removable chips + a "+ Add tag" button.** Each authored tag is a
+  `.tag-chip` (the same tint tones as the read pills) with a circular **`.tag-x`**
+  remove control (`i-x`; a `<span>`, NOT a nested button — no `nested-interactive`).
+  Adding a tag is a **two-state** affordance, NOT a persistent input box: the resting
+  state is a compact dashed **`.tag-add` "+ Add tag" `<button>`**; clicking it swaps
+  it for a **small fixed-width inline input** (`.tag-add.input`, ~150px, accent ring
+  - blinking `.caret`) where you type a tag and press Enter to add (Esc cancels) —
+    the chip then appears and the control reverts to the "+ Add tag" button. (No
+    full-width input bar — the default surface is just the + button.) A **`.tag-meta`**
+    count ("4 / 8 tags") states the max; empty → a **`.tag-empty`** "No tags yet" hint.
+- **README body → the shipped `MarkdownEditor`** (`.md-edit`): the `.editor-toolbar`
+  formatting row (heading / bold / italic · sep · link / list / numbered / image)
+  over a `--font-mono` source `<pre class="ta">`. (Body-only editing, as before —
+  the live page below is the preview.)
+- **Sticky Save / Cancel bar** (`.editbar`, `position: sticky; bottom: 0`,
+  `--shadow-elevated`): a **status** ("● Unsaved changes", `--el-warning` dot) +
+  **Cancel** (ghost) + **Save changes** (primary, `i-check-check`). Save persists
+  all three fields via a service method (success-response-is-confirmation — no
+  whole-tree refresh; the page state IS the optimistic value); `viewerCanManage`-
+  gated; the public projection re-reads.
+
+### Panel 1d — edit-mode states (the 6.16.5 / 6.16.4 surfaces)
+
+- **Empty tagline → fallback** — the input shows the "Add a tagline…" placeholder;
+  the note states the public hero falls back to the generic i18n line, never a blank
+  subtitle.
+- **Zero tags** — `.tag-empty` "No tags yet" + the "+ Add tag" button; the public
+  hero omits the meta-pill row entirely.
+- **Adding a tag** — the "+ Add tag" button has been clicked → a small inline input
+  (`.tag-add.input`) with a caret; type + Enter adds the chip, Esc cancels.
+- **Saving…** — the Save button shows a `.spin` spinner + "Saving…", both buttons
+  disabled (the in-flight, race-guarded write — `CLAUDE.md` E2E-signal rule).
+- **Save error** — a rose **`.save-error`** banner ("Couldn't save your changes. …
+  your edits are kept", `i-alert` in `--el-danger`) above the bar, with **Cancel** +
+  **Retry** (`i-rotate`). Never a raw 500 — a graceful typed error.
+- **Unsaved-changes guard** — a **`.guard-dialog`** modal (over a `.guard-scrim`)
+  fired on Cancel / navigate-away with pending edits: "Discard unsaved changes?" +
+  **Keep editing** (ghost) / **Discard** (`btn-danger`).
 
 ---
 
@@ -544,31 +655,39 @@ It is the host surface for two code subtasks: **6.14.11** (build the page) and
 
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
-| Element                             | Token                                                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Public chip / banner background     | `--el-public-banner-bg` (→ `--color-tint-sky`)                                                         |
-| Public chip / banner text           | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)                             |
-| Public-chip / banner glyph          | `--el-info`                                                                                            |
-| Upvote control (resting)            | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                                          |
-| Upvote control (voted)              | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                                  |
-| Roadmap status headers              | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)                     |
-| Status header / org text            | `--el-text-strong` on the tint (AA-safe)                                                               |
-| Work-item type icon (board/kind)    | `--el-type-{task,bug,story,epic}`                                                                      |
-| Priority pills                      | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`                         |
-| Selected access option              | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                                |
-| Disable link button                 | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)                           |
-| Rate-limit banner                   | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                                          |
-| Success confirmation badge          | `--el-tint-mint` + `--el-success`                                                                      |
-| Error glyph                         | `--el-tint-rose` + `--el-danger`                                                                       |
-| Overview hero corner washes         | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`                      |
-| Hero logo / CTA card accent         | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                                     |
-| README feature-list ticks           | `--el-success`; links `--el-link`                                                                      |
-| "Building in public" badge          | `--el-build-bg` (→ lavender) + `--el-build-text` (charcoal, AA), `--el-build-glyph` (accent) megaphone |
-| Promoted header button `.btn-build` | `--el-build-bg` + `--el-text-strong`, `--el-build-glyph` megaphone; hover `color-mix(--el-accent 18%)` |
-| Entry-point promo glyph / CTA       | `--el-accent` fill + `--el-accent-text`; promo wash = `--el-hero-wash-*` over `--el-page-bg`           |
-| Shell nudge accent                  | `--el-accent` left-border + lead glyph, on `--el-surface-soft`                                         |
-| Explainer "becomes public" list     | `yes` `--el-success` · `gate` `--el-info` · `strip` `--el-text-faint` glyphs                           |
-| Stop-confirm warn glyph / note      | `--el-tint-yellow` + `--el-warning` (`modal-glyph.warn`, `modal-note.warn`)                            |
+| Element                                    | Token                                                                                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Public chip / banner background            | `--el-public-banner-bg` (→ `--color-tint-sky`)                                                                               |
+| Public chip / banner text                  | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)                                                   |
+| Public-chip / banner glyph                 | `--el-info`                                                                                                                  |
+| Upvote control (resting)                   | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                                                                |
+| Upvote control (voted)                     | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                                                        |
+| Roadmap status headers                     | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)                                           |
+| Status header / org text                   | `--el-text-strong` on the tint (AA-safe)                                                                                     |
+| Work-item type icon (board/kind)           | `--el-type-{task,bug,story,epic}`                                                                                            |
+| Priority pills                             | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`                                               |
+| Selected access option                     | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                                                      |
+| Disable link button                        | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)                                                 |
+| Rate-limit banner                          | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                                                                |
+| Success confirmation badge                 | `--el-tint-mint` + `--el-success`                                                                                            |
+| Error glyph                                | `--el-tint-rose` + `--el-danger`                                                                                             |
+| Overview hero corner washes                | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`                                            |
+| Hero logo / CTA card accent                | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                                                           |
+| README feature-list ticks                  | `--el-success`; links `--el-link`                                                                                            |
+| "Building in public" badge (6.17)          | `--el-build-bg` (→ lavender) + `--el-build-text` (charcoal, AA), `--el-build-glyph` (accent) megaphone                       |
+| Promoted header button `.btn-build` (6.17) | `--el-build-bg` + `--el-text-strong`, `--el-build-glyph` megaphone; hover `color-mix(--el-accent 18%)`                       |
+| Entry-point promo glyph / CTA (6.17)       | `--el-accent` fill + `--el-accent-text`; promo wash = `--el-hero-wash-*` over `--el-page-bg`                                 |
+| Shell nudge accent (6.17)                  | `--el-accent` left-border + lead glyph, on `--el-surface-soft`                                                               |
+| Explainer "becomes public" list (6.17)     | `yes` `--el-success` · `gate` `--el-info` · `strip` `--el-text-faint` glyphs                                                 |
+| Stop-confirm warn glyph / note (6.17)      | `--el-tint-yellow` + `--el-warning` (`modal-glyph.warn`, `modal-note.warn`)                                                  |
+| Edit-page affordance glyph (6.16)          | `--el-accent-on-surface` on a `btn-outline`                                                                                  |
+| Admin hint band (6.16)                     | `color-mix(--el-accent 7%, --el-page-bg)` bg + `--el-border`, text `--el-text-secondary`                                     |
+| "Editing" mode chip (6.16)                 | `color-mix(--el-accent 9%)` bg + `color-mix(--el-accent 32%)` border + `--el-accent-on-surface` text; live dot `--el-accent` |
+| Tagline input focus ring (6.16)            | `--el-accent` border + `color-mix(--el-accent 18%)` ring                                                                     |
+| Editable tag chip + remove ✕ (6.16)        | tint bg + `--el-text-strong`; `.tag-x` = `color-mix(--el-text-strong 12%)`                                                   |
+| Unsaved-changes status dot (6.16)          | `--el-warning`                                                                                                               |
+| Save-error banner (6.16)                   | `--el-tint-rose` bg + `--el-text-strong`, glyph `--el-danger` (finding #35)                                                  |
+| Unsaved-guard scrim / dialog (6.16)        | `color-mix(--el-text 28%)` scrim; dialog `--el-page-bg` + `--shadow-modal`                                                   |
 
 **Palette, not grey-only (finding #54):** the roadmap uses four distinct status
 tints, the upvote uses the accent, kinds use their type hues, the Overview hero +
@@ -589,6 +708,12 @@ pattern, mistake #20): `--el-public-banner-bg`, `--el-public-banner-text`,
 "Building in public" status badge + the reframed access option. Same growth rule:
 add to Tier 3, consume via `--el-*`.
 
+**Story 6.16 adds NO new `--el-*` tokens** — the in-place editing surfaces reuse
+existing tokens (`--el-accent` / `--el-accent-on-surface`, `--el-tint-lavender/mint/rose`,
+`--el-warning` / `--el-danger`, `--el-border-strong`), with `color-mix(… --el-* …)`
+for the accent-tint hint band, focus ring, and scrim — so the swap layer still
+governs them and no Tier-0 leaks in.
+
 ## Shape roles (every shaped surface via the `[data-display-style]` tokens)
 
 - **Cards** (board card, roadmap card, request card, access option, state box,
@@ -602,6 +727,12 @@ add to Tier 3, consume via `--el-*`.
   `--radius-control`.
 - **Hero / overview sidebar cards / CTA card / editor**: `--radius-card` (editor
   `--radius-input`) + `--shadow-card`/`-subtle`.
+- **In-place edit (6.16)**: tagline input `--radius-input` + `--spacing-input-*`
+  (multi-line, `min-height` ≈ 1.7×`--height-input`); editable tag chips + "Add tag" `--radius-badge` +
+  `--spacing-chip-y`; in-place `MarkdownEditor` `--radius-input`; the sticky
+  `.editbar` `--radius-card` + `--shadow-elevated`; the unsaved-guard dialog
+  `--radius-modal` + `--shadow-modal`; the `.tag-x` remove control is genuinely
+  circular (`rounded-full`).
 - **Avatars / radio / status dots**: `rounded-full` (genuinely circular — allowed).
 
 No raw `rounded-*` / `p-*` / `h-*` / `shadow-md` on any shaped surface (the shape
@@ -638,14 +769,26 @@ swap layer must reach every element).
   everything around it. That's a vibe project."_ Then **"Contribute"**. NOT framed as "AI project
   management" — it's the three-layer, end-to-end pipeline. This canonical copy is
   seeded onto the `motir` project's `publicOverviewMd` (see story-6.12.ts § 6.12.4
-  - the seed loader), so the live tenant renders it. Settings entry point:
-    **"Project overview (public landing)"** · **"README-style intro for the public
-    Overview tab"** · **"Edit overview"** (button) · **"This shows on the public
-    Overview tab — the first thing a visitor sees. It's hidden while the project
-    isn't public."** Edit-overview view: **"Edit overview"** · **"Markdown — shown
-    on your public project's Overview tab. Changes save to the live public page."**
-    · **"Markdown" / "Preview" / "Live preview"** · **"Saved" / "Cancel" /
-    "Save"**.
+  - the seed loader), so the live tenant renders it. **Story 6.16: Motir's "Vibe
+    your whole project…" line is seeded into `publicTagline` (not the body top), and
+    its tags into `publicTags`** (6.16.7).
+- **In-place editing (6.16)** — Settings "Page content" row:
+  **"Hero & overview"** · **"Edit the tagline, tags, and README right on the public
+  page — what you change is what visitors see."** · **"Edit on the public page →"** ·
+  _"Opens the public Overview with the on-page editor. Available while the project is
+  public; the link is hidden otherwise."_ · admin affordance: **"Edit page"** + hint
+  _"You manage this project. Hit **Edit page** to change the tagline, tags, and
+  overview right here on the public page — what you edit is what visitors see."_ ·
+  edit mode: **"Editing"** (pill) · banner **"Editing the public page. Changes show
+  live as you type…"** · field labels **"Tagline" / "Tags" / "Overview (README ·
+  Markdown)"** · tagline placeholder **"Add a tagline…"** · tags **"Add tag" / "No
+  tags yet" / "N / 8 tags"** · save bar **"Unsaved changes" / "Cancel" / "Save
+  changes"** · saving **"Saving…"** · save error **"Couldn't save your changes.
+  Check your connection and try again — your edits are kept." / "Retry"** · fallback
+  tagline (unset) **"Track work, plan sprints, and ship — the open project
+  manager."** · unsaved guard **"Discard unsaved changes?" / "You've edited the
+  tagline, tags, or overview but haven't saved. Leaving now discards those
+  changes." / "Keep editing" / "Discard"**.
 - Roadmap buckets: **"Submitted" / "Planned" / "In progress" / "Done"** ·
   **"Load N more →"**.
 - Submit: **"Submit a request"** · **"Tell the Motir team about a bug or a feature
@@ -725,16 +868,19 @@ shipped `components/ui/Modal.tsx`, size md, no new primitive) · `IssueTypeIcon`
 (kind hue via `--el-type-*`) ·
 `Avatar` (initial-letter) · `Segmented` (the view nav + the type toggle) ·
 `FormField` + `Input` + `Textarea` (the submit form + comment composer) ·
-`MarkdownView` (the Overview README render) · `MarkdownEditor` (the settings
-authoring editor) · `EmptyState` / `ErrorState` (the state panels) · the loading
+`MarkdownView` (the Overview README render) · `MarkdownEditor` (the **in-place**
+README editor, Story 6.16) · `Input` (the tagline inline input + the add-tag
+input) · `EmptyState` / `ErrorState` (the state panels) · the loading
 `Spinner`/skeleton · the board `.col`/`.bcard` grammar from `design/boards`. The
 upvote control is the one NEW composite (a bordered `--radius-control`
 chevron+count) — it is not a new primitive vocabulary, just an arrangement of an
 icon + a number + the tokens; it maps to a small `components/ui` control 6.12.6
 adds. The Overview hero is likewise a NEW arrangement (logo + serif heading +
-pills + CTA row + stat strip), not a new primitive. The build-in-public
-entry-point **promo card** and **shell nudge** (6.17.3) are also arrangements of
-existing primitives (`Card` + accent glyph + serif heading + bullet list +
+pills + CTA row + stat strip), not a new primitive. Story 6.16's editable tag
+chips (a `Pill` + a circular remove control) and the sticky `.editbar` are
+arrangements of existing primitives, not new vocabulary. The build-in-public
+entry-point **promo card** and **shell nudge** (6.17.3) are likewise arrangements
+of existing primitives (`Card` + accent glyph + serif heading + bullet list +
 `Button`s; an accent-bordered strip + glyph + `Button` + close), not new
 primitive vocabulary.
 
@@ -754,9 +900,33 @@ alongside this asset so the design is not orphaned:
   story's scope line + model gain the Overview. (Mirror rung 1: GitHub repo README
   on the repo home; Canny / Productboard / Plane / OpenProject public overviews.)
 
+**Story 6.16 — authorable hero + in-place editing (this iteration).** The plan is
+already seeded; this asset is its design gate. The owning subtasks:
+
+- **`publicTagline` (string) + `publicTags` (string[]) — new nullable `project`
+  fields.** Schema + migration in **6.16.2**; threaded through the read projection +
+  the write path + a **`viewerCanManage`** flag in **6.16.3**.
+- **Render** the authorable tagline + tags (i18n / empty fallbacks) in the hero —
+  **6.16.4** (this asset, Panel 1).
+- **The on-page admin "Edit page" affordance + in-place edit** (tagline + add/remove
+  tags + README body via `MarkdownEditor`, sticky Save/Cancel, all states) —
+  **6.16.5** (Panels 1b/1c/1d).
+- **Remove the in-settings Overview editor → link to the on-page editor** — **6.16.6**
+  (Panel 6; retires Panel 7).
+- **Seed** Motir's tagline + tags into the fields; drop the "Vibe…" line from the
+  body — **6.16.7**. **E2E** — **6.16.8**.
+  (Mirror rung 1: Notion / GitHub-profile / Canny / Linear / Productboard edit their
+  public pages IN PLACE, not in a buried settings sub-view.)
+
 ## Context refs
 
 - `scripts/plan-seed/data/story-6.12.ts` — the locked model + the subtask DAG.
+- `scripts/plan-seed/data/story-6.16.ts` (MOTIR-774 · 6.16.1–6.16.8) — the
+  authorable-hero + in-place-editing DAG this asset gates.
+- `app/(public)/_components/PublicOverviewHero.tsx` — the shipped hero this redesign
+  makes authorable (today: hardcoded `autoIntroTagline` + four i18n pills).
+- `components/ui/MarkdownEditor.tsx` · `components/ui/Input.tsx` · `components/ui/Pill.tsx` ·
+  `components/ui/Button.tsx` — the primitives the in-place editor composes.
 - `scripts/plan-seed/data/story-7.0.ts` § 7.0.1 — the multi-panel design-card
   shape mirrored.
 - `scripts/plan-seed/data/story-6.11.ts` § 6.11.1 (`design/triage/`) — the triage
