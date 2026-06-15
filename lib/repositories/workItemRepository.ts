@@ -2017,6 +2017,20 @@ export const workItemRepository = {
   },
 
   /**
+   * Restore a soft-deleted item — clear `archivedAt` (Subtask 7.8.14, the
+   * Jira "restore" action). The inverse of {@link archive}: a single-op update,
+   * the same P2025→WorkItemNotFoundError translation. Re-archiving an already-
+   * live row (archivedAt already null) is a harmless no-op write.
+   */
+  async unarchive(id: string, tx: Prisma.TransactionClient): Promise<WorkItem> {
+    try {
+      return await tx.workItem.update({ where: { id }, data: { archivedAt: null } });
+    } catch (err) {
+      throw translateWriteError(err, { id });
+    }
+  },
+
+  /**
    * PERMANENT delete of a whole subtree (Story 2.8 · Subtask 2.8.2) — the
    * destructive counterpart of {@link archive}. The caller (`deleteWorkItem`)
    * resolves the full id set via {@link findSubtree} (root + every descendant)

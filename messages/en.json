@@ -719,6 +719,7 @@
     "errorDescription": "Something went wrong fetching the activity.",
     "created": "<actor></actor> created the work item",
     "archived": "<actor></actor> archived the work item",
+    "unarchived": "<actor></actor> restored the work item",
     "changedField": "<actor></actor> changed the <field>{fieldName}</field>",
     "updatedField": "<actor></actor> updated the <field>{fieldName}</field>",
     "movedToSprint": "<actor></actor> moved this work item to <target>{targetName}</target>",

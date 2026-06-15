@@ -125,7 +125,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **20 tools**.
+`initialize` handshake and registers **23 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -288,6 +288,59 @@ is already absent succeeds as a no-op. Same edit gate as the UI link path.
 
 **Output** — `structuredContent`: `{ removed: boolean, relationship }` — `removed`
 is `false` when no such link existed (the idempotent no-op).
+
+#### `update_work_item`
+
+Edit a work item's fields — the partial-patch counterpart of `create_work_item`,
+which can only set kind/title/parentKey/description/priority on create. Patch any
+subset of the UI-editable fields; an omitted field is left unchanged, and an
+explicit `null` clears a nullable one. The workflow **status** is NOT edited here
+(use `transition_status`), and neither is `kind`/`parent` (a structural move).
+The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected),
+the type→executor seed, and the assignee-membership check all apply exactly as in
+the UI; the same Story-6.4 edit gate gates the call.
+
+| Input             | Type                                | Required | Notes                                                            |
+| ----------------- | ----------------------------------- | -------- | ---------------------------------------------------------------- |
+| `key`             | string                              | yes      | Work item identifier, e.g. `"PROD-7"`.                           |
+| `title`           | string                              | no       | New title.                                                       |
+| `descriptionMd`   | string \| null                      | no       | New description; `null` clears it.                               |
+| `explanationMd`   | string \| null                      | no       | New explanation ("why"); `null` clears it.                       |
+| `priority`        | `lowest…highest`                    | no       | New priority.                                                    |
+| `type`            | work type \| null                   | no       | Leaf items only; `null` clears it. First set seeds the executor. |
+| `executor`        | `"coding_agent" \| "human"` \| null | no       | Leaf items only; `null` clears it.                               |
+| `estimateMinutes` | number \| null                      | no       | Estimated minutes; `null` clears it.                             |
+| `assigneeId`      | string \| null                      | no       | Assignee user id (must be a workspace member); `null` unassigns. |
+| `dueDate`         | string (ISO-8601) \| null           | no       | Due date; `null` clears it.                                      |
+
+**Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
+assignee, or a `type`/`executor` on a non-leaf, returns a typed error.
+
+#### `archive_work_item`
+
+Soft-delete (archive) a work item: it leaves the ready set (`list_ready` /
+`next_ready`) and search, but is fully recoverable. Archives **only this item** —
+children are left intact (the deliberate "Linear shape", not a Jira parent→subtree
+cascade; a destructive subtree delete is the separate `delete_work_item`). Same
+edit gate as the UI.
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: the archived `WorkItemDto` (`archivedAt` set).
+
+#### `unarchive_work_item`
+
+Restore an archived work item — the inverse of `archive_work_item` (Jira
+"restore"). Clears `archivedAt` so the item returns to active views and records an
+`unarchived` history entry. Same edit gate as the UI.
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: the restored `WorkItemDto` (`archivedAt` null).
 
 ### Search
 

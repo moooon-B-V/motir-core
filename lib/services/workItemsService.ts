@@ -1497,6 +1497,36 @@ export const workItemsService = {
   },
 
   /**
+   * Restore (unarchive) a soft-deleted work item — the inverse of
+   * {@link archiveWorkItem}, the Jira "restore" action (Subtask 7.8.14). Clears
+   * `archivedAt` and records an `'unarchived'` revision, so the item returns to
+   * active views (`list_ready` / search) and the History feed shows the restore
+   * the same way it shows the archive. Same tenant-gate + 6.4 edit gate as
+   * archive. The `from` in the revision diff is the archived timestamp the row
+   * carried before the restore (null if it was already live — a no-op restore).
+   */
+  async unarchiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
+    return db.$transaction(async (tx) => {
+      const current = await workItemRepository.findById(id, tx);
+      if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+
+      const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
+      const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
+      await workItemRevisionsService.recordRevision(
+        {
+          workItemId: id,
+          changedById: ctx.userId,
+          changeKind: 'unarchived',
+          diff: { archivedAt: { from: wasArchivedAt, to: null } },
+        },
+        tx,
+      );
+      return toWorkItemDto(row);
+    });
+  },
+
+  /**
    * PERMANENT delete (Story 2.8 · Subtask 2.8.2) — the destructive, irreversible
    * counterpart of {@link archiveWorkItem}, Jira-parity ("Delete Issues"). Removes
    * the item AND its ENTIRE subtree (every descendant), plus their links / comments
