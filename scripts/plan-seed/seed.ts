@@ -36,6 +36,24 @@
  * would skip the kind-parent triggers), so the seed exercises the same create
  * path the app does.
  *
+ * Status preservation (Subtask 7.8.7 — the source-of-truth flip). The seed is
+ * still the source of truth for plan STRUCTURE (the epic→story→leaf tree), but
+ * NO LONGER for STATUS. Once agents/users transition statuses directly in the
+ * live tenant (via the MCP `transition_status` tool, 7.8.5), a clear-and-reseed
+ * that re-applied seed statuses would CLOBBER those live changes. So a seed
+ * status is now INITIAL-ONLY: it is the status a NEW item is created with, and
+ * a reseed PRESERVES the live `workflow_status` of items that already existed
+ * in the tenant. Mechanically (see `./preserveStatus.ts`): BEFORE the clear we
+ * snapshot the current status of every existing plan item keyed by its dotted
+ * plan id (the stable title prefix), and AFTER re-creating the tree we re-apply
+ * that snapshot to the items that existed before, leaving new items on their
+ * seed status. A snapshotted status whose key is no longer in the target
+ * workflow falls back to the seed status with a loader warning. The double
+ * reseed stays idempotent (it snapshots the statuses it just preserved and
+ * re-applies the same values). This is also why `.github/workflows/seed.yml`'s
+ * `[reseed]` gate is safe for PLANNING merges: a reseed regenerates the tree
+ * without reverting the user's hand/agent status flips.
+ *
  * Production: unlike `db:seed:large` (a pure dev tool), this seed is the
  * authoritative plan and may run against production on merge to main (the
  * `Reseed plan on merge` workflow). It refuses to run under
@@ -61,6 +79,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { PLAN, ROOT_BUGS } from './data';
 import { composeDescription, mapTypeAndExecutor } from './mapItem';
+import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import { PLAN_STATUS_MAP, type PlanItem, type PlanLeafKind, type PlanStatus } from './types';
 
 const SEED_PASSWORD = '!QAZ1qaz';
@@ -119,6 +138,13 @@ async function main() {
     );
   }
 
+  // The live `workflow_status` of every existing plan item, keyed by dotted plan
+  // id, snapshotted BELOW (before the destructive clear) and re-applied AFTER the
+  // tree is rebuilt — so a reseed PRESERVES statuses agents/users flipped in the
+  // live tenant (seed status is initial-only; Subtask 7.8.7). Empty on a
+  // first-ever seed → every item then keeps its seed status.
+  let preservedStatuses = new Map<string, string>();
+
   // ── Idempotent clear: drop every `moooon` workspace owned by a seed user ────
   // (old single-owner OR the new team), then remove the legacy account. Keyed by
   // the seed emails + workspace NAME, so it never touches a real user's data.
@@ -141,6 +167,10 @@ async function main() {
     // (The new-tenant-root truncate rule: a tier above an existing root must be
     // cleared explicitly — Cascade never reaches up.)
     const organizationIds = new Set(seededWorkspaces.map((w) => w.organizationId));
+    // Snapshot live statuses BEFORE anything is deleted (Subtask 7.8.7). Keyed
+    // by the dotted plan id (recovered from the stable title prefix), so it
+    // survives the key reallocation a reseed does.
+    preservedStatuses = await snapshotLiveStatuses(workspaceIds);
     for (const workspaceId of workspaceIds) {
       // work_item.parent is onDelete:NoAction, so clear the set in one statement
       // first; the workspace then cascades project + memberships. Clearing the
@@ -448,6 +478,14 @@ async function main() {
     for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
   }
 
+  // ── Status-preservation pass (Subtask 7.8.7) ─────────────────────────────
+  // Re-apply the statuses snapshotted before the clear, so a reseed PRESERVES
+  // the live workflow status of items that already existed (seed status is now
+  // INITIAL-ONLY — it stays only on NEW items). Matched by dotted plan id; a
+  // snapshotted status no longer in the target workflow keeps the seed status
+  // with a warning. No-op on a first-ever seed (empty snapshot).
+  const preserve = await applyPreservedStatuses({ snapshot: preservedStatuses, idMap });
+
   // ── Link pass: depends_on → `is_blocked_by` (fromItem is_blocked_by toItem) ─
   let links = 0;
   let dangling = 0;
@@ -500,6 +538,14 @@ async function main() {
 
   console.log(`\n✅ Seeded ${created} work items, ${links} dependency links.`);
   if (dangling) console.log(`   (${dangling} depends_on edge(s) referenced unknown ids — skipped)`);
+  if (preserve.preserved || preserve.fellBack) {
+    console.log(
+      `🔁 Preserved ${preserve.preserved} live status(es) from the prior tenant` +
+        (preserve.fellBack ? ` (${preserve.fellBack} fell back to seed status)` : '') +
+        ` — seed status is initial-only (7.8.7).`,
+    );
+    for (const w of preserve.warnings) console.warn(`   ⚠ ${w}`);
+  }
   console.log(
     `🏃 Seeded ${sprintSummary.sprintCount} sprints ` +
       `(${sprintSummary.completeCount} complete, ${sprintSummary.activeCount} active, ` +
