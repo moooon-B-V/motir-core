@@ -1,10 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
 import { ArrowLeft, Check, Eye, Info, PencilLine } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
@@ -20,18 +18,30 @@ import { updateProjectOverviewAction } from '../../actions';
 // and treats the success response as the confirmation — NO whole-tree refresh
 // (the inline-edit no-tree-refresh rule). Project-admin gated: a non-admin sees
 // the same surface read-only (no Save / Cancel, the editor is read-only).
-const BACK_HREF = '/settings/project/members';
-
+//
+// This is a route-less SUB-VIEW reached from the make-public entry point (Panel
+// 6): the host (`ProjectMembersSettings`) swaps the whole settings content to
+// this dedicated view rather than navigating — so it adds NO settings route /
+// rail entry the design didn't specify (the route↔registry totality contract,
+// mistake #29). `onClose` returns to the settings cards; `onSaved` lifts the
+// committed body so the entry-point snippet reflects it.
 export interface EditOverviewProps {
-  initialValue: string;
+  value: string;
   canManage: boolean;
   /** Whether the project is currently public (drives the "hidden while not public" note). */
   isPublic: boolean;
+  onClose: () => void;
+  onSaved: (committed: string) => void;
 }
 
-export function EditOverview({ initialValue, canManage, isPublic }: EditOverviewProps) {
+export function EditOverview({
+  value: initialValue,
+  canManage,
+  isPublic,
+  onClose,
+  onSaved,
+}: EditOverviewProps) {
   const t = useTranslations('settings');
-  const router = useRouter();
   const { toast } = useToast();
 
   const [value, setValue] = useState(initialValue);
@@ -47,8 +57,10 @@ export function EditOverview({ initialValue, canManage, isPublic }: EditOverview
       const result = await updateProjectOverviewAction({ publicOverviewMd: value });
       if (result.ok) {
         // Success IS the confirmation — keep the optimistic value, mark it the
-        // new committed baseline, and DON'T refresh (the no-tree-refresh rule).
+        // new committed baseline, lift it to the host, and DON'T refresh (the
+        // no-tree-refresh rule).
         setSavedValue(value);
+        onSaved(value);
         toast({ variant: 'success', title: t('overview.savedToast') });
       } else {
         toast({
@@ -74,27 +86,30 @@ export function EditOverview({ initialValue, canManage, isPublic }: EditOverview
   }
 
   function cancel() {
+    // A pending edit reverts to the last committed body; a clean view returns to
+    // the settings cards.
     if (dirty) setValue(savedValue);
-    else router.push(BACK_HREF);
+    else onClose();
   }
 
   return (
-    <div className="mx-auto flex max-w-[64rem] flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <Card
         header={
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <Link
-                href={BACK_HREF}
+              <button
+                type="button"
+                onClick={onClose}
                 aria-label={t('overview.back')}
                 className="focus-visible:ring-(--focus-ring-color) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) inline-flex size-8 shrink-0 items-center justify-center rounded-(--radius-control) focus-visible:outline-none focus-visible:ring-2"
               >
                 <ArrowLeft className="size-4" aria-hidden />
-              </Link>
+              </button>
               <div>
-                <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
+                <h2 className="font-serif text-2xl font-semibold text-(--el-text)">
                   {t('overview.title')}
-                </h1>
+                </h2>
                 <p className="text-(--el-text-muted) font-sans text-xs">{t('overview.subtitle')}</p>
               </div>
             </div>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
   ArrowRight,
@@ -17,13 +16,14 @@ import {
 } from 'lucide-react';
 import type { ProjectAccessLevel } from '@prisma/client';
 import { Card } from '@/components/ui/Card';
-import { Button, buttonVariants } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
 import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { EditOverview } from './EditOverview';
 
 // ProjectMembersSettings (Story 6.4 · Subtask 6.4.5) — the project-settings
 // Members + Access UI, built against design/projects/access-members.mock.html
@@ -74,9 +74,9 @@ export interface ProjectMembersSettingsProps {
   // The project's CURRENT level (display + settable) — `ProjectAccessLevel`,
   // now including `public` (6.12.8, the make-public control).
   accessLevel: ProjectAccessLevel;
-  // The authored public Overview/README body (6.12.8) — used only for the
-  // "Edit overview" entry-point snippet shown while the project is public. The
-  // full authoring view lives at /settings/project/overview.
+  // The authored public Overview/README body (6.12.8) — seeds the entry-point
+  // snippet + the route-less "Edit overview" sub-view (`EditOverview`), both
+  // shown only while the project is public.
   publicOverviewMd: string | null;
   members: ProjectMemberDTO[];
   workspaceMembers: WorkspaceMemberDTO[];
@@ -102,6 +102,12 @@ export function ProjectMembersSettings({
   const [members, setMembers] = useState<ProjectMemberDTO[]>(initialMembers);
   const [accessPending, setAccessPending] = useState(false);
   const [pendingUserIds, setPendingUserIds] = useState<ReadonlySet<string>>(new Set());
+  // The Overview/README authoring is a route-less sub-view (Panel 7) reached
+  // from the make-public entry point — swap the whole settings content to it
+  // rather than navigate, so no settings route/rail entry is invented (the
+  // totality contract). `overviewMd` holds the committed body for the snippet.
+  const [editingOverview, setEditingOverview] = useState(false);
+  const [overviewMd, setOverviewMd] = useState(publicOverviewMd ?? '');
 
   function setPending(userId: string, on: boolean) {
     setPendingUserIds((prev) => {
@@ -270,6 +276,20 @@ export function ProjectMembersSettings({
     [t],
   );
 
+  // The dedicated Overview/README editor takes over the whole settings content
+  // (Panel 7) — reached from the entry point below, no route change.
+  if (editingOverview) {
+    return (
+      <EditOverview
+        value={overviewMd}
+        canManage={canManage}
+        isPublic={accessLevel === 'public'}
+        onClose={() => setEditingOverview(false)}
+        onSaved={setOverviewMd}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* ── Project access ─────────────────────────────────────────────── */}
@@ -353,8 +373,9 @@ export function ProjectMembersSettings({
       {accessLevel === 'public' ? (
         <PublicShareSection
           projectKey={projectKey}
-          publicOverviewMd={publicOverviewMd}
+          publicOverviewMd={overviewMd}
           canManage={canManage}
+          onEditOverview={() => setEditingOverview(true)}
         />
       ) : null}
 
@@ -489,10 +510,12 @@ function PublicShareSection({
   projectKey,
   publicOverviewMd,
   canManage,
+  onEditOverview,
 }: {
   projectKey: string;
   publicOverviewMd: string | null;
   canManage: boolean;
+  onEditOverview: () => void;
 }) {
   const t = useTranslations('settings');
   const { toast } = useToast();
@@ -567,13 +590,10 @@ function PublicShareSection({
               </p>
             </div>
             {canManage ? (
-              <Link
-                href="/settings/project/overview"
-                className={buttonVariants({ variant: 'secondary', size: 'md' })}
-              >
+              <Button variant="secondary" size="md" onClick={onEditOverview}>
                 <FileText className="size-4" aria-hidden />
                 {t('public.editOverview')}
-              </Link>
+              </Button>
             ) : null}
           </div>
         }
@@ -584,13 +604,14 @@ function PublicShareSection({
             {overviewSnippet || t('public.overviewEmpty')}
           </p>
           {canManage ? (
-            <Link
-              href="/settings/project/overview"
+            <button
+              type="button"
+              onClick={onEditOverview}
               className="text-(--el-link) hover:text-(--el-link-pressed) inline-flex shrink-0 items-center gap-1 font-sans text-xs font-medium"
             >
               {t('public.overviewEdit')}
               <ArrowRight className="size-3" aria-hidden />
-            </Link>
+            </button>
           ) : null}
         </div>
         <p className="text-(--el-text-muted) mt-2 font-sans text-xs">{t('public.overviewNote')}</p>
