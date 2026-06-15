@@ -18,18 +18,24 @@ no Pencil→code gap.
 > "account-required, not anonymous" framing for READ, mirrors the 6.13
 > project-square revision, and resolves its anonymous click-through knock-on.
 
-| Surface                       | Asset                       | Gates                                                   |
-| ----------------------------- | --------------------------- | ------------------------------------------------------- |
-| **Public Overview / README**  | `public-projects.mock.html` | **6.12.4** (render) + **6.12.8** (the authoring editor) |
-| **Edit overview** (admin)     | `public-projects.mock.html` | **6.12.8** (split Markdown editor + live preview)       |
-| **Public read-only view**     | `public-projects.mock.html` | **6.12.4** (board / work items, internal fields hidden) |
-| **Public roadmap**            | `public-projects.mock.html` | **6.12.7** (status-grouped, vote-counted, paginated)    |
-| **Submit + duplicate detect** | `public-projects.mock.html` | **6.12.5** (the form) + **6.12.6** (the upvote target)  |
-| **Request detail**            | `public-projects.mock.html` | **6.12.6** (upvote + comments on public requests)       |
-| **Make-public + share link**  | `public-projects.mock.html` | **6.12.8** (the four-level Access control + the link)   |
+| Surface                       | Asset                          | Gates                                                                          |
+| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| **Public Overview / README**  | `public-projects.mock.html`    | **6.12.4** (render) + **6.12.8** (the authoring editor)                        |
+| **Edit overview** (admin)     | `public-projects.mock.html`    | **6.12.8** (split Markdown editor + live preview)                              |
+| **Public read-only view**     | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                        |
+| **Public roadmap**            | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                           |
+| **Submit + duplicate detect** | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                         |
+| **Request detail**            | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                              |
+| **Make-public + share link**  | `public-projects.mock.html`    | **6.12.8** (the four-level Access control + the link)                          |
+| **Public work-item DETAIL**   | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder) |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
-`6.12.1` in `dependsOn` and is `blocked` until this asset lands.
+`6.12.1` in `dependsOn` and is `blocked` until this asset lands. The
+**public work-item DETAIL page** is a LATER addition (Story 6.14 — see the
+dedicated section below): `public-projects.mock.html` deferred it as "a later
+card" (cards were drawn navigable to a read-only work item that was never built),
+and 6.14.6 (the private-epic child-panel placeholder) needs it. Its asset is
+**`public-item-detail.mock.html`** (gate **6.14.12**); the code is **6.14.11**.
 
 ## The locked model this UI sits on (6.12.2 / 6.12.3)
 
@@ -340,6 +346,78 @@ The dedicated authoring surface for `publicOverviewMd` — a \*\*split Markdown 
 - **Rate-limited submit** — a yellow `.rl-banner` (`alarm` glyph, warning hue):
   _"You're submitting a little too fast…"_ + a disabled submit — a graceful typed
   error, **never a raw 500** (6.12.5 throttle precedent from 6.11.4).
+
+---
+
+## Public work-item DETAIL page (Story 6.14 · gate 6.14.12) — `public-item-detail.mock.html`
+
+The read-only PUBLIC work-item detail page at `/p/[identifier]/items/[key]` — the
+page a public/non-member viewer lands on from a board card, an items-list row, or
+a tree node. **A separate asset** (`public-item-detail.mock.html`) because it is a
+later addition: `public-projects.mock.html` drew its cards as "navigable to the
+read-only work item" but never built that destination (`PublicWorkItemList.tsx`
+left the rows as non-links — "6.12.4 has no public work-item DETAIL route (that's
+a later card)"). It reuses **the same public chrome** (`.pub-topbar` /
+`.pub-banner` / `.seg` sub-bar nav — incl. the **Tree** tab added by 6.14.10) and
+the **same stripped public projection** (NO assignee / estimate / story points /
+internal comments) as the rest of this area, and it reconciles with the
+just-shipped **6.14.10 public tree** (the child-row grammar matches
+`PublicWorkItemTree` / `PublicWorkItemList`). The detail/child-panel/sidebar
+layout + the privacy placeholder reuse `design/epic-privacy/` (panels 3 + 5)
+verbatim.
+
+It is the host surface for two code subtasks: **6.14.11** (build the page) and
+**6.14.6** (the private-epic child-panel placeholder, rendered on it).
+
+### Panel 1 — normal EPIC detail (public viewer)
+
+- Public chrome on top. **Header:** `IssueTypeIcon` (epic, `--el-type-epic`, lucide
+  `zap`) + the mono identifier + serif title + a status `Pill`. **No edit
+  affordances** (read-only) — the distinguishing difference from the authed
+  `/issues/[key]` detail page.
+- **Body:** a public-safe description (`.motir-prose`); the public projection
+  strips internal fields, so no assignee / estimate / points anywhere.
+- **Child issues panel** (`Card` + `SectionLabel`): a list of public-safe child
+  rows, each an `<a>` navigable to its OWN `/p/.../items/<key>` detail —
+  `IssueTypeIcon` (kind hue) + key + title + status `Pill`, the SAME stripped row
+  grammar as the public board/list/tree. No nested interactive (the row is the
+  only control).
+- **Sidebar** (`Card`): Status, Type = Epic, Children = N (a plain count — for a
+  NON-private epic the child set is public, so the count is public-safe).
+
+### Panel 2 — private EPIC detail (public / non-member viewer) — the 6.14.6 target
+
+- Same chrome + header, but the header carries the lavender **"Not public"**
+  `Pill` (lock glyph; `--el-tint-lavender` / `--el-text-strong`, the AA recipe).
+- **Child issues panel → the centered `EmptyState`** (lucide `eye-off` ~40px,
+  `--el-text-muted`): title **"This epic is not public"**, subtext **"The project
+  admin has kept this epic's contents private."** (exact copy shared 1:1 with
+  `design/epic-privacy/` panels 2/3). **No child rows in the DOM** — the 6.14.4
+  server projection has already excluded them (no-leak), so the UI renders the
+  placeholder off the `childrenHidden` marker with no child in the payload.
+- **Sidebar:** Children → **"Hidden"**, Progress → **"Hidden"** (italic
+  `--el-text-secondary`) — the stripped aggregate tells.
+
+### Panel 3 — non-epic (story) detail (public viewer)
+
+- Same shape with a story `IssueTypeIcon` (`--el-type-story`); sidebar shows
+  Type = Story and a **Parent** link back to its epic's detail. A non-epic with
+  children renders the same child-issues panel — the placeholder/marker logic is
+  epic-only (privacy is an epic-level flag), so a story always shows its children.
+
+### Panel 4 — states
+
+- **Empty** — an epic with zero (real, non-private) children → an `EmptyState`
+  (lucide `inbox`) with title **"No child issues yet"** / **"This epic has no
+  stories or tasks yet."** — deliberately DISTINCT copy + glyph from the private
+  `eye-off` placeholder, so "private" never reads as "empty".
+- **Loading** — `.sk` shimmer skeleton (header + a few child rows).
+- **Error** — the `ErrorState` shape (lucide `triangle-alert`, `--el-danger`):
+  **"Couldn't load this item. Try again."** + a Retry button.
+- **Not found / not public** — a centered `EmptyState` (lucide `lock`): **"This
+  item isn't available"** / **"It may be private or may not exist."** A non-public
+  item/project 404s (no existence leak), so the page degrades to this, never a raw
+  error.
 
 ---
 
