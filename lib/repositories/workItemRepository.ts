@@ -1051,6 +1051,59 @@ export const workItemRepository = {
   },
 
   /**
+   * Count a project's non-archived, non-triage work items grouped by workflow
+   * status CATEGORY (Story 6.12 · Subtask 6.12.4) — the Overview stat strip's
+   * Planned / In progress / Shipped denominators, in ONE aggregate (no
+   * per-category round-trip). Joins `workflow_status` to resolve each item's
+   * `status` key → its category (`todo` / `in_progress` / `done`); an item whose
+   * status maps to no live workflow status falls outside every bucket (omitted),
+   * same as the board's unmapped handling. The explicit `workspaceId` gate is
+   * the app-layer tenancy check atop RLS (finding #26). Read-only → `db`
+   * singleton. Returns a per-category count map (absent categories ⇒ 0).
+   */
+  async countByStatusCategory(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ todo: number; in_progress: number; done: number }> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ category: string; count: number }>>`
+      SELECT ws."category"::text AS "category", COUNT(*)::int AS "count"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+          ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+        GROUP BY ws."category"`;
+    const out = { todo: 0, in_progress: 0, done: 0 };
+    for (const r of rows) {
+      if (r.category === 'todo' || r.category === 'in_progress' || r.category === 'done') {
+        out[r.category] = r.count;
+      }
+    }
+    return out;
+  },
+
+  /**
+   * Count a project's TRIAGE-queued items (Story 6.12 · Subtask 6.12.4) — the
+   * Overview "Public requests" stat. Triage items are the submission inbox
+   * (`triagedAt IS NOT NULL`), which 6.12.5's public submit feeds; today this is
+   * typically 0. Archived items are excluded. Read-only → `db` singleton.
+   */
+  async countTriageItems(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.workItem.count({
+      where: { projectId, workspaceId, archivedAt: null, triagedAt: { not: null } },
+    });
+  },
+
+  /**
    * The BOUNDED card set of a board column (Subtask 3.1.4 / 3.8.2, finding #57):
    * a project's non-archived work items whose `status` is one of `statusKeys`
    * (the column's mapped statuses), ordered for the board and capped with `take`

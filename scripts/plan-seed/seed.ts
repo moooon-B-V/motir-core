@@ -14,9 +14,10 @@
  * `motir` **project** (Story 6.4 added project-level access gating): every seed
  * user gets a `ProjectMembership` — **zhuyue@motir.co is the project `admin`**
  * (manages members + access), **everyone else is a `member`** (can edit, can't
- * manage) — and the project's `accessLevel` is set explicitly to **`open`** so the
- * demo tenant stays browsable by every workspace member (flip to `private` here to
- * showcase gating instead). Before 6.4 access was workspace-level only.
+ * manage) — and the project's `accessLevel` is set to **`public`** (Story 6.12 —
+ * the live tenant IS the public showcase: anyone reads /p/PROD with no sign-in;
+ * flip to `open`/`private` to showcase member gating instead). Before 6.4 access
+ * was workspace-level only.
  *
  * Org tier (Story 6.10): the `moooon` workspace nests under a `moooon`
  * **Organization** — the root tenancy tier ABOVE Workspace. The seed models a
@@ -79,6 +80,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { PLAN, ROOT_BUGS } from './data';
 import { composeDescription, mapTypeAndExecutor } from './mapItem';
+import { MOTIR_PUBLIC_OVERVIEW_MD } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import { PLAN_STATUS_MAP, type PlanItem, type PlanLeafKind, type PlanStatus } from './types';
 
@@ -299,12 +301,11 @@ async function main() {
   // original "add the team to the workspace AND the project" ask (the workspace
   // half is the addMember loop above). zhuyue@motir.co is the project `admin`
   // (manages members + access); everyone else is a `member` (can edit, can't
-  // manage). The project keeps accessLevel `open` (set explicitly here, though it
-  // is also the schema default) so the demo tenant stays browsable by every
-  // workspace member — gating is exercised by the 6.4 tests, not forced on the
-  // showcase tenant; flip `'open'` to `'private'` below to demo gating instead.
-  // The clear pass above deletes the project (cascading its memberships), so a
-  // plain create is idempotent across reseeds.
+  // manage). The project's accessLevel is set to `public` below (Story 6.12 —
+  // the live tenant IS the public showcase); flip it to `'open'`/`'private'` to
+  // demo workspace-member gating instead. The clear pass above deletes the
+  // project (cascading its memberships), so a plain create is idempotent across
+  // reseeds.
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
     for (const u of SEED_USERS) {
       await projectMembershipRepository.create(
@@ -317,7 +318,16 @@ async function main() {
         tx,
       );
     }
-    await projectRepository.setAccessLevel(project.id, 'open', tx);
+    // Story 6.12: the live tenant IS the public showcase — `public` so anyone
+    // on the web reads its Overview / board / work items at /p/PROD with no
+    // sign-in (the 6.12.4 anonymous public view), and its `publicOverviewMd` is
+    // seeded to Motir's canonical README so the Overview renders real copy.
+    await projectRepository.setAccessLevel(project.id, 'public', tx);
+    await projectRepository.updatePublicFields(
+      project.id,
+      { publicOverviewMd: MOTIR_PUBLIC_OVERVIEW_MD },
+      tx,
+    );
   });
 
   // ── Tree pass: create every epic → story → leaf through the shipped path ──
@@ -561,7 +571,8 @@ async function main() {
   );
   console.log(`  Workspace: ${SEED_WORKSPACE_NAME}`);
   console.log(`  Project:   ${SEED_PROJECT_NAME} (${project.identifier})`);
-  console.log(`  Project:   access=open · ${OWNER_EMAIL}=admin, rest=member (Story 6.4)`);
+  console.log(`  Project:   access=public · ${OWNER_EMAIL}=admin, rest=member (Story 6.4/6.12)`);
+  console.log(`  Public:    /p/${project.identifier} — anonymous public view (Story 6.12.4)`);
   console.log('  Open the project to browse the plan as an issue tree.');
   console.log('────────────────────────────────────────────────────────');
 }

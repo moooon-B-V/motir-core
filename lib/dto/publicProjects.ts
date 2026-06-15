@@ -1,10 +1,121 @@
-// DTOs for the public-project write/read entry points (Story 6.12 · Subtask
-// 6.12.5). What crosses the HTTP boundary for the public "submit a request" +
-// duplicate-detection surfaces — no Prisma row shape leaks. The submission
-// itself returns the shared `TriageSubmissionResultDto` (it IS a triage
-// submission, born through the 6.11.4 intake path); these are the dedupe shapes.
+// DTOs for the PUBLIC project surfaces (Story 6.12).
+//
+// Two concerns live here, both wire-safe (no Prisma row crosses the boundary;
+// enums cross as string-literal unions so a public consumer never imports
+// `@prisma/client`):
+//
+//   * The public READ projection (Subtask 6.12.4) — the load-bearing
+//     correctness boundary. The public read MUST go through these shapes so
+//     internal fields NEVER cross the wire (not fetched-then-hidden in the DOM):
+//       STRIPPED: assignees, estimates (estimateMinutes), story points
+//                 (storyPoints), internal work-item comments.
+//       KEPT:     work item key/identifier, title, kind, status, priority, board
+//                 columns + ordering, and the public-safe `publicOverviewMd`.
+//     The DTOs simply DON'T HAVE the stripped fields, so a mapper/service that
+//     forgets to drop one is a compile error, not a silent leak.
+//   * The public WRITE/dedupe entry points (Subtask 6.12.5) — the duplicate
+//     -detection shapes for "submit a request". The submission itself returns
+//     the shared `TriageSubmissionResultDto` (it IS a triage submission).
 
-import type { WorkItemKindDto } from './workItems';
+import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
+
+// --- Public READ projection (6.12.4) ---------------------------------------
+
+/**
+ * A single public-safe work item, as a board/list card. NO assignee, NO
+ * estimateMinutes, NO storyPoints — those fields are absent BY DESIGN (the
+ * public projection). `statusCategory` lets the public UI bucket the card
+ * (todo / in_progress / done) without re-reading the workflow.
+ */
+export interface PublicWorkItemListItemDto {
+  id: string;
+  /** "PROD-42" — the denormalized work-item key the public URL uses. */
+  identifier: string;
+  /** The per-project monotonic number (PROD-**42**). */
+  key: number;
+  title: string;
+  kind: WorkItemKindDto;
+  /** The status key (e.g. "in_progress"); a public-safe workflow label. */
+  status: string;
+  statusCategory: StatusCategoryDto;
+  priority: WorkItemPriorityDto;
+}
+
+/** Alias — a public board card is exactly the same stripped projection. */
+export type PublicBoardCardDto = PublicWorkItemListItemDto;
+
+/** One public board column: its name + the cards mapped into it. */
+export interface PublicBoardColumnDto {
+  id: string;
+  name: string;
+  /** Mapped status keys (so the column header can show its statuses). */
+  statusKeys: string[];
+  cards: PublicBoardCardDto[];
+  /** Full card count in this column (the denominator above the loaded set). */
+  totalCount: number;
+}
+
+/** The public board — columns of public-safe cards. Bounded (the at-scale cap). */
+export interface PublicBoardDto {
+  boardId: string;
+  name: string;
+  columns: PublicBoardColumnDto[];
+  /** The board-level load cap (the bound; never "load every row"). */
+  cap: number;
+  /** True when the board's total exceeds the cap (the "refine" hint). */
+  truncated: boolean;
+}
+
+/** A cursor-paginated page of public-safe work items (the Work items tab). */
+export interface PublicWorkItemPageDto {
+  items: PublicWorkItemListItemDto[];
+  /** Opaque cursor (a work-item id) for the next page, or null at the end. */
+  nextCursor: string | null;
+}
+
+/** The at-a-glance stat strip on the Overview hero + sidebar. */
+export interface PublicProjectStatsDto {
+  /** Public requests submitted into triage (likely 0 until 6.12.5 ships). */
+  publicRequests: number;
+  /** Total upvotes across the project's public requests (6.12.6). */
+  upvotes: number;
+  /** Work items whose status category is todo/in_progress (the roadmap ahead). */
+  planned: number;
+  /** Work items shipped — status category `done`. */
+  shipped: number;
+  /** Work items currently in progress (sidebar "In progress" stat). */
+  inProgress: number;
+}
+
+/**
+ * External links derived from EXISTING project fields only — NO new schema.
+ * Motir's project has no dedicated link columns today, so every field is
+ * optional and may be absent; the Overview sidebar renders only the present
+ * ones. (6.12.8's settings editor is where these become authorable.)
+ */
+export interface PublicProjectLinksDto {
+  website?: string;
+  repo?: string;
+  docs?: string;
+  changelog?: string;
+}
+
+/** The public Overview/README landing payload. */
+export interface PublicProjectOverviewDto {
+  /** The project's display name (the hero `<h1>`). */
+  name: string;
+  /** The project key (e.g. "PROD") — the public URL segment + a hero meta. */
+  identifier: string;
+  /** The owning workspace's name (top-bar "key · workspace"). */
+  workspaceName: string;
+  /** The authored README Markdown, or null → the slim auto-intro fallback. */
+  publicOverviewMd: string | null;
+  stats: PublicProjectStatsDto;
+  links: PublicProjectLinksDto;
+}
+
+// --- Public WRITE / duplicate detection (6.12.5) ---------------------------
 
 /**
  * One duplicate-detection candidate — an existing PUBLIC REQUEST that matches a

@@ -1,16 +1,21 @@
 import { Prisma, type PublicRequestVote } from '@prisma/client';
+import { db } from '@/lib/db';
 
-// publicRequestVoteRepository (Story 6.12 · Subtask 6.12.6) — single-op access
-// to the `public_request_vote` join. One vote per (request, account) is the
+// publicRequestVoteRepository (Story 6.12) — single-op access to the
+// `public_request_vote` join. One vote per (request, account) is the
 // server-enforced rule (the schema `@@unique([workItemId, userId])` from
-// 6.12.3); the SERVICE owns the toggle transaction + the work_item row lock.
+// 6.12.3); the SERVICE owns the toggle transaction + the work_item row lock
+// (6.12.6).
 //
 // RLS (6.12.3): `public_request_vote` is FORCE-RLS, keyed on the `app.user_id`
 // GUC for the owner's own rows and `app.system_admin` for the cross-account
-// COUNT. So the write methods run inside a `withUserContext` tx (the voter casts
-// only their OWN vote) and the aggregate `countByWorkItem` runs inside a
-// `withSystemContext` tx (it spans every voter) — the service binds the right
-// context and threads its `tx` here.
+// COUNT. So the toggle write methods run inside a `withUserContext` tx (the
+// voter casts only their OWN vote) and the per-request `countByWorkItem`
+// aggregate runs inside a `withSystemContext` tx (it spans every voter) — the
+// service binds the right context and threads its `tx` here. The anonymous
+// public READ (6.12.4 Overview "Upvotes" stat) rides the app connection's
+// RLS-secondary posture + the app-layer `projectId` gate, the same way 6.12.6's
+// triage vote-tally read does (finding #26).
 
 export const publicRequestVoteRepository = {
   /**
@@ -55,5 +60,17 @@ export const publicRequestVoteRepository = {
    */
   async countByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<number> {
     return tx.publicRequestVote.count({ where: { workItemId } });
+  },
+
+  /**
+   * Total upvotes across a project's public requests (Story 6.12 · Subtask
+   * 6.12.4) — the public Overview "Upvotes" stat. Counts every vote row whose
+   * work item belongs to the project, in ONE aggregate (no per-item N+1). The
+   * anonymous public read uses the `db` singleton + the app-layer `projectId`
+   * gate (RLS-secondary posture, like 6.12.6's triage vote-tally). Returns 0
+   * when the project has no public requests / votes.
+   */
+  async countByProject(projectId: string): Promise<number> {
+    return db.publicRequestVote.count({ where: { workItem: { projectId } } });
   },
 };
