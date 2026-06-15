@@ -3456,7 +3456,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Settings → Project → Details: the "Project details" card title and the Admin pill render flush against the card edges, because the editable variant overrides Card padding to `p-0` (to let body dividers extend edge-to-edge) but the Card header slot has no padding of its own and inherited the outer pad',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
