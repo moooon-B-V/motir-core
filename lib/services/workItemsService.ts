@@ -1496,6 +1496,74 @@ export const workItemsService = {
   },
 
   /**
+   * PERMANENT delete (Story 2.8 · Subtask 2.8.2) — the destructive, irreversible
+   * counterpart of {@link archiveWorkItem}, Jira-parity ("Delete Issues"). Removes
+   * the item AND its ENTIRE subtree (every descendant), plus their links / comments
+   * / watchers / custom-field values / etc., in ONE transaction.
+   *
+   * Flow (lock → gate → resolve → audit → delete):
+   *  1. FOR-UPDATE lock the root, then re-read + tenant-gate (a cross-workspace or
+   *     already-deleted id is a 404 `WorkItemNotFoundError` — the "already-deleted"
+   *     race, translated to a typed error). The lock serializes against a concurrent
+   *     delete/move of the SAME root (lock-before-read-derived).
+   *  2. Permission gate: delete is more privileged than edit — it is the project
+   *     **manage** capability (Jira "Delete Issues" defaults to project admins;
+   *     `assertCanManage` = project admin or workspace owner/admin, the 6.4 gate),
+   *     NOT `assertCanEdit`.
+   *  3. Resolve the full subtree id set via `findSubtree` (root + descendants).
+   *  4. Write the audit record. The deleted rows — and their OWN revisions (FK
+   *     `onDelete: Cascade`) — vanish, so the surviving trace is a `deleted`
+   *     revision on the root's PARENT (the `comment_deleted` precedent: history
+   *     records the deletion on a surviving neighbour). A TOP-LEVEL item has no
+   *     surviving parent to anchor to, so its deletion leaves no per-item History
+   *     entry — a project-scoped audit log is a separate capability (not in 2.8),
+   *     noted for a follow-up.
+   *  5. `deleteSubtree` removes the rows in one statement; every other inbound FK
+   *     is `Cascade`/`SetNull` so no orphaned links or rows survive.
+   *
+   * Idempotent-safe: a missing id throws `WorkItemNotFoundError` (→ 404), never a
+   * raw Prisma error. Returns nothing — the rows are gone, there is no DTO to map.
+   */
+  async deleteWorkItem(id: string, ctx: ServiceContext): Promise<void> {
+    return db.$transaction(async (tx) => {
+      // 1. Lock the root + tenant-gate (404 on cross-workspace / already-deleted).
+      const locked = await workItemRepository.lockById(id, tx);
+      if (!locked) throw new WorkItemNotFoundError(id);
+      const root = await workItemRepository.findById(id, tx);
+      if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+
+      // 2. Permission gate — delete is the project-admin "manage" capability.
+      await projectAccessService.assertCanManage(root.projectId, ctx, tx);
+
+      // 3. Resolve the full subtree (root + every descendant) in one round-trip.
+      const subtree = await workItemRepository.findSubtree(id, tx);
+      const ids = subtree.map((r) => r.id);
+      const descendantCount = ids.length - 1;
+
+      // 4. Audit on the surviving parent (the deleted rows' own revisions cascade
+      //    away). A top-level item has no parent anchor — see the doc-comment.
+      if (root.parentId) {
+        const summary =
+          descendantCount > 0
+            ? `${root.identifier}: ${root.title} (+${descendantCount} descendant${descendantCount === 1 ? '' : 's'})`
+            : `${root.identifier}: ${root.title}`;
+        await workItemRevisionsService.recordRevision(
+          {
+            workItemId: root.parentId,
+            changedById: ctx.userId,
+            changeKind: 'deleted',
+            diff: { deleted: { from: summary, to: null } },
+          },
+          tx,
+        );
+      }
+
+      // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
+      await workItemRepository.deleteSubtree(ids, tx);
+    });
+  },
+
+  /**
    * Re-parent and/or reorder a work item atomically. Position is minted by
    * fractional indexing between the named neighbors, so a reorder is a single
    * O(1) write with no sibling cascade:

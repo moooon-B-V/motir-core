@@ -301,6 +301,23 @@ const commentEntry: RegistryEntry = {
   },
 };
 
+/**
+ * The 2.8.2 work-item-deletion record (changeKind `deleted`, diff
+ * `{ deleted: { from: '<identifier>: <title> (+N descendants)', to: null } }`)
+ * — recorded on the PERMANENTLY-deleted item's SURVIVING PARENT, since the
+ * deleted rows and their own revisions cascade away (the `comment_deleted`
+ * shape, one level up). An EXPLICIT renderable disposition is mandatory here —
+ * mistake #29 forbids letting the generic fallback absorb a real event — so the
+ * deletion shows in the parent's History. It renders through the shared
+ * `generic` part (the summary string carries the gone item + descendant count,
+ * no ids to resolve); a dedicated visual entry is owned by the delete UI subtask
+ * (2.8.4) / Story 5.5.
+ */
+const deletedEntry: RegistryEntry = {
+  disposition: 'renderable',
+  render: (key, value) => [genericPart(key, value)],
+};
+
 /** Exact-match dispositions. */
 const REGISTRY: Record<string, RegistryEntry> = {
   // -- suppressed (the explicit noise policy) ------------------------------
@@ -335,6 +352,7 @@ const REGISTRY: Record<string, RegistryEntry> = {
   // -- composite shapes ------------------------------------------------------
   links: linksEntry,
   comment: commentEntry,
+  deleted: deletedEntry,
   // -- in-flight 5.2 / 5.4 collection shapes (registered ahead of merge) ----
   attachments: collectionField(),
   labels: collectionField(),
