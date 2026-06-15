@@ -25,9 +25,10 @@ no Pencil→code gap.
 > sign-in-to-act writes); only its **presentation + discoverability** change.
 > Three additions, each a UI subtask gated on this asset: **(6.17.2)** the
 > make-public control + copy reframed to "Building in public" with an
-> **explainer/confirm** step; **(6.17.3)** a **discoverable entry point** for
-> non-public projects (a Settings → General promo card + a dismissible
-> project-shell nudge — NOT a bare dropdown option); **(6.17.4)** a **"Building in
+> **explainer/confirm** step; **(6.17.3)** a **promoted, discoverable entry
+> point** for non-public projects (PRIMARY: a persistent "Build in public" button
+> in the project-shell header, not buried in settings; plus a dismissible nudge +
+> a Settings → General card — NOT a bare dropdown option); **(6.17.4)** a **"Building in
 > public" status badge** on the project (authed shell header + settings) when
 > access = `public`, plus the **stop/manage path** (a reverse "stop building in
 > public" confirm). Panels **10–12** below; the header badge in Panels 1–2 and the
@@ -37,19 +38,19 @@ no Pencil→code gap.
 > surface "make public" / "share" as a first-class action rather than a buried
 > setting.
 
-| Surface                       | Asset                          | Gates                                                                              |
-| ----------------------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
-| **Public Overview / README**  | `public-projects.mock.html`    | **6.12.4** (render) + **6.12.8** (the authoring editor)                            |
-| **Edit overview** (admin)     | `public-projects.mock.html`    | **6.12.8** (split Markdown editor + live preview)                                  |
-| **Public read-only view**     | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                            |
-| **Public roadmap**            | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                               |
-| **Submit + duplicate detect** | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                             |
-| **Request detail**            | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                  |
-| **Make-public + share link**  | `public-projects.mock.html`    | **6.12.8** (the four-level Access control + the link)                              |
-| **Public work-item DETAIL**   | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)     |
-| **Build-in-public reframe**   | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11             |
-| **Build-in-public entry pt**  | `public-projects.mock.html`    | **6.17.3** (Settings General promo + shell nudge → confirm → go public) — Panel 10 |
-| **Build-in-public badge**     | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                     |
+| Surface                       | Asset                          | Gates                                                                                        |
+| ----------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
+| **Public Overview / README**  | `public-projects.mock.html`    | **6.12.4** (render) + **6.12.8** (the authoring editor)                                      |
+| **Edit overview** (admin)     | `public-projects.mock.html`    | **6.12.8** (split Markdown editor + live preview)                                            |
+| **Public read-only view**     | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                                      |
+| **Public roadmap**            | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                                         |
+| **Submit + duplicate detect** | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                                       |
+| **Request detail**            | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                            |
+| **Make-public + share link**  | `public-projects.mock.html`    | **6.12.8** (the four-level Access control + the link)                                        |
+| **Public work-item DETAIL**   | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)               |
+| **Build-in-public reframe**   | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                       |
+| **Build-in-public entry pt**  | `public-projects.mock.html`    | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10 |
+| **Build-in-public badge**     | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                               |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 `6.12.1` in `dependsOn` and is `blocked` until this asset lands. The
@@ -130,12 +131,14 @@ duplicate-detection portal set.
    a semantic HTML outline, and the GEO answer-engine framing (the Overview/README
    as the citable description + an FAQ). States the read-anonymous /
    write-needs-sign-in / internal-fields-stripped facts.
-10. **(10)** **Build-in-public ENTRY POINT** (6.17.3) — the two discoverable
-    placements for a NOT-yet-public project: a **Settings → General promo card**
-    (the durable home — megaphone hero + 3 what's-shared bullets + a primary
-    "Start building in public" CTA) and a **dismissible project-shell nudge** (a
-    one-time admin strip in the header). Both open the explainer/confirm (panel 11);
-    it is **never** a bare access-dropdown option.
+10. **(10)** **Build-in-public ENTRY POINT** (6.17.3) — the **promoted** entry for
+    a NOT-yet-public project. **PRIMARY: a persistent "Build in public" button in
+    the project-shell header** (`.btn-build`, build-tinted, always visible to
+    admins — the same slot that becomes the status badge once public). Secondary:
+    a **dismissible project-shell nudge** (one-time reinforcement) and a **Settings
+    → General promo card** (durable home — megaphone hero + 3 what's-shared bullets
+    - a primary "Start building in public" CTA). All open the explainer/confirm
+      (panel 11); it is **never** a bare access-dropdown option.
 11. **(11)** **EXPLAINER / CONFIRM** (6.17.2) — the "Start building in public?"
     Modal: a lead paragraph + a "What becomes public" list (board + roadmap; work
     items crawlable; sign-in only to act; internal fields stay stripped) + a
@@ -417,24 +420,35 @@ on this asset (`dependsOn: 6.17.1`, `blocked` until it lands):
 
 ### The discoverable entry point (6.17.3 · Panel 10)
 
-A non-public project gets **two** placements — never a bare dropdown option (the
-explicit anti-pattern):
+A non-public project gets a **promoted PRIMARY entry** plus two secondary
+reinforcements — never a bare dropdown option (the explicit anti-pattern). The
+point of 6.17.3 is that turning a project public is a **promoted action, not a
+buried setting** (mirror rung 1: Linear / Notion / Vercel surface "Share" /
+"Publish" as a persistent top-right header action; GitHub puts repo visibility
+front-and-centre — none bury it three clicks into settings).
 
-- **(a) Settings → General promo card** (`.promo`) — the **durable home**. A
-  bordered card with a soft decorative corner-wash (the same `--el-hero-wash-*`
-  tints, text on `--el-page-bg` so AA holds — finding #35), an accent-filled
-  `promo-glyph` megaphone, a serif headline + sub, a 3-row `promo-bul`
-  what's-shared list, and a `promo-actions` row (**"Start building in public"**
-  `btn-primary btn-lg` + a "Learn more" ghost). Always present for an admin on a
-  non-public project.
-- **(b) A dismissible project-shell nudge** (`.nudge`) — the **discovery**
-  surface. A one-time, dismissible strip (accent left-border, `#i-rocket` lead
-  glyph, title + sub, a "Start building in public" `btn-primary`, an `#i-x`
-  `nudge-close`). Shows once to project admins; dismissible; not persistent
-  chrome.
+- **(a) PRIMARY — a persistent project-shell HEADER button** (`.btn-build`). A
+  build-tinted action (`--el-build-bg` lavender + `--el-text-strong` + accent
+  `#i-megaphone` glyph) in the project header's action row, **always visible to
+  admins on every project view** (board / items / roadmap) while the project is
+  not public. This is the obvious, promoted home. **It is the SAME header slot
+  that shows the "Building in public" status badge once public (6.17.4 · Panel 12)** — so the affordance is stateful (non-public → "Build in public" action;
+  public → "Building in public" badge + manage), never buried and never
+  duplicated. One click opens the Panel-11 confirm.
+- **(b) A dismissible project-shell nudge** (`.nudge`) — a **richer one-time
+  prompt** that reinforces the header button with context. A dismissible strip
+  (accent left-border, `#i-rocket` lead glyph, title + sub, a "Start building in
+  public" `btn-primary`, an `#i-x` `nudge-close`). Shows once to admins; the
+  persistent header button (a) remains after it's dismissed.
+- **(c) Settings → General promo card** (`.promo`) — the **durable home** for
+  details + manage. A bordered card with a soft decorative corner-wash (the same
+  `--el-hero-wash-*` tints, text on `--el-page-bg` so AA holds — finding #35), an
+  accent-filled `promo-glyph` megaphone, a serif headline + sub, a 3-row
+  `promo-bul` what's-shared list, and a `promo-actions` row (**"Start building in
+  public"** `btn-primary btn-lg` + a "Learn more" ghost).
 
-Both open the Panel-11 confirm → on confirm, `setAccessLevel('public')` and the
-project goes public. (Both placements are rendered inside a dashed `ctx-strip` /
+All three open the Panel-11 confirm → on confirm, `setAccessLevel('public')` and
+the project goes public. (Each placement is rendered inside a dashed `ctx-strip` /
 `ctx-wrap` frame in the mock — that frame is mock-only context labelling, NOT a
 shipped element.)
 
@@ -530,30 +544,31 @@ It is the host surface for two code subtasks: **6.14.11** (build the page) and
 
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
-| Element                          | Token                                                                                                  |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Public chip / banner background  | `--el-public-banner-bg` (→ `--color-tint-sky`)                                                         |
-| Public chip / banner text        | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)                             |
-| Public-chip / banner glyph       | `--el-info`                                                                                            |
-| Upvote control (resting)         | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                                          |
-| Upvote control (voted)           | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                                  |
-| Roadmap status headers           | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)                     |
-| Status header / org text         | `--el-text-strong` on the tint (AA-safe)                                                               |
-| Work-item type icon (board/kind) | `--el-type-{task,bug,story,epic}`                                                                      |
-| Priority pills                   | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`                         |
-| Selected access option           | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                                |
-| Disable link button              | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)                           |
-| Rate-limit banner                | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                                          |
-| Success confirmation badge       | `--el-tint-mint` + `--el-success`                                                                      |
-| Error glyph                      | `--el-tint-rose` + `--el-danger`                                                                       |
-| Overview hero corner washes      | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`                      |
-| Hero logo / CTA card accent      | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                                     |
-| README feature-list ticks        | `--el-success`; links `--el-link`                                                                      |
-| "Building in public" badge       | `--el-build-bg` (→ lavender) + `--el-build-text` (charcoal, AA), `--el-build-glyph` (accent) megaphone |
-| Entry-point promo glyph / CTA    | `--el-accent` fill + `--el-accent-text`; promo wash = `--el-hero-wash-*` over `--el-page-bg`           |
-| Shell nudge accent               | `--el-accent` left-border + lead glyph, on `--el-surface-soft`                                         |
-| Explainer "becomes public" list  | `yes` `--el-success` · `gate` `--el-info` · `strip` `--el-text-faint` glyphs                           |
-| Stop-confirm warn glyph / note   | `--el-tint-yellow` + `--el-warning` (`modal-glyph.warn`, `modal-note.warn`)                            |
+| Element                             | Token                                                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Public chip / banner background     | `--el-public-banner-bg` (→ `--color-tint-sky`)                                                         |
+| Public chip / banner text           | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)                             |
+| Public-chip / banner glyph          | `--el-info`                                                                                            |
+| Upvote control (resting)            | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                                          |
+| Upvote control (voted)              | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                                  |
+| Roadmap status headers              | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)                     |
+| Status header / org text            | `--el-text-strong` on the tint (AA-safe)                                                               |
+| Work-item type icon (board/kind)    | `--el-type-{task,bug,story,epic}`                                                                      |
+| Priority pills                      | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`                         |
+| Selected access option              | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                                |
+| Disable link button                 | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)                           |
+| Rate-limit banner                   | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                                          |
+| Success confirmation badge          | `--el-tint-mint` + `--el-success`                                                                      |
+| Error glyph                         | `--el-tint-rose` + `--el-danger`                                                                       |
+| Overview hero corner washes         | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`                      |
+| Hero logo / CTA card accent         | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                                     |
+| README feature-list ticks           | `--el-success`; links `--el-link`                                                                      |
+| "Building in public" badge          | `--el-build-bg` (→ lavender) + `--el-build-text` (charcoal, AA), `--el-build-glyph` (accent) megaphone |
+| Promoted header button `.btn-build` | `--el-build-bg` + `--el-text-strong`, `--el-build-glyph` megaphone; hover `color-mix(--el-accent 18%)` |
+| Entry-point promo glyph / CTA       | `--el-accent` fill + `--el-accent-text`; promo wash = `--el-hero-wash-*` over `--el-page-bg`           |
+| Shell nudge accent                  | `--el-accent` left-border + lead glyph, on `--el-surface-soft`                                         |
+| Explainer "becomes public" list     | `yes` `--el-success` · `gate` `--el-info` · `strip` `--el-text-faint` glyphs                           |
+| Stop-confirm warn glyph / note      | `--el-tint-yellow` + `--el-warning` (`modal-glyph.warn`, `modal-note.warn`)                            |
 
 **Palette, not grey-only (finding #54):** the roadmap uses four distinct status
 tints, the upvote uses the accent, kinds use their type hues, the Overview hero +
@@ -672,7 +687,9 @@ swap layer must reach every element).
   this project"** / **"You're submitting a little too fast. … Your draft is
   saved."** / **"Retry" / "Keep editing"**.
 - Build in public — status badge (6.17.4): **"Building in public"** (+ short form
-  **"Live"** on the access option). Entry-point promo (6.17.3):
+  **"Live"** on the access option). Promoted header button (6.17.3): **"Build in
+  public"** (compact label on the persistent project-header `.btn-build`).
+  Entry-point promo (6.17.3):
   **"Build this project in public"** · **"Turn the project into a public
   build-in-public page."** · bullets **"Share your board, roadmap, and work items
   with anyone — no account needed, indexable by search engines."** / **"Let people

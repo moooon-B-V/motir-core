@@ -2135,6 +2135,23 @@
         color: var(--el-build-glyph);
       }
 
+      /* The promoted, persistent project-header entry button (6.17.3) — a
+         build-tinted action so it reads as an obvious, branded affordance in the
+         header action row (not buried in settings). AA: --el-text-strong on the
+         lavender tint, accent megaphone glyph. */
+      .btn-build {
+        background: var(--el-build-bg);
+        color: var(--el-text-strong);
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .btn-build .ic {
+        color: var(--el-build-glyph);
+      }
+      .btn-build:hover {
+        background: color-mix(in srgb, var(--el-accent) 18%, var(--el-page-bg));
+      }
+
       /* The discoverable entry point (6.17.3): a Settings → General promo card,
          and a dismissible project-shell nudge. NOT a bare dropdown option. */
       .promo {
@@ -3730,86 +3747,109 @@ open source (GPL-3.0) on [GitHub](#).
 
     <!-- ════════════════ PANEL 10 — discoverable "Start building in public" entry point (6.17.3) ════════════════ -->
     <div class="panel-label">
-      (10) Build in public — discoverable ENTRY POINT for a NOT-yet-public project (6.17.3): a
-      prominent Settings → General promo card + a dismissible project-shell nudge. NOT a bare
+      (10) Build in public — the ENTRY POINT for a NOT-yet-public project (6.17.3). PRIMARY: a
+      PROMOTED, persistent button in the project-shell header (always visible to admins — not buried
+      in settings). Secondary: a dismissible nudge + the Settings → General card. NEVER a bare
       dropdown option. Each opens the confirm/explainer (Panel 11) → goes public.
     </div>
-    <div class="panel cols2 uneven">
-      <!-- (a) the durable home: a Settings → General promo card -->
-      <div>
-        <div class="ctx-strip">
-          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-columns" /></svg>
-          Project settings · General
+    <div class="panel">
+      <!-- (a) PRIMARY — the promoted, persistent project-header action -->
+      <div class="ctx-strip">
+        <svg class="ic" style="width: 13px; height: 13px"><use href="#i-route" /></svg>
+        Project shell · header — PRIMARY, persistent (admin, non-public project)
+      </div>
+      <div class="ctx-wrap" style="margin-bottom: 18px">
+        <div class="shellbar">
+          <span class="crumb">Motir <span class="sep">/</span> Board</span>
+          <span class="spacer"></span>
+          <button class="btn btn-build">
+            <svg class="ic"><use href="#i-megaphone" /></svg> Build in public
+          </button>
+          <button class="btn btn-outline">
+            <svg class="ic"><use href="#i-plus" /></svg> New
+          </button>
         </div>
-        <div class="ctx-wrap">
-          <div class="promo">
-            <div class="promo-head">
-              <span class="promo-glyph"
-                ><svg class="ic"><use href="#i-megaphone" /></svg
-              ></span>
-              <div>
-                <h3>Build this project in public</h3>
-                <p class="sub">Turn the project into a public build-in-public page.</p>
-              </div>
-            </div>
-            <ul class="promo-bul">
-              <li>
-                <svg class="ic"><use href="#i-check-check" /></svg> Share your board, roadmap, and
-                work items with anyone — no account needed, indexable by search engines.
-              </li>
-              <li>
-                <svg class="ic"><use href="#i-check-check" /></svg> Let people submit, upvote, and
-                comment on requests (they sign in only to act).
-              </li>
-              <li>
-                <svg class="ic"><use href="#i-check-check" /></svg> Internal fields stay private —
-                assignees, estimates, and internal comments are never shown.
-              </li>
-            </ul>
-            <div class="promo-actions">
-              <button class="btn btn-primary btn-lg">
-                <svg class="ic"><use href="#i-megaphone" /></svg> Start building in public
-              </button>
-              <button class="btn btn-ghost btn-lg">Learn more</button>
-            </div>
-          </div>
+        <div class="acct-note" style="margin-top: 13px">
+          <svg class="ic"><use href="#i-megaphone" /></svg>
+          <span
+            >The promoted entry — a persistent action in the project header, visible to admins on
+            every project view until the project is public. It is the SAME header slot that shows
+            the <b>"Building in public"</b> status badge once public (Panel 12), so the affordance
+            is never buried and never duplicated. One click opens the confirm (Panel 11).</span
+          >
         </div>
       </div>
 
-      <!-- (b) the discovery surface: a dismissible project-shell nudge -->
-      <div>
-        <div class="ctx-strip">
-          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-route" /></svg>
-          Project shell · header (one-time, dismissible)
-        </div>
-        <div class="ctx-wrap">
-          <div class="shellbar" style="margin-bottom: 14px">
-            <span class="crumb">Motir <span class="sep">/</span> Board</span>
-            <span class="spacer"></span>
-            <button class="btn btn-outline">
-              <svg class="ic"><use href="#i-plus" /></svg> New
-            </button>
+      <div class="cols2 uneven">
+        <!-- (b) the discovery surface: a dismissible project-shell nudge -->
+        <div>
+          <div class="ctx-strip">
+            <svg class="ic" style="width: 13px; height: 13px"><use href="#i-rocket" /></svg>
+            Project shell · one-time nudge (dismissible)
           </div>
-          <div class="nudge">
-            <svg class="ic ic-lead"><use href="#i-rocket" /></svg>
-            <div class="body">
-              <div class="ttl">Want eyes on your work?</div>
-              <div class="sub">
-                Build this project in public — share the roadmap and collect requests.
+          <div class="ctx-wrap">
+            <div class="nudge">
+              <svg class="ic ic-lead"><use href="#i-rocket" /></svg>
+              <div class="body">
+                <div class="ttl">Want eyes on your work?</div>
+                <div class="sub">
+                  Build this project in public — share the roadmap and collect requests.
+                </div>
+              </div>
+              <button class="btn btn-primary">Start building in public</button>
+              <button class="nudge-close" aria-label="Dismiss">
+                <svg class="ic"><use href="#i-x" /></svg>
+              </button>
+            </div>
+            <div class="acct-note" style="margin-top: 14px">
+              <svg class="ic"><use href="#i-shield" /></svg>
+              <span
+                >A richer one-time prompt that reinforces the header button with context; shows once
+                to admins and can be dismissed. The persistent button (above) remains after it's
+                gone.</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- (c) the durable settings home: a Settings → General promo card -->
+        <div>
+          <div class="ctx-strip">
+            <svg class="ic" style="width: 13px; height: 13px"><use href="#i-columns" /></svg>
+            Project settings · General (durable home)
+          </div>
+          <div class="ctx-wrap">
+            <div class="promo">
+              <div class="promo-head">
+                <span class="promo-glyph"
+                  ><svg class="ic"><use href="#i-megaphone" /></svg
+                ></span>
+                <div>
+                  <h3>Build this project in public</h3>
+                  <p class="sub">Turn the project into a public build-in-public page.</p>
+                </div>
+              </div>
+              <ul class="promo-bul">
+                <li>
+                  <svg class="ic"><use href="#i-check-check" /></svg> Share your board, roadmap, and
+                  work items with anyone — no account needed, indexable by search engines.
+                </li>
+                <li>
+                  <svg class="ic"><use href="#i-check-check" /></svg> Let people submit, upvote, and
+                  comment on requests (they sign in only to act).
+                </li>
+                <li>
+                  <svg class="ic"><use href="#i-check-check" /></svg> Internal fields stay private —
+                  assignees, estimates, and internal comments are never shown.
+                </li>
+              </ul>
+              <div class="promo-actions">
+                <button class="btn btn-primary btn-lg">
+                  <svg class="ic"><use href="#i-megaphone" /></svg> Start building in public
+                </button>
+                <button class="btn btn-ghost btn-lg">Learn more</button>
               </div>
             </div>
-            <button class="btn btn-primary">Start building in public</button>
-            <button class="nudge-close" aria-label="Dismiss">
-              <svg class="ic"><use href="#i-x" /></svg>
-            </button>
-          </div>
-          <div class="acct-note" style="margin-top: 14px">
-            <svg class="ic"><use href="#i-shield" /></svg>
-            <span
-              >The nudge shows once to project admins on a non-public project and can be dismissed;
-              the Settings → General card is the durable home. Both open the same confirm step — it
-              is <b>never</b> a bare access-dropdown option.</span
-            >
           </div>
         </div>
       </div>
