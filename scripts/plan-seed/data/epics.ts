@@ -3654,6 +3654,76 @@ export const EPICS: EpicMeta[] = [
       'before any tree write). The same pass added **Story 2.7** (work-item type + executor) in ' +
       'Epic 2 and an explanation-generation toggle (7.3.8). Every new dep points backward — the ' +
       'ordering audit stays clean.',
+    items: [
+      {
+        id: '7.20',
+        kind: 'bug',
+        title:
+          'Production work_item reads 500 (P2022 ColumnNotFound) — triage-marker columns ' +
+          '(externalSubmitterName/Email, triagedAt, snoozedUntil) missing on prod from migration drift',
+        status: 'done',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 7 (discovery epic — surfaced right after the 7.8.3 ' +
+          'deploy while closing out that Epic-7 subtask; per the discovery-epic rule the bug ' +
+          'files here, NOT to the code-surface epic that owns the migration, Epic 6 / 6.11.3) · ' +
+          '**Surfaces:** every full-row `work_item` read — reported as ' +
+          '`GET /api/work-items/[id]/rollup` (the epic progress rollup: ' +
+          '`estimationService.rollupForParent` → `workItemRepository.findById` → ' +
+          '`prisma.workItem.findUnique`) returning 500; "can\'t load work items from an epic". · ' +
+          '**Status:** FIXED (PR #1151 merged + deployed). · **Source:** prod incident reported ' +
+          'by Yue (2026-06-15) after merging the 7.8.3 feature PR.\n\n' +
+          "Production's `work_item` table was MISSING `externalSubmitterName`, " +
+          '`externalSubmitterEmail`, `triagedAt`, `snoozedUntil` and the ' +
+          '`(projectId, triagedAt)` index — the objects migration ' +
+          '`20260613221114_add_work_item_triage_marker` (Subtask 6.11.3) adds. `schema.prisma` ' +
+          'and the generated Prisma client SELECT those columns on every `work_item.findUnique` ' +
+          '(no explicit `select`), so each full-row read threw ' +
+          '`PrismaClientKnownRequestError P2022 ColumnNotFound`. List/board reads that use ' +
+          'narrow `select` clauses kept working, which is why only the rollup / epic-detail ' +
+          'surface visibly broke. The 7.8.3 merge did NOT cause it (token routes + settings UI ' +
+          'only); the drift was latent and loading an epic merely exercised the affected read.\n\n' +
+          '**Root cause (drift — exact mechanism uncertain, not confirmed against prod ' +
+          '`_prisma_migrations`):** the `externalSubmitter*` columns were declared in ' +
+          '`schema.prisma` (so the generated client SELECTs them) but absent from the prod DB. ' +
+          'Two plausible mechanisms, both the same CLASS of schema-vs-DB drift: **(a)** the ' +
+          '6.11.3 migration was recorded APPLIED on prod via `prisma migrate resolve --applied` ' +
+          'WITHOUT its `ALTER` running (the documented shared-dev-DB drift escape hatch marks ' +
+          'history without executing SQL); or **(b)** the 6.11.10 DROP of these very columns ' +
+          '(PR #1146, OPEN at incident time) was applied to prod ahead of that PR merging — so ' +
+          "the columns were dropped while main's schema still declared them. Either way: " +
+          '**schema declares a column the DB lacks** — invisible to `migrate status` (reports ' +
+          '"up to date"), invisible to CI (a fresh DB replays the real SQL), reproducible only ' +
+          'on the drifted environment.\n\n' +
+          '**Fix:** motir-core PR #1151 — a forward-only, IDEMPOTENT repair migration ' +
+          '(`20260615120000_repair_work_item_triage_marker_columns`) re-adds the columns + index ' +
+          'with `ADD COLUMN IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`: it adds the missing ' +
+          'objects on prod and is a no-op everywhere they already exist; no `schema.prisma` ' +
+          'change (so `migrate dev` reports no drift).\n\n' +
+          '**Resolution:** PR #1151 merged 2026-06-15 and deployed; the Vercel build ran ' +
+          '`prisma migrate deploy`, the repair migration added the missing columns + index, and ' +
+          'the epic rollup / work-item reads load again (verified by Yue on prod). **Note — ' +
+          'these columns are being RETIRED:** Subtask 6.11.10 (PR #1146) drops ' +
+          '`externalSubmitterName`/`Email` and removes them from the schema (the public portal ' +
+          'was retired; triage attribution is now always `submittedByUserId`). So the durable ' +
+          "end-state is columns-GONE — #1151's re-add was the correct EMERGENCY fix (it matched " +
+          "main's then-current schema, which still declared the fields), and #1146's drop " +
+          'migration was re-sequenced (renamed to `20260615130000_drop_triage_external_submitter` ' +
+          "+ `DROP COLUMN IF EXISTS`) to land AFTER #1151's repair so the two do not fight on a " +
+          'fresh-DB replay (add → repair re-add no-op → drop = gone, matching schema).\n\n' +
+          '**Lesson (notes.html #41):** keep the prod DB and `schema.prisma` in lockstep — a ' +
+          'full-row `findUnique`/`findFirst` (no `select`) SELECTs every schema scalar, so ONE ' +
+          'column that exists in the schema but not the DB 500s every such read while ' +
+          'narrow-`select` reads survive (masking the scope). The two ways to get there: ' +
+          '`migrate resolve --applied` a migration whose SQL never ran, or apply a DROP from an ' +
+          'unmerged PR to prod ahead of its schema change landing — never do either. If a ' +
+          'shared-DB drift forces a manual fix, run the real SQL (or an idempotent equivalent) ' +
+          'and keep the migration that matches it on `main`; repair forward-only with an ' +
+          'idempotent `IF NOT EXISTS` migration, and re-sequence any conflicting later migration ' +
+          'after it. Prefer narrow `select`s on hot read paths. And reproduce the real error ' +
+          'before blaming the most-recently-merged diff.',
+      },
+    ],
   },
   {
     id: '8',
