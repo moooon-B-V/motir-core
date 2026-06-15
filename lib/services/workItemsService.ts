@@ -53,7 +53,11 @@ import {
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
-import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  NotProjectAdminError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
@@ -97,6 +101,8 @@ import {
 } from '@/lib/workItems/readyFilter';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
+  CompleteSessionItemResultDto,
+  CompleteSessionResultDto,
   CreateWorkItemInput,
   ExecutorDto,
   IssueDetailDto,
@@ -492,6 +498,16 @@ async function resolveDescriptionMentionable(
   const members = await assignableMembersService.list({ projectId, accessLevel, ctx });
   return new Set(members.map((m) => m.userId));
 }
+
+// The default-workflow status keys the integration tools target (Subtask
+// 7.8.11). `mark_integrated` moves an item to `in_review`; `complete_session`
+// moves each recorded item to `done`. Both are the canonical default keys
+// (lib/workflows/defaultWorkflow.ts). A project whose CUSTOM workflow lacks the
+// key surfaces `UnknownStatusError` from the transition (mark_integrated → a tool
+// error; complete_session → a per-item `failed` result) — the honest outcome
+// rather than a silent miss.
+const IN_REVIEW_STATUS_KEY = 'in_review';
+const DONE_STATUS_KEY = 'done';
 
 export const workItemsService = {
   /**
@@ -1227,6 +1243,7 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
     tx: Prisma.TransactionClient,
+    opts: { sessionBranch?: string } = {},
   ): Promise<{
     dto: WorkItemDto;
     transition: { fromStatusKey: string; toStatusKey: string; revisionId: string } | null;
@@ -1247,9 +1264,27 @@ export const workItemsService = {
     await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
 
     const fromKey = current.status;
-    // No-op move: succeed without writing a revision (idempotent) — and with
-    // no transition for the caller to emit.
-    if (fromKey === toStatusKey) return { dto: toWorkItemDto(current), transition: null };
+    // The `mark_integrated` session-branch directive (Subtask 7.8.11): set the
+    // integration branch alongside the status move. A genuine write only when it
+    // differs from the current value (re-marking the SAME branch is a no-op).
+    const branchDirective = opts.sessionBranch;
+    const wantsBranchWrite =
+      branchDirective !== undefined && branchDirective !== current.sessionBranch;
+
+    // No-op STATUS move: succeed without a revision (idempotent) and emit no
+    // transition. But still honor a branch-only write — re-marking an item
+    // ALREADY in `in_review` to a new session branch changes the field without a
+    // status transition (no revision, since sessionBranch is dispatch bookkeeping
+    // not a content edit on the activity feed).
+    if (fromKey === toStatusKey) {
+      if (!wantsBranchWrite) return { dto: toWorkItemDto(current), transition: null };
+      const row = await workItemRepository.update(
+        workItemId,
+        { sessionBranch: branchDirective },
+        tx,
+      );
+      return { dto: toWorkItemDto(row), transition: null };
+    }
 
     const target = await workflowsService.getStatusByKey(
       current.projectId,
@@ -1266,7 +1301,19 @@ export const workItemsService = {
     );
     if (!legal) throw new IllegalTransitionError(fromKey, toStatusKey);
 
-    const row = await workItemRepository.update(workItemId, { status: toStatusKey }, tx);
+    // Build the row write. Reaching a `done`-category status CLEARS the
+    // integration branch (Subtask 7.8.11 invariant: done ⇒ sessionBranch null,
+    // so a merged dep never leaves a stale lineage for dependents to inherit —
+    // `complete_session` rides this, as does any board drag to done). Otherwise
+    // apply the explicit branch directive (`mark_integrated`'s move to in_review
+    // sets it). The revision diff stays status-only — `sessionBranch` is dispatch
+    // bookkeeping, not a content edit, so it never lands in the activity feed (and
+    // keeping it out avoids the activity totality guard).
+    const update: Prisma.WorkItemUncheckedUpdateInput = { status: toStatusKey };
+    if (target.category === 'done') update.sessionBranch = null;
+    else if (branchDirective !== undefined) update.sessionBranch = branchDirective;
+
+    const row = await workItemRepository.update(workItemId, update, tx);
     const revisionId = await workItemRevisionsService.recordRevision(
       {
         workItemId,
@@ -1280,6 +1327,123 @@ export const workItemsService = {
       dto: toWorkItemDto(row),
       transition: { fromStatusKey: fromKey, toStatusKey, revisionId },
     };
+  },
+
+  /**
+   * Integrate a work item onto a session branch (Story 7.8 · Subtask 7.8.11) —
+   * the write the 7.9 CLI loop calls on agent success. ONE transaction:
+   * transition the item to `in_review` (the same legal-transition validation
+   * every status move runs — an item that can't legally reach `in_review` from
+   * its current status throws `IllegalTransitionError` and the field is NEVER
+   * touched, since the throw precedes the write) AND record `session_branch`.
+   * From then on the item is integrated-awaiting-review: it unblocks dependents
+   * (the field-keyed readiness rule) and the branch travels with it for prompt
+   * generation. Re-marking an item already in `in_review` to a NEW branch updates
+   * the field with no spurious revision (the no-op-status branch-write path).
+   * Emits `work-item/transitioned` post-commit like `updateStatus`.
+   */
+  async markIntegrated(
+    workItemId: string,
+    sessionBranch: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto> {
+    const { dto, transition } = await db.$transaction((tx) =>
+      workItemsService.applyStatusTransition(workItemId, IN_REVIEW_STATUS_KEY, ctx, tx, {
+        sessionBranch,
+      }),
+    );
+    if (transition) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId: dto.id,
+        actorId: ctx.userId,
+        fromStatusKey: transition.fromStatusKey,
+        toStatusKey: transition.toStatusKey,
+        revisionId: transition.revisionId,
+        ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
+      });
+    }
+    return dto;
+  },
+
+  /**
+   * Bulk close-out a session branch (Story 7.8 · Subtask 7.8.11) — run after a
+   * human merges the session PR. Every work item recorded on `sessionBranch`
+   * (workspace-scoped) is transitioned to `done` (which CLEARS the branch via the
+   * `applyStatusTransition` done-invariant) in ONE transaction. The legal-
+   * transition + status-lookup checks run BEFORE any write, so a per-item
+   * rejection (an illegal path to done, an unknown `done` status in a custom
+   * workflow, or an access denial) is caught and surfaced as a `failed` result
+   * WITHOUT aborting the transaction — the items that CAN complete still commit.
+   * An item already in `done` is an idempotent no-op (`already_done`), its branch
+   * cleared defensively. Emits `work-item/transitioned` for each completed item
+   * post-commit. An empty branch (no recorded items) returns an empty result.
+   */
+  async completeSession(
+    sessionBranch: string,
+    ctx: ServiceContext,
+  ): Promise<CompleteSessionResultDto> {
+    const items = await workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId);
+    if (items.length === 0) return { sessionBranch, results: [] };
+
+    const { results, transitions } = await db.$transaction(async (tx) => {
+      const results: CompleteSessionItemResultDto[] = [];
+      const transitions: Array<{
+        id: string;
+        fromStatusKey: string;
+        toStatusKey: string;
+        revisionId: string;
+      }> = [];
+      for (const item of items) {
+        try {
+          const { dto, transition } = await workItemsService.applyStatusTransition(
+            item.id,
+            DONE_STATUS_KEY,
+            ctx,
+            tx,
+          );
+          if (transition) {
+            transitions.push({ id: dto.id, ...transition });
+            results.push({ key: item.identifier, outcome: 'completed' });
+          } else {
+            // Already in the done status — the move was a no-op. Clear any
+            // lingering branch so a dependent never re-inherits it (normally a
+            // done item's branch is already null; this is the invariant guard).
+            if (dto.sessionBranch !== null) {
+              await workItemRepository.update(item.id, { sessionBranch: null }, tx);
+            }
+            results.push({ key: item.identifier, outcome: 'already_done' });
+          }
+        } catch (err) {
+          // A per-item rejection (illegal transition / unknown done status /
+          // access denial) is surfaced, not fatal — these all throw BEFORE the
+          // write, so the transaction stays healthy for the remaining items.
+          if (
+            err instanceof IllegalTransitionError ||
+            err instanceof UnknownStatusError ||
+            err instanceof ProjectAccessDeniedError
+          ) {
+            results.push({ key: item.identifier, outcome: 'failed', reason: err.message });
+          } else {
+            throw err;
+          }
+        }
+      }
+      return { results, transitions };
+    });
+
+    for (const t of transitions) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId: t.id,
+        actorId: ctx.userId,
+        fromStatusKey: t.fromStatusKey,
+        toStatusKey: t.toStatusKey,
+        revisionId: t.revisionId,
+        ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
+      });
+    }
+    return { sessionBranch, results };
   },
 
   /**
@@ -1755,40 +1919,62 @@ export const workItemsService = {
 
   /**
    * The full readiness verdict: not just WHETHER the item is ready, but WHICH
-   * `is_blocked_by` blockers are still open (non-terminal). Same per-project
-   * terminal classification as `isReady` (2.2.6 / finding #21) — a blocker is
-   * resolved iff its status is in ITS OWN project's `category = done` set, so
-   * `done` and `cancelled` both count and a live recategorization re-judges it.
-   * Returns `openBlockerIds` (a Set, for an O(1) membership filter at the call
-   * site) so the relationships surface can highlight exactly the open blockers
-   * without re-running the classification. An item with no blockers → ready,
-   * empty set. Two queries total, no N+1 (see `isReady`).
+   * `is_blocked_by` blockers are still open and WHICH session branch (if any) the
+   * item's integrated deps live on. A blocker is SATISFIED iff it is TERMINAL
+   * (its status is in ITS OWN project's `category = done` set — 2.2.6 /
+   * finding #21, so `done`/`cancelled` count and a live recategorization
+   * re-judges it) OR it is INTEGRATED-awaiting-review (a recorded `sessionBranch`
+   * — Subtask 7.8.11's integrated-dep rule, keyed on the field, not the status).
+   * Otherwise the blocker is OPEN. `openBlockerIds` (a Set, for an O(1) filter at
+   * the call site) names exactly the still-open blockers so the relationships
+   * banner can highlight them. `inheritedSessionBranch` is the single branch the
+   * integrated deps share (what dispatch inherits); `conflictingSessionBranches`
+   * is non-empty when those deps span MORE THAN ONE branch — conflicting lineages
+   * that keep the item OUT of the ready set until a human merges one session PR.
+   * An item with no blockers → ready, empty sets. Two queries total, no N+1.
    */
   async getReadiness(
     workItemId: string,
     ctx: ServiceContext,
-  ): Promise<{ ready: boolean; openBlockerIds: Set<string> }> {
+  ): Promise<{
+    ready: boolean;
+    openBlockerIds: Set<string>;
+    inheritedSessionBranch: string | null;
+    conflictingSessionBranches: string[];
+  }> {
     const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
-    if (blockers.length === 0) return { ready: true, openBlockerIds: new Set() };
+    if (blockers.length === 0) {
+      return {
+        ready: true,
+        openBlockerIds: new Set(),
+        inheritedSessionBranch: null,
+        conflictingSessionBranches: [],
+      };
+    }
     const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
       blockers.map((b) => b.projectId),
       ctx.workspaceId,
     );
+    const cls = classifyBlockerReadiness(blockers, terminalByProject);
     const openBlockerIds = new Set(
-      blockers
-        .filter((b) => !(terminalByProject.get(b.projectId)?.has(b.status) ?? false))
-        .map((b) => b.id),
+      blockers.filter((b) => isOpenBlocker(b, terminalByProject)).map((b) => b.id),
     );
-    return { ready: openBlockerIds.size === 0, openBlockerIds };
+    return {
+      ready: cls.ready,
+      openBlockerIds,
+      inheritedSessionBranch: cls.inheritedSessionBranch,
+      conflictingSessionBranches: cls.conflicting ? cls.sessionBranches : [],
+    };
   },
 
   /**
    * Batch readiness (finding #21) for MANY items at once — the board projection
-   * (3.1.4) needs a `ready` flag per card without a per-card N+1. Returns a Map
-   * keyed by EVERY requested id (an item with no blocker, or only terminal
-   * blockers, is ready). Mirrors `getReadiness`'s per-project terminal
-   * classification, but over ONE batched blocker read + ONE batched terminal-set
-   * read — the same shape `getReadiness` uses, scaled to a set.
+   * (3.1.4) needs a `ready` flag per card without a per-card N+1, and the ready
+   * set (7.0) filters candidates by it. Returns a Map keyed by EVERY requested id
+   * (an item with no blocker, or only satisfied blockers, is ready). Same rule as
+   * `getReadiness` (terminal OR integrated satisfies; conflicting lineages →
+   * not ready — Subtask 7.8.11), over ONE batched blocker read + ONE batched
+   * terminal-set read.
    */
   async getReadinessForItems(
     itemIds: string[],
@@ -1802,9 +1988,16 @@ export const workItemsService = {
       blockers.map((b) => b.projectId),
       ctx.workspaceId,
     );
+    // Group each item's blockers, then classify per item (an item is ready iff
+    // it has no open blocker AND its integrated deps don't span >1 branch).
+    const byItem = new Map<string, BlockerReadinessState[]>();
     for (const b of blockers) {
-      const isTerminal = terminalByProject.get(b.projectId)?.has(b.status) ?? false;
-      if (!isTerminal) ready.set(b.fromId, false);
+      const arr = byItem.get(b.fromId);
+      if (arr) arr.push(b);
+      else byItem.set(b.fromId, [b]);
+    }
+    for (const [fromId, itemBlockers] of byItem) {
+      ready.set(fromId, classifyBlockerReadiness(itemBlockers, terminalByProject).ready);
     }
     return ready;
   },
@@ -2172,7 +2365,7 @@ export const workItemsService = {
           ctx,
         );
       const chosen = rows.find((r) => !exclude.has(r.id));
-      if (chosen) return buildReadyDispatchDto(chosen);
+      if (chosen) return buildReadyDispatchDto(chosen, ctx);
       if (!nextCursor) return null;
       cursor = nextCursor;
     }
@@ -2384,26 +2577,101 @@ function rowReadyContext(row: ReadyCandidateRow): ReadyItemContext {
 
 /**
  * Decorate a ready candidate row with the dispatch-only payload (Subtask 7.0.2):
- * the parent key, the resolved blocker keys, and the `contextRefs` parsed from
- * the body's `## Context refs` section (finding #62 — Motir stores refs in
+ * the parent key, the resolved blocker keys, the `contextRefs` parsed from the
+ * body's `## Context refs` section (finding #62 — Motir stores refs in
  * `descriptionMd`, not a column; this supplies REAL paths into the 7.0.3
- * mapper's `contextRefs` input instead of the `[]` placeholder). For a READY
- * item the blockers are all terminal — the dependency story the agent's prompt
- * tells. The candidate row carries the full `WorkItem` body, so no re-read.
+ * mapper's `contextRefs` input instead of the `[]` placeholder), and the
+ * INHERITED `sessionBranch` (Subtask 7.8.11 — the single branch this item's
+ * integrated-awaiting-review deps live on, so 7.6's GIT-WORKFLOW prompt variant
+ * tells the agent to branch from / integrate into it). For a READY item the
+ * blockers are all SATISFIED — terminal OR integrated on that one branch — the
+ * dependency story the agent's prompt tells. `getReadiness` is the single source
+ * of the inherited branch (it ignores a terminal blocker's stale branch and
+ * collapses the one integrated lineage); a ready item can never span >1 branch.
+ * The candidate row carries the full `WorkItem` body, so no re-read for it.
  */
-async function buildReadyDispatchDto(row: ReadyCandidateRow): Promise<ReadyItemDispatchDto> {
-  const [parentRow, blockerLinks] = await Promise.all([
+async function buildReadyDispatchDto(
+  row: ReadyCandidateRow,
+  ctx: ServiceContext,
+): Promise<ReadyItemDispatchDto> {
+  const [parentRow, blockerLinks, readiness] = await Promise.all([
     row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
     workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by'),
+    workItemsService.getReadiness(row.id, ctx),
   ]);
   const blockerRows = (await workItemRepository.findByIds(blockerLinks.map((l) => l.toId)))
     .slice()
     .sort(byKeyAsc);
 
-  const ctx: ReadyDispatchContext = {
+  const dispatchCtx: ReadyDispatchContext = {
     ...rowReadyContext(row),
     parent: parentRow ? { identifier: parentRow.identifier } : null,
     contextRefs: extractContextRefs(row.descriptionMd),
+    sessionBranch: readiness.inheritedSessionBranch,
   };
-  return toReadyItemDispatchDto(row, blockerRows, ctx);
+  return toReadyItemDispatchDto(row, blockerRows, dispatchCtx);
+}
+
+/** A blocker row as the readiness classifier needs it — its status + project
+ *  (for the per-project terminal check) and its integration `sessionBranch`. */
+export interface BlockerReadinessState {
+  status: string;
+  projectId: string;
+  sessionBranch: string | null;
+}
+
+/** Whether a single blocker is still OPEN — neither terminal (status in its
+ *  project's `category=done` set) nor integrated-awaiting-review (a recorded
+ *  `sessionBranch`). The shared open-predicate `getReadiness` reuses to name the
+ *  open blocker ids and `classifyBlockerReadiness` reuses to decide readiness. */
+function isOpenBlocker(
+  blocker: BlockerReadinessState,
+  terminalByProject: Map<string, Set<string>>,
+): boolean {
+  const terminal = terminalByProject.get(blocker.projectId)?.has(blocker.status) ?? false;
+  return !terminal && !blocker.sessionBranch;
+}
+
+/**
+ * Classify a work item's blockers under the integrated-dep readiness rule
+ * (Subtask 7.8.11). A blocker is SATISFIED when it is TERMINAL (status in its
+ * project's `category=done` set) OR INTEGRATED-awaiting-review (a recorded
+ * `sessionBranch`); otherwise it is OPEN. Every integrated blocker contributes
+ * its branch to the item's lineage set: an item whose integrated deps span MORE
+ * THAN ONE session branch has CONFLICTING lineages and is NOT ready (a human
+ * must merge one session PR first). The single shared lineage (when exactly one)
+ * is what the dispatch payload inherits. A terminal blocker's branch is IGNORED
+ * (reaching done clears it; ignoring it keeps the rule correct even if that
+ * invariant were ever violated). PURE — the single source of the rule, reused by
+ * `getReadiness` (single) and `getReadinessForItems` (batch).
+ */
+export function classifyBlockerReadiness(
+  blockers: BlockerReadinessState[],
+  terminalByProject: Map<string, Set<string>>,
+): {
+  ready: boolean;
+  sessionBranches: string[];
+  inheritedSessionBranch: string | null;
+  conflicting: boolean;
+} {
+  let hasOpenBlocker = false;
+  const branches = new Set<string>();
+  for (const b of blockers) {
+    const terminal = terminalByProject.get(b.projectId)?.has(b.status) ?? false;
+    if (terminal) continue; // satisfied; a done blocker contributes no lineage
+    if (b.sessionBranch) {
+      branches.add(b.sessionBranch); // integrated — satisfied, carries its lineage
+      continue;
+    }
+    hasOpenBlocker = true; // truly open
+  }
+  const sessionBranches = [...branches].sort();
+  const conflicting = sessionBranches.length > 1;
+  const inheritedSessionBranch = sessionBranches.length === 1 ? sessionBranches[0]! : null;
+  return {
+    ready: !hasOpenBlocker && !conflicting,
+    sessionBranches,
+    inheritedSessionBranch,
+    conflicting,
+  };
 }

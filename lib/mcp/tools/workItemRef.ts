@@ -12,6 +12,15 @@ export const workItemKeyField = z
   .min(1)
   .describe('The work item identifier, e.g. "PROD-7" (case-insensitive).');
 
+/** The session/integration branch field the 7.8.11 integration tools share —
+ *  the git branch a run's work was merged onto (`mark_integrated`) / is being
+ *  closed out from (`complete_session`). Trimmed, non-empty. */
+export const sessionBranchField = z
+  .string()
+  .trim()
+  .min(1)
+  .describe('The session/integration branch name, e.g. "session/PROD-42-run".');
+
 /** Normalize a user-supplied identifier to its canonical upper-case form. */
 export function normalizeIdentifier(raw: string): string {
   return raw.trim().toUpperCase();

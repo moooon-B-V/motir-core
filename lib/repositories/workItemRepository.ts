@@ -322,6 +322,21 @@ export const workItemRepository = {
   },
 
   /**
+   * Every work item currently recorded on a given session branch within a
+   * workspace (Subtask 7.8.11) — the read backing `complete_session`'s bulk
+   * close-out. Workspace-scoped (the explicit finding-#26 tenant gate, since RLS
+   * is inert under the dev/CI superuser) and ordered by `key` so the bulk flip +
+   * its per-item result list are deterministic. Rides the
+   * `work_item_sessionBranch` index. Read-only path → `db` singleton.
+   */
+  async findBySessionBranch(sessionBranch: string, workspaceId: string): Promise<WorkItem[]> {
+    return db.workItem.findMany({
+      where: { sessionBranch, workspaceId },
+      orderBy: { key: 'asc' },
+    });
+  },
+
+  /**
    * The CANDIDATE ready set of a project (Subtask 7.0.2): non-archived work
    * items whose OWN status is in the `todo` category (not-yet-started —
    * `workflow_status.category = 'todo'`; a "ready" item is one to START, so

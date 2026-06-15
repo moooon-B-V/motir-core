@@ -539,6 +539,7 @@
     "removeConfirmAfter": " 之间「{relationship}」的关联吗？该工作项不会被删除——只会移除此关联。",
     "removeLink": "移除关联",
     "status": "状态",
+    "sessionBranch": "会话分支",
     "type": "类型",
     "workItemType": "工作类型",
     "executor": "执行者",
