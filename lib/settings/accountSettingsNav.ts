@@ -59,10 +59,10 @@ export interface AccountSettingsNavEntry {
    * A designed-for, not-yet-built slot — rendered as a disabled "Soon" row so the
    * area's shape is legible from day one, but NOT a real route (excluded from the
    * route↔registry totality assertion and from the command palette). The reserved
-   * slots: Profile (a future personal-details story), Appearance (deliberately not
-   * designed in 7.8.2 — its own future story owns it), and API tokens (Story 7.8.3
-   * flips it to a real entry + page, keeping the totality test green by
-   * construction).
+   * slots: Profile (a future personal-details story) and Appearance (deliberately
+   * not designed in 7.8.2 — its own future story owns it). (API tokens WAS such a
+   * slot until Story 7.8.3 shipped its pane + route and flipped it to a real
+   * entry.)
    */
   placeholder?: boolean;
 }
@@ -114,13 +114,13 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
   {
     id: 'apiTokens',
     group: 'security',
-    href: '',
+    href: '/settings/account/api-tokens',
     icon: KeyRound,
     labelKey: 'apiTokens',
-    // Reserved "Soon" in 7.8.12; Story 7.8.3 flips it to a real entry (drop
-    // `placeholder`, set `href: '/settings/account/api-tokens'`) and ships its
-    // route page — so each PR's totality test stays green by construction.
-    placeholder: true,
+    // Lit up by Story 7.8.3 (the API-tokens pane + its route page): 7.8.12
+    // reserved this as a "Soon" placeholder, and flipping it to a real entry
+    // here keeps the route↔registry totality test green by construction (the new
+    // pane has an on-disk route now).
   },
 ];
 

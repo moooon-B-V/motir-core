@@ -148,20 +148,27 @@ export type ReadyCandidateRow = WorkItem & {
 
 /**
  * One row of the triage QUEUE read (Subtask 6.11.3) — the FULL `work_item` row
- * (so the mapper consumes its `triagedAt` / `snoozedUntil` / `externalSubmitter*`
- * columns directly) PLUS the bits the SAME single read resolves so the service
- * doesn't re-query: the status `category` (joined from `workflow_status` — the
- * row's `status` is only the key) and the REPORTER's display name / email /
- * avatar (left-joined from `user`). For an in-app member submission the reporter
- * IS the submitter; for an external portal submission the reporter is the
- * per-project intake user and the real submitter is in `externalSubmitter{Name,
- * Email}` (ADR §3) — the mapper derives which from `externalSubmitterEmail`.
+ * (so the mapper consumes its `triagedAt` / `snoozedUntil` columns directly)
+ * PLUS the bits the SAME single read resolves so the service doesn't re-query:
+ * the status `category` (joined from `workflow_status` — the row's `status` is
+ * only the key) and the SUBMITTER's display name / email / avatar (left-joined
+ * from `user` on `submittedByUserId`) plus whether that submitter is a member of
+ * the item's workspace. Intake is signed-in only (the 2026-06-14 revision,
+ * Subtask 6.11.10), so the submitter is always a real account; the inbox derives
+ * "member vs public" from `submitterIsMember` (ADR §3).
  */
 export type TriageQueueRow = WorkItem & {
   statusCategory: string;
-  reporterName: string | null;
-  reporterEmail: string | null;
-  reporterImage: string | null;
+  submitterName: string | null;
+  submitterEmail: string | null;
+  submitterImage: string | null;
+  /**
+   * TRUE when `submittedByUserId` is a member of the item's workspace (the
+   * in-app report widget); FALSE for a signed-in non-member (Story 6.12's public
+   * "Submit a request") or when the item has no recorded submitter. Drives the
+   * mapper's member-vs-public `kind`.
+   */
+  submitterIsMember: boolean;
   /**
    * How many accounts upvoted this request (Story 6.12 · Subtask 6.12.6) — the
    * demand signal the queue sorts by, highest-first. 0 for an item with no
@@ -513,9 +520,10 @@ export const workItemRepository = {
    * pages). Cursor-paginated — `take + 1` lets the service derive the next
    * cursor without a COUNT (finding #57 — the public form can flood the inbox;
    * NEVER load-all). Resolves the status `category` (so the service needn't
-   * re-query) + the REPORTER display fields for attribution in the SAME read.
-   * Read-only path → `db` singleton (optional `tx`). The explicit
-   * `workspaceId` + `projectId` gate is the app-layer tenancy check (finding #26).
+   * re-query) + the SUBMITTER display fields and workspace-membership flag for
+   * attribution in the SAME read. Read-only path → `db` singleton (optional
+   * `tx`). The explicit `workspaceId` + `projectId` gate is the app-layer
+   * tenancy check (finding #26).
    */
   async findTriageQueue(
     projectId: string,
@@ -553,14 +561,17 @@ export const workItemRepository = {
     return client.$queryRaw<TriageQueueRow[]>`
       SELECT w.*,
              ws."category"::text   AS "statusCategory",
-             ru."name"             AS "reporterName",
-             ru."email"            AS "reporterEmail",
-             ru."image"            AS "reporterImage",
+             su."name"             AS "submitterName",
+             su."email"            AS "submitterEmail",
+             su."image"            AS "submitterImage",
+             (sm."userId" IS NOT NULL) AS "submitterIsMember",
              ${voteCountSql}::int  AS "voteCount"
         FROM "work_item" w
         JOIN "workflow_status" ws
               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
-        LEFT JOIN "user" ru ON ru."id" = w."reporterId"
+        LEFT JOIN "user" su ON su."id" = w."submittedByUserId"
+        LEFT JOIN "workspace_membership" sm
+              ON sm."userId" = w."submittedByUserId" AND sm."workspaceId" = w."workspaceId"
         LEFT JOIN (
                SELECT "work_item_id", COUNT(*) AS "votes"
                  FROM "public_request_vote"
@@ -987,6 +998,31 @@ export const workItemRepository = {
       )
       SELECT "id" FROM hidden`;
     return rows.map((r) => r.id);
+  },
+
+  /**
+   * The most recent work-item activity per project, for a SET of projects, in
+   * ONE grouped aggregate — the "recent activity" stat for a page of PROJECT
+   * SQUARE cards (Story 6.13 · Subtask 6.13.2), avoiding a per-card N+1. Returns
+   * one `{ projectId, lastActivityAt }` per project that has at least one
+   * non-archived, non-triage work item (a project with none is simply absent —
+   * the service defaults its activity to null). Excludes archived + triage items
+   * so the signal reflects the publicly-visible planned tree (the 6.11.3
+   * read-exclusion + the 6.12.4 public projection), not internal triage churn.
+   * Empty input short-circuits to `[]` (no pointless query). Read-only cross-org
+   * path → `db` singleton + the app-layer `projectId` filter (the directory's
+   * public-only set is enforced one layer up).
+   */
+  async maxActivityByProjects(
+    projectIds: string[],
+  ): Promise<Array<{ projectId: string; lastActivityAt: Date | null }>> {
+    if (projectIds.length === 0) return [];
+    const rows = await db.workItem.groupBy({
+      by: ['projectId'],
+      where: { projectId: { in: projectIds }, archivedAt: null, triagedAt: null },
+      _max: { updatedAt: true },
+    });
+    return rows.map((r) => ({ projectId: r.projectId, lastActivityAt: r._max.updatedAt }));
   },
 
   /**

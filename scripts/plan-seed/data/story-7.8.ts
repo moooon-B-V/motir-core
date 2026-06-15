@@ -239,7 +239,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.3',
       title:
         'API tokens settings UI — Settings → Account → API tokens (list / create-shows-once / revoke)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 45,

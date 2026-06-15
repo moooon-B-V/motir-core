@@ -19,26 +19,19 @@ function snippet(md: string | null): string | null {
 }
 
 /**
- * Resolve a triage row's submitter (ADR §3). An external submission is the one
- * with a captured `externalSubmitterEmail`; otherwise it's a member submission
- * whose reporter (joined into the row) IS the submitter.
+ * Resolve a triage row's submitter (ADR §3, the 2026-06-14 signed-in-only
+ * revision — Subtask 6.11.10). Intake is signed-in only, so the submitter is the
+ * real `submittedByUserId` account (joined into the row as `submitter*`); the
+ * `kind` is `member` when that account is a member of the item's workspace
+ * (`submitterIsMember`) and `public` for a signed-in non-member (Story 6.12).
  */
 function toSubmitterDto(row: TriageQueueRow): TriageSubmitterDto {
-  if (row.externalSubmitterEmail !== null) {
-    return {
-      kind: 'external',
-      userId: null,
-      name: row.externalSubmitterName,
-      email: row.externalSubmitterEmail,
-      image: null,
-    };
-  }
   return {
-    kind: 'member',
-    userId: row.reporterId,
-    name: row.reporterName,
-    email: row.reporterEmail,
-    image: row.reporterImage,
+    kind: row.submitterIsMember ? 'member' : 'public',
+    userId: row.submittedByUserId,
+    name: row.submitterName,
+    email: row.submitterEmail,
+    image: row.submitterImage,
   };
 }
 

@@ -130,14 +130,17 @@ default:
 
 The other two markers the model needs (per §3/§5), also on `work_item`:
 
-| Column                   | Type        | Meaning                                                                                                                                                                                 |
-| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `snoozedUntil`           | `DateTime?` | Set by snooze (§5): the item drops out of the **active** queue until this time or new activity. Does not affect the normal-read exclusion (a snoozed item is still `triagedAt`-marked). |
-| `externalSubmitterName`  | `String?`   | External-portal submitter identity (§3); NULL for in-app member submissions.                                                                                                            |
-| `externalSubmitterEmail` | `String?`   | External-portal submitter email (§3); NULL for in-app member submissions.                                                                                                               |
+| Column              | Type        | Meaning                                                                                                                                                                                                                          |
+| ------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `snoozedUntil`      | `DateTime?` | Set by snooze (§5): the item drops out of the **active** queue until this time or new activity. Does not affect the normal-read exclusion (a snoozed item is still `triagedAt`-marked).                                          |
+| `submittedByUserId` | `String?`   | The signed-in account that submitted the item (§3, revised 2026-06-14): a workspace member, or a signed-in non-member (Story 6.12). `SetNull` `@relation`. The member-vs-public origin derives from this + workspace membership. |
 
-6.11.3 adds these with a migration + the supporting partial index, every FK
-modelled as a Prisma `@relation` (the migration FK-as-relation rule).
+6.11.3 adds the `triagedAt` / `snoozedUntil` markers with a migration + the
+supporting partial index, every FK modelled as a Prisma `@relation` (the
+migration FK-as-relation rule). _(6.11.3 also added the original
+`externalSubmitter{Name,Email}` columns; the 2026-06-14 signed-in-only revision
+retired them — Subtask 6.11.10 drops the columns and `submittedByUserId`, added
+by 6.11.4, is the durable attribution. See §3.)_
 
 ### 2. Read-exclusion is total, central, and defined ONCE
 
@@ -193,9 +196,40 @@ The triage surface MAY offer a "resolved/declined" variant of this read (drop th
 category + snooze predicates) so an admin can review terminal items; that variant
 is still a triage-surface read, never a normal read.
 
-### 3. Submitter attribution — member OR external, respecting non-null `reporterId`
+### 3. Submitter attribution — member OR public (signed-in only)
 
-A triage item records its origin. The card suggested a nullable
+> **⚠️ REVISED 2026-06-14 (Subtask 6.11.10) — signed-in-only intake.** The
+> unauthenticated public portal is **dropped**: a work item is created only by a
+> signed-in account, because the shipped `workItemsService.createWorkItem`
+> requires a member actor. So attribution is now **ALWAYS a real
+> `submittedByUserId`** account — there is no captured-external name/email and no
+> non-login intake service account. The `externalSubmitter{Name,Email}` columns
+> the original decision below introduced were **retired** (the column drop +
+> consumer rewire is Subtask 6.11.10); the text below is kept as the record of
+> the original model. The current model is the **Revised decision** that follows.
+
+**Revised decision (current):** every triage item carries a real
+`submittedByUserId` — the human who submitted it, ALWAYS a signed-in account:
+
+| Origin                     | `reporterId`                                   | `submittedByUserId`                        | Tenant access                     |
+| -------------------------- | ---------------------------------------------- | ------------------------------------------ | --------------------------------- |
+| In-app member submit       | the submitting **member** (they ARE reporter)  | the same member (equals `reporterId`)      | their existing membership         |
+| Public submit (non-member) | the per-project **intake member** (Story 6.12) | the signed-in **non-member** who submitted | **none** — account, no membership |
+
+- **Origin is a derived predicate:** the submitter is `submittedByUserId`'s
+  account; the inbox renders it **`member`** when that account is a member of the
+  item's workspace and **`public`** for a signed-in non-member (Story 6.12's
+  `canSubmitToTriage` grant). The membership check is a left-join in the
+  triage-queue read (`workItemRepository.findTriageQueue`) and a repository
+  lookup in the detail read (`triageService.resolveSubmitter`).
+- `submittedByUserId` is **nullable + `SetNull`** (NOT `Restrict` like
+  `reporterId`): a departed submitter just loses attribution and never blocks or
+  deletes the work item. `reporterId` stays the non-null tenant owner.
+
+---
+
+**Original decision (superseded by the 2026-06-14 revision above; kept for the
+record):** A triage item records its origin. The card suggested a nullable
 `submittedByUserId`; the **shipped non-null `reporterId` (rung 2) overrides that**
 — making `reporterId` nullable would break its `Restrict` invariant and ripple
 through ~38 reads + the DTO mappers for no gain. Decision:
@@ -208,7 +242,8 @@ through ~38 reads + the DTO mappers for no gain. Decision:
 - **Origin is a derived predicate:** `externalSubmitterEmail IS NOT NULL` ⇒
   external; else a member submission whose `reporterId` is the real submitter. No
   redundant `submittedByUserId` (it would always either equal `reporterId` or be
-  null).
+  null). _(Superseded: `submittedByUserId` is now the durable attribution and the
+  external columns are dropped — see the revision above.)_
 - The **intake user** is the verified-mirror shape: Linear Asks / integration
   submissions are created by a bot/integration user with the customer captured
   separately. 6.11.4 provisions the per-project intake account and the
