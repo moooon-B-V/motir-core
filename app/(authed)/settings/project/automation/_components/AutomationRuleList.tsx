@@ -208,7 +208,7 @@ function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean
 
   const lastRun = rule.lastRun;
   if (!lastRun) {
-    return <span className="text-(--el-text-faint)">{t('row.neverRun')}</span>;
+    return <span className="text-(--el-text-muted)">{t('row.neverRun')}</span>;
   }
 
   const time = format.relativeTime(new Date(lastRun.at));
@@ -229,7 +229,7 @@ function LastRun({ rule, auto }: { rule: AutomationRuleSummaryDto; auto: boolean
     );
   }
   return (
-    <span className="flex items-center gap-1 text-(--el-text-faint)">
+    <span className="flex items-center gap-1 text-(--el-text-muted)">
       <MinusCircle className="size-3.5 shrink-0" aria-hidden />
       {t('row.noActionsAgo', { time })}
     </span>
