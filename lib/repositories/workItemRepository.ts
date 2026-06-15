@@ -221,6 +221,36 @@ export type PublicRoadmapRow = WorkItem & {
 };
 
 /**
+ * One row of a LAZY level of the PUBLIC work-item TREE (Story 6.14 · Subtask
+ * 6.14.10) — a single parent's direct children OR the project's roots, projected
+ * to the PUBLIC-safe fields ONLY (no assignee / estimate / story points / due
+ * date / reporter — those are never SELECTed, so an internal field cannot leak;
+ * the public projection is structural, not a runtime omission). Carries:
+ *
+ *   - `publicChildrenHidden` — the epic-privacy flag (6.14.4) the mapper reads to
+ *     stamp the "this epic is not public" marker on a PRIVATE epic's row.
+ *   - `hasChildren` — an `EXISTS` over the node's PUBLICLY-VISIBLE children (the
+ *     same `excludeIds` exclusion as the level itself, so a private epic — whose
+ *     descendants are all excluded — reports `false`; the placeholder chevron is
+ *     driven by `publicChildrenHidden`, not this flag).
+ *
+ * Same `parentId` + lazy-`hasChildren` shape as the authed {@link WorkItemTreeRow},
+ * minus the internal columns.
+ */
+export interface PublicWorkItemTreeRow {
+  id: string;
+  parentId: string | null;
+  kind: WorkItemKind;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  priority: WorkItemPriority;
+  publicChildrenHidden: boolean;
+  hasChildren: boolean;
+}
+
+/**
  * The `(voteCount, recency, id)` seek-after position a roadmap column read pages
  * after (Subtask 6.12.7). `voteCount` is the leading sort key; `recency` is the
  * bucket tiebreak — a `Date` (the Submitted column's `triagedAt`) or a `number`
@@ -1593,6 +1623,95 @@ export const workItemRepository = {
   },
 
   /**
+   * One LAZY level of the PUBLIC work-item TREE (Story 6.14 · Subtask 6.14.10) —
+   * the project's roots (`parentId === null`) or one parent's DIRECT children,
+   * key-ordered + paged with `take`/`offset`, projected to the PUBLIC-safe
+   * columns only (the {@link PublicWorkItemTreeRow} shape — no assignee /
+   * estimate / story points / reporter is SELECTed, so the public boundary is
+   * structural). `excludeIds` is the epic-privacy exclusion set (6.14.4): a
+   * non-member's level drops every descendant of a private epic — both the rows
+   * AND the `hasChildren` EXISTS probe exclude them, so a private epic reports
+   * `hasChildren = false` (its placeholder chevron is driven by
+   * `publicChildrenHidden`, the mapper's marker). A member passes `[]`, reading
+   * the unfiltered tree.
+   *
+   * The explicit `workspaceId` + `projectId` gate (finding #26 — RLS is inert
+   * under the dev/CI superuser) means a row can never cross tenants. `key ASC` is
+   * a total order, so paging never skips/repeats a row. Fetches `take + 1` so the
+   * caller derives `hasMore` without a separate COUNT. UNfiltered + UNsorted
+   * (the public tree has no sort headers) — the read mirrors
+   * {@link findProjectTreeLevel} minus the internal columns + the user joins.
+   */
+  async findPublicProjectTreeLevel(
+    projectId: string,
+    workspaceId: string,
+    parentId: string | null,
+    page: { take: number; offset: number },
+    excludeIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<PublicWorkItemTreeRow[]> {
+    const client = tx ?? db;
+    const parentPred =
+      parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+
+    return client.$queryRaw<PublicWorkItemTreeRow[]>`
+      SELECT w."id",
+             w."parentId",
+             w."kind"::text       AS "kind",
+             w."key",
+             w."identifier",
+             w."title",
+             w."status",
+             w."priority"::text   AS "priority",
+             w."publicChildrenHidden",
+             EXISTS (
+               SELECT 1 FROM "work_item" ch
+                WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
+                  AND ${notInTriageSql('ch')}
+                  AND ${notExcludedSql('ch', excludeIds)}
+             )                    AS "hasChildren"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', excludeIds)}
+          AND ${parentPred}
+        ORDER BY w."key" ASC
+        LIMIT ${page.take + 1} OFFSET ${page.offset}`;
+  },
+
+  /**
+   * The FULL child count of one PUBLIC tree level (Subtask 6.14.10) — the
+   * project's roots or a parent's direct children — for an honest
+   * `aria-setsize` / "Showing N of M", independent of paging. Same
+   * `workspaceId`+`projectId` + epic-privacy `excludeIds` exclusion as
+   * {@link findPublicProjectTreeLevel} (so the denominator never counts a hidden
+   * descendant — an aggregate-tell leak). COUNT → `bigint`, coerced to `number`.
+   */
+  async countPublicProjectTreeLevel(
+    projectId: string,
+    workspaceId: string,
+    parentId: string | null,
+    excludeIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const parentPred =
+      parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+    const rows = await client.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', excludeIds)}
+          AND ${parentPred}`;
+    return Number(rows[0]?.count ?? 0);
+  },
+
+  /**
    * Create a work item. Required `tx`. The DB triggers validate the
    * kind-parent matrix + depth on insert; their SQLSTATE-23514 rejections and
    * a P2002 unique violation are translated to typed errors here.
@@ -2860,7 +2979,10 @@ function notInTriageSql(alias: string): Prisma.Sql {
  * (never interpolated), mirroring the `= ANY(...)` convention; the `alias` is a
  * fixed internal literal, not user input.
  */
-function notExcludedSql(alias: 'w' | 'f', excludeIds: readonly string[] | undefined): Prisma.Sql {
+function notExcludedSql(
+  alias: 'w' | 'f' | 'ch',
+  excludeIds: readonly string[] | undefined,
+): Prisma.Sql {
   if (!excludeIds || excludeIds.length === 0) return Prisma.sql`TRUE`;
   return Prisma.sql`${Prisma.raw(alias)}."id" <> ALL(${excludeIds as string[]})`;
 }

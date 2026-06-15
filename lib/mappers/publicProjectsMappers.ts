@@ -10,6 +10,7 @@ import type {
   PublicRequestMatchDto,
   PublicRoadmapCardDto,
   PublicWorkItemListItemDto,
+  PublicWorkItemTreeRowDto,
 } from '@/lib/dto/publicProjects';
 import type {
   PublicRequestMatchRow,
@@ -60,6 +61,36 @@ export function toPublicWorkItemListItemDto(
     dto.childrenHidden = true;
   }
   return dto;
+}
+
+/**
+ * Map a public TREE-level row → its DTO (Story 6.14 · Subtask 6.14.10). Reuses
+ * {@link toPublicWorkItemListItemDto} for the stripped public projection + the
+ * `childrenHidden` marker, then adds the two tree bits (`parentId`,
+ * `hasChildren`). The row's internal columns are never read into the DTO — the
+ * public boundary stays structural.
+ */
+export function toPublicWorkItemTreeRowDto(
+  row: Pick<
+    WorkItem,
+    | 'id'
+    | 'identifier'
+    | 'key'
+    | 'title'
+    | 'kind'
+    | 'status'
+    | 'priority'
+    | 'publicChildrenHidden'
+    | 'parentId'
+  > & { hasChildren: boolean },
+  statusCategory: StatusCategoryDto,
+  opts: { hideChildren?: boolean } = {},
+): PublicWorkItemTreeRowDto {
+  return {
+    ...toPublicWorkItemListItemDto(row, statusCategory, opts),
+    parentId: row.parentId,
+    hasChildren: row.hasChildren,
+  };
 }
 
 /**

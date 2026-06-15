@@ -2939,6 +2939,23 @@
     "priorityHigh": "High",
     "priorityMedium": "Medium",
     "priorityLow": "Low",
-    "priorityLowest": "Lowest"
+    "priorityLowest": "Lowest",
+    "tabTree": "Tree",
+    "treeTitle": "Work item tree",
+    "treeSubtitle": "A read-only, expandable view of this project’s public work items.",
+    "treeEmptyTitle": "No work items yet",
+    "treeEmptyBody": "There’s nothing on this project’s public board yet.",
+    "treeColTitle": "Title",
+    "treeColStatus": "Status",
+    "treeColPriority": "Priority",
+    "treeLoadingChildren": "Loading…",
+    "treeLoadMoreChildren": "Load more",
+    "treeShowingCount": "Showing {loaded} of {total}",
+    "statusTodo": "To do",
+    "statusInProgress": "In progress",
+    "statusDone": "Done",
+    "epicNotPublicBadge": "Not public",
+    "epicNotPublicTitle": "This epic is not public",
+    "epicNotPublicBody": "The project admin has kept this epic’s contents private."
   }
 }

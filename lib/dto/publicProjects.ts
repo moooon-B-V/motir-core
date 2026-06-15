@@ -89,6 +89,42 @@ export interface PublicWorkItemPageDto {
   nextCursor: string | null;
 }
 
+// --- Public TREE projection (6.14.10) --------------------------------------
+
+/**
+ * One row of the PUBLIC, expandable work-item TREE (Story 6.14 · Subtask
+ * 6.14.10) — the same stripped public projection as a list/board card, plus the
+ * two tree bits the lazy hierarchy needs:
+ *
+ *   - `parentId` — where the row sits (null at the root level).
+ *   - `hasChildren` — whether the node has PUBLICLY-VISIBLE children (drives the
+ *     expand chevron WITHOUT pre-loading the subtree — the lazy at-scale read).
+ *     A PRIVATE epic reports `false` here (its descendants are excluded
+ *     server-side) but still carries `childrenHidden` (inherited from the list
+ *     projection) — the tree-expand placeholder (6.14.5) is driven by THAT
+ *     marker, not `hasChildren`.
+ *
+ * No assignee / estimate / story points — absent by design (the public
+ * projection), exactly like {@link PublicWorkItemListItemDto}.
+ */
+export interface PublicWorkItemTreeRowDto extends PublicWorkItemListItemDto {
+  parentId: string | null;
+  hasChildren: boolean;
+}
+
+/**
+ * One lazily-loaded LEVEL of the public tree (the roots, or one parent's direct
+ * children): the paged `rows` + whether a next page exists + the level's FULL
+ * sibling `total` (for an honest "Showing N of M" / `aria-setsize`, independent
+ * of paging). Offset-paged — the client tracks the loaded count as the next
+ * offset, mirroring the authed {@link import('@/lib/dto/workItems').TreeLevelDto}.
+ */
+export interface PublicTreeLevelDto {
+  rows: PublicWorkItemTreeRowDto[];
+  hasMore: boolean;
+  total: number;
+}
+
 // --- Public ROADMAP projection (6.12.7) ------------------------------------
 
 /**

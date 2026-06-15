@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BookOpen, Columns3, List, Route } from 'lucide-react';
+import { BookOpen, Columns3, List, ListTree, Route } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 import { cn } from '@/lib/utils/cn';
 import { PublicSubmitRequest } from './PublicSubmitRequest';
@@ -11,7 +11,7 @@ import { PublicSubmitRequest } from './PublicSubmitRequest';
 // (`--el-surface` track, raised active option). Plus the "Submit a request"
 // control. Server component; colour + shape via --el-* / element-semantic tokens.
 
-export type PublicTab = 'overview' | 'board' | 'items' | 'roadmap';
+export type PublicTab = 'overview' | 'board' | 'items' | 'tree' | 'roadmap';
 
 export async function PublicTabNav({
   identifier,
@@ -40,6 +40,12 @@ export async function PublicTabNav({
       href: `${base}/items`,
       label: t('tabWorkItems'),
       icon: <List className="h-3.5 w-3.5" />,
+    },
+    {
+      key: 'tree',
+      href: `${base}/tree`,
+      label: t('tabTree'),
+      icon: <ListTree className="h-3.5 w-3.5" />,
     },
     {
       key: 'roadmap',
