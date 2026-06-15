@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { CLI_VERSION } from './version.js';
 import { authLogin, authLogout, authStatus } from './commands/auth.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
+import { openCommand, readyCommand, statusCommand } from './commands/read.js';
 
 // The command tree. 7.9.1 ships the scaffold + auth + link; the read commands
 // (`ready` / `status` / `open`) are 7.9.2, single dispatch (`next` / `run` /
@@ -55,6 +56,25 @@ export function buildProgram(): Command {
     .command('remove <repo>')
     .description('Remove a repo checkout-path override.')
     .action(linkRemoveCommand);
+
+  // ── read ───────────────────────────────────────────────────────────────────
+  program
+    .command('ready')
+    .description('List the linked project’s ready set (every dependency satisfied).')
+    .option('--kinds <list>', 'Comma-separated kinds: epic,story,task,bug,subtask.')
+    .option('--assignee <id>', 'Filter by assignee: a user id, "me", or "unassigned".')
+    .option('--json', 'Emit the ready items as JSON.')
+    .action(readyCommand);
+  program
+    .command('status')
+    .description('Show the project pulse: ready / in-flight counts + the active sprint.')
+    .option('--json', 'Emit the pulse as JSON.')
+    .action(statusCommand);
+  program
+    .command('open <key>')
+    .description('Open a work item (e.g. PROD-7) in the browser; prints the URL.')
+    .option('--print', 'Print the URL only; do not launch a browser.')
+    .action(openCommand);
 
   return program;
 }
