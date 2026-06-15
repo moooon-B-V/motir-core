@@ -86,6 +86,7 @@ export function toPublicProjectOverviewDto(
   stats: PublicProjectStatsDto,
 ): PublicProjectOverviewDto {
   return {
+    id: project.id,
     name: project.name,
     identifier: project.identifier,
     workspaceName,

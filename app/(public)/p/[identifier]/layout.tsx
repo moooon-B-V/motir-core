@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { publicProjectsService } from '@/lib/services/publicProjectsService';
+import { getPublicOverview } from '@/lib/publicProjects/viewerContext';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { publicProjectUrl, derivePublicDescription } from '@/lib/publicProjects/urls';
 import { PublicTopBar } from '@/app/(public)/_components/PublicTopBar';
@@ -29,7 +29,7 @@ export async function generateMetadata({
   const actorUserId = session?.user.id ?? null;
   let overview;
   try {
-    overview = await publicProjectsService.getOverview(identifier, actorUserId);
+    overview = await getPublicOverview(identifier, actorUserId);
   } catch (err) {
     if (err instanceof ProjectNotFoundError) return {};
     throw err;
@@ -72,7 +72,7 @@ export default async function PublicProjectLayout({
 
   let overview;
   try {
-    overview = await publicProjectsService.getOverview(identifier, actorUserId);
+    overview = await getPublicOverview(identifier, actorUserId);
   } catch (err) {
     if (err instanceof ProjectNotFoundError) notFound();
     throw err;

@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import type { PublicProjectOverviewDto } from '@/lib/dto/publicProjects';
-import { PublicSubmitRequestButton } from './PublicSubmitRequestButton';
+import { PublicSubmitRequest } from './PublicSubmitRequest';
 
 // The Overview hero (Story 6.12 · Subtask 6.12.4 · design Panel 1 `.hero`). A
 // bordered card with a soft corner-wash (two radial --el-hero-wash-* tints over
@@ -86,7 +86,7 @@ export async function PublicOverviewHero({
           <Route className="h-4 w-4" aria-hidden />
           {t('viewRoadmap')}
         </Link>
-        <PublicSubmitRequestButton size="md" />
+        <PublicSubmitRequest identifier={overview.identifier} size="md" />
         {overview.links.repo ? (
           <a
             href={overview.links.repo}

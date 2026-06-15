@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import type { PublicProjectOverviewDto } from '@/lib/dto/publicProjects';
-import { PublicSubmitRequestButton } from './PublicSubmitRequestButton';
+import { PublicSubmitRequest } from './PublicSubmitRequest';
 
 // The Overview sidebar (Story 6.12 · Subtask 6.12.4 · design Panel 1 `.ov-side`):
 // a Links card (only the present links — derived from existing project fields),
@@ -94,7 +94,7 @@ export async function PublicOverviewSidebar({ overview }: { overview: PublicProj
       >
         <h2 className="mb-1 font-serif text-[15px] text-(--el-text)">{t('ctaTitle')}</h2>
         <p className="mb-3 text-[12.5px] leading-relaxed text-(--el-text-muted)">{t('ctaBody')}</p>
-        <PublicSubmitRequestButton size="sm" />
+        <PublicSubmitRequest identifier={overview.identifier} size="sm" />
       </div>
     </aside>
   );
