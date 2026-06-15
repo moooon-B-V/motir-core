@@ -326,17 +326,24 @@ function TitleCell({
 
 /** The epic-privacy tree-expand placeholder (design epic-privacy panel 2) — the
  *  inline "This epic is not public" row that replaces a private epic's children
- *  for a public / non-member viewer. SINGLE-LINE: the TreeTable renders every
- *  row at a fixed `ROW_PX` (40px) height — the windowing unit — so a synthetic
- *  row must fit one line (matching the "loading" row), or its content overflows
- *  the slot and overlaps the next row. The title + explanation sit inline (the
- *  explanation truncates on a narrow tree); the icon carries the meaning. */
+ *  for a public / non-member viewer. Rendered as a SINGLE-LINE soft-bg chip: the
+ *  TreeTable renders every row at a fixed `ROW_PX` (40px) — the windowing unit —
+ *  so a synthetic row must fit one line, or (the design's free-height two-line
+ *  block) it overflows the slot and overlaps the next row. This keeps the
+ *  design's elements — the `eye-off` glyph, the bold "This epic is not public"
+ *  title, the soft-`--el-surface-soft` block, and the reason — on one row; the
+ *  reason truncates on a narrow tree. (The full two-line block lives on the
+ *  detail child-panel, 6.14.6, where the surface is free-height.) */
 function PrivatePlaceholder({ t }: { t: ReturnType<typeof useTranslations> }) {
   return (
-    <span className="flex min-w-0 items-center gap-2 text-(--el-text-secondary)">
+    <span className="inline-flex max-w-full min-w-0 items-center gap-2 rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
       <EyeOff className="h-3.5 w-3.5 flex-none text-(--el-text-muted)" aria-hidden />
-      <span className="flex-none font-semibold text-(--el-text)">{t('epicNotPublicTitle')}</span>
-      <span className="min-w-0 truncate text-[12.5px]">{t('epicNotPublicBody')}</span>
+      <span className="flex-none text-[12.5px] font-semibold text-(--el-text)">
+        {t('epicNotPublicTitle')}
+      </span>
+      <span className="min-w-0 truncate text-[12px] text-(--el-text-secondary)">
+        {t('epicNotPublicBody')}
+      </span>
     </span>
   );
 }
