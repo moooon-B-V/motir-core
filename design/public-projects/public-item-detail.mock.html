@@ -1,0 +1,1666 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Public work-item detail page (Story 6.14 · 6.14.12)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the PUBLIC, read-only WORK-ITEM DETAIL page
+      at /p/[identifier]/items/[key] (Story 6.14 · subtask 6.14.12). This is the
+      page a logged-out / non-member viewer lands on when they click a work item
+      on a PUBLIC project, and it is the surface subtask 6.14.6 renders its
+      "this epic is not public" placeholder onto.
+
+      COMPOSED from the two existing assets so the conventions match 1:1:
+        - design/public-projects/public-projects.mock.html — the token block
+          (Tier-0 --color-* + shape tokens + Tier-3 --el-*, copied 1:1 from
+          app/globals.css) AND the public chrome (.pub-shell / .pub-topbar /
+          .pub-banner / .seg sub-bar nav). Every panel shows the full chrome.
+        - design/epic-privacy/epic-privacy.mock.html — the detail-page markup +
+          CSS (the .detail layout, .detail-head with IssueTypeIcon + .lr-id +
+          serif title + the lavender "Not public" Pill, the Card + section-label
+          "Child issues" panel rendering a centered EmptyState, the detail
+          sidebar Card with rollups → "Hidden"). The "Not public" Pill uses the
+          lavender recipe (--el-tint-lavender / --el-text-strong) + a lucide
+          lock glyph. The MEMBER-view child rows convention informs the public
+          child-row grammar.
+
+      The PUBLIC child-row grammar mirrors PublicWorkItemList / PublicWorkItemTree
+      (6.12.4 / 6.14.10): IssueTypeIcon + mono key + title + a status/priority
+      Pill — NO assignee avatar, NO points/estimate, NO drag grip (the public
+      projection strips them). Each child row is a plain <a> navigable to its own
+      /p/.../items/<key> detail page. There are NO edit affordances anywhere
+      (read-only) and NO vote controls (votes live only on public requests).
+
+      The sub-bar tabs are the REAL current PublicTabNav tabs (6.14.10 added
+      Tree): Overview · Board · Work items · Tree · Roadmap. "Work items" is
+      marked active (the detail page lives under the items surface).
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) a NORMAL epic detail (public viewer) — header + body + a "Child
+            issues" panel of public-safe child rows + a public-safe sidebar.
+        (2) a PRIVATE epic detail (the 6.14.6 TARGET) — the lavender "Not public"
+            badge in the header, the centered "This epic is not public"
+            EmptyState in place of the child list, sidebar rollups → "Hidden",
+            and NO child rows in the DOM (the no-leak guarantee).
+        (3) a NON-EPIC (story) detail — a parent link to its epic + its own
+            child tasks panel.
+        (4) STATES — empty (no children) · loading skeleton · error · not-found.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+
+      Colour ONLY via --el-* tokens; shape ONLY via the shape tokens. No Tier-0
+      --color-* is referenced in the <body> (only in the :root token block).
+      Every lucide icon is viewBox="0 0 24 24"; no nested interactive elements.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 14px;
+        --spacing-btn-y: 8px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+
+        /* Tier 3 growth — public-projects (6.12.1). Each mapped to an existing
+           Tier-0 value (the per-component token-growth pattern). */
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-destructive: #f06565;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-public-banner-text: var(--color-charcoal);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 74ch;
+      }
+      .legend {
+        max-width: 1080px;
+        margin: 10px auto 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend .sw {
+        width: 12px;
+        height: 12px;
+        border-radius: var(--radius-control);
+        flex: none;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel-label .note {
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      .anno {
+        max-width: 1080px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        line-height: 1.5;
+      }
+      .anno svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Shared icon sizing ──────────────────────────────────────────────── */
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic svg,
+      svg.ic {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ── Card (components/ui/Card) ───────────────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+      }
+
+      /* ── Pill (components/ui/Pill) — hue in the tint bg, --el-text-strong (AA) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill .pic {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      /* priority tones (PublicWorkItemList recipe) */
+      .pill--high {
+        background: var(--el-tint-rose);
+      }
+      .pill--medium {
+        background: var(--el-tint-yellow);
+      }
+      .pill--low {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      /* the `private` tone — lavender tint + --el-text-strong (the same AA recipe
+         as the `planned` tone). Carries a lock glyph. (epic-privacy primitive growth) */
+      .pill--private {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+
+      /* ── IssueTypeIcon — lucide glyph in the type hue ────────────────────── */
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .type-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* ── The public top bar / banner / sub-bar (design/public-projects chrome) ── */
+      .pub-shell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .pub-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .pub-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .pub-logo {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 14px;
+        flex: none;
+      }
+      .pub-proj {
+        font-weight: 700;
+        font-size: 14.5px;
+        color: var(--el-text);
+      }
+      .pub-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      /* the signed-out CTA on the topbar (sign-in-to-act) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-outline {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+      }
+      .btn-lg {
+        height: var(--height-btn-md);
+        font-size: 14px;
+      }
+      .topbar-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* the explicit public banner (view-only framing) */
+      .pub-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 18px;
+        background: var(--el-public-banner-bg);
+        color: var(--el-public-banner-text);
+        font-size: 12.5px;
+      }
+      .pub-banner .ic {
+        color: var(--el-info);
+        width: 15px;
+        height: 15px;
+      }
+      .pub-banner b {
+        font-weight: 700;
+      }
+      .pub-banner .dot {
+        color: var(--el-text-faint);
+      }
+
+      /* read-only view nav (Overview / Board / Work items / Tree / Roadmap) */
+      .pub-subbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 10px 18px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .seg {
+        display: inline-flex;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+        gap: 2px;
+        flex-wrap: wrap;
+      }
+      .seg a {
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 500;
+        text-decoration: none;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .seg a .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .seg a.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg a.on .ic {
+        color: var(--el-accent);
+      }
+      .readonly-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .readonly-note .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+
+      /* a breadcrumb above the detail header (parent epic → this item) */
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-bottom: 4px;
+        flex-wrap: wrap;
+      }
+      .crumbs a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .crumbs a:hover {
+        text-decoration: underline;
+      }
+      .crumbs .sep {
+        color: var(--el-text-faint);
+      }
+
+      /* ── Detail-page framing (epic-privacy panel 3) ──────────────────────── */
+      .pub-body {
+        padding: 20px 18px 22px;
+      }
+      .detail {
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 20px;
+        align-items: start;
+      }
+      .detail-main {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-width: 0;
+      }
+      .detail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .detail-head .lr-id {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text-faint);
+      }
+      .detail-head h2 {
+        font-family: var(--font-serif);
+        font-weight: 400;
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-label {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 12px;
+      }
+      .panel-box {
+        padding: var(--spacing-card-padding);
+      }
+      /* the public-safe description body (markdown / prose) */
+      .prose {
+        font-size: 14px;
+        line-height: 1.62;
+        color: var(--el-text-secondary);
+      }
+      .prose p {
+        margin: 0 0 12px;
+      }
+      .prose p:last-child {
+        margin-bottom: 0;
+      }
+      .prose strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* ── Child-issue rows (public projection grammar — stripped) ─────────── */
+      .child-list {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .child-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 10px 12px;
+        min-width: 0;
+      }
+      .child-row:hover {
+        border-color: var(--el-border-strong);
+      }
+      .child-row .lr-id {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .child-row .ctitle {
+        min-width: 0;
+        flex: 1;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .child-row:hover .ctitle {
+        color: var(--el-link);
+      }
+
+      /* ── EmptyState (components/ui/EmptyState) — the placeholder ─────────── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 32px 24px;
+      }
+      .empty .ic-wrap {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 40px;
+        height: 40px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 8px 0 0;
+        max-width: 46ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .empty .err-ic {
+        color: var(--el-danger);
+      }
+      .empty .empty-action {
+        margin-top: 16px;
+      }
+
+      /* ── Detail sidebar Card (epic-privacy panel 3) ──────────────────────── */
+      .side-card {
+        padding: 16px;
+      }
+      .side-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+        padding: 7px 0;
+      }
+      .side-row + .side-row {
+        border-top: 1px solid var(--el-border);
+      }
+      .side-row .k {
+        color: var(--el-text-muted);
+      }
+      .side-row .v {
+        color: var(--el-text);
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .side-row .v a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .side-row .v a:hover {
+        text-decoration: underline;
+      }
+      /* the stripped rollups (Children / Progress → "Hidden") — -secondary for AA */
+      .stripped {
+        color: var(--el-text-secondary);
+        font-style: italic;
+        font-weight: 400;
+      }
+
+      /* ── States (panel 4) ────────────────────────────────────────────────── */
+      .states {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .state-box {
+        position: relative;
+      }
+      .state-cap {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin: 0 0 8px 2px;
+      }
+      /* skeleton shimmer */
+      .sk {
+        background: linear-gradient(
+          90deg,
+          var(--el-surface) 25%,
+          var(--el-muted) 37%,
+          var(--el-surface) 63%
+        );
+        border-radius: var(--radius-control);
+      }
+      .sk-line {
+        height: 12px;
+      }
+      .sk-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 11px 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Public work-item detail page — 6.14.12</h1>
+        <p>
+          Story 6.14 · subtask 6.14.12 — the read-only WORK-ITEM DETAIL page at
+          <code>/p/[identifier]/items/[key]</code> a logged-out / non-member viewer lands on from a
+          public project. Full public chrome (topbar · banner · sub-bar nav) above the detail. It is
+          the surface 6.14.6 renders its "this epic is not public" placeholder onto.
+        </p>
+        <div class="legend">
+          <span><span class="sw" style="background: var(--el-type-epic)"></span> Epic</span>
+          <span><span class="sw" style="background: var(--el-type-story)"></span> Story</span>
+          <span><span class="sw" style="background: var(--el-type-task)"></span> Task</span>
+          <span
+            ><span class="sw" style="background: var(--el-tint-lavender)"></span> Not public
+            (private epic)</span
+          >
+        </div>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <!-- epic = zap -->
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <!-- story = book-open -->
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <!-- bug -->
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- list (Work items tab) -->
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12h.01" />
+          <path d="M3 18h.01" />
+          <path d="M3 6h.01" />
+          <path d="M8 12h13" />
+          <path d="M8 18h13" />
+          <path d="M8 6h13" />
+        </g>
+        <!-- columns-3 (Board tab) -->
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <!-- list-tree (Tree tab) -->
+        <g
+          id="i-listtree"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12h-8" />
+          <path d="M21 6H8" />
+          <path d="M21 18h-8" />
+          <path d="M3 6v4c0 1.1.9 2 2 2h3" />
+          <path d="M3 10v6c0 1.1.9 2 2 2h3" />
+        </g>
+        <!-- book-open (Overview tab) -->
+        <g
+          id="i-bookopen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- route (Roadmap tab) -->
+        <g
+          id="i-route"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="19" r="3" />
+          <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+          <circle cx="18" cy="5" r="3" />
+        </g>
+        <!-- eye (read-only view note + public banner) -->
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <!-- eye-off (the placeholder glyph — hidden from you) -->
+        <g
+          id="i-eye-off"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"
+          />
+          <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+          <path
+            d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
+          />
+          <path d="m2 2 20 20" />
+        </g>
+        <!-- lock (the "Not public" badge glyph + not-found state) -->
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <!-- alert-triangle (error state) -->
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <!-- inbox (empty: no children) -->
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <!-- info -->
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <!-- refresh-cw (retry) -->
+        <g
+          id="i-refresh"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M8 16H3v5" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 1 — Normal EPIC detail (public viewer)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 1 — Public viewer · a NORMAL epic detail
+      <span class="note"
+        >· header + public-safe body + a "Child issues" panel of stripped child rows + a public-safe
+        sidebar. No edit affordances.</span
+      >
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <!-- topbar: brand + sign-in-to-act CTA (logged-out) -->
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <span class="pub-proj">Motir</span>
+            <span class="pub-key">PROD</span>
+          </div>
+          <div class="topbar-cta">
+            <a class="btn btn-outline" href="#">Sign in</a>
+            <a class="btn btn-primary" href="#">Start free</a>
+          </div>
+        </div>
+        <!-- the view-only public banner -->
+        <div class="pub-banner">
+          <span class="ic"
+            ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+          ></span>
+          <span
+            ><b>You’re viewing a public project.</b> <span class="dot">·</span> Anyone can view it —
+            no account needed. Sign in to submit, upvote, or comment on requests.</span
+          >
+        </div>
+        <!-- the sub-bar nav (Overview / Board / Work items / Tree / Roadmap) -->
+        <div class="pub-subbar">
+          <nav class="seg" aria-label="Public views">
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-bookopen" /></svg></span
+              >Overview</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg></span
+              >Board</a
+            >
+            <a class="on" href="#" aria-current="page"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-list" /></svg></span
+              >Work items</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-listtree" /></svg></span
+              >Tree</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-route" /></svg></span
+              >Roadmap</a
+            >
+          </nav>
+          <span class="readonly-note">
+            <span class="ic"
+              ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+            ></span>
+            View-only — you can’t edit work items
+          </span>
+        </div>
+        <!-- the detail content -->
+        <div class="pub-body">
+          <div class="detail">
+            <div class="detail-main">
+              <div>
+                <div class="crumbs">
+                  <a href="#">Work items</a>
+                  <span class="sep">/</span>
+                  <span>PROD-12</span>
+                </div>
+                <div class="detail-head">
+                  <span class="type-icon t-epic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ></span>
+                  <span class="lr-id">PROD-12</span>
+                  <h2>Q3 launch — Auth &amp; sign-in</h2>
+                  <span class="pill pill--inprogress">In progress</span>
+                </div>
+              </div>
+              <div class="card panel-box">
+                <p class="section-label">Description</p>
+                <div class="prose">
+                  <p>
+                    The umbrella epic for the Q3 authentication push: a passwordless
+                    <strong>email sign-in</strong>, social providers, and a hardened session model.
+                    Tracks the user-facing surfaces and the supporting platform work.
+                  </p>
+                  <p>
+                    Public visibility is on so early adopters can follow progress and weigh in on
+                    the roadmap.
+                  </p>
+                </div>
+              </div>
+              <div class="card panel-box">
+                <p class="section-label">Child issues</p>
+                <div class="child-list">
+                  <a class="child-row" href="#">
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="lr-id">PROD-13</span>
+                    <span class="ctitle">Passwordless email sign-in</span>
+                    <span class="pill pill--inprogress">In progress</span>
+                  </a>
+                  <a class="child-row" href="#">
+                    <span class="type-icon t-story"
+                      ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                    ></span>
+                    <span class="lr-id">PROD-19</span>
+                    <span class="ctitle">Social providers (Google, GitHub)</span>
+                    <span class="pill pill--done">Done</span>
+                  </a>
+                  <a class="child-row" href="#">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="lr-id">PROD-22</span>
+                    <span class="ctitle">Session rotation &amp; revocation</span>
+                    <span class="pill pill--neutral">To do</span>
+                  </a>
+                  <a class="child-row" href="#">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="lr-id">PROD-24</span>
+                    <span class="ctitle">Rate-limit the sign-in endpoint</span>
+                    <span class="pill pill--inprogress">In progress</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div class="card side-card">
+              <div class="side-row">
+                <span class="k">Status</span><span class="v">In progress</span>
+              </div>
+              <div class="side-row">
+                <span class="k">Type</span>
+                <span class="v"
+                  ><span class="type-icon t-epic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+                  >Epic</span
+                >
+              </div>
+              <div class="side-row"><span class="k">Children</span><span class="v">4</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >Child rows follow the public-projection grammar of <code>PublicWorkItemList</code> /
+        <code>PublicWorkItemTree</code> — kind icon + key + title + a status Pill, but NO assignee
+        avatar, NO points/estimate, NO drag grip. Each row is a plain <code>&lt;a&gt;</code> to its
+        own <code>/p/.../items/&lt;key&gt;</code> detail page. No edit buttons anywhere.</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 2 — Private EPIC detail (the 6.14.6 TARGET)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 2 — Public viewer · a PRIVATE epic detail
+      <span class="note"
+        >· the 6.14.6 target — "Not public" badge, the EmptyState placeholder instead of children,
+        sidebar rollups → "Hidden", NO child rows in the DOM</span
+      >
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <span class="pub-proj">Motir</span>
+            <span class="pub-key">PROD</span>
+          </div>
+          <div class="topbar-cta">
+            <a class="btn btn-outline" href="#">Sign in</a>
+            <a class="btn btn-primary" href="#">Start free</a>
+          </div>
+        </div>
+        <div class="pub-banner">
+          <span class="ic"
+            ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+          ></span>
+          <span
+            ><b>You’re viewing a public project.</b> <span class="dot">·</span> Anyone can view it —
+            no account needed. Sign in to submit, upvote, or comment on requests.</span
+          >
+        </div>
+        <div class="pub-subbar">
+          <nav class="seg" aria-label="Public views">
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-bookopen" /></svg></span
+              >Overview</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg></span
+              >Board</a
+            >
+            <a class="on" href="#" aria-current="page"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-list" /></svg></span
+              >Work items</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-listtree" /></svg></span
+              >Tree</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-route" /></svg></span
+              >Roadmap</a
+            >
+          </nav>
+          <span class="readonly-note">
+            <span class="ic"
+              ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+            ></span>
+            View-only — you can’t edit work items
+          </span>
+        </div>
+        <div class="pub-body">
+          <div class="detail">
+            <div class="detail-main">
+              <div>
+                <div class="crumbs">
+                  <a href="#">Work items</a>
+                  <span class="sep">/</span>
+                  <span>PROD-48</span>
+                </div>
+                <div class="detail-head">
+                  <span class="type-icon t-epic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg
+                  ></span>
+                  <span class="lr-id">PROD-48</span>
+                  <h2>Billing &amp; subscriptions</h2>
+                  <span class="pill pill--private"
+                    ><svg class="pic" viewBox="0 0 24 24"><use href="#i-lock" /></svg>Not
+                    public</span
+                  >
+                </div>
+              </div>
+              <div class="card panel-box">
+                <p class="section-label">Child issues</p>
+                <div class="empty">
+                  <span class="ic-wrap"
+                    ><svg viewBox="0 0 24 24"><use href="#i-eye-off" /></svg
+                  ></span>
+                  <h3>This epic is not public</h3>
+                  <p>The project admin has kept this epic’s contents private.</p>
+                </div>
+              </div>
+            </div>
+            <div class="card side-card">
+              <div class="side-row">
+                <span class="k">Status</span><span class="v">In progress</span>
+              </div>
+              <div class="side-row">
+                <span class="k">Type</span>
+                <span class="v"
+                  ><span class="type-icon t-epic"
+                    ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+                  >Epic</span
+                >
+              </div>
+              <div class="side-row">
+                <span class="k">Children</span><span class="v stripped">Hidden</span>
+              </div>
+              <div class="side-row">
+                <span class="k">Progress</span><span class="v stripped">Hidden</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >Same copy as the tree-expand placeholder (epic-privacy panel 2), drawn in the detail-page
+        child-panel slot. There are <b>NO child rows in the DOM</b> — the children are stripped
+        server-side by the public projection, not merely hidden (the no-leak guarantee). The sidebar
+        Children / Progress rollups read "Hidden" (<code>--el-text-secondary</code> italic).</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 3 — Non-epic detail (a story, public viewer)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 3 — Public viewer · a NON-epic (story) detail
+      <span class="note"
+        >· same surface for a non-epic — a Parent link to its epic + its own child tasks panel</span
+      >
+    </div>
+    <div class="panel">
+      <div class="pub-shell">
+        <div class="pub-topbar">
+          <div class="pub-brand">
+            <span class="pub-logo">M</span>
+            <span class="pub-proj">Motir</span>
+            <span class="pub-key">PROD</span>
+          </div>
+          <div class="topbar-cta">
+            <a class="btn btn-outline" href="#">Sign in</a>
+            <a class="btn btn-primary" href="#">Start free</a>
+          </div>
+        </div>
+        <div class="pub-banner">
+          <span class="ic"
+            ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+          ></span>
+          <span
+            ><b>You’re viewing a public project.</b> <span class="dot">·</span> Anyone can view it —
+            no account needed. Sign in to submit, upvote, or comment on requests.</span
+          >
+        </div>
+        <div class="pub-subbar">
+          <nav class="seg" aria-label="Public views">
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-bookopen" /></svg></span
+              >Overview</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg></span
+              >Board</a
+            >
+            <a class="on" href="#" aria-current="page"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-list" /></svg></span
+              >Work items</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-listtree" /></svg></span
+              >Tree</a
+            >
+            <a href="#"
+              ><span class="ic"
+                ><svg viewBox="0 0 24 24"><use href="#i-route" /></svg></span
+              >Roadmap</a
+            >
+          </nav>
+          <span class="readonly-note">
+            <span class="ic"
+              ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+            ></span>
+            View-only — you can’t edit work items
+          </span>
+        </div>
+        <div class="pub-body">
+          <div class="detail">
+            <div class="detail-main">
+              <div>
+                <div class="crumbs">
+                  <a href="#">Work items</a>
+                  <span class="sep">/</span>
+                  <a href="#">PROD-12</a>
+                  <span class="sep">/</span>
+                  <span>PROD-13</span>
+                </div>
+                <div class="detail-head">
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="lr-id">PROD-13</span>
+                  <h2>Passwordless email sign-in</h2>
+                  <span class="pill pill--inprogress">In progress</span>
+                </div>
+              </div>
+              <div class="card panel-box">
+                <p class="section-label">Description</p>
+                <div class="prose">
+                  <p>
+                    Let people sign in with a one-time link sent to their email — no password to
+                    remember. Covers the request screen, the magic-link email, and the
+                    <strong>callback verification</strong>.
+                  </p>
+                </div>
+              </div>
+              <div class="card panel-box">
+                <p class="section-label">Child issues</p>
+                <div class="child-list">
+                  <a class="child-row" href="#">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="lr-id">PROD-14</span>
+                    <span class="ctitle">Magic-link email template</span>
+                    <span class="pill pill--done">Done</span>
+                  </a>
+                  <a class="child-row" href="#">
+                    <span class="type-icon t-task"
+                      ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                    ></span>
+                    <span class="lr-id">PROD-17</span>
+                    <span class="ctitle">Callback token verification</span>
+                    <span class="pill pill--inprogress">In progress</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div class="card side-card">
+              <div class="side-row">
+                <span class="k">Status</span><span class="v">In progress</span>
+              </div>
+              <div class="side-row">
+                <span class="k">Type</span>
+                <span class="v"
+                  ><span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                  >Story</span
+                >
+              </div>
+              <div class="side-row">
+                <span class="k">Parent</span>
+                <span class="v"><a href="#">PROD-12 · Q3 launch</a></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >A non-epic parent works the same way — its own child tasks render in the "Child issues"
+        panel with the same stripped row grammar, and the sidebar carries a <b>Parent</b> link up to
+        its epic. (A leaf item with no children would simply omit the "Child issues" panel; the
+        empty-with-children case is panel 4a.)</span
+      >
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 4 — States (empty · loading · error · not-found)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4 — States
+      <span class="note"
+        >· empty (no children) · loading skeleton · error · not-found / not public</span
+      >
+    </div>
+    <div class="panel states">
+      <!-- 4a · EMPTY — an epic with no (real, non-private) children -->
+      <div class="state-box">
+        <p class="state-cap">4a · Empty — an epic with no children</p>
+        <div class="card panel-box">
+          <p class="section-label">Child issues</p>
+          <div class="empty">
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+            ></span>
+            <h3>No child issues yet</h3>
+            <p>This epic has no stories or tasks yet.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4b · LOADING — skeleton for header + child panel -->
+      <div class="state-box">
+        <p class="state-cap">4b · Loading — skeleton</p>
+        <div class="card panel-box">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 18px">
+            <span
+              class="sk"
+              style="width: 24px; height: 24px; border-radius: var(--radius-control)"
+            ></span>
+            <span class="sk" style="width: 64px; height: 12px"></span>
+            <span class="sk" style="width: 220px; height: 16px"></span>
+          </div>
+          <p class="section-label">Child issues</p>
+          <div class="child-list" aria-hidden="true">
+            <div class="sk-row">
+              <span
+                class="sk"
+                style="width: 18px; height: 18px; border-radius: var(--radius-control)"
+              ></span>
+              <span class="sk" style="width: 56px; height: 11px"></span>
+              <span class="sk sk-line" style="flex: 1; max-width: 280px"></span>
+              <span
+                class="sk"
+                style="width: 72px; height: 18px; border-radius: var(--radius-badge)"
+              ></span>
+            </div>
+            <div class="sk-row">
+              <span
+                class="sk"
+                style="width: 18px; height: 18px; border-radius: var(--radius-control)"
+              ></span>
+              <span class="sk" style="width: 56px; height: 11px"></span>
+              <span class="sk sk-line" style="flex: 1; max-width: 220px"></span>
+              <span
+                class="sk"
+                style="width: 72px; height: 18px; border-radius: var(--radius-badge)"
+              ></span>
+            </div>
+            <div class="sk-row">
+              <span
+                class="sk"
+                style="width: 18px; height: 18px; border-radius: var(--radius-control)"
+              ></span>
+              <span class="sk" style="width: 56px; height: 11px"></span>
+              <span class="sk sk-line" style="flex: 1; max-width: 320px"></span>
+              <span
+                class="sk"
+                style="width: 72px; height: 18px; border-radius: var(--radius-badge)"
+              ></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4c · ERROR — the item failed to load -->
+      <div class="state-box">
+        <p class="state-cap">4c · Error</p>
+        <div class="card panel-box">
+          <div class="empty">
+            <span class="ic-wrap err-ic"
+              ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ></span>
+            <h3>Couldn’t load this item. Try again.</h3>
+            <p>Something went wrong loading this view.</p>
+            <div class="empty-action">
+              <button class="btn btn-outline btn-lg" type="button">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-refresh" /></svg
+                ></span>
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4d · NOT FOUND / NOT PUBLIC — a non-public item 404s (no existence leak) -->
+      <div class="state-box">
+        <p class="state-cap">
+          4d · Not found / not public (a non-public item 404s — no existence leak)
+        </p>
+        <div class="card panel-box">
+          <div class="empty">
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+            ></span>
+            <h3>This item isn’t available</h3>
+            <p>It may be private or may not exist.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="anno">
+      <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+      <span
+        >The empty (4a) and not-public (4d) cases carry deliberately different copy: an epic with
+        zero public children says "No child issues yet"; a private or non-existent item resolves to
+        a single 404 (4d) so the public can’t distinguish "private" from "doesn’t exist" — no
+        existence leak.</span
+      >
+    </div>
+  </body>
+</html>
