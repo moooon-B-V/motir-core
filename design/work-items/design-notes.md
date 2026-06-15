@@ -2332,3 +2332,156 @@ badge`, `--spacing-control/chip-*`, `--height-control`,
   grammar.
 - If a genuinely new primitive is ever needed, that is a NEW `design/` subtask
   — not a 2.7.4 code workaround.
+
+---
+
+## Delete a work item — confirm UX (Story 2.8 · 2.8.1 → 2.8.4)
+
+Asset: `delete-confirm.mock.html` designs the **permanent delete** flow for
+Story 2.8 (Jira-parity hard delete with a **subtree cascade**), shown next to
+the already-shipped soft **archive** (`workItemsService.archiveWorkItem` —
+`archivedAt`, single-node, reversible). 2.8.1 is the design gate; the UI code
+(delete action + confirm dialog on detail / list / board, permission-gated) is
+2.8.4, blocked on this.
+
+**The two destructive actions are kept deliberately distinct** — this is the
+whole point of the surface:
+
+| Action      | Reversible       | Scope                      | Confirm                         | Gate        |
+| ----------- | ---------------- | -------------------------- | ------------------------------- | ----------- |
+| **Archive** | Yes (restorable) | Single node (kids stay)    | inline / lightweight            | `canEdit`   |
+| **Delete**  | No (permanent)   | The whole subtree, cascade | `alertdialog` — count + warning | `canDelete` |
+
+**Mirror check (rung 1 — Atlassian + Linear):** Jira's delete confirm warns the
+action is permanent, **names the cascade** ("This issue has N sub-tasks that
+will also be deleted"), and offers no type-to-confirm for a normal issue — a
+single Cancel / Delete pair. We match that exactly and reuse the **5.3.6
+delete-with-count** dialog grammar (`saved-filters.mock.html` panel 4): a real
+`role="alertdialog"`, consequences **named in text** (never colour-only), a
+dependents list, and a destructive button labelled with the action + magnitude.
+
+### The six panels
+
+| Panel | Surface                                                                      |
+| ----- | ---------------------------------------------------------------------------- |
+| 0     | Entry point — the **work-item detail** ⋯ actions menu, open (permitted)      |
+| 1     | Entry points — **list row** + **board card** ⋯ menus, and the **gated** menu |
+| 2     | Confirm dialog — **parent with descendants** (the cascade)                   |
+| 3     | Confirm dialog — **leaf** item (no descendants)                              |
+| 4     | States — **in-flight** (deleting) · **error** (failed, retryable)            |
+| 5     | Legend — the archive-vs-delete table + copy index                            |
+
+### Entry points (panels 0–1)
+
+- The ⋯ menu is the shipped `Popover` actions menu (RowActionsMenu vocabulary),
+  identical on detail / list / board. Order: `Edit details` · `Copy link` · _—
+  separator —_ · `Archive` · `Delete…`. **Delete is the only danger-coloured
+  row**; its trailing `…` signals a confirm step follows (it never deletes on
+  click), and the separator + colour make Archive and Delete impossible to
+  confuse.
+- **Permission-gated, Jira-faithfully.** `Delete` needs the project
+  `canDelete` permission (Jira's "Delete Issues" project permission,
+  project-admin by default); `Archive` needs `canEdit`. A user without a
+  permission **doesn't see that row at all** — the action is _hidden, never
+  shown-disabled_ (the mirror's behaviour) — so the gated viewer's menu in
+  panel 1 collapses to just `Copy link`.
+
+### The confirm dialog (panels 2–3)
+
+- A real `role="alertdialog"` (the shipped `Modal` chrome — `--radius-modal` /
+  `--shadow-modal`) with `aria-labelledby`/`aria-describedby`. **Cancel takes
+  default focus**, and `Esc` / the ✕ both cancel — the safe default for a
+  destructive dialog.
+- **Cascade case (panel 2):** the body warns it permanently deletes the named
+  item "and everything beneath it. **This can't be undone.**" A `dep-list`
+  (the 5.3.6 grammar) names the consequences: the **descendant count with a
+  per-kind breakdown** ("7 descendants will also be deleted — 5 subtasks, 1
+  task, 1 bug"), that comments/attachments/history on all N items go too, and
+  that inbound links are removed. The destructive button states the
+  magnitude — **"Delete 8 items"** = `1 + descendants` — so the count is on the
+  button you press, not just in the prose.
+- **Leaf case (panel 3):** the cascade row drops out, the copy reads "It has no
+  child items.", and the button reads **"Delete work item"** (no magnitude). The
+  irreversibility warning, the comments/history note, and the Archive
+  alternative stay.
+- **Archive as the reversible alternative** lives _inside_ the same dialog: a
+  mint callout ("Just want it out of the way? **Archive** hides this item but
+  keeps it and its history…") with an `Archive instead` link — the one-click
+  safe exit, so a user who opened Delete by reflex can still down-shift to the
+  recoverable action without dismissing and re-finding the menu.
+
+### States (panel 4)
+
+- **In-flight:** the dialog is `aria-busy`, both buttons disabled, the danger
+  button shows a spinner + `Deleting…` — so a slow cascade can't be
+  double-fired.
+- **Error:** a `role="alert"` rose callout states the delete is **atomic** — it
+  either fully cascades or changes nothing — so a failed attempt leaves the
+  subtree intact ("Nothing was changed — the item and its descendants are
+  intact."); the danger button becomes `Try again`.
+
+### Copy strings
+
+Menu: `Edit details` · `Copy link` · `Archive` · `Delete…` · |
+Dialog title: `Delete this work item?` · |
+Cascade body: `This permanently deletes [KEY] “[title]” and everything beneath it. This can't be undone.` · |
+Leaf body: `This permanently deletes [KEY] “[title]”. It has no child items. This can't be undone.` · |
+Cascade rows: `N descendants will also be deleted — [kind breakdown].` · `All comments, attachments, and activity history on these N items go with them.` · `Links from other items (blocks, relates to, duplicates) are removed.` · |
+Leaf row: `Its comments, attachments, and activity history are deleted too.` · |
+Archive callout: `Just want it out of the way? Archive hides this item but keeps it and its history — and leaves its descendants live. You can restore it later.` · `Archive instead` · |
+Buttons: `Cancel` · `Delete N items` / `Delete work item` · `Deleting…` · `Try again` · |
+Error: `Couldn't delete this item. Nothing was changed — the item and its descendants are intact. Check your connection and try again.`
+
+All copy goes in the issues i18n namespace (the locale set the app ships).
+
+### Tokens / a11y
+
+- Colour only via Tier-3 `--el-*`: the danger menu row + the destructive button
+  use `--el-danger` (`--el-danger-text` on the fill); the cascade `dep-list`
+  glyphs use `--el-warning`; the **archive callout** uses `--el-tint-mint` +
+  `--el-success` (the safe/recoverable cue, a deliberate green contrast to the
+  red delete). **Tier 0 has no red tint**, so the error callout uses
+  `--el-tint-rose` background + a `--el-danger` border/icon with
+  `--el-text-strong` body — the design system's honest danger surface, **no new
+  Tier-0 colour**. No page-level tint.
+- Shape via element-semantic tokens only (`--radius-modal/card/control/badge`,
+  `--spacing-card-padding`/`-control-*`/`-chip-*`, `--height-btn-md`,
+  `--shadow-modal/elevated/subtle`) — every surface reshapes under
+  `data-display-style`.
+- **No new primitive** — the menu is `Popover`, the dialog is `Modal`, the
+  buttons are `Button` (`danger` / `secondary` variants), the dep-list + callout
+  reuse the 5.3.6 grammars.
+- A11y: `role="alertdialog"` + labelled/described; **every consequence is in
+  words, never colour alone** (the count, the irreversibility, the atomicity);
+  Cancel is default focus, `Esc`/✕ cancel; in-flight is `aria-busy` + disabled;
+  the error is `role="alert"`. Light + dark parity via the token flip (toggle in
+  the mock).
+
+### Out of scope (documented extension slots)
+
+- **The cascade COUNT backend** — the subtree count + per-kind breakdown the
+  dialog reads before opening (2.8.x service), and the **atomic cascade
+  delete** transaction itself (2.8.x); this asset only specifies the UX they
+  feed.
+- **Bulk delete** from a list/board multi-select — the single-item flow ships;
+  multi-select bulk delete (with an aggregated count) is a later list-surface
+  extension.
+- **Restore / trash bin** — delete is permanent by design; an undo window or a
+  recycle bin is NOT in 2.8 (archive is the recoverable path). If ever wanted,
+  it is its own story.
+- **Type-to-confirm** for very large cascades — deliberately omitted to match
+  the mirror (Jira asks no typed confirmation for a normal issue); revisit only
+  with a concrete use case (the justified-deviation rule).
+- **Audit/event emission** on delete (who deleted what) — an activity/audit
+  concern owned by the revisions/activity surface, not this dialog.
+
+### Primitives composed (no hand-rolling)
+
+- **Entry menus** → `Popover` actions menu (RowActionsMenu vocabulary).
+- **Confirm dialog** → the shipped `Modal` (`role="alertdialog"`).
+- **Buttons** → `Button` (`danger` for delete, `secondary` for cancel, the
+  `loading` spinner state for in-flight).
+- **Cascade dep-list + archive/error callouts** → the 5.3.6
+  delete-with-count + note-line grammars (`saved-filters.mock.html`).
+- If a genuinely new primitive is ever needed, that is a NEW `design/` subtask
+  — not a 2.8.4 code workaround.
