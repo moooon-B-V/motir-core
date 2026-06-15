@@ -18,16 +18,38 @@ no Pencil→code gap.
 > "account-required, not anonymous" framing for READ, mirrors the 6.13
 > project-square revision, and resolves its anonymous click-through knock-on.
 
-| Surface                       | Asset                          | Gates                                                                          |
-| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
-| **Public Overview / README**  | `public-projects.mock.html`    | **6.12.4** (render) + **6.12.8** (the authoring editor)                        |
-| **Edit overview** (admin)     | `public-projects.mock.html`    | **6.12.8** (split Markdown editor + live preview)                              |
-| **Public read-only view**     | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                        |
-| **Public roadmap**            | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                           |
-| **Submit + duplicate detect** | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                         |
-| **Request detail**            | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                              |
-| **Make-public + share link**  | `public-projects.mock.html`    | **6.12.8** (the four-level Access control + the link)                          |
-| **Public work-item DETAIL**   | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder) |
+> **⚠️ Reframe (Story 6.17, 2026-06-15).** The `public` access level is now
+> **presented as a status — "Building in public"** — not a bare dropdown option.
+> Nothing about the access MODEL changes (it is still the same 4th
+> `ProjectAccessLevel = public`, the same public projection, the same
+> sign-in-to-act writes); only its **presentation + discoverability** change.
+> Three additions, each a UI subtask gated on this asset: **(6.17.2)** the
+> make-public control + copy reframed to "Building in public" with an
+> **explainer/confirm** step; **(6.17.3)** a **discoverable entry point** for
+> non-public projects (a Settings → General promo card + a dismissible
+> project-shell nudge — NOT a bare dropdown option); **(6.17.4)** a **"Building in
+> public" status badge** on the project (authed shell header + settings) when
+> access = `public`, plus the **stop/manage path** (a reverse "stop building in
+> public" confirm). Panels **10–12** below; the header badge in Panels 1–2 and the
+> access option in Panel 6 are reframed to match. Mirror (rung 1): the
+> build-in-public posture is the GitHub "make public" + Canny / Productboard
+> "public portal" flow, surfaced as an opt-in **activity** the way Vercel / Linear
+> surface "make public" / "share" as a first-class action rather than a buried
+> setting.
+
+| Surface                       | Asset                          | Gates                                                                              |
+| ----------------------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| **Public Overview / README**  | `public-projects.mock.html`    | **6.12.4** (render) + **6.12.8** (the authoring editor)                            |
+| **Edit overview** (admin)     | `public-projects.mock.html`    | **6.12.8** (split Markdown editor + live preview)                                  |
+| **Public read-only view**     | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                            |
+| **Public roadmap**            | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                               |
+| **Submit + duplicate detect** | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                             |
+| **Request detail**            | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                  |
+| **Make-public + share link**  | `public-projects.mock.html`    | **6.12.8** (the four-level Access control + the link)                              |
+| **Public work-item DETAIL**   | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)     |
+| **Build-in-public reframe**   | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11             |
+| **Build-in-public entry pt**  | `public-projects.mock.html`    | **6.17.3** (Settings General promo + shell nudge → confirm → go public) — Panel 10 |
+| **Build-in-public badge**     | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                     |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 `6.12.1` in `dependsOn` and is `blocked` until this asset lands. The
@@ -108,6 +130,22 @@ duplicate-detection portal set.
    a semantic HTML outline, and the GEO answer-engine framing (the Overview/README
    as the citable description + an FAQ). States the read-anonymous /
    write-needs-sign-in / internal-fields-stripped facts.
+10. **(10)** **Build-in-public ENTRY POINT** (6.17.3) — the two discoverable
+    placements for a NOT-yet-public project: a **Settings → General promo card**
+    (the durable home — megaphone hero + 3 what's-shared bullets + a primary
+    "Start building in public" CTA) and a **dismissible project-shell nudge** (a
+    one-time admin strip in the header). Both open the explainer/confirm (panel 11);
+    it is **never** a bare access-dropdown option.
+11. **(11)** **EXPLAINER / CONFIRM** (6.17.2) — the "Start building in public?"
+    Modal: a lead paragraph + a "What becomes public" list (board + roadmap; work
+    items crawlable; sign-in only to act; internal fields stay stripped) + a
+    reassurance note (stop anytime, requests kept) + a Cancel / "Start building in
+    public" footer.
+12. **(12)** **STATUS badge + STOP / manage path** (6.17.4) — the "Building in
+    public" badge shown in the authed project-shell header + settings access row
+    when access = `public`, the manage row (View public page · Stop), and the
+    reverse **"Stop building in public?"** confirm Modal (warn tone — page goes
+    offline, link stops working, requests/upvotes kept).
 
 ## Where it lives
 
@@ -349,6 +387,75 @@ The dedicated authoring surface for `publicOverviewMd` — a \*\*split Markdown 
 
 ---
 
+## Build in public (Story 6.17 · gate 6.17.1) — Panels 10–12
+
+A **presentation + discoverability** layer over the existing `public` access
+level (Story 6.12). The model is unchanged: `setAccessLevel('public')` is still
+the single mutation, the public projection still strips internal fields, and the
+three writes still require sign-in. Story 6.17 only changes how that level is
+**named, discovered, confirmed, and signposted**. Three code subtasks, all gated
+on this asset (`dependsOn: 6.17.1`, `blocked` until it lands):
+
+### The reframe — "Building in public", not "Public" (6.17.2 · Panels 6 + 11)
+
+- **The make-public control** (Panel 6) renames the first `access-opt` from
+  "Public" to **"Building in public"** (`#i-megaphone`, `--el-build-glyph` accent
+  glyph), carries a **"Live"** `pill-building` status chip on the selected option,
+  and reframes the copy to the build-in-public framing — explicitly noting it is
+  "the same `public` access level, presented as a status you can start and stop
+  anytime." The other three options (Open / Limited / Private) are unchanged.
+  6.17.2 keeps calling the shipped 6.4 `setAccessLevel` with the `public` enum
+  value — **reframe the label, never fork the model**.
+- **The explainer / confirm** (Panel 11) is a `Modal` (size md) opened from the
+  control AND from either entry point (Panel 10). It does NOT flip access on
+  open — the mutation fires only on the footer confirm. Body: a lead paragraph
+  - a **"What becomes public"** `vis-list` whose rows carry distinct semantic
+    glyphs (`yes` = `--el-success` check, `gate` = `--el-info` lock for
+    sign-in-to-act, `strip` = `--el-text-faint` eye-off for stays-private), a
+    `modal-note` (stop-anytime / requests-kept reassurance), and a Cancel /
+    "Start building in public" `btn-primary` footer.
+
+### The discoverable entry point (6.17.3 · Panel 10)
+
+A non-public project gets **two** placements — never a bare dropdown option (the
+explicit anti-pattern):
+
+- **(a) Settings → General promo card** (`.promo`) — the **durable home**. A
+  bordered card with a soft decorative corner-wash (the same `--el-hero-wash-*`
+  tints, text on `--el-page-bg` so AA holds — finding #35), an accent-filled
+  `promo-glyph` megaphone, a serif headline + sub, a 3-row `promo-bul`
+  what's-shared list, and a `promo-actions` row (**"Start building in public"**
+  `btn-primary btn-lg` + a "Learn more" ghost). Always present for an admin on a
+  non-public project.
+- **(b) A dismissible project-shell nudge** (`.nudge`) — the **discovery**
+  surface. A one-time, dismissible strip (accent left-border, `#i-rocket` lead
+  glyph, title + sub, a "Start building in public" `btn-primary`, an `#i-x`
+  `nudge-close`). Shows once to project admins; dismissible; not persistent
+  chrome.
+
+Both open the Panel-11 confirm → on confirm, `setAccessLevel('public')` and the
+project goes public. (Both placements are rendered inside a dashed `ctx-strip` /
+`ctx-wrap` frame in the mock — that frame is mock-only context labelling, NOT a
+shipped element.)
+
+### The status badge + stop / manage path (6.17.4 · Panels 1, 2, 12)
+
+- **The badge** is a `pill-building` (lavender `--el-build-bg` + AA-safe
+  `--el-build-text` + accent `--el-build-glyph` megaphone) reading **"Building in
+  public"**. It appears wherever the project is identified to its team while
+  access = `public`: the **authed project-shell header** (Panel 12) and the
+  **settings access row** (Panel 12), and the **public visitor chrome** top bar
+  (Panels 1–2, reframed from the old "Public" globe chip). It disappears the
+  moment building-in-public is stopped.
+- **The manage row** (Panel 12) pairs the badge with the live public URL, a
+  **"View public page"** outline (`#i-external-link`), and a **"Stop"**
+  `btn-danger`.
+- **The reverse confirm** (Panel 12) is a warn-toned `Modal` (`modal-glyph.warn`
+  yellow `#i-eye-off`): a `vis-list` of what happens (page goes offline · link
+  stops working · requests / upvotes / comments **kept** — nothing deleted) + a
+  `modal-note.warn` (can restart anytime) + a Cancel / "Stop building in public"
+  `btn-danger` footer. Stopping reverts to the project's previous access level.
+
 ## Public work-item DETAIL page (Story 6.14 · gate 6.14.12) — `public-item-detail.mock.html`
 
 The read-only PUBLIC work-item detail page at `/p/[identifier]/items/[key]` — the
@@ -423,25 +530,30 @@ It is the host surface for two code subtasks: **6.14.11** (build the page) and
 
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
-| Element                          | Token                                                                              |
-| -------------------------------- | ---------------------------------------------------------------------------------- |
-| Public chip / banner background  | `--el-public-banner-bg` (→ `--color-tint-sky`)                                     |
-| Public chip / banner text        | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)         |
-| Public-chip / banner glyph       | `--el-info`                                                                        |
-| Upvote control (resting)         | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                      |
-| Upvote control (voted)           | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`              |
-| Roadmap status headers           | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint) |
-| Status header / org text         | `--el-text-strong` on the tint (AA-safe)                                           |
-| Work-item type icon (board/kind) | `--el-type-{task,bug,story,epic}`                                                  |
-| Priority pills                   | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`     |
-| Selected access option           | `--el-accent` border + `color-mix(--el-accent 7%)` tint                            |
-| Disable link button              | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)       |
-| Rate-limit banner                | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                      |
-| Success confirmation badge       | `--el-tint-mint` + `--el-success`                                                  |
-| Error glyph                      | `--el-tint-rose` + `--el-danger`                                                   |
-| Overview hero corner washes      | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`  |
-| Hero logo / CTA card accent      | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                 |
-| README feature-list ticks        | `--el-success`; links `--el-link`                                                  |
+| Element                          | Token                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Public chip / banner background  | `--el-public-banner-bg` (→ `--color-tint-sky`)                                                         |
+| Public chip / banner text        | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)                             |
+| Public-chip / banner glyph       | `--el-info`                                                                                            |
+| Upvote control (resting)         | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                                          |
+| Upvote control (voted)           | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                                  |
+| Roadmap status headers           | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)                     |
+| Status header / org text         | `--el-text-strong` on the tint (AA-safe)                                                               |
+| Work-item type icon (board/kind) | `--el-type-{task,bug,story,epic}`                                                                      |
+| Priority pills                   | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`                         |
+| Selected access option           | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                                |
+| Disable link button              | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)                           |
+| Rate-limit banner                | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                                          |
+| Success confirmation badge       | `--el-tint-mint` + `--el-success`                                                                      |
+| Error glyph                      | `--el-tint-rose` + `--el-danger`                                                                       |
+| Overview hero corner washes      | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`                      |
+| Hero logo / CTA card accent      | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                                     |
+| README feature-list ticks        | `--el-success`; links `--el-link`                                                                      |
+| "Building in public" badge       | `--el-build-bg` (→ lavender) + `--el-build-text` (charcoal, AA), `--el-build-glyph` (accent) megaphone |
+| Entry-point promo glyph / CTA    | `--el-accent` fill + `--el-accent-text`; promo wash = `--el-hero-wash-*` over `--el-page-bg`           |
+| Shell nudge accent               | `--el-accent` left-border + lead glyph, on `--el-surface-soft`                                         |
+| Explainer "becomes public" list  | `yes` `--el-success` · `gate` `--el-info` · `strip` `--el-text-faint` glyphs                           |
+| Stop-confirm warn glyph / note   | `--el-tint-yellow` + `--el-warning` (`modal-glyph.warn`, `modal-note.warn`)                            |
 
 **Palette, not grey-only (finding #54):** the roadmap uses four distinct status
 tints, the upvote uses the accent, kinds use their type hues, the Overview hero +
@@ -455,7 +567,12 @@ pattern, mistake #20): `--el-public-banner-bg`, `--el-public-banner-text`,
 `--el-vote-bg`, `--el-vote-active-bg`, `--el-vote-active-text`,
 `--el-roadmap-submitted`, `--el-roadmap-planned`, `--el-roadmap-progress`,
 `--el-roadmap-done`, **`--el-hero-wash-a`, `--el-hero-wash-b`**. Consume the
-`--el-*` token, never the Tier-0 value directly.
+`--el-*` token, never the Tier-0 value directly. **Story 6.17 adds three more**
+(6.17.2/6.17.4): **`--el-build-bg`** (→ `--color-tint-lavender`),
+**`--el-build-text`** (→ `--color-charcoal`, AA ~10:1 on the lavender tint), and
+**`--el-build-glyph`** (→ `--color-primary`, the megaphone accent) — the
+"Building in public" status badge + the reframed access option. Same growth rule:
+add to Tier 3, consume via `--el-*`.
 
 ## Shape roles (every shaped surface via the `[data-display-style]` tokens)
 
@@ -529,9 +646,12 @@ swap layer must reach every element).
   attribute it to your account."** · **"View roadmap" / "Submit another"**.
 - Request detail: **"opened by {name}"** · **"N comments"** · composer placeholder
   **"Add a comment…"** · **"Comment"**.
-- Access levels: **"Public"** — _"Anyone on the web can view this project — no
-  account needed, and it's indexable by search engines. Visitors sign in only to
-  submit, upvote, or comment. They can't edit anything else."_ · **"Open"** —
+- Access levels: **"Building in public"** (reframed from "Public" by 6.17.2;
+  badge label **"Live"**) — _"Publish the project to the web as a build-in-public
+  page — anyone can follow the board, roadmap, and work items (no account needed,
+  indexable by search engines). Visitors sign in only to submit, upvote, or
+  comment; they can't edit anything else. This is the same `public` access level,
+  presented as a status you can start and stop anytime."_ · **"Open"** —
   _"Any member of this workspace can view and edit."_ · **"Limited"** — _"Any
   member of this workspace can view and comment, but not edit."_ · **"Private"** —
   _"Only people added to this project can see it."_
@@ -551,11 +671,41 @@ swap layer must reach every element).
   first — submit a bug or feature request for this project."** / **"Couldn't load
   this project"** / **"You're submitting a little too fast. … Your draft is
   saved."** / **"Retry" / "Keep editing"**.
+- Build in public — status badge (6.17.4): **"Building in public"** (+ short form
+  **"Live"** on the access option). Entry-point promo (6.17.3):
+  **"Build this project in public"** · **"Turn the project into a public
+  build-in-public page."** · bullets **"Share your board, roadmap, and work items
+  with anyone — no account needed, indexable by search engines."** / **"Let people
+  submit, upvote, and comment on requests (they sign in only to act)."** /
+  **"Internal fields stay private — assignees, estimates, and internal comments
+  are never shown."** · **"Start building in public"** (CTA) · **"Learn more"**.
+  Shell nudge: **"Want eyes on your work?"** · **"Build this project in public —
+  share the roadmap and collect requests."** · **"Start building in public"**.
+  Start explainer (6.17.2): **"Start building in public?"** · _"Your project
+  becomes a public page anyone on the web can open — no account needed, and search
+  engines can index it. Here's exactly what changes:"_ · **"What becomes public"**
+  · **"Your board and roadmap — status, progress, and what's shipping."** /
+  **"Your work items — titles, types, and descriptions, crawlable by search
+  engines."** / **"Visitors sign in only to submit a request, upvote, or comment —
+  they can't edit anything."** / **"Stays private: assignees, estimates, and
+  internal comments are never shown."** · _"You can stop building in public
+  anytime — the page goes offline and the public link stops working. Submitted
+  requests and upvotes are kept."_ · **"Cancel" / "Start building in public"**.
+  Manage / stop (6.17.4): **"View public page" / "View" / "Stop"** · Stop confirm:
+  **"Stop building in public?"** · _"The project goes back to its previous access.
+  Here's what happens:"_ · **"The public page goes offline — visitors and search
+  engines can no longer open it."** / **"The public link stops working until you
+  build in public again."** / **"Submitted requests, upvotes, and comments are
+  kept — nothing is deleted."** · _"You can start building in public again anytime
+  from Settings."_ · **"Cancel" / "Stop building in public"**.
 
 ## Primitives composed (no hand-rolling)
 
 `Card` · `Button` (primary / outline / ghost / danger-tinted) · `Pill` (neutral +
-tint tones + the public chip) · `IssueTypeIcon` (kind hue via `--el-type-*`) ·
+tint tones + the public chip + the "Building in public" `pill-building` status
+chip) · `Modal` (the build-in-public start + stop confirm/explainer dialogs — the
+shipped `components/ui/Modal.tsx`, size md, no new primitive) · `IssueTypeIcon`
+(kind hue via `--el-type-*`) ·
 `Avatar` (initial-letter) · `Segmented` (the view nav + the type toggle) ·
 `FormField` + `Input` + `Textarea` (the submit form + comment composer) ·
 `MarkdownView` (the Overview README render) · `MarkdownEditor` (the settings
@@ -565,7 +715,11 @@ upvote control is the one NEW composite (a bordered `--radius-control`
 chevron+count) — it is not a new primitive vocabulary, just an arrangement of an
 icon + a number + the tokens; it maps to a small `components/ui` control 6.12.6
 adds. The Overview hero is likewise a NEW arrangement (logo + serif heading +
-pills + CTA row + stat strip), not a new primitive.
+pills + CTA row + stat strip), not a new primitive. The build-in-public
+entry-point **promo card** and **shell nudge** (6.17.3) are also arrangements of
+existing primitives (`Card` + accent glyph + serif heading + bullet list +
+`Button`s; an accent-bordered strip + glyph + `Button` + close), not new
+primitive vocabulary.
 
 ## Planning delta (this design iteration adds scope — reflected in the seed)
 

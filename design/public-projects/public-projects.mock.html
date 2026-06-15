@@ -230,6 +230,14 @@
            stays AA via --el-text on --el-page-bg, not on the wash) */
         --el-hero-wash-a: var(--color-tint-lavender);
         --el-hero-wash-b: var(--color-tint-sky);
+        /* Build in public (Story 6.17). The `public` access level reframed as a
+           STATUS. Lavender ties it to the "vibe project" pill; the megaphone glyph
+           takes the accent. AA holds (hue in the tint bg + --el-text-strong text,
+           finding #35). New --el-* roles 6.17.2/6.17.3/6.17.4 add to globals.css
+           Tier 3, each mapped to a Tier-0 value (token-growth pattern, mistake #20). */
+        --el-build-bg: var(--color-tint-lavender); /* the "Building in public" status badge bg */
+        --el-build-text: var(--color-charcoal); /* AA-safe text on the lavender tint */
+        --el-build-glyph: var(--color-primary); /* the megaphone accent glyph */
       }
       [data-theme='dark'] {
         color-scheme: dark;
@@ -2113,6 +2121,392 @@
       .md-prev h3:first-child {
         margin-top: 0;
       }
+
+      /* ════ Build in public (Story 6.17) — reframe + entry + explainer + badge ════ */
+
+      /* The "Building in public" STATUS badge (mirror components/ui/Pill.tsx) —
+         lavender tint + AA-safe strong text + accent megaphone glyph (6.17.4). */
+      .pill-building {
+        background: var(--el-build-bg);
+        color: var(--el-build-text);
+        border: 1px solid transparent;
+      }
+      .pill-building .ic {
+        color: var(--el-build-glyph);
+      }
+
+      /* The discoverable entry point (6.17.3): a Settings → General promo card,
+         and a dismissible project-shell nudge. NOT a bare dropdown option. */
+      .promo {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        background: var(--el-page-bg);
+        padding: var(--spacing-card-padding);
+        overflow: hidden;
+      }
+      /* decorative corner wash — text sits on --el-page-bg, never the wash (finding #35) */
+      .promo::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(120% 80% at 100% 0%, var(--el-hero-wash-a) 0%, transparent 55%),
+          radial-gradient(90% 70% at 0% 100%, var(--el-hero-wash-b) 0%, transparent 55%);
+        opacity: 0.6;
+        pointer-events: none;
+      }
+      .promo > * {
+        position: relative;
+      }
+      .promo-head {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin-bottom: 12px;
+      }
+      .promo-glyph {
+        width: 40px;
+        height: 40px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .promo-glyph .ic {
+        width: 21px;
+        height: 21px;
+      }
+      .promo-head h3 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .promo-head .sub {
+        margin: 2px 0 0;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .promo-bul {
+        list-style: none;
+        margin: 0 0 16px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .promo-bul li {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .promo-bul .ic {
+        width: 15px;
+        height: 15px;
+        margin-top: 1px;
+        flex: none;
+        color: var(--el-success);
+      }
+      .promo-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* the dismissible project-shell nudge strip */
+      .nudge {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 12px 11px 14px;
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .nudge .ic-lead {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-accent);
+      }
+      .nudge .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .nudge .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .nudge .sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+      .nudge-close {
+        width: 28px;
+        height: 28px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .nudge-close:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+
+      /* the shell-context label above the entry placements (mock-only framing) */
+      .ctx-strip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        border: 1px dashed var(--el-border-strong);
+        border-bottom: none;
+        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+      }
+      .ctx-wrap {
+        border: 1px dashed var(--el-border-strong);
+        border-top: none;
+        border-radius: 0 0 var(--radius-card) var(--radius-card);
+        padding: 16px;
+        background: var(--el-page-bg);
+      }
+
+      /* the Modal explainer/confirm (mirror components/ui/Modal.tsx, size md) */
+      .modal {
+        position: relative;
+        width: 460px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .modal-glyph {
+        width: 38px;
+        height: 38px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        background: var(--el-build-bg);
+      }
+      .modal-glyph .ic {
+        width: 20px;
+        height: 20px;
+        color: var(--el-build-glyph);
+      }
+      .modal-glyph.warn {
+        background: var(--el-tint-yellow);
+      }
+      .modal-glyph.warn .ic {
+        color: var(--el-warning);
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 3px 0 0;
+      }
+      .modal-close {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-lead {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        margin: 0 0 14px;
+      }
+      .vis-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 0 0 9px;
+      }
+      .vis-list {
+        list-style: none;
+        margin: 0 0 14px;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .vis-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .vis-list .ic {
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        flex: none;
+      }
+      .vis-list .yes .ic {
+        color: var(--el-success);
+      }
+      .vis-list .gate .ic {
+        color: var(--el-info);
+      }
+      .vis-list .strip .ic {
+        color: var(--el-text-faint);
+      }
+      .vis-list b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .modal-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+        margin-bottom: 4px;
+      }
+      .modal-note .ic {
+        width: 15px;
+        height: 15px;
+        margin-top: 1px;
+        flex: none;
+        color: var(--el-info);
+      }
+      .modal-note.warn {
+        background: var(--el-tint-yellow);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .modal-note.warn .ic {
+        color: var(--el-warning);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--el-border);
+      }
+
+      /* the status-badge gallery + the manage / stop path (6.17.4) */
+      .badge-ctx {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .shellbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .shellbar .crumb {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .shellbar .crumb .sep {
+        color: var(--el-text-faint);
+        margin: 0 7px;
+        font-weight: 400;
+      }
+      .shellbar .spacer {
+        flex: 1;
+      }
+      .manage-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .manage-row .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .manage-row .ttl {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .manage-row .snip {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+        font-family: var(--font-mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .modal-stage {
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 28px;
+        display: flex;
+        justify-content: center;
+      }
     </style>
   </head>
   <body>
@@ -2149,8 +2543,8 @@
             <div>
               <div class="pub-proj">
                 Motir
-                <span class="pill pill-public" style="margin-left: 6px"
-                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
+                <span class="pill pill-building" style="margin-left: 6px"
+                  ><svg class="ic"><use href="#i-megaphone" /></svg> Building in public</span
                 >
               </div>
               <span class="pub-key">PROD · moooon</span>
@@ -2398,8 +2792,8 @@
             <div>
               <div class="pub-proj">
                 Motir
-                <span class="pill pill-public" style="margin-left: 6px"
-                  ><svg class="ic"><use href="#i-globe" /></svg> Public</span
+                <span class="pill pill-building" style="margin-left: 6px"
+                  ><svg class="ic"><use href="#i-megaphone" /></svg> Building in public</span
                 >
               </div>
               <span class="pub-key">PROD · moooon</span>
@@ -2886,12 +3280,17 @@
           <span class="radio"></span>
           <div class="body">
             <div class="ttl">
-              <svg class="ic"><use href="#i-globe" /></svg> Public
+              <svg class="ic"><use href="#i-megaphone" /></svg> Building in public
+              <span class="pill pill-building"
+                ><svg class="ic"><use href="#i-megaphone" /></svg> Live</span
+              >
             </div>
             <div class="dsc">
-              Anyone on the web can view this project — no account needed, and it's indexable by
-              search engines. Visitors sign in only to submit, upvote, or comment. They can't edit
-              anything else.
+              Publish the project to the web as a <b>build-in-public</b> page — anyone can follow
+              the board, roadmap, and work items (no account needed, indexable by search engines).
+              Visitors sign in only to submit, upvote, or comment; they can't edit anything else.
+              This is the same <code>public</code> access level, presented as a status you can start
+              and stop anytime.
             </div>
           </div>
         </div>
@@ -3324,6 +3723,280 @@ open source (GPL-3.0) on [GitHub](#).
                 estimate / internal comments) stay stripped by the public projection.
               </li>
             </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 10 — discoverable "Start building in public" entry point (6.17.3) ════════════════ -->
+    <div class="panel-label">
+      (10) Build in public — discoverable ENTRY POINT for a NOT-yet-public project (6.17.3): a
+      prominent Settings → General promo card + a dismissible project-shell nudge. NOT a bare
+      dropdown option. Each opens the confirm/explainer (Panel 11) → goes public.
+    </div>
+    <div class="panel cols2 uneven">
+      <!-- (a) the durable home: a Settings → General promo card -->
+      <div>
+        <div class="ctx-strip">
+          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-columns" /></svg>
+          Project settings · General
+        </div>
+        <div class="ctx-wrap">
+          <div class="promo">
+            <div class="promo-head">
+              <span class="promo-glyph"
+                ><svg class="ic"><use href="#i-megaphone" /></svg
+              ></span>
+              <div>
+                <h3>Build this project in public</h3>
+                <p class="sub">Turn the project into a public build-in-public page.</p>
+              </div>
+            </div>
+            <ul class="promo-bul">
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Share your board, roadmap, and
+                work items with anyone — no account needed, indexable by search engines.
+              </li>
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Let people submit, upvote, and
+                comment on requests (they sign in only to act).
+              </li>
+              <li>
+                <svg class="ic"><use href="#i-check-check" /></svg> Internal fields stay private —
+                assignees, estimates, and internal comments are never shown.
+              </li>
+            </ul>
+            <div class="promo-actions">
+              <button class="btn btn-primary btn-lg">
+                <svg class="ic"><use href="#i-megaphone" /></svg> Start building in public
+              </button>
+              <button class="btn btn-ghost btn-lg">Learn more</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- (b) the discovery surface: a dismissible project-shell nudge -->
+      <div>
+        <div class="ctx-strip">
+          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-route" /></svg>
+          Project shell · header (one-time, dismissible)
+        </div>
+        <div class="ctx-wrap">
+          <div class="shellbar" style="margin-bottom: 14px">
+            <span class="crumb">Motir <span class="sep">/</span> Board</span>
+            <span class="spacer"></span>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-plus" /></svg> New
+            </button>
+          </div>
+          <div class="nudge">
+            <svg class="ic ic-lead"><use href="#i-rocket" /></svg>
+            <div class="body">
+              <div class="ttl">Want eyes on your work?</div>
+              <div class="sub">
+                Build this project in public — share the roadmap and collect requests.
+              </div>
+            </div>
+            <button class="btn btn-primary">Start building in public</button>
+            <button class="nudge-close" aria-label="Dismiss">
+              <svg class="ic"><use href="#i-x" /></svg>
+            </button>
+          </div>
+          <div class="acct-note" style="margin-top: 14px">
+            <svg class="ic"><use href="#i-shield" /></svg>
+            <span
+              >The nudge shows once to project admins on a non-public project and can be dismissed;
+              the Settings → General card is the durable home. Both open the same confirm step — it
+              is <b>never</b> a bare access-dropdown option.</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 11 — "Start building in public" explainer / confirm (6.17.2) ════════════════ -->
+    <div class="panel-label">
+      (11) The EXPLAINER / CONFIRM step (6.17.2) — what building in public means + exactly what
+      becomes visible + a confirm. Opened from either entry point (Panel 10) or the access control
+      (Panel 6).
+    </div>
+    <div class="panel narrow">
+      <div class="modal-stage">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bip-start-title">
+          <button class="modal-close" aria-label="Close">
+            <svg class="ic"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-head">
+            <span class="modal-glyph"
+              ><svg class="ic"><use href="#i-megaphone" /></svg
+            ></span>
+            <h3 class="modal-title" id="bip-start-title">Start building in public?</h3>
+          </div>
+          <p class="modal-lead">
+            Your project becomes a public page anyone on the web can open — no account needed, and
+            search engines can index it. Here's exactly what changes:
+          </p>
+          <div class="vis-label">What becomes public</div>
+          <ul class="vis-list">
+            <li class="yes">
+              <svg class="ic"><use href="#i-check-check" /></svg>
+              <span
+                >Your <b>board</b> and <b>roadmap</b> — status, progress, and what's shipping.</span
+              >
+            </li>
+            <li class="yes">
+              <svg class="ic"><use href="#i-check-check" /></svg>
+              <span
+                >Your <b>work items</b> — titles, types, and descriptions, crawlable by search
+                engines.</span
+              >
+            </li>
+            <li class="gate">
+              <svg class="ic"><use href="#i-lock" /></svg>
+              <span
+                >Visitors sign in <b>only to</b> submit a request, upvote, or comment — they can't
+                edit anything.</span
+              >
+            </li>
+            <li class="strip">
+              <svg class="ic"><use href="#i-eye-off" /></svg>
+              <span
+                >Stays private: <b>assignees, estimates, and internal comments</b> are never
+                shown.</span
+              >
+            </li>
+          </ul>
+          <div class="modal-note">
+            <svg class="ic"><use href="#i-shield" /></svg>
+            <span
+              >You can stop building in public anytime — the page goes offline and the public link
+              stops working. Submitted requests and upvotes are kept.</span
+            >
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">
+              <svg class="ic"><use href="#i-megaphone" /></svg> Start building in public
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 12 — "Building in public" STATUS badge + stop / manage path (6.17.4) ════════════════ -->
+    <div class="panel-label">
+      (12) STATUS badge + STOP / manage path (6.17.4) — a "Building in public" badge on the project
+      (authed shell header + settings) when access = public, plus the manage row and the reverse
+      "stop" confirm.
+    </div>
+    <div class="panel cols2 uneven">
+      <!-- the badge in context + the manage/stop entry -->
+      <div class="badge-ctx">
+        <div class="ctx-strip">
+          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-route" /></svg>
+          Project shell · header (admin view, when public)
+        </div>
+        <div
+          class="shellbar"
+          style="border-radius: 0 0 var(--radius-card) var(--radius-card); border-top: none"
+        >
+          <span class="crumb">Motir <span class="sep">/</span> Board</span>
+          <span class="pill pill-building"
+            ><svg class="ic"><use href="#i-megaphone" /></svg> Building in public</span
+          >
+          <span class="spacer"></span>
+          <button class="btn btn-outline">
+            <svg class="ic"><use href="#i-external-link" /></svg> View public page
+          </button>
+        </div>
+
+        <div class="ctx-strip" style="margin-top: 6px">
+          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-columns" /></svg>
+          Project settings · access
+        </div>
+        <div
+          class="manage-row"
+          style="border-radius: 0 0 var(--radius-card) var(--radius-card); border-top: none"
+        >
+          <div class="body">
+            <div class="ttl">
+              <span class="pill pill-building"
+                ><svg class="ic"><use href="#i-megaphone" /></svg> Building in public</span
+              >
+            </div>
+            <div class="snip">https://motir.co/p/moooon-motir</div>
+          </div>
+          <button class="btn btn-outline">
+            <svg class="ic"><use href="#i-external-link" /></svg> View
+          </button>
+          <button class="btn btn-danger">
+            <svg class="ic"><use href="#i-x" /></svg> Stop
+          </button>
+        </div>
+        <div class="acct-note">
+          <svg class="ic"><use href="#i-megaphone" /></svg>
+          <span
+            >The badge appears wherever the project is identified to its team while access is
+            <code>public</code>; it disappears the moment building-in-public is stopped. "Stop"
+            opens the confirm at right.</span
+          >
+        </div>
+      </div>
+
+      <!-- the reverse "stop building in public" confirm -->
+      <div>
+        <div class="ctx-strip">
+          <svg class="ic" style="width: 13px; height: 13px"><use href="#i-alert" /></svg>
+          Confirm · stop building in public
+        </div>
+        <div class="ctx-wrap">
+          <div
+            class="modal"
+            style="width: 100%; box-shadow: var(--shadow-card)"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bip-stop-title"
+          >
+            <div class="modal-head">
+              <span class="modal-glyph warn"
+                ><svg class="ic"><use href="#i-eye-off" /></svg
+              ></span>
+              <h3 class="modal-title" id="bip-stop-title">Stop building in public?</h3>
+            </div>
+            <p class="modal-lead">
+              The project goes back to its previous access. Here's what happens:
+            </p>
+            <ul class="vis-list">
+              <li class="strip">
+                <svg class="ic"><use href="#i-eye-off" /></svg>
+                <span
+                  >The public page <b>goes offline</b> — visitors and search engines can no longer
+                  open it.</span
+                >
+              </li>
+              <li class="strip">
+                <svg class="ic"><use href="#i-x" /></svg>
+                <span>The public <b>link stops working</b> until you build in public again.</span>
+              </li>
+              <li class="yes">
+                <svg class="ic"><use href="#i-check-check" /></svg>
+                <span
+                  >Submitted requests, upvotes, and comments are <b>kept</b> — nothing is
+                  deleted.</span
+                >
+              </li>
+            </ul>
+            <div class="modal-note warn">
+              <svg class="ic"><use href="#i-alert" /></svg>
+              <span>You can start building in public again anytime from Settings.</span>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-danger">
+                <svg class="ic"><use href="#i-eye-off" /></svg> Stop building in public
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -3821,6 +4494,38 @@ open source (GPL-3.0) on [GitHub](#).
           <path d="M22 5h-4" />
           <path d="M4 17v2" />
           <path d="M5 18H3" />
+        </symbol>
+        <!-- megaphone -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-megaphone"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 11 18-5v12L3 14v-3z" />
+          <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+        </symbol>
+        <!-- rocket -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-rocket"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+          />
+          <path
+            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
         </symbol>
       </defs>
     </svg>
