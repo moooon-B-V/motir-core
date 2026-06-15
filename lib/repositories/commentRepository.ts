@@ -24,6 +24,15 @@ import { db } from '@/lib/db';
  */
 export type CommentWithReplies = Prisma.CommentGetPayload<{ include: { replies: true } }>;
 
+/**
+ * The bound on the public-request comment thread read (Subtask 6.12.12 — the
+ * at-scale rule: a public detail never loads every comment). The detail shows
+ * the most recent N public comments oldest-first; a longer thread drops its
+ * oldest rows (a "load older" page is a later hardening, like the roadmap's
+ * per-column paging — flagged in the 6.12.12 PR).
+ */
+export const PUBLIC_REQUEST_COMMENT_CAP = 100;
+
 export const commentRepository = {
   /**
    * Insert one comment. Required `tx` — the mention rows the service parses
@@ -119,6 +128,29 @@ export const commentRepository = {
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
+  },
+
+  /**
+   * The PUBLIC-request comment thread for a work item (Subtask 6.12.12) — ONLY
+   * `isPublic` comments, the public feedback thread distinct from the work
+   * item's internal Story-5.1 discussion (`isPublic = false`, which never
+   * crosses the public projection). Public-request comments are flat (6.12.6
+   * always writes `parentCommentId = null`), so this is a flat list, NOT the
+   * threaded `listThreadsByWorkItem` read. Bounded (the at-scale rule): the most
+   * recent {@link PUBLIC_REQUEST_COMMENT_CAP} comments, then reversed to
+   * oldest-first so the composer's optimistic insert appends at the bottom
+   * (chronological). `id` is the total-order tiebreak (same-ms writes). A thread
+   * longer than the cap drops its OLDEST comments, keeping the recent activity.
+   * Read-only path (public detail) → `db` singleton directly, no `tx` param
+   * (CLAUDE.md: a read used only by a read-only service path takes no `tx`).
+   */
+  async listPublicByWorkItem(workItemId: string): Promise<Comment[]> {
+    const rows = await db.comment.findMany({
+      where: { workItemId, isPublic: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: PUBLIC_REQUEST_COMMENT_CAP,
+    });
+    return rows.reverse();
   },
 
   /**

@@ -19,6 +19,7 @@
 
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { CommentDTO } from '@/lib/dto/comments';
 
 // --- Public READ projection (6.12.4) ---------------------------------------
 
@@ -199,6 +200,49 @@ export interface PublicProjectOverviewDto {
   publicOverviewMd: string | null;
   stats: PublicProjectStatsDto;
   links: PublicProjectLinksDto;
+}
+
+// --- Public REQUEST DETAIL (6.12.12) ---------------------------------------
+
+/**
+ * The public request DETAIL payload (Subtask 6.12.12 · design Panel 5) — the
+ * full read behind `/p/<project>/requests/<request>`. It is the public
+ * projection PLUS the request body, the upvote demand signal, and the PUBLIC
+ * comment thread. Like every public DTO it physically cannot carry an internal
+ * field: NO assignee / estimate / story points (absent from the shape), and the
+ * `comments` are ONLY the request's `isPublic` thread — a work item's internal
+ * Story-5.1 discussion never enters this read.
+ */
+export interface PublicRequestDetailDto {
+  id: string;
+  /** "PROD-42" — the work-item identifier the public URL addresses. */
+  identifier: string;
+  /** The per-project monotonic number (PROD-**42**). */
+  key: number;
+  title: string;
+  kind: WorkItemKindDto;
+  /** The workflow status key (e.g. "in_progress"). */
+  status: string;
+  /** The status's display label for the status `Pill`. */
+  statusLabel: string;
+  /** The status category — drives the `Pill` tone (todo / in_progress / done). */
+  statusCategory: StatusCategoryDto;
+  /** The request body Markdown (public-safe), or null when empty. */
+  descriptionMd: string | null;
+  /** The submitter's display name — the "opened by {name}" meta. */
+  openedByName: string;
+  /** ISO timestamp the request was opened (the meta-row age). */
+  createdAt: string;
+  /** Upvote tally across every account (the demand signal). */
+  voteCount: number;
+  /** Whether the CURRENT viewer has upvoted it (always false logged out). */
+  voted: boolean;
+  /**
+   * The PUBLIC comment thread (the request's `isPublic` comments only), oldest
+   * first. The shared {@link CommentDTO} shape — the same shape the comment
+   * POST route returns, so the composer's optimistic append matches the wire.
+   */
+  comments: CommentDTO[];
 }
 
 // --- Public WRITE / duplicate detection (6.12.5) ---------------------------

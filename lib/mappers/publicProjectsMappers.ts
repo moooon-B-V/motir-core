@@ -1,10 +1,12 @@
 import type { Project, WorkItem } from '@prisma/client';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { CommentDTO } from '@/lib/dto/comments';
 import type {
   PublicProjectLinksDto,
   PublicProjectOverviewDto,
   PublicProjectStatsDto,
+  PublicRequestDetailDto,
   PublicRequestMatchDto,
   PublicRoadmapCardDto,
   PublicWorkItemListItemDto,
@@ -108,6 +110,50 @@ export function toPublicProjectOverviewDto(
     publicOverviewMd: project.publicOverviewMd ?? null,
     stats,
     links: toPublicProjectLinksDto(project),
+  };
+}
+
+// --- Request detail (6.12.12) ----------------------------------------------
+
+/**
+ * Map a work-item row + the service-resolved extras → the public request DETAIL
+ * DTO (Subtask 6.12.12). Like the other public mappers this is a pure field
+ * selector: the assignee / estimate / story-point columns on `row` are
+ * deliberately NOT read, so an internal field physically cannot enter the
+ * detail payload. The status label/category, the upvote tally + viewer flag,
+ * the opened-by name, and the already-mapped public `comments` are resolved by
+ * the service (it owns the workflow / vote / user / comment reads) and passed
+ * in — the mapper just shapes them.
+ */
+export function toPublicRequestDetailDto(
+  row: Pick<
+    WorkItem,
+    'id' | 'identifier' | 'key' | 'title' | 'kind' | 'status' | 'descriptionMd' | 'createdAt'
+  >,
+  extras: {
+    statusLabel: string;
+    statusCategory: StatusCategoryDto;
+    openedByName: string;
+    voteCount: number;
+    voted: boolean;
+    comments: CommentDTO[];
+  },
+): PublicRequestDetailDto {
+  return {
+    id: row.id,
+    identifier: row.identifier,
+    key: row.key,
+    title: row.title,
+    kind: row.kind as WorkItemKindDto,
+    status: row.status,
+    statusLabel: extras.statusLabel,
+    statusCategory: extras.statusCategory,
+    descriptionMd: row.descriptionMd ?? null,
+    openedByName: extras.openedByName,
+    createdAt: row.createdAt.toISOString(),
+    voteCount: extras.voteCount,
+    voted: extras.voted,
+    comments: extras.comments,
   };
 }
 
