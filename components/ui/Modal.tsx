@@ -97,6 +97,12 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
    * `bg-black/80` per `design/work-items/attachments.mock.html` panel 6.
    */
   overlayClassName?: string;
+  /**
+   * The dialog's ARIA role. Defaults to Radix's `dialog`; a DESTRUCTIVE confirm
+   * passes `alertdialog` (Subtask 2.8.4's delete confirm) so assistive tech
+   * treats it as an alert that interrupts and announces its description.
+   */
+  role?: 'dialog' | 'alertdialog';
 }
 
 function ModalRoot({
@@ -109,6 +115,7 @@ function ModalRoot({
   srTitle,
   className,
   overlayClassName,
+  role,
   children,
 }: ModalProps) {
   const tc = useTranslations('common');
@@ -128,6 +135,9 @@ function ModalRoot({
         */}
         <Dialog.Content
           className={cn(contentVariants({ size }), className)}
+          // A destructive confirm opts into `alertdialog` (2.8.4); otherwise
+          // Radix's default `dialog` role applies.
+          {...(role ? { role } : {})}
           // Only opt out when there's no description. When `description` is
           // set we omit the prop entirely so Radix keeps auto-wiring
           // aria-describedby to the rendered Dialog.Description's id.

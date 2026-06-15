@@ -44,15 +44,27 @@ const toastVariants = cva(
 
 type ToastVariant = NonNullable<VariantProps<typeof toastVariants>['variant']>;
 
+/** An optional inline action button (e.g. "Undo" after an archive). */
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastItem {
   id: string;
   variant: ToastVariant;
   title: string;
   description?: string;
+  action?: ToastAction;
 }
 
 interface ToastContextValue {
-  toast: (opts: { variant?: ToastVariant; title: string; description?: string }) => void;
+  toast: (opts: {
+    variant?: ToastVariant;
+    title: string;
+    description?: string;
+    action?: ToastAction;
+  }) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -76,9 +88,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const toast = useCallback<ToastContextValue['toast']>(
-    ({ variant = 'info', title, description }) => {
+    ({ variant = 'info', title, description, action }) => {
       const id = crypto.randomUUID();
-      setToasts((prev) => [...prev, { id, variant, title, description }]);
+      setToasts((prev) => [...prev, { id, variant, title, description, action }]);
     },
     [],
   );
@@ -116,6 +128,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   </RadixToast.Description>
                 ) : null}
               </div>
+              {t.action ? (
+                <RadixToast.Action
+                  altText={t.action.label}
+                  onClick={t.action.onClick}
+                  className="shrink-0 self-center rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) font-sans text-xs font-semibold text-(--el-link) hover:bg-(--el-surface) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                >
+                  {t.action.label}
+                </RadixToast.Action>
+              ) : null}
               <RadixToast.Close
                 aria-label={tc('close')}
                 className="text-(--el-text-muted) hover:text-(--el-text) rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
@@ -131,10 +152,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// A no-op fallback for components rendered outside a ToastProvider — a unit test
+// or a surface mounted without the shell. The production root layout always
+// mounts the provider, so this only ever spares a deeply-embedded control (the
+// 2.8.4 ⋯ menu inside a board card / list row) from a hard provider dependency;
+// a stray toast outside the shell silently no-ops rather than crashing render.
+const NO_OP_TOAST: ToastContextValue = { toast: () => {} };
+
 export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error('useToast must be used inside <ToastProvider>');
-  }
-  return ctx;
+  return useContext(ToastContext) ?? NO_OP_TOAST;
 }

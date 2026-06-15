@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
@@ -24,6 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
+import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
@@ -272,14 +272,16 @@ export default async function IssueDetailPage({
                   email: m.email,
                 }))}
               />
-              {canEdit ? (
-                <Link
-                  href={`/issues/${item.identifier}/edit`}
-                  className="border-(--el-border) text-(--el-text) hover:bg-(--el-surface) rounded-md border px-3 py-1.5 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                >
-                  {t('edit')}
-                </Link>
-              ) : null}
+              {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
+                · Delete… (Edit folded in here). Permission-gated: Edit/Archive
+                on canEdit, Delete on canManageProject. */}
+              <WorkItemDetailActions
+                itemId={item.id}
+                identifier={item.identifier}
+                title={item.title}
+                canEdit={canEdit}
+                canManage={canManageProject}
+              />
             </div>
           </div>
           <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>

@@ -31,6 +31,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
     canCreate: true,
     issuesChangedAt: 0,
   }),
+  useNotifyIssuesChanged: () => () => {},
 }));
 
 import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer';

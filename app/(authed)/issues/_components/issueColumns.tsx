@@ -12,7 +12,7 @@ import {
   InlineDueCell,
   InlineEstimateCell,
 } from './IssueInlineEdit';
-import { QuickViewTrigger } from './QuickViewTrigger';
+import { WorkItemRowActions } from './WorkItemRowActions';
 import type { IssueRowData } from './issueRows';
 
 // A next-intl global translator (from `useTranslations()` with no namespace), so
@@ -159,16 +159,16 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       cell: (r) => <InlineStatusCell row={r} />,
     },
     {
-      // The trailing row-actions cell (Subtask 2.5.19) — shared by Tree + List
-      // so the quick-view trigger appears in both. Non-sortable (no sortColumn):
-      // its header is a screen-reader-only "Actions" label. The eye button is a
-      // SIBLING of the row's stretched link, raised above it (relative z-10) so
-      // it never nests inside the link (design/work-items/quick-view.mock.html).
+      // The trailing row-actions cell (Subtask 2.5.19 + 2.8.4) — shared by Tree +
+      // List: the quick-view eye PLUS the ⋯ actions menu (Edit/Copy/Archive/
+      // Delete). Non-sortable (no sortColumn); its header is a screen-reader-only
+      // "Actions" label. Both controls are SIBLINGS of the row's stretched link,
+      // raised above it so they never nest inside the link.
       key: 'actions',
       header: t('issues.columns.actions'),
-      width: 40,
+      width: 76,
       align: 'end',
-      cell: (r) => <QuickViewTrigger identifier={r.identifier} title={r.title} />,
+      cell: (r) => <WorkItemRowActions row={r} />,
     },
   ];
 }

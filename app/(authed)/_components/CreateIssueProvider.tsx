@@ -23,12 +23,19 @@ interface CreateIssueContextValue {
   openCreateIssue: () => void;
   canCreate: boolean;
   /**
-   * A monotonically increasing tick bumped each time a work item is
-   * successfully created. Client-fetched surfaces (e.g. the board, which
+   * A monotonically increasing tick bumped each time a work item is created,
+   * deleted, or archived. Client-fetched surfaces (e.g. the board, which
    * `router.refresh()` can't reach) watch this to refetch. It carries no
-   * payload — it's a "something was created, re-read if you cache" signal.
+   * payload — it's a "the item set changed, re-read if you cache" signal.
    */
   issuesChangedAt: number;
+  /**
+   * Bump `issuesChangedAt` from a mutation OTHER than create — a delete or
+   * archive from the ⋯ actions menu (2.8.4), so a watching client island (the
+   * board) refetches and drops the gone/archived item. Same signal the create
+   * modal raises on a successful create.
+   */
+  notifyIssuesChanged: () => void;
 }
 
 const CreateIssueContext = createContext<CreateIssueContextValue | null>(null);
@@ -70,8 +77,9 @@ export function CreateIssueProvider({
       openCreateIssue: () => setOpen(true),
       canCreate: hasProject,
       issuesChangedAt,
+      notifyIssuesChanged: notifyIssueCreated,
     }),
-    [open, hasProject, issuesChangedAt],
+    [open, hasProject, issuesChangedAt, notifyIssueCreated],
   );
 
   return (
@@ -90,4 +98,16 @@ export function useCreateIssue(): CreateIssueContextValue {
     throw new Error('useCreateIssue must be used inside <CreateIssueProvider>');
   }
   return ctx;
+}
+
+/**
+ * A NON-throwing accessor for the "issues changed" notifier — returns a no-op
+ * when rendered outside the provider (a unit test, or a surface with no board
+ * island to refetch). The mutation cells that live deep in lists / board cards
+ * (the 2.8.4 ⋯ menu) use THIS rather than `useCreateIssue()`, so a row/card
+ * renders without requiring the whole create-issue provider just to mount.
+ */
+export function useNotifyIssuesChanged(): () => void {
+  const ctx = useContext(CreateIssueContext);
+  return ctx?.notifyIssuesChanged ?? (() => {});
 }
