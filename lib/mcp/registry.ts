@@ -8,15 +8,23 @@ import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/t
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
+import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
+import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
+import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
+import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
+import { MOVE_TO_SPRINT_TOOL_NAME, registerMoveToSprint } from './tools/moveToSprint';
+import { MOVE_TO_BACKLOG_TOOL_NAME, registerMoveToBacklog } from './tools/moveToBacklog';
+import { START_SPRINT_TOOL_NAME, registerStartSprint } from './tools/startSprint';
+import { COMPLETE_SPRINT_TOOL_NAME, registerCompleteSprint } from './tools/completeSprint';
 
-// The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5) — the
-// single place that assembles the server's tool surface. This is the SEAM the
-// write tools (7.8.5), search (7.8.6), and the sprint tools (7.8.10) extend: add
-// the tool module under `tools/`, import its `register*`, and add one line to
-// `registerMcpTools` — without touching the transport (`app/api/mcp/route.ts`)
-// or the auth gate (`lib/mcp/auth.ts`). Every tool resolves its acting
-// `ServiceContext` through the injected `resolveContext`, so auth lives in
-// exactly one place and the tools stay testable with a fixed-context resolver.
+// The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
+// 7.8.10) — the single place that assembles the server's tool surface. This is
+// the SEAM each later subtask extends: add the tool module under `tools/`,
+// import its `register*`, and add one line to `registerMcpTools` — without
+// touching the transport (`app/api/mcp/route.ts`) or the auth gate
+// (`lib/mcp/auth.ts`). Every tool resolves its acting `ServiceContext` through
+// the injected `resolveContext`, so auth lives in exactly one place and the
+// tools stay testable with a fixed-context resolver.
 
 /** Identifying info the MCP `initialize` handshake reports to clients. */
 export const MCP_SERVER_INFO = { name: 'motir', version: '0.1.0' } as const;
@@ -31,6 +39,14 @@ export const MCP_TOOL_NAMES = [
   ADD_COMMENT_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   WHOAMI_TOOL_NAME,
+  LIST_SPRINTS_TOOL_NAME,
+  CREATE_SPRINT_TOOL_NAME,
+  UPDATE_SPRINT_TOOL_NAME,
+  DELETE_SPRINT_TOOL_NAME,
+  MOVE_TO_SPRINT_TOOL_NAME,
+  MOVE_TO_BACKLOG_TOOL_NAME,
+  START_SPRINT_TOOL_NAME,
+  COMPLETE_SPRINT_TOOL_NAME,
 ] as const;
 
 /** Register every MCP tool on `server`, wiring each to `resolveContext`. */
@@ -47,6 +63,15 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
   registerSearchWorkItems(server, resolveContext);
   // Identity (added by 7.9.1, consumed by the CLI's auth commands).
   registerWhoami(server, resolveContext);
+  // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
+  registerListSprints(server, resolveContext);
+  registerCreateSprint(server, resolveContext);
+  registerUpdateSprint(server, resolveContext);
+  registerDeleteSprint(server, resolveContext);
+  registerMoveToSprint(server, resolveContext);
+  registerMoveToBacklog(server, resolveContext);
+  registerStartSprint(server, resolveContext);
+  registerCompleteSprint(server, resolveContext);
 }
 
 /**
