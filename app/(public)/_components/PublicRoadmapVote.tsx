@@ -25,11 +25,14 @@ export function PublicRoadmapVote({
   initialVoted,
   initialCount,
   signedIn,
+  size = 'sm',
 }: {
   requestId: string;
   initialVoted: boolean;
   initialCount: number;
   signedIn: boolean;
+  /** `sm` (the roadmap card default) · `lg` (the request-detail head, 6.12.12). */
+  size?: 'sm' | 'lg';
 }) {
   const t = useTranslations('publicProjects');
   const [voted, setVoted] = useState(initialVoted);
@@ -88,16 +91,21 @@ export function PublicRoadmapVote({
         aria-label={ariaLabel}
         title={ariaLabel}
         className={cn(
-          'flex w-[42px] flex-col items-center justify-center gap-px rounded-(--radius-control) border py-1.5 transition-colors',
+          'flex flex-col items-center justify-center gap-px rounded-(--radius-control) border transition-colors',
+          size === 'lg' ? 'w-[54px] py-2.5' : 'w-[42px] py-1.5',
           voted
             ? 'border-(--el-vote-active-bg) bg-(--el-vote-active-bg) text-(--el-vote-active-text)'
             : 'border-(--el-border) bg-(--el-page-bg) text-(--el-text-secondary) hover:border-(--el-accent)',
         )}
       >
-        <ChevronUp className="h-[15px] w-[15px]" aria-hidden />
+        <ChevronUp
+          className={cn(size === 'lg' ? 'h-[19px] w-[19px]' : 'h-[15px] w-[15px]')}
+          aria-hidden
+        />
         <span
           className={cn(
-            'text-[13px] font-bold',
+            'font-bold',
+            size === 'lg' ? 'text-[16px]' : 'text-[13px]',
             voted ? 'text-(--el-vote-active-text)' : 'text-(--el-text-strong)',
           )}
         >

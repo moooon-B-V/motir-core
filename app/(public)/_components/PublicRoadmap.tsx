@@ -22,12 +22,11 @@ import { PublicRoadmapVote } from './PublicRoadmapVote';
 // the at-scale rule). The only interactive elements are the upvote controls; the
 // projection guarantees no internal field is present to leak.
 //
-// Card title links: a PROMOTED card (planned / in progress / done) exists on the
-// public Work items tab, so its title links to that tab's anchor (the same
-// target the public board card uses — there is no public request DETAIL route
-// yet; that surface, design Panel 5, is unbuilt). A SUBMITTED card is a
-// still-in-triage request that is NOT on the Work items tab, so its title is
-// plain text (no dead link) — only its upvote is interactive.
+// Card title links: EVERY card — promoted (planned / in progress / done) AND
+// submitted (still-in-triage) — links to the public request DETAIL page
+// (`/p/<project>/requests/<request>`, Subtask 6.12.12, design Panel 5), where a
+// viewer reads the body + comments and upvotes. The vote button is a SIBLING of
+// the title link, never nested in it (the axe `nested-interactive` rule).
 
 const BUCKET_LABEL: Record<PublicRoadmapBucketKey, string> = {
   submitted: 'roadmapSubmitted',
@@ -53,20 +52,19 @@ const KIND_LABEL: Record<PublicRoadmapCardDto['kind'], string> = {
 
 function RoadmapCard({
   card,
-  bucket,
   identifier,
   signedIn,
 }: {
   card: PublicRoadmapCardDto;
-  bucket: PublicRoadmapBucketKey;
   identifier: string;
   signedIn: boolean;
 }) {
   const t = useTranslations('publicProjects');
-  // The title link target: a promoted card lives on the Work items tab; a
-  // submitted (still-in-triage) request does not, so it stays plain text.
-  const href =
-    bucket === 'submitted' ? null : `/p/${encodeURIComponent(identifier)}/items#${card.identifier}`;
+  // Every card links to the public request detail page (6.12.12) — promoted and
+  // submitted alike now have a real detail surface.
+  const href = `/p/${encodeURIComponent(identifier)}/requests/${encodeURIComponent(
+    card.identifier,
+  )}`;
   const titleClass = 'block text-[13px] font-semibold leading-snug text-(--el-text)';
 
   return (
@@ -78,13 +76,9 @@ function RoadmapCard({
         signedIn={signedIn}
       />
       <div className="min-w-0 flex-1">
-        {href ? (
-          <Link href={href} className={cn(titleClass, 'hover:text-(--el-link)')}>
-            {card.title}
-          </Link>
-        ) : (
-          <span className={titleClass}>{card.title}</span>
-        )}
+        <Link href={href} className={cn(titleClass, 'hover:text-(--el-link)')}>
+          {card.title}
+        </Link>
         <span className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] text-(--el-text-muted)">
           <IssueTypeIcon type={card.kind} className="h-[13px] w-[13px]" />
           {t(KIND_LABEL[card.kind])}
@@ -130,13 +124,7 @@ function RoadmapColumn({
           </p>
         ) : (
           column.cards.map((card) => (
-            <RoadmapCard
-              key={card.id}
-              card={card}
-              bucket={column.key}
-              identifier={identifier}
-              signedIn={signedIn}
-            />
+            <RoadmapCard key={card.id} card={card} identifier={identifier} signedIn={signedIn} />
           ))
         )}
         {column.nextCursor ? (

@@ -3,15 +3,21 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { publicRequestVoteRepository } from '@/lib/repositories/publicRequestVoteRepository';
+import { commentRepository } from '@/lib/repositories/commentRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { triageService, type TriageSubmissionKind } from '@/lib/services/triageService';
+import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
+import { toCommentDto } from '@/lib/mappers/commentMappers';
 import {
   toPublicProjectOverviewDto,
+  toPublicRequestDetailDto,
   toPublicRequestMatchDto,
   toPublicRoadmapCardDto,
   toPublicWorkItemListItemDto,
@@ -40,6 +46,7 @@ import type {
   PublicRoadmapColumnDto,
   PublicRoadmapColumnPageDto,
   PublicRoadmapDto,
+  PublicRequestDetailDto,
   PublicWorkItemPageDto,
 } from '@/lib/dto/publicProjects';
 import { PUBLIC_ROADMAP_BUCKET_KEYS } from '@/lib/dto/publicProjects';
@@ -554,6 +561,88 @@ export const publicProjectsService = {
       cursor,
     );
     return { bucket, cards: page.cards, nextCursor: page.nextCursor };
+  },
+
+  // --- READ · REQUEST DETAIL (6.12.12) -------------------------------------
+
+  /**
+   * The public request DETAIL (Subtask 6.12.12 · design Panel 5) — the read
+   * behind `/p/<project>/requests/<request>`. Resolves the public project + runs
+   * the anonymous browse gate (a non-public / unknown project 404s, never 403),
+   * then resolves the request WITHIN that project by its work-item identifier
+   * (e.g. "PROD-42"). A missing / cross-project / archived item is a
+   * {@link PublicRequestNotFoundError} (the 404-not-403 posture — no existence
+   * leak); a still-in-triage request IS shown (a roadmap "Submitted" card links
+   * here). Epic-privacy (6.14.4): a non-member NEVER reaches a private epic's
+   * hidden descendant — it 404s exactly like a missing item (the same no-leak
+   * predicate the list/board/roadmap reads apply). Returns the public projection
+   * PLUS the body, the status label, the upvote tally + the viewer's `voted`
+   * flag, the opened-by name, and the PUBLIC comment thread (the request's
+   * `isPublic` comments only — the work item's internal Story-5.1 discussion
+   * never crosses the projection). `actorUserId` nullable (anonymous read; only
+   * `voted` and the composer need a session).
+   *
+   * RLS context mirrors the 6.12.6 toggle: the cross-account vote COUNT reads
+   * under `withSystemContext` (it spans every voter), the viewer's own `voted`
+   * probe under `withUserContext` (it touches only their row). The work-item /
+   * comment / user reads ride the app-layer projectId gate the rest of the
+   * public read path uses.
+   */
+  async getRequestDetail(
+    identifier: string,
+    requestIdentifier: string,
+    actorUserId: string | null,
+  ): Promise<PublicRequestDetailDto> {
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+
+    const item = await workItemRepository.findByIdentifier(project.id, requestIdentifier);
+    // 404-not-403: a missing item, an item in another project, or an archived
+    // (soft-deleted) one is hidden exactly like a non-public project.
+    if (!item || item.archivedAt !== null) {
+      throw new PublicRequestNotFoundError(requestIdentifier);
+    }
+    // Epic-privacy (6.14.4): a non-member must not reach a private epic's hidden
+    // descendant — treat it as not-found (no leak), consistent with the other
+    // public reads' exclusion set.
+    const hiddenIds = await resolveHiddenIds(project, isMember);
+    if (hiddenIds.includes(item.id)) {
+      throw new PublicRequestNotFoundError(requestIdentifier);
+    }
+
+    // Status label + category for the Pill — the project's live workflow.
+    const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
+    const status = statuses.find((s) => s.key === item.status) ?? null;
+
+    // The upvote tally spans every account (system context); the viewer's own
+    // voted flag is their single row (user context), only when signed in.
+    const [voteCount, voted] = await Promise.all([
+      withSystemContext((tx) => publicRequestVoteRepository.countByWorkItem(item.id, tx)),
+      actorUserId
+        ? withUserContext(actorUserId, (tx) =>
+            publicRequestVoteRepository.findByWorkItemAndUser(item.id, actorUserId, tx),
+          ).then((row) => row !== null)
+        : Promise.resolve(false),
+    ]);
+
+    // "Opened by" — the real submitter (a 6.12 non-member, when present) else
+    // the tenant reporter. The PUBLIC comment thread (isPublic only).
+    const openedById = item.submittedByUserId ?? item.reporterId;
+    const commentRows = await commentRepository.listPublicByWorkItem(item.id);
+    const userIds = [...new Set([openedById, ...commentRows.map((c) => c.authorId)])];
+    const users = await userRepository.findByIds(userIds);
+    const usersById = new Map(users.map((u) => [u.id, u]));
+    // Public-request comments carry no mention scoping (6.12.6), so an empty
+    // mention map is correct — never a leak of an internal mention set.
+    const comments = commentRows.map((row) => toCommentDto(row, usersById, new Map()));
+
+    return toPublicRequestDetailDto(item, {
+      statusLabel: status?.label ?? item.status,
+      statusCategory: status?.category ?? 'todo',
+      openedByName: usersById.get(openedById)?.name ?? '',
+      voteCount,
+      voted,
+      comments,
+    });
   },
 
   // --- WRITE / dedupe (6.12.5) ---------------------------------------------
