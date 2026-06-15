@@ -315,10 +315,7 @@ function TitleCell({
         {row.title}
       </span>
       {row.childrenHidden ? (
-        <Pill
-          tone="neutral"
-          className="flex-none gap-1 border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)"
-        >
+        <Pill tone="private" className="flex-none">
           <Lock className="h-3 w-3" aria-hidden />
           {t('epicNotPublicBadge')}
         </Pill>

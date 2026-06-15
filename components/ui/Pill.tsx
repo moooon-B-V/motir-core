@@ -15,7 +15,9 @@ import { cn } from '@/lib/utils/cn';
  *    sitting above the workspace `memberRole`. owner → lavender (the highest,
  *    brand-purple tier), admin → sky, member → mint — per the org-admin design.
  *  - `tone`: neutral — a non-semantic chip (counts, metadata). Dark text on a
- *    neutral surface.
+ *    neutral surface. `private` — the epic-level-privacy "Not public" badge
+ *    (Story 6.14 · design epic-privacy panels 1/2/6b): lavender tint + charcoal
+ *    text, the same AA-safe recipe as `status="planned"` / `memberRole="admin"`.
  *
  * All tones use adaptive dark/light text (`--color-charcoal`) on a hued tint,
  * so every variant clears WCAG AA contrast in both light and dark modes
@@ -72,6 +74,10 @@ const pillVariants = cva(
       },
       tone: {
         neutral: 'bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)',
+        // Epic-level privacy "Not public" badge (Story 6.14 · design
+        // epic-privacy panels 1/2/6b) — lavender tint, charcoal text, the same
+        // AA-safe recipe as `status="planned"` / `memberRole="admin"` (≈9.7:1).
+        private: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
       },
     },
     defaultVariants: {},
