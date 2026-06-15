@@ -107,20 +107,24 @@ export function NotificationPreferencesCard({
         </div>
       }
     >
-      <div
-        role="grid"
-        aria-label={t('heading')}
-        className="mt-2 grid grid-cols-[1fr_5rem_5rem] items-center"
-      >
-        {/* Column headers */}
-        <div className="text-(--el-text-faint) border-(--el-border) border-b pb-3 font-sans text-[11px] font-semibold tracking-wide uppercase">
-          {t('columns.event')}
-        </div>
-        <div className="text-(--el-text-faint) border-(--el-border) border-b pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
-          {t('columns.email')}
-        </div>
-        <div className="text-(--el-text-faint) border-(--el-border) border-b pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
-          {t('columns.inApp')}
+      <div role="grid" aria-label={t('heading')} className="mt-2 grid grid-cols-[1fr_5rem_5rem]">
+        {/* Column-header row. The whole row is ONE subgrid element so the
+            bottom rule spans uninterrupted from the EVENT column through the
+            IN-APP column — a per-cell `border-b` would break wherever an
+            individual cell has its own padding. */}
+        <div
+          role="row"
+          className="border-(--el-border) col-span-3 grid grid-cols-subgrid items-center border-b"
+        >
+          <div className="text-(--el-text-faint) pb-3 font-sans text-[11px] font-semibold tracking-wide uppercase">
+            {t('columns.event')}
+          </div>
+          <div className="text-(--el-text-faint) pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
+            {t('columns.email')}
+          </div>
+          <div className="text-(--el-text-faint) pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
+            {t('columns.inApp')}
+          </div>
         </div>
 
         {events.map((row) => (
@@ -148,8 +152,16 @@ function EventRow({
   const label = t(`events.${row.eventType}.label`);
   const desc = t(`events.${row.eventType}.desc`);
   return (
-    <>
-      <div className="border-(--el-border-soft) border-b py-3.5 pr-4">
+    // One row = one subgrid element carrying the border. The three cells (event
+    // label, email toggle, in-app toggle) inherit the parent's column tracks via
+    // `grid-cols-subgrid`, and the bottom rule is now ROW-level — so a per-cell
+    // padding asymmetry (the event cell's `pr-4`) can't break the divider into
+    // disconnected segments any more.
+    <div
+      role="row"
+      className="border-(--el-border-soft) col-span-3 grid grid-cols-subgrid items-center border-b"
+    >
+      <div className="py-3.5 pr-4">
         <div className="flex items-center gap-2">
           <span
             className={cn(
@@ -171,7 +183,7 @@ function EventRow({
       </div>
       <NotificationCell row={row} channel="email" t={t} onToggle={onToggle} />
       <NotificationCell row={row} channel="in_app" t={t} onToggle={onToggle} />
-    </>
+    </div>
   );
 }
 
@@ -193,7 +205,9 @@ function NotificationCell({
     ? t('cellAria', { channel: channelLabel, event: eventLabel })
     : t('cellAriaSoon', { channel: channelLabel, event: eventLabel });
   return (
-    <div className="border-(--el-border-soft) flex justify-center border-b py-3.5">
+    // The bottom rule is now owned by the row wrapper (see EventRow); cells just
+    // carry their own padding + content.
+    <div className="flex justify-center py-3.5">
       <Switch
         checked={checked}
         disabled={!row.settable}
