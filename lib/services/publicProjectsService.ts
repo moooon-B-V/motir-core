@@ -83,7 +83,12 @@ const PUBLIC_BOARD_CAP = 200;
 /** The Work-items tab page size (cursor-paginated, lazy — the at-scale rule). */
 const PUBLIC_WORK_ITEMS_PAGE_SIZE = 30;
 
-/** Resolve a public project by identifier + run the anonymous browse gate. */
+/**
+ * Resolve a public project by identifier + run the anonymous browse gate, AND
+ * report whether the actor is a project MEMBER (Subtask 6.14.4 — the epic-privacy
+ * exclusion keys off member-vs-non-member). One round-trip via
+ * `projectAccessService.resolvePublicBrowse`.
+ */
 async function resolvePublicProject(identifier: string, actorUserId: string | null) {
   // A public project lives in exactly one workspace, but the identifier alone
   // doesn't name the workspace, so we can't use the workspace-scoped
@@ -97,18 +102,44 @@ async function resolvePublicProject(identifier: string, actorUserId: string | nu
   const project = await projectRepository.findPublicByIdentifier(identifier);
   if (!project) throw new ProjectNotFoundError(identifier);
   // The gate is the authority on visibility (it throws ProjectNotFoundError on a
-  // non-public project) — reuse it, never re-derive the public check.
-  await projectAccessService.assertCanBrowsePublic(project.id, actorUserId);
-  return project;
+  // non-public project) — reuse it, never re-derive the public check. It also
+  // reports member-vs-non-member in the same round-trip (6.14.4).
+  const { isMember } = await projectAccessService.resolvePublicBrowse(project.id, actorUserId);
+  return { project, isMember };
 }
 
-/** Compute the Overview stat strip from bounded counts (no per-item N+1). */
+/**
+ * The epic-privacy exclusion set for a public read (Story 6.14 · Subtask 6.14.4)
+ * — the ids of every descendant of a PRIVATE epic, which the projection must drop
+ * so they never cross the wire to a non-member. A MEMBER viewer (or a project
+ * with no private epic) gets `[]`, so the read stays byte-for-byte the prior
+ * projection. Centralised here so EVERY public read that loads work items applies
+ * the SAME predicate (the no-leak guarantee is one helper, not N filters); a new
+ * public item read is wired by passing `excludeIds` from this one call.
+ */
+async function resolveHiddenIds(
+  project: { id: string; workspaceId: string },
+  isMember: boolean,
+): Promise<string[]> {
+  if (isMember) return [];
+  return workItemRepository.findPublicHiddenDescendantIds(project.id, project.workspaceId);
+}
+
+/**
+ * Compute the Overview stat strip from bounded counts (no per-item N+1).
+ * `excludeIds` is the epic-privacy exclusion set (6.14.4): for a non-member the
+ * Planned / In progress / Shipped counts must NOT count a private epic's hidden
+ * descendants (counting them would leak the hidden subtree's size — an aggregate
+ * tell). The triage / upvote counts are unaffected (a triage item is parentless,
+ * so never a private epic's descendant).
+ */
 async function computeStats(
   projectId: string,
   workspaceId: string,
+  excludeIds: readonly string[],
 ): Promise<PublicProjectStatsDto> {
   const [byCategory, publicRequests, upvotes] = await Promise.all([
-    workItemRepository.countByStatusCategory(projectId, workspaceId),
+    workItemRepository.countByStatusCategory(projectId, workspaceId, { excludeIds }),
     workItemRepository.countTriageItems(projectId, workspaceId),
     publicRequestVoteRepository.countByProject(projectId),
   ]);
@@ -195,21 +226,26 @@ async function loadRoadmapColumnPage(
   bucket: PublicRoadmapBucketKey,
   promotedKeys: Record<'planned' | 'in_progress' | 'done', string[]>,
   actorUserId: string | null,
+  excludeIds: readonly string[],
   cursor?: PublicRoadmapCursor,
 ): Promise<{ cards: PublicRoadmapColumnDto['cards']; nextCursor: string | null }> {
   const limit = PUBLIC_ROADMAP_PAGE_SIZE + 1;
   const rows =
     bucket === 'submitted'
-      ? await workItemRepository.findPublicRoadmapSubmitted(project.id, project.workspaceId, {
+      ? // Submitted = still-in-triage public requests; a triage item is parentless
+        // so it can never descend from a private epic — no epic-privacy exclusion.
+        await workItemRepository.findPublicRoadmapSubmitted(project.id, project.workspaceId, {
           limit,
           cursor,
           voterUserId: actorUserId,
         })
-      : await workItemRepository.findPublicRoadmapByStatus(
+      : // Promoted buckets read graduated work items, which CAN be a private epic's
+        // descendants — exclude them for a non-member (6.14.4).
+        await workItemRepository.findPublicRoadmapByStatus(
           project.id,
           project.workspaceId,
           promotedKeys[bucket],
-          { limit, cursor, voterUserId: actorUserId },
+          { limit, cursor, voterUserId: actorUserId, excludeIds },
         );
 
   const hasMore = rows.length > PUBLIC_ROADMAP_PAGE_SIZE;
@@ -226,11 +262,15 @@ async function countRoadmapColumn(
   project: { id: string; workspaceId: string },
   bucket: PublicRoadmapBucketKey,
   promotedKeys: Record<'planned' | 'in_progress' | 'done', string[]>,
+  excludeIds: readonly string[],
 ): Promise<number> {
   return bucket === 'submitted'
-    ? workItemRepository.countPublicRoadmapSubmitted(project.id, project.workspaceId)
+    ? // Submitted bucket = parentless triage items; never a private epic's
+      // descendant, so no epic-privacy exclusion (6.14.4).
+      workItemRepository.countPublicRoadmapSubmitted(project.id, project.workspaceId)
     : workItemRepository.countProjectIssues(project.id, project.workspaceId, {
         statuses: promotedKeys[bucket],
+        excludeIds,
       });
 }
 
@@ -295,10 +335,11 @@ export const publicProjectsService = {
     identifier: string,
     actorUserId: string | null,
   ): Promise<PublicProjectOverviewDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+    const hiddenIds = await resolveHiddenIds(project, isMember);
     const [workspace, stats] = await Promise.all([
       workspaceRepository.findById(project.workspaceId),
-      computeStats(project.id, project.workspaceId),
+      computeStats(project.id, project.workspaceId, hiddenIds),
     ]);
     return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats);
   },
@@ -314,8 +355,12 @@ export const publicProjectsService = {
    * nullable.
    */
   async getBoard(identifier: string, actorUserId: string | null): Promise<PublicBoardDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
     const { id: projectId, workspaceId } = project;
+    // Epic-privacy (6.14.4): a non-member never receives a private epic's
+    // descendants — the cards AND the per-column denominators exclude them; the
+    // private epic card itself is marked `childrenHidden` (the mapper).
+    const hiddenIds = await resolveHiddenIds(project, isMember);
 
     const board = await boardRepository.findDefaultForProject(projectId, workspaceId);
     if (!board) {
@@ -369,9 +414,12 @@ export const publicProjectsService = {
             workspaceId,
             statusKeys,
             terminal ? 'recent' : 'position',
-            { limit: PUBLIC_BOARD_CAP },
+            { limit: PUBLIC_BOARD_CAP, excludeIds: hiddenIds },
           ),
-          workItemRepository.countProjectIssues(projectId, workspaceId, { statuses: statusKeys }),
+          workItemRepository.countProjectIssues(projectId, workspaceId, {
+            statuses: statusKeys,
+            excludeIds: hiddenIds,
+          }),
         ]);
         boardTotal += totalCount;
         return {
@@ -379,7 +427,9 @@ export const publicProjectsService = {
           name: col.name,
           statusKeys,
           cards: rows.map((r) =>
-            toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo'),
+            toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo', {
+              hideChildren: !isMember,
+            }),
           ),
           totalCount,
         };
@@ -407,19 +457,27 @@ export const publicProjectsService = {
     actorUserId: string | null,
     cursor?: string,
   ): Promise<PublicWorkItemPageDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
     const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
     const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
+    // Epic-privacy (6.14.4): a non-member's list excludes a private epic's
+    // descendants server-side; the private epic row stays, marked.
+    const hiddenIds = await resolveHiddenIds(project, isMember);
 
     // Over-fetch one row to detect whether a next page exists, then trim.
     const rows = await workItemRepository.findByProject(project.id, {
       take: PUBLIC_WORK_ITEMS_PAGE_SIZE + 1,
       cursor,
+      excludeIds: hiddenIds,
     });
     const hasMore = rows.length > PUBLIC_WORK_ITEMS_PAGE_SIZE;
     const page = hasMore ? rows.slice(0, PUBLIC_WORK_ITEMS_PAGE_SIZE) : rows;
     return {
-      items: page.map((r) => toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo')),
+      items: page.map((r) =>
+        toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo', {
+          hideChildren: !isMember,
+        }),
+      ),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
     };
   },
@@ -439,15 +497,18 @@ export const publicProjectsService = {
    * public projection mapper. `actorUserId` nullable.
    */
   async getRoadmap(identifier: string, actorUserId: string | null): Promise<PublicRoadmapDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
     const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
     const promotedKeys = promotedRoadmapStatusKeys(statuses);
+    // Epic-privacy (6.14.4): a non-member's roadmap excludes a private epic's
+    // descendants from both the promoted-bucket cards and their header counts.
+    const hiddenIds = await resolveHiddenIds(project, isMember);
 
     const columns = await Promise.all(
       PUBLIC_ROADMAP_BUCKET_KEYS.map(async (bucket): Promise<PublicRoadmapColumnDto> => {
         const [page, totalCount] = await Promise.all([
-          loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId),
-          countRoadmapColumn(project, bucket, promotedKeys),
+          loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId, hiddenIds),
+          countRoadmapColumn(project, bucket, promotedKeys, hiddenIds),
         ]);
         return { key: bucket, totalCount, cards: page.cards, nextCursor: page.nextCursor };
       }),
@@ -471,7 +532,7 @@ export const publicProjectsService = {
     bucket: PublicRoadmapBucketKey,
     cursorRaw: string,
   ): Promise<PublicRoadmapColumnPageDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
     const cursor = decodeRoadmapCursorForBucket(bucket, cursorRaw);
     // Only the promoted buckets consult the status-key map; submitted ignores it,
     // so deriving the keys only when needed avoids a status read for Submitted.
@@ -481,7 +542,17 @@ export const publicProjectsService = {
         : promotedRoadmapStatusKeys(
             await workflowsService.listStatusesByProject(project.id, project.workspaceId),
           );
-    const page = await loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId, cursor);
+    // Epic-privacy (6.14.4): the submitted bucket needs no exclusion (parentless
+    // triage items); a promoted bucket excludes a non-member's hidden subtree.
+    const hiddenIds = bucket === 'submitted' ? [] : await resolveHiddenIds(project, isMember);
+    const page = await loadRoadmapColumnPage(
+      project,
+      bucket,
+      promotedKeys,
+      actorUserId,
+      hiddenIds,
+      cursor,
+    );
     return { bucket, cards: page.cards, nextCursor: page.nextCursor };
   },
 

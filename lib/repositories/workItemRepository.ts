@@ -684,7 +684,15 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     statusKeys: string[],
-    options: { limit: number; cursor?: PublicRoadmapCursor; voterUserId: string | null },
+    options: {
+      limit: number;
+      cursor?: PublicRoadmapCursor;
+      voterUserId: string | null;
+      // Epic-privacy public exclusion (Subtask 6.14.4) — drop a private epic's
+      // descendants for a non-member viewer (resolved by
+      // `findPublicHiddenDescendantIds`). Absent/empty ⇒ no clause.
+      excludeIds?: readonly string[];
+    },
   ): Promise<PublicRoadmapRow[]> {
     if (statusKeys.length === 0) return [];
     const votes = Prisma.sql`COALESCE(vt."votes", 0)`;
@@ -711,6 +719,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', options.excludeIds)}
           AND w."status" = ANY(${statusKeys})
           ${cursorPred}
         ORDER BY ${votes} DESC, w."key" DESC, w."id" ASC
@@ -922,17 +931,73 @@ export const workItemRepository = {
    */
   async findByProject(
     projectId: string,
-    options: { take?: number; cursor?: string } = {},
+    options: { take?: number; cursor?: string; excludeIds?: readonly string[] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     const client = tx ?? db;
-    const { take = 50, cursor } = options;
+    const { take = 50, cursor, excludeIds } = options;
     return client.workItem.findMany({
-      where: { projectId, archivedAt: null, triagedAt: null }, // read-exclusion (6.11.3)
+      where: {
+        projectId,
+        archivedAt: null,
+        triagedAt: null, // read-exclusion (6.11.3)
+        // Epic-privacy public exclusion (6.14.4): drop descendants of a private
+        // epic for a non-member viewer. Absent/empty ⇒ no clause (members + the
+        // no-private-epic case read the unchanged projection).
+        ...(excludeIds && excludeIds.length > 0 ? { id: { notIn: excludeIds as string[] } } : {}),
+      },
       orderBy: { key: 'asc' },
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
+  },
+
+  /**
+   * The ids of every work item that DESCENDS from a PRIVATE epic
+   * (`kind = 'epic' AND publicChildrenHidden = true`) in this project — the set a
+   * public / non-member read must EXCLUDE (Story 6.14 · Subtask 6.14.4, per
+   * `docs/decisions/epic-privacy.md` §6). Seeded from the (tiny, index-backed —
+   * `@@index([projectId, publicChildrenHidden])`) private-epic set and walked
+   * DOWN the `parentId` edge in ONE recursive CTE, so it is depth-agnostic (the
+   * tree caps at 4: epic → story → task → subtask) and resolved entirely in SQL —
+   * never a load-all-then-filter-in-app (finding #57). The private epic ROWS
+   * themselves are NOT included (they stay visible as the "this epic is not
+   * public" placeholder); only their descendants are returned. Returns `[]` when
+   * the project has no private epic (the common case — the caller then skips the
+   * exclusion entirely). The `workspaceId` gate rides every step (the app-layer
+   * tenancy check atop RLS, finding #26). Read-only → `db` singleton.
+   *
+   * NOTE on scale: the descendant set is bounded by the private subtrees' size
+   * and is consumed as an indexable `id <> ALL(...)` array predicate. A
+   * denormalized root-epic column would collapse this to a single equality but
+   * costs write-time fan-out + a backfill; the ADR (§6) deliberately DEFERS it —
+   * the bounded depth + tiny private-epic set make the CTE the simpler correct
+   * shape, and adding the column later does not change this method's contract.
+   */
+  async findPublicHiddenDescendantIds(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ id: string }>>`
+      WITH RECURSIVE hidden AS (
+        SELECT c."id", c."parentId"
+          FROM "work_item" c
+          JOIN "work_item" e ON e."id" = c."parentId"
+          WHERE c."workspaceId" = ${workspaceId}
+            AND e."projectId" = ${projectId}
+            AND e."workspaceId" = ${workspaceId}
+            AND e."kind"::text = 'epic'
+            AND e."publicChildrenHidden" = true
+        UNION ALL
+        SELECT c."id", c."parentId"
+          FROM "work_item" c
+          JOIN hidden h ON h."id" = c."parentId"
+          WHERE c."workspaceId" = ${workspaceId}
+      )
+      SELECT "id" FROM hidden`;
+    return rows.map((r) => r.id);
   },
 
   /**
@@ -1255,6 +1320,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', filter.excludeIds)}
           AND (${matched})`;
     return rows[0]?.count ?? 0;
   },
@@ -1273,6 +1339,7 @@ export const workItemRepository = {
   async countByStatusCategory(
     projectId: string,
     workspaceId: string,
+    opts: { excludeIds?: readonly string[] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<{ todo: number; in_progress: number; done: number }> {
     const client = tx ?? db;
@@ -1285,6 +1352,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', opts.excludeIds)}
         GROUP BY ws."category"`;
     const out = { todo: 0, in_progress: 0, done: 0 };
     for (const r of rows) {
@@ -1347,6 +1415,11 @@ export const workItemRepository = {
       // unfiltered board (the byte-for-byte 3.8.2 builder read below).
       ast?: FilterAst;
       referents?: ProjectFilterReferents;
+      // Epic-privacy public exclusion (Story 6.14 · Subtask 6.14.4) — drop
+      // descendants of a private epic for a non-member viewer (resolved by
+      // `findPublicHiddenDescendantIds`). Absent/empty ⇒ no clause (the internal
+      // board + the no-private-epic case read the unchanged projection).
+      excludeIds?: readonly string[];
     },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
@@ -1385,6 +1458,7 @@ export const workItemRepository = {
             AND w."status" = ANY(${statusKeys})
             ${updatedSinceSql}
             ${sprintScope}
+            AND ${notExcludedSql('w', opts.excludeIds)}
             AND (${compileFilterConditionsSql(opts.ast, opts.referents)})
           ORDER BY ${orderSql}
           LIMIT ${opts.limit}`;
@@ -1415,6 +1489,11 @@ export const workItemRepository = {
         // active sprint's id so the column loads only that sprint's issues; a
         // kanban board omits it (unscoped, byte-for-byte the 3.1.4 load).
         ...(opts.sprintId ? { sprintId: opts.sprintId } : {}),
+        // Epic-privacy public exclusion (Subtask 6.14.4) — drop a private epic's
+        // descendants for a non-member viewer; empty ⇒ no clause.
+        ...(opts.excludeIds && opts.excludeIds.length > 0
+          ? { id: { notIn: opts.excludeIds as string[] } }
+          : {}),
       },
       orderBy,
       take: opts.limit,
@@ -2328,6 +2407,19 @@ export interface RepoIssueFilter {
    * degrade rule, never an error). Built-in-only ASTs don't need it.
    */
   filterReferents?: ProjectFilterReferents;
+  /**
+   * The epic-privacy public exclusion (Story 6.14 · Subtask 6.14.4) — a hard
+   * row-exclusion set (the descendants of a private epic) applied by the flat
+   * COUNT read {@link workItemRepository.countProjectIssues} so a non-member's
+   * board denominators never count a hidden subtree. Resolved by {@link
+   * workItemRepository.findPublicHiddenDescendantIds}. Honored ONLY as a real
+   * filter by `countProjectIssues`; it is deliberately NOT emitted by {@link
+   * buildIssueFilterSql} (whose output is the forest read's `matched` SELECT
+   * FLAG, not a WHERE filter — emitting it there would mis-flag rather than
+   * exclude). Absent/empty ⇒ no-op (members + the no-private-epic case read the
+   * unchanged projection).
+   */
+  excludeIds?: readonly string[];
 }
 
 /**
@@ -2755,6 +2847,22 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  */
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
+}
+
+/**
+ * The epic-privacy exclusion predicate for the PUBLIC reads (Story 6.14 ·
+ * Subtask 6.14.4) — drop the rows whose ids are in `excludeIds` (the descendants
+ * of a private epic, resolved once by {@link workItemRepository.findPublicHiddenDescendantIds}).
+ * An EMPTY / absent set returns `TRUE`, so a member viewer (or a project with no
+ * private epic) reads byte-for-byte the prior projection — the predicate is a
+ * pure no-op unless a non-member is reading a public project that actually has a
+ * private epic. `<> ALL(array)` binds the id set as ONE Postgres array param
+ * (never interpolated), mirroring the `= ANY(...)` convention; the `alias` is a
+ * fixed internal literal, not user input.
+ */
+function notExcludedSql(alias: 'w' | 'f', excludeIds: readonly string[] | undefined): Prisma.Sql {
+  if (!excludeIds || excludeIds.length === 0) return Prisma.sql`TRUE`;
+  return Prisma.sql`${Prisma.raw(alias)}."id" <> ALL(${excludeIds as string[]})`;
 }
 
 /**
