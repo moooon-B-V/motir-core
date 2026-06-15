@@ -71,7 +71,12 @@ export function MergePicker({ excludeId, busy, onMerge }: MergePickerProps) {
           {t('actions.markDuplicate')}
         </Button>
       </Popover.Trigger>
-      <Popover.Content align="start" width={360} className="flex flex-col gap-2 p-3">
+      <Popover.Content
+        align="start"
+        width={360}
+        className="flex flex-col gap-2 p-3"
+        overflowVisible
+      >
         <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-faint)">
           {t('merge.heading')}
         </p>
