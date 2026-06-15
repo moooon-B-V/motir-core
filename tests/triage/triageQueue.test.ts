@@ -331,25 +331,47 @@ describe('triageService.getTriageQueue — gate + cursor validation', () => {
 });
 
 describe('triage cursor codec + limit clamp (pure unit)', () => {
-  it('round-trips a (triagedAt, id) position', () => {
-    const token = encodeTriageCursor({ triagedAt: '2026-06-12T00:00:00.000Z', id: 'wi_1' });
+  it('round-trips a (voteCount, triagedAt, id) position', () => {
+    const token = encodeTriageCursor({
+      voteCount: 3,
+      triagedAt: '2026-06-12T00:00:00.000Z',
+      id: 'wi_1',
+    });
     expect(decodeTriageCursor(token)).toEqual({
+      voteCount: 3,
       triagedAt: '2026-06-12T00:00:00.000Z',
       id: 'wi_1',
     });
   });
 
-  it('rejects malformed tokens (bad base64/JSON, bad date, empty id)', () => {
+  it('rejects malformed tokens (bad base64/JSON, bad vote count, bad date, empty id)', () => {
     expect(() => decodeTriageCursor('@@@not-base64@@@')).toThrow(InvalidTriageCursorError);
     expect(() => decodeTriageCursor(Buffer.from('{}', 'utf8').toString('base64url'))).toThrow(
       InvalidTriageCursorError,
     );
+    // Legacy 2-tuple token (pre-6.12.6) is now malformed — must be rejected.
     expect(() =>
-      decodeTriageCursor(Buffer.from('["not-a-date","wi_1"]', 'utf8').toString('base64url')),
+      decodeTriageCursor(
+        Buffer.from('["2026-06-12T00:00:00.000Z","wi_1"]', 'utf8').toString('base64url'),
+      ),
+    ).toThrow(InvalidTriageCursorError);
+    // Non-integer / negative vote count.
+    expect(() =>
+      decodeTriageCursor(
+        Buffer.from('["x","2026-06-12T00:00:00.000Z","wi_1"]', 'utf8').toString('base64url'),
+      ),
     ).toThrow(InvalidTriageCursorError);
     expect(() =>
       decodeTriageCursor(
-        Buffer.from('["2026-06-12T00:00:00.000Z",""]', 'utf8').toString('base64url'),
+        Buffer.from('[-1,"2026-06-12T00:00:00.000Z","wi_1"]', 'utf8').toString('base64url'),
+      ),
+    ).toThrow(InvalidTriageCursorError);
+    expect(() =>
+      decodeTriageCursor(Buffer.from('[0,"not-a-date","wi_1"]', 'utf8').toString('base64url')),
+    ).toThrow(InvalidTriageCursorError);
+    expect(() =>
+      decodeTriageCursor(
+        Buffer.from('[0,"2026-06-12T00:00:00.000Z",""]', 'utf8').toString('base64url'),
       ),
     ).toThrow(InvalidTriageCursorError);
   });

@@ -655,7 +655,9 @@ async function readTriageQueuePage(
 
   const rows = await workItemRepository.findTriageQueue(projectId, workspaceId, {
     limit: limit + 1,
-    cursor: cursor ? { triagedAt: new Date(cursor.triagedAt), id: cursor.id } : undefined,
+    cursor: cursor
+      ? { voteCount: cursor.voteCount, triagedAt: new Date(cursor.triagedAt), id: cursor.id }
+      : undefined,
   });
 
   const hasMore = rows.length > limit;
@@ -664,7 +666,11 @@ async function readTriageQueuePage(
   const last = pageRows[pageRows.length - 1];
   const nextCursor =
     hasMore && last
-      ? encodeTriageCursor({ triagedAt: last.triagedAt!.toISOString(), id: last.id })
+      ? encodeTriageCursor({
+          voteCount: last.voteCount,
+          triagedAt: last.triagedAt!.toISOString(),
+          id: last.id,
+        })
       : null;
 
   return { items, nextCursor };

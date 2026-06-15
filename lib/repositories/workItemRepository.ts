@@ -162,15 +162,26 @@ export type TriageQueueRow = WorkItem & {
   reporterName: string | null;
   reporterEmail: string | null;
   reporterImage: string | null;
+  /**
+   * How many accounts upvoted this request (Story 6.12 · Subtask 6.12.6) — the
+   * demand signal the queue sorts by, highest-first. 0 for an item with no
+   * public votes (the common case), so a queue with no votes keeps its
+   * newest-first order (votes tie at 0 → the `triagedAt`/`id` tiebreak decides).
+   */
+  voteCount: number;
 };
 
 /**
  * The seek-after position the triage-queue cursor decodes to — the last item of
- * the previous page under the queue's `(triagedAt DESC, id ASC)` total order.
+ * the previous page under the queue's `(voteCount DESC, triagedAt DESC, id ASC)`
+ * total order (Story 6.12 · Subtask 6.12.6 added the leading vote-count key — the
+ * demand signal — ahead of the original newest-first `(triagedAt, id)` tiebreak,
+ * so an upvoted request floats up while a zero-vote queue is unchanged).
  * `triagedAt` is the marker timestamp (always non-null for a queue row); `id`
  * breaks the (rare) same-instant tie so paging never skips/repeats a row.
  */
 export interface TriageQueueCursor {
+  voteCount: number;
   triagedAt: Date;
   id: string;
 }
@@ -464,24 +475,42 @@ export const workItemRepository = {
     // timezone and skews by the offset. Binding a `Date` compares like-for-like
     // (the same pattern `aggregateCreatedByBucket` uses for its window bounds).
     const now = new Date();
-    // Seek-after under `(triagedAt DESC, id ASC)`: strictly after the previous
-    // page's last item. Bound params, never interpolated.
+    // The public-vote tally per request (Story 6.12 · Subtask 6.12.6) — the
+    // demand signal the queue sorts by, highest-first. `COALESCE(...,0)` so an
+    // item with no votes counts as 0 (the common case) and a zero-vote queue
+    // keeps its newest-first order. The `vt` aggregate is GROUPed once and
+    // LEFT-JOINed, so it stays O(votes) — never a correlated per-row count.
+    // (`public_request_vote` is FORCE-RLS keyed on `app.user_id`/`app.system_admin`;
+    // like the work_item read this query already relies on, the vote tally here
+    // rides the app-layer `projectId`/`workspaceId` gate + the app connection's
+    // RLS-secondary posture — finding #26. When that table's RLS is enforced for
+    // this read, the whole triage read moves to a system/workspace context.)
+    const voteCountSql = Prisma.sql`COALESCE(vt."votes", 0)`;
+    // Seek-after under `(voteCount DESC, triagedAt DESC, id ASC)`: strictly after
+    // the previous page's last item. Bound params, never interpolated.
     const cursorPred = options.cursor
       ? Prisma.sql`AND (
-            w."triagedAt" < ${options.cursor.triagedAt}
-            OR (w."triagedAt" = ${options.cursor.triagedAt} AND w."id" > ${options.cursor.id})
+            ${voteCountSql} < ${options.cursor.voteCount}
+            OR (${voteCountSql} = ${options.cursor.voteCount} AND w."triagedAt" < ${options.cursor.triagedAt})
+            OR (${voteCountSql} = ${options.cursor.voteCount} AND w."triagedAt" = ${options.cursor.triagedAt} AND w."id" > ${options.cursor.id})
           )`
       : Prisma.empty;
     return client.$queryRaw<TriageQueueRow[]>`
       SELECT w.*,
-             ws."category"::text AS "statusCategory",
-             ru."name"           AS "reporterName",
-             ru."email"          AS "reporterEmail",
-             ru."image"          AS "reporterImage"
+             ws."category"::text   AS "statusCategory",
+             ru."name"             AS "reporterName",
+             ru."email"            AS "reporterEmail",
+             ru."image"            AS "reporterImage",
+             ${voteCountSql}::int  AS "voteCount"
         FROM "work_item" w
         JOIN "workflow_status" ws
               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
         LEFT JOIN "user" ru ON ru."id" = w."reporterId"
+        LEFT JOIN (
+               SELECT "work_item_id", COUNT(*) AS "votes"
+                 FROM "public_request_vote"
+                GROUP BY "work_item_id"
+             ) vt ON vt."work_item_id" = w."id"
         WHERE w."projectId" = ${projectId}
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
@@ -489,7 +518,7 @@ export const workItemRepository = {
           AND ws."category" <> 'done'
           AND (w."snoozedUntil" IS NULL OR w."snoozedUntil" <= ${now})
           ${cursorPred}
-        ORDER BY w."triagedAt" DESC, w."id" ASC
+        ORDER BY ${voteCountSql} DESC, w."triagedAt" DESC, w."id" ASC
         LIMIT ${options.limit}`;
   },
 

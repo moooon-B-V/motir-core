@@ -1650,6 +1650,14 @@ model Comment {
   authorId        String    @map("author_id")
   parentCommentId String?   @map("parent_comment_id")
   bodyMd          String    @map("body_md") @db.Text
+  // Public-visible marker (Story 6.12 · Subtask 6.12.6, per
+  // docs/decisions/public-projects.md §4 — the comment split). A
+  // PUBLIC-REQUEST comment (authored on a public project through the
+  // `canCommentPublicRequest` grant) is `true`; the work item's INTERNAL
+  // discussion (every Story 5.1 comment) stays `false`. The 6.12.4 public
+  // projection returns ONLY `isPublic` comments for a request and never the
+  // internal thread — so the line is a data fact, not a UI convention.
+  isPublic        Boolean   @default(false) @map("is_public")
   editedAt        DateTime? @map("edited_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
