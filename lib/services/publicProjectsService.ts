@@ -226,21 +226,26 @@ async function loadRoadmapColumnPage(
   bucket: PublicRoadmapBucketKey,
   promotedKeys: Record<'planned' | 'in_progress' | 'done', string[]>,
   actorUserId: string | null,
+  excludeIds: readonly string[],
   cursor?: PublicRoadmapCursor,
 ): Promise<{ cards: PublicRoadmapColumnDto['cards']; nextCursor: string | null }> {
   const limit = PUBLIC_ROADMAP_PAGE_SIZE + 1;
   const rows =
     bucket === 'submitted'
-      ? await workItemRepository.findPublicRoadmapSubmitted(project.id, project.workspaceId, {
+      ? // Submitted = still-in-triage public requests; a triage item is parentless
+        // so it can never descend from a private epic — no epic-privacy exclusion.
+        await workItemRepository.findPublicRoadmapSubmitted(project.id, project.workspaceId, {
           limit,
           cursor,
           voterUserId: actorUserId,
         })
-      : await workItemRepository.findPublicRoadmapByStatus(
+      : // Promoted buckets read graduated work items, which CAN be a private epic's
+        // descendants — exclude them for a non-member (6.14.4).
+        await workItemRepository.findPublicRoadmapByStatus(
           project.id,
           project.workspaceId,
           promotedKeys[bucket],
-          { limit, cursor, voterUserId: actorUserId },
+          { limit, cursor, voterUserId: actorUserId, excludeIds },
         );
 
   const hasMore = rows.length > PUBLIC_ROADMAP_PAGE_SIZE;
@@ -257,11 +262,15 @@ async function countRoadmapColumn(
   project: { id: string; workspaceId: string },
   bucket: PublicRoadmapBucketKey,
   promotedKeys: Record<'planned' | 'in_progress' | 'done', string[]>,
+  excludeIds: readonly string[],
 ): Promise<number> {
   return bucket === 'submitted'
-    ? workItemRepository.countPublicRoadmapSubmitted(project.id, project.workspaceId)
+    ? // Submitted bucket = parentless triage items; never a private epic's
+      // descendant, so no epic-privacy exclusion (6.14.4).
+      workItemRepository.countPublicRoadmapSubmitted(project.id, project.workspaceId)
     : workItemRepository.countProjectIssues(project.id, project.workspaceId, {
         statuses: promotedKeys[bucket],
+        excludeIds,
       });
 }
 
@@ -488,15 +497,18 @@ export const publicProjectsService = {
    * public projection mapper. `actorUserId` nullable.
    */
   async getRoadmap(identifier: string, actorUserId: string | null): Promise<PublicRoadmapDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
     const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
     const promotedKeys = promotedRoadmapStatusKeys(statuses);
+    // Epic-privacy (6.14.4): a non-member's roadmap excludes a private epic's
+    // descendants from both the promoted-bucket cards and their header counts.
+    const hiddenIds = await resolveHiddenIds(project, isMember);
 
     const columns = await Promise.all(
       PUBLIC_ROADMAP_BUCKET_KEYS.map(async (bucket): Promise<PublicRoadmapColumnDto> => {
         const [page, totalCount] = await Promise.all([
-          loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId),
-          countRoadmapColumn(project, bucket, promotedKeys),
+          loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId, hiddenIds),
+          countRoadmapColumn(project, bucket, promotedKeys, hiddenIds),
         ]);
         return { key: bucket, totalCount, cards: page.cards, nextCursor: page.nextCursor };
       }),
@@ -520,7 +532,7 @@ export const publicProjectsService = {
     bucket: PublicRoadmapBucketKey,
     cursorRaw: string,
   ): Promise<PublicRoadmapColumnPageDto> {
-    const project = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
     const cursor = decodeRoadmapCursorForBucket(bucket, cursorRaw);
     // Only the promoted buckets consult the status-key map; submitted ignores it,
     // so deriving the keys only when needed avoids a status read for Submitted.
@@ -530,7 +542,17 @@ export const publicProjectsService = {
         : promotedRoadmapStatusKeys(
             await workflowsService.listStatusesByProject(project.id, project.workspaceId),
           );
-    const page = await loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId, cursor);
+    // Epic-privacy (6.14.4): the submitted bucket needs no exclusion (parentless
+    // triage items); a promoted bucket excludes a non-member's hidden subtree.
+    const hiddenIds = bucket === 'submitted' ? [] : await resolveHiddenIds(project, isMember);
+    const page = await loadRoadmapColumnPage(
+      project,
+      bucket,
+      promotedKeys,
+      actorUserId,
+      hiddenIds,
+      cursor,
+    );
     return { bucket, cards: page.cards, nextCursor: page.nextCursor };
   },
 

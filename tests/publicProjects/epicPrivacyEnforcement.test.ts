@@ -191,6 +191,13 @@ describe('publicProjectsService — non-member cannot read a private epic’s ch
             await publicProjectsService.getBoard(fx.projectIdentifier, nonMember.id)
           ).columns.flatMap((c) => c.cards.map((card) => card.id)),
       },
+      {
+        name: 'roadmap',
+        ids: async () =>
+          (
+            await publicProjectsService.getRoadmap(fx.projectIdentifier, nonMember.id)
+          ).columns.flatMap((c) => c.cards.map((card) => card.id)),
+      },
     ];
 
     for (const read of reads) {
@@ -199,6 +206,24 @@ describe('publicProjectsService — non-member cannot read a private epic’s ch
         expect(ids, `${read.name} must not leak ${hidden}`).not.toContain(hidden);
       }
     }
+  });
+
+  it('getRoadmap: a non-member’s Planned column EXCLUDES the hidden subtree and its count', async () => {
+    const fx = await makePublicProjectFixture();
+    const t = await buildTree(fx);
+    const nonMember = await createTestUser();
+
+    const roadmap = await publicProjectsService.getRoadmap(fx.projectIdentifier, nonMember.id);
+    const planned = roadmap.columns.find((c) => c.key === 'planned')!;
+    const plannedIds = planned.cards.map((c) => c.id);
+
+    // The 'todo'-status items map to the Planned bucket. The hidden story/task
+    // are excluded; the private epic + open epic + open story remain = 3.
+    expect(plannedIds).not.toContain(t.privStory.id);
+    expect(plannedIds).not.toContain(t.privTask.id);
+    expect(plannedIds).toContain(t.privateEpic.id);
+    expect(plannedIds).toContain(t.openStory.id);
+    expect(planned.totalCount).toBe(3);
   });
 });
 
@@ -217,6 +242,14 @@ describe('publicProjectsService — member bypass + the no-op cases', () => {
     const overview = await publicProjectsService.getOverview(fx.projectIdentifier, fx.ownerId);
     // Member sees all 5 'todo' items in the Planned bucket.
     expect(overview.stats.planned).toBe(5);
+
+    // The roadmap, too: a member's Planned column carries the hidden subtree.
+    const roadmap = await publicProjectsService.getRoadmap(fx.projectIdentifier, fx.ownerId);
+    const planned = roadmap.columns.find((c) => c.key === 'planned')!;
+    expect(planned.cards.map((c) => c.id)).toEqual(
+      expect.arrayContaining([t.privStory.id, t.privTask.id]),
+    );
+    expect(planned.totalCount).toBe(5);
   });
 
   it('a NON-PUBLIC project is unreachable by a non-member (404) — the flag is inert off the public surface', async () => {

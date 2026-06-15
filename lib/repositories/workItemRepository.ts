@@ -673,7 +673,15 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     statusKeys: string[],
-    options: { limit: number; cursor?: PublicRoadmapCursor; voterUserId: string | null },
+    options: {
+      limit: number;
+      cursor?: PublicRoadmapCursor;
+      voterUserId: string | null;
+      // Epic-privacy public exclusion (Subtask 6.14.4) — drop a private epic's
+      // descendants for a non-member viewer (resolved by
+      // `findPublicHiddenDescendantIds`). Absent/empty ⇒ no clause.
+      excludeIds?: readonly string[];
+    },
   ): Promise<PublicRoadmapRow[]> {
     if (statusKeys.length === 0) return [];
     const votes = Prisma.sql`COALESCE(vt."votes", 0)`;
@@ -700,6 +708,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${notExcludedSql('w', options.excludeIds)}
           AND w."status" = ANY(${statusKeys})
           ${cursorPred}
         ORDER BY ${votes} DESC, w."key" DESC, w."id" ASC
