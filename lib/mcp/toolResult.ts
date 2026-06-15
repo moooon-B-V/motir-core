@@ -20,7 +20,10 @@ import {
   ReplyDepthExceededError,
 } from '@/lib/comments/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
+import { FilterValidationError } from '@/lib/filters/errors';
+import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
+import { InvalidSearchCursorError } from './searchCursor';
 
 // Tool-result helpers (Story 7.8 · Subtask 7.8.4, extended by 7.8.5) — the MCP
 // analogue of the route layer's typed-error → HTTP-status mapping.
@@ -68,6 +71,27 @@ export function toolError(code: string, message: string): CallToolResult {
   };
 }
 
+/** Stable codes for a {@link FilterDecodeResult} failure reason — the codec's
+ * version/structure verdict surfaced to an agent (one per `reason`). */
+const FILTER_DECODE_CODES: Record<Exclude<FilterDecodeResult, { ok: true }>['reason'], string> = {
+  malformed: 'MALFORMED_FILTER',
+  'unsupported-version': 'UNSUPPORTED_FILTER_VERSION',
+  invalid: 'INVALID_FILTER',
+};
+
+/**
+ * Map a non-`ok` {@link FilterDecodeResult} (a `search_work_items` envelope that
+ * fails the SHARED 6.1.1 codec — a foreign version, a non-`v1` envelope, or a
+ * structurally-broken shape) to a clean `isError` tool result. The codec
+ * returns a typed FAILURE VALUE (it never throws), so this is the decode-path
+ * analogue of {@link toToolError}'s thrown-error mapping.
+ */
+export function toFilterDecodeToolError(
+  decoded: Exclude<FilterDecodeResult, { ok: true }>,
+): CallToolResult {
+  return toolError(FILTER_DECODE_CODES[decoded.reason], decoded.detail);
+}
+
 /**
  * Map a thrown service error to an `isError` tool result, or re-throw if it
  * isn't one of the tools' expected typed errors. Every branch surfaces the
@@ -104,7 +128,13 @@ export function toToolError(err: unknown): CallToolResult {
   ) {
     return toolError(err.code, err.message);
   }
-  if (err instanceof InvalidReadyCursorError) {
+  if (err instanceof InvalidReadyCursorError || err instanceof InvalidSearchCursorError) {
+    return toolError(err.code, err.message);
+  }
+  if (err instanceof FilterValidationError) {
+    // `search_work_items` (7.8.6): the registry's typed 422 — an unknown
+    // field/operator id or a value that fails its (field, operator) arity —
+    // surfaced as a clean tool error, the MCP analogue of the route's 422.
     return toolError(err.code, err.message);
   }
   if (err instanceof McpMissingContextError) {
