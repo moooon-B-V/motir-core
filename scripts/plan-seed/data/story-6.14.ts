@@ -477,7 +477,7 @@ export const story_6_14: PlanStory = {
       id: '6.14.4',
       title:
         'Server-side enforcement — exclude a private epic’s children + strip its tells from EVERY public read path (tree / detail child-panel / public board / ready set / search)',
-      status: 'blocked',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 70,
