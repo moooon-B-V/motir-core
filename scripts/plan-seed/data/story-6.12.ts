@@ -869,7 +869,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.8',
       title:
         'Project settings — the "make public" toggle + the shareable public link + the Overview/README editor',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
@@ -1005,7 +1005,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.10',
       title:
         'E2E (playwright) — anyone reads a public project LOGGED OUT (+ SEO surface), then signs in to submit (dedupe → upvote) + comment; a non-public project is not viewable',
-      status: 'blocked',
+      status: 'planned',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 55,
