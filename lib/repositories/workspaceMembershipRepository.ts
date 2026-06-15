@@ -176,6 +176,29 @@ export const workspaceMembershipRepository = {
     });
   },
 
+  /**
+   * The workspace's OWNER membership — the oldest `role: 'owner'` row (a
+   * workspace is born with exactly one owner at creation; `orderBy createdAt
+   * asc` pins a deterministic pick should role changes ever produce more than
+   * one). Used by Story 6.12's public-submit path as the deterministic "intake
+   * reporter": a cross-org public submitter is NOT a workspace member, but
+   * `createWorkItem` requires the reporter to BE one (`assertReporterMember`),
+   * so the owner stands in as `reporterId` while the real submitter rides
+   * `submittedByUserId` (the 6.11.4 seam). Read-only → the `db` singleton
+   * (optional `tx` for a caller already inside a transaction). Returns null only
+   * for a workspace with no owner (an invariant violation the caller handles).
+   */
+  async findOwnerByWorkspace(
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkspaceMembership | null> {
+    const client = tx ?? db;
+    return client.workspaceMembership.findFirst({
+      where: { workspaceId, role: 'owner' },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
   async create(
     data: { userId: string; workspaceId: string; role: MemberRole },
     tx: Prisma.TransactionClient,
