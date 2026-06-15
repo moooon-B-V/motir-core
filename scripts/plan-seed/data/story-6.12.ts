@@ -869,7 +869,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.8',
       title:
         'Project settings — the "make public" toggle + the shareable public link + the Overview/README editor',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,

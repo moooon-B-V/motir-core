@@ -487,7 +487,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.10',
       title:
         'Sprint tools — `list_sprints` / `create_sprint` / `update_sprint` / `delete_sprint` / `move_to_sprint` / `move_to_backlog` / `start_sprint` / `complete_sprint`',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -555,7 +555,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.11',
       title:
         'Integration-state substrate — `in_review` status, `work_item.session_branch`, integrated-dep readiness, `mark_integrated` / `complete_session` tools',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -625,7 +625,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.12',
       title:
         'Account-settings AREA shell — `accountSettingsNav` registry + rail-swap layout + route split + totality test',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,

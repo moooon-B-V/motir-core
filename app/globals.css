@@ -421,6 +421,26 @@
   --el-chart-deficit: var(--color-destructive); /* fill where created > resolved */
   --el-chart-surplus: var(--color-success); /* fill where resolved > created */
 
+  /* ── Public projects (Story 6.12 · public read-only view) ──────────
+     New --el-* roles 6.12.4/6.12.6/6.12.7 add here, each mapped to an
+     existing Tier-0 value (the per-component token-growth pattern). The
+     [data-theme="dark"] block re-skins them automatically because every
+     mapping is a --color-* var the Tier-1 block already flips (no concrete
+     hex). Per design/public-projects/design-notes.md "Colour roles". */
+  --el-public-banner-bg: var(--color-tint-sky); /* "you're viewing a public project" framing */
+  --el-public-banner-text: var(--color-charcoal); /* AA ~10:1 on the sky tint */
+  --el-vote-bg: var(--color-tint-lavender); /* upvote control resting fill (6.12.7) */
+  --el-vote-active-bg: var(--color-primary); /* voted: accent fill */
+  --el-vote-active-text: var(--color-primary-foreground);
+  --el-roadmap-submitted: var(--color-tint-peach);
+  --el-roadmap-planned: var(--color-tint-lavender);
+  --el-roadmap-progress: var(--color-tint-sky);
+  --el-roadmap-done: var(--color-tint-mint);
+  /* the Overview hero's soft corner washes (decorative tints only; all text
+     sits on --el-page-bg, never on the wash, so AA holds — finding #35) */
+  --el-hero-wash-a: var(--color-tint-lavender);
+  --el-hero-wash-b: var(--color-tint-sky);
+
   /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);
   --el-code-text: var(--color-charcoal);

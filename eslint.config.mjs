@@ -108,6 +108,10 @@ const eslintConfig = defineConfig([
     // Project additions:
     'node_modules/**',
     'prisma/migrations/**',
+    // Workspace-package BUILD output only — the bundled binary, not source.
+    // The package SOURCE is linted by the shared config (Subtask 7.9.1; 7.9.5
+    // wires the CLI's own coverage gate).
+    'packages/*/dist/**',
   ]),
 ]);
 

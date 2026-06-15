@@ -1,44 +1,116 @@
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { publicRequestVoteRepository } from '@/lib/repositories/publicRequestVoteRepository';
+import { boardRepository } from '@/lib/repositories/boardRepository';
+import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
+import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { triageService, type TriageSubmissionKind } from '@/lib/services/triageService';
-import { toPublicRequestMatchDto } from '@/lib/mappers/publicProjectsMappers';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  toPublicProjectOverviewDto,
+  toPublicRequestMatchDto,
+  toPublicWorkItemListItemDto,
+} from '@/lib/mappers/publicProjectsMappers';
 import {
   MAX_PUBLIC_REQUEST_DESCRIPTION_LENGTH,
   PublicProjectIntakeUnavailableError,
   PublicRequestDescriptionTooLongError,
   PublicSubmissionRateLimitedError,
 } from '@/lib/publicProjects/errors';
-import type { PublicDuplicateMatchesDto, PublicRequestMatchDto } from '@/lib/dto/publicProjects';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type {
+  PublicBoardDto,
+  PublicDuplicateMatchesDto,
+  PublicProjectOverviewDto,
+  PublicProjectStatsDto,
+  PublicRequestMatchDto,
+  PublicWorkItemPageDto,
+} from '@/lib/dto/publicProjects';
 import type { TriageSubmissionResultDto } from '@/lib/dto/triage';
 
-// publicProjectsService — the WRITE/read entry points a PUBLIC project exposes
-// to any signed-in account, cross-org included (Story 6.12). Subtask 6.12.5
-// lands the first two: the cross-account "submit a request" path (reusing the
-// 6.11.4 triage intake — no second submissions table) and the deterministic
-// duplicate-detection pre-check (Canny's "upvote this instead"). The two
-// remaining public writes — upvote + comment — land in 6.12.6 on top of the
-// same gate.
+// publicProjectsService — the SINGLE service behind every PUBLIC project surface
+// (Story 6.12). It carries two concerns over the same 6.12.3 access gate:
 //
-// Addressing: a public project is reached by its GLOBAL project id (ADR §2.2 —
-// the workspace-scoped "PROD" identifier collides across workspaces, so the
-// public surface keys off the id), and the access gate is the dedicated
-// public-read path (`projectAccessService.assertCanSubmitToTriage`), the SINGLE
-// place the org/workspace boundary is crossed. Every method here REQUIRES a
-// signed-in `actorUserId` (sign-in-to-act — the route gates the session); only
-// the WRITES are restricted, READ of a public project is anonymous (6.12.4).
+//   * READ (Subtask 6.12.4) — the anonymous, crawlable `/p/[identifier]` view.
+//     Every read method resolves the project, then calls
+//     `projectAccessService.assertCanBrowsePublic` (anonymous READ allowed on a
+//     public project; ProjectNotFoundError → 404 on a non-public one — the
+//     single auditable cross-org branch, reused not re-derived). `actorUserId`
+//     is NULLABLE (a logged-out visitor / a crawler). The reads return the
+//     PUBLIC PROJECTION DTOs (lib/dto/publicProjects.ts), which structurally
+//     lack assignees / estimates / story points / internal comments — so an
+//     internal field can never leak (absent from the shape, not DOM-hidden).
 //
-// Attribution (the 6.11.4 seam): a cross-org submitter is NOT a workspace
-// member, but `createWorkItem` requires the reporter to be one
-// (`assertReporterMember`). So the submission is attributed with the project's
-// workspace OWNER as the `reporterId` (the deterministic "intake reporter") and
-// the real cross-org account as `submittedByUserId` — exactly what
-// `CreateTriageSubmissionInput.submittedByUserId` and `createWorkItem`'s triage
-// branch were built to carry. (NOTE: docs/decisions/public-projects.md §6's
-// table says `reporterId` = the cross-org account directly; that conflicts with
-// the shipped `assertReporterMember` member gate, so the shipped code wins
-// per the decision-authority ladder — see the PR body's ADR-discrepancy flag.)
+//   * WRITE / dedupe (Subtask 6.12.5) — the cross-account "submit a request"
+//     path (reusing the 6.11.4 triage intake — no second submissions table) +
+//     the deterministic duplicate-detection pre-check (Canny's "upvote this
+//     instead"). These REQUIRE a signed-in `actorUserId` (sign-in-to-act — the
+//     route gates the session) and key off the GLOBAL project id (ADR §2.2 — the
+//     workspace-scoped "PROD" identifier collides across workspaces). Gated by
+//     `assertCanSubmitToTriage` (NOT `canEdit`).
+//
+// 4-layer: this service orchestrates repositories + sibling services and maps to
+// DTOs; the read paths own no transactions, the write path delegates to
+// `triageService.createSubmission` for its transaction. Routes parse + call ONE
+// method each.
+
+// --- READ (6.12.4) helpers -------------------------------------------------
+
+/**
+ * The public board's load cap — a board-level bound (the at-scale rule: never
+ * "load every row"). Smaller than the internal board cap because the public
+ * projection is a lightweight crawlable read, not the full working board.
+ */
+const PUBLIC_BOARD_CAP = 200;
+
+/** The Work-items tab page size (cursor-paginated, lazy — the at-scale rule). */
+const PUBLIC_WORK_ITEMS_PAGE_SIZE = 30;
+
+/** Resolve a public project by identifier + run the anonymous browse gate. */
+async function resolvePublicProject(identifier: string, actorUserId: string | null) {
+  // A public project lives in exactly one workspace, but the identifier alone
+  // doesn't name the workspace, so we can't use the workspace-scoped
+  // `findByIdentifier` here. `findPublicByIdentifier` resolves the (single)
+  // PUBLIC project carrying this key; the gate then confirms it is `public` (404
+  // otherwise — no existence leak), so a non-public project carrying the same
+  // key in another workspace stays hidden. (ADR §2.2 prefers id-addressing for
+  // the public surface to avoid the cross-workspace key collision; 6.12.4 keeps
+  // the pretty `/p/PROD` URL — the proper share token is 6.12.8. The collision
+  // is a documented edge for the demo; flagged in the 6.12.4 PR body.)
+  const project = await projectRepository.findPublicByIdentifier(identifier);
+  if (!project) throw new ProjectNotFoundError(identifier);
+  // The gate is the authority on visibility (it throws ProjectNotFoundError on a
+  // non-public project) — reuse it, never re-derive the public check.
+  await projectAccessService.assertCanBrowsePublic(project.id, actorUserId);
+  return project;
+}
+
+/** Compute the Overview stat strip from bounded counts (no per-item N+1). */
+async function computeStats(
+  projectId: string,
+  workspaceId: string,
+): Promise<PublicProjectStatsDto> {
+  const [byCategory, publicRequests, upvotes] = await Promise.all([
+    workItemRepository.countByStatusCategory(projectId, workspaceId),
+    workItemRepository.countTriageItems(projectId, workspaceId),
+    publicRequestVoteRepository.countByProject(projectId),
+  ]);
+  return {
+    publicRequests,
+    upvotes,
+    // "Planned" = everything not yet shipped (todo + in_progress); "Shipped" =
+    // the done category. "In progress" is surfaced separately on the sidebar.
+    planned: byCategory.todo + byCategory.in_progress,
+    shipped: byCategory.done,
+    inProgress: byCategory.in_progress,
+  };
+}
+
+// --- WRITE / dedupe (6.12.5) helpers ---------------------------------------
 
 // How many duplicate candidates the pre-check surfaces (bounded — never
 // load-all; the UI shows the top matches as "upvote this instead").
@@ -77,6 +149,159 @@ function checkSubmissionRateLimit(userId: string): void {
 }
 
 export const publicProjectsService = {
+  // --- READ (6.12.4) -------------------------------------------------------
+
+  /**
+   * Every public project's `{ identifier, updatedAt }` — the read behind
+   * `app/sitemap.ts` (Subtask 6.12.4). No gate: these are public by definition
+   * (the repo read constrains to `accessLevel = 'public'`). Cross-workspace
+   * (the sitemap lists every public project regardless of tenant).
+   */
+  async listPublicForSitemap(): Promise<Array<{ identifier: string; updatedAt: Date }>> {
+    return projectRepository.listPublic();
+  },
+
+  /**
+   * The public Overview/README landing (Subtask 6.12.4). Resolves the project +
+   * runs the anonymous gate, then returns the hero/meta + the authored
+   * `publicOverviewMd` (null → the UI's slim auto-intro fallback) + the
+   * at-a-glance stats + the public-safe Links. `actorUserId` nullable.
+   */
+  async getOverview(
+    identifier: string,
+    actorUserId: string | null,
+  ): Promise<PublicProjectOverviewDto> {
+    const project = await resolvePublicProject(identifier, actorUserId);
+    const [workspace, stats] = await Promise.all([
+      workspaceRepository.findById(project.workspaceId),
+      computeStats(project.id, project.workspaceId),
+    ]);
+    return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats);
+  },
+
+  /**
+   * The public read-only BOARD (Subtask 6.12.4) — the project's default board
+   * projected through the PUBLIC mapper: each card carries ONLY kind / key /
+   * identifier / title / status / priority (NO assignee, estimate, or story
+   * points). Triage + archived items are excluded by the repository read.
+   * Bounded by `PUBLIC_BOARD_CAP` (the at-scale rule). Returns an empty board
+   * (no columns) when the project has no default board yet — the public UI shows
+   * its empty state rather than 404ing a browsable project. `actorUserId`
+   * nullable.
+   */
+  async getBoard(identifier: string, actorUserId: string | null): Promise<PublicBoardDto> {
+    const project = await resolvePublicProject(identifier, actorUserId);
+    const { id: projectId, workspaceId } = project;
+
+    const board = await boardRepository.findDefaultForProject(projectId, workspaceId);
+    if (!board) {
+      return { boardId: '', name: '', columns: [], cap: PUBLIC_BOARD_CAP, truncated: false };
+    }
+
+    const [columns, mappings, statuses] = await Promise.all([
+      boardColumnRepository.findByBoard(board.id, workspaceId),
+      boardColumnStatusRepository.findByBoard(board.id, workspaceId),
+      workflowsService.listStatusesByProject(projectId, workspaceId),
+    ]);
+
+    const statusById = new Map(statuses.map((s) => [s.id, s]));
+    const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
+    const terminalKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+
+    // column id → its mapped LIVE statuses (a mapping to a deleted status is
+    // skipped — no live key).
+    const liveByColumn = new Map<string, WorkflowStatusDto[]>();
+    for (const m of mappings) {
+      const s = statusById.get(m.statusId);
+      if (!s) continue;
+      const list = liveByColumn.get(m.columnId) ?? [];
+      list.push(s);
+      liveByColumn.set(m.columnId, list);
+    }
+
+    let boardTotal = 0;
+    const builtColumns = await Promise.all(
+      columns.map(async (col) => {
+        const live = (liveByColumn.get(col.id) ?? [])
+          .slice()
+          .sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+        const statusKeys = live.map((s) => s.key);
+        if (statusKeys.length === 0) {
+          return {
+            id: col.id,
+            name: col.name,
+            statusKeys,
+            cards: [],
+            totalCount: 0,
+          };
+        }
+        // A terminal (done) column ranks by recency; an active column by board
+        // rank — same ordering the internal board uses, minus the Done-age
+        // window (the public projection shows the most recent shipped work).
+        const terminal = statusKeys.every((k) => terminalKeys.has(k));
+        const [rows, totalCount] = await Promise.all([
+          workItemRepository.findColumnCards(
+            projectId,
+            workspaceId,
+            statusKeys,
+            terminal ? 'recent' : 'position',
+            { limit: PUBLIC_BOARD_CAP },
+          ),
+          workItemRepository.countProjectIssues(projectId, workspaceId, { statuses: statusKeys }),
+        ]);
+        boardTotal += totalCount;
+        return {
+          id: col.id,
+          name: col.name,
+          statusKeys,
+          cards: rows.map((r) =>
+            toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo'),
+          ),
+          totalCount,
+        };
+      }),
+    );
+
+    return {
+      boardId: board.id,
+      name: board.name,
+      columns: builtColumns,
+      cap: PUBLIC_BOARD_CAP,
+      truncated: boardTotal > PUBLIC_BOARD_CAP,
+    };
+  },
+
+  /**
+   * The public WORK ITEMS tab (Subtask 6.12.4) — a cursor-paginated, read-only
+   * list of public-safe work items (same stripped projection as the board).
+   * Triage + archived items are excluded by the repository read. `cursor` is an
+   * opaque work-item id; `nextCursor` is null at the end of the list.
+   * `actorUserId` nullable.
+   */
+  async getWorkItems(
+    identifier: string,
+    actorUserId: string | null,
+    cursor?: string,
+  ): Promise<PublicWorkItemPageDto> {
+    const project = await resolvePublicProject(identifier, actorUserId);
+    const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
+    const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
+
+    // Over-fetch one row to detect whether a next page exists, then trim.
+    const rows = await workItemRepository.findByProject(project.id, {
+      take: PUBLIC_WORK_ITEMS_PAGE_SIZE + 1,
+      cursor,
+    });
+    const hasMore = rows.length > PUBLIC_WORK_ITEMS_PAGE_SIZE;
+    const page = hasMore ? rows.slice(0, PUBLIC_WORK_ITEMS_PAGE_SIZE) : rows;
+    return {
+      items: page.map((r) => toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo')),
+      nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+    };
+  },
+
+  // --- WRITE / dedupe (6.12.5) ---------------------------------------------
+
   /**
    * Duplicate-detection pre-check (Subtask 6.12.5) — given a draft title, return
    * the matching EXISTING active public requests so the UI can offer "upvote

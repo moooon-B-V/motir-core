@@ -80,6 +80,60 @@ export const projectRepository = {
   },
 
   /**
+   * Resolve a PUBLIC project by its `identifier` (the `PROD`-style key) WITHOUT
+   * a workspace scope — the lookup behind the anonymous public view
+   * (`/p/[identifier]`, Story 6.12 · Subtask 6.12.4). The public surface knows
+   * only the key, not the workspace, so this is one of the few deliberately
+   * cross-workspace reads; it is constrained to `accessLevel = 'public'` and
+   * non-archived rows so it can never resolve a private/internal project (the
+   * no-existence-leak posture is preserved — a non-public key resolves to null,
+   * and the projectAccessService gate re-confirms `public` regardless).
+   * `identifier` is unique per workspace; if two workspaces ever both made a
+   * project with the same key public, this returns the most recently updated
+   * (deterministic) — an acceptable edge for the showcase tenant, and a true
+   * collision is resolved by the gate + the key-uniqueness the product enforces
+   * per workspace. Read-only → `db` singleton.
+   */
+  async findPublicByIdentifier(identifier: string): Promise<Project | null> {
+    return db.project.findFirst({
+      where: { identifier, accessLevel: 'public', archivedAt: null },
+      orderBy: { updatedAt: 'desc' },
+    });
+  },
+
+  /**
+   * Every PUBLIC (accessLevel = 'public'), non-archived project across ALL
+   * workspaces — the read behind `app/sitemap.ts` (Story 6.12 · Subtask
+   * 6.12.4). This is the ONE project read that is deliberately NOT
+   * workspace-scoped: a public project is crawlable cross-org, so the sitemap
+   * lists every one regardless of tenant. Read-only path → `db` singleton.
+   * Ordered by `updatedAt` desc so the freshest public projects lead the
+   * sitemap. Returns only the columns the sitemap needs.
+   */
+  async listPublic(): Promise<Array<Pick<Project, 'identifier' | 'updatedAt'>>> {
+    return db.project.findMany({
+      where: { accessLevel: 'public', archivedAt: null },
+      select: { identifier: true, updatedAt: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+  },
+
+  /**
+   * Set the project's PUBLIC-facing fields (Story 6.12) — the authored
+   * `publicOverviewMd` README body, the only public-safe content field
+   * 6.12.3 added. Used by the 6.12.8 settings editor and by `db:seed` (to seed
+   * Motir's own canonical overview). `tx` REQUIRED; the caller has already
+   * tenant-/admin-gated the project. Only the provided fields are written.
+   */
+  async updatePublicFields(
+    id: string,
+    data: { publicOverviewMd?: string | null },
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data });
+  },
+
+  /**
    * Acquire a row-level lock on the project inside the caller's transaction —
    * the guarding read for the key-change flow (Story 6.8 · projectsService
    * `changeKey`): lock the row, then run the collision guards + the bulk
