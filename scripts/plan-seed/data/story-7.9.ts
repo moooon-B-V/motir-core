@@ -279,7 +279,7 @@ export const story_7_9: PlanStory = {
       id: '7.9.1',
       title:
         'CLI scaffold — `packages/cli` workspace package, MCP client core, `motir auth login|status|logout` + `motir link`',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
