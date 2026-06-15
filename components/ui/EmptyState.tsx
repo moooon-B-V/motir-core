@@ -26,8 +26,10 @@ import { cn } from '@/lib/utils/cn';
 export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
   /** Headline — what's missing. Required. */
   title: string;
-  /** Optional supporting copy explaining what would appear here. */
-  description?: string;
+  /** Optional supporting copy explaining what would appear here. Accepts a
+   * node so the copy can carry an inline link (e.g. the API-tokens empty
+   * state's "Read the MCP setup guide", 7.8.3); a plain string still works. */
+  description?: ReactNode;
   /** Lucide-style icon; defaults to `<Inbox />`. */
   icon?: ReactNode;
   /** Typically a `<Button>` representing the next action. */
