@@ -405,7 +405,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.7',
       title:
         'Reseed preserves live statuses — flip the seed-loader invariant (seed status becomes initial-only)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
