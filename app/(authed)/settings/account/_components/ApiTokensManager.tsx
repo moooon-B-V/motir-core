@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { CreateTokenModal } from './CreateTokenModal';
 import { RevokeTokenDialog } from './RevokeTokenDialog';
 import type { ApiTokenDto } from './apiTokensClient';
+import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 
 // The API tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
 // `account-settings.mock.html` Panels 3 + 7. It owns the token-list state
@@ -21,7 +22,9 @@ import type { ApiTokenDto } from './apiTokensClient';
 // be reached by `router.refresh()`, and create/revoke fire from INSIDE the
 // island, so a local update is the correct mechanism (no re-fetch).
 //
-// The page server-reads the initial list via `apiTokensService.listForUser`.
+// The page server-reads the initial list via `apiTokensService.listForUser`
+// (account-level) + the org → workspace tree (`listScopeOptions`) the create
+// modal scopes a new token within (bug 7.21).
 
 // The MCP setup guide the empty state links to (`docs/mcp.md`, the 7.8.8 doc).
 const MCP_GUIDE_HREF = 'https://github.com/moooon-B-V/motir-core/blob/main/docs/mcp.md';
@@ -30,9 +33,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** An expiry within this window shows the peach "expiring soon" warning chip. */
 const EXPIRING_SOON_DAYS = 7;
 
-export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto[] }) {
+export function ApiTokensManager({
+  initialTokens,
+  scopeOrgs,
+  activeWorkspaceId,
+}: {
+  initialTokens: ApiTokenDto[];
+  /** The org → workspace tree the create modal scopes a token within (bug 7.21). */
+  scopeOrgs: TokenScopeOrgDTO[];
+  /** The active workspace, pre-selected in the create modal (or null). */
+  activeWorkspaceId: string | null;
+}) {
   const t = useTranslations('settings.apiTokens');
   const locale = useLocale() as Locale;
+
+  // A token's scope spans one org (so don't repeat the org name when the account
+  // has a single org); show the workspace name, with the org as a muted prefix
+  // only when there is more than one org.
+  const multiOrg = scopeOrgs.length > 1;
 
   const [tokens, setTokens] = useState<ApiTokenDto[]>(initialTokens);
   const [createOpen, setCreateOpen] = useState(false);
@@ -120,6 +138,7 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
                 <tr className="border-b border-(--el-border)">
                   <Th>{t('columns.label')}</Th>
                   <Th>{t('columns.token')}</Th>
+                  <Th>{t('columns.workspace')}</Th>
                   <Th>{t('columns.created')}</Th>
                   <Th>{t('columns.expires')}</Th>
                   <Th>{t('columns.lastUsed')}</Th>
@@ -145,6 +164,15 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
                         <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-xs text-(--el-code-text)">
                           {token.tokenPrefix}…
                         </code>
+                      </td>
+                      <td className="py-(--spacing-control-y) pr-4 align-middle">
+                        <span
+                          className={`font-sans text-sm ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'}`}
+                        >
+                          {multiOrg
+                            ? `${token.organization.name} · ${token.workspace.name}`
+                            : token.workspace.name}
+                        </span>
                       </td>
                       <td className="py-(--spacing-control-y) pr-4 align-middle">
                         <span className={`font-sans text-sm ${dateClass}`}>
@@ -184,7 +212,13 @@ export function ApiTokensManager({ initialTokens }: { initialTokens: ApiTokenDto
         </Card>
       )}
 
-      <CreateTokenModal open={createOpen} onOpenChange={setCreateOpen} onCreated={handleCreated} />
+      <CreateTokenModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+        scopeOrgs={scopeOrgs}
+        activeWorkspaceId={activeWorkspaceId}
+      />
       {revokeTarget ? (
         <RevokeTokenDialog
           token={revokeTarget}

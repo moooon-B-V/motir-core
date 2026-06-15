@@ -18,6 +18,27 @@ export interface ApiTokenDto {
   lastUsedAt: string | null;
   /** Non-null = soft-revoked (the muted "Revoked" row). */
   revokedAt: string | null;
+  /** The workspace this token is BOUND to (bug 7.21) + its organization — the
+   * account-level list labels each row with its `org → workspace` scope, and the
+   * MCP gate resolves the request workspace from it. */
+  workspace: { id: string; name: string };
+  organization: { id: string; name: string };
+}
+
+/** One workspace a token can be scoped to (bug 7.21) — the create modal's
+ * workspace option. */
+export interface TokenScopeWorkspaceDTO {
+  id: string;
+  name: string;
+}
+
+/** One organization the user belongs to, with the workspaces of it they can
+ * mint a token in — the create modal's org → workspace picker source (bug 7.21).
+ * Orgs with zero accessible workspaces are omitted. */
+export interface TokenScopeOrgDTO {
+  id: string;
+  name: string;
+  workspaces: TokenScopeWorkspaceDTO[];
 }
 
 /** The create result. `token` is the FULL plaintext secret — returned ONCE,

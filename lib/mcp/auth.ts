@@ -1,6 +1,5 @@
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { apiTokensService } from '@/lib/services/apiTokensService';
-import { workspacesService } from '@/lib/services/workspacesService';
 import {
   ApiTokenExpiredError,
   ApiTokenRevokedError,
@@ -23,15 +22,16 @@ import type { McpAuthExtra } from './context';
 // `ServiceContext` the cookie session would have produced, so the tools hit the
 // exact 6.4 role checks + the 404-not-403 cross-tenant contract the routes do.
 //
-// Why resolve the workspace HERE (once per request) rather than per tool: it's
-// a DB read, and the actor is the same for every tool in the request. A PAT has
-// no cookie, so there is no "active workspace" hint — we resolve the user's
-// active/default workspace the same way the cookie-less path does
-// (`resolveActiveWorkspace(userId, null)`), which returns the user's first
-// workspace (self-healing a zero-membership user exactly like the HTTP path).
-// A future tool that needs to act across multiple of the user's workspaces
-// would take an explicit workspace selector; today the contract matches the
-// single-active-workspace shape the rest of the app uses.
+// The workspace comes from the TOKEN, not the user's default (bug 7.21). A PAT
+// is workspace-scoped (the verified Linear mirror): `verify` returns the
+// `workspaceId` the token was bound to at mint time, and that IS the request
+// workspace — so a token minted in workspace A always acts on A, even when A is
+// not the owner's oldest/default workspace. (The retired behaviour resolved the
+// owner's first workspace via `resolveActiveWorkspace(userId, null)`, which made
+// every token act on the signup-default workspace and left projects in any other
+// workspace unreachable.) The per-tool 6.4 gates still apply with this
+// `workspaceId`, so a token whose owner has lost membership simply gets the same
+// 404-not-403 the cookie path would.
 
 /** Extract the `Bearer` credential from an Authorization header value. */
 function bearerFromHeader(header: string | null): string | undefined {
@@ -62,8 +62,9 @@ export async function verifyMcpToken(
   if (!token || !token.startsWith(TOKEN_PREFIX)) return undefined;
 
   let user;
+  let workspaceId: string;
   try {
-    user = await apiTokensService.verify(token);
+    ({ user, workspaceId } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -75,12 +76,9 @@ export async function verifyMcpToken(
     throw err;
   }
 
-  // No cookie hint → resolve the actor's active/default workspace (the same
-  // cookie-less resolution the HTTP middleware uses). Null only if the user has
-  // no workspace AND the self-heal could not create one — reject in that case.
-  const workspaceId = await workspacesService.resolveActiveWorkspace(user.id, null, user.name);
-  if (!workspaceId) return undefined;
-
+  // The request workspace IS the workspace the token was bound to at mint time
+  // (bug 7.21) — NOT the owner's default workspace. The per-tool 6.4 gates
+  // enforce access with it.
   const extra: McpAuthExtra = { userId: user.id, workspaceId, userName: user.name };
   return {
     token,

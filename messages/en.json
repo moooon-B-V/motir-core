@@ -1652,6 +1652,7 @@
       "columns": {
         "label": "Label",
         "token": "Token",
+        "workspace": "Workspace",
         "created": "Created",
         "expires": "Expires",
         "lastUsed": "Last used",
@@ -1674,6 +1675,10 @@
         "labelField": "Label",
         "labelHelper": "A name to recognise this token by — e.g. the agent or machine using it.",
         "labelPlaceholder": "claude-code",
+        "orgField": "Organization",
+        "workspaceField": "Workspace",
+        "defaultWorkspace": "Default",
+        "scopeHelper": "This token can only access the workspace you choose here.",
         "expiresField": "Expires",
         "expiresHelper": "After this, the token stops working and agents must be re-issued one.",
         "submit": "Create token",

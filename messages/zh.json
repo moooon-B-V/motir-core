@@ -1652,6 +1652,7 @@
       "columns": {
         "label": "名称",
         "token": "令牌",
+        "workspace": "工作区",
         "created": "创建时间",
         "expires": "过期时间",
         "lastUsed": "上次使用",
@@ -1674,6 +1675,10 @@
         "labelField": "名称",
         "labelHelper": "便于识别此令牌的名称——例如使用它的 agent 或设备。",
         "labelPlaceholder": "claude-code",
+        "orgField": "组织",
+        "workspaceField": "工作区",
+        "defaultWorkspace": "默认",
+        "scopeHelper": "此令牌仅能访问你在此选择的工作区。",
         "expiresField": "过期时间",
         "expiresHelper": "过期后令牌将停止工作，需要为 agent 重新签发。",
         "submit": "创建令牌",

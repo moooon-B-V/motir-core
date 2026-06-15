@@ -1,5 +1,7 @@
 import type { User } from '@prisma/client';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { organizationsService } from '@/lib/services/organizationsService';
 import { apiTokenRepository } from '@/lib/repositories/apiTokenRepository';
 import { toApiTokenDto } from '@/lib/mappers/apiTokenMappers';
 import { generateToken, hashToken, tokenPrefixOf } from '@/lib/apiTokens/token';
@@ -10,7 +12,7 @@ import {
   InvalidApiTokenError,
   InvalidApiTokenLabelError,
 } from '@/lib/apiTokens/errors';
-import type { ApiTokenDto, CreateApiTokenResult } from '@/lib/dto/apiTokens';
+import type { ApiTokenDto, CreateApiTokenResult, TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 
 // API-token service (Story 7.8 · Subtask 7.8.1) — the auth substrate every
 // other 7.8 subtask rides. Owns transactions, token generation/hashing,
@@ -63,13 +65,22 @@ export const apiTokensService = {
    * caller shows the plaintext once with a copy affordance; after that it is
    * irretrievable.
    */
-  async create(userId: string, input: CreateApiTokenInput): Promise<CreateApiTokenResult> {
+  async create(
+    userId: string,
+    workspaceId: string,
+    input: CreateApiTokenInput,
+  ): Promise<CreateApiTokenResult> {
     const label = normalizeLabel(input.label);
+    // The token BINDS to `workspaceId` (bug 7.21), so the user must be a member
+    // of it — the create UI only offers the user's own workspaces, but the
+    // server is the authority (a forged id throws NotAMemberError → 403).
+    await workspacesService.assertMembership(userId, workspaceId);
     const token = generateToken();
     const row = await withUserContext(userId, (tx) =>
       apiTokenRepository.create(
         {
           userId,
+          workspaceId,
           label,
           tokenHash: hashToken(token),
           tokenPrefix: tokenPrefixOf(token),
@@ -81,11 +92,36 @@ export const apiTokensService = {
     return { token, dto: toApiTokenDto(row) };
   },
 
-  /** A user's tokens, newest first — the settings-list read. Display-safe
-   * DTOs (never the hash). */
+  /** A user's tokens across all their workspaces, newest first — the
+   * account-level settings list. Each DTO carries the workspace + org it is
+   * bound to (bug 7.21) so the list labels its scope. Display-safe (never the
+   * hash). */
   async listForUser(userId: string): Promise<ApiTokenDto[]> {
     const rows = await withUserContext(userId, (tx) => apiTokenRepository.findByUser(userId, tx));
     return rows.map(toApiTokenDto);
+  },
+
+  /**
+   * The org → workspace tree the create modal scopes a token within (bug 7.21):
+   * every organization the user belongs to, each with the workspaces of it they
+   * are a member of (an org with zero accessible workspaces is omitted). The
+   * modal pre-selects the active workspace; the user can pick any of these.
+   * Composes the same reads the shell switcher uses — no new persistence.
+   */
+  async listScopeOptions(userId: string): Promise<TokenScopeOrgDTO[]> {
+    const [orgs, workspaces] = await Promise.all([
+      organizationsService.listUserOrganizations(userId),
+      workspacesService.listUserWorkspaces(userId),
+    ]);
+    const workspacesByOrg = new Map<string, { id: string; name: string }[]>();
+    for (const w of workspaces) {
+      const list = workspacesByOrg.get(w.organizationId) ?? [];
+      list.push({ id: w.id, name: w.name });
+      workspacesByOrg.set(w.organizationId, list);
+    }
+    return orgs
+      .map((org) => ({ id: org.id, name: org.name, workspaces: workspacesByOrg.get(org.id) ?? [] }))
+      .filter((org) => org.workspaces.length > 0);
   },
 
   /**
@@ -113,14 +149,17 @@ export const apiTokensService = {
    * with a DISTINCT typed error: unknown/malformed → InvalidApiTokenError,
    * soft-revoked → ApiTokenRevokedError, past-expiry → ApiTokenExpiredError.
    * On success, touches `lastUsedAt` (throttled to once per 5-minute window)
-   * and returns the owning User.
+   * and returns the owning User PLUS the workspace the token is BOUND to
+   * (bug 7.21) — the MCP bearer gate resolves the request workspace from this
+   * `workspaceId`, NOT the owner's default workspace, so a token minted in
+   * workspace A always acts on A.
    *
    * Returns the raw Prisma User (not a DTO) deliberately: the only caller is
    * internal infrastructure (the 7.8.4 transport gate building the request
    * actor), the same internal-caller exception `usersService.findOrCreateOAuthUser`
    * documents — there is no public-API shape for "the authenticated principal".
    */
-  async verify(plaintext: string): Promise<User> {
+  async verify(plaintext: string): Promise<{ user: User; workspaceId: string }> {
     const tokenHash = hashToken(plaintext);
     return withSystemContext(async (tx) => {
       const row = await apiTokenRepository.findByTokenHash(tokenHash, tx);
@@ -135,7 +174,7 @@ export const apiTokensService = {
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {
         await apiTokenRepository.touchLastUsed(row.id, now, tx);
       }
-      return row.user;
+      return { user: row.user, workspaceId: row.workspaceId };
     });
   },
 };

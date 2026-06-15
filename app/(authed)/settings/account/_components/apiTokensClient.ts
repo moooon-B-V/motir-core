@@ -32,6 +32,8 @@ const BASE = '/api/me/api-tokens';
 export async function createToken(input: {
   label: string;
   expiresInDays: ExpiryChoice;
+  /** The workspace the token is scoped to (bug 7.21) — chosen in the modal. */
+  workspaceId: string;
 }): Promise<CreateApiTokenResult> {
   const res = await fetch(BASE, {
     method: 'POST',
