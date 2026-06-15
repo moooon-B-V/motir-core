@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
-import { Check, FunnelPlus, Search, SlidersHorizontal, UserX, X } from 'lucide-react';
+import { Check, CircleDashed, FunnelPlus, Search, SlidersHorizontal, UserX, X } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WorkItemTypeIcon } from '@/components/issues/WorkItemTypeIcon';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
+import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import type { WorkItemTypeDto } from '@/lib/dto/workItems';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 import { buildIssueListHref, type IssueListView, type IssueSort } from '@/lib/issues/issueListView';
 import {
@@ -17,7 +20,9 @@ import {
   toggleAssignee,
   toggleKind,
   toggleStatus,
+  toggleType,
   toggleUnassigned,
+  toggleUntyped,
   type IssueFilter,
 } from '@/lib/issues/issueListFilter';
 import {
@@ -150,6 +155,7 @@ export function IssueFilterBar({
   const pathname = usePathname();
   const t = useTranslations('issueViews');
   const tType = useTranslations('labels.issueType');
+  const tWorkType = useTranslations('labels.workItemType');
   const tStatus = useTranslations('labels.defaultStatus');
   // Protected default statuses (To Do · Blocked · In Progress · In Review · Done
   // · Cancelled) cannot be renamed, so their canonical labels are translated by
@@ -368,6 +374,36 @@ export function IssueFilterBar({
                   disabled={superseded}
                 />
               ))}
+            </div>
+          </div>
+
+          {/* WORK TYPE — the 6.15 net-new facet (the WorkItemType field, before
+              this reachable only via [Advanced]): the 10 WORK_ITEM_TYPES + the
+              nullable "Untyped" bucket. Glyph + hue via WorkItemTypeIcon
+              (WORK_ITEM_TYPE_META); Untyped = a faint dashed circle. */}
+          <div className="border-t border-(--el-border) py-1.5">
+            <FacetLabel
+              label={t('filterWorkType')}
+              count={optimistic.types.length + (optimistic.includeUntyped ? 1 : 0)}
+            />
+            <div role="listbox" aria-label={t('filterWorkType')} aria-multiselectable="true">
+              {WORK_ITEM_TYPES.map((type: WorkItemTypeDto) => (
+                <OptionRow
+                  key={type}
+                  selected={optimistic.types.includes(type)}
+                  onToggle={() => apply(toggleType(filterRef.current, type))}
+                  glyph={<WorkItemTypeIcon type={type} className="h-4 w-4" />}
+                  label={tWorkType(type)}
+                  disabled={superseded}
+                />
+              ))}
+              <OptionRow
+                selected={optimistic.includeUntyped}
+                onToggle={() => apply(toggleUntyped(filterRef.current))}
+                glyph={<CircleDashed className="h-4 w-4 text-(--el-text-faint)" aria-hidden />}
+                label={t('filterUntyped')}
+                disabled={superseded}
+              />
             </div>
           </div>
 

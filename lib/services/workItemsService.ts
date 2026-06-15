@@ -319,6 +319,8 @@ function buildRepoFilter(
 ): RepoIssueFilter {
   const repoFilter: RepoIssueFilter = {};
   if (filter.kinds && filter.kinds.length > 0) repoFilter.kinds = filter.kinds;
+  if (filter.types && filter.types.length > 0) repoFilter.types = filter.types;
+  if (filter.includeUntyped) repoFilter.includeUntyped = true;
   if (filter.statuses && filter.statuses.length > 0) repoFilter.statuses = filter.statuses;
   if (filter.assigneeIds && filter.assigneeIds.length > 0) {
     repoFilter.assigneeIds = filter.assigneeIds;
@@ -409,6 +411,8 @@ function clampIssuePageSize(pageSize: number | undefined): number {
 function repoFilterIsActive(f: RepoIssueFilter): boolean {
   return (
     f.kinds !== undefined ||
+    f.types !== undefined ||
+    f.includeUntyped === true ||
     f.statuses !== undefined ||
     f.assigneeIds !== undefined ||
     f.includeUnassigned === true ||

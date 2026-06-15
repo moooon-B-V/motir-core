@@ -4,6 +4,7 @@ import {
   type WorkItem,
   type WorkItemKind,
   type WorkItemPriority,
+  type WorkItemType,
 } from '@prisma/client';
 import { db } from '@/lib/db';
 import type { BuiltInFilterFieldId, FilterAst, FilterCondition } from '@/lib/filters/ast';
@@ -1223,7 +1224,7 @@ export const workItemRepository = {
 
     return client.$queryRaw<WorkItemForestRow[]>`
       WITH RECURSIVE forest AS (
-        SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
+        SELECT w."id", w."parentId", w."kind", w."type", w."key", w."identifier",
                w."title", w."status", w."priority", w."assigneeId", w."reporterId",
                w."dueDate", w."estimateMinutes", w."storyPoints", w."updatedAt", 1 AS depth
           FROM "work_item" w
@@ -1233,7 +1234,7 @@ export const workItemRepository = {
             AND w."archivedAt" IS NULL
             AND ${notInTriageSql('w')}
         UNION ALL
-        SELECT c."id", c."parentId", c."kind", c."key", c."identifier",
+        SELECT c."id", c."parentId", c."kind", c."type", c."key", c."identifier",
                c."title", c."status", c."priority", c."assigneeId", c."reporterId",
                c."dueDate", c."estimateMinutes", c."storyPoints", c."updatedAt", p.depth + 1
           FROM "work_item" c
@@ -2493,6 +2494,13 @@ function escapeLikePattern(value: string): string {
  */
 export interface RepoIssueFilter {
   kinds?: WorkItemKind[];
+  /** The work-item TYPE facet (the 6.15 quick-filter facet) — "any of" these
+   * `WorkItemType` members, UNION-ed with `includeUntyped` (a null `type`).
+   * `type` is nullable, so the union COALESCEs to a clean boolean exactly like
+   * the assignee facet. */
+  types?: WorkItemType[];
+  /** Include items with a null `type` (the "Untyped" bucket), OR-ed with `types`. */
+  includeUntyped?: boolean;
   statuses?: string[];
   assigneeIds?: string[];
   includeUnassigned?: boolean;
@@ -3004,6 +3012,22 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
     // Cast the bound text[] to the enum array so `kind::text = ANY(...)` compares text-to-text.
     const kinds = filter.kinds.map((k) => k as string);
     predicates.push(Prisma.sql`${t}."kind"::text = ANY(${kinds})`);
+  }
+  const types = filter.types ?? [];
+  if (types.length > 0 || filter.includeUntyped) {
+    // The work-type facet (the 6.15 quick filter). `type` is nullable (epics /
+    // stories / legacy rows are null), so — like the assignee group — OR the
+    // selected types with an `IS NULL` test for the "Untyped" bucket and
+    // COALESCE the whole group to a clean boolean (an unmatched null `type`
+    // yields SQL NULL through `= ANY`, which must read as FALSE for the
+    // projected `matched` flag, not a null DTO field).
+    const terms: Prisma.Sql[] = [];
+    if (types.length > 0) {
+      const typeStrs = types.map((ty) => ty as string);
+      terms.push(Prisma.sql`${t}."type"::text = ANY(${typeStrs})`);
+    }
+    if (filter.includeUntyped) terms.push(Prisma.sql`${t}."type" IS NULL`);
+    predicates.push(Prisma.sql`COALESCE((${Prisma.join(terms, ' OR ')}), FALSE)`);
   }
   if (filter.statuses && filter.statuses.length > 0) {
     predicates.push(Prisma.sql`${t}."status" = ANY(${filter.statuses})`);

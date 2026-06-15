@@ -488,6 +488,8 @@
     "filterActiveAria": "Filter — {count} active",
     "filterDialogLabel": "Filter work items",
     "filterKind": "Kind",
+    "filterWorkType": "Work type",
+    "filterUntyped": "Untyped",
     "filterClearAll": "Clear filters",
     "filterFindPlaceholder": "Find by ID or title…",
     "filterByText": "Filter by text",

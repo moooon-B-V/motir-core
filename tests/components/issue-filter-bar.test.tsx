@@ -117,14 +117,16 @@ describe('IssueFilterBar — trigger', () => {
   it('shows the active count badge = number of selected values', () => {
     renderBar({
       kinds: ['bug'],
+      types: ['code'],
+      includeUntyped: true,
       statuses: ['in_progress', 'done'],
       assigneeIds: [],
       includeUnassigned: true,
       advanced: null,
       text: null,
     });
-    // 1 kind + 2 statuses + Unassigned = 4
-    expect(screen.getByRole('button', { name: 'Filter — 4 active' })).toBeTruthy();
+    // 1 kind + 1 type + Untyped + 2 statuses + Unassigned = 6
+    expect(screen.getByRole('button', { name: 'Filter — 6 active' })).toBeTruthy();
   });
 });
 
@@ -135,6 +137,32 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     const kindList = screen.getByRole('listbox', { name: 'Kind' });
     fireEvent.click(within(kindList).getByRole('option', { name: 'Bug' }));
     expect(push).toHaveBeenCalledWith('/issues?kind=bug');
+  });
+
+  it('toggling a work type pushes ?type=<key> (the 6.15.5 facet)', () => {
+    renderBar();
+    open();
+    const typeList = screen.getByRole('listbox', { name: 'Work type' });
+    fireEvent.click(within(typeList).getByRole('option', { name: 'Design' }));
+    expect(push).toHaveBeenCalledWith('/issues?type=design');
+  });
+
+  it('toggling Untyped pushes the ?type=untyped token', () => {
+    renderBar();
+    open();
+    const typeList = screen.getByRole('listbox', { name: 'Work type' });
+    fireEvent.click(within(typeList).getByRole('option', { name: 'Untyped' }));
+    expect(push).toHaveBeenCalledWith('/issues?type=untyped');
+  });
+
+  it('un-checking an already-selected work type removes it', () => {
+    renderBar({ ...EMPTY_FILTER, types: ['code'] });
+    open();
+    const typeList = screen.getByRole('listbox', { name: 'Work type' });
+    const code = within(typeList).getByRole('option', { name: 'Code' });
+    expect(code.getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(code);
+    expect(push).toHaveBeenCalledWith('/issues');
   });
 
   it('toggling a status pushes ?status=<key>', () => {
