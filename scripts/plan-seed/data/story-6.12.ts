@@ -947,7 +947,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.9',
       title:
         'Tests (vitest) — access enforcement (cross-org read, writes blocked except triage/vote/comment) + dedupe + voting',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 55,
