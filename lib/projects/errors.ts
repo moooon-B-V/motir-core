@@ -35,6 +35,18 @@ export class InvalidProjectNameError extends Error {
   }
 }
 
+// The public Overview/README body exceeds the maximum allowed length (Story
+// 6.12 · Subtask 6.12.8). Project admins author it, but the field is a stored
+// public-projection payload, so a generous server cap keeps a single edit from
+// bloating the row / public read. Maps to 400.
+export class ProjectOverviewTooLongError extends Error {
+  readonly code = 'PROJECT_OVERVIEW_TOO_LONG' as const;
+  constructor(readonly max: number) {
+    super(`The project overview must be at most ${max} characters.`);
+    this.name = 'ProjectOverviewTooLongError';
+  }
+}
+
 // The new key is not a legal project key. STRICT (reject, don't normalize): an
 // explicit admin key change must not silently pad/truncate a malformed key the
 // way the create-time `normalizeIdentifier` does — renaming every issue to a key
@@ -203,7 +215,9 @@ export class InvalidProjectRoleError extends Error {
 export class InvalidAccessLevelError extends Error {
   readonly code = 'INVALID_ACCESS_LEVEL' as const;
   constructor(level: string) {
-    super(`"${level}" is not a valid project access level (use open, limited, or private).`);
+    super(
+      `"${level}" is not a valid project access level (use public, open, limited, or private).`,
+    );
     this.name = 'InvalidAccessLevelError';
   }
 }

@@ -201,6 +201,20 @@ export const projectRepository = {
     return tx.project.update({ where: { id }, data: { accessLevel } });
   },
 
+  /**
+   * Set the project's public Overview/README Markdown body (Story 6.12 ·
+   * Subtask 6.12.8). `null` clears it (the public Overview tab then falls back
+   * to the slim auto-intro, 6.12.4). A public-safe field that rides the public
+   * projection only when the project is `public`.
+   */
+  async setPublicOverview(
+    id: string,
+    publicOverviewMd: string | null,
+    tx: Prisma.TransactionClient,
+  ): Promise<Project> {
+    return tx.project.update({ where: { id }, data: { publicOverviewMd } });
+  },
+
   // --- Estimation config (Story 4.3 · Subtask 4.3.3) ------------------------
   // The project-scoped estimation settings (`estimationStatistic` / `pointScale`
   // / `customScaleValues`; see the story-4.3 module header for the

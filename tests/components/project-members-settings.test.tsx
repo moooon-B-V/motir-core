@@ -50,6 +50,7 @@ function renderAdmin(overrides: Partial<React.ComponentProps<typeof ProjectMembe
         projectName="motir"
         workspaceName="moooon"
         accessLevel="private"
+        publicOverviewMd={null}
         members={members}
         workspaceMembers={workspaceMembers}
         currentUserId={SELF}
