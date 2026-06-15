@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
@@ -12,8 +13,9 @@ import type { PublicWorkItemListItemDto } from '@/lib/dto/publicProjects';
 // cursor-paginated list of the public projection (same stripped card as the
 // board). Client island: it renders the SSR'd first page (props) and lazily
 // loads more via /api/public/p/[identifier]/items (the at-scale rule —
-// never load-all). Each row is an <a> anchored by its identifier (so a board
-// card's #identifier link lands on it); no edit affordances.
+// never load-all). Each row LINKS to the public work-item DETAIL page (6.14.11);
+// no edit affordances. The `id` anchor is kept so an older `#identifier` deep
+// link still scrolls to the row.
 
 const PRIORITY_PILL: Record<
   PublicWorkItemListItemDto['priority'],
@@ -26,17 +28,17 @@ const PRIORITY_PILL: Record<
   lowest: { tone: 'low', key: 'priorityLowest' },
 };
 
-function Row({ item }: { item: PublicWorkItemListItemDto }) {
+function Row({ item, identifier }: { item: PublicWorkItemListItemDto; identifier: string }) {
   const t = useTranslations('publicProjects');
   const pri = PRIORITY_PILL[item.priority];
-  // Not a link: 6.12.4 has no public work-item DETAIL route (that's a later
-  // card), and a public viewer must never be bounced into the authed
-  // /issues/[key] surface. The `id` anchor lets a board card's `#identifier`
-  // link scroll to this row.
+  // Links to the public work-item DETAIL page (6.14.11) — read-only, never the
+  // authed /issues/[key] surface. The `id` keeps an older `#identifier` deep
+  // link scrolling to this row.
   return (
-    <article
+    <Link
+      href={`/p/${encodeURIComponent(identifier)}/items/${encodeURIComponent(item.identifier)}`}
       id={item.identifier}
-      className="flex scroll-mt-24 items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-3 shadow-(--shadow-subtle)"
+      className="flex scroll-mt-24 items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-3 shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong)"
     >
       <IssueTypeIcon type={item.kind} className="h-4 w-4 flex-none" />
       <span className="font-mono text-[11.5px] text-(--el-text-faint)">{item.identifier}</span>
@@ -54,7 +56,7 @@ function Row({ item }: { item: PublicWorkItemListItemDto }) {
       >
         {t(pri.key)}
       </Pill>
-    </article>
+    </Link>
   );
 }
 
@@ -93,7 +95,7 @@ export function PublicWorkItemList({
       <ul className="flex flex-col gap-2.5">
         {items.map((item) => (
           <li key={item.id}>
-            <Row item={item} />
+            <Row item={item} identifier={identifier} />
           </li>
         ))}
       </ul>

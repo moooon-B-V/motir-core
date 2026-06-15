@@ -6,6 +6,24 @@
 // internet-facing submit path adds on top — the per-account throttle and the
 // description size cap (the abuse guards the ADR §6 calls for).
 
+/**
+ * The public DETAIL read (Subtask 6.14.11) couldn't resolve the requested work
+ * item WITHIN the public project — it's missing, in another project, archived
+ * (soft-deleted), a triage item that hasn't graduated to the planned tree, or a
+ * private epic's hidden descendant a non-member must not reach. The route maps
+ * this to 404 — the 404-not-403 posture (no existence leak), the same as a
+ * non-public project and exactly mirroring {@link
+ * import('@/lib/publicRequests/errors').PublicRequestNotFoundError} on the
+ * request-detail surface.
+ */
+export class PublicWorkItemNotFoundError extends Error {
+  readonly code = 'PUBLIC_WORK_ITEM_NOT_FOUND' as const;
+  constructor(identifier: string) {
+    super(`Public work item ${identifier} not found.`);
+    this.name = 'PublicWorkItemNotFoundError';
+  }
+}
+
 /** The longest a public request body (Markdown) may be — the abuse-guard size
  *  cap for an internet-facing write (the title is bounded by the shared
  *  `MAX_TRIAGE_TITLE_LENGTH`). Generous enough for a real bug report, bounded

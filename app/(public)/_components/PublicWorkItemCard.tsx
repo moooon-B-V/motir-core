@@ -12,9 +12,8 @@ import { cn } from '@/lib/utils/cn';
 // <a> (navigable, not draggable). The omissions are a read-layer projection
 // (the DTO has no assignee/estimate/storyPoints fields) — not DOM-hidden.
 //
-// Public card links land on the public work-items tab (anchored to the card) —
-// there is no public work-item DETAIL route in 6.12.4, so the link points back
-// to the list rather than 404ing into the authed /issues/[key] surface.
+// Public card links land on the public work-item DETAIL page (6.14.11) via the
+// `href` the caller builds — read-only, never the authed /issues/[key] surface.
 
 const PRIORITY_PILL: Record<
   PublicWorkItemListItemDto['priority'],
