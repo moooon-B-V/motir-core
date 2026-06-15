@@ -150,7 +150,7 @@ export const story_6_7: PlanStory = {
       id: '6.7.1',
       title:
         'Reporting-shaped corpus — `db:seed:reporting` time-spread 10k-issue seed + saved filters/dashboard/rules through the shipped services (+ helpers, CI-lane cap)',
-      status: 'blocked',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 28,
