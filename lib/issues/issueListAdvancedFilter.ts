@@ -98,6 +98,13 @@ export function clearFacets(f: IssueFilter): IssueFilter {
  * field, AND-ed, plus the single text quick-filter. */
 const FACET_EXPRESSIBLE: ReadonlyMap<string, FilterOperatorId> = new Map([
   ['kind', 'is_any_of'],
+  // The work-type facet (the 6.15 quick filter) — its selected-types row is
+  // `is_any_of`, so a quick `type` selection round-trips without superseding.
+  // The "Untyped" bucket maps to `type is_empty` (no registry sentinel — see
+  // `facetFilterToAst`), which this single-operator map can't represent, so an
+  // `is_empty` type row correctly still EXCEEDS the facets (read-only / managed
+  // in Advanced) rather than silently down-converting.
+  ['type', 'is_any_of'],
   ['status', 'is_any_of'],
   ['assignee', 'is_any_of'],
   ['text', 'contains'],

@@ -295,6 +295,18 @@ export function facetFilterToAst(facets: IssueFilter): FilterAst {
   if (facets.kinds.length > 0) {
     conditions.push({ field: 'kind', operator: 'is_any_of', value: [...facets.kinds] });
   }
+  // The work-type facet (the 6.15 quick filter). Selected types → one
+  // `is_any_of` row; the "Untyped" bucket → an `is_empty` row (the registry's
+  // `type` field is nullable but carries a closed `valueWhitelist` and NO empty
+  // sentinel, so — unlike assignee's "Unassigned" — Untyped can't ride the
+  // value list and maps to the empty operator instead). Both selected emits both
+  // rows (nothing dropped — lossless).
+  if (facets.types.length > 0) {
+    conditions.push({ field: 'type', operator: 'is_any_of', value: [...facets.types] });
+  }
+  if (facets.includeUntyped) {
+    conditions.push({ field: 'type', operator: 'is_empty', value: null });
+  }
   if (facets.statuses.length > 0) {
     conditions.push({ field: 'status', operator: 'is_any_of', value: [...facets.statuses] });
   }

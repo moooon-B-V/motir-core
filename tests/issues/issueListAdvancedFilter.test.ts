@@ -104,6 +104,8 @@ describe('setAdvancedParam / clearFacets', () => {
   it('clearFacets resets the facets but PRESERVES the advanced param', () => {
     const filter: IssueFilter = {
       kinds: ['bug'],
+      types: ['code'],
+      includeUntyped: true,
       statuses: ['todo'],
       assigneeIds: ['u1'],
       includeUnassigned: true,
@@ -121,6 +123,8 @@ describe('astExceedsFacets (the superseded gate — fires EXACTLY beyond facet e
         combinator: 'and',
         conditions: [
           { field: 'kind', operator: 'is_any_of', value: ['bug', 'task'] },
+          // the work-type facet's is_any_of row is facet-expressible (6.15.5).
+          { field: 'type', operator: 'is_any_of', value: ['code', 'design'] },
           { field: 'status', operator: 'is_any_of', value: ['todo'] },
           { field: 'assignee', operator: 'is_any_of', value: ['u1', 'unassigned'] },
           { field: 'text', operator: 'contains', value: 'oauth' },
@@ -142,6 +146,13 @@ describe('astExceedsFacets (the superseded gate — fires EXACTLY beyond facet e
     [
       'empty operator',
       { combinator: 'and', conditions: [{ field: 'assignee', operator: 'is_empty', value: null }] },
+    ],
+    [
+      // the work-type "Untyped" bucket maps to `type is_empty` — NOT facet-
+      // expressible (the single-operator map can't hold it), so it correctly
+      // supersedes rather than silently down-converting (6.15.5).
+      'type is_empty (the untyped bucket)',
+      { combinator: 'and', conditions: [{ field: 'type', operator: 'is_empty', value: null }] },
     ],
     [
       'comparison',
@@ -173,6 +184,8 @@ describe('upgradeFacetsIntoAst (the one-way lossless upgrade)', () => {
   it('carries every facet axis in as rows', () => {
     const facets: IssueFilter = {
       kinds: ['bug', 'task'],
+      types: ['code', 'design'],
+      includeUntyped: true,
       statuses: ['todo'],
       assigneeIds: ['u1'],
       includeUnassigned: true,
@@ -183,6 +196,11 @@ describe('upgradeFacetsIntoAst (the one-way lossless upgrade)', () => {
       combinator: 'and',
       conditions: [
         { field: 'kind', operator: 'is_any_of', value: ['bug', 'task'] },
+        // the work-type facet → an is_any_of row for the selected types + an
+        // is_empty row for the "Untyped" bucket (no registry sentinel — lossless,
+        // nothing dropped).
+        { field: 'type', operator: 'is_any_of', value: ['code', 'design'] },
+        { field: 'type', operator: 'is_empty', value: null },
         { field: 'status', operator: 'is_any_of', value: ['todo'] },
         { field: 'assignee', operator: 'is_any_of', value: ['u1', 'unassigned'] },
         { field: 'text', operator: 'contains', value: 'oauth' },

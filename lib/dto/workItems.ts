@@ -278,6 +278,11 @@ export interface WorkItemSubtreeDto {
  */
 export interface ProjectTreeFilter {
   kinds?: WorkItemKindDto[];
+  /** The work-item TYPE facet (the 6.15 quick-filter facet) — match any of these
+   * `WorkItemType` members. */
+  types?: WorkItemTypeDto[];
+  /** Include items with NO work type (the "Untyped" null bucket), OR-ed with `types`. */
+  includeUntyped?: boolean;
   statuses?: string[];
   assigneeIds?: string[];
   /** Include items with NO assignee (the "Unassigned" bucket), OR-ed with `assigneeIds`. */

@@ -10,7 +10,7 @@ import {
   type FilterFieldId,
   type FilterOperatorId,
 } from '@/lib/filters/ast';
-import { FILTER_FIELDS } from '@/lib/filters/registry';
+import { FILTER_FIELDS, validateFilterAst } from '@/lib/filters/registry';
 import { EMPTY_FILTER, parseIssueFilter } from '@/lib/issues/issueListFilter';
 
 // The FilterAST URL codec (Subtask 6.1.1): the round-trip property over every
@@ -173,6 +173,43 @@ describe('facetFilterToAst — the lossless 2.5.4 basic→advanced upgrade', () 
   it('the upgraded AST survives the codec round-trip', () => {
     const facets = parseIssueFilter({ kind: 'story', assignee: 'unassigned', q: '50%_done' });
     const ast = facetFilterToAst(facets);
+    expect(decodeFilterParam(encodeFilterParam(ast))).toEqual({ ok: true, ast });
+  });
+
+  // The 6.15.5 work-type facet → AST (AC: emits the `type` is_any_of condition
+  // and maps Untyped → the empty-bucket operator; lossless = nothing dropped).
+  it('maps selected work types to an is_any_of row', () => {
+    const facets = parseIssueFilter({ type: ['design', 'code'] });
+    expect(facetFilterToAst(facets)).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'type', operator: 'is_any_of', value: ['code', 'design'] }],
+    });
+  });
+
+  it('maps the Untyped bucket to a type is_empty row', () => {
+    const facets = parseIssueFilter({ type: ['untyped'] });
+    expect(facetFilterToAst(facets)).toEqual({
+      combinator: 'and',
+      conditions: [{ field: 'type', operator: 'is_empty', value: null }],
+    });
+  });
+
+  it('emits BOTH rows when types AND Untyped are selected (lossless — nothing dropped)', () => {
+    const facets = parseIssueFilter({ type: ['code', 'untyped'] });
+    expect(facetFilterToAst(facets)).toEqual({
+      combinator: 'and',
+      conditions: [
+        { field: 'type', operator: 'is_any_of', value: ['code'] },
+        { field: 'type', operator: 'is_empty', value: null },
+      ],
+    });
+  });
+
+  it('the work-type-facet AST validates against the registry + survives the codec', () => {
+    const ast = facetFilterToAst(parseIssueFilter({ type: ['code', 'design', 'untyped'] }));
+    // type is_any_of [whitelisted] + type is_empty are both legal registry
+    // conditions (no grammar/registry change needed).
+    expect(() => validateFilterAst(ast)).not.toThrow();
     expect(decodeFilterParam(encodeFilterParam(ast))).toEqual({ ok: true, ast });
   });
 });

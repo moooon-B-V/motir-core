@@ -42,6 +42,9 @@ async function setStatus(id: string, status: string): Promise<void> {
 async function setAssignee(id: string, assigneeId: string | null): Promise<void> {
   await db.workItem.update({ where: { id }, data: { assigneeId } });
 }
+async function setType(id: string, type: Prisma.WorkItemUpdateInput['type']): Promise<void> {
+  await db.workItem.update({ where: { id }, data: { type } });
+}
 
 /**
  * Build the canonical test forest in one fixture's project:
@@ -196,6 +199,45 @@ describe('workItemsService.getProjectTree — context-preserving filter', () => 
     // Only Bug X (PROD-7) is a bug, and it is a root → just it.
     expect(tree.map((n) => n.identifier)).toEqual(['PROD-7']);
     expect(tree[0]!.matched).toBe(true);
+  });
+
+  it('filters by work type (set) + the Untyped null bucket (6.15.5 facet)', async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    await setType(t.A1.id, 'code'); // Task A1 → code
+    await setType(t.B1.id, 'design'); // Task B1 → design
+    // every other node keeps its default null `type` (epics/stories are untyped).
+
+    // types = [code] → A1 matched, ancestors A + E retained; the B + X branches drop.
+    const code = await workItemsService.getProjectTree(fx.projectId, { types: ['code'] }, fx.ctx);
+    expect(findNode(code, 'PROD-3')!.matched).toBe(true); // A1
+    expect(findNode(code, 'PROD-2')!.matched).toBe(false); // A (retained ancestor)
+    expect(findNode(code, 'PROD-1')!.matched).toBe(false); // E (retained ancestor)
+    expect(findNode(code, 'PROD-6')).toBeUndefined(); // B1 (design) dropped
+    expect(findNode(code, 'PROD-7')).toBeUndefined(); // X (untyped) dropped
+
+    // includeUntyped → every null-type node matches; the two typed tasks do not.
+    const untyped = await workItemsService.getProjectTree(
+      fx.projectId,
+      { includeUntyped: true },
+      fx.ctx,
+    );
+    expect(findNode(untyped, 'PROD-7')!.matched).toBe(true); // X (untyped)
+    expect(findNode(untyped, 'PROD-4')!.matched).toBe(true); // A1a (untyped)
+    expect(findNode(untyped, 'PROD-3')!.matched).toBe(false); // A1 (code) — retained ancestor of A1a
+    expect(findNode(untyped, 'PROD-6')).toBeUndefined(); // B1 (design) leaf → pruned
+
+    // types = [design] OR Untyped → B1 + every untyped node; A1 (code) excluded.
+    const designOrUntyped = await workItemsService.getProjectTree(
+      fx.projectId,
+      { types: ['design'], includeUntyped: true },
+      fx.ctx,
+    );
+    expect(findNode(designOrUntyped, 'PROD-6')!.matched).toBe(true); // B1 (design)
+    expect(findNode(designOrUntyped, 'PROD-7')!.matched).toBe(true); // X (untyped)
+    // A1 (code) doesn't match, but is retained as the ancestor of A1a (untyped).
+    expect(findNode(designOrUntyped, 'PROD-3')!.matched).toBe(false);
+    expect(findNode(designOrUntyped, 'PROD-4')!.matched).toBe(true); // A1a (untyped)
   });
 
   it('filters by status, retaining the ancestor chain', async () => {

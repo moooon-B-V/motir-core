@@ -15,11 +15,19 @@
 // "Unassigned" bucket (items with no assignee), OR-ed with the explicit member
 // ids. `q` is the single text quick-filter.
 
-import type { ProjectTreeFilter } from '@/lib/dto/workItems';
+import type { ProjectTreeFilter, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { ISSUE_TYPES, isIssueType, type IssueType } from '@/lib/issues/parentRules';
+import { WORK_ITEM_TYPES, isWorkItemType } from '@/lib/issues/executorDefaults';
 
 /** The literal assignee token for the "Unassigned" bucket (no assignee). */
 export const UNASSIGNED_TOKEN = 'unassigned';
+
+/** The literal work-type token for the "Untyped" bucket (a null `type` — epics,
+ * stories, and legacy rows). The registry's `type` field is NULLABLE but carries
+ * a closed `valueWhitelist`, so — unlike assignee's sentinel — this token lives
+ * ONLY in the facet URL param; the facet→AST map (`facetFilterToAst`) expresses
+ * it as the `is_empty` operator instead (no registry sentinel). */
+export const UNTYPED_TOKEN = 'untyped';
 
 /**
  * The parsed, client-facing filter state. Facet axes are non-optional arrays
@@ -30,6 +38,16 @@ export const UNASSIGNED_TOKEN = 'unassigned';
  */
 export interface IssueFilter {
   kinds: IssueType[];
+  /**
+   * The work-item TYPE facet (Story 2.7 · the 6.15 quick-filter facet) — the
+   * `WorkItemType` members selected, held in canonical `WORK_ITEM_TYPES` order
+   * (one canonical URL per selection). `includeUntyped` is the OR-ed null bucket
+   * (epics/stories/legacy rows with `type = null`), mirroring how
+   * `includeUnassigned` rides the assignee facet.
+   */
+  types: WorkItemTypeDto[];
+  /** Include items with NO work type (the "Untyped" bucket), OR-ed with `types`. */
+  includeUntyped: boolean;
   statuses: string[];
   assigneeIds: string[];
   includeUnassigned: boolean;
@@ -50,6 +68,8 @@ export interface IssueFilter {
 /** The no-filter state — the full, unpruned tree. */
 export const EMPTY_FILTER: IssueFilter = {
   kinds: [],
+  types: [],
+  includeUntyped: false,
   statuses: [],
   assigneeIds: [],
   includeUnassigned: false,
@@ -63,6 +83,7 @@ export type RawParam = string | string[] | undefined;
 /** The filter slice of the `/issues` searchParams. */
 export interface IssueFilterParams {
   kind?: RawParam;
+  type?: RawParam;
   status?: RawParam;
   assignee?: RawParam;
   q?: RawParam;
@@ -91,6 +112,11 @@ export function parseIssueFilter(params: IssueFilterParams): IssueFilter {
   const kinds = dedupe(toList(params.kind))
     .filter((k): k is IssueType => isIssueType(k))
     .sort((a, b) => ISSUE_TYPES.indexOf(a) - ISSUE_TYPES.indexOf(b));
+  const typeRaw = toList(params.type);
+  const includeUntyped = typeRaw.includes(UNTYPED_TOKEN);
+  const types = dedupe(typeRaw.filter((t) => t !== UNTYPED_TOKEN))
+    .filter((t): t is WorkItemTypeDto => isWorkItemType(t))
+    .sort((a, b) => WORK_ITEM_TYPES.indexOf(a) - WORK_ITEM_TYPES.indexOf(b));
   const statuses = dedupe(toList(params.status)).sort();
   const assigneeRaw = toList(params.assignee);
   const includeUnassigned = assigneeRaw.includes(UNASSIGNED_TOKEN);
@@ -99,6 +125,8 @@ export function parseIssueFilter(params: IssueFilterParams): IssueFilter {
   const advanced = (Array.isArray(params.filter) ? params.filter[0] : params.filter)?.trim() ?? '';
   return {
     kinds,
+    types,
+    includeUntyped,
     statuses,
     assigneeIds,
     includeUnassigned,
@@ -114,6 +142,8 @@ export function parseIssueFilter(params: IssueFilterParams): IssueFilter {
 export function isFilterActive(f: IssueFilter): boolean {
   return (
     f.kinds.length > 0 ||
+    f.types.length > 0 ||
+    f.includeUntyped ||
     f.statuses.length > 0 ||
     f.assigneeIds.length > 0 ||
     f.includeUnassigned ||
@@ -129,6 +159,8 @@ export function isFilterActive(f: IssueFilter): boolean {
 export function countActiveFilters(f: IssueFilter): number {
   return (
     f.kinds.length +
+    f.types.length +
+    (f.includeUntyped ? 1 : 0) +
     f.statuses.length +
     f.assigneeIds.length +
     (f.includeUnassigned ? 1 : 0) +
@@ -144,6 +176,8 @@ export function countActiveFilters(f: IssueFilter): number {
  */
 export function appendFilterParams(params: URLSearchParams, f: IssueFilter): void {
   for (const k of f.kinds) params.append('kind', k);
+  for (const t of f.types) params.append('type', t);
+  if (f.includeUntyped) params.append('type', UNTYPED_TOKEN);
   for (const s of f.statuses) params.append('status', s);
   for (const a of f.assigneeIds) params.append('assignee', a);
   if (f.includeUnassigned) params.append('assignee', UNASSIGNED_TOKEN);
@@ -158,6 +192,8 @@ export function appendFilterParams(params: URLSearchParams, f: IssueFilter): voi
 export function toProjectTreeFilter(f: IssueFilter): ProjectTreeFilter {
   const out: ProjectTreeFilter = {};
   if (f.kinds.length > 0) out.kinds = f.kinds;
+  if (f.types.length > 0) out.types = f.types;
+  if (f.includeUntyped) out.includeUntyped = true;
   if (f.statuses.length > 0) out.statuses = f.statuses;
   if (f.assigneeIds.length > 0) out.assigneeIds = f.assigneeIds;
   if (f.includeUnassigned) out.includeUnassigned = true;
@@ -174,6 +210,20 @@ export function toggleKind(f: IssueFilter, kind: IssueType): IssueFilter {
     (a, b) => ISSUE_TYPES.indexOf(a) - ISSUE_TYPES.indexOf(b),
   );
   return { ...f, kinds };
+}
+
+/** Toggle a work type in/out of the filter (canonical `WORK_ITEM_TYPES` order). */
+export function toggleType(f: IssueFilter, type: WorkItemTypeDto): IssueFilter {
+  const has = f.types.includes(type);
+  const types = (has ? f.types.filter((t) => t !== type) : [...f.types, type]).sort(
+    (a, b) => WORK_ITEM_TYPES.indexOf(a) - WORK_ITEM_TYPES.indexOf(b),
+  );
+  return { ...f, types };
+}
+
+/** Toggle the "Untyped" bucket. */
+export function toggleUntyped(f: IssueFilter): IssueFilter {
+  return { ...f, includeUntyped: !f.includeUntyped };
 }
 
 /** Toggle a status key in/out of the filter. */

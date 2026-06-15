@@ -488,6 +488,8 @@
     "filterActiveAria": "筛选 — 已启用 {count} 项",
     "filterDialogLabel": "筛选工作项",
     "filterKind": "类型",
+    "filterWorkType": "工作类型",
+    "filterUntyped": "无类型",
     "filterClearAll": "清除筛选",
     "filterFindPlaceholder": "按ID或标题查找…",
     "filterByText": "按文本筛选",
