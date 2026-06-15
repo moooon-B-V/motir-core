@@ -2939,6 +2939,23 @@
     "priorityHigh": "高",
     "priorityMedium": "中",
     "priorityLow": "低",
-    "priorityLowest": "最低"
+    "priorityLowest": "最低",
+    "tabTree": "树形视图",
+    "treeTitle": "工作项树",
+    "treeSubtitle": "以只读、可展开的方式查看本项目的公开工作项。",
+    "treeEmptyTitle": "暂无工作项",
+    "treeEmptyBody": "该项目的公开看板上暂无内容。",
+    "treeColTitle": "标题",
+    "treeColStatus": "状态",
+    "treeColPriority": "优先级",
+    "treeLoadingChildren": "加载中…",
+    "treeLoadMoreChildren": "加载更多",
+    "treeShowingCount": "已显示 {loaded} / {total}",
+    "statusTodo": "待办",
+    "statusInProgress": "进行中",
+    "statusDone": "已完成",
+    "epicNotPublicBadge": "未公开",
+    "epicNotPublicTitle": "此史诗未公开",
+    "epicNotPublicBody": "项目管理员已将此史诗的内容设为私有。"
   }
 }

@@ -21,6 +21,7 @@ import {
   toPublicRequestMatchDto,
   toPublicRoadmapCardDto,
   toPublicWorkItemListItemDto,
+  toPublicWorkItemTreeRowDto,
 } from '@/lib/mappers/publicProjectsMappers';
 import {
   MAX_PUBLIC_REQUEST_DESCRIPTION_LENGTH,
@@ -47,6 +48,7 @@ import type {
   PublicRoadmapColumnPageDto,
   PublicRoadmapDto,
   PublicRequestDetailDto,
+  PublicTreeLevelDto,
   PublicWorkItemPageDto,
 } from '@/lib/dto/publicProjects';
 import { PUBLIC_ROADMAP_BUCKET_KEYS } from '@/lib/dto/publicProjects';
@@ -89,6 +91,14 @@ const PUBLIC_BOARD_CAP = 200;
 
 /** The Work-items tab page size (cursor-paginated, lazy — the at-scale rule). */
 const PUBLIC_WORK_ITEMS_PAGE_SIZE = 30;
+
+/**
+ * The public TREE level page size (Subtask 6.14.10) — how many siblings one lazy
+ * level loads at once before a "Load more children" affordance. Offset-paged per
+ * level (the at-scale rule: a node's children load on expand, never the whole
+ * forest up front), mirroring the authed lazy tree (2.5.13).
+ */
+const PUBLIC_TREE_PAGE_SIZE = 50;
 
 /**
  * Resolve a public project by identifier + run the anonymous browse gate, AND
@@ -486,6 +496,64 @@ export const publicProjectsService = {
         }),
       ),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+    };
+  },
+
+  /**
+   * One lazy LEVEL of the public, expandable work-item TREE (Story 6.14 ·
+   * Subtask 6.14.10) — the project's ROOTS (`parentId === null`, the SSR'd first
+   * level of the Tree tab) or one parent's DIRECT children (fetched on expand).
+   * The hierarchy is loaded a level at a time (the at-scale rule — never the
+   * whole forest), offset-paged within each level. Returns the public projection
+   * (stripped of assignee / estimate / story points) plus the lazy `hasChildren`
+   * chevron flag + the level's full `total`.
+   *
+   * Epic-privacy (6.14.4): a non-member's level EXCLUDES every descendant of a
+   * private epic — server-side, from both the rows AND the `hasChildren` probe
+   * AND the `total` denominator (so the hidden subtree's size never leaks). The
+   * private epic ROW itself stays, marked `childrenHidden` (the placeholder UI
+   * reads that). A MEMBER (or a project with no private epic) reads the full
+   * tree. Even a direct child-level fetch for a private epic returns `[]` (its
+   * descendants are excluded) — defence-in-depth behind the marker-driven UI.
+   * `actorUserId` nullable (a logged-out visitor / crawler).
+   */
+  async getProjectTreeLevel(
+    identifier: string,
+    parentId: string | null,
+    actorUserId: string | null,
+    offset = 0,
+  ): Promise<PublicTreeLevelDto> {
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+    const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
+    const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
+    const hiddenIds = await resolveHiddenIds(project, isMember);
+
+    const [rows, total] = await Promise.all([
+      // Over-fetch one row to detect a next page without a second COUNT.
+      workItemRepository.findPublicProjectTreeLevel(
+        project.id,
+        project.workspaceId,
+        parentId,
+        { take: PUBLIC_TREE_PAGE_SIZE, offset },
+        hiddenIds,
+      ),
+      workItemRepository.countPublicProjectTreeLevel(
+        project.id,
+        project.workspaceId,
+        parentId,
+        hiddenIds,
+      ),
+    ]);
+    const hasMore = rows.length > PUBLIC_TREE_PAGE_SIZE;
+    const page = hasMore ? rows.slice(0, PUBLIC_TREE_PAGE_SIZE) : rows;
+    return {
+      rows: page.map((r) =>
+        toPublicWorkItemTreeRowDto(r, categoryByKey.get(r.status) ?? 'todo', {
+          hideChildren: !isMember,
+        }),
+      ),
+      hasMore,
+      total,
     };
   },
 
