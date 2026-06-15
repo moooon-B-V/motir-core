@@ -347,7 +347,7 @@ export const story_7_9: PlanStory = {
     {
       id: '7.9.2',
       title: 'Read commands — `motir ready`, `motir status`, `motir open <key>`',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 35,
