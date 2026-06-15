@@ -237,3 +237,75 @@ describe('deleteWorkItem — races translate to typed errors', () => {
     expect(await exists(item.id)).toBe(true);
   });
 });
+
+// The cascade-impact READ the 2.8.4 confirm dialog shows before the user
+// commits (Subtask 2.8.7): the subtree size (the "Delete N items" magnitude),
+// the descendant count, and the per-kind breakdown of the descendants. Same
+// manage gate + tenant gate as deleteWorkItem; a pure read (deletes nothing).
+describe('getDeletePreview — cascade impact', () => {
+  it('counts the whole subtree with a per-kind descendant breakdown, deleting nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, sub1, sub2 } = await makeTree(fx);
+
+    const preview = await workItemsService.getDeletePreview(story.id, fx.ctx);
+
+    // story (root) + sub1 + sub2 = 3 rows; 2 descendants, both subtasks.
+    expect(preview).toEqual({ totalCount: 3, descendantCount: 2, byKind: { subtask: 2 } });
+    // It's a READ — the subtree is untouched.
+    expect(await exists(story.id)).toBe(true);
+    expect(await exists(sub1.id)).toBe(true);
+    expect(await exists(sub2.id)).toBe(true);
+  });
+
+  it('breaks the descendants down across kinds for a top-level root', async () => {
+    const fx = await makeWorkItemFixture();
+    const { epic } = await makeTree(fx);
+
+    const preview = await workItemsService.getDeletePreview(epic.id, fx.ctx);
+
+    // epic + story + sub1 + sub2 + story2 = 5 rows; descendants = 2 stories + 2 subtasks.
+    expect(preview.totalCount).toBe(5);
+    expect(preview.descendantCount).toBe(4);
+    expect(preview.byKind).toEqual({ story: 2, subtask: 2 });
+  });
+
+  it('returns a leaf with zero descendants and an empty breakdown', async () => {
+    const fx = await makeWorkItemFixture();
+    const { sub1 } = await makeTree(fx);
+
+    expect(await workItemsService.getDeletePreview(sub1.id, fx.ctx)).toEqual({
+      totalCount: 1,
+      descendantCount: 0,
+      byKind: {},
+    });
+  });
+
+  it('rejects a non-admin member with NotProjectAdminError (no impact-preview leak)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story } = await makeTree(fx);
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: fx.workspaceId });
+    const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
+
+    await expect(workItemsService.getDeletePreview(story.id, memberCtx)).rejects.toBeInstanceOf(
+      NotProjectAdminError,
+    );
+  });
+
+  it('throws WorkItemNotFoundError for a missing id', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      workItemsService.getDeletePreview('cmqfmuslu000h04jp00000000', fx.ctx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+
+  it('throws WorkItemNotFoundError for a cross-workspace id (no existence leak)', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const item = await createTestWorkItem(other, { kind: 'task', title: 'Theirs' });
+
+    await expect(workItemsService.getDeletePreview(item.id, fx.ctx)).rejects.toBeInstanceOf(
+      WorkItemNotFoundError,
+    );
+  });
+});
