@@ -25,20 +25,69 @@ export interface WhoamiResult {
   workspace: { id: string; name: string; slug: string } | null;
 }
 
-/** A ready-set row (the `list_ready` / `next_ready` DTO, terminal-relevant
- * fields). Kept loose — the CLI renders, it does not re-validate the server. */
+/** A ready-set row (the `list_ready` `ReadyItemDto`, terminal-relevant fields).
+ * Kept loose — the CLI renders, it does not re-validate the server. `key` is the
+ * `PROD-<n>` identifier; the ready row carries no `type`/`estimate` column (the
+ * /ready row is kind · key · title · priority · assignee). */
 export interface ReadyItemSummary {
   key: string;
   kind: string;
-  type: string | null;
   title: string;
   priority: string;
-  assignee?: { name: string } | null;
+  assignee?: { id: string; name: string } | null;
 }
 
 export interface ReadyPage {
   items: ReadyItemSummary[];
   nextCursor: string | null;
+}
+
+/** A sprint row (the `list_sprints` `SprintDto`, the fields `motir status`
+ * renders). */
+export interface SprintSummary {
+  id: string;
+  name: string;
+  state: 'planned' | 'active' | 'complete';
+  goal: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  issueCount: number;
+}
+
+export interface SprintList {
+  sprints: SprintSummary[];
+}
+
+/** A `search_work_items` result row (the `WorkItemListItemDto` subset the CLI
+ * renders); `status` is the raw workflow status key. */
+export interface SearchItemSummary {
+  identifier: string;
+  kind: string;
+  title: string;
+  status: string;
+  priority: string;
+}
+
+export interface SearchPage {
+  items: SearchItemSummary[];
+  total: number;
+  nextCursor: string | null;
+}
+
+/** One FilterAST condition in the tool's self-documenting expanded form. */
+export interface SearchFilterCondition {
+  field: string;
+  operator: string;
+  value: unknown;
+}
+
+/** The versioned FilterAST envelope `search_work_items` accepts — the SAME
+ * grammar the /issues `?filter=` URL + saved filters carry (`version` is the
+ * server's `FILTER_PARAM_VERSION`). */
+export interface SearchFilterEnvelope {
+  version: string;
+  combinator: 'and' | 'or';
+  conditions: SearchFilterCondition[];
 }
 
 export interface MotirClientOptions {
@@ -194,12 +243,17 @@ export class MotirClient {
     return this.callStructured('transition_status', { ...args });
   }
 
-  listSprints(args: { projectKey: string }): Promise<unknown> {
-    return this.callStructured('list_sprints', { ...args });
+  listSprints(args: { projectKey: string }): Promise<SprintList> {
+    return this.callStructured<SprintList>('list_sprints', { ...args });
   }
 
-  searchWorkItems(args: Record<string, unknown>): Promise<unknown> {
-    return this.callStructured('search_work_items', { ...args });
+  searchWorkItems(args: {
+    projectKey: string;
+    filter?: SearchFilterEnvelope;
+    cursor?: string;
+    limit?: number;
+  }): Promise<SearchPage> {
+    return this.callStructured<SearchPage>('search_work_items', { ...args });
   }
 }
 
