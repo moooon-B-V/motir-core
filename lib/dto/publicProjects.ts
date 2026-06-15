@@ -74,6 +74,70 @@ export interface PublicWorkItemPageDto {
   nextCursor: string | null;
 }
 
+// --- Public ROADMAP projection (6.12.7) ------------------------------------
+
+/**
+ * The four public roadmap buckets (Subtask 6.12.7), in display order. The
+ * project's real workflow statuses map to these four PUBLIC-facing buckets
+ * (the service owns the mapping): `submitted` = still-in-triage public
+ * requests (the demand-gathering column); `planned` = `todo`-category
+ * statuses; `in_progress` = `in_progress`-category; `done` = `done`-category
+ * EXCLUDING `cancelled`. Non-public statuses (cancelled / raw triage) never
+ * map to a bucket — they are not shown.
+ */
+export type PublicRoadmapBucketKey = 'submitted' | 'planned' | 'in_progress' | 'done';
+
+export const PUBLIC_ROADMAP_BUCKET_KEYS: readonly PublicRoadmapBucketKey[] = [
+  'submitted',
+  'planned',
+  'in_progress',
+  'done',
+] as const;
+
+/**
+ * One public roadmap card — a public-safe request/work-item projection PLUS its
+ * upvote `voteCount` (the demand signal) and `voted` (whether the CURRENT viewer
+ * has upvoted it, so the card paints its voted state; always `false` logged
+ * out). NO assignee / estimate / story points — the public projection. `key` is
+ * the per-project number behind the public `/p/<id>/items#<identifier>` link.
+ */
+export interface PublicRoadmapCardDto {
+  id: string;
+  identifier: string;
+  key: number;
+  title: string;
+  kind: WorkItemKindDto;
+  voteCount: number;
+  voted: boolean;
+}
+
+/** One public roadmap column — a status bucket, its total + its loaded page. */
+export interface PublicRoadmapColumnDto {
+  key: PublicRoadmapBucketKey;
+  /** The bucket's full card count (the header number; not the loaded length). */
+  totalCount: number;
+  /** The first/loaded page of cards (highest-demand first). */
+  cards: PublicRoadmapCardDto[];
+  /** Opaque cursor for this column's next page, or null at the end. */
+  nextCursor: string | null;
+}
+
+/** The public roadmap — the four status-grouped columns, in display order. */
+export interface PublicRoadmapDto {
+  columns: PublicRoadmapColumnDto[];
+}
+
+/**
+ * A single roadmap column's next page (the per-column "Load more" fetch). The
+ * `bucket` echoes which column the page belongs to so the client island appends
+ * it to the right column.
+ */
+export interface PublicRoadmapColumnPageDto {
+  bucket: PublicRoadmapBucketKey;
+  cards: PublicRoadmapCardDto[];
+  nextCursor: string | null;
+}
+
 /** The at-a-glance stat strip on the Overview hero + sidebar. */
 export interface PublicProjectStatsDto {
   /** Public requests submitted into triage (likely 0 until 6.12.5 ships). */
