@@ -297,8 +297,29 @@ export interface PublicProjectOverviewDto {
   workspaceName: string;
   /** The authored README Markdown, or null → the slim auto-intro fallback. */
   publicOverviewMd: string | null;
+  /**
+   * The authored public hero TAGLINE (Story 6.16 · Subtask 6.16.3) — the short
+   * one-liner under the project name; `null` when never authored (the hero then
+   * falls back to its i18n default). Public-safe — it rides this projection only
+   * because `getOverview` ran the public gate first.
+   */
+  publicTagline: string | null;
+  /**
+   * The authored public hero TAGS (Story 6.16 · Subtask 6.16.3) — the topic
+   * chips on the hero, in author order. Empty array when none authored (never
+   * `null` — the column defaults to `[]`).
+   */
+  publicTags: string[];
   stats: PublicProjectStatsDto;
   links: PublicProjectLinksDto;
+  /**
+   * Whether the CURRENT viewer may MANAGE this project (Story 6.16 · Subtask
+   * 6.16.3) — drives the on-page admin "Edit" affordance server-side. `true`
+   * only for a project admin (or workspace owner/admin) viewing the public page;
+   * an anonymous reader, a crawler, and a cross-org account all read `false`, so
+   * the edit ability never leaks to a non-admin.
+   */
+  viewerCanManage: boolean;
 }
 
 // --- Public REQUEST DETAIL (6.12.12) ---------------------------------------

@@ -128,12 +128,17 @@ export function toPublicProjectLinksDto(_project: Project): PublicProjectLinksDt
 
 /**
  * Map a project row + computed stats → the public Overview DTO. `workspaceName`
- * is read by the service (the project row doesn't carry it) and passed in.
+ * is read by the service (the project row doesn't carry it) and passed in, as is
+ * `viewerCanManage` — the service resolves it from the actor's session against
+ * the public access gate (the mapper stays a pure field-selector). The hero
+ * `publicTagline` / `publicTags` are read straight off the project row (they ride
+ * the public projection only because `getOverview` already ran the public gate).
  */
 export function toPublicProjectOverviewDto(
   project: Project,
   workspaceName: string,
   stats: PublicProjectStatsDto,
+  viewerCanManage: boolean,
 ): PublicProjectOverviewDto {
   return {
     id: project.id,
@@ -141,8 +146,11 @@ export function toPublicProjectOverviewDto(
     identifier: project.identifier,
     workspaceName,
     publicOverviewMd: project.publicOverviewMd ?? null,
+    publicTagline: project.publicTagline ?? null,
+    publicTags: project.publicTags,
     stats,
     links: toPublicProjectLinksDto(project),
+    viewerCanManage,
   };
 }
 

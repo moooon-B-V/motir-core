@@ -285,17 +285,26 @@ export const projectRepository = {
   },
 
   /**
-   * Set the project's public Overview/README Markdown body (Story 6.12 ·
-   * Subtask 6.12.8). `null` clears it (the public Overview tab then falls back
-   * to the slim auto-intro, 6.12.4). A public-safe field that rides the public
-   * projection only when the project is `public`.
+   * Set the project's public hero fields — the Overview/README body (Story 6.12
+   * · Subtask 6.12.8) plus the tagline + tags (Story 6.16 · Subtask 6.16.3). A
+   * PARTIAL update: only the keys present in `data` are written, so a caller can
+   * author one field without touching the others. `publicOverviewMd` /
+   * `publicTagline` set to `null` clears that field (the public surface then
+   * falls back to its default); `publicTags` is replaced wholesale with the
+   * given array. Public-safe fields that ride the public projection only when
+   * the project is `public`. The service owns validation; this is the single
+   * Prisma op.
    */
   async setPublicOverview(
     id: string,
-    publicOverviewMd: string | null,
+    data: {
+      publicOverviewMd?: string | null;
+      publicTagline?: string | null;
+      publicTags?: string[];
+    },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
-    return tx.project.update({ where: { id }, data: { publicOverviewMd } });
+    return tx.project.update({ where: { id }, data });
   },
 
   // --- Estimation config (Story 4.3 · Subtask 4.3.3) ------------------------

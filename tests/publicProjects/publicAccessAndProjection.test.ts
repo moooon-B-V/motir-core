@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { publicRequestsService } from '@/lib/services/publicRequestsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -301,5 +302,48 @@ describe('public WRITE matrix (6.12.9) — normal writes blocked, the three gran
     expect(comment.author.id).toBe(actor.id);
     const row = await db.comment.findUnique({ where: { id: comment.id } });
     expect(row!.isPublic).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. Public hero fields + viewerCanManage on the Overview read (6.16.3)
+// ---------------------------------------------------------------------------
+
+describe('public Overview hero (6.16.3) — authored tagline/tags + viewerCanManage', () => {
+  it('surfaces the authored tagline + tags through the public Overview projection', async () => {
+    const fx = await makePublicProjectFixture();
+    // Author the hero via the admin write path (fx owner manages the project).
+    await projectsService.setPublicOverview({
+      key: fx.projectIdentifier,
+      ctx: fx.ctx,
+      publicTagline: 'Plan, build, ship',
+      publicTags: ['agile', 'roadmap'],
+    });
+
+    const overview = await publicProjectsService.getOverview(fx.projectIdentifier, null);
+    expect(overview.publicTagline).toBe('Plan, build, ship');
+    expect(overview.publicTags).toEqual(['agile', 'roadmap']);
+  });
+
+  it('defaults the hero fields when never authored (null tagline, empty tags)', async () => {
+    const fx = await makePublicProjectFixture();
+    const overview = await publicProjectsService.getOverview(fx.projectIdentifier, null);
+    expect(overview.publicTagline).toBeNull();
+    expect(overview.publicTags).toEqual([]);
+  });
+
+  it('viewerCanManage is TRUE only for a managing viewer; false for anon + cross-org', async () => {
+    const fx = await makePublicProjectFixture();
+    const crossOrg = await createTestUser();
+
+    // The project owner (workspace owner → manager) reads an editable hero.
+    const asOwner = await publicProjectsService.getOverview(fx.projectIdentifier, fx.ownerId);
+    expect(asOwner.viewerCanManage).toBe(true);
+
+    // An anonymous reader and a cross-org account never get the edit ability.
+    const asAnon = await publicProjectsService.getOverview(fx.projectIdentifier, null);
+    expect(asAnon.viewerCanManage).toBe(false);
+    const asCrossOrg = await publicProjectsService.getOverview(fx.projectIdentifier, crossOrg.id);
+    expect(asCrossOrg.viewerCanManage).toBe(false);
   });
 });

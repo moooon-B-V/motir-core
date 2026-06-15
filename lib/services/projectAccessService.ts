@@ -299,6 +299,7 @@ export const projectAccessService = {
    */
   canBrowse,
   canEdit,
+  canManageProject,
 
   /**
    * Assert the actor may BROWSE the project — gate the read paths. Throws
@@ -401,10 +402,15 @@ export const projectAccessService = {
     projectId: string,
     actorUserId: string | null,
     tx?: Prisma.TransactionClient,
-  ): Promise<{ isMember: boolean }> {
+  ): Promise<{ isMember: boolean; canManage: boolean }> {
     const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
     if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
-    return { isMember: inputs.workspaceRole != null || inputs.projectRole != null };
+    return {
+      isMember: inputs.workspaceRole != null || inputs.projectRole != null,
+      // The in-place "Edit" affordance gate for the public page (Subtask 6.16.3)
+      // — admin-only; an anonymous / cross-org viewer resolves to `false`.
+      canManage: canManageProject(inputs),
+    };
   },
 
   /**
