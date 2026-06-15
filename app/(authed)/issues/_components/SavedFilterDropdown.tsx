@@ -53,6 +53,10 @@ export interface SavedFilterDropdownProps {
   /** The decoded active AST — only used so the apply path can compose URLs
    * (the dropdown itself reads the applied filter from the session). */
   ast: FilterAst | null;
+  /** Navigation override (Subtask 6.15.3): the board injects
+   * `buildBoardFilterHref` (board-scoped URL, no view/sort). Defaults to the
+   * /issues `buildIssueListHref`. */
+  buildHref?: (filter: IssueFilter) => string;
 }
 
 export function SavedFilterDropdown({
@@ -61,10 +65,13 @@ export function SavedFilterDropdown({
   view,
   sort,
   filter,
+  buildHref,
 }: SavedFilterDropdownProps) {
   const t = useTranslations('savedFilters');
   const router = useRouter();
   const pathname = usePathname();
+  const hrefFor = (next: IssueFilter) =>
+    buildHref ? buildHref(next) : buildIssueListHref(pathname, { view, sort, filter: next });
   const { toast } = useToast();
   const session = useSavedFilterSession();
 
@@ -158,13 +165,7 @@ export function SavedFilterDropdown({
       }
       session?.setApplied(next);
       setOpen(false);
-      router.push(
-        buildIssueListHref(pathname, {
-          view,
-          sort,
-          filter: setAdvancedParam(clearFacets(filter), resolved.ast),
-        }),
-      );
+      router.push(hrefFor(setAdvancedParam(clearFacets(filter), resolved.ast)));
     } catch {
       toast({ variant: 'error', title: t('applyError') });
     } finally {

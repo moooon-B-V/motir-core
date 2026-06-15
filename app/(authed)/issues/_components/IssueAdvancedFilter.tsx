@@ -63,6 +63,10 @@ export interface IssueAdvancedFilterProps {
   /** Field-def override for tests (the registry-driven AC); defaults to the
    * registry's built-ins + the project's dynamic custom-field entries. */
   fields?: FilterFieldDef[];
+  /** Navigation override (Subtask 6.15.3): the board injects
+   * `buildBoardFilterHref` (board-scoped URL, no view/sort). Defaults to the
+   * /issues `buildIssueListHref`. */
+  buildHref?: (filter: IssueFilter) => string;
 }
 
 export function IssueAdvancedFilter({
@@ -78,9 +82,12 @@ export function IssueAdvancedFilter({
   referencedLabels,
   projectKey,
   fields,
+  buildHref,
 }: IssueAdvancedFilterProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const hrefFor = (next: IssueFilter) =>
+    buildHref ? buildHref(next) : buildIssueListHref(pathname, { view, sort, filter: next });
   const t = useTranslations('issueViews');
   // Page-shared open state (the summary chips + the facet upgrade open the
   // builder from outside the toolbar); local fallback when no provider.
@@ -129,7 +136,7 @@ export function IssueAdvancedFilter({
     if (nextFilter.advanced === lastPushedRef.current) return;
     const push = () => {
       lastPushedRef.current = nextFilter.advanced;
-      router.push(buildIssueListHref(pathname, { view, sort, filter: nextFilter }));
+      router.push(hrefFor(nextFilter));
     };
     if (opts?.debounce) {
       pushTimer.current = setTimeout(push, 300);

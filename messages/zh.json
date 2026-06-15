@@ -1720,8 +1720,6 @@
   "boards": {
     "heading": "面板",
     "subtitle": "{project} 的看板面板",
-    "filter": "筛选",
-    "filterComingSoon": "面板筛选即将推出",
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，以查看其面板。",
     "loadingLabel": "正在加载面板",
@@ -1764,6 +1762,9 @@
     "moveErrorDescription": "无法移动 {key}，已返回原位。",
     "emptyTitle": "还没有工作项",
     "emptyDescription": "此面板还没有任何工作项。创建一个，它就会显示在这里。",
+    "filteredEmptyTitle": "没有工作项匹配此筛选",
+    "filteredEmptyDescription": "此面板上没有工作项匹配当前筛选。清除筛选或调整条件即可查看它们。",
+    "filteredEmptyClear": "清除筛选",
     "unmappedLabel": "不在此面板上的状态",
     "unmappedText": "以下状态不在此面板上——其中的工作项不会显示在这里：",
     "unmappedMapColumns": "映射到列",

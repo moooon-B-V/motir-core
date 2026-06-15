@@ -8,6 +8,10 @@ import {
   InvalidSwimlaneGroupByError,
   NotBoardAdminError,
 } from '@/lib/boards/errors';
+import { decodeFilterParam } from '@/lib/filters/ast';
+import { FilterValidationError } from '@/lib/filters/errors';
+import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
+import type { BoardFilterInput } from '@/lib/dto/boards';
 
 // GET /api/board (Subtask 3.1.6) — the board projection for the ACTIVE project's
 // default board: a BoardProjectionDto (columns in workflow order, each with a
@@ -27,6 +31,19 @@ import {
 // its `?board=` selection here as `?boardId=`. The service tenant-gates the id
 // to the active project/workspace (a stale / cross-project id → 404), so the
 // param is safe to take from the client.
+//
+// Board FILTER (Story 6.15 · 6.15.2 read + 6.15.3 wiring): a `?filter=v1:` query
+// param carries the COMPILED filter AST (the board page merges the toolbar's
+// facets + advanced `?filter=` into one AST via `upgradeFacetsIntoAst`, then
+// encodes it here). It's decoded with the SAME `decodeFilterParam` codec the
+// /issues navigator uses (one codec, two carriers) and threaded to
+// `getBoard` as a `BoardFilterInput.ast`, which narrows every column + the
+// cap/`truncated` count + swimlane lanes and composes with the Scrum sprint
+// scope. A malformed/forged param decodes to `!ok` → treated as NO filter (the
+// unfiltered projection — the page only ever emits a valid param, so this is the
+// forged-URL degrade, mirroring the navigator's recoverable-state handling).
+// `getBoard` re-validates the AST against the registry, so a structurally-valid
+// but semantically-bad condition throws `FilterValidationError` → 422.
 
 export async function GET(req: Request): Promise<Response> {
   const session = await getSession();
@@ -40,17 +57,39 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
 
-  const boardId = new URL(req.url).searchParams.get('boardId')?.trim() || undefined;
+  const params = new URL(req.url).searchParams;
+  const boardId = params.get('boardId')?.trim() || undefined;
+
+  // Decode the optional compiled-filter param. A bad decode → no filter (the
+  // graceful degrade, not a 400): the page never emits a malformed param, so
+  // this only guards a hand-forged URL, which should show the full board.
+  const rawFilter = params.get('filter')?.trim() || undefined;
+  let filter: BoardFilterInput | undefined;
+  if (rawFilter) {
+    const decoded = decodeFilterParam(rawFilter);
+    if (decoded.ok && decoded.ast.conditions.length > 0) filter = { ast: decoded.ast };
+  }
 
   try {
     const board = await boardsService.getBoard(
       ctx.projectId,
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       boardId,
+      filter,
     );
     return NextResponse.json(board);
   } catch (err) {
     if (err instanceof BoardNotFoundError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    // An inline filter AST that fails registry validation (6.1.1) → 422.
+    if (err instanceof FilterValidationError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    // A saved-filter id that resolves to nothing/unauthorized (only reachable
+    // via `BoardFilterInput.savedFilterId`, which this route does not currently
+    // emit — mapped for the service's full contract) → 404.
+    if (err instanceof SavedFilterNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
     throw err;

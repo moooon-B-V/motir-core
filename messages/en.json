@@ -1720,8 +1720,6 @@
   "boards": {
     "heading": "Boards",
     "subtitle": "Kanban board for {project}",
-    "filter": "Filter",
-    "filterComingSoon": "Board filtering is coming soon",
     "noProjectTitle": "No project selected",
     "noProjectDescription": "Pick or create a project from the switcher to see its board.",
     "loadingLabel": "Loading board",
@@ -1764,6 +1762,9 @@
     "moveErrorDescription": "Couldn’t move {key}. It was returned to its place.",
     "emptyTitle": "No work items yet",
     "emptyDescription": "This board doesn’t have any work items yet. Create one and it’ll show up here.",
+    "filteredEmptyTitle": "No work items match this filter",
+    "filteredEmptyDescription": "No work items on this board match the active filter. Clear it or adjust the conditions to see them.",
+    "filteredEmptyClear": "Clear filter",
     "unmappedLabel": "Statuses not on this board",
     "unmappedText": "These statuses aren’t on this board — work items in them are hidden here:",
     "unmappedMapColumns": "Map columns",
