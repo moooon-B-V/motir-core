@@ -17,3 +17,32 @@ export class InvalidProjectSquareCursorError extends Error {
     this.name = 'InvalidProjectSquareCursorError';
   }
 }
+
+/**
+ * A client supplied an unrecognised `rank` query param to the directory read —
+ * one outside the `trending | popular | recent` set (Subtask 6.13.4). The route
+ * maps this to 400 (Bad Request). An absent `rank` is NOT an error — it falls
+ * back to the default rank; this fires only on a present-but-invalid value.
+ */
+export class InvalidProjectSquareRankError extends Error {
+  readonly code = 'INVALID_RANK' as const;
+  constructor() {
+    super('Invalid project-square rank.');
+    this.name = 'InvalidProjectSquareRankError';
+  }
+}
+
+/**
+ * A client supplied an unrecognised `window` query param — one outside the
+ * `day | week | month` Trending recency set (Subtask 6.13.4). The route maps
+ * this to 400. An absent `window` falls back to the default; this fires only on
+ * a present-but-invalid value. (Only the `trending` rank reads `window`; it is
+ * ignored for popular/recent.)
+ */
+export class InvalidProjectSquareWindowError extends Error {
+  readonly code = 'INVALID_WINDOW' as const;
+  constructor() {
+    super('Invalid project-square trending window.');
+    this.name = 'InvalidProjectSquareWindowError';
+  }
+}
