@@ -7,6 +7,7 @@ import { commentRepository } from '@/lib/repositories/commentRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -678,28 +679,29 @@ async function readTriageQueuePage(
 
 /**
  * Resolve a triage item's submitter into the SHIPPED {@link TriageSubmitterDto}
- * discriminated shape (mirrors `triageMappers.toSubmitterDto`, which works over
- * the joined queue row; the detail read has only the bare `WorkItem`, so it
- * looks the reporter up via the user repository). An external submission is the
- * one with a captured `externalSubmitterEmail`; otherwise it is a member
- * submission whose reporter IS the submitter.
+ * shape (mirrors `triageMappers.toSubmitterDto`, which works over the joined
+ * queue row; the detail read has only the bare `WorkItem`, so it looks the
+ * submitter + workspace-membership up via the repositories). Intake is signed-in
+ * only (the 2026-06-14 revision — Subtask 6.11.10): the submitter is the real
+ * `submittedByUserId` account, classified `member` when it belongs to the item's
+ * workspace and `public` for a signed-in non-member (Story 6.12). A
+ * legacy/never-attributed item (null `submittedByUserId`) maps to a `public`
+ * shape with a null `userId`.
  */
 async function resolveSubmitter(item: WorkItem): Promise<TriageSubmitterDto> {
-  if (item.externalSubmitterEmail !== null) {
-    return {
-      kind: 'external',
-      userId: null,
-      name: item.externalSubmitterName,
-      email: item.externalSubmitterEmail,
-      image: null,
-    };
+  const submitterId = item.submittedByUserId;
+  if (submitterId === null) {
+    return { kind: 'public', userId: null, name: null, email: null, image: null };
   }
-  const reporter = await userRepository.findById(item.reporterId);
+  const [submitter, membership] = await Promise.all([
+    userRepository.findById(submitterId),
+    workspaceMembershipRepository.findByUserAndWorkspace(submitterId, item.workspaceId),
+  ]);
   return {
-    kind: 'member',
-    userId: item.reporterId,
-    name: reporter?.name ?? null,
-    email: reporter?.email ?? null,
-    image: reporter?.image ?? null,
+    kind: membership !== null ? 'member' : 'public',
+    userId: submitterId,
+    name: submitter?.name ?? null,
+    email: submitter?.email ?? null,
+    image: submitter?.image ?? null,
   };
 }

@@ -1,38 +1,34 @@
 // DTOs for the triage inbox (Story 6.11). What crosses the HTTP / Server-Action
 // boundary for the triage-queue read (Subtask 6.11.3) — no Prisma row shape
 // leaks. Dates become ISO-8601 strings; the submitter is resolved to a single
-// discriminated shape (member vs external) so the inbox UI (6.11.6) renders an
-// avatar OR an "external" chip without re-deriving origin.
+// shape (member vs public) so the inbox UI (6.11.6) renders the submitter avatar
+// and a "Public" chip without re-deriving origin.
 
 import type { WorkItemKindDto, WorkItemPriorityDto } from './workItems';
 import type { CommentDTO } from './comments';
 import type { AttachmentDTO } from './attachments';
 
 /**
- * Who submitted a triage item (ADR §3). `member` = an in-app submission whose
- * reporter IS the submitter (a real `User`); `external` = an unauthenticated
- * public-portal submission attributed to the per-project intake user, with the
- * real submitter captured as a name/email and NO tenant account. Origin is
- * derived from `externalSubmitterEmail IS NOT NULL` on the row — no redundant
- * column is stored.
+ * Who submitted a triage item (ADR §3, the 2026-06-14 signed-in-only revision —
+ * Subtask 6.11.10). Intake is signed-in only, so EVERY triage item carries a
+ * real account (`submittedByUserId`); the captured-external name/email shape is
+ * retired. `kind` distinguishes the two signed-in origins, derived from whether
+ * the submitter is a member of the work item's workspace:
+ *   - `member` — a workspace member submitting through the in-app "report a bug
+ *     / request a feature" widget.
+ *   - `public` — a signed-in NON-member submitting through Story 6.12's
+ *     public-project "Submit a request" form (granted by `canSubmitToTriage`);
+ *     they have an account but no tenant access.
+ * `userId` is the submitter's account id (null only for a legacy/never-attributed
+ * triage row); `name` / `email` / `image` are that account's display fields.
  */
-export type TriageSubmitterDto =
-  | {
-      kind: 'member';
-      /** The submitting member's user id (the work item's reporter). */
-      userId: string;
-      name: string | null;
-      email: string | null;
-      image: string | null;
-    }
-  | {
-      kind: 'external';
-      /** External submissions have no account. */
-      userId: null;
-      name: string | null;
-      email: string | null;
-      image: null;
-    };
+export interface TriageSubmitterDto {
+  kind: 'member' | 'public';
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  image: string | null;
+}
 
 /**
  * One row of the triage inbox queue. The lighter list shape (no full Markdown

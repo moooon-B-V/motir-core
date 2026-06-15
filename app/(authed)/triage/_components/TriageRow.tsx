@@ -24,7 +24,7 @@ export function TriageRow({ item, active, onSelect }: TriageRowProps) {
   const format = useFormatter();
 
   const submitterName = item.submitter.name ?? t('unknownSubmitter');
-  const isPublic = item.submitter.kind === 'external';
+  const isPublic = item.submitter.kind === 'public';
   const snoozed = item.snoozedUntil !== null;
   const snoozeDay = snoozed
     ? format.dateTime(new Date(item.snoozedUntil!), { weekday: 'short' })

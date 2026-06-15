@@ -756,14 +756,6 @@ model WorkItem {
   // a snoozed item is still `triagedAt`-marked, so still hidden from every tree /
   // board / list / ready / search read.
   snoozedUntil           DateTime?
-  // External-portal submitter identity (ADR §3 — the ORIGINAL model). DEAD as of
-  // the 2026-06-14 signed-in-only revision (Subtask 6.11.4): intake is signed-in
-  // only, so attribution is ALWAYS a real `submittedByUserId`. These columns are
-  // unreachable and are DROPPED by Subtask 6.11.10 (the ADR §3 amend + migration);
-  // kept here until then so 6.11.4 ships an additive migration with no consumer
-  // churn.
-  externalSubmitterName  String?
-  externalSubmitterEmail String?
   // Triage submitter (Story 6.11 · Subtask 6.11.4, the 2026-06-14 signed-in-only
   // revision). The human who SUBMITTED a triage item — ALWAYS a real account: a
   // workspace member (the in-app "report a bug / request a feature" widget) OR a
@@ -772,8 +764,10 @@ model WorkItem {
   // tenant reporter (a workspace member): for an in-app member submit the two are
   // EQUAL; for a 6.12 non-member submit the reporter is the project's intake
   // member while THIS records the real (non-member) submitter. The inbox derives
-  // "member vs public" from this + workspace membership (the captured name/email
-  // shape is retired by 6.11.10). NULL on every non-triage item (and on a
+  // "member vs public" from this + workspace membership — the original
+  // captured-external `externalSubmitter{Name,Email}` columns were retired by
+  // Subtask 6.11.10 (intake is signed-in only, so attribution is always a real
+  // account; there is no anonymous portal). NULL on every non-triage item (and on a
   // never-attributed legacy triage row). `SetNull` (NOT `Restrict`): deleting the
   // submitter must never delete or block the work item — the `reporter`
   // (`Restrict`) is the durable owner; a departed submitter just loses
