@@ -1075,7 +1075,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.11',
       title:
         'Public submit-request FORM + duplicate-detection "upvote this instead" UI (wire the 6.12.5 backend into the public surface)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
