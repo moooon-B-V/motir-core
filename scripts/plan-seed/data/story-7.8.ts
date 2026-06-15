@@ -555,7 +555,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.11',
       title:
         'Integration-state substrate — `in_review` status, `work_item.session_branch`, integrated-dep readiness, `mark_integrated` / `complete_session` tools',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
