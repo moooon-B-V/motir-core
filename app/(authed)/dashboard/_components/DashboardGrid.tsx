@@ -447,6 +447,7 @@ export function DashboardGrid({
           {cols.map((colWidgets, c) => (
             <div
               key={c}
+              role="group"
               className="flex flex-col gap-4"
               aria-label={t('grid.columnAria', { n: c + 1 })}
             >
@@ -527,6 +528,7 @@ function EditColumn({ column, children }: { column: number; children: React.Reac
   return (
     <div
       ref={setNodeRef}
+      role="group"
       aria-label={t('grid.columnAria', { n: column + 1 })}
       data-testid={`dashboard-column-${column}`}
       className={`flex min-h-32 flex-col gap-4 rounded-(--radius-card) p-1 ${
