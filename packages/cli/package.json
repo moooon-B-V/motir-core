@@ -1,0 +1,32 @@
+{
+  "name": "@motir/cli",
+  "version": "0.1.0",
+  "description": "Motir CLI — terminal dispatch of the work loop (an MCP client of the Motir server).",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "motir": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.26.0",
+    "commander": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}

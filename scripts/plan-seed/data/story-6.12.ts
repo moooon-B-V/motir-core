@@ -752,7 +752,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.6',
       title:
         'Upvoting + comments on public requests — the vote model (the demand signal the triage queue sorts by)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -869,7 +869,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.8',
       title:
         'Project settings — the "make public" toggle + the shareable public link + the Overview/README editor',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
@@ -947,7 +947,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.9',
       title:
         'Tests (vitest) — access enforcement (cross-org read, writes blocked except triage/vote/comment) + dedupe + voting',
-      status: 'blocked',
+      status: 'planned',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 55,

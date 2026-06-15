@@ -244,13 +244,19 @@ export const story_7_8: PlanStory = {
       executor: 'coding_agent',
       estimateMinutes: 45,
       descriptionMd:
-        'The human half of the token lifecycle, matching the 7.8.2 design asset exactly.\n\n' +
+        'The human half of the token lifecycle, matching the 7.8.2 design asset exactly — the ' +
+        '**Security → API tokens pane INSIDE the 7.8.12 account-settings area** (design Panels ' +
+        '3–8). The area shell (registry + rail-swap layout + route split) is 7.8.12; this ' +
+        "subtask adds the API-tokens route page and **flips the registry's reserved " +
+        '`apiTokens` entry from `placeholder` to a real entry** (so the totality test now ' +
+        'requires this route — which this PR adds).\n\n' +
         'Routes (HTTP-only, 4-layer): `GET/POST /api/me/api-tokens`, `DELETE ' +
         '/api/me/api-tokens/[tokenId]` — session-authed (the PAT is for agents; the UI that ' +
         'MINTS it is cookie-session only, so a leaked PAT cannot mint more PATs), each calling ' +
-        'one `apiTokensService` method. Page: an "API tokens" section/tab in Settings → ' +
-        'Account rendering the 7.8.2 panels — list, create modal with expiry select, the ' +
-        'shown-once copy state, revoke confirm, empty state.\n\n' +
+        'one `apiTokensService` method. Page: the `settings/account/api-tokens/page.tsx` pane ' +
+        'rendering the 7.8.2 panels — the client-island token list (optimistic insert / ' +
+        'mark-revoked, NOT a `router.refresh()`), create modal with expiry select, the ' +
+        'shown-once copy state + toast, revoke confirm, empty state.\n\n' +
         '## Acceptance criteria\n\n' +
         '- Create → modal shows the plaintext exactly once with a working copy affordance; ' +
         'after close it is irretrievable (only prefix shown); revoke flips the row to the ' +
@@ -262,12 +268,13 @@ export const story_7_8: PlanStory = {
         '- Vitest covers the three routes; an E2E covers create → copy → revoke → the ' +
         'revoked-state render.\n\n' +
         '## Context refs\n\n' +
-        '- `design/settings/api-tokens.mock.html` + `design-notes.md` (7.8.2 — REQUIRED ' +
-        'design reference)\n' +
+        '- `design/settings/account-settings.mock.html` + `design-notes.md` (7.8.2 — REQUIRED ' +
+        'design reference; Panels 3–8 are this surface)\n' +
         '- `lib/services/apiTokensService.ts` (7.8.1)\n' +
-        '- `app/(authed)/settings/account/page.tsx` + `_components/` (host page patterns)\n\n' +
+        '- `lib/settings/accountSettingsNav.ts` + `app/(authed)/settings/account/layout.tsx` ' +
+        '(7.8.12 — the area shell this pane mounts into; flip the `apiTokens` placeholder)\n\n' +
         '**Branch.** `subtask/PROD-7.8.3-api-tokens-settings-ui`.',
-      dependsOn: ['7.8.1', '7.8.2'],
+      dependsOn: ['7.8.1', '7.8.2', '7.8.12'],
     },
     {
       id: '7.8.4',
@@ -372,7 +379,7 @@ export const story_7_8: PlanStory = {
     {
       id: '7.8.6',
       title: 'Search tool — `search_work_items` riding the 6.1.1 versioned FilterAST envelope',
-      status: 'done',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -405,7 +412,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.7',
       title:
         'Reseed preserves live statuses — flip the seed-loader invariant (seed status becomes initial-only)',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 40,
@@ -480,7 +487,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.10',
       title:
         'Sprint tools — `list_sprints` / `create_sprint` / `update_sprint` / `delete_sprint` / `move_to_sprint` / `move_to_backlog` / `start_sprint` / `complete_sprint`',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 50,
@@ -548,7 +555,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.11',
       title:
         'Integration-state substrate — `in_review` status, `work_item.session_branch`, integrated-dep readiness, `mark_integrated` / `complete_session` tools',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
@@ -613,6 +620,81 @@ export const story_7_8: PlanStory = {
         "- story-7.9.ts header (the consuming loop's semantics)\n\n" +
         '**Branch.** `subtask/PROD-7.8.11-integration-state`.',
       dependsOn: ['7.8.5'],
+    },
+    {
+      id: '7.8.12',
+      title:
+        'Account-settings AREA shell — `accountSettingsNav` registry + rail-swap layout + route split + totality test',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 60,
+      descriptionMd:
+        "The prerequisite the 7.8.2 design flagged, split out of 7.8.3 (Yue's call, " +
+        '2026-06-14). The design redesigned the account surface from a flat 2-card page into ' +
+        'a grouped-nav **area** that scales as it grows, mirroring the SHIPPED project-settings ' +
+        'area (Story 6.5): a typed nav registry drives the rail-swap nav + the command-palette ' +
+        'deep links + a route↔registry totality guard. This subtask ships that shell (and only ' +
+        'the panes we build now); 7.8.3 then adds the Security → API tokens pane INSIDE it.\n\n' +
+        '**Registry (`lib/settings/accountSettingsNav.ts`).** The exact shape of ' +
+        '`projectSettingsNav` (typed `SettingsNavEntry`: `id` / `group` / `href` / `icon` / ' +
+        '`labelKey` / `access` / `exact?` / `placeholder?`), pure data + helpers (server- AND ' +
+        'client-importable, unit-testable). Groups in rail order **General · Preferences · ' +
+        'Security**:\n' +
+        '- **General → Profile** — reserved `placeholder: true` "Soon" slot (name / avatar / ' +
+        "password later), like the project area's Automation slot.\n" +
+        '- **Preferences → Language** (real route), **Notifications** (real route), ' +
+        '**Appearance** (reserved `placeholder: true` "Soon" — NOT designed here per the ' +
+        '7.8.2 scope guard; its own future story owns it).\n' +
+        '- **Security → API tokens** — a reserved `placeholder: true` "Soon" slot in THIS ' +
+        'subtask. **7.8.3 flips it from placeholder to a real entry and adds its route page** — ' +
+        "so each PR's totality test stays green by construction (placeholder entries are " +
+        'excluded from the route↔registry assertion, per the 6.5 pattern).\n\n' +
+        '**Layout (`app/(authed)/settings/account/layout.tsx`).** The area layout that swaps ' +
+        'the grouped nav into the app rail (SidebarNav renders it from the registry when the ' +
+        'route is inside the area — the same App-Router shape as `settings/project/layout.tsx`, ' +
+        'rail in the parent (authed) layout). The rail HEADER shows **"← Back to Motir"** + the ' +
+        'user identity (initial `Avatar` + name + email) + the eyebrow **"Account settings"** ' +
+        '(design Panel 1).\n\n' +
+        '**Route split.** Move the existing `LanguageCard` → ' +
+        '`settings/account/language/page.tsx` and `NotificationPreferencesCard` → ' +
+        '`settings/account/notifications/page.tsx` (their behaviour unchanged — they already own ' +
+        'their state + mutations; only their host pane changes). The current flat ' +
+        '`settings/account/page.tsx` becomes a redirect to the first real pane ' +
+        '(`/settings/account/language`).\n\n' +
+        '**Totality test** (`tests/settings/accountSettingsNav.test.ts`, mirroring the 6.5 ' +
+        'projectSettingsNav test): enumerate the filesystem and assert every ' +
+        '`settings/account/**/page.tsx` route pairs 1:1 with exactly one NON-placeholder ' +
+        'registry entry, and vice versa (the mistake #29 totality guard).\n\n' +
+        '**i18n — new `settings.account` namespace** (design § i18n): `eyebrow` ("Account ' +
+        'settings"), `back` ("Back to Motir"), `nav.group.{general,preferences,security}`, ' +
+        '`nav.{profile,language,notifications,appearance,apiTokens}`, `nav.soon` ("Soon"). The ' +
+        'Language pane gets `settings.language` (`heading` / `subtitle` / `card.*`); ' +
+        'Notifications keeps its shipped 5.7.6 `settings` keys. Every shipped locale.\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- `/settings/account` redirects to the first real pane; the rail shows the grouped ' +
+        'nav (General · Preferences · Security) with Profile + Appearance + API tokens as ' +
+        'disabled "Soon" rows (text chip, not colour-alone — finding #35), and the active pane ' +
+        'in the canvas-inset treatment; the rail header carries the back-link + user identity + ' +
+        'eyebrow.\n' +
+        '- Language and Notifications render in their own routes/panes via the moved cards, ' +
+        'behaviour unchanged (the Combobox locale set + the Switch matrix).\n' +
+        '- The totality test pairs every non-placeholder route 1:1 with a registry entry and ' +
+        'FAILS if a route lacks an entry or an entry lacks a route (placeholders excluded).\n' +
+        '- Matches `design/settings/account-settings.mock.html` Panels 1–2 + the area shell — ' +
+        'colour through `--el-*`, shape through element-semantic tokens (no Tier-0).\n' +
+        '- Vitest/RTL covers the registry + totality; the PR body carries a "How to test" ' +
+        'click-path (sign in → Settings → Account → the rail nav + each pane).\n\n' +
+        '## Context refs\n\n' +
+        '- `design/settings/account-settings.mock.html` + `design-notes.md` (7.8.2 — REQUIRED ' +
+        'design reference; Panels 1–2 + the area architecture + the scope guard)\n' +
+        '- `lib/settings/projectSettingsNav.ts` + `tests/settings/projectSettingsNav.test.ts` + ' +
+        '`app/(authed)/settings/project/layout.tsx` (the 6.5 area precedent to mirror 1:1)\n' +
+        '- `app/(authed)/settings/account/page.tsx` + `_components/{LanguageCard,' +
+        'NotificationPreferencesCard}.tsx` (the flat page + the cards to move)\n' +
+        '- `components/navigation/SidebarNav` (the rail-swap consumer of the registry)\n\n' +
+        '**Branch.** `subtask/PROD-7.8.12-account-settings-area-shell`.',
+      dependsOn: ['7.8.2'],
     },
     {
       id: '7.8.9',

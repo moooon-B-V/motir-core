@@ -7,6 +7,7 @@ import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/crea
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
+import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
@@ -37,6 +38,7 @@ export const MCP_TOOL_NAMES = [
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
+  WHOAMI_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
@@ -59,6 +61,8 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
   registerAddComment(server, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(server, resolveContext);
+  // Identity (added by 7.9.1, consumed by the CLI's auth commands).
+  registerWhoami(server, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(server, resolveContext);
   registerCreateSprint(server, resolveContext);

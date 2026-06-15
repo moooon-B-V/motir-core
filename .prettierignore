@@ -6,6 +6,8 @@ build/
 node_modules/
 pnpm-lock.yaml
 next-env.d.ts
+# Workspace-package build output (bundled by tsup; not source).
+packages/*/dist/
 
 # Prisma's migration SQL has its own formatting from the CLI; leave it alone.
 prisma/migrations/
