@@ -15,6 +15,7 @@ import {
   InvalidIdentifierError,
   InvalidProjectNameError,
   ProjectNotFoundError,
+  ProjectOverviewTooLongError,
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
@@ -60,6 +61,10 @@ const IDENTIFIER_MIN_LENGTH = 3;
 const IDENTIFIER_MAX_LENGTH = 5;
 const IDENTIFIER_FALLBACK = 'PRJ';
 const SLUG_MAX_LENGTH = 60;
+// Server cap on the public Overview/README body (Story 6.12 · Subtask 6.12.8).
+// Generous — a long README fits — but bounds the stored public-projection
+// payload a single admin edit can write.
+const PUBLIC_OVERVIEW_MAX_LENGTH = 50_000;
 const SLUG_SUFFIX_LENGTH = 4;
 const SLUG_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const RETRY_ATTEMPTS = 5;
@@ -627,6 +632,53 @@ export const projectsService = {
       }
 
       const updated = await projectRepository.update(project.id, data, tx);
+      const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
+      return toProjectDTO(updated, aliases);
+    });
+  },
+
+  /**
+   * Read the project's current public Overview/README Markdown body (Story
+   * 6.12 · Subtask 6.12.8) — the initial value for the "Edit overview"
+   * authoring view. A plain browse-scoped read (the settings surface decides
+   * editable-vs-read-only via `getManageCapabilities`); the WRITE
+   * (`setPublicOverview`) is admin-gated. `null` ⇒ never authored (the public
+   * tab falls back to its auto-intro).
+   */
+  async getPublicOverview(input: { key: string; ctx: WorkspaceContext }): Promise<string | null> {
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
+      return project.publicOverviewMd;
+    });
+  },
+
+  /**
+   * Set the project's public Overview/README Markdown body (Story 6.12 ·
+   * Subtask 6.12.8 — the dedicated "Edit overview" authoring view). Admin-gated
+   * (the same `assertCanManage` gate as `updateDetails`). The body is trimmed;
+   * an empty body clears the field (`null`) so the public Overview tab (6.12.4)
+   * falls back to its slim auto-intro. A generous server cap guards the stored
+   * public-projection payload. Returns the project DTO (the inline save reads
+   * the success response as confirmation — no whole-tree refresh).
+   */
+  async setPublicOverview(input: {
+    key: string;
+    ctx: WorkspaceContext;
+    publicOverviewMd: string;
+  }): Promise<ProjectDTO> {
+    const trimmed = input.publicOverviewMd.trim();
+    if (trimmed.length > PUBLIC_OVERVIEW_MAX_LENGTH) {
+      throw new ProjectOverviewTooLongError(PUBLIC_OVERVIEW_MAX_LENGTH);
+    }
+    return withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
+      await projectAccessService.assertCanManage(project.id, input.ctx, tx);
+
+      const updated = await projectRepository.setPublicOverview(
+        project.id,
+        trimmed.length > 0 ? trimmed : null,
+        tx,
+      );
       const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
       return toProjectDTO(updated, aliases);
     });

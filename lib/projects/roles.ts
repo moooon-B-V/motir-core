@@ -23,8 +23,15 @@ export const PROJECT_ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const;
 
 export type ProjectRole = (typeof PROJECT_ASSIGNABLE_ROLES)[number];
 
-/** The valid `project.accessLevel` values (mirrors the Prisma enum). */
-export const PROJECT_ACCESS_LEVELS = ['open', 'limited', 'private'] as const;
+/**
+ * The valid `project.accessLevel` values (mirrors the Prisma enum). `public`
+ * (Story 6.12) is the openness-ladder top — `public > open > limited > private`
+ * — and the only settable level that opens the project for anonymous, cross-org
+ * READ. Setting it routes through the SAME `setAccessLevel` service as the other
+ * levels (6.12.8 — extend, don't fork); the cross-org browse exception lives in
+ * `lib/projects/access.ts` (6.12.3), not here.
+ */
+export const PROJECT_ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
 
 /**
  * True when `role` is a workspace manager (owner or admin) — the tier that

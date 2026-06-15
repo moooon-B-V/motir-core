@@ -1,11 +1,23 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Eye, Globe, Globe2, Info, Lock, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  Eye,
+  FileText,
+  Globe,
+  Info,
+  Link2,
+  Lock,
+  Users,
+} from 'lucide-react';
 import type { ProjectAccessLevel } from '@prisma/client';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
@@ -31,40 +43,41 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 // data read-only (role chips, no selects, no add/remove) — the gate stays
 // legible rather than the controls vanishing.
 
-// The SETTABLE access levels (the radio control). `public` (Story 6.12) is
-// deliberately NOT here yet — making a project public ships with its own
-// make-public toggle + share link in Subtask 6.12.8 (per the 6.12.1 Panel 5
-// design); 6.12.3 only lands the enum value + the access policy. The icon /
-// tint / label maps below ARE total over `ProjectAccessLevel` so a project that
-// is ALREADY `public` (set via 6.12.8 / seed) still renders its current-level
-// summary pill without crashing.
-const ACCESS_LEVELS = ['open', 'limited', 'private'] as const;
+// The SETTABLE access levels (the radio control), in openness order
+// `public > open > limited > private` (Story 6.12.8 adds `public` — the
+// make-public toggle — to the 6.4 control; the share link + Overview editor
+// below it render only while the project is public, per design/public-projects
+// Panel 6). The icon / tint / label maps are total over `ProjectAccessLevel`.
+const ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
 type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
+// Per-level icon (design Panel 6: globe / users / eye / lock).
 const ACCESS_ICON: Record<ProjectAccessLevel, typeof Globe> = {
-  open: Globe,
+  public: Globe,
+  open: Users,
   limited: Eye,
   private: Lock,
-  // Interim — 6.12.8 finalises the public-level control per design/public-projects Panel 5.
-  public: Globe2,
 };
-// Icon-tile tint per level — mirrors the 6.4.1 mockup (open = mint, limited =
-// sky, private = lavender), hue in the tint with strong text (AA, finding #35).
+// Icon-tile tint per level — hue in the tint with strong text (AA, finding #35):
+// public = sky, open = mint, limited = peach, private = lavender.
 const ACCESS_TINT: Record<ProjectAccessLevel, string> = {
+  public: 'bg-(--el-tint-sky)',
   open: 'bg-(--el-tint-mint)',
-  limited: 'bg-(--el-tint-sky)',
+  limited: 'bg-(--el-tint-peach)',
   private: 'bg-(--el-tint-lavender)',
-  public: 'bg-(--el-tint-peach)',
 };
 
 export interface ProjectMembersSettingsProps {
   projectKey: string;
   projectName: string;
   workspaceName: string;
-  // The project's CURRENT level (display) — `ProjectAccessLevel`, so a project
-  // already set to `public` renders. The SETTABLE radio is still `ACCESS_LEVELS`
-  // (open/limited/private) until 6.12.8 adds the make-public control.
+  // The project's CURRENT level (display + settable) — `ProjectAccessLevel`,
+  // now including `public` (6.12.8, the make-public control).
   accessLevel: ProjectAccessLevel;
+  // The authored public Overview/README body (6.12.8) — used only for the
+  // "Edit overview" entry-point snippet shown while the project is public. The
+  // full authoring view lives at /settings/project/overview.
+  publicOverviewMd: string | null;
   members: ProjectMemberDTO[];
   workspaceMembers: WorkspaceMemberDTO[];
   currentUserId: string;
@@ -76,6 +89,7 @@ export function ProjectMembersSettings({
   projectName,
   workspaceName,
   accessLevel: initialAccessLevel,
+  publicOverviewMd,
   members: initialMembers,
   workspaceMembers,
   currentUserId,
@@ -335,6 +349,15 @@ export function ProjectMembersSettings({
         ) : null}
       </Card>
 
+      {/* ── Public link + Overview (only while the project is public, 6.12.8) ── */}
+      {accessLevel === 'public' ? (
+        <PublicShareSection
+          projectKey={projectKey}
+          publicOverviewMd={publicOverviewMd}
+          canManage={canManage}
+        />
+      ) : null}
+
       {/* ── Members ────────────────────────────────────────────────────── */}
       <Card
         header={
@@ -447,5 +470,131 @@ function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label:
       <Icon className="size-3" aria-hidden />
       {label}
     </Pill>
+  );
+}
+
+// The public-only follow-on to the Access card (Story 6.12 · Subtask 6.12.8,
+// design/public-projects Panel 6) — rendered ONLY while the project is public:
+//   • the shareable public link (a stable, crawlable `/p/<key>` URL + Copy);
+//   • the Overview/README entry point → the dedicated editor (Panel 7).
+// Deviation from the Panel-6 mock, noted in the PR: the mock drew Copy/Rotate/
+// Disable, but the locked model (Yue, 2026-06-14) is a FULLY PUBLIC, crawlable,
+// SEO/GEO-indexed page, and the 6.12.4 public route is the stable project key
+// (`/p/<identifier>`), not a rotatable secret slug. A rotatable/secret link is
+// incoherent with an indexable page, so we ship a STABLE link (Copy only) and
+// fold "stop sharing" into the access control above (set a non-public level) —
+// the GitHub / Canny model. "Rotate" is dropped (no stated use case; rung-1
+// "no complexity for nothing").
+function PublicShareSection({
+  projectKey,
+  publicOverviewMd,
+  canManage,
+}: {
+  projectKey: string;
+  publicOverviewMd: string | null;
+  canManage: boolean;
+}) {
+  const t = useTranslations('settings');
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  // The path is stable + server-relative; the absolute origin is only resolvable
+  // client-side, so build the display/copy value after mount to avoid a
+  // hydration mismatch. The path itself (`/p/<key>`) renders immediately.
+  const publicPath = `/p/${projectKey}`;
+
+  async function copyLink() {
+    const href =
+      typeof window !== 'undefined' ? `${window.location.origin}${publicPath}` : publicPath;
+    try {
+      await navigator.clipboard.writeText(href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({ variant: 'error', title: t('public.copyError') });
+    }
+  }
+
+  const overviewSnippet = (publicOverviewMd ?? '')
+    .replace(/[#>*_`~\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Public link */}
+      <Card
+        header={
+          <div>
+            <h2 className="font-sans text-base font-semibold text-(--el-text)">
+              {t('public.linkHeading')}
+            </h2>
+            <p className="text-(--el-text-muted) font-sans text-xs">{t('public.linkSubheading')}</p>
+          </div>
+        }
+      >
+        <div className="flex items-center gap-2">
+          <span className="border-(--el-border) bg-(--el-surface) flex h-(--height-input) min-w-0 flex-1 items-center gap-2 rounded-(--radius-input) border px-(--spacing-input-x)">
+            <Link2 className="text-(--el-text-muted) size-4 shrink-0" aria-hidden />
+            <span className="truncate font-mono text-xs text-(--el-text)">{publicPath}</span>
+          </span>
+          <Button variant="secondary" size="md" onClick={copyLink}>
+            {copied ? (
+              <Check className="size-4 text-(--el-success)" aria-hidden />
+            ) : (
+              <Copy className="size-4" aria-hidden />
+            )}
+            {copied ? t('public.copied') : t('public.copy')}
+          </Button>
+        </div>
+        <div className="mt-3 flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding)">
+          <Info className="mt-0.5 size-4 shrink-0 text-(--el-text-strong)" aria-hidden />
+          <p className="font-sans text-xs text-(--el-text-strong)">{t('public.linkNote')}</p>
+        </div>
+      </Card>
+
+      {/* Overview / README entry point → the dedicated editor (Panel 7) */}
+      <Card
+        header={
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                {t('public.overviewHeading')}
+              </h2>
+              <p className="text-(--el-text-muted) font-sans text-xs">
+                {t('public.overviewSubheading')}
+              </p>
+            </div>
+            {canManage ? (
+              <Link
+                href="/settings/project/overview"
+                className={buttonVariants({ variant: 'secondary', size: 'md' })}
+              >
+                <FileText className="size-4" aria-hidden />
+                {t('public.editOverview')}
+              </Link>
+            ) : null}
+          </div>
+        }
+      >
+        <div className="flex items-center gap-3 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-card-padding)">
+          <FileText className="text-(--el-text-muted) size-4 shrink-0" aria-hidden />
+          <p className="text-(--el-text-secondary) min-w-0 flex-1 truncate font-sans text-sm">
+            {overviewSnippet || t('public.overviewEmpty')}
+          </p>
+          {canManage ? (
+            <Link
+              href="/settings/project/overview"
+              className="text-(--el-link) hover:text-(--el-link-pressed) inline-flex shrink-0 items-center gap-1 font-sans text-xs font-medium"
+            >
+              {t('public.overviewEdit')}
+              <ArrowRight className="size-3" aria-hidden />
+            </Link>
+          ) : null}
+        </div>
+        <p className="text-(--el-text-muted) mt-2 font-sans text-xs">{t('public.overviewNote')}</p>
+      </Card>
+    </div>
   );
 }

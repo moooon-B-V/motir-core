@@ -14,6 +14,7 @@ import {
   InvalidProjectNameError,
   NotProjectAdminError,
   ProjectNotFoundError,
+  ProjectOverviewTooLongError,
 } from '@/lib/projects/errors';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
@@ -74,6 +75,36 @@ export async function updateProjectDetailsAction(
   } catch (err) {
     if (err instanceof InvalidProjectNameError) return { ok: false, code: 'INVALID_NAME' };
     if (err instanceof InvalidAvatarError) return { ok: false, code: 'INVALID_AVATAR' };
+    if (err instanceof NotProjectAdminError) return { ok: false, code: 'NOT_ADMIN' };
+    if (err instanceof ProjectNotFoundError) return { ok: false, code: 'UNKNOWN' };
+    throw err;
+  }
+}
+
+// ── updateOverview (the public Overview/README authoring view, 6.12.8) ───────
+
+export type UpdateOverviewResult =
+  | { ok: true; project: ProjectDTO }
+  | { ok: false; code: 'TOO_LONG' | 'NOT_ADMIN' | 'UNKNOWN' };
+
+export interface UpdateProjectOverviewInput {
+  /** The full public Overview/README Markdown body; empty clears it. */
+  publicOverviewMd: string;
+}
+
+export async function updateProjectOverviewAction(
+  input: UpdateProjectOverviewInput,
+): Promise<UpdateOverviewResult> {
+  const { userId, workspaceId, key } = await requireProjectContext();
+  try {
+    const project = await projectsService.setPublicOverview({
+      key,
+      ctx: { userId, workspaceId },
+      publicOverviewMd: input.publicOverviewMd,
+    });
+    return { ok: true, project };
+  } catch (err) {
+    if (err instanceof ProjectOverviewTooLongError) return { ok: false, code: 'TOO_LONG' };
     if (err instanceof NotProjectAdminError) return { ok: false, code: 'NOT_ADMIN' };
     if (err instanceof ProjectNotFoundError) return { ok: false, code: 'UNKNOWN' };
     throw err;
