@@ -31,8 +31,15 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
  * revision is the surviving History trace Story 5.5 renders. The DB column is
  * plain text, so the new kind needs no migration (the designed extension
  * point — see workItemRevisionMappers).
+ *
+ * `deleted` (Story 2.8 · Subtask 2.8.2) is the same shape one level up: when a
+ * work item is PERMANENTLY deleted with its subtree, the deleted rows — and
+ * their own revisions (FK `onDelete: Cascade`) — are gone, so the audit trace
+ * is recorded on the deleted root's SURVIVING PARENT (diff `{ deleted: { from:
+ * '<identifier>: <title> …', to: null } }`). A top-level item (no parent) has
+ * no surviving anchor; see `deleteWorkItem`.
  */
-export type RevisionChangeKind = 'created' | 'updated' | 'archived' | 'comment_deleted';
+export type RevisionChangeKind = 'created' | 'updated' | 'archived' | 'comment_deleted' | 'deleted';
 
 /**
  * The arguments a service write passes when recording a revision. `diff` is

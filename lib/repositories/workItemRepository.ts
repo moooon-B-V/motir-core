@@ -2016,6 +2016,31 @@ export const workItemRepository = {
     }
   },
 
+  /**
+   * PERMANENT delete of a whole subtree (Story 2.8 · Subtask 2.8.2) — the
+   * destructive counterpart of {@link archive}. The caller (`deleteWorkItem`)
+   * resolves the full id set via {@link findSubtree} (root + every descendant)
+   * and passes it here; this is the single-op leaf that removes them.
+   *
+   * ONE statement (`deleteMany ... WHERE id IN (...)`) removes the root AND its
+   * children together. The self-FK (`work_item.parentId → work_item.id`) is
+   * `onDelete: NoAction`, and SQL `NO ACTION` (unlike `RESTRICT`) defers the
+   * referential check to END-OF-STATEMENT — so a single delete that removes a
+   * parent and all its referencing children passes with no per-level ordering.
+   * Every OTHER inbound FK is `Cascade` (links from+to, comments,
+   * labels/components/watchers, custom-field values, notifications, votes,
+   * revisions, sprint-report entries) or `SetNull` (attachments → orphan-GC,
+   * automation-execution audit), so the DB removes/decouples those rows for us:
+   * no orphaned links or rows survive. Returns the deleted-row count. Write →
+   * `tx` REQUIRED (the service runs it inside its delete transaction). An empty
+   * id set short-circuits so we never issue a degenerate `IN ()`.
+   */
+  async deleteSubtree(ids: string[], tx: Prisma.TransactionClient): Promise<number> {
+    if (ids.length === 0) return 0;
+    const r = await tx.workItem.deleteMany({ where: { id: { in: ids } } });
+    return r.count;
+  },
+
   // --- Sprint association + backlog rank (Story 4.1 · Subtask 4.1.2) ---------
   // The `work_item` sprint/rank methods live HERE (the entity owns them — the
   // repository-name-matches-entity rule), not in a new repo. `sprintId` /
