@@ -171,6 +171,20 @@ test('@smoke a public project: admin makes it public, anyone reads it logged-out
   await expect(anon.getByRole('heading', { level: 1, name: 'Work items' })).toBeVisible();
   await expect(anon.getByText(EXISTING_REQUEST).first()).toBeVisible();
 
+  // A list row LINKS to the public read-only work-item DETAIL page (6.14.11) —
+  // header (identifier + title + status), a public-safe sidebar. No edit
+  // affordances; a public viewer is never bounced into the authed surface.
+  await anon.getByRole('link', { name: /Export the board to CSV/ }).click();
+  await anon.waitForURL(/\/items\/[^/]+$/);
+  await expect(
+    anon.getByRole('heading', { level: 1, name: 'Export the board to CSV' }),
+  ).toBeVisible();
+  await expect(
+    anon.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', {
+      name: 'Work items',
+    }),
+  ).toBeVisible();
+
   // Board — renders the projection note proving internal fields are ABSENT (not
   // fetched), and carries no edit affordances.
   const boardRes = await anon.goto(`/p/${PUBLIC_KEY}/board`);

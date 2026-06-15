@@ -2959,6 +2959,18 @@
     "statusDone": "已完成",
     "epicNotPublicBadge": "未公开",
     "epicNotPublicTitle": "此史诗未公开",
-    "epicNotPublicBody": "项目管理员已将此史诗的内容设为私有。"
+    "epicNotPublicBody": "项目管理员已将此史诗的内容设为私有。",
+    "detailBreadcrumbLabel": "面包屑导航",
+    "detailDescriptionLabel": "描述",
+    "detailNoDescription": "暂无描述。",
+    "detailChildIssuesLabel": "子工作项",
+    "detailNoChildrenTitle": "暂无子工作项",
+    "detailNoChildrenBody": "此史诗还没有故事或任务。",
+    "detailSideStatus": "状态",
+    "detailSideType": "类型",
+    "detailSideChildren": "子项",
+    "detailSideProgress": "进度",
+    "detailSideParent": "父级",
+    "detailSideHidden": "已隐藏"
   }
 }

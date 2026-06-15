@@ -63,7 +63,7 @@ export default async function PublicBoardPage({
                         <PublicWorkItemCard
                           key={card.id}
                           item={card}
-                          href={`${itemsBase}#${card.identifier}`}
+                          href={`${itemsBase}/${encodeURIComponent(card.identifier)}`}
                         />
                       ))
                     )}

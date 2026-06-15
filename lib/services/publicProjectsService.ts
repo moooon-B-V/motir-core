@@ -20,6 +20,8 @@ import {
   toPublicRequestDetailDto,
   toPublicRequestMatchDto,
   toPublicRoadmapCardDto,
+  toPublicWorkItemDetailDto,
+  toPublicWorkItemDetailParentDto,
   toPublicWorkItemListItemDto,
   toPublicWorkItemTreeRowDto,
 } from '@/lib/mappers/publicProjectsMappers';
@@ -28,6 +30,7 @@ import {
   PublicProjectIntakeUnavailableError,
   PublicRequestDescriptionTooLongError,
   PublicSubmissionRateLimitedError,
+  PublicWorkItemNotFoundError,
 } from '@/lib/publicProjects/errors';
 import {
   decodeRoadmapCursor,
@@ -49,6 +52,8 @@ import type {
   PublicRoadmapDto,
   PublicRequestDetailDto,
   PublicTreeLevelDto,
+  PublicWorkItemDetailDto,
+  PublicWorkItemDetailParentDto,
   PublicWorkItemPageDto,
 } from '@/lib/dto/publicProjects';
 import { PUBLIC_ROADMAP_BUCKET_KEYS } from '@/lib/dto/publicProjects';
@@ -710,6 +715,110 @@ export const publicProjectsService = {
       voteCount,
       voted,
       comments,
+    });
+  },
+
+  // --- READ · WORK-ITEM DETAIL (6.14.11) -----------------------------------
+
+  /**
+   * The public read-only WORK-ITEM DETAIL (Story 6.14 · Subtask 6.14.11 · design
+   * `public-item-detail.mock.html`) — the read behind `/p/<project>/items/<key>`,
+   * the page a public / non-member viewer lands on from an items-list row or a
+   * board card. Resolves the public project + runs the anonymous browse gate (a
+   * non-public / unknown project 404s, never 403), then resolves the work item
+   * WITHIN that project by its identifier (e.g. "PROD-42"). It returns the public
+   * projection PLUS the body, the resolved status label, the immediate parent,
+   * and the FIRST page of public-safe direct children (the rest lazy-load via the
+   * public tree endpoint — the at-scale rule).
+   *
+   * Not-found posture (404-not-403, no existence leak): a missing /
+   * cross-project / archived item, a TRIAGE item (it lives in the inbox, not the
+   * planned tree — its public surface is the REQUEST detail, not this one), and a
+   * private epic's HIDDEN descendant (a non-member must never reach it) all throw
+   * {@link PublicWorkItemNotFoundError} — exactly like the request-detail read.
+   *
+   * Epic-privacy (Subtask 6.14.4): a NON-MEMBER viewing a PRIVATE epic gets the
+   * `childrenHidden` marker (the child panel renders the "not public" statement,
+   * the sidebar rollups read "Hidden"); its descendants are excluded server-side
+   * (`children` empty, `childCount` 0) — defence-in-depth behind the marker. A
+   * MEMBER (or a project with no private epic) reads the full child set.
+   * `actorUserId` nullable (anonymous read / crawler).
+   */
+  async getWorkItemDetail(
+    identifier: string,
+    itemIdentifier: string,
+    actorUserId: string | null,
+  ): Promise<PublicWorkItemDetailDto> {
+    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+
+    const item = await workItemRepository.findByIdentifier(project.id, itemIdentifier);
+    // 404-not-403: a missing / cross-project item, an archived (soft-deleted)
+    // one, or a triage item (not graduated to the planned tree) is hidden exactly
+    // like a non-public project — the same exclusions the list / board / tree
+    // reads apply (`triagedAt IS NULL`, `archivedAt IS NULL`).
+    if (!item || item.archivedAt !== null || item.triagedAt !== null) {
+      throw new PublicWorkItemNotFoundError(itemIdentifier);
+    }
+    // Epic-privacy (6.14.4): a non-member must not reach a private epic's hidden
+    // descendant — treat it as not-found (no leak), consistent with every other
+    // public read's exclusion set. (The private epic's OWN row stays reachable —
+    // it is the visible placeholder; only its DESCENDANTS are in `hiddenIds`.)
+    const hiddenIds = await resolveHiddenIds(project, isMember);
+    if (hiddenIds.includes(item.id)) {
+      throw new PublicWorkItemNotFoundError(itemIdentifier);
+    }
+
+    const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
+    const status = statuses.find((s) => s.key === item.status) ?? null;
+    const categoryByKey = new Map(statuses.map((s) => [s.key, s.category]));
+
+    // The placeholder marker: a non-member viewing a PRIVATE epic sees the "not
+    // public" statement instead of children + "Hidden" sidebar rollups.
+    const childrenHidden = !isMember && item.kind === 'epic' && item.publicChildrenHidden;
+
+    // The immediate parent (the breadcrumb + sidebar "Parent" link). The item is
+    // reachable, so its parent chain is public-safe — a parent that were a hidden
+    // descendant (or the private epic itself) would have 404'd the item above.
+    let parent: PublicWorkItemDetailParentDto | null = null;
+    if (item.parentId) {
+      const [parentRow] = await workItemRepository.findByIds([item.parentId]);
+      if (parentRow) parent = toPublicWorkItemDetailParentDto(parentRow);
+    }
+
+    // The first page of public-safe direct children + the full count (the
+    // at-scale rule — the panel lazily loads the rest via the public tree
+    // endpoint, `?parentId=<item.id>`). For a private-epic non-member, `hiddenIds`
+    // already EXCLUDES the children, so this returns []/0 behind the marker.
+    const [childRows, childCount] = await Promise.all([
+      workItemRepository.findPublicProjectTreeLevel(
+        project.id,
+        project.workspaceId,
+        item.id,
+        { take: PUBLIC_TREE_PAGE_SIZE, offset: 0 },
+        hiddenIds,
+      ),
+      workItemRepository.countPublicProjectTreeLevel(
+        project.id,
+        project.workspaceId,
+        item.id,
+        hiddenIds,
+      ),
+    ]);
+    const childrenHasMore = childRows.length > PUBLIC_TREE_PAGE_SIZE;
+    const childPage = childrenHasMore ? childRows.slice(0, PUBLIC_TREE_PAGE_SIZE) : childRows;
+
+    return toPublicWorkItemDetailDto(item, {
+      statusLabel: status?.label ?? item.status,
+      statusCategory: status?.category ?? 'todo',
+      parent,
+      childrenHidden,
+      childCount,
+      children: childPage.map((r) =>
+        toPublicWorkItemTreeRowDto(r, categoryByKey.get(r.status) ?? 'todo', {
+          hideChildren: !isMember,
+        }),
+      ),
+      childrenHasMore,
     });
   },
 

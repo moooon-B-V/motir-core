@@ -125,6 +125,69 @@ export interface PublicTreeLevelDto {
   total: number;
 }
 
+// --- Public WORK-ITEM DETAIL projection (6.14.11) ---------------------------
+
+/**
+ * The item's parent, projected for the public DETAIL page's breadcrumb + the
+ * sidebar "Parent" link (Subtask 6.14.11). Public-safe identity only — no
+ * assignee / estimate / story points. `null` when the item is a root (an epic,
+ * or a parentless item). A reachable detail item always has a public-safe parent
+ * chain (a child of a PRIVATE epic is itself excluded from every public read, so
+ * it 404s before this is read), so the parent here is never a hidden node.
+ */
+export interface PublicWorkItemDetailParentDto {
+  identifier: string;
+  key: number;
+  title: string;
+  kind: WorkItemKindDto;
+}
+
+/**
+ * The public read-only WORK-ITEM DETAIL payload (Story 6.14 · Subtask 6.14.11 ·
+ * design `public-item-detail.mock.html`) — the page a public / non-member viewer
+ * lands on from an items-list row or a board card. The public projection PLUS
+ * the body, the resolved status label, the immediate parent, and the FIRST page
+ * of public-safe direct children (the child / sub-issue panel; the rest lazy-load
+ * via the public tree endpoint — the at-scale rule). Like every public DTO it
+ * physically cannot carry an internal field: NO assignee / estimate / story
+ * points (absent from the shape), and a private epic's descendants never enter
+ * `children` (excluded server-side).
+ */
+export interface PublicWorkItemDetailDto {
+  id: string;
+  /** "PROD-42" — the work-item identifier the public URL addresses. */
+  identifier: string;
+  /** The per-project monotonic number (PROD-**42**). */
+  key: number;
+  title: string;
+  kind: WorkItemKindDto;
+  /** The workflow status key (e.g. "in_progress"). */
+  status: string;
+  /** The status's display label for the header status `Pill`. */
+  statusLabel: string;
+  /** The status category — drives the `Pill` tone (todo / in_progress / done). */
+  statusCategory: StatusCategoryDto;
+  /** The item's public-safe body Markdown, or null when empty. */
+  descriptionMd: string | null;
+  /** The immediate parent (breadcrumb + sidebar Parent link), or null at a root. */
+  parent: PublicWorkItemDetailParentDto | null;
+  /**
+   * The "this epic is not public" placeholder MARKER (Subtask 6.14.4). `true`
+   * ONLY when the focal item is a PRIVATE epic (`kind = 'epic'`,
+   * `publicChildrenHidden`) viewed by a NON-MEMBER — the child panel renders the
+   * "not public" statement instead of children and the sidebar rollups read
+   * "Hidden". The descendants are already EXCLUDED server-side (`children` is
+   * empty, `childCount` is 0), so this is the display signal, not the enforcement.
+   */
+  childrenHidden: boolean;
+  /** Total public-safe DIRECT children (the sidebar "Children = N"); 0 when hidden. */
+  childCount: number;
+  /** The first page of public-safe child rows (SSR'd, crawlable). */
+  children: PublicWorkItemTreeRowDto[];
+  /** Whether more children exist past the first page (drives "Load more children"). */
+  childrenHasMore: boolean;
+}
+
 // --- Public ROADMAP projection (6.12.7) ------------------------------------
 
 /**

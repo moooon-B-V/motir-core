@@ -9,6 +9,8 @@ import type {
   PublicRequestDetailDto,
   PublicRequestMatchDto,
   PublicRoadmapCardDto,
+  PublicWorkItemDetailDto,
+  PublicWorkItemDetailParentDto,
   PublicWorkItemListItemDto,
   PublicWorkItemTreeRowDto,
 } from '@/lib/dto/publicProjects';
@@ -185,6 +187,64 @@ export function toPublicRequestDetailDto(
     voteCount: extras.voteCount,
     voted: extras.voted,
     comments: extras.comments,
+  };
+}
+
+// --- Work-item detail (6.14.11) --------------------------------------------
+
+/**
+ * Map a work-item row → the public DETAIL page's PARENT projection (Subtask
+ * 6.14.11) — the breadcrumb + sidebar "Parent" link. Public-safe identity only;
+ * the assignee / estimate / story-point columns on `row` are never read.
+ */
+export function toPublicWorkItemDetailParentDto(
+  row: Pick<WorkItem, 'identifier' | 'key' | 'title' | 'kind'>,
+): PublicWorkItemDetailParentDto {
+  return {
+    identifier: row.identifier,
+    key: row.key,
+    title: row.title,
+    kind: row.kind as WorkItemKindDto,
+  };
+}
+
+/**
+ * Map a work-item row + the service-resolved extras → the public work-item
+ * DETAIL DTO (Subtask 6.14.11). A pure field selector like the other public
+ * mappers: the assignee / estimate / story-point columns on `row` are
+ * deliberately NOT read, so an internal field physically cannot enter the
+ * detail payload. The status label/category, the immediate parent, the
+ * already-mapped public child rows + their count, and the epic-privacy
+ * `childrenHidden` marker are resolved by the service (it owns the workflow /
+ * tree-level / parent reads) and passed in.
+ */
+export function toPublicWorkItemDetailDto(
+  row: Pick<WorkItem, 'id' | 'identifier' | 'key' | 'title' | 'kind' | 'status' | 'descriptionMd'>,
+  extras: {
+    statusLabel: string;
+    statusCategory: StatusCategoryDto;
+    parent: PublicWorkItemDetailParentDto | null;
+    childrenHidden: boolean;
+    childCount: number;
+    children: PublicWorkItemTreeRowDto[];
+    childrenHasMore: boolean;
+  },
+): PublicWorkItemDetailDto {
+  return {
+    id: row.id,
+    identifier: row.identifier,
+    key: row.key,
+    title: row.title,
+    kind: row.kind as WorkItemKindDto,
+    status: row.status,
+    statusLabel: extras.statusLabel,
+    statusCategory: extras.statusCategory,
+    descriptionMd: row.descriptionMd ?? null,
+    parent: extras.parent,
+    childrenHidden: extras.childrenHidden,
+    childCount: extras.childCount,
+    children: extras.children,
+    childrenHasMore: extras.childrenHasMore,
   };
 }
 

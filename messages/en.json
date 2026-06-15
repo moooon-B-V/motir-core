@@ -2959,6 +2959,18 @@
     "statusDone": "Done",
     "epicNotPublicBadge": "Not public",
     "epicNotPublicTitle": "This epic is not public",
-    "epicNotPublicBody": "The project admin has kept this epic’s contents private."
+    "epicNotPublicBody": "The project admin has kept this epic’s contents private.",
+    "detailBreadcrumbLabel": "Breadcrumb",
+    "detailDescriptionLabel": "Description",
+    "detailNoDescription": "No description provided.",
+    "detailChildIssuesLabel": "Child work items",
+    "detailNoChildrenTitle": "No child work items yet",
+    "detailNoChildrenBody": "This epic has no stories or tasks yet.",
+    "detailSideStatus": "Status",
+    "detailSideType": "Type",
+    "detailSideChildren": "Children",
+    "detailSideProgress": "Progress",
+    "detailSideParent": "Parent",
+    "detailSideHidden": "Hidden"
   }
 }
