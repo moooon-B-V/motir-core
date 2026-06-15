@@ -752,7 +752,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.6',
       title:
         'Upvoting + comments on public requests — the vote model (the demand signal the triage queue sorts by)',
-      status: 'planned',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
