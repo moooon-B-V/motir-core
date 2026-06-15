@@ -2082,18 +2082,28 @@
         border-radius: var(--radius-badge);
         background: var(--el-page-bg);
         color: var(--el-text-muted);
+        font-family: var(--font-sans);
         font-size: 12px;
         font-weight: 600;
-        cursor: text;
+        cursor: pointer;
+      }
+      .tag-add:hover {
+        border-color: var(--el-accent);
+        color: var(--el-accent-on-surface);
       }
       .tag-add .ic {
         width: 13px;
         height: 13px;
       }
+      /* clicking the + button swaps it for a SMALL inline input (fixed, compact
+         — not a full-width bar) */
       .tag-add.input {
+        width: 150px;
+        justify-content: flex-start;
         border-style: solid;
         border-color: var(--el-accent);
         color: var(--el-text);
+        cursor: text;
         box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
       }
       .tag-add .caret {
@@ -2792,7 +2802,9 @@
                     <span class="tag-x" aria-label="Remove tag"
                       ><svg class="ic"><use href="#i-x" /></svg></span
                   ></span>
-                  <span class="tag-add input">Self-hosted<span class="caret"></span></span>
+                  <button class="tag-add">
+                    <svg class="ic"><use href="#i-plus" /></svg> Add tag
+                  </button>
                   <span class="tag-meta">4 / 8 tags</span>
                 </div>
               </div>
@@ -2910,12 +2922,29 @@ build Motir. Every feature here started as a work item on this board.
               ><svg class="ic" style="width: 14px; height: 14px"><use href="#i-minus" /></svg> No
               tags yet</span
             >
-            <span class="tag-add"
-              ><svg class="ic"><use href="#i-plus" /></svg> Add tag</span
-            >
+            <button class="tag-add">
+              <svg class="ic"><use href="#i-plus" /></svg> Add tag
+            </button>
           </div>
           <p style="margin: 10px 0 0; font-size: 11.5px; color: var(--el-text-faint)">
             With no tags the public hero simply omits the meta-pill row.
+          </p>
+        </div>
+
+        <!-- adding a tag: the + button → a small inline input -->
+        <div class="state-tile">
+          <div class="cap">Adding a tag</div>
+          <div class="tag-edit">
+            <span class="tag-chip neutral"
+              >GPL-3.0
+              <span class="tag-x" aria-label="Remove tag"
+                ><svg class="ic"><use href="#i-x" /></svg></span
+            ></span>
+            <span class="tag-add input">Self-hosted<span class="caret"></span></span>
+          </div>
+          <p style="margin: 10px 0 0; font-size: 11.5px; color: var(--el-text-faint)">
+            Clicking <b>+ Add tag</b> swaps it for a small inline input — type a tag, press Enter to
+            add (Esc cancels).
           </p>
         </div>
 

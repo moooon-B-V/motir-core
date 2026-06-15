@@ -398,12 +398,16 @@ three regions become editable:
   paragraph, not a one-liner). Focused state = `--el-accent` border + a 3px accent
   ring + a blinking inline `.caret`. Placeholder **"Add a tagline…"** when empty.
   Above it a `.field-label` "Tagline".
-- **Tags → removable chips + an "Add tag" input.** Each authored tag is a
+- **Tags → removable chips + a "+ Add tag" button.** Each authored tag is a
   `.tag-chip` (the same tint tones as the read pills) with a circular **`.tag-x`**
   remove control (`i-x`; a `<span>`, NOT a nested button — no `nested-interactive`).
-  An **`.tag-add`** affordance: resting = a dashed "+ Add tag"; active (`.input`) =
-  a solid accent-ringed input with a blinking `.caret`. A **`.tag-meta`** count
-  ("4 / 8 tags") states the max. Empty → a **`.tag-empty`** "No tags yet" hint.
+  Adding a tag is a **two-state** affordance, NOT a persistent input box: the resting
+  state is a compact dashed **`.tag-add` "+ Add tag" `<button>`**; clicking it swaps
+  it for a **small fixed-width inline input** (`.tag-add.input`, ~150px, accent ring
+  - blinking `.caret`) where you type a tag and press Enter to add (Esc cancels) —
+    the chip then appears and the control reverts to the "+ Add tag" button. (No
+    full-width input bar — the default surface is just the + button.) A **`.tag-meta`**
+    count ("4 / 8 tags") states the max; empty → a **`.tag-empty`** "No tags yet" hint.
 - **README body → the shipped `MarkdownEditor`** (`.md-edit`): the `.editor-toolbar`
   formatting row (heading / bold / italic · sep · link / list / numbered / image)
   over a `--font-mono` source `<pre class="ta">`. (Body-only editing, as before —
@@ -420,8 +424,10 @@ three regions become editable:
 - **Empty tagline → fallback** — the input shows the "Add a tagline…" placeholder;
   the note states the public hero falls back to the generic i18n line, never a blank
   subtitle.
-- **Zero tags** — `.tag-empty` "No tags yet" + the "Add tag" affordance; the public
+- **Zero tags** — `.tag-empty` "No tags yet" + the "+ Add tag" button; the public
   hero omits the meta-pill row entirely.
+- **Adding a tag** — the "+ Add tag" button has been clicked → a small inline input
+  (`.tag-add.input`) with a caret; type + Enter adds the chip, Esc cancels.
 - **Saving…** — the Save button shows a `.spin` spinner + "Saving…", both buttons
   disabled (the in-flight, race-guarded write — `CLAUDE.md` E2E-signal rule).
 - **Save error** — a rose **`.save-error`** banner ("Couldn't save your changes. …
