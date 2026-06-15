@@ -52,6 +52,10 @@ export interface IssueAppliedFilterBarProps {
   ast: FilterAst | null;
   /** The 6.1.3 condition-chip readout (AdvancedFilterSummary), or null. */
   children?: ReactNode;
+  /** Navigation override (Subtask 6.15.3): the board injects
+   * `buildBoardFilterHref` (board-scoped URL, no view/sort) so Discard returns
+   * to the board, not /issues. Defaults to the /issues `buildIssueListHref`. */
+  buildHref?: (filter: IssueFilter) => string;
 }
 
 export function IssueAppliedFilterBar({
@@ -62,10 +66,13 @@ export function IssueAppliedFilterBar({
   filter,
   ast,
   children,
+  buildHref,
 }: IssueAppliedFilterBarProps) {
   const t = useTranslations('savedFilters');
   const router = useRouter();
   const pathname = usePathname();
+  const hrefFor = (next: IssueFilter) =>
+    buildHref ? buildHref(next) : buildIssueListHref(pathname, { view, sort, filter: next });
   const { toast } = useToast();
   const session = useSavedFilterSession();
   const applied = session?.applied ?? null;
@@ -108,13 +115,7 @@ export function IssueAppliedFilterBar({
     if (applied === null) return;
     // Reload the saved envelope into builder + URL (preserving view/sort,
     // clearing the basic facets — the advanced param is the single channel).
-    router.push(
-      buildIssueListHref(pathname, {
-        view,
-        sort,
-        filter: { ...clearFacets(filter), advanced: applied.envelopeParam },
-      }),
-    );
+    router.push(hrefFor({ ...clearFacets(filter), advanced: applied.envelopeParam }));
   }
 
   function onSavedAs(created: SavedFilterSummaryDto) {

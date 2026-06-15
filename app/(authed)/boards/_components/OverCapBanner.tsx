@@ -21,13 +21,16 @@ import { Button } from '@/components/ui/Button';
 // never a tinted page surface). Announced to assistive tech via `role="status"`
 // (it appears conditionally after a fetch, so it's a live region).
 //
-// Affordance: the control that shrinks an over-cap board is the board filter /
-// saved query — Epic 6. Until that lands, the banner points at the SAME disabled
-// `[Filter]` seam the boards toolbar already reserves (page.tsx), reusing the
-// shipped `Button` primitive (`variant="secondary"`, `disabled`) so it reads as a
-// documented seam, not an invented control.
+// Affordance (Story 6.15.3): the control that shrinks an over-cap board is the
+// board filter. The "Refine filter" CTA now OPENS the board's quick `[Filter]`
+// popover (`onRefine`, wired by BoardContainer through BoardFilterUiContext) —
+// it used to point at the dead disabled `[Filter]` seam. When `onRefine` is
+// absent (an isolated render with no board filter UI mounted) the CTA falls back
+// to the documented disabled seam, so it never reads as a broken control. The
+// cap / `truncated` are computed over the FILTERED set (6.15.2), so applying a
+// filter that brings the board under the cap dismisses this banner entirely.
 
-export function OverCapBanner({ cap }: { cap: number }) {
+export function OverCapBanner({ cap, onRefine }: { cap: number; onRefine?: () => void }) {
   const t = useTranslations('boards');
   return (
     <aside
@@ -44,8 +47,9 @@ export function OverCapBanner({ cap }: { cap: number }) {
         variant="secondary"
         size="sm"
         leftIcon={<Filter className="h-4 w-4" />}
-        disabled
-        title={t('overCapSeamTitle')}
+        disabled={!onRefine}
+        onClick={onRefine}
+        title={onRefine ? undefined : t('overCapSeamTitle')}
         data-testid="board-overcap-filter"
       >
         {t('overCapRefine')}

@@ -41,7 +41,9 @@ import { BoardCardOverlay } from './BoardCard';
 import { BoardColumn } from './BoardColumn';
 import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
 import { BoardEmptyState } from './BoardEmptyState';
+import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
+import { useBoardFilterUi } from './BoardFilterUiContext';
 import { NoActiveSprintState } from './NoActiveSprintState';
 import { OverCapBanner } from './OverCapBanner';
 import { SprintHeader } from './SprintHeader';
@@ -110,10 +112,26 @@ export function BoardContainer({
   canEdit = true,
   projectName = '',
   workflow,
+  filterParam = '',
+  filterActive = false,
 }: {
   members?: WorkspaceMemberDTO[];
   activeProjectId?: string;
   selectedBoardId?: string;
+  /**
+   * The compiled board filter (Story 6.15.3) — the merged toolbar facets +
+   * advanced AST, encoded as the `?filter=v1:` codec param (empty string when no
+   * filter narrows the board). Rides the projection fetch so the server read
+   * (6.15.2) re-projects every column + the cap/`truncated` count to the
+   * matching set; a change refetches (it's in the fetch query → the effect dep).
+   */
+  filterParam?: string;
+  /**
+   * Whether a filter is active (Story 6.15.3) — selects the FILTERED-empty state
+   * ("no card matches", Clear CTA) over the brand-new-board empty state ("New
+   * work item") when every column is empty.
+   */
+  filterActive?: boolean;
   /**
    * Whether the actor may edit this board (Story 6.4.6). `false` for a viewer /
    * a member on a `limited` project: the board renders read-only — drag is
@@ -131,13 +149,26 @@ export function BoardContainer({
   workflow?: WorkflowDto;
 }) {
   const t = useTranslations('boards');
-  // The selected board (Subtask 3.7.5) — the page's `?board=<id>` selection. It
-  // rides the projection fetch as `?boardId=` so the board the user picked (not
-  // just the default) is what loads; absent → the server resolves the project's
-  // default board. Threaded into the mount fetch AND the group-by re-lay refetch
-  // so a re-lay stays on the SAME selected board.
-  const boardQuery = selectedBoardId ? `?boardId=${encodeURIComponent(selectedBoardId)}` : '';
+  // The board's projection-fetch query. `?boardId=` (Subtask 3.7.5) carries the
+  // page's `?board=<id>` selection so the picked board (not just the default)
+  // loads; absent → the server resolves the project's default. `?filter=`
+  // (Subtask 6.15.3) carries the compiled filter AST so the server re-projects
+  // to the matching set. Threaded into the mount fetch AND the group-by re-lay
+  // refetch so a re-lay stays on the SAME board + filter. As a single derived
+  // string it's a stable effect dep — changing EITHER the selection or the
+  // filter refetches.
+  const boardQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (selectedBoardId) params.set('boardId', selectedBoardId);
+    if (filterParam) params.set('filter', filterParam);
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }, [selectedBoardId, filterParam]);
   const { toast } = useToast();
+  // The quick-`[Filter]` open state (Subtask 6.15.3) — the over-cap banner's
+  // "Refine filter" CTA opens the board filter through it. Null outside the
+  // board page's provider (isolated tests) → the CTA stays a disabled seam.
+  const boardFilterUi = useBoardFilterUi();
   // The group-by control lives in the PAGE HEADER toolbar row (beside the board
   // switcher), per design/boards/multi-board.mock.html — but its value + change
   // handler live HERE (in the projection state). page.tsx renders an empty
@@ -349,12 +380,26 @@ export function BoardContainer({
           {t('readOnlyBoardBanner')}
         </div>
       ) : null}
-      {board.truncated ? <OverCapBanner cap={board.cap} /> : null}
+      {board.truncated ? (
+        <OverCapBanner
+          cap={board.cap}
+          onRefine={boardFilterUi ? () => boardFilterUi.setFilterOpen(true) : undefined}
+        />
+      ) : null}
       {hasUnmapped ? (
         <UnmappedStatusesTray statuses={board.unmappedStatuses} boardId={board.boardId} />
       ) : null}
       {isEmpty ? (
-        <BoardEmptyState />
+        // FILTERED-empty (Subtask 6.15.3): an active filter that matches no card
+        // shows the distinct "no match" state with a Clear CTA, NOT the
+        // brand-new-board "New work item" empty state (the board has items; the
+        // filter is over-narrow). The toolbar + applied summary stay (page-level)
+        // so the user can edit what they filtered on.
+        filterActive ? (
+          <BoardFilteredEmptyState selectedBoardId={selectedBoardId} />
+        ) : (
+          <BoardEmptyState />
+        )
       ) : relaying ? (
         <BoardSkeleton />
       ) : (

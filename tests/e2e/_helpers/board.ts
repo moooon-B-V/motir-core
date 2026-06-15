@@ -427,6 +427,9 @@ export async function setColumnWip(page: Page, columnId: string, value: string):
       new RegExp(`/api/board/columns/${columnId}$`).test(r.url()) &&
       r.request().method() === 'PATCH',
   );
-  await page.getByRole('button', { name: 'Save' }).click();
+  // `exact` — the board toolbar now mounts the [Saved] filter picker (6.15.3),
+  // whose accessible name "Saved filters — apply, star, or search" substring-
+  // matches a bare "Save", so a non-exact match resolves 2 elements.
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect((await patch).ok(), `set WIP ${value} on ${columnId} persisted`).toBeTruthy();
 }

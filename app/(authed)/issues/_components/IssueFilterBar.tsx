@@ -141,6 +141,16 @@ export interface IssueFilterBarProps {
    * (exactly when the AST exceeds facet expressiveness) and rides into the
    * one-way "Edit in Advanced" upgrade. */
   ast?: FilterAst | null;
+  /** Navigation override (Subtask 6.15.3): the board mounts this same bar but
+   * its URL state is board-scoped (`?board=` preserved, no view/sort), so it
+   * injects `buildBoardFilterHref`. Defaults to the /issues `buildIssueListHref`
+   * (view + sort preserved). */
+  buildHref?: (filter: IssueFilter) => string;
+  /** Controlled open (Subtask 6.15.3): the board's over-cap banner "Refine
+   * filter" CTA opens this popover from outside the toolbar. Uncontrolled
+   * (internal state) on /issues. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function IssueFilterBar({
@@ -150,9 +160,14 @@ export function IssueFilterBar({
   view,
   sort,
   ast = null,
+  buildHref,
+  open: controlledOpen,
+  onOpenChange,
 }: IssueFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const hrefFor = (next: IssueFilter) =>
+    buildHref ? buildHref(next) : buildIssueListHref(pathname, { view, sort, filter: next });
   const t = useTranslations('issueViews');
   const tType = useTranslations('labels.issueType');
   const tWorkType = useTranslations('labels.workItemType');
@@ -164,7 +179,9 @@ export function IssueFilterBar({
   // follows for statuses.
   const statusLabel = (s: WorkflowStatusDto) =>
     DEFAULT_STATUS_KEYS.has(s.key) ? tStatus(s.key) : s.label;
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = onOpenChange ?? setLocalOpen;
   const [memberQuery, setMemberQuery] = useState('');
   const advancedPopover = useAdvancedFilterPopover();
 
@@ -226,7 +243,7 @@ export function IssueFilterBar({
   function apply(next: IssueFilter) {
     filterRef.current = next; // sync source: the NEXT toggle composes onto this
     setOptimistic(next); // instant UI: check marks + counts update on click
-    router.push(buildIssueListHref(pathname, { view, sort, filter: next }));
+    router.push(hrefFor(next));
   }
 
   function onTextChange(value: string) {
@@ -257,7 +274,7 @@ export function IssueFilterBar({
       filterRef.current = next;
       setOptimistic(next);
       setText('');
-      router.push(buildIssueListHref(pathname, { view, sort, filter: next }));
+      router.push(hrefFor(next));
     }
     setOpen(false);
     advancedPopover?.setOpen(true);

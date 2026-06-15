@@ -7,6 +7,8 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { truncateAuthTables } from '../helpers/db';
+import { encodeFilterParam, facetFilterToAst, type FilterAst } from '@/lib/filters/ast';
+import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 import type { ProjectContext } from '@/lib/projects';
 import type { BoardProjectionDto } from '@/lib/dto/boards';
 
@@ -158,6 +160,62 @@ describe('board API routes', () => {
     const res = await boardGetReq('?boardId=brd_not_a_real_board');
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe('BOARD_NOT_FOUND');
+  });
+
+  // Board FILTER (Story 6.15.3) — the route decodes the `?filter=v1:` param and
+  // threads it into getBoard (the 6.15.2 read). The filtered PROJECTION itself
+  // is covered by tests/boards/filtered-projection.test.ts; here we assert the
+  // ROUTE transport: the param narrows, a forged param degrades, a bad field 422s.
+  it('GET /api/board?filter= → re-projects the board to the matching set', async () => {
+    const fx = await makeFixture();
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'bug', title: 'a bug' },
+      { userId: fx.userId, workspaceId: fx.workspaceId },
+    );
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'a task' },
+      { userId: fx.userId, workspaceId: fx.workspaceId },
+    );
+
+    // Unfiltered: both land in todo.
+    const before = (await (await boardGetReq()).json()) as BoardProjectionDto;
+    const todoBefore = before.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    expect(todoBefore.totalCount).toBe(2);
+
+    // Filtered to kind=bug → only the bug remains.
+    const param = encodeFilterParam(facetFilterToAst({ ...EMPTY_FILTER, kinds: ['bug'] }));
+    const res = await boardGetReq(`?filter=${encodeURIComponent(param)}`);
+    expect(res.status).toBe(200);
+    const after = (await res.json()) as BoardProjectionDto;
+    const todoAfter = after.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    expect(todoAfter.totalCount).toBe(1);
+    expect(todoAfter.cards).toHaveLength(1);
+  });
+
+  it('GET /api/board?filter= → a malformed/forged param degrades to the full board (200)', async () => {
+    const fx = await makeFixture();
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'a task' },
+      { userId: fx.userId, workspaceId: fx.workspaceId },
+    );
+    // No version prefix → decode fails → treated as NO filter (not a 400).
+    const res = await boardGetReq('?filter=not-a-valid-param');
+    expect(res.status).toBe(200);
+    const board = (await res.json()) as BoardProjectionDto;
+    expect(board.columns.find((c) => c.statusKeys[0] === 'todo')!.totalCount).toBe(1);
+  });
+
+  it('GET /api/board?filter= → 422 for a structurally-decodable but invalid filter', async () => {
+    await makeFixture();
+    // Decodes fine (the codec is structural) but names a field the registry
+    // doesn't know → resolveFilterAst throws FilterValidationError → 422.
+    const badAst = {
+      combinator: 'and',
+      conditions: [{ field: 'not_a_field', operator: 'is_any_of', value: ['x'] }],
+    } as unknown as FilterAst;
+    const res = await boardGetReq(`?filter=${encodeURIComponent(encodeFilterParam(badAst))}`);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe('UNKNOWN_FILTER_FIELD');
   });
 
   it('POST /api/board/move → 200 for a legal cross-column move (status persists)', async () => {
