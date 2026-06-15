@@ -3654,6 +3654,60 @@ export const EPICS: EpicMeta[] = [
       'before any tree write). The same pass added **Story 2.7** (work-item type + executor) in ' +
       'Epic 2 and an explanation-generation toggle (7.3.8). Every new dep points backward — the ' +
       'ordering audit stays clean.',
+    items: [
+      {
+        id: '7.20',
+        kind: 'bug',
+        title:
+          'Production work_item reads 500 (P2022 ColumnNotFound) — triage-marker columns ' +
+          '(externalSubmitterName/Email, triagedAt, snoozedUntil) missing on prod from migration drift',
+        status: 'done',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 7 (discovery epic — surfaced right after the 7.8.3 ' +
+          'deploy while closing out that Epic-7 subtask; per the discovery-epic rule the bug ' +
+          'files here, NOT to the code-surface epic that owns the migration, Epic 6 / 6.11.3) · ' +
+          '**Surfaces:** every full-row `work_item` read — reported as ' +
+          '`GET /api/work-items/[id]/rollup` (the epic progress rollup: ' +
+          '`estimationService.rollupForParent` → `workItemRepository.findById` → ' +
+          '`prisma.workItem.findUnique`) returning 500; "can\'t load work items from an epic". · ' +
+          '**Status:** FIXED (PR #1151 merged + deployed). · **Source:** prod incident reported ' +
+          'by Yue (2026-06-15) after merging the 7.8.3 feature PR.\n\n' +
+          "Production's `work_item` table was MISSING `externalSubmitterName`, " +
+          '`externalSubmitterEmail`, `triagedAt`, `snoozedUntil` and the ' +
+          '`(projectId, triagedAt)` index — the objects migration ' +
+          '`20260613221114_add_work_item_triage_marker` (Subtask 6.11.3) adds. `schema.prisma` ' +
+          'and the generated Prisma client SELECT those columns on every `work_item.findUnique` ' +
+          '(no explicit `select`), so each full-row read threw ' +
+          '`PrismaClientKnownRequestError P2022 ColumnNotFound`. List/board reads that use ' +
+          'narrow `select` clauses kept working, which is why only the rollup / epic-detail ' +
+          'surface visibly broke. The 7.8.3 merge did NOT cause it (token routes + settings UI ' +
+          'only); the drift was latent and loading an epic merely exercised the affected read.\n\n' +
+          '**Root cause:** the 6.11.3 migration was recorded APPLIED on prod WITHOUT its ' +
+          '`ALTER` running — the `prisma migrate resolve --applied <name>` workaround (the ' +
+          'documented escape hatch for shared-dev-DB `migrate dev` drift) marks a migration done ' +
+          'without executing its SQL. Used against the prod/seed DB, it left the migration ' +
+          'history "complete" while the columns never landed. Class: **schema/DB drift from a ' +
+          'resolve-applied that skipped the SQL** — invisible to `migrate status` (reports "up ' +
+          'to date"), invisible to CI (a fresh DB runs the real ALTER), reproducible only on the ' +
+          'resolve-marked environment.\n\n' +
+          '**Fix:** motir-core PR #1151 — a forward-only, IDEMPOTENT repair migration ' +
+          '(`20260615120000_repair_work_item_triage_marker_columns`) re-adds the columns + index ' +
+          'with `ADD COLUMN IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`: it adds the missing ' +
+          'objects on prod and is a no-op everywhere they already exist; no `schema.prisma` ' +
+          'change (so `migrate dev` reports no drift).\n\n' +
+          '**Resolution:** PR #1151 merged 2026-06-15 and deployed; the Vercel build ran ' +
+          '`prisma migrate deploy`, the repair migration added the missing columns + index, and ' +
+          'the epic rollup / work-item reads load again. Verified by Yue on prod.\n\n' +
+          '**Lesson (notes.html #41):** never `migrate resolve --applied` a migration whose SQL ' +
+          'did not actually run against that DB; a full-row `findUnique`/`findFirst` (no ' +
+          '`select`) SELECTs every schema scalar, so ONE drifted column 500s every such read ' +
+          'while narrow-`select` reads survive (masking the scope). If a shared-DB drift forces a ' +
+          'manual fix, run the real SQL (or an idempotent equivalent) BEFORE resolving; repair ' +
+          'drift forward-only with an idempotent `IF NOT EXISTS` migration; prefer narrow ' +
+          '`select`s on hot read paths.',
+      },
+    ],
   },
   {
     id: '8',
