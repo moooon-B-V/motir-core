@@ -337,6 +337,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(fileURLToPath(new URL('.', import.meta.url))),
+      // `import 'server-only'` is a Next build-time marker with no plain-node
+      // resolution; alias it to an empty stub so server-only modules (e.g.
+      // lib/ai/motirAiClient) import cleanly under Vitest. The Next build still
+      // enforces the real boundary.
+      'server-only': resolve(
+        fileURLToPath(new URL('./tests/stubs/server-only.ts', import.meta.url)),
+      ),
     },
   },
 });
