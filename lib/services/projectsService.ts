@@ -65,6 +65,13 @@ const SLUG_MAX_LENGTH = 60;
 // Generous — a long README fits — but bounds the stored public-projection
 // payload a single admin edit can write.
 const PUBLIC_OVERVIEW_MAX_LENGTH = 50_000;
+// Server caps on the public hero fields (Story 6.16 · Subtask 6.16.2), edited
+// in-place on the public page. The tagline is a short subtitle; tags are a
+// small set of short meta pills. Exported so the backend write path (6.16.3)
+// validates against the same bounds the schema columns hold.
+export const PUBLIC_TAGLINE_MAX_LENGTH = 140;
+export const PUBLIC_TAGS_MAX_COUNT = 8;
+export const PUBLIC_TAG_MAX_LENGTH = 24;
 const SLUG_SUFFIX_LENGTH = 4;
 const SLUG_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const RETRY_ATTEMPTS = 5;
