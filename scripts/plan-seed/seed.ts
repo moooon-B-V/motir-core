@@ -82,7 +82,13 @@ import { PLAN, ROOT_BUGS } from './data';
 import { composeDescription, mapTypeAndExecutor } from './mapItem';
 import { MOTIR_PUBLIC_OVERVIEW_MD } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
-import { PLAN_STATUS_MAP, type PlanItem, type PlanLeafKind, type PlanStatus } from './types';
+import {
+  PLAN_STATUS_MAP,
+  epicIdOf,
+  type PlanItem,
+  type PlanLeafKind,
+  type PlanStatus,
+} from './types';
 
 const SEED_PASSWORD = '!QAZ1qaz';
 const SEED_WORKSPACE_NAME = 'moooon';
@@ -587,91 +593,148 @@ interface SprintLeaf {
   kind: PlanLeafKind;
 }
 
-/** One sprint to create, with the plan statuses + batch size it draws items from. */
+/** One sprint to create (computed dynamically — see `buildSprints`). */
 interface SprintSpec {
   name: string;
   goal: string;
   state: SprintState;
-  /** Days from "now": sprint window [now+startOffset, now+endOffset]. */
-  startOffsetDays: number | null;
-  endOffsetDays: number | null;
-  /** Plan statuses this sprint's items are drawn from, in preference order. */
-  drawFrom: PlanStatus[];
-  /** How many leaves to pull into the sprint. */
-  size: number;
+  startDate: Date | null;
+  endDate: Date | null;
+  /** The exact leaves assigned to this sprint (no reuse across sprints). */
+  items: SprintLeaf[];
 }
 
 /** The day in ms — for the consecutive short-sprint windows. */
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// The sprint history covers EVERY leaf (user request, last reseed): rather than
+// a fixed handful of sprints with size caps that leave most work in the backlog,
+// we partition ALL leaves into consecutive short sprints so the board / velocity
+// / burndown read a full, realistic project history.
+//
+//   • LEAVES_PER_SPRINT — a realistic ~4-day batch for a 6-person team (subtasks
+//     are small). The sprint COUNT is emergent (≈ done/size complete + active +
+//     ≈ upcoming/size planned), which for an 8-epic product is dozens of sprints
+//     — exactly what a months-long short-cadence project looks like.
+//   • DONE leaves (in PLAN order) → consecutive COMPLETE sprints marching back in
+//     time (Sprint 1 = the oldest work); IN_PROGRESS leaves → the single ACTIVE
+//     sprint (Jira allows one active); PLANNED + BLOCKED leaves → PLANNED sprints
+//     marching forward. CANCELLED leaves are never sprinted.
+//   • Each sprint is themed by the dominant story/epic of its items, so the names
+//     read like a real backlog ("Sprint 12 · Triage inbox").
+const LEAVES_PER_SPRINT = 16;
+/** Each sprint window is this many days; the active sprint straddles "now". */
+const SPRINT_DAYS = 4;
+/** The active sprint started ~2 days ago and ends ~2 days out (it straddles now). */
+const ACTIVE_START_DAYS = -2;
+const ACTIVE_END_DAYS = ACTIVE_START_DAYS + SPRINT_DAYS;
+
+/** Split an array into consecutive chunks of `size` (last chunk may be short). */
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Epic title by epic id, and story title by 2-segment story id — for theming. */
+const EPIC_TITLE_BY_ID = new Map(PLAN.map((e) => [e.id, e.title]));
+const STORY_TITLE_BY_ID = new Map<string, string>();
+for (const e of PLAN) for (const s of e.stories) STORY_TITLE_BY_ID.set(s.id, s.title);
+
+/** The 2-segment story id of a dotted plan id (`6.11.10` → `6.11`). */
+function storyIdOf(planId: string): string {
+  const parts = planId.split('.');
+  return parts.length >= 2 ? `${parts[0]}.${parts[1]}` : planId;
+}
+
+/** A short theme label for a sprint: the dominant story's title (parenthetical
+ * stripped), falling back to the dominant epic's title. */
+function themeFor(items: readonly SprintLeaf[]): string {
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const sid = storyIdOf(it.planId);
+    counts.set(sid, (counts.get(sid) ?? 0) + 1);
+  }
+  let bestId = '';
+  let bestN = -1;
+  for (const [id, n] of counts) {
+    if (n > bestN) {
+      bestId = id;
+      bestN = n;
+    }
+  }
+  const title =
+    STORY_TITLE_BY_ID.get(bestId) ?? EPIC_TITLE_BY_ID.get(epicIdOf(bestId)) ?? 'Delivery';
+  // Drop a trailing parenthetical for a tidy sprint name.
+  return title.split(' (')[0]!.trim();
+}
+
 /**
- * The sprint plan: ~3 complete + 1 active + ~2 planned, consecutive ~4-day
- * windows with the most recent ACTIVE one ending a few days out (the active
- * sprint started ~2 days ago). Complete windows march backwards from the active
- * sprint's start; planned windows march forward from the active sprint's end.
- * Offsets are in days relative to "now" — deterministic given the run time
- * (dates are realistic, not reproducible-to-the-ms, which is expected of a
- * time-anchored seed). `drawFrom` matches the work to the state.
+ * Partition every leaf into a full sprint history (deterministic, plan-ordered):
+ * DONE → consecutive COMPLETE sprints ending at the active sprint's start;
+ * IN_PROGRESS → the one ACTIVE sprint straddling now; PLANNED+BLOCKED → PLANNED
+ * sprints marching forward. Sprint windows are `SPRINT_DAYS` apart; `sequence`
+ * runs chronologically (oldest complete = 1).
  */
-const SPRINT_SPECS: readonly SprintSpec[] = [
-  // Three completed sprints (oldest → newest), each a past ~4-day window.
-  {
-    name: 'Sprint 1 · Foundations',
-    goal: 'Stand up auth, workspaces, and the project shell.',
-    state: 'complete',
-    startOffsetDays: -14,
-    endOffsetDays: -10,
-    drawFrom: ['done'],
-    size: 14,
-  },
-  {
-    name: 'Sprint 2 · Issue tree',
-    goal: 'Ship the epic→story→task tree and the issue detail view.',
-    state: 'complete',
-    startOffsetDays: -10,
-    endOffsetDays: -6,
-    drawFrom: ['done'],
-    size: 12,
-  },
-  {
-    name: 'Sprint 3 · Boards & workflow',
-    goal: 'Land the board, columns, and the workflow status model.',
-    state: 'complete',
-    startOffsetDays: -6,
-    endOffsetDays: -2,
-    drawFrom: ['done'],
-    size: 10,
-  },
-  // The single active sprint — started ~2 days ago, ends ~2 days out.
-  {
-    name: 'Sprint 4 · Sprints & backlog',
-    goal: 'Sprint entity, backlog ranking, velocity, and burndown.',
-    state: 'active',
-    startOffsetDays: -2,
-    endOffsetDays: 2,
-    drawFrom: ['in_progress', 'planned', 'done'],
-    size: 10,
-  },
-  // Two planned sprints — upcoming work, future windows.
-  {
-    name: 'Sprint 5 · Reports & filters',
-    goal: 'Saved filters, the report builder, and dashboards.',
-    state: 'planned',
-    startOffsetDays: 2,
-    endOffsetDays: 6,
-    drawFrom: ['planned', 'blocked'],
-    size: 8,
-  },
-  {
-    name: 'Sprint 6 · Native rewrite polish',
-    goal: 'Localization polish and the design-system pass.',
-    state: 'planned',
-    startOffsetDays: 6,
-    endOffsetDays: 10,
-    drawFrom: ['planned', 'blocked'],
-    size: 8,
-  },
-];
+function buildSprints(leaves: readonly SprintLeaf[]): SprintSpec[] {
+  const now = Date.now();
+  const day = (offset: number): Date => new Date(now + offset * DAY_MS);
+
+  // Plan-ordered leaves by lifecycle bucket (cancelled is never sprinted).
+  const done = leaves.filter((l) => l.status === 'done');
+  const inProgress = leaves.filter((l) => l.status === 'in_progress');
+  const upcoming = leaves.filter((l) => l.status === 'planned' || l.status === 'blocked');
+
+  const completeChunks = chunk(done, LEAVES_PER_SPRINT);
+  const plannedChunks = chunk(upcoming, LEAVES_PER_SPRINT);
+  // The active sprint holds the in-progress work; if there is none, it pulls the
+  // first upcoming chunk forward so a mid-flight project always has one.
+  const activeItems = inProgress.length > 0 ? inProgress : (plannedChunks.shift() ?? []);
+
+  const specs: SprintSpec[] = [];
+  const n = completeChunks.length;
+
+  // Complete sprints — oldest (i=0) → newest (i=n-1); the newest ends where the
+  // active sprint starts, and each is a `SPRINT_DAYS` window marching back.
+  completeChunks.forEach((items, i) => {
+    const endOffset = ACTIVE_START_DAYS - (n - 1 - i) * SPRINT_DAYS;
+    specs.push({
+      name: `Sprint ${specs.length + 1} · ${themeFor(items)}`,
+      goal: `Ship the ${themeFor(items)} work.`,
+      state: 'complete',
+      startDate: day(endOffset - SPRINT_DAYS),
+      endDate: day(endOffset),
+      items,
+    });
+  });
+
+  // The single active sprint, straddling now.
+  if (activeItems.length > 0) {
+    specs.push({
+      name: `Sprint ${specs.length + 1} · ${themeFor(activeItems)}`,
+      goal: `In flight: the ${themeFor(activeItems)} work.`,
+      state: 'active',
+      startDate: day(ACTIVE_START_DAYS),
+      endDate: day(ACTIVE_END_DAYS),
+      items: activeItems,
+    });
+  }
+
+  // Planned sprints — upcoming work, future windows marching forward.
+  plannedChunks.forEach((items, p) => {
+    const startOffset = ACTIVE_END_DAYS + p * SPRINT_DAYS;
+    specs.push({
+      name: `Sprint ${specs.length + 1} · ${themeFor(items)}`,
+      goal: `Up next: the ${themeFor(items)} work.`,
+      state: 'planned',
+      startDate: day(startOffset),
+      endDate: day(startOffset + SPRINT_DAYS),
+      items,
+    });
+  });
+
+  return specs;
+}
 
 /**
  * Create the sprints + assign leaves. Walks PLAN in order (deterministic) to
@@ -705,9 +768,16 @@ async function runSprintPass(args: {
   // is never sprinted, whatever the colliding plan id resolved to.
   const leafKindRows = await db.workItem.findMany({
     where: { projectId, kind: { in: ['subtask', 'bug', 'task'] } },
-    select: { id: true },
+    select: { id: true, status: true, kind: true },
   });
   const leafWorkItemIds = new Set(leafKindRows.map((r) => r.id));
+
+  // Invert PLAN_STATUS_MAP (planned→todo, …) so an orphan's DB workflow status
+  // maps back to a plan lifecycle bucket for the sweep below. The seed creates
+  // items with these initial keys; anything unexpected falls back to `planned`.
+  const planStatusByWorkflowKey = new Map<string, PlanStatus>(
+    (Object.entries(PLAN_STATUS_MAP) as [PlanStatus, string][]).map(([plan, key]) => [key, plan]),
+  );
 
   // Collect every LEAF in PLAN order (stable), resolving the created id.
   const LEAF_KINDS: ReadonlySet<PlanLeafKind> = new Set(['subtask', 'bug', 'task']);
@@ -728,34 +798,26 @@ async function runSprintPass(args: {
     for (const item of epic.items ?? []) addLeaf(item, 'bug');
   }
 
-  // Bucket by plan status; we draw from these without reuse (a consumed leaf is
-  // removed from the head of its bucket, so no item lands in two sprints).
-  const buckets: Record<PlanStatus, SprintLeaf[]> = {
-    done: [],
-    in_progress: [],
-    planned: [],
-    blocked: [],
-    // Cancelled (won't-build tombstone) cards are never sprinted — no SprintSpec
-    // draws from this bucket; it exists only to satisfy the Record's totality.
-    cancelled: [],
-  };
-  for (const leaf of leaves) buckets[leaf.status].push(leaf);
+  // Sweep up any LEAF work_item the PLAN walk couldn't reach via `idMap` — the
+  // 2 plan-id collisions (`1.0.5` is BOTH a story and a leaf) leave their leaf
+  // unreachable by plan id, so it'd otherwise never be sprinted. Append them
+  // (status from the DB) so EVERY leaf is covered (the "cover all" request).
+  for (const row of leafKindRows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    leaves.push({
+      planId: row.id,
+      workItemId: row.id,
+      status: planStatusByWorkflowKey.get(row.status) ?? 'planned',
+      kind: row.kind as PlanLeafKind,
+    });
+  }
 
-  /** Pull up to `n` leaves preferring `statuses` in order; consumes from buckets. */
-  const draw = (statuses: PlanStatus[], n: number): SprintLeaf[] => {
-    const out: SprintLeaf[] = [];
-    for (const status of statuses) {
-      while (out.length < n && buckets[status].length > 0) {
-        out.push(buckets[status].shift()!);
-      }
-      if (out.length >= n) break;
-    }
-    return out;
-  };
-
-  const now = Date.now();
-  const at = (offsetDays: number | null): Date | null =>
-    offsetDays === null ? null : new Date(now + offsetDays * DAY_MS);
+  // Partition EVERY leaf into a full sprint history (done → complete sprints,
+  // in_progress → the active sprint, planned/blocked → planned sprints). The
+  // sprint count is emergent, so the whole backlog is covered — no large
+  // unsprinted remainder (the user's "cover all the work items" request).
+  const specs = buildSprints(leaves);
 
   let sequence = 0;
   let assignedCount = 0;
@@ -763,10 +825,10 @@ async function runSprintPass(args: {
   const lines: string[] = [];
   const counts = { complete: 0, active: 0, planned: 0 };
 
-  for (const spec of SPRINT_SPECS) {
+  for (const spec of specs) {
     sequence += 1;
     const seq = sequence;
-    const items = draw(spec.drawFrom, spec.size);
+    const items = spec.items;
     counts[spec.state] += 1;
 
     // Snapshot: committed points = Σ storyPoints over the assigned items,
@@ -776,8 +838,8 @@ async function runSprintPass(args: {
     const committedPoints = points.reduce((sum, p) => sum + p, 0);
     const committedIssueCount = items.length;
 
-    const startDate = at(spec.startOffsetDays);
-    const endDate = at(spec.endOffsetDays);
+    const startDate = spec.startDate;
+    const endDate = spec.endDate;
     // A completed sprint completed at its window end; active/planned have none.
     const completedAt = spec.state === 'complete' ? endDate : null;
 
@@ -824,7 +886,7 @@ async function runSprintPass(args: {
   }
 
   return {
-    sprintCount: SPRINT_SPECS.length,
+    sprintCount: specs.length,
     completeCount: counts.complete,
     activeCount: counts.active,
     plannedCount: counts.planned,
