@@ -13,6 +13,12 @@ import {
 } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
+  CrossWorkspaceLinkError,
+  SelfLinkError,
+  WorkItemLinkCycleError,
+  WorkItemLinkNotFoundError,
+} from '@/lib/workItems/linkErrors';
+import {
   CommentForbiddenError,
   CommentNotFoundError,
   EmptyCommentBodyError,
@@ -144,6 +150,19 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof InvalidReadyCursorError || err instanceof InvalidSearchCursorError) {
+    return toolError(err.code, err.message);
+  }
+  // Link tools (7.8.13): the work-item-link structural guards — a self-link,
+  // a dependency CYCLE, and a cross-workspace link surface verbatim so the agent
+  // self-corrects (the message names the violation). `WorkItemLinkNotFoundError`
+  // keeps the 404-not-403 contract. A DUPLICATE_LINK never reaches here — the
+  // `link_work_items` tool treats it as an idempotent success.
+  if (
+    err instanceof SelfLinkError ||
+    err instanceof WorkItemLinkCycleError ||
+    err instanceof CrossWorkspaceLinkError ||
+    err instanceof WorkItemLinkNotFoundError
+  ) {
     return toolError(err.code, err.message);
   }
   // Sprint tools (7.8.10): the sprint-entity + backlog-association typed errors.

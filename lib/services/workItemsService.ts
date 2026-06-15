@@ -1875,6 +1875,64 @@ export const workItemsService = {
   },
 
   /**
+   * Remove the directed link addressed by its ENDPOINTS (`fromId <kind> toId`)
+   * rather than its opaque id — the shape the MCP `unlink_work_items` tool
+   * (Subtask 7.8.13) needs, since an agent addresses a link by the two item
+   * keys + relationship, not the link id it never sees. Resolves the unique
+   * `(fromId, toId, kind)` row, then runs the SAME delete + reciprocal-drop +
+   * revision logic as {@link unlinkWorkItems}. IDEMPOTENT: a link that's already
+   * absent (or not visible to `ctx`) is a no-op returning `false` — no typed
+   * error — so a retried unlink is safe (the tool's acceptance contract).
+   * Returns whether a link was actually removed.
+   */
+  async unlinkWorkItemsByEndpoints(
+    input: LinkWorkItemsInput,
+    ctx: ServiceContext,
+  ): Promise<boolean> {
+    return db.$transaction(async (tx) => {
+      const link = await workItemLinkRepository.findReciprocal(
+        input.fromId,
+        input.toId,
+        input.kind,
+        tx,
+      );
+      if (!link) return false;
+
+      // Project access gate (6.4.3): removing a link is an edit of the FROM
+      // item. A cross-workspace / unreadable from-item resolves as already-gone
+      // (the 404-not-403 contract — no existence leak), so we return false.
+      const fromItem = await workItemRepository.findById(link.fromId, tx);
+      if (!fromItem || fromItem.workspaceId !== ctx.workspaceId) return false;
+      await projectAccessService.assertCanEdit(fromItem.projectId, ctx, tx);
+
+      await workItemLinkRepository.delete(link.id, tx);
+
+      if (link.kind === 'relates_to') {
+        const reciprocal = await workItemLinkRepository.findReciprocal(
+          link.toId,
+          link.fromId,
+          'relates_to',
+          tx,
+        );
+        if (reciprocal) {
+          await workItemLinkRepository.delete(reciprocal.id, tx);
+        }
+      }
+
+      await workItemRevisionsService.recordRevision(
+        {
+          workItemId: link.fromId,
+          changedById: ctx.userId,
+          changeKind: 'updated',
+          diff: { links: { removed: [{ toId: link.toId, kind: link.kind }] } },
+        },
+        tx,
+      );
+      return true;
+    });
+  },
+
+  /**
    * The blockers of `workItemId`: the items it `is_blocked_by`. One link-table
    * query yields the toIds, one findByIds resolves them all (N+0 — no N+1).
    * Sorted by key for a stable order. Read-only; `ctx` reserved for 1.4.5 RLS.
