@@ -1640,6 +1640,74 @@
           "description": "此规则尚未触发。当某个工作项匹配其触发器和条件时，每次运行都会显示在此处，包含运行结果、耗时以及触发该次运行的工作项。"
         }
       }
+    },
+    "apiTokens": {
+      "heading": "API 令牌",
+      "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
+      "card": {
+        "title": "你的令牌",
+        "subtitle": "仅在创建时显示一次，之后只保存哈希值。",
+        "create": "创建令牌"
+      },
+      "columns": {
+        "label": "名称",
+        "token": "令牌",
+        "created": "创建时间",
+        "expires": "过期时间",
+        "lastUsed": "上次使用",
+        "actions": "操作"
+      },
+      "expiresIn": "{days} 天后",
+      "expiresNever": "永不",
+      "lastUsedNever": "从未",
+      "revoked": "已吊销",
+      "revokeAria": "吊销令牌 {label}",
+      "expiry": {
+        "d30": "30 天",
+        "d90": "90 天",
+        "d365": "365 天",
+        "never": "永不过期"
+      },
+      "createModal": {
+        "title": "创建 API 令牌",
+        "description": "令牌只会在创建后显示一次，请妥善保存。",
+        "labelField": "名称",
+        "labelHelper": "便于识别此令牌的名称——例如使用它的 agent 或设备。",
+        "labelPlaceholder": "claude-code",
+        "expiresField": "过期时间",
+        "expiresHelper": "过期后令牌将停止工作，需要为 agent 重新签发。",
+        "submit": "创建令牌",
+        "cancel": "取消",
+        "errorTitle": "无法创建令牌",
+        "errorGeneric": "出了点问题，请重试。",
+        "copyFailed": "复制失败——请手动选择并复制令牌。"
+      },
+      "created": {
+        "title": "令牌已创建",
+        "description": "请立即复制你的令牌——出于安全考虑，Motir 不会再次显示它。",
+        "secretLabel": "你的新令牌",
+        "copy": "复制",
+        "warning": "这是你唯一一次看到此令牌的机会。如果遗失，请吊销并重新创建。",
+        "done": "完成"
+      },
+      "revokeConfirm": {
+        "title": "吊销“{label}”？",
+        "body": "使用此令牌的 agent 将立即失去对 Motir 的访问权限。此操作无法撤销——你需要创建新令牌才能重新连接。",
+        "confirm": "吊销令牌",
+        "cancel": "取消",
+        "errorTitle": "无法吊销令牌",
+        "errorGeneric": "出了点问题，请重试。"
+      },
+      "empty": {
+        "title": "还没有 API 令牌",
+        "body": "API 令牌让你的编码 agent 通过 MCP 服务器与 Motir 对话——以你的身份列出就绪工作、打开工作项、移动它们并发表评论。",
+        "guideLink": "阅读 MCP 配置指南",
+        "bodyAfterLink": "，连接你的第一个 agent。"
+      },
+      "toast": {
+        "title": "令牌已复制",
+        "body": "现在就把它粘贴到 agent 的 MCP 配置中——它不会再次显示。"
+      }
     }
   },
   "boards": {
