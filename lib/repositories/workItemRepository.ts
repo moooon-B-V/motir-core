@@ -176,6 +176,17 @@ export interface TriageQueueCursor {
 }
 
 /**
+ * One duplicate-detection candidate row (Story 6.12 · Subtask 6.12.5) — a
+ * matching active PUBLIC REQUEST plus its upvote count (the demand signal the
+ * "upvote this instead" affordance shows). A public request is a project work
+ * item of request grammar (`bug` / `task`); the count rides the 6.12.3
+ * `PublicRequestVote` join (zero when no votes / before 6.12.6 lands the write).
+ */
+export type PublicRequestMatchRow = WorkItem & {
+  voteCount: number;
+};
+
+/**
  * The whitelisted ORDER-BY expression per sort column (Subtask 2.5.8). The
  * key is a validated `IssueSortColumn` (parsed/clamped in `issueListView`), so
  * the SQL fragment is never derived from raw user input. `assignee`/`reporter`
@@ -562,6 +573,54 @@ export const workItemRepository = {
           END ASC,
           w."key" ASC,
           w."identifier" ASC
+        LIMIT ${limit}`;
+  },
+
+  /**
+   * Duplicate-detection match for a public submission (Story 6.12 · Subtask
+   * 6.12.5) — the deterministic title search behind "upvote this instead"
+   * (Canny's behaviour). Returns the project's ACTIVE public requests (kind
+   * `bug` / `task`, not archived, NOT in a `done`-category status — so cancelled
+   * / declined / shipped items are excluded) whose `title` contains EVERY query
+   * token (the same Jira-style tokenisation `quickSearch` uses, riding the
+   * 6.1.1 `pg_trgm` GIN index), newest-demand first (vote count DESC, then key).
+   *
+   * Two deliberate differences from `quickSearch`: it is scoped to ONE project
+   * (the public project — a cross-org caller has no browsable-set) and it does
+   * NOT apply the triage exclusion, so a still-in-triage request IS surfaceable
+   * (a duplicate of an un-promoted submission must be join-able — the ADR §6
+   * "DOES include still-in-triage requests"). The vote count rides the 6.12.3
+   * `PublicRequestVote` join. A blank / token-less query returns []. Read-only →
+   * the `db` singleton; `query` binds as a param (never interpolated) and is
+   * pattern-escaped for LIKE metacharacters.
+   */
+  async findPublicRequestMatches(
+    projectId: string,
+    query: string,
+    limit: number,
+  ): Promise<PublicRequestMatchRow[]> {
+    const tokens = query.split(/\s+/).filter((t) => t.length > 0);
+    if (tokens.length === 0) return [];
+    const titleMatch = Prisma.join(
+      tokens.map((t) => Prisma.sql`w."title" ILIKE ${`%${escapeLikePattern(t)}%`}`),
+      ' AND ',
+    );
+    return db.$queryRaw<PublicRequestMatchRow[]>`
+      SELECT w.*, COALESCE(v."cnt", 0) AS "voteCount"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        LEFT JOIN (
+          SELECT "work_item_id", COUNT(*)::int AS "cnt"
+            FROM "public_request_vote"
+            GROUP BY "work_item_id"
+        ) v ON v."work_item_id" = w."id"
+        WHERE w."projectId" = ${projectId}
+          AND w."kind"::text IN ('bug', 'task')
+          AND w."archivedAt" IS NULL
+          AND ws."category" <> 'done'
+          AND (${titleMatch})
+        ORDER BY "voteCount" DESC, w."key" ASC
         LIMIT ${limit}`;
   },
 
