@@ -326,17 +326,17 @@ function TitleCell({
 
 /** The epic-privacy tree-expand placeholder (design epic-privacy panel 2) — the
  *  inline "This epic is not public" row that replaces a private epic's children
- *  for a public / non-member viewer. */
+ *  for a public / non-member viewer. SINGLE-LINE: the TreeTable renders every
+ *  row at a fixed `ROW_PX` (40px) height — the windowing unit — so a synthetic
+ *  row must fit one line (matching the "loading" row), or its content overflows
+ *  the slot and overlaps the next row. The title + explanation sit inline (the
+ *  explanation truncates on a narrow tree); the icon carries the meaning. */
 function PrivatePlaceholder({ t }: { t: ReturnType<typeof useTranslations> }) {
   return (
-    <span className="flex items-start gap-2.5 rounded-(--radius-control) bg-(--el-surface-soft) px-3 py-2">
-      <EyeOff className="mt-0.5 h-4 w-4 flex-none text-(--el-text-muted)" aria-hidden />
-      <span className="flex flex-col">
-        <span className="text-[13px] font-semibold text-(--el-text)">
-          {t('epicNotPublicTitle')}
-        </span>
-        <span className="text-[12.5px] text-(--el-text-secondary)">{t('epicNotPublicBody')}</span>
-      </span>
+    <span className="flex min-w-0 items-center gap-2 text-(--el-text-secondary)">
+      <EyeOff className="h-3.5 w-3.5 flex-none text-(--el-text-muted)" aria-hidden />
+      <span className="flex-none font-semibold text-(--el-text)">{t('epicNotPublicTitle')}</span>
+      <span className="min-w-0 truncate text-[12.5px]">{t('epicNotPublicBody')}</span>
     </span>
   );
 }
