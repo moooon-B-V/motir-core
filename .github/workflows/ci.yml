@@ -217,15 +217,15 @@ jobs:
           # excludes the three at-scale tags AND the @a11y sweeps (their own leg
           # below); `--shard=i/5` then partitions what remains.
           - id: bulk-1
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=1/5'
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=1/5'
           - id: bulk-2
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=2/5'
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=2/5'
           - id: bulk-3
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=3/5'
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=3/5'
           - id: bulk-4
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=4/5'
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=4/5'
           - id: bulk-5
-            args: '--grep-invert "(board(-scrum)?|collab)-at-scale|@a11y" --shard=5/5'
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=5/5'
           # Every @a11y axe sweep (the shell-a11y* files + the per-feature a11y
           # closers), pulled into one parallel leg so the slow sweeps stop
           # clustering into a single bulk shard. Standard board/collab defaults
@@ -250,6 +250,16 @@ jobs:
             collab_comments: '40'
             collab_churn_edits: '60'
             collab_spread_issues: '2'
+          # Story 6.7 — search / reporting / automation AT SCALE (Subtask 6.7.3).
+          # The corpus seed (`db:seed:reporting`) is cap-parameterised; this lane
+          # lowers SEED_REPORTING_ITEMS to ~1,000 (still ≫ the 50-row list page,
+          # so paging vs. load-all stays distinguishable — the spec's beforeAll
+          # fails loud otherwise) and trims the rich subset to keep the seed
+          # inside the webServer window. Full 10k runs locally.
+          - id: reporting-at-scale
+            args: '--grep "epic6-at-scale"'
+            seed_reporting_items: '1000'
+            seed_reporting_rich_items: '200'
     services:
       postgres:
         image: postgres:16-alpine
@@ -337,6 +347,8 @@ jobs:
           SEED_COLLAB_COMMENTS: ${{ matrix.collab_comments }}
           SEED_COLLAB_CHURN_EDITS: ${{ matrix.collab_churn_edits }}
           SEED_COLLAB_SPREAD_ISSUES: ${{ matrix.collab_spread_issues }}
+          SEED_REPORTING_ITEMS: ${{ matrix.seed_reporting_items }}
+          SEED_REPORTING_RICH_ITEMS: ${{ matrix.seed_reporting_rich_items }}
       # Always upload the report — pass-runs are useful for debugging flakes, and
       # the report is small. The trace/video/screenshot artifacts only exist for
       # failures (config above). The artifact name MUST be unique per leg or the
