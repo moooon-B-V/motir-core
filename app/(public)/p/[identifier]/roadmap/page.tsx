@@ -6,17 +6,17 @@ import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PublicTabNav } from '@/app/(public)/_components/PublicTabNav';
+import { PublicRoadmap } from '@/app/(public)/_components/PublicRoadmap';
 
-// The public Roadmap tab (Story 6.12 · design Panel 3). The ROADMAP ITSELF is
-// owned by Subtask 6.12.7 (status-grouped, vote-counted, paginated columns over
-// the public projection). For 6.12.4 this renders the design-specified empty
-// state ("Nothing on the roadmap yet") so the 4-tab nav is complete and no tab
-// link 404s. This is the DESIGN'S empty state (design-notes Panel 8), NOT
-// improvised UI.
-//
-// TODO(6.12.7): replace this EmptyState with the real status-grouped roadmap
-// (submitted → planned → in progress → done columns, per-column pagination,
-// upvote control) built over publicProjectsService.
+// The public Roadmap tab (Story 6.12 · Subtask 6.12.7 · design Panel 3) — the
+// status-grouped, vote-counted, per-column-paginated public roadmap over the
+// 6.12.4 public projection. Server component: it runs the anonymous browse gate
+// (a non-public / unknown project 404s, never 403) and renders the SSR'd first
+// page of every column into the crawlable HTML (SEO/GEO), then hands the columns
+// to the PublicRoadmap client island for the upvote toggles + the per-column
+// "Load more". When every column is empty it shows the design's empty state
+// (Panel 8) rather than four empty columns. READ is fully public — no sign-in;
+// `signedIn` only drives the upvote control's sign-in-to-act prompt.
 
 export default async function PublicRoadmapPage({
   params,
@@ -27,26 +27,34 @@ export default async function PublicRoadmapPage({
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;
 
-  // Re-run the anonymous browse gate so a non-public / unknown project 404s here
-  // too (getOverview throws ProjectNotFoundError on a non-public project).
+  let roadmap;
   try {
-    await publicProjectsService.getOverview(identifier, actorUserId);
+    roadmap = await publicProjectsService.getRoadmap(identifier, actorUserId);
   } catch (err) {
     if (err instanceof ProjectNotFoundError) notFound();
     throw err;
   }
 
   const t = await getTranslations('publicProjects');
+  const isEmpty = roadmap.columns.every((c) => c.totalCount === 0);
 
   return (
     <>
       <PublicTabNav identifier={identifier} active="roadmap" />
       <div className="p-(--spacing-card-padding)">
-        <EmptyState
-          icon={<Route className="h-12 w-12" aria-hidden />}
-          title={t('roadmapEmptyTitle')}
-          description={t('roadmapEmptyBody')}
-        />
+        {isEmpty ? (
+          <EmptyState
+            icon={<Route className="h-12 w-12" aria-hidden />}
+            title={t('roadmapEmptyTitle')}
+            description={t('roadmapEmptyBody')}
+          />
+        ) : (
+          <PublicRoadmap
+            identifier={identifier}
+            initialColumns={roadmap.columns}
+            signedIn={session !== null}
+          />
+        )}
       </div>
     </>
   );

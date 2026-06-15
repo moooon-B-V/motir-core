@@ -13,6 +13,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   toPublicProjectOverviewDto,
   toPublicRequestMatchDto,
+  toPublicRoadmapCardDto,
   toPublicWorkItemListItemDto,
 } from '@/lib/mappers/publicProjectsMappers';
 import {
@@ -21,6 +22,13 @@ import {
   PublicRequestDescriptionTooLongError,
   PublicSubmissionRateLimitedError,
 } from '@/lib/publicProjects/errors';
+import {
+  decodeRoadmapCursor,
+  encodeRoadmapCursor,
+  InvalidRoadmapCursorError,
+  PUBLIC_ROADMAP_PAGE_SIZE,
+} from '@/lib/publicProjects/roadmapCursor';
+import type { PublicRoadmapCursor, PublicRoadmapRow } from '@/lib/repositories/workItemRepository';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   PublicBoardDto,
@@ -28,8 +36,13 @@ import type {
   PublicProjectOverviewDto,
   PublicProjectStatsDto,
   PublicRequestMatchDto,
+  PublicRoadmapBucketKey,
+  PublicRoadmapColumnDto,
+  PublicRoadmapColumnPageDto,
+  PublicRoadmapDto,
   PublicWorkItemPageDto,
 } from '@/lib/dto/publicProjects';
+import { PUBLIC_ROADMAP_BUCKET_KEYS } from '@/lib/dto/publicProjects';
 import type { TriageSubmissionResultDto } from '@/lib/dto/triage';
 
 // publicProjectsService — the SINGLE service behind every PUBLIC project surface
@@ -108,6 +121,117 @@ async function computeStats(
     shipped: byCategory.done,
     inProgress: byCategory.in_progress,
   };
+}
+
+// --- READ · ROADMAP (6.12.7) helpers ---------------------------------------
+
+/**
+ * The default terminal "cancelled" status key — EXCLUDED from the public
+ * roadmap's Done bucket. `cancelled` is a category-`done` status (a resolved
+ * "won't do / duplicate"), but the card's contract is that non-public statuses
+ * (cancelled / triage) are not shown — a cancelled item is sealed-not-shipped,
+ * so it never appears on the public roadmap. It is a PROTECTED default key
+ * (can't be renamed/recategorised — `lib/workflows/defaultWorkflow.ts`), so the
+ * literal exclusion is stable; a project's CUSTOM done statuses still map to
+ * Done by category (no project-specific "cancel" detection is attempted).
+ */
+const ROADMAP_EXCLUDED_DONE_KEY = 'cancelled';
+
+/**
+ * Map the project's real workflow statuses to the three PROMOTED roadmap
+ * buckets' status-key sets (the planner's "decide the mapping" call — rung 1,
+ * the Canny/Productboard status-roadmap shape): `planned` = every `todo`-
+ * category status (To&nbsp;Do, Blocked); `in_progress` = every `in_progress`-
+ * category status (In&nbsp;Progress, In&nbsp;Review); `done` = every `done`-
+ * category status EXCEPT `cancelled`. The fourth bucket (`submitted`) is the
+ * in-triage public requests — it has no status-key set (a different read).
+ */
+function promotedRoadmapStatusKeys(
+  statuses: WorkflowStatusDto[],
+): Record<'planned' | 'in_progress' | 'done', string[]> {
+  return {
+    planned: statuses.filter((s) => s.category === 'todo').map((s) => s.key),
+    in_progress: statuses.filter((s) => s.category === 'in_progress').map((s) => s.key),
+    done: statuses
+      .filter((s) => s.category === 'done' && s.key !== ROADMAP_EXCLUDED_DONE_KEY)
+      .map((s) => s.key),
+  };
+}
+
+/** The opaque next-page cursor for the last row of a roadmap column page. */
+function nextRoadmapCursor(bucket: PublicRoadmapBucketKey, last: PublicRoadmapRow): string {
+  // Submitted tiebreaks on `triagedAt` (non-null by the read's predicate);
+  // every promoted bucket tiebreaks on the monotonic `key`.
+  const recency =
+    bucket === 'submitted' ? (last.triagedAt as Date).toISOString() : String(last.key);
+  return encodeRoadmapCursor({ voteCount: last.voteCount, recency, id: last.id });
+}
+
+/** Decode + retype a column cursor for the bucket's seek-after comparison. */
+function decodeRoadmapCursorForBucket(
+  bucket: PublicRoadmapBucketKey,
+  raw: string,
+): PublicRoadmapCursor {
+  const token = decodeRoadmapCursor(raw);
+  if (bucket === 'submitted') {
+    const d = new Date(token.recency);
+    if (Number.isNaN(d.getTime())) throw new InvalidRoadmapCursorError();
+    return { voteCount: token.voteCount, recency: d, id: token.id };
+  }
+  const n = Number(token.recency);
+  if (!Number.isInteger(n)) throw new InvalidRoadmapCursorError();
+  return { voteCount: token.voteCount, recency: n, id: token.id };
+}
+
+/**
+ * Read ONE roadmap column's page (the at-scale `take + 1` over-fetch → derive
+ * `nextCursor` without a trailing COUNT). `submitted` reads the active in-triage
+ * public requests; the promoted buckets read graduated items in their mapped
+ * status keys. Shared by the initial `getRoadmap` (all four) and the per-column
+ * `getRoadmapColumn` "Load more". `voterUserId` (nullable) drives `voted`.
+ */
+async function loadRoadmapColumnPage(
+  project: { id: string; workspaceId: string },
+  bucket: PublicRoadmapBucketKey,
+  promotedKeys: Record<'planned' | 'in_progress' | 'done', string[]>,
+  actorUserId: string | null,
+  cursor?: PublicRoadmapCursor,
+): Promise<{ cards: PublicRoadmapColumnDto['cards']; nextCursor: string | null }> {
+  const limit = PUBLIC_ROADMAP_PAGE_SIZE + 1;
+  const rows =
+    bucket === 'submitted'
+      ? await workItemRepository.findPublicRoadmapSubmitted(project.id, project.workspaceId, {
+          limit,
+          cursor,
+          voterUserId: actorUserId,
+        })
+      : await workItemRepository.findPublicRoadmapByStatus(
+          project.id,
+          project.workspaceId,
+          promotedKeys[bucket],
+          { limit, cursor, voterUserId: actorUserId },
+        );
+
+  const hasMore = rows.length > PUBLIC_ROADMAP_PAGE_SIZE;
+  const page = hasMore ? rows.slice(0, PUBLIC_ROADMAP_PAGE_SIZE) : rows;
+  const last = page[page.length - 1];
+  return {
+    cards: page.map(toPublicRoadmapCardDto),
+    nextCursor: hasMore && last ? nextRoadmapCursor(bucket, last) : null,
+  };
+}
+
+/** The full-bucket count behind a column header (not the loaded-page length). */
+async function countRoadmapColumn(
+  project: { id: string; workspaceId: string },
+  bucket: PublicRoadmapBucketKey,
+  promotedKeys: Record<'planned' | 'in_progress' | 'done', string[]>,
+): Promise<number> {
+  return bucket === 'submitted'
+    ? workItemRepository.countPublicRoadmapSubmitted(project.id, project.workspaceId)
+    : workItemRepository.countProjectIssues(project.id, project.workspaceId, {
+        statuses: promotedKeys[bucket],
+      });
 }
 
 // --- WRITE / dedupe (6.12.5) helpers ---------------------------------------
@@ -298,6 +422,67 @@ export const publicProjectsService = {
       items: page.map((r) => toPublicWorkItemListItemDto(r, categoryByKey.get(r.status) ?? 'todo')),
       nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
     };
+  },
+
+  /**
+   * The public ROADMAP (Subtask 6.12.7) — the project's public-facing items as
+   * four status-grouped, vote-counted, per-column-paginated columns
+   * (**Submitted → Planned → In progress → Done**), over the 6.12.4 public
+   * projection. Resolves the project + runs the anonymous browse gate
+   * (`actorUserId` nullable — a logged-out reader / crawler), then loads the
+   * FIRST page + the full count of each column in parallel. The Submitted column
+   * is the still-in-triage public requests (the demand-gathering bucket the ADR
+   * §4 routes triage items to); the promoted columns map the project's real
+   * workflow statuses to their buckets (cancelled excluded from Done). Every
+   * card carries its upvote count (the demand signal the column orders by) and
+   * the viewer's `voted` flag. Nothing internal leaks — the rows go through the
+   * public projection mapper. `actorUserId` nullable.
+   */
+  async getRoadmap(identifier: string, actorUserId: string | null): Promise<PublicRoadmapDto> {
+    const project = await resolvePublicProject(identifier, actorUserId);
+    const statuses = await workflowsService.listStatusesByProject(project.id, project.workspaceId);
+    const promotedKeys = promotedRoadmapStatusKeys(statuses);
+
+    const columns = await Promise.all(
+      PUBLIC_ROADMAP_BUCKET_KEYS.map(async (bucket): Promise<PublicRoadmapColumnDto> => {
+        const [page, totalCount] = await Promise.all([
+          loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId),
+          countRoadmapColumn(project, bucket, promotedKeys),
+        ]);
+        return { key: bucket, totalCount, cards: page.cards, nextCursor: page.nextCursor };
+      }),
+    );
+
+    return { columns };
+  },
+
+  /**
+   * One roadmap column's NEXT page (Subtask 6.12.7) — the per-column "Load more"
+   * fetch behind the client island. Re-resolves the project + the anonymous gate
+   * (a non-public project 404s here too), re-derives the bucket's status keys,
+   * decodes the opaque column cursor, and returns the next page + the following
+   * cursor. A malformed cursor throws `InvalidRoadmapCursorError` (→ 400). No
+   * total count — the header already has it from `getRoadmap`. `actorUserId`
+   * nullable.
+   */
+  async getRoadmapColumn(
+    identifier: string,
+    actorUserId: string | null,
+    bucket: PublicRoadmapBucketKey,
+    cursorRaw: string,
+  ): Promise<PublicRoadmapColumnPageDto> {
+    const project = await resolvePublicProject(identifier, actorUserId);
+    const cursor = decodeRoadmapCursorForBucket(bucket, cursorRaw);
+    // Only the promoted buckets consult the status-key map; submitted ignores it,
+    // so deriving the keys only when needed avoids a status read for Submitted.
+    const promotedKeys =
+      bucket === 'submitted'
+        ? { planned: [], in_progress: [], done: [] }
+        : promotedRoadmapStatusKeys(
+            await workflowsService.listStatusesByProject(project.id, project.workspaceId),
+          );
+    const page = await loadRoadmapColumnPage(project, bucket, promotedKeys, actorUserId, cursor);
+    return { bucket, cards: page.cards, nextCursor: page.nextCursor };
   },
 
   // --- WRITE / dedupe (6.12.5) ---------------------------------------------

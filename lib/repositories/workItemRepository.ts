@@ -198,6 +198,35 @@ export type PublicRequestMatchRow = WorkItem & {
 };
 
 /**
+ * One card of a PUBLIC ROADMAP column (Story 6.12 · Subtask 6.12.7) — the FULL
+ * `work_item` row (the public mapper reads only its public-safe fields) PLUS the
+ * two bits the SAME single read resolves: `voteCount` (the upvote tally — the
+ * demand signal the column orders by, 6.12.6) and `voted` (whether the CURRENT
+ * viewer has upvoted this card, so the card paints its voted state on first
+ * load; always `false` for a logged-out reader). The vote aggregate + the
+ * viewer-vote probe ride the app-layer `projectId` gate + the app connection's
+ * RLS-secondary posture, the same way `findTriageQueue` / `countByProject` read
+ * `public_request_vote` (finding #26).
+ */
+export type PublicRoadmapRow = WorkItem & {
+  voteCount: number;
+  voted: boolean;
+};
+
+/**
+ * The `(voteCount, recency, id)` seek-after position a roadmap column read pages
+ * after (Subtask 6.12.7). `voteCount` is the leading sort key; `recency` is the
+ * bucket tiebreak — a `Date` (the Submitted column's `triagedAt`) or a `number`
+ * (a promoted column's monotonic `key`); `id` breaks the exact tie. The service
+ * decodes the opaque cursor token into this typed shape per column.
+ */
+export interface PublicRoadmapCursor {
+  voteCount: number;
+  recency: Date | number;
+  id: string;
+}
+
+/**
  * The whitelisted ORDER-BY expression per sort column (Subtask 2.5.8). The
  * key is a validated `IssueSortColumn` (parsed/clamped in `issueListView`), so
  * the SQL fragment is never derived from raw user input. `assignee`/`reporter`
@@ -545,6 +574,135 @@ export const workItemRepository = {
           AND (w."snoozedUntil" IS NULL OR w."snoozedUntil" <= ${now})
           ${cursorPred}
         ORDER BY ${voteCountSql} DESC, w."triagedAt" DESC, w."id" ASC
+        LIMIT ${options.limit}`;
+  },
+
+  /**
+   * The PUBLIC ROADMAP "Submitted" column read (Story 6.12 · Subtask 6.12.7) —
+   * the still-in-triage public requests (the demand-gathering bucket). It
+   * mirrors the active `findTriageQueue` predicate (a triage-marked, non-
+   * declined, non-snoozed item) but ADDS `submittedByUserId IS NOT NULL` so only
+   * real public submissions surface on the internet-facing roadmap (a never-
+   * attributed legacy triage row is never exposed) and returns the PUBLIC
+   * projection bits only (no reporter PII — the public mapper drops everything
+   * but the public-safe fields). Ordered `(voteCount DESC, triagedAt DESC, id
+   * ASC)` — highest-demand first — and cursor-paginated (`take + 1` in the
+   * service; the at-scale rule, never load-all). `voterUserId` (nullable — a
+   * logged-out reader) drives the per-card `voted` probe. Read-only → `db`
+   * singleton; the vote aggregate rides the app-layer `projectId`/`workspaceId`
+   * gate + RLS-secondary posture (finding #26), like `findTriageQueue`.
+   */
+  async findPublicRoadmapSubmitted(
+    projectId: string,
+    workspaceId: string,
+    options: { limit: number; cursor?: PublicRoadmapCursor; voterUserId: string | null },
+  ): Promise<PublicRoadmapRow[]> {
+    // Bind `now` as a JS Date param (never SQL NOW()) — the timestamp-vs-
+    // timestamptz skew guard `findTriageQueue` documents.
+    const now = new Date();
+    const votes = Prisma.sql`COALESCE(vt."votes", 0)`;
+    const cursorPred = options.cursor
+      ? Prisma.sql`AND (
+            ${votes} < ${options.cursor.voteCount}
+            OR (${votes} = ${options.cursor.voteCount} AND w."triagedAt" < ${options.cursor.recency})
+            OR (${votes} = ${options.cursor.voteCount} AND w."triagedAt" = ${options.cursor.recency} AND w."id" > ${options.cursor.id})
+          )`
+      : Prisma.empty;
+    return db.$queryRaw<PublicRoadmapRow[]>`
+      SELECT w.*,
+             ${votes}::int                  AS "voteCount",
+             (mv."work_item_id" IS NOT NULL) AS "voted"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        LEFT JOIN (
+               SELECT "work_item_id", COUNT(*) AS "votes"
+                 FROM "public_request_vote"
+                GROUP BY "work_item_id"
+             ) vt ON vt."work_item_id" = w."id"
+        LEFT JOIN "public_request_vote" mv
+              ON mv."work_item_id" = w."id" AND mv."user_id" = ${options.voterUserId}
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND w."triagedAt" IS NOT NULL
+          AND w."submittedByUserId" IS NOT NULL
+          AND ws."category" <> 'done'
+          AND (w."snoozedUntil" IS NULL OR w."snoozedUntil" <= ${now})
+          ${cursorPred}
+        ORDER BY ${votes} DESC, w."triagedAt" DESC, w."id" ASC
+        LIMIT ${options.limit}`;
+  },
+
+  /**
+   * The total of the roadmap "Submitted" column (Subtask 6.12.7) — the same
+   * active-public-request predicate as {@link findPublicRoadmapSubmitted}, minus
+   * the cursor/limit, so the column header shows a real count (never the loaded-
+   * page length). One bounded aggregate. Read-only → `db` singleton.
+   */
+  async countPublicRoadmapSubmitted(projectId: string, workspaceId: string): Promise<number> {
+    const now = new Date();
+    const rows = await db.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS "count"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND w."triagedAt" IS NOT NULL
+          AND w."submittedByUserId" IS NOT NULL
+          AND ws."category" <> 'done'
+          AND (w."snoozedUntil" IS NULL OR w."snoozedUntil" <= ${now})`;
+    return rows[0]?.count ?? 0;
+  },
+
+  /**
+   * A PUBLIC ROADMAP "promoted" column read (Subtask 6.12.7) — the graduated
+   * (non-triage) public-facing items whose workflow `status` is one of
+   * `statusKeys` (the service maps the project's real statuses to the Planned /
+   * In&nbsp;progress / Done buckets; Done's keys deliberately EXCLUDE `cancelled`
+   * so a "won't do" item never appears on the public roadmap). Same public
+   * projection + vote aggregate + `voted` probe as the Submitted read, but
+   * tiebroken on the monotonic per-project `key` (recency) rather than
+   * `triagedAt`. Ordered `(voteCount DESC, key DESC, id ASC)`; cursor-paginated.
+   * Empty `statusKeys` short-circuits to `[]` (a bucket that maps no live status
+   * has no cards). Read-only → `db` singleton.
+   */
+  async findPublicRoadmapByStatus(
+    projectId: string,
+    workspaceId: string,
+    statusKeys: string[],
+    options: { limit: number; cursor?: PublicRoadmapCursor; voterUserId: string | null },
+  ): Promise<PublicRoadmapRow[]> {
+    if (statusKeys.length === 0) return [];
+    const votes = Prisma.sql`COALESCE(vt."votes", 0)`;
+    const cursorPred = options.cursor
+      ? Prisma.sql`AND (
+            ${votes} < ${options.cursor.voteCount}
+            OR (${votes} = ${options.cursor.voteCount} AND w."key" < ${options.cursor.recency})
+            OR (${votes} = ${options.cursor.voteCount} AND w."key" = ${options.cursor.recency} AND w."id" > ${options.cursor.id})
+          )`
+      : Prisma.empty;
+    return db.$queryRaw<PublicRoadmapRow[]>`
+      SELECT w.*,
+             ${votes}::int                  AS "voteCount",
+             (mv."work_item_id" IS NOT NULL) AS "voted"
+        FROM "work_item" w
+        LEFT JOIN (
+               SELECT "work_item_id", COUNT(*) AS "votes"
+                 FROM "public_request_vote"
+                GROUP BY "work_item_id"
+             ) vt ON vt."work_item_id" = w."id"
+        LEFT JOIN "public_request_vote" mv
+              ON mv."work_item_id" = w."id" AND mv."user_id" = ${options.voterUserId}
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND w."status" = ANY(${statusKeys})
+          ${cursorPred}
+        ORDER BY ${votes} DESC, w."key" DESC, w."id" ASC
         LIMIT ${options.limit}`;
   },
 
