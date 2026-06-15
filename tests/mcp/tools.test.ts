@@ -142,6 +142,22 @@ describe('MCP read tools — client round-trip', () => {
     expect((none.structuredContent as { item: unknown }).item).toBeNull();
     await client.close();
   });
+
+  it('whoami resolves the acting user + active workspace (the CLI auth-status read)', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+
+    const res = await client.callTool({ name: 'whoami', arguments: {} });
+    expect(res.isError).toBeFalsy();
+    const id = res.structuredContent as {
+      user: { id: string; name: string; email: string };
+      workspace: { id: string; slug: string } | null;
+    };
+    expect(id.user.id).toBe(fx.owner.id);
+    expect(id.user.email).toBe(fx.owner.email);
+    expect(id.workspace?.id).toBe(fx.workspace.id);
+    await client.close();
+  });
 });
 
 describe('MCP read tools — adapters', () => {
