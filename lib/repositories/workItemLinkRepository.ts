@@ -89,19 +89,28 @@ export const workItemLinkRepository = {
    * blocks are legal in the link model), so each blocker carries its own
    * `projectId`. The blocker's `id` rides along too so a caller naming the OPEN
    * blockers (the 2.4.5 readiness banner) can correlate this row back to the
-   * resolved blocker summary without a second lookup. Read-only → `db` singleton.
+   * resolved blocker summary without a second lookup. Each blocker's
+   * `sessionBranch` (Subtask 7.8.11) rides along too: an integrated-awaiting-
+   * review blocker (non-terminal but with a recorded branch) satisfies its
+   * dependents, so readiness needs the field, not just the status. Read-only →
+   * `db` singleton.
    */
   async findBlockerStates(
     workItemId: string,
-  ): Promise<Array<{ id: string; status: string; projectId: string }>> {
+  ): Promise<
+    Array<{ id: string; status: string; projectId: string; sessionBranch: string | null }>
+  > {
     const rows = await db.workItemLink.findMany({
       where: { fromId: workItemId, kind: 'is_blocked_by' },
-      select: { toItem: { select: { id: true, status: true, projectId: true } } },
+      select: {
+        toItem: { select: { id: true, status: true, projectId: true, sessionBranch: true } },
+      },
     });
     return rows.map((r) => ({
       id: r.toItem.id,
       status: r.toItem.status,
       projectId: r.toItem.projectId,
+      sessionBranch: r.toItem.sessionBranch,
     }));
   },
 
@@ -110,21 +119,29 @@ export const workItemLinkRepository = {
    * projection (3.1.4) needs a ready flag per card without an N+1. Returns every
    * `is_blocked_by` blocker of any item in `fromIds`, each row carrying the
    * blocked item it belongs to (`fromId`) plus the blocker's `status` +
-   * `projectId` for per-project terminal classification. ONE query. Empty
-   * `fromIds` short-circuits to `[]`. Read-only → `db` singleton.
+   * `projectId` for per-project terminal classification + its `sessionBranch`
+   * (Subtask 7.8.11 — an integrated blocker with a recorded branch satisfies its
+   * dependents and contributes its lineage to the conflicting-branch check). ONE
+   * query. Empty `fromIds` short-circuits to `[]`. Read-only → `db` singleton.
    */
   async findBlockerStatesForItems(
     fromIds: string[],
-  ): Promise<Array<{ fromId: string; status: string; projectId: string }>> {
+  ): Promise<
+    Array<{ fromId: string; status: string; projectId: string; sessionBranch: string | null }>
+  > {
     if (fromIds.length === 0) return [];
     const rows = await db.workItemLink.findMany({
       where: { fromId: { in: fromIds }, kind: 'is_blocked_by' },
-      select: { fromId: true, toItem: { select: { status: true, projectId: true } } },
+      select: {
+        fromId: true,
+        toItem: { select: { status: true, projectId: true, sessionBranch: true } },
+      },
     });
     return rows.map((r) => ({
       fromId: r.fromId,
       status: r.toItem.status,
       projectId: r.toItem.projectId,
+      sessionBranch: r.toItem.sessionBranch,
     }));
   },
 

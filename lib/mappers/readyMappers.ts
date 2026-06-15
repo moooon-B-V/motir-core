@@ -32,6 +32,14 @@ export interface ReadyDispatchContext extends ReadyItemContext {
    * finding. The service supplies `[]` until that schema field lands.
    */
   contextRefs: string[];
+  /**
+   * The inherited session branch (Subtask 7.8.11) — the single branch this
+   * item's integrated-awaiting-review deps live on, or null when it has none.
+   * Resolved by the service (`getReadiness`), not read from the row (the row's
+   * OWN `sessionBranch` is null for a not-yet-integrated ready item). See the
+   * DTO doc.
+   */
+  sessionBranch: string | null;
 }
 
 function toAssigneeDto(assignee: ReadyAssignee | null): ReadyItemDto['assignee'] {
@@ -85,5 +93,6 @@ export function toReadyItemDispatchDto(
     blockerKeys: blockerRows.map((b) => b.identifier),
     parentKey: ctx.parent?.identifier ?? null,
     runCommand: `motir run ${row.identifier}`,
+    sessionBranch: ctx.sessionBranch,
   };
 }

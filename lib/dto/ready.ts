@@ -83,4 +83,15 @@ export interface ReadyItemDispatchDto extends ReadyItemDto {
   /** `motir run <key>` — built server-side so the page's "Copy" affordance and
    *  the CLI agree on the exact string. Always matches `^motir run PROD-\d+$`. */
   runCommand: string;
+  /**
+   * The INHERITED session branch (Subtask 7.8.11) — the single integration
+   * branch this item's integrated-awaiting-review deps live on, or `null` when
+   * the item has no integrated dep (all blockers merged-to-main / done, or it
+   * has none). The 7.9 CLI loop + 7.6's GIT-WORKFLOW prompt variant tell the
+   * agent to branch from / integrate into this branch so a dependency chain
+   * stays on ONE lineage until a human merges the session PR. A ready item never
+   * inherits more than one branch — conflicting lineages keep it out of the
+   * ready set (`getReadiness`'s `conflictingSessionBranches`).
+   */
+  sessionBranch: string | null;
 }

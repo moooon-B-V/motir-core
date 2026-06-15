@@ -11,7 +11,7 @@ import { truncateAuthTables } from '../helpers/db';
 // Real Postgres. Default statuses are now protected (finding #49) so they can't
 // go missing; restore only re-adds missing default transition EDGES. It never
 // deletes, never touches statuses, and is idempotent. createTestProject
-// auto-seeds the default workflow (6 statuses, 15 transitions, todo initial).
+// auto-seeds the default workflow (6 statuses, 16 transitions, todo initial).
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -85,8 +85,9 @@ describe('restoreDefaultTransitions — additive merge', () => {
     expect(result.transitionsAdded).toBe(3);
 
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    // Full default graph restored (15) + the one custom edge kept = 16.
-    expect(wf.transitions).toHaveLength(16);
+    // Full default graph restored (16, incl. 7.8.11's in_review→blocked) + the
+    // one custom edge kept = 17.
+    expect(wf.transitions).toHaveLength(17);
     // Statuses untouched: 6 defaults + on_hold.
     expect(wf.statuses).toHaveLength(7);
     const has = (from: string, to: string) =>
@@ -105,7 +106,7 @@ describe('restoreDefaultTransitions — additive merge', () => {
     });
     expect(again).toEqual({ transitionsAdded: 0 });
     const wf2 = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
-    expect(wf2.transitions).toHaveLength(16);
+    expect(wf2.transitions).toHaveLength(17);
   });
 
   it('is a no-op on a pristine default-seeded project', async () => {

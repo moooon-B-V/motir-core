@@ -539,6 +539,7 @@
     "removeConfirmAfter": "? The work item isn’t deleted — only the link.",
     "removeLink": "Remove link",
     "status": "Status",
+    "sessionBranch": "Session branch",
     "type": "Type",
     "workItemType": "Work type",
     "executor": "Executor",

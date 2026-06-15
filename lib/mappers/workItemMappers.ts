@@ -55,6 +55,9 @@ export function toWorkItemDto(row: WorkItem): WorkItemDto {
     // INTERNAL DTO; the public PROJECTION (6.14.4) is where it gets stripped /
     // turned into the "children-hidden" marker for a non-member viewer.
     publicChildrenHidden: row.publicChildrenHidden,
+    // The integration branch (Story 7.8 · Subtask 7.8.11) — non-null while the
+    // item is integrated-awaiting-review; null once it reaches done. Pass through.
+    sessionBranch: row.sessionBranch,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

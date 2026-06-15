@@ -1,0 +1,232 @@
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { db } from '@/lib/db';
+import { workItemsService } from '@/lib/services/workItemsService';
+import { IllegalTransitionError } from '@/lib/workItems/errors';
+import { inngest } from '@/lib/jobs/client';
+import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { truncateAuthTables } from '../helpers/db';
+
+// Integration-state substrate (Story 7.8 · Subtask 7.8.11): the `in_review`
+// status + `work_item.session_branch` + the integrated-dep readiness rule +
+// `mark_integrated` / `complete_session`. Real Postgres; the project comes from
+// makeWorkItemFixture (default workflow: todo → in_progress → in_review → done,
+// plus blocked). The Inngest publish is stubbed — the status-transition paths
+// emit `work-item/transitioned` post-commit (the transition-suite pattern).
+
+beforeEach(async () => {
+  vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+  await truncateAuthTables();
+});
+
+afterAll(async () => {
+  await db.$disconnect();
+});
+
+/** Create a leaf task in `fx`'s project. */
+async function task(fx: WorkItemFixture, title: string) {
+  return workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title }, fx.ctx);
+}
+
+/** `from` is_blocked_by `to`. */
+async function block(fx: WorkItemFixture, fromId: string, toId: string) {
+  await workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
+}
+
+/** Move an item todo → in_progress (the legal precondition for in_review). */
+async function start(fx: WorkItemFixture, id: string) {
+  await workItemsService.updateStatus(id, 'in_progress', fx.ctx);
+}
+
+describe('integrated-dep readiness (7.8.11) — a recorded session branch unblocks dependents', () => {
+  it('an in-review dep WITH a session branch unblocks B; WITHOUT it does NOT; done still does', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'A (the dependency)');
+    const b = await task(fx, 'B (depends on A)');
+    await block(fx, b.id, a.id);
+
+    // A still in `todo` → B blocked.
+    expect(await workItemsService.isReady(b.id, fx.ctx)).toBe(false);
+
+    // Move A to in_review WITHOUT recording a branch (a raw status change, not
+    // `mark_integrated`): the FIELD is the signal, so B is STILL blocked.
+    await start(fx, a.id);
+    await workItemsService.updateStatus(a.id, 'in_review', fx.ctx);
+    expect(await workItemsService.isReady(b.id, fx.ctx)).toBe(false);
+
+    // Record the branch via mark_integrated → A is integrated-awaiting-review →
+    // B unblocks (a done dep would too, tested below).
+    await workItemsService.markIntegrated(a.id, 'session/PROD-run-1', fx.ctx);
+    expect(await workItemsService.isReady(b.id, fx.ctx)).toBe(true);
+
+    // And a fully done dep still unblocks (done clears the branch).
+    await workItemsService.completeSession('session/PROD-run-1', fx.ctx);
+    const refreshedA = await workItemsService.getWorkItem(a.id, fx.ctx);
+    expect(refreshedA.status).toBe('done');
+    expect(refreshedA.sessionBranch).toBeNull();
+    expect(await workItemsService.isReady(b.id, fx.ctx)).toBe(true);
+  });
+
+  it('conflicting lineages — deps integrated on TWO branches keep the item out of the ready set', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'A');
+    const c = await task(fx, 'C');
+    const b = await task(fx, 'B (depends on A and C)');
+    await block(fx, b.id, a.id);
+    await block(fx, b.id, c.id);
+
+    await start(fx, a.id);
+    await start(fx, c.id);
+    await workItemsService.markIntegrated(a.id, 'session/branch-1', fx.ctx);
+    await workItemsService.markIntegrated(c.id, 'session/branch-2', fx.ctx);
+
+    // Two distinct lineages → NOT ready, and the verdict names them.
+    const verdict = await workItemsService.getReadiness(b.id, fx.ctx);
+    expect(verdict.ready).toBe(false);
+    expect(verdict.openBlockerIds.size).toBe(0); // neither blocker is "open"…
+    expect(verdict.conflictingSessionBranches).toEqual(['session/branch-1', 'session/branch-2']);
+    expect(verdict.inheritedSessionBranch).toBeNull();
+
+    // Re-integrate C onto A's branch → single lineage → ready, inherited branch set.
+    await workItemsService.markIntegrated(c.id, 'session/branch-1', fx.ctx);
+    const ok = await workItemsService.getReadiness(b.id, fx.ctx);
+    expect(ok.ready).toBe(true);
+    expect(ok.conflictingSessionBranches).toEqual([]);
+    expect(ok.inheritedSessionBranch).toBe('session/branch-1');
+  });
+
+  it('listReady / next_ready honor the rule and the dispatch payload carries the inherited branch', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'A');
+    const b = await task(fx, 'B');
+    await block(fx, b.id, a.id);
+    await start(fx, a.id);
+    await workItemsService.markIntegrated(a.id, 'session/PROD-42', fx.ctx);
+
+    // B is the only ready candidate (A is in_review, not a todo candidate).
+    const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
+    expect(items.map((i) => i.id)).toContain(b.id);
+
+    // The dispatch payload for B inherits A's branch.
+    const dispatch = await workItemsService.getNextReady(fx.projectId, {}, fx.ctx);
+    expect(dispatch?.id).toBe(b.id);
+    expect(dispatch?.sessionBranch).toBe('session/PROD-42');
+
+    // An item with no integrated dep carries null.
+    const standalone = await task(fx, 'standalone');
+    const solo = await workItemsService.getNextReady(fx.projectId, { excludeIds: [b.id] }, fx.ctx);
+    expect(solo?.id).toBe(standalone.id);
+    expect(solo?.sessionBranch).toBeNull();
+  });
+});
+
+describe('mark_integrated (7.8.11) — transactional status + branch', () => {
+  it('sets in_review + branch together; re-marking updates the branch with no status change', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'A');
+    await start(fx, a.id);
+
+    const integrated = await workItemsService.markIntegrated(a.id, 'session/v1', fx.ctx);
+    expect(integrated.status).toBe('in_review');
+    expect(integrated.sessionBranch).toBe('session/v1');
+
+    // Re-mark with a new branch — already in_review, so a branch-only write.
+    const remarked = await workItemsService.markIntegrated(a.id, 'session/v2', fx.ctx);
+    expect(remarked.status).toBe('in_review');
+    expect(remarked.sessionBranch).toBe('session/v2');
+  });
+
+  it('an ILLEGAL transition to in_review throws and leaves the branch untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    // A is in `todo`; todo → in_review is NOT a legal default transition (only
+    // in_progress → in_review is), so mark_integrated must reject it.
+    const a = await task(fx, 'A');
+    await expect(workItemsService.markIntegrated(a.id, 'session/x', fx.ctx)).rejects.toBeInstanceOf(
+      IllegalTransitionError,
+    );
+    const after = await workItemsService.getWorkItem(a.id, fx.ctx);
+    expect(after.status).toBe('todo');
+    expect(after.sessionBranch).toBeNull();
+  });
+});
+
+describe('complete_session (7.8.11) — bulk close-out', () => {
+  it('flips every recorded item to done and clears the branch (a 3-item session)', async () => {
+    const fx = await makeWorkItemFixture();
+    const items = await Promise.all([task(fx, 'one'), task(fx, 'two'), task(fx, 'three')]);
+    for (const it of items) {
+      await start(fx, it.id);
+      await workItemsService.markIntegrated(it.id, 'session/bulk', fx.ctx);
+    }
+
+    const result = await workItemsService.completeSession('session/bulk', fx.ctx);
+    expect(result.sessionBranch).toBe('session/bulk');
+    expect(result.results).toHaveLength(3);
+    expect(result.results.every((r) => r.outcome === 'completed')).toBe(true);
+
+    for (const it of items) {
+      const after = await workItemsService.getWorkItem(it.id, fx.ctx);
+      expect(after.status).toBe('done');
+      expect(after.sessionBranch).toBeNull();
+    }
+  });
+
+  it('an empty branch returns an empty result', async () => {
+    const fx = await makeWorkItemFixture();
+    const result = await workItemsService.completeSession('session/nobody', fx.ctx);
+    expect(result).toEqual({ sessionBranch: 'session/nobody', results: [] });
+  });
+
+  it('surfaces a per-item FAILURE without blocking the items that can complete', async () => {
+    const fx = await makeWorkItemFixture();
+    const okItem = await task(fx, 'completable');
+    await start(fx, okItem.id);
+    await workItemsService.markIntegrated(okItem.id, 'session/mixed', fx.ctx);
+
+    // A second item parked on the same branch while still in `todo` (set
+    // directly): todo → done is NOT a legal default transition, so it must
+    // surface as `failed` while the legal item still completes.
+    const stuck = await task(fx, 'stuck-in-todo');
+    await db.workItem.update({
+      where: { id: stuck.id },
+      data: { sessionBranch: 'session/mixed' },
+    });
+
+    const result = await workItemsService.completeSession('session/mixed', fx.ctx);
+    const byKey = new Map(result.results.map((r) => [r.key, r]));
+    expect(byKey.get(okItem.identifier)?.outcome).toBe('completed');
+    expect(byKey.get(stuck.identifier)?.outcome).toBe('failed');
+    expect(byKey.get(stuck.identifier)?.reason).toBeTruthy();
+
+    // The completable one really committed; the stuck one is untouched.
+    expect((await workItemsService.getWorkItem(okItem.id, fx.ctx)).status).toBe('done');
+    expect((await workItemsService.getWorkItem(stuck.id, fx.ctx)).status).toBe('todo');
+  });
+
+  it('an item already in done on the branch is an idempotent no-op and clears the branch', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'already done');
+    // Park a done item on the branch with a lingering field (invariant repair).
+    await db.workItem.update({
+      where: { id: a.id },
+      data: { status: 'done', sessionBranch: 'session/repair' },
+    });
+
+    const result = await workItemsService.completeSession('session/repair', fx.ctx);
+    expect(result.results).toEqual([{ key: a.identifier, outcome: 'already_done' }]);
+    expect((await workItemsService.getWorkItem(a.id, fx.ctx)).sessionBranch).toBeNull();
+  });
+});
+
+describe('done clears the session branch (7.8.11 invariant) on any transition', () => {
+  it('a plain status move to done clears a recorded branch', async () => {
+    const fx = await makeWorkItemFixture();
+    const a = await task(fx, 'A');
+    await start(fx, a.id);
+    await workItemsService.markIntegrated(a.id, 'session/plain', fx.ctx);
+    expect((await workItemsService.getWorkItem(a.id, fx.ctx)).sessionBranch).toBe('session/plain');
+
+    // in_review → done via the ordinary status path clears the field too.
+    await workItemsService.updateStatus(a.id, 'done', fx.ctx);
+    expect((await workItemsService.getWorkItem(a.id, fx.ctx)).sessionBranch).toBeNull();
+  });
+});

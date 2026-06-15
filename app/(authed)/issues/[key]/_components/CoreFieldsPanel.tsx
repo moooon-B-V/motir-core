@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Bot, Calendar, Clock, Plus, User } from 'lucide-react';
+import { Bot, Calendar, Clock, GitBranch, Plus, User } from 'lucide-react';
 import type {
   ExecutorDto,
   WorkItemDto,
@@ -261,6 +261,20 @@ export function CoreFieldsPanel({
           <Pill tone="neutral">{eff.status}</Pill>
         )}
       </FieldCard>
+
+      {/* Session branch (Subtask 7.8.11) — a READ-ONLY line under Status,
+          present only while the item is integrated-awaiting-review (its work
+          merged to a session branch via `mark_integrated`, cleared on done). No
+          editing affordance: it's set/cleared by the integration tools, never by
+          hand. Reuses the read-only FieldCard chrome (no new visual element). */}
+      {eff.sessionBranch ? (
+        <FieldCard label={t('sessionBranch')} editable={false}>
+          <span className="flex items-center gap-1.5">
+            <GitBranch className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
+            <span className="truncate font-mono text-xs">{eff.sessionBranch}</span>
+          </span>
+        </FieldCard>
+      ) : null}
 
       <FieldCard label={t('type')} editing={editing === 'type'} onToggle={() => toggle('type')}>
         {editing === 'type' ? (
