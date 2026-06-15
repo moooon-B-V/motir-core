@@ -204,7 +204,7 @@ export const story_6_7: PlanStory = {
       id: '6.7.2',
       title:
         'The combined Epic-6 journey E2E — build a filter, save it, back a widget, gate a viewer, fire a rule; the cross-story seams asserted end-to-end',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'test',
       executor: 'coding_agent',
       estimateMinutes: 35,
