@@ -608,3 +608,20 @@ export interface CompleteSessionResultDto {
   sessionBranch: string;
   results: CompleteSessionItemResultDto[];
 }
+
+/**
+ * The cascade impact of a PERMANENT delete (Story 2.8 · Subtask 2.8.7) — the
+ * figures the delete-confirm dialog (2.8.4) reads BEFORE the user confirms, so
+ * the irreversible cascade is named in words (not colour alone). `totalCount` is
+ * the number of rows the delete removes — the root PLUS every descendant — i.e.
+ * the "Delete N items" button magnitude; `descendantCount` is `totalCount − 1`;
+ * `byKind` is the per-kind breakdown of the DESCENDANTS only (e.g.
+ * `{ subtask: 5, task: 1, bug: 1 }`), the zero-count kinds omitted. A leaf item
+ * returns `{ totalCount: 1, descendantCount: 0, byKind: {} }`. This is a READ —
+ * the destructive write is `deleteWorkItem` (2.8.2).
+ */
+export interface WorkItemDeletePreviewDto {
+  totalCount: number;
+  descendantCount: number;
+  byKind: Partial<Record<WorkItemKindDto, number>>;
+}

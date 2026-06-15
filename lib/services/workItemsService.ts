@@ -109,6 +109,7 @@ import type {
   ProjectTreeFilter,
   RelationshipLinkDto,
   UpdateWorkItemInput,
+  WorkItemDeletePreviewDto,
   WorkItemDto,
   WorkItemKindDto,
   WorkItemTypeDto,
@@ -1561,6 +1562,40 @@ export const workItemsService = {
       // 5. Delete the subtree; links / comments / etc. cascade at the DB layer.
       await workItemRepository.deleteSubtree(ids, tx);
     });
+  },
+
+  /**
+   * The cascade IMPACT of a permanent delete (Story 2.8 · Subtask 2.8.7) — the
+   * READ counterpart of {@link deleteWorkItem} that the 2.8.4 confirm dialog
+   * shows BEFORE the user commits, so the irreversible cascade is named in
+   * words. Returns the subtree size (the "Delete N items" magnitude), the
+   * descendant count, and the per-kind breakdown of the DESCENDANTS.
+   *
+   * Gated on the SAME `assertCanManage` capability `deleteWorkItem` requires: a
+   * viewer who could not perform the delete must not be able to probe the
+   * subtree shape (no impact-preview leak). Tenant-gated identically — a missing
+   * / cross-workspace id is a 404 `WorkItemNotFoundError`, no existence leak. A
+   * pure read: no lock, no transaction (the gate + the subtree are two reads,
+   * and a benign race just yields a slightly stale count the confirm tolerates;
+   * the delete itself re-resolves the subtree under a FOR-UPDATE lock).
+   */
+  async getDeletePreview(id: string, ctx: ServiceContext): Promise<WorkItemDeletePreviewDto> {
+    // Resolve + tenant-gate (404 on cross-workspace / missing) before the gate,
+    // so the access check has the item's project and an unknown id never leaks.
+    const root = await workItemRepository.findById(id);
+    if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
+    await projectAccessService.assertCanManage(root.projectId, ctx);
+
+    // One recursive-CTE round-trip: root + every descendant, each with its kind.
+    const subtree = await workItemRepository.findSubtree(id);
+    const byKind: Partial<Record<WorkItemKindDto, number>> = {};
+    for (const row of subtree) {
+      if (row.id === id) continue; // the breakdown counts DESCENDANTS only
+      const kind = row.kind as WorkItemKindDto;
+      byKind[kind] = (byKind[kind] ?? 0) + 1;
+    }
+    const totalCount = subtree.length;
+    return { totalCount, descendantCount: totalCount - 1, byKind };
   },
 
   /**
