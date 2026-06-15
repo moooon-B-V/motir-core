@@ -327,7 +327,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.5',
       title:
         'Write tools — `create_work_item` (incl. bug logging), `transition_status`, `add_comment`',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 55,
