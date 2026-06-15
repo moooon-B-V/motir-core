@@ -1393,12 +1393,20 @@
       "runsEmptyDesc": "When a background job runs, it'll appear here."
     },
     "account": {
-      "title": "Account settings",
-      "subtitle": "Manage your personal preferences.",
-      "language": {
-        "heading": "Language",
-        "helper": "Choose the language for the Motir interface.",
-        "label": "Language"
+      "eyebrow": "Account settings",
+      "back": "Back to Motir",
+      "nav": {
+        "group": {
+          "general": "General",
+          "preferences": "Preferences",
+          "security": "Security"
+        },
+        "profile": "Profile",
+        "language": "Language",
+        "notifications": "Notifications",
+        "appearance": "Appearance",
+        "apiTokens": "API tokens",
+        "soon": "Soon"
       },
       "notifications": {
         "heading": "Notifications",
@@ -1436,6 +1444,18 @@
           "error": "Couldn't save",
           "retry": "Retry"
         }
+      }
+    },
+    "language": {
+      "heading": "Language & region",
+      "subtitle": "The language Motir's interface is shown in — menus, labels and dates. Personal to you, applied on every device you sign in on.",
+      "card": {
+        "title": "Language",
+        "subtitle": "Choose your interface language."
+      },
+      "displayLanguage": {
+        "label": "Display language",
+        "desc": "Menus, labels and dates use this language."
       }
     },
     "automation": {

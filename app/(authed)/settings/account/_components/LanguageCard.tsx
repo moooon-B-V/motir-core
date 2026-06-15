@@ -8,14 +8,18 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { locales, localeLabel, type Locale } from '@/lib/i18n/locales';
 import { setLocale } from '@/lib/i18n/actions';
 
-// The Language preference card on the account-settings page. Mirrors the
-// workspace-settings cards (Card + a design-system control). Writes the
-// NEXT_LOCALE cookie via the setLocale server action inside a transition, then
-// router.refresh() re-renders server components in the new locale — the same
-// no-full-reload UX as the top-nav toggle.
+// The Language preference card inside the account-settings area's Language pane
+// (Story 7.8 · Subtask 7.8.12, moved from the flat account page). Behaviour is
+// unchanged — it writes the NEXT_LOCALE cookie via the setLocale server action
+// inside a transition, then router.refresh() re-renders server components in the
+// new locale (the same no-full-reload UX as the top-nav toggle). Only the layout
+// follows the design (`account-settings.mock.html` Panel 1): a titled Card with
+// the SETTINGS-ROW grammar (a label + description on the left, the control on the
+// right, hairline-separated) — the pattern that scales as region / timezone /
+// date-format rows land later.
 export function LanguageCard() {
   const current = useLocale() as Locale;
-  const t = useTranslations('settings');
+  const t = useTranslations('settings.language');
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -35,22 +39,30 @@ export function LanguageCard() {
   return (
     <Card
       header={
-        <h2 className="font-sans text-base font-semibold text-(--el-text)">
-          {t('account.language.heading')}
-        </h2>
+        <div>
+          <h3 className="font-sans text-base font-semibold text-(--el-text)">{t('card.title')}</h3>
+          <p className="mt-0.5 font-sans text-sm text-(--el-text-muted)">{t('card.subtitle')}</p>
+        </div>
       }
     >
-      <div className="flex flex-col gap-3">
-        <div className="max-w-[16rem]">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="font-sans text-sm font-medium text-(--el-text)">
+            {t('displayLanguage.label')}
+          </div>
+          <div className="mt-0.5 font-sans text-xs leading-snug text-(--el-text-muted)">
+            {t('displayLanguage.desc')}
+          </div>
+        </div>
+        <div className="w-[12rem] shrink-0">
           <Combobox
-            label={t('account.language.label')}
+            label={t('displayLanguage.label')}
             options={options}
             value={current}
             onChange={change}
             disabled={isPending}
           />
         </div>
-        <p className="text-(--el-text-muted) font-sans text-sm">{t('account.language.helper')}</p>
       </div>
     </Card>
   );
