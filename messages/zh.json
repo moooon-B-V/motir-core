@@ -719,6 +719,7 @@
     "errorDescription": "获取动态时出了点问题。",
     "created": "<actor></actor>创建了该工作项",
     "archived": "<actor></actor>归档了该工作项",
+    "unarchived": "<actor></actor>恢复了该工作项",
     "changedField": "<actor></actor>更改了<field>{fieldName}</field>",
     "updatedField": "<actor></actor>更新了<field>{fieldName}</field>",
     "movedToSprint": "<actor></actor>将此工作项移至<target>{targetName}</target>",

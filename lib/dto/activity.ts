@@ -39,6 +39,7 @@ export type ActivityValueDto =
 export type ActivityEntryPartDto =
   | { kind: 'created' }
   | { kind: 'archived' }
+  | { kind: 'unarchived' }
   | { kind: 'field'; field: string; from: ActivityValueDto; to: ActivityValueDto }
   | { kind: 'fieldEdited'; field: string }
   | { kind: 'link'; op: 'added' | 'removed'; linkKind: string; target: ActivityValueDto }

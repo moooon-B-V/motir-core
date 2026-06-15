@@ -39,7 +39,13 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
  * '<identifier>: <title> …', to: null } }`). A top-level item (no parent) has
  * no surviving anchor; see `deleteWorkItem`.
  */
-export type RevisionChangeKind = 'created' | 'updated' | 'archived' | 'comment_deleted' | 'deleted';
+export type RevisionChangeKind =
+  | 'created'
+  | 'updated'
+  | 'archived'
+  | 'unarchived'
+  | 'comment_deleted'
+  | 'deleted';
 
 /**
  * The arguments a service write passes when recording a revision. `diff` is

@@ -397,7 +397,7 @@ function isSuppressedKey(key: string): boolean {
 }
 
 /** Anchor changeKinds that render regardless of (and instead of) the diff. */
-const ANCHOR_KINDS = new Set(['created', 'archived']);
+const ANCHOR_KINDS = new Set(['created', 'archived', 'unarchived']);
 
 function diffKeysOf(diff: unknown): string[] {
   return isRecord(diff) ? Object.keys(diff) : [];
@@ -430,10 +430,10 @@ export function emptyDiffRefs(): DiffRefs {
 
 /**
  * Phase 2 — render a revision's parts from the resolved maps. `created` /
- * `archived` render as their anchor part ("created the issue") rather than a
- * 17-field dump; every other kind walks the diff through the registry, drops
- * suppressed keys, and keeps the renderable remainder (mixed diffs render
- * partially). Returns [] only for a non-displayable revision.
+ * `archived` / `unarchived` render as their anchor part ("created the issue")
+ * rather than a 17-field dump; every other kind walks the diff through the
+ * registry, drops suppressed keys, and keeps the renderable remainder (mixed
+ * diffs render partially). Returns [] only for a non-displayable revision.
  */
 export function buildEntryParts(
   changeKind: string,
@@ -442,6 +442,7 @@ export function buildEntryParts(
 ): ActivityEntryPartDto[] {
   if (changeKind === 'created') return [{ kind: 'created' }];
   if (changeKind === 'archived') return [{ kind: 'archived' }];
+  if (changeKind === 'unarchived') return [{ kind: 'unarchived' }];
   const parts: ActivityEntryPartDto[] = [];
   if (!isRecord(diff)) return parts;
   for (const [key, value] of Object.entries(diff)) {

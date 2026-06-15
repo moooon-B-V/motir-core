@@ -249,6 +249,19 @@ describe('activityService.listHistory — entry rendering', () => {
     });
   });
 
+  it('renders the unarchived anchor (restore), symmetric with archive', async () => {
+    const fx = await makeWorkItemFixture();
+    const issue = await createIssue(fx);
+    await workItemsService.archiveWorkItem(issue.id, fx.ctx);
+    await workItemsService.unarchiveWorkItem(issue.id, fx.ctx);
+
+    const page = await activityService.listHistory(issue.id, {}, fx.ctx);
+    expect(page.entries[0]?.changeKind).toBe('unarchived');
+    expect(partsOf(page.entries[0])).toEqual([{ kind: 'unarchived' }]);
+    // The archive entry is still present below it.
+    expect(page.entries[1]?.changeKind).toBe('archived');
+  });
+
   it('renders the in-flight comment_deleted shape (5.1.2) without content', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);

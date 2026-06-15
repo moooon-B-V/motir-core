@@ -422,4 +422,20 @@ describe('workItemRepository.create / update — Prisma error translation', () =
       ),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
+
+  it('unarchive clears archivedAt (the inverse of archive)', async () => {
+    const fx = await makeFixture();
+    const item = await createWorkItem(fx, { kind: 'task', title: 'restore me' });
+    await db.$transaction((tx) => workItemRepository.archive(item.id, tx));
+    const restored = await db.$transaction((tx) => workItemRepository.unarchive(item.id, tx));
+    expect(restored.archivedAt).toBeNull();
+  });
+
+  it('translates an unarchive of a missing row to WorkItemNotFoundError (P2025)', async () => {
+    await expect(
+      db.$transaction((tx) =>
+        workItemRepository.unarchive('00000000-0000-0000-0000-000000000000', tx),
+      ),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
 });

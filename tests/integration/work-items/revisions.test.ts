@@ -211,6 +211,20 @@ describe('archiveWorkItem — revision', () => {
     expect(diff.archivedAt).toEqual({ from: null, to: archived.archivedAt });
     expect(archived.archivedAt).not.toBeNull();
   });
+
+  it('writes an "unarchived" revision with diff { archivedAt: { from: <timestamp>, to: null } }', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+    const archived = await workItemsService.archiveWorkItem(created.id, fx.ctx);
+    const restored = await workItemsService.unarchiveWorkItem(created.id, fx.ctx);
+
+    const revs = await workItemRevisionRepository.listByWorkItem(created.id);
+    const rev = revs[0]!; // newest first
+    expect(rev.changeKind).toBe('unarchived');
+    const diff = diffOf(rev);
+    expect(diff.archivedAt).toEqual({ from: archived.archivedAt, to: null });
+    expect(restored.archivedAt).toBeNull();
+  });
 });
 
 // ── link / unlink revisions (FROM item only) ─────────────────────────────────

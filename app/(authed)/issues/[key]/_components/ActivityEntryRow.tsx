@@ -212,6 +212,8 @@ export function ActivityEntryRow({
         return { sentence: t.rich('created', { actor }), anchor: true };
       case 'archived':
         return { sentence: t.rich('archived', { actor }), anchor: true };
+      case 'unarchived':
+        return { sentence: t.rich('unarchived', { actor }), anchor: true };
       case 'fieldEdited':
         return {
           sentence: t.rich('updatedField', {

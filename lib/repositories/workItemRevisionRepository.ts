@@ -82,7 +82,7 @@ export const workItemRevisionRepository = {
       FROM "work_item_revision" r
       WHERE r."workItemId" = ${workItemId}
         AND (
-          r."changeKind" IN ('created', 'archived')
+          r."changeKind" IN ('created', 'archived', 'unarchived')
           OR (
             jsonb_typeof(r."diff") = 'object'
             AND EXISTS (

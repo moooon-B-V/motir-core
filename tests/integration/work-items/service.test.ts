@@ -4,7 +4,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
-import { IllegalParentTypeError } from '@/lib/workItems/errors';
+import { IllegalParentTypeError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { WorkItemLinkCycleError } from '@/lib/workItems/linkErrors';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../fixtures';
@@ -301,6 +301,39 @@ describe('archiveWorkItem', () => {
     const childRow = await workItemRepository.findById(story.id);
     expect(childRow).not.toBeNull();
     expect(childRow?.archivedAt).toBeNull();
+  });
+});
+
+// ── unarchiveWorkItem ────────────────────────────────────────────────────
+
+describe('unarchiveWorkItem', () => {
+  it('restores an archived item — clears archivedAt (the inverse of archive)', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+    const archived = await workItemsService.archiveWorkItem(item.id, fx.ctx);
+    expect(archived.archivedAt).not.toBeNull();
+
+    const restored = await workItemsService.unarchiveWorkItem(item.id, fx.ctx);
+    expect(restored.archivedAt).toBeNull();
+
+    // The persisted row is live again.
+    const row = await workItemRepository.findById(item.id);
+    expect(row?.archivedAt).toBeNull();
+  });
+
+  it('is a harmless no-op on an already-live item', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+
+    const restored = await workItemsService.unarchiveWorkItem(item.id, fx.ctx);
+    expect(restored.archivedAt).toBeNull();
+  });
+
+  it('throws WorkItemNotFoundError for an unknown id (the tenant gate)', async () => {
+    const fx = await makeFixture();
+    await expect(
+      workItemsService.unarchiveWorkItem('00000000-0000-0000-0000-000000000000', fx.ctx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
 });
 
