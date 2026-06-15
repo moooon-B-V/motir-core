@@ -21,6 +21,21 @@ import {
 } from '@/lib/comments/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
 import { FilterValidationError } from '@/lib/filters/errors';
+import {
+  BulkBatchTooLargeError,
+  CannotDeleteActiveSprintError,
+  CannotModifyCompletedSprintError,
+  CrossProjectSprintAssignmentError,
+  InvalidCarryOverTargetError,
+  InvalidSprintNameError,
+  InvalidSprintTransitionError,
+  NotSprintAdminError,
+  SprintAlreadyActiveError,
+  SprintNotCompletableError,
+  SprintNotFoundError,
+  SprintNotStartableError,
+  SprintWindowInvalidError,
+} from '@/lib/sprints/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
@@ -129,6 +144,29 @@ export function toToolError(err: unknown): CallToolResult {
     return toolError(err.code, err.message);
   }
   if (err instanceof InvalidReadyCursorError || err instanceof InvalidSearchCursorError) {
+    return toolError(err.code, err.message);
+  }
+  // Sprint tools (7.8.10): the sprint-entity + backlog-association typed errors.
+  // `SprintNotFoundError` keeps the 404-not-403 contract (a foreign/unknown
+  // sprint is an indistinguishable not-found); the state-machine + admin-gate +
+  // window/name + carry-over + bulk-cap errors surface verbatim so an agent can
+  // self-correct (e.g. "complete the active sprint first", "only a planned
+  // sprint is startable").
+  if (
+    err instanceof SprintNotFoundError ||
+    err instanceof NotSprintAdminError ||
+    err instanceof InvalidSprintNameError ||
+    err instanceof SprintWindowInvalidError ||
+    err instanceof InvalidSprintTransitionError ||
+    err instanceof CannotModifyCompletedSprintError ||
+    err instanceof CannotDeleteActiveSprintError ||
+    err instanceof SprintAlreadyActiveError ||
+    err instanceof SprintNotStartableError ||
+    err instanceof SprintNotCompletableError ||
+    err instanceof InvalidCarryOverTargetError ||
+    err instanceof CrossProjectSprintAssignmentError ||
+    err instanceof BulkBatchTooLargeError
+  ) {
     return toolError(err.code, err.message);
   }
   if (err instanceof FilterValidationError) {
