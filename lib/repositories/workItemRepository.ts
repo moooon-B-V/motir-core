@@ -925,6 +925,31 @@ export const workItemRepository = {
   },
 
   /**
+   * The most recent work-item activity per project, for a SET of projects, in
+   * ONE grouped aggregate — the "recent activity" stat for a page of PROJECT
+   * SQUARE cards (Story 6.13 · Subtask 6.13.2), avoiding a per-card N+1. Returns
+   * one `{ projectId, lastActivityAt }` per project that has at least one
+   * non-archived, non-triage work item (a project with none is simply absent —
+   * the service defaults its activity to null). Excludes archived + triage items
+   * so the signal reflects the publicly-visible planned tree (the 6.11.3
+   * read-exclusion + the 6.12.4 public projection), not internal triage churn.
+   * Empty input short-circuits to `[]` (no pointless query). Read-only cross-org
+   * path → `db` singleton + the app-layer `projectId` filter (the directory's
+   * public-only set is enforced one layer up).
+   */
+  async maxActivityByProjects(
+    projectIds: string[],
+  ): Promise<Array<{ projectId: string; lastActivityAt: Date | null }>> {
+    if (projectIds.length === 0) return [];
+    const rows = await db.workItem.groupBy({
+      by: ['projectId'],
+      where: { projectId: { in: projectIds }, archivedAt: null, triagedAt: null },
+      _max: { updatedAt: true },
+    });
+    return rows.map((r) => ({ projectId: r.projectId, lastActivityAt: r._max.updatedAt }));
+  },
+
+  /**
    * How many work items in a project reference a given status key (Subtask
    * 2.2.5's delete-protection: a status still in use can't be removed).
    * Counts ALL items including archived — an archived item's status string

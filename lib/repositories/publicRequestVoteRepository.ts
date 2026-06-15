@@ -73,4 +73,28 @@ export const publicRequestVoteRepository = {
   async countByProject(projectId: string): Promise<number> {
     return db.publicRequestVote.count({ where: { workItem: { projectId } } });
   },
+
+  /**
+   * Total upvotes for a SET of projects in ONE aggregate — the upvote stat for a
+   * page of PROJECT SQUARE cards (Story 6.13 · Subtask 6.13.2), avoiding a
+   * per-card N+1. Joins each vote to its work item and groups by the work
+   * item's project; returns one `{ projectId, upvotes }` per project that has at
+   * least one vote (a project with zero votes is simply absent — the service
+   * defaults it to 0). Empty input short-circuits to `[]` (no pointless query).
+   * Anonymous cross-org read → `db` singleton + the app-layer `projectId` filter
+   * (the RLS-secondary posture `countByProject` uses). `Prisma.join` keeps the
+   * `IN` list parameterized (no string-built SQL).
+   */
+  async sumUpvotesByProjects(
+    projectIds: string[],
+  ): Promise<Array<{ projectId: string; upvotes: number }>> {
+    if (projectIds.length === 0) return [];
+    const rows = await db.$queryRaw<Array<{ projectId: string; upvotes: number }>>`
+      SELECT wi."projectId" AS "projectId", COUNT(*)::int AS "upvotes"
+        FROM "public_request_vote" v
+        JOIN "work_item" wi ON wi."id" = v."work_item_id"
+       WHERE wi."projectId" IN (${Prisma.join(projectIds)})
+       GROUP BY wi."projectId"`;
+    return rows.map((r) => ({ projectId: r.projectId, upvotes: Number(r.upvotes) }));
+  },
 };
