@@ -625,7 +625,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.12',
       title:
         'Account-settings AREA shell — `accountSettingsNav` registry + rail-swap layout + route split + totality test',
-      status: 'in_progress',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
