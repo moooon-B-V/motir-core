@@ -40,6 +40,20 @@ export interface PublicWorkItemListItemDto {
   status: string;
   statusCategory: StatusCategoryDto;
   priority: WorkItemPriorityDto;
+  /**
+   * The "this epic is not public" MARKER (Story 6.14 · Subtask 6.14.4). Set to
+   * `true` ONLY on a PRIVATE epic's row (`kind = 'epic'`, `publicChildrenHidden`)
+   * as projected for a NON-MEMBER viewer — the signal the placeholder UI
+   * (6.14.5 / 6.14.6) renders the badge + "not public" statement off, WITHOUT
+   * ever receiving a child. Omitted (absent) otherwise: a normal card, a member
+   * viewer, or a non-epic. The epic ROW itself stays visible (its key / title /
+   * kind / status are present); the server has already EXCLUDED its descendants
+   * from every public read (the no-leak guarantee — they are absent from the
+   * payload, not DOM-hidden). The flat public projection carries no aggregate
+   * tells (child count / progress / points) to strip — the marker is the ADR §4
+   * surface for the board / items list.
+   */
+  childrenHidden?: boolean;
 }
 
 /** Alias — a public board card is exactly the same stripped projection. */

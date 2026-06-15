@@ -386,6 +386,28 @@ export const projectAccessService = {
   },
 
   /**
+   * Assert the actor may BROWSE the public project AND report whether they are a
+   * project MEMBER (Story 6.14 · Subtask 6.14.4). One `resolvePublicInputs`
+   * round-trip serves both: the same anonymous/cross-org browse gate as {@link
+   * assertCanBrowsePublic}, plus the member/non-member split the epic-privacy
+   * exclusion keys off. `isMember` is `true` iff the actor holds ANY role in the
+   * project's workspace OR the project itself (a workspace member viewing the
+   * public `/p` surface bypasses the exclusion); an anonymous reader, a crawler,
+   * and a cross-org account all resolve to `isMember: false` (null roles) — the
+   * population a private epic's children must never reach. Throws
+   * ProjectNotFoundError (→ 404) on a non-public project (no existence leak).
+   */
+  async resolvePublicBrowse(
+    projectId: string,
+    actorUserId: string | null,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ isMember: boolean }> {
+    const inputs = await resolvePublicInputs(projectId, actorUserId, tx);
+    if (!canBrowse(inputs)) throw new ProjectAccessDeniedError(projectId, 'browse');
+    return { isMember: inputs.workspaceRole != null || inputs.projectRole != null };
+  },
+
+  /**
    * Assert the (authenticated) actor may SUBMIT a request into the public
    * project's triage (6.12.5). `actorUserId` is REQUIRED — the route has gated on
    * a session (sign-in-to-act). Throws ProjectNotFoundError (→ 404) on a

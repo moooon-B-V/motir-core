@@ -24,12 +24,23 @@ import type { PublicRequestMatchRow } from '@/lib/repositories/workItemRepositor
  * is resolved by the caller (it knows the project's workflow) and passed in, so
  * this mapper stays a pure field-selector. The assignee / estimate / story-point
  * columns on `row` are deliberately NOT read — they never enter the DTO.
+ *
+ * `opts.hideChildren` is the NON-MEMBER flag (Story 6.14 · Subtask 6.14.4): when
+ * `true` AND `row` is a PRIVATE epic (`kind = 'epic'`, `publicChildrenHidden`),
+ * the card carries the `childrenHidden: true` marker the placeholder UI reads —
+ * the epic ROW stays visible while its descendants have already been EXCLUDED
+ * server-side from the read. A member viewer (`hideChildren` false) never marks,
+ * so a member reads the unchanged projection.
  */
 export function toPublicWorkItemListItemDto(
-  row: Pick<WorkItem, 'id' | 'identifier' | 'key' | 'title' | 'kind' | 'status' | 'priority'>,
+  row: Pick<
+    WorkItem,
+    'id' | 'identifier' | 'key' | 'title' | 'kind' | 'status' | 'priority' | 'publicChildrenHidden'
+  >,
   statusCategory: StatusCategoryDto,
+  opts: { hideChildren?: boolean } = {},
 ): PublicWorkItemListItemDto {
-  return {
+  const dto: PublicWorkItemListItemDto = {
     id: row.id,
     identifier: row.identifier,
     key: row.key,
@@ -39,6 +50,10 @@ export function toPublicWorkItemListItemDto(
     statusCategory,
     priority: row.priority as WorkItemPriorityDto,
   };
+  if (opts.hideChildren && row.kind === 'epic' && row.publicChildrenHidden) {
+    dto.childrenHidden = true;
+  }
+  return dto;
 }
 
 /**
