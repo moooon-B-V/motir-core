@@ -13,6 +13,7 @@ import {
   encodeTriageCursor,
 } from '@/lib/triage/triageQueue';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { createTestUser } from '../fixtures/userFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
 // Triage schema + read-exclusion invariant + the queue read (Subtask 6.11.3,
@@ -52,7 +53,10 @@ async function createItem(
 
 /**
  * Mark an existing work item as a triage submission (stand-in for the 6.11.4
- * intake path, which doesn't exist yet). Tests may write the repo/db directly.
+ * intake path). Tests may write the repo/db directly. `submittedByUserId` is the
+ * real signed-in account that submitted it — a workspace member (rendered
+ * `member`) or a signed-in non-member (rendered `public`, Story 6.12); intake is
+ * signed-in only since the 2026-06-14 revision (Subtask 6.11.10).
  */
 async function markTriage(
   id: string,
@@ -60,7 +64,7 @@ async function markTriage(
     triagedAt?: Date;
     snoozedUntil?: Date | null;
     status?: string;
-    external?: { name: string; email: string };
+    submittedByUserId?: string;
   } = {},
 ) {
   await db.workItem.update({
@@ -69,9 +73,7 @@ async function markTriage(
       triagedAt: opts.triagedAt ?? new Date(),
       snoozedUntil: opts.snoozedUntil ?? null,
       ...(opts.status ? { status: opts.status } : {}),
-      ...(opts.external
-        ? { externalSubmitterName: opts.external.name, externalSubmitterEmail: opts.external.email }
-        : {}),
+      ...(opts.submittedByUserId ? { submittedByUserId: opts.submittedByUserId } : {}),
     },
   });
 }
@@ -271,14 +273,18 @@ describe('findTriageQueue — the active inbox read', () => {
     expect(page2.nextCursor).toBeNull();
   });
 
-  it('attributes a member submission to its reporter and an external one to its captured identity', async () => {
+  it('attributes a member submission to the member and a non-member one to its public account', async () => {
     const fx = await makeWorkItemFixture();
+    // A signed-in NON-member (Story 6.12's public "Submit a request" path): a
+    // real account with no membership in this workspace.
+    const outsider = await createTestUser({
+      name: 'Outside Person',
+      email: 'outsider@example.com',
+    });
     const member = await createItem(fx, { title: 'Reported in-app' });
     const external = await createItem(fx, { title: 'Reported via portal' });
-    await markTriage(member.id);
-    await markTriage(external.id, {
-      external: { name: 'Outside Person', email: 'outsider@example.com' },
-    });
+    await markTriage(member.id, { submittedByUserId: fx.ownerId });
+    await markTriage(external.id, { submittedByUserId: outsider.id });
 
     const page = await triageService.getTriageQueue(fx.projectId, { limit: 100 }, fx.ctx);
     const byId = new Map(page.items.map((i) => [i.id, i]));
@@ -288,8 +294,8 @@ describe('findTriageQueue — the active inbox read', () => {
     expect(memberItem.submitter.userId).toBe(fx.ownerId);
 
     const externalItem = byId.get(external.id)!;
-    expect(externalItem.submitter.kind).toBe('external');
-    expect(externalItem.submitter.userId).toBeNull();
+    expect(externalItem.submitter.kind).toBe('public');
+    expect(externalItem.submitter.userId).toBe(outsider.id);
     expect(externalItem.submitter.email).toBe('outsider@example.com');
     expect(externalItem.submitter.name).toBe('Outside Person');
   });

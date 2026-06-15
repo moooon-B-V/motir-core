@@ -39,8 +39,6 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     archivedAt: null,
     triagedAt: null,
     snoozedUntil: null,
-    externalSubmitterName: null,
-    externalSubmitterEmail: null,
     submittedByUserId: null,
     publicChildrenHidden: false,
     sessionBranch: null,
