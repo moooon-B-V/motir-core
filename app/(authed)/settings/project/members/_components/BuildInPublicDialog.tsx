@@ -93,8 +93,12 @@ export function BuildInPublicDialog({
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
           {tc('cancel')}
         </Button>
-        <Button variant="primary" onClick={onConfirm} loading={pending}>
-          <Megaphone className="size-4" aria-hidden />
+        <Button
+          variant="primary"
+          onClick={onConfirm}
+          loading={pending}
+          leftIcon={<Megaphone className="size-4" />}
+        >
           {t('confirmCta')}
         </Button>
       </Modal.Footer>
