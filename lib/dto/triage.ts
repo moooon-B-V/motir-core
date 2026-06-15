@@ -57,6 +57,12 @@ export interface TriageQueueItemDto {
   triagedAt: string;
   /** Snooze-until (ISO-8601), or null when active. */
   snoozedUntil: string | null;
+  /**
+   * How many accounts upvoted this request (Story 6.12 · Subtask 6.12.6) — the
+   * demand signal the queue is sorted by (highest-first). 0 when no public
+   * votes; the inbox renders it so the admin sees what's in demand.
+   */
+  voteCount: number;
   createdAt: string;
 }
 

@@ -63,6 +63,7 @@ export function toTriageQueueItemDto(row: TriageQueueRow): TriageQueueItemDto {
     // invariant for the type (the row's column is nullable in general).
     triagedAt: row.triagedAt!.toISOString(),
     snoozedUntil: row.snoozedUntil ? row.snoozedUntil.toISOString() : null,
+    voteCount: row.voteCount,
     createdAt: row.createdAt.toISOString(),
   };
 }
