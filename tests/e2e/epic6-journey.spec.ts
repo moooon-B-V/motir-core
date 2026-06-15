@@ -210,6 +210,23 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   );
   await watchersService.watch(bug.id, { userId: watcher.id, workspaceId: tenant.workspaceId });
 
+  // A control item that ALWAYS matches the filter (Severity High, Priority Medium
+  // — not in the excluded {Low, Lowest} set) so the live count is never zero (the
+  // zero-match state renders the empty card, not the `# work items match` status,
+  // and the count line has no zero plural). The rule never touches it (it's a
+  // task, not a Bug), so the delta is purely the escalated bug entering the set.
+  const control = await workItemsService.createWorkItem(
+    { projectId: tenant.projectId, kind: 'task', title: 'High-sev control' },
+    ownerCtx(tenant),
+  );
+  await db.workItem.update({ where: { id: control.id }, data: { priority: 'medium' } });
+  await customFieldValuesService.setValue(
+    control.id,
+    severityField.id,
+    highOption.id,
+    ownerCtx(tenant),
+  );
+
   await signIn(page, tenant.owner.email, PWD);
 
   // ════════════════════════ BUILD-UP (admin) ════════════════════════
@@ -243,10 +260,8 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   await page.keyboard.press('Escape'); // close the builder
   await expect(dialog).not.toBeVisible();
 
-  // The bug is excluded (Low priority) → zero matches under the live filter.
-  await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(
-    '0 work items match',
-  );
+  // The bug is excluded (Low priority); only the control matches → count is 1.
+  await expect(page.getByRole('status').filter({ hasText: 'match' })).toContainText('1 work item');
 
   // ── 2. Save + name it, shared with the project (6.2) ─────────────────────────
   await page.getByRole('button', { name: 'Save as' }).click();
@@ -294,6 +309,10 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   const dashboard = await db.dashboard.findFirstOrThrow({
     where: { workspaceId: tenant.workspaceId, name: DASHBOARD_NAME },
   });
+  const widget = await db.dashboardWidget.findFirstOrThrow({
+    where: { dashboardId: dashboard.id },
+  });
+  const widgetId = widget.id;
 
   // ── 4. Create the automation rule (6.6): transitioned → Done, if Kind=Bug,
   // then set Priority = Highest ────────────────────────────────────────────────
@@ -340,8 +359,8 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   expect(priorityRev!.changedById).toBe(tenant.owner.id);
 
   // Seam — the saved-filter result set TRACKS the change: re-apply the SAVED
-  // filter from the dropdown; the bug now matches (Highest ∉ {Low,Lowest} AND
-  // Severity High), so the live count is 1.
+  // filter from the dropdown; the bug now matches too (Highest ∉ {Low,Lowest} AND
+  // Severity High), so the live count climbs 1 → 2 (the control + the escalated bug).
   await page.goto('/issues?view=list');
   await page.getByRole('button', { name: /^Saved filters/ }).click();
   await expect(page.getByRole('textbox', { name: 'Find filters' })).toBeVisible();
@@ -349,13 +368,15 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   await expect(
     page.getByRole('button', { name: new RegExp(`Applied filter: ${FILTER_NAME}`) }),
   ).toBeVisible();
-  await expect(page.getByRole('status').filter({ hasText: 'match' })).toContainText('1 work item');
+  await expect(page.getByRole('status').filter({ hasText: 'match' })).toContainText('2 work item');
 
   // Seam — the widget tracks it too: the dashboard renders its filter-results
-  // card (backed by the live filter), no crash.
+  // card backed by the LIVE filter (not the stale "Filter missing" card — that
+  // only appears once the filter is deleted in the unwind below), no crash.
   await page.goto(`/dashboard/${dashboard.id}`);
   await expect(page.getByRole('heading', { name: DASHBOARD_NAME })).toBeVisible();
-  await expect(page.locator('[data-testid^="dashboard-widget-grip-"]')).toHaveCount(1);
+  await expect(page.getByTestId(`dashboard-widget-${widgetId}`)).toBeVisible();
+  await expect(page.getByText('Filter missing')).toHaveCount(0);
 
   // Seam — the History feed renders the automation change (5.5), no crash.
   await page.goto(`/issues/${bug.identifier}`);
