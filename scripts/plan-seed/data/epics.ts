@@ -3707,6 +3707,64 @@ export const EPICS: EpicMeta[] = [
           'drift forward-only with an idempotent `IF NOT EXISTS` migration; prefer narrow ' +
           '`select`s on hot read paths.',
       },
+      {
+        id: '7.21',
+        kind: 'bug',
+        title:
+          'MCP PAT resolves to the user’s DEFAULT (oldest) workspace, not the token’s — a token ' +
+          'minted in a non-default workspace can’t reach its projects (moooon/PROD unreachable)',
+        status: 'planned',
+        type: 'bug',
+        descriptionMd:
+          '**Type:** bug · **Parent:** Epic 7 (discovery epic — surfaced while wiring the planner ' +
+          'MCP to flip 6.11.10’s status via `transition_status`; the defect lives in the Story 7.8 ' +
+          'API-token + MCP-auth surface, which is Epic 7) · **Surfaces:** every MCP tool call made ' +
+          'with a PAT whose owner’s DEFAULT (oldest) workspace is not the workspace the token was ' +
+          'created in — `whoami` reports the wrong active workspace and `get_work_item` / ' +
+          '`search_work_items` / `transition_status` return `PROJECT_NOT_FOUND` for a project that ' +
+          'exists in another of the user’s workspaces. · **Status:** OPEN. · **Source:** reported ' +
+          'by Yue (2026-06-15) wiring the planner MCP against prod — a PAT minted in the `moooon` ' +
+          'workspace resolved to “Zhu Yue’s Workspace” (the signup default), so the `motir` project ' +
+          '(`PROD`) was unreachable and PROD-6.11.10 could not be transitioned to Done.\n\n' +
+          '**Two coupled defects:**\n\n' +
+          '1. **The MCP pins every PAT to the user’s first/default workspace.** `verifyMcpToken` ' +
+          '(`lib/mcp/auth.ts`) resolves the request workspace with ' +
+          '`workspacesService.resolveActiveWorkspace(user.id, null, user.name)` — a `null` cookie ' +
+          'hint, so it returns the user’s FIRST workspace by membership age ' +
+          '(`workspaceMembershipRepository.findWorkspacesByUser` is `orderBy createdAt asc`, “so ' +
+          'the auto-created default workspace lands first”). A PAT can therefore only ever act on ' +
+          'the owner’s OLDEST workspace; any project in a later-joined workspace (here ' +
+          '`moooon`/`PROD`) is invisible — reads 404 (the no-leak browse-deny → `PROJECT_NOT_FOUND`) ' +
+          'and writes can’t target it. The code comment already flags this as a known limitation ' +
+          '(“a future tool that needs to act across multiple of the user’s workspaces would take an ' +
+          'explicit workspace selector; today the contract matches the single-active-workspace ' +
+          'shape”). Switching the active workspace in the web UI does NOT help — the cookie-less MCP ' +
+          'path never consults an active-workspace hint.\n' +
+          '2. **API tokens are account-scoped, not workspace-scoped.** They are created / listed at ' +
+          '`/api/me/api-tokens` keyed on the USER only (no `workspaceId` on `api_token`), so the ' +
+          'SAME token appears in EVERY workspace’s Settings → Account → API tokens list (Yue saw the ' +
+          '`moooon`-minted token in both `moooon` and “Zhu Yue’s Workspace”). The token carries no ' +
+          'record of where it was created, so defect (1) has nothing to bind to.\n\n' +
+          '**Root cause:** the PAT model has no workspace binding, and the MCP auth gate substitutes ' +
+          'the user’s default workspace for the missing binding. Together they make a PAT unusable ' +
+          'for any non-default workspace — the exact case the planner needs (the plan tenant lives ' +
+          'in `moooon`, not the signup-default workspace).\n\n' +
+          '**Proposed fix (mirror = GitHub fine-grained PATs, which are scoped to a chosen ' +
+          'org/resource — verify, don’t assert):** make tokens WORKSPACE-SCOPED. Add `workspaceId` ' +
+          'to `api_token` (captured from the active workspace at mint time, a non-null `@relation`); ' +
+          'scope the create route + the Settings list to the active workspace (so a token shows only ' +
+          'in the workspace it belongs to); and have `verifyMcpToken` resolve the request workspace ' +
+          'from `token.workspaceId` instead of `resolveActiveWorkspace`. Keep the Story-6.4 role ' +
+          'checks + the 404-not-403 cross-tenant contract `verifyMcpToken` already upholds, and ' +
+          '`whoami` should report the token’s bound workspace. (Alternative considered + rejected: ' +
+          'keep account-scoped tokens and add an explicit per-tool workspace selector — heavier, and ' +
+          'it still leaves the “shows in every workspace” list leak.) Sizing/design is for the ' +
+          'owning Story-7.8 follow-up subtask; this item captures the defect + direction.\n\n' +
+          '**Workaround until fixed:** none via the UI. The planner falls back to flipping status on ' +
+          'the locally-seeded tenant (the sandbox dev Postgres holds `PROD`/motir with the plan ' +
+          'tree) rather than prod, until workspace-scoped tokens land.\n\n' +
+          '**Resolution:** _(open)_',
+      },
     ],
   },
   {
