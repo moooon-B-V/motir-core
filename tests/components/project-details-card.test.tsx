@@ -97,4 +97,26 @@ describe('ProjectDetailsCard (6.8.4 — editable)', () => {
     expect(screen.queryByText('Previous keys')).toBeNull();
     expect(screen.queryByText('Danger zone')).toBeNull();
   });
+
+  // Regression — bug-card-header-loses-padding-when-body-overrides-p-0.
+  it('admin header: the "Project details" title + Admin pill sit inside a padded wrapper, not flush against the card edge', () => {
+    renderCard({ canManage: true });
+    const title = screen.getAllByText('Project details')[0]!;
+    // Walk up to find the nearest ancestor carrying horizontal card padding.
+    let node: HTMLElement | null = title;
+    let padded: HTMLElement | null = null;
+    while (node) {
+      if (node.className?.includes?.('px-(--spacing-card-padding)')) {
+        padded = node;
+        break;
+      }
+      node = node.parentElement;
+    }
+    expect(padded, 'header is wrapped in a horizontally-padded element').not.toBeNull();
+    expect(padded!.className).toContain('pt-(--spacing-card-padding)');
+    // The padded wrapper must contain BOTH the title and the Admin pill — i.e.
+    // it's the CardHead wrapper, not some narrower ancestor.
+    expect(padded!.textContent).toContain('Project details');
+    expect(padded!.textContent).toContain('Admin');
+  });
 });
