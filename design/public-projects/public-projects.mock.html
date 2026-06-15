@@ -1957,15 +1957,29 @@
         color: var(--el-text);
       }
 
-      /* (2) Edit mode — the "Editing" pill that replaces the Public chip while
-         the admin is editing in place. */
+      /* (2) Edit mode — a light "Editing" mode chip (a live accent dot) that
+         replaces the Public chip while the admin is editing in place. */
       .pill-editing {
-        background: var(--el-tint-lavender);
-        color: var(--el-text-strong);
-        border: 1px solid transparent;
-      }
-      .pill-editing .ic {
+        background: color-mix(in srgb, var(--el-accent) 9%, var(--el-page-bg));
         color: var(--el-accent-on-surface);
+        border: 1px solid color-mix(in srgb, var(--el-accent) 32%, transparent);
+      }
+      .pill-editing .dote {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        flex: none;
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.35;
+        }
       }
 
       /* the hero in edit mode — fields get a dashed "editable" affordance ring */
@@ -1982,20 +1996,20 @@
         color: var(--el-text-faint);
         margin: 0 0 6px;
       }
-      /* the tagline inline input (placeholder when empty) */
+      /* the tagline input — a MULTI-LINE field (the tagline wraps to 2–3 lines);
+         placeholder when empty */
       .tagline-input {
         width: 100%;
         max-width: 640px;
-        height: var(--height-input);
-        padding: 0 var(--spacing-input-x);
+        min-height: calc(var(--height-input) * 1.7);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
         border: 1px solid var(--el-border);
         border-radius: var(--radius-input);
         background: var(--el-page-bg);
         font-family: var(--font-sans);
         font-size: 15px;
+        line-height: 1.5;
         color: var(--el-text);
-        display: flex;
-        align-items: center;
       }
       .tagline-input.focused {
         border-color: var(--el-accent);
@@ -2003,6 +2017,16 @@
       }
       .tagline-input .ph {
         color: var(--el-text-faint);
+      }
+      /* a blinking caret sits inline at the end of the focused tagline */
+      .tagline-input .caret {
+        display: inline-block;
+        vertical-align: -2px;
+        margin-left: 1px;
+        width: 1px;
+        height: 15px;
+        background: var(--el-text);
+        animation: caret 1s step-end infinite;
       }
 
       /* the editable tag chips + add-tag input */
@@ -2719,7 +2743,7 @@
               <div class="pub-proj">
                 Motir
                 <span class="pill pill-editing" style="margin-left: 6px"
-                  ><svg class="ic"><use href="#i-edit" /></svg> Editing</span
+                  ><span class="dote"></span> Editing</span
                 >
               </div>
               <span class="pub-key">PROD · moooon</span>
@@ -2774,10 +2798,13 @@
               </div>
             </div>
 
-            <!-- tagline → an inline input -->
+            <!-- tagline → a multi-line input (wraps to 2–3 lines) -->
             <span class="field-label" style="margin-top: 16px">Tagline</span>
             <div class="tagline-input focused">
-              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it…
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it, end to end. You're looking at Motir, built in Motir.<span
+                class="caret"
+              ></span>
             </div>
 
             <div class="hero-stats">

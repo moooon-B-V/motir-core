@@ -106,7 +106,7 @@ duplicate-detection portal set.
    **"Edit page"** button (top-right), plus a quiet hint band. Anonymous / non-admin
    viewers never see it.
    1c. **(1c)** **edit mode — in place** (Story 6.16) — entering edit makes the page
-   itself the editor (WYSIWYG): the tagline becomes an inline input (placeholder
+   itself the editor (WYSIWYG): the tagline becomes a multi-line input (placeholder
    "Add a tagline…"), the tags become removable chips + an "Add tag" input
    (max-count + empty states), and the README body becomes the shipped
    `MarkdownEditor`. A **sticky Save / Cancel** bar tracks unsaved changes; the
@@ -387,13 +387,17 @@ absent for anonymous / non-admin viewers (who see Panel 1).
 ### Panel 1c — edit mode, in place (the 6.16.5 surface)
 
 The page becomes the editor (WYSIWYG — no separate preview). The topbar **"Public"**
-chip is replaced by an **"Editing"** `.pill-editing` (lavender) and the banner reads
-"Editing the public page. Changes show live as you type…". The hero takes a dashed
-**`.hero.editing`** affordance ring, and three regions become editable:
+chip is replaced by a light **"Editing"** mode chip (`.pill-editing` — a faint
+`color-mix(--el-accent 9%)` tint + accent border + a live **pulsing accent dot**,
+not a heavy filled pill) and the banner reads "Editing the public page. Changes show
+live as you type…". The hero takes a dashed **`.hero.editing`** affordance ring, and
+three regions become editable:
 
-- **Tagline → an inline input** (`.tagline-input`, `--height-input` /
-  `--radius-input`; focused state = `--el-accent` border + a 3px accent ring).
-  Placeholder **"Add a tagline…"** when empty. Above it a `.field-label` "Tagline".
+- **Tagline → a MULTI-LINE input** (`.tagline-input`, `--radius-input` +
+  `--spacing-input-*`; `min-height` ≈ 2–3 lines so the tagline wraps — it is a short
+  paragraph, not a one-liner). Focused state = `--el-accent` border + a 3px accent
+  ring + a blinking inline `.caret`. Placeholder **"Add a tagline…"** when empty.
+  Above it a `.field-label` "Tagline".
 - **Tags → removable chips + an "Add tag" input.** Each authored tag is a
   `.tag-chip` (the same tint tones as the read pills) with a circular **`.tag-x`**
   remove control (`i-x`; a `<span>`, NOT a nested button — no `nested-interactive`).
@@ -517,33 +521,33 @@ It is the host surface for two code subtasks: **6.14.11** (build the page) and
 
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
-| Element                             | Token                                                                                    |
-| ----------------------------------- | ---------------------------------------------------------------------------------------- |
-| Public chip / banner background     | `--el-public-banner-bg` (→ `--color-tint-sky`)                                           |
-| Public chip / banner text           | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)               |
-| Public-chip / banner glyph          | `--el-info`                                                                              |
-| Upvote control (resting)            | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                            |
-| Upvote control (voted)              | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                    |
-| Roadmap status headers              | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)       |
-| Status header / org text            | `--el-text-strong` on the tint (AA-safe)                                                 |
-| Work-item type icon (board/kind)    | `--el-type-{task,bug,story,epic}`                                                        |
-| Priority pills                      | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`           |
-| Selected access option              | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                  |
-| Disable link button                 | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)             |
-| Rate-limit banner                   | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                            |
-| Success confirmation badge          | `--el-tint-mint` + `--el-success`                                                        |
-| Error glyph                         | `--el-tint-rose` + `--el-danger`                                                         |
-| Overview hero corner washes         | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`        |
-| Hero logo / CTA card accent         | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                       |
-| README feature-list ticks           | `--el-success`; links `--el-link`                                                        |
-| Edit-page affordance glyph (6.16)   | `--el-accent-on-surface` on a `btn-outline`                                              |
-| Admin hint band (6.16)              | `color-mix(--el-accent 7%, --el-page-bg)` bg + `--el-border`, text `--el-text-secondary` |
-| "Editing" pill (6.16)               | `--el-tint-lavender` bg + `--el-text-strong` (glyph `--el-accent-on-surface`)            |
-| Tagline input focus ring (6.16)     | `--el-accent` border + `color-mix(--el-accent 18%)` ring                                 |
-| Editable tag chip + remove ✕ (6.16) | tint bg + `--el-text-strong`; `.tag-x` = `color-mix(--el-text-strong 12%)`               |
-| Unsaved-changes status dot (6.16)   | `--el-warning`                                                                           |
-| Save-error banner (6.16)            | `--el-tint-rose` bg + `--el-text-strong`, glyph `--el-danger` (finding #35)              |
-| Unsaved-guard scrim / dialog (6.16) | `color-mix(--el-text 28%)` scrim; dialog `--el-page-bg` + `--shadow-modal`               |
+| Element                             | Token                                                                                                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Public chip / banner background     | `--el-public-banner-bg` (→ `--color-tint-sky`)                                                                               |
+| Public chip / banner text           | `--el-public-banner-text` (→ `--color-charcoal`, AA ~10:1 on the sky tint)                                                   |
+| Public-chip / banner glyph          | `--el-info`                                                                                                                  |
+| Upvote control (resting)            | `--el-page-bg` + `--el-border`; count text `--el-text-strong`                                                                |
+| Upvote control (voted)              | `--el-vote-active-bg` (→ `--color-primary`) + `--el-vote-active-text`                                                        |
+| Roadmap status headers              | `--el-roadmap-{submitted,planned,progress,done}` (→ peach / lavender / sky / mint)                                           |
+| Status header / org text            | `--el-text-strong` on the tint (AA-safe)                                                                                     |
+| Work-item type icon (board/kind)    | `--el-type-{task,bug,story,epic}`                                                                                            |
+| Priority pills                      | rose (`--el-tint-rose`+`--el-danger` glyph) / yellow / neutral, text `-strong`                                               |
+| Selected access option              | `--el-accent` border + `color-mix(--el-accent 7%)` tint                                                                      |
+| Disable link button                 | `btn-danger` (`--el-tint-rose` bg + `--el-text-strong`, `--el-danger` glyph)                                                 |
+| Rate-limit banner                   | `--el-tint-yellow` + `--el-text-strong`, `--el-warning` glyph                                                                |
+| Success confirmation badge          | `--el-tint-mint` + `--el-success`                                                                                            |
+| Error glyph                         | `--el-tint-rose` + `--el-danger`                                                                                             |
+| Overview hero corner washes         | `--el-hero-wash-a` (→ lavender) + `--el-hero-wash-b` (→ sky), over `--el-page-bg`                                            |
+| Hero logo / CTA card accent         | `--el-accent` + `--el-accent-text`; stats text `--el-text` (serif)                                                           |
+| README feature-list ticks           | `--el-success`; links `--el-link`                                                                                            |
+| Edit-page affordance glyph (6.16)   | `--el-accent-on-surface` on a `btn-outline`                                                                                  |
+| Admin hint band (6.16)              | `color-mix(--el-accent 7%, --el-page-bg)` bg + `--el-border`, text `--el-text-secondary`                                     |
+| "Editing" mode chip (6.16)          | `color-mix(--el-accent 9%)` bg + `color-mix(--el-accent 32%)` border + `--el-accent-on-surface` text; live dot `--el-accent` |
+| Tagline input focus ring (6.16)     | `--el-accent` border + `color-mix(--el-accent 18%)` ring                                                                     |
+| Editable tag chip + remove ✕ (6.16) | tint bg + `--el-text-strong`; `.tag-x` = `color-mix(--el-text-strong 12%)`                                                   |
+| Unsaved-changes status dot (6.16)   | `--el-warning`                                                                                                               |
+| Save-error banner (6.16)            | `--el-tint-rose` bg + `--el-text-strong`, glyph `--el-danger` (finding #35)                                                  |
+| Unsaved-guard scrim / dialog (6.16) | `color-mix(--el-text 28%)` scrim; dialog `--el-page-bg` + `--shadow-modal`                                                   |
 
 **Palette, not grey-only (finding #54):** the roadmap uses four distinct status
 tints, the upvote uses the accent, kinds use their type hues, the Overview hero +
@@ -578,8 +582,8 @@ governs them and no Tier-0 leaks in.
   `--radius-control`.
 - **Hero / overview sidebar cards / CTA card / editor**: `--radius-card` (editor
   `--radius-input`) + `--shadow-card`/`-subtle`.
-- **In-place edit (6.16)**: tagline input `--radius-input` + `--height-input` +
-  `--spacing-input-x`; editable tag chips + "Add tag" `--radius-badge` +
+- **In-place edit (6.16)**: tagline input `--radius-input` + `--spacing-input-*`
+  (multi-line, `min-height` ≈ 1.7×`--height-input`); editable tag chips + "Add tag" `--radius-badge` +
   `--spacing-chip-y`; in-place `MarkdownEditor` `--radius-input`; the sticky
   `.editbar` `--radius-card` + `--shadow-elevated`; the unsaved-guard dialog
   `--radius-modal` + `--shadow-modal`; the `.tag-x` remove control is genuinely
