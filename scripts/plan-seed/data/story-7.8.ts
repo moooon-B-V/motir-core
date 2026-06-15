@@ -448,7 +448,7 @@ export const story_7_8: PlanStory = {
       id: '7.8.8',
       title:
         'Docs + runbook flip — `docs/mcp.md` (tool catalog, client wiring) + MOTIR.md status-workflow rewrite',
-      status: 'in_progress',
+      status: 'done',
       type: 'content',
       executor: 'coding_agent',
       estimateMinutes: 35,
