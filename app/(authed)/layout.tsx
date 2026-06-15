@@ -172,6 +172,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     variant="rail"
                     readyCount={readyCount}
                     settingsAccess={settingsAccess}
+                    user={{ name: session.user.name, email: session.user.email }}
                   />
                 }
               >
@@ -199,6 +200,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   variant="drawer"
                   readyCount={readyCount}
                   settingsAccess={settingsAccess}
+                  user={{ name: session.user.name, email: session.user.email }}
                 />
               </SidebarDrawer>
 

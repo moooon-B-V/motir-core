@@ -25,6 +25,7 @@ import {
   visibleSettingsNav,
   type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
+import { ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/accountSettingsNav';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { ThemePattern } from '@/lib/theme/types';
@@ -211,6 +212,20 @@ export function AppCommandPalette({
       });
     }
   }
+
+  // Account settings — per-pane deep links generated FROM the account-settings-nav
+  // registry (Subtask 7.8.12), the same source the rail uses. Always available (a
+  // personal area, no project/access gating); a new pane appears here automatically
+  // by adding a registry entry. Placeholders are excluded (ACCOUNT_SETTINGS_ROUTES).
+  groups.push({
+    heading: ts('account.eyebrow'),
+    actions: ACCOUNT_SETTINGS_ROUTES.map((entry) => ({
+      id: `account-settings-${entry.id}`,
+      label: ts(`account.nav.${entry.labelKey}`),
+      icon: <entry.icon />,
+      onSelect: () => go(entry.href),
+    })),
+  });
 
   // The active workspace/project isn't a switch target — show it by name with
   // a "Current" tag, and make selecting it a no-op (just closes the palette).

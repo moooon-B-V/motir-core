@@ -235,8 +235,11 @@ test('preference cut — one gate, both channels: in-app off stops the bell (ema
   await page.goto(`/issues/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task' })).toBeVisible();
 
-  // ── A turns IN-APP off for "Mentioned" on the /settings/account matrix ───────
-  await pageA.goto('/settings/account');
+  // ── A turns IN-APP off for "Mentioned" on the notifications matrix ───────────
+  // The account settings are an AREA now (7.8.12): the matrix lives in its own
+  // pane; `/settings/account` redirects to the Language pane, so go straight to
+  // the notifications route.
+  await pageA.goto('/settings/account/notifications');
   await expect(pageA.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible();
   const inApp = pageA.getByRole('switch', { name: 'In-app for Mentioned' });
   const email = pageA.getByRole('switch', { name: 'Email for Mentioned' });

@@ -25,8 +25,15 @@ import {
   visibleSettingsNav,
   type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
+import {
+  ACCOUNT_SETTINGS_NAV,
+  groupAccountSettingsNav,
+  isAccountSettingsEntryActive,
+  isAccountSettingsPath,
+} from '@/lib/settings/accountSettingsNav';
 import { SidebarHeader } from './SidebarHeader';
 import { SettingsSidebarHeader } from './SettingsSidebarHeader';
+import { AccountSidebarHeader } from './AccountSidebarHeader';
 
 // The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with
 // a SidebarHeader (project context) and the route-aware nav sections. Active
@@ -78,6 +85,13 @@ export interface SidebarNavProps {
    * reads it); defaults closed so a missing value never leaks an entry.
    */
   settingsAccess?: SettingsNavCapabilities;
+  /**
+   * The signed-in user's identity (Subtask 7.8.12) — drives the account-settings
+   * area rail header (initial avatar + name + email) when the rail is inside the
+   * `/settings/account*` area. Resolved once in the (authed) layout from the
+   * session (the same `{ name, email }` the TopNav user menu shows).
+   */
+  user: { name: string; email: string };
 }
 
 function isActive(pathname: string, match: string): boolean {
@@ -111,6 +125,7 @@ export function SidebarNav({
   variant = 'rail',
   readyCount,
   settingsAccess,
+  user,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -121,6 +136,39 @@ export function SidebarNav({
   const collapsed = isDrawer ? false : storeCollapsed;
 
   const hasProject = Boolean(activeProject);
+
+  // Account-settings AREA (Subtask 7.8.12): swap the project nav for the
+  // registry-driven account-settings nav. Unlike the project area this does NOT
+  // gate on an active project — account settings are personal, reachable with no
+  // project selected — and the header shows the USER, not the project.
+  if (isAccountSettingsPath(pathname)) {
+    const accountSections: SidebarSection[] = groupAccountSettingsNav(ACCOUNT_SETTINGS_NAV).map(
+      ({ group, entries }) => ({
+        id: `account-settings-${group}`,
+        label: ts(`account.nav.group.${group}`),
+        items: entries.map((entry) => ({
+          icon: <entry.icon />,
+          label: ts(`account.nav.${entry.labelKey}`),
+          // Placeholder rows carry an empty href; SidebarItem ignores it for a
+          // disabled row (a non-interactive span) and the React key falls back to
+          // the label, so the empty href is correct (no collision).
+          href: entry.href,
+          active: isAccountSettingsEntryActive(entry, pathname),
+          disabled: entry.placeholder,
+          badge: entry.placeholder ? <SoonChip label={ts('account.nav.soon')} /> : undefined,
+        })),
+      }),
+    );
+    return (
+      <Sidebar
+        aria-label={ts('account.eyebrow')}
+        header={<AccountSidebarHeader user={user} collapsed={collapsed} />}
+        sections={accountSections}
+        footer={isDrawer ? undefined : <SidebarToggle variant="footer" />}
+        collapsed={isDrawer ? false : undefined}
+      />
+    );
+  }
 
   // Settings AREA: swap the project nav for the registry-driven settings nav.
   if (activeProject && isProjectSettingsPath(pathname)) {

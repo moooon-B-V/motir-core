@@ -1393,12 +1393,20 @@
       "runsEmptyDesc": "当后台任务运行时，会显示在这里。"
     },
     "account": {
-      "title": "账户设置",
-      "subtitle": "管理你的个人偏好。",
-      "language": {
-        "heading": "语言",
-        "helper": "选择Motir界面使用的语言。",
-        "label": "语言"
+      "eyebrow": "账户设置",
+      "back": "返回Motir",
+      "nav": {
+        "group": {
+          "general": "常规",
+          "preferences": "偏好",
+          "security": "安全"
+        },
+        "profile": "个人资料",
+        "language": "语言",
+        "notifications": "通知",
+        "appearance": "外观",
+        "apiTokens": "API令牌",
+        "soon": "即将推出"
       },
       "notifications": {
         "heading": "通知",
@@ -1436,6 +1444,18 @@
           "error": "保存失败",
           "retry": "重试"
         }
+      }
+    },
+    "language": {
+      "heading": "语言与区域",
+      "subtitle": "Motir界面显示所用的语言——菜单、标签和日期。仅对你生效，并在你登录的每台设备上同步应用。",
+      "card": {
+        "title": "语言",
+        "subtitle": "选择你的界面语言。"
+      },
+      "displayLanguage": {
+        "label": "显示语言",
+        "desc": "菜单、标签和日期将使用此语言。"
       }
     },
     "automation": {

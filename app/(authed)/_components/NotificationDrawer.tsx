@@ -249,7 +249,7 @@ export function NotificationDrawer({
               </button>
               <div className="my-1 h-px bg-(--el-border-soft)" aria-hidden />
               <Link
-                href="/settings/account"
+                href="/settings/account/notifications"
                 onClick={() => {
                   setOverflowOpen(false);
                   onNavigate();
