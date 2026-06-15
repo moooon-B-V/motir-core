@@ -366,7 +366,7 @@ export const story_6_13: PlanStory = {
       id: '6.13.2',
       title:
         'Public-projects directory service — list ALL `public` projects cross-org, cursor-paginated, card projection; EXCLUDES non-public',
-      status: 'blocked',
+      status: 'done',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
