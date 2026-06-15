@@ -3,7 +3,9 @@ import { db } from '@/lib/db';
 import { hash, verify } from '@/lib/auth/passwords';
 import { accountRepository } from '@/lib/repositories/accountRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { toUserProfileDto } from '@/lib/mappers/userMappers';
 import { DuplicateEmailError } from '@/lib/users/errors';
+import type { UserProfileDto } from '@/lib/dto/users';
 
 // Users service — business logic for the User entity.
 //
@@ -29,6 +31,19 @@ export interface CreateUserInput {
 }
 
 export const usersService = {
+  /**
+   * Resolve a user's own display-safe profile by id — the read behind the MCP
+   * `whoami` tool (Story 7.9 · Subtask 7.9.1), which the CLI uses so
+   * `motir auth status` can show the PAT owner. Returns null when the id has
+   * no user (a deleted account whose token somehow survived); the caller
+   * surfaces that as a not-found. The actor is the token owner resolving
+   * THEMSELVES, so there is no cross-user exposure here.
+   */
+  async getProfile(userId: string): Promise<UserProfileDto | null> {
+    const user = await userRepository.findById(userId);
+    return user ? toUserProfileDto(user) : null;
+  },
+
   /**
    * Email/password signup. Hashes the password, creates the User and a
    * paired credential Account in one transaction. The credential Account

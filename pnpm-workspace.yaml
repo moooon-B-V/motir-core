@@ -1,3 +1,9 @@
+# Workspace packages. The Next app lives at the repo root; `packages/*` holds
+# the workspace packages — the first is `@motir/cli` (Subtask 7.9.1), the
+# terminal MCP client. The root app build is unaffected by their presence.
+packages:
+  - 'packages/*'
+
 allowBuilds:
   # @parcel/watcher + @swc/core arrive as OPTIONAL deps of next-intl (its
   # experimental build-time SWC message plugin + file watcher). The cookie-based
