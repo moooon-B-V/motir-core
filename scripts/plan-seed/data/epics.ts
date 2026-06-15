@@ -2203,7 +2203,7 @@ export const EPICS: EpicMeta[] = [
         kind: 'bug',
         title:
           'Combobox listbox is clipped by the parent Popover / Modal at every Combobox-in-dialog site (12 occurrences across 9 files: triage Promote popover ×3 + triage Merge popover + CreateIssueModal ×5 pickers + 5 other settings/filter modals). Reported repro: triage Promote → Active sprint shows the search input + 1 row, rest of sprint list cut off below popover edge.',
-        status: 'planned',
+        status: 'done',
         type: 'bug',
         descriptionMd:
           '**Type:** bug · **Parent:** Epic 6 (where the bug was DISCOVERED) · ' +
