@@ -201,7 +201,11 @@ export const story_6_12: PlanStory = {
     '(6.12.6); the public roadmap view with status tracking (6.12.7); the ' +
     '"make public" toggle + the shareable public link + the Overview/README ' +
     'authoring editor in project settings (6.12.8); the access + dedupe + ' +
-    'voting tests (6.12.9); the cross-org e2e (6.12.10).\n\n' +
+    'voting tests (6.12.9); the public submit-request form + ' +
+    'duplicate-detection "upvote this instead" UI (6.12.11) and the public ' +
+    'request detail page + comment composer/thread UI (6.12.12) — the public ' +
+    'WRITE surfaces that wire the 6.12.5/6.12.6 backend into the public pages; ' +
+    'and the cross-org e2e (6.12.10), which drives all of them.\n\n' +
     '**The public OVERVIEW / README (Yue, design iteration 2026-06-13).** The ' +
     'public landing leads with a modern, GitHub-README-style project intro — a ' +
     'hero (logo + name + tagline + at-a-glance stats + CTAs) + an authored ' +
@@ -1005,7 +1009,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.10',
       title:
         'E2E (playwright) — anyone reads a public project LOGGED OUT (+ SEO surface), then signs in to submit (dedupe → upvote) + comment; a non-public project is not viewable',
-      status: 'planned',
+      status: 'blocked',
       type: 'e2e',
       executor: 'coding_agent',
       estimateMinutes: 55,
@@ -1065,7 +1069,180 @@ export const story_6_12: PlanStory = {
         'whose harness + the promote-from-queue step this builds on.\n' +
         '- `motir-core/e2e/` — the existing Playwright specs + the run-harness ' +
         '+ selector conventions to mirror.',
-      dependsOn: ['6.12.4', '6.12.8'],
+      dependsOn: ['6.12.4', '6.12.7', '6.12.8', '6.12.11', '6.12.12'],
+    },
+    {
+      id: '6.12.11',
+      title:
+        'Public submit-request FORM + duplicate-detection "upvote this instead" UI (wire the 6.12.5 backend into the public surface)',
+      status: 'planned',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 60,
+      descriptionMd:
+        '**Why this exists (planning gap, found running 6.12.10):** 6.12.5 ' +
+        'shipped the public submit-to-triage + duplicate-detection BACKEND ' +
+        'only (the `POST /api/public/projects/[projectId]/requests` create + ' +
+        'the `GET …/requests/duplicates` pre-check + their service/tests) — but ' +
+        'NO public-facing FORM was built. The 6.12.4 ' +
+        '`PublicSubmitRequestButton` is still a sign-in-to-act STUB (its own ' +
+        'comment: "The submit FORM is 6.12.5 and isn’t built here"). So a ' +
+        'public viewer cannot actually submit a request, and the e2e (6.12.10) ' +
+        'has no real UI to drive. This card builds the missing UI half of ' +
+        '6.12.5, per the 6.12.1 Panel 3 design (the submit form + the ' +
+        'duplicate-detection "upvote this instead" state).\n\n' +
+        '- **The real submit form (replaces the stub for signed-in viewers):** ' +
+        'turn `PublicSubmitRequestButton` into the real composer — a kind ' +
+        'toggle (**bug | feature**; "feature" maps to the backend `task` kind ' +
+        'the route accepts — see the 6.12.5 route grammar), a **title**, and a ' +
+        '**descriptionMd** body — that POSTs to ' +
+        '`/api/public/projects/[projectId]/requests` (the GLOBAL project id, ' +
+        'not the `PROD` identifier — ADR §2.2; the public page already has ' +
+        'the id server-side, thread it in). On 201 show the design’s ' +
+        '"thanks, we got it" confirmation. A LOGGED-OUT viewer keeps the ' +
+        'existing sign-in-to-act prompt (reading is open; posting needs an ' +
+        'account) — do NOT remove that branch.\n' +
+        '- **SIGNED-IN ONLY — the unauthenticated public portal form is ' +
+        'DROPPED (Yue, 2026-06-14; `design/triage/design-notes.md`).** This ' +
+        'form is the signed-in external-intake channel: NO name/email capture, ' +
+        'NO honeypot, NO per-form anonymous-token route. A work item is created ' +
+        'only by a signed-in account (the submission is attributed to it, per ' +
+        'the Panel 4 "Submitted as {name} ({org})" hint), so a logged-out ' +
+        'viewer NEVER sees the form — only the sign-in-to-act prompt. Do NOT ' +
+        'build an anonymous public form.\n' +
+        '- **Duplicate detection BEFORE create (Canny’s behaviour):** as ' +
+        'the title is entered (debounced), call ' +
+        '`GET /api/public/projects/[projectId]/requests/duplicates?title=…` ' +
+        'and surface the returned matching existing public request(s) with an ' +
+        '**"Upvote this instead"** affordance. Choosing it UPVOTES the existing ' +
+        'request (reuse the 6.12.6 `POST /api/public-requests/[id]/upvote` the ' +
+        'roadmap’s `PublicRoadmapVote` already calls) and creates NO new ' +
+        'item; "Submit as new" runs the create path. Render the empty / ' +
+        'loading / rate-limited (typed-error, not a raw 500) states per the ' +
+        'design.\n' +
+        '- **No new backend.** This is a pure UI + wiring card over the shipped ' +
+        '6.12.5 routes; no new service/route/migration. Stay design-compliant: ' +
+        'ONLY shipped `components/ui/*` + `--el-*` / `[data-display-style]` ' +
+        'tokens (no Tier-0 `--color-*`, no raw `rounded-*`/`p-*`/`h-*`).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A signed-in viewer (cross-org included) opens the submit form on a ' +
+        'public project, picks a kind, enters a title + description, and ' +
+        'submits → a triage request is created (201) and the confirmation ' +
+        'shows; a logged-out viewer still sees the sign-in-to-act prompt (no ' +
+        'form).\n' +
+        '- As the title is typed, matching existing public requests surface ' +
+        'with an "Upvote this instead" control; choosing it upvotes the ' +
+        'existing request (vote increments) and creates NO duplicate; "Submit ' +
+        'as new" creates the item.\n' +
+        '- Empty / loading / rate-limited states render gracefully (no raw ' +
+        '500); the dedupe match drives the UI (no AI).\n' +
+        '- ONLY `--el-*` + `[data-display-style]` tokens + shipped ' +
+        '`components/ui/*`; matches the 6.12.1 Panel 3 design; no new ' +
+        'service/route (pure wiring over 6.12.5/6.12.6).\n\n' +
+        '## Context refs\n\n' +
+        '- 6.12.1 Panel 3 (the submit + duplicate-detection design) — the ' +
+        'surface to match; `design/public-projects/`.\n' +
+        '- `design/triage/design-notes.md` (Yue, 2026-06-14) — the ' +
+        'sign-in-to-act intake model: the unauthenticated public portal form is ' +
+        'DROPPED; the 6.12 public-project "Submit a request" is the SIGNED-IN ' +
+        'external-intake channel into the 6.11 triage queue.\n' +
+        '- 6.12.5 routes (shipped): ' +
+        '`app/api/public/projects/[projectId]/requests/route.ts` (POST create, ' +
+        '`{ kind: bug|task, title, descriptionMd? }` → 201) + ' +
+        '`…/requests/duplicates/route.ts` (GET ?title= → ' +
+        '`{ candidates: [{ id, kind, identifier, title, status, voteCount }] }`).\n' +
+        '- 6.12.6 upvote route (shipped): ' +
+        '`app/api/public-requests/[id]/upvote/route.ts` (POST → ' +
+        '`{ voted, voteCount }`) — the "upvote this instead" target.\n' +
+        '- `app/(public)/_components/PublicSubmitRequestButton.tsx` (the stub ' +
+        'to replace) + `PublicRoadmapVote.tsx` (the shipped upvote-control ' +
+        'pattern to reuse).\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens.',
+      dependsOn: ['6.12.1', '6.12.4', '6.12.5', '6.12.6'],
+    },
+    {
+      id: '6.12.12',
+      title:
+        'Public request DETAIL page + comment composer/thread UI (wire the 6.12.6 backend into the public surface)',
+      status: 'blocked',
+      type: 'code',
+      executor: 'coding_agent',
+      estimateMinutes: 60,
+      descriptionMd:
+        '**Why this exists (planning gap, found running 6.12.10):** 6.12.6 ' +
+        'shipped the upvote + public-request COMMENT backend ' +
+        '(`POST /api/public-requests/[id]/upvote` and ' +
+        '`POST /api/public-requests/[id]/comments`), and 6.12.7 added the ' +
+        'roadmap upvote control (`PublicRoadmapVote`) — but there is NO ' +
+        'public request DETAIL surface and NO comment UI anywhere ' +
+        '(`PublicRoadmap`’s own comment notes: "there is no public request ' +
+        'DETAIL route yet; that surface, design Panel 5, is unbuilt"; submitted ' +
+        'roadmap cards are plain text with no link). So a public viewer cannot ' +
+        'open a request, read its comments, or comment, and the e2e (6.12.10 ' +
+        'step 3 "add a comment on that public request → it appears") has no ' +
+        'real UI to drive. This card builds the missing public request detail + ' +
+        'comment UI per the 6.12.1 Panel 4/5 design.\n\n' +
+        '- **The public request detail route:** add a public, server-rendered, ' +
+        'crawlable detail page under `app/(public)/` for a public request ' +
+        '(reached from the roadmap cards — repoint `PublicRoadmap` ' +
+        'titles/cards to it — and from the 6.12.11 dedupe candidates), ' +
+        'gated by the same anonymous-read browse check the other public tabs use ' +
+        '(non-public / unknown → 404-not-403). It renders the request ' +
+        'title + kind + status + body through the **public projection** (no ' +
+        'internal field leaks — reuse the 6.12.4 read shape).\n' +
+        '- **Upvote on the detail:** reuse the shipped `PublicRoadmapVote` ' +
+        'control (one vote per account, toggle, sign-in-to-act when logged out) ' +
+        'so the detail and the roadmap share one upvote affordance.\n' +
+        '- **Comment composer + thread:** render the public-request comment ' +
+        'thread (the `isPublic` comments from 6.12.6 — the work item’s ' +
+        'INTERNAL comments stay hidden by the projection) and a composer that ' +
+        'POSTs to `/api/public-requests/[id]/comments` (`{ bodyMd }` → ' +
+        '201) for a signed-in account; a logged-out viewer sees the ' +
+        'sign-in-to-act prompt on the composer. New comment appears on success ' +
+        '(the composer fires from inside the thread island — optimistic ' +
+        'local insert / authoritative refetch, per the page-state-after-mutation ' +
+        'rule; no whole-tree refresh).\n' +
+        '- **No new backend** beyond a public-projection READ for the detail + ' +
+        'its comment thread (a read method / DTO in the existing ' +
+        '`publicProjectsService` / `publicRequestsService` layer if one ' +
+        'isn’t already exposed) — the upvote + comment WRITES reuse ' +
+        'the shipped 6.12.6 routes. Stay 4-layer; design-compliant (ONLY ' +
+        'shipped `components/ui/*` + `--el-*` / `[data-display-style]` ' +
+        'tokens).\n\n' +
+        '## Acceptance criteria\n\n' +
+        '- A public request detail page renders anonymously (server-rendered, ' +
+        'crawlable) showing the request title/kind/status/body via the public ' +
+        'projection (assignee / estimate / internal comments absent); a ' +
+        'non-public / unknown request is 404-not-403; roadmap cards + 6.12.11 ' +
+        'dedupe candidates link to it.\n' +
+        '- The detail shows the upvote control (reused `PublicRoadmapVote`: ' +
+        'toggle, count, already-voted state, sign-in-to-act when logged out) ' +
+        'and the public comment thread (only `isPublic` comments; internal ' +
+        'comments never present).\n' +
+        '- A signed-in account (cross-org included) adds a comment → it ' +
+        'posts (201) and appears in the thread (optimistic/refetch, no ' +
+        'whole-tree refresh); a logged-out viewer sees a sign-in-to-act prompt ' +
+        'on the composer.\n' +
+        '- ONLY `--el-*` + `[data-display-style]` tokens + shipped ' +
+        '`components/ui/*`; matches the 6.12.1 Panel 4/5 design; 4-layer ' +
+        'respected (public-projection read in the service/repository; the ' +
+        'upvote/comment writes reuse the shipped 6.12.6 routes; no raw Prisma ' +
+        'in the route).\n\n' +
+        '## Context refs\n\n' +
+        '- 6.12.1 Panel 4/5 (the public request detail + upvote + comments ' +
+        'design) — the surface to match; `design/public-projects/`.\n' +
+        '- 6.12.6 routes (shipped): ' +
+        '`app/api/public-requests/[id]/upvote/route.ts` (POST → ' +
+        '`{ voted, voteCount }`) + ' +
+        '`app/api/public-requests/[id]/comments/route.ts` (POST `{ bodyMd }` ' +
+        '→ 201 CommentDTO).\n' +
+        '- `app/(public)/_components/PublicRoadmap.tsx` (repoint the card ' +
+        'links) + `PublicRoadmapVote.tsx` (reuse the upvote control) + the ' +
+        '6.12.4 public projection (`lib/services/publicProjectsService.ts`, ' +
+        '`lib/dto/publicProjects.ts`).\n' +
+        '- `motir-core/CLAUDE.md` § 4-layer + § colour/shape tokens + ' +
+        '§ page-state-after-mutation (client-island refetch).',
+      dependsOn: ['6.12.1', '6.12.4', '6.12.6', '6.12.7'],
     },
   ],
 };
