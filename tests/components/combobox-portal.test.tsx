@@ -199,4 +199,48 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     expect(panel.className).toContain('top-full');
     expect(panel.className).not.toContain('bottom-full');
   });
+
+  // Regression for bug-combobox-menu-clipped-inside-popover: a `role="dialog"`
+  // ancestor whose `overflow` is VISIBLE — the shape `Popover.Content` takes
+  // when its `overflowVisible` prop is set so a Combobox menu can render past
+  // the popover's edge. The clamp+flip logic must NOT engage here (it would
+  // clamp against the next clip box up, which on a triage popover is uselessly
+  // small): the menu must render at its full natural height (max-h-64), inline
+  // below the trigger, free to extend past the popover's edge.
+  function OverflowVisibleDialogHost() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+      // Triage promote-sprint shape: a `role="dialog"` ancestor with no clip.
+      // The clip-box walk in `nearestClipBox` skips this and either finds a
+      // further-up clip OR returns null — both branches leave the menu at the
+      // default max-h-64 with no flip.
+      <div role="dialog" style={{ overflow: 'visible' }}>
+        <Combobox
+          label="Sprint"
+          options={TALL_OPTIONS}
+          value={value}
+          onChange={setValue}
+          searchable
+        />
+      </div>
+    );
+  }
+
+  it('keeps a Popover-with-overflow-visible dialog menu at its natural height (no clamp)', () => {
+    render(<OverflowVisibleDialogHost />);
+    const trigger = screen.getByRole('combobox', { name: 'Sprint' });
+    fireEvent.click(trigger);
+    fireEvent.resize(window);
+
+    const listbox = screen.getByRole('listbox', { name: 'Sprint' });
+    const panel = listbox.parentElement as HTMLElement;
+
+    // No flip — menu stays below the trigger…
+    expect(panel.className).toContain('top-full');
+    expect(panel.className).not.toContain('bottom-full');
+
+    // …and the listbox keeps the default 256px cap (max-h-64), NOT clamped
+    // down to the 80px floor a tiny clip box would have forced.
+    expect(listbox.style.maxHeight).toBe('256px');
+  });
 });
