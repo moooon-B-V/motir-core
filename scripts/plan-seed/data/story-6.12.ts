@@ -1164,7 +1164,7 @@ export const story_6_12: PlanStory = {
       id: '6.12.12',
       title:
         'Public request DETAIL page + comment composer/thread UI (wire the 6.12.6 backend into the public surface)',
-      status: 'blocked',
+      status: 'in_progress',
       type: 'code',
       executor: 'coding_agent',
       estimateMinutes: 60,
