@@ -1877,6 +1877,24 @@ export const workItemsService = {
   },
 
   /**
+   * The COUNT of the project's archived items (Story 2.9 · Subtask 2.9.3) — the
+   * lightweight read behind the `/issues` toolbar's `[Archived]` entry-point
+   * badge (the design's count chip), so the navigator can show "there's
+   * something there" without loading a page of rows. Same project + workspace
+   * gate and `canBrowse` read gate as {@link listArchivedWorkItems} (a
+   * cross-tenant `projectId` → `ProjectNotFoundError`, no existence leak); it
+   * just returns the `archivedAt IS NOT NULL` count instead of a page.
+   */
+  async countArchivedWorkItems(projectId: string, ctx: ServiceContext): Promise<number> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    return workItemRepository.countArchivedByProject(projectId, project.workspaceId);
+  },
+
+  /**
    * The project's ROOT issues for the LAZY tree (Subtask 2.5.13, finding #57) —
    * one sorted, paged level (`parentId IS NULL`), each row carrying
    * `hasChildren` so the client renders an expand chevron without loading the
