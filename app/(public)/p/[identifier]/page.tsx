@@ -22,10 +22,13 @@ import { PublicProjectJsonLd } from '@/app/(public)/_components/PublicProjectJso
 
 export default async function PublicOverviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ identifier: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { identifier } = await params;
+  const { edit } = await searchParams;
   const session = await getSession();
   const actorUserId = session?.user.id ?? null;
 
@@ -63,6 +66,9 @@ export default async function PublicOverviewPage({
           faq={<PublicOverviewFaq />}
           sidebar={<PublicOverviewSidebar overview={overview} />}
           submitButton={<PublicSubmitRequest identifier={overview.identifier} size="md" />}
+          // `?edit=1` opens straight into edit mode — the deep link the Settings
+          // "Edit on the public page →" entry (6.16.6) uses.
+          initialEditing={edit === '1'}
         />
       ) : (
         <div className="p-(--spacing-card-padding)">

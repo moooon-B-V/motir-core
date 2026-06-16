@@ -80,6 +80,13 @@ export interface PublicOverviewEditorProps {
    * `sidebar`. (The CTA is static — it never reflects the edited values.)
    */
   submitButton: ReactNode;
+  /**
+   * Open straight into edit mode on mount. Set by the page when the URL carries
+   * `?edit=1` — the deep link the Settings "Edit on the public page →" entry
+   * (Subtask 6.16.6) uses so an admin lands here already editing, rather than
+   * having to click the "Edit page" affordance.
+   */
+  initialEditing?: boolean;
 }
 
 export function PublicOverviewEditor({
@@ -89,11 +96,12 @@ export function PublicOverviewEditor({
   faq,
   sidebar,
   submitButton,
+  initialEditing = false,
 }: PublicOverviewEditorProps) {
   const t = useTranslations('publicProjects');
   const { toast } = useToast();
 
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEditing);
 
   // The three editable fields + their last-saved baselines (the optimistic
   // value IS the committed value on success — no tree refresh).

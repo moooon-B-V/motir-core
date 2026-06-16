@@ -8,7 +8,6 @@ import {
   Copy,
   ExternalLink,
   Eye,
-  FileText,
   Info,
   Link2,
   Lock,
@@ -26,7 +25,6 @@ import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBad
 import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { EditOverview } from './EditOverview';
 import { BuildInPublicDialog } from './BuildInPublicDialog';
 import { StopBuildInPublicDialog } from './StopBuildInPublicDialog';
 
@@ -50,9 +48,10 @@ import { StopBuildInPublicDialog } from './StopBuildInPublicDialog';
 
 // The SETTABLE access levels (the radio control), in openness order
 // `public > open > limited > private` (Story 6.12.8 adds `public` — the
-// make-public toggle — to the 6.4 control; the share link + Overview editor
-// below it render only while the project is public, per design/public-projects
-// Panel 6). The icon / tint / label maps are total over `ProjectAccessLevel`.
+// make-public toggle — to the 6.4 control; the share link + the "Edit on the
+// public page →" entry below it render only while the project is public, per
+// design/public-projects Panel 6). The icon / tint / label maps are total over
+// `ProjectAccessLevel`.
 const ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
 type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
@@ -81,10 +80,6 @@ export interface ProjectMembersSettingsProps {
   // The project's CURRENT level (display + settable) — `ProjectAccessLevel`,
   // now including `public` (6.12.8, the make-public control).
   accessLevel: ProjectAccessLevel;
-  // The authored public Overview/README body (6.12.8) — seeds the entry-point
-  // snippet + the route-less "Edit overview" sub-view (`EditOverview`), both
-  // shown only while the project is public.
-  publicOverviewMd: string | null;
   members: ProjectMemberDTO[];
   workspaceMembers: WorkspaceMemberDTO[];
   currentUserId: string;
@@ -96,7 +91,6 @@ export function ProjectMembersSettings({
   projectName,
   workspaceName,
   accessLevel: initialAccessLevel,
-  publicOverviewMd,
   members: initialMembers,
   workspaceMembers,
   currentUserId,
@@ -109,12 +103,6 @@ export function ProjectMembersSettings({
   const [members, setMembers] = useState<ProjectMemberDTO[]>(initialMembers);
   const [accessPending, setAccessPending] = useState(false);
   const [pendingUserIds, setPendingUserIds] = useState<ReadonlySet<string>>(new Set());
-  // The Overview/README authoring is a route-less sub-view (Panel 7) reached
-  // from the make-public entry point — swap the whole settings content to it
-  // rather than navigate, so no settings route/rail entry is invented (the
-  // totality contract). `overviewMd` holds the committed body for the snippet.
-  const [editingOverview, setEditingOverview] = useState(false);
-  const [overviewMd, setOverviewMd] = useState(publicOverviewMd ?? '');
   // The "Start building in public?" explainer/confirm (Story 6.17.2, design
   // Panel 11). Selecting the `public` level opens it instead of mutating
   // immediately — going public is a confirmed action, never a bare toggle.
@@ -321,20 +309,6 @@ export function ProjectMembersSettings({
     [t],
   );
 
-  // The dedicated Overview/README editor takes over the whole settings content
-  // (Panel 7) — reached from the entry point below, no route change.
-  if (editingOverview) {
-    return (
-      <EditOverview
-        value={overviewMd}
-        canManage={canManage}
-        isPublic={accessLevel === 'public'}
-        onClose={() => setEditingOverview(false)}
-        onSaved={setOverviewMd}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-6">
       {/* ── Project access ─────────────────────────────────────────────── */}
@@ -447,12 +421,7 @@ export function ProjectMembersSettings({
             canManage={canManage}
             onStop={() => setStopConfirmOpen(true)}
           />
-          <PublicShareSection
-            projectKey={projectKey}
-            publicOverviewMd={overviewMd}
-            canManage={canManage}
-            onEditOverview={() => setEditingOverview(true)}
-          />
+          <PublicShareSection projectKey={projectKey} canManage={canManage} />
         </>
       ) : null}
 
@@ -615,8 +584,12 @@ function BuildInPublicManageRow({
           {t('buildInPublic.viewPublicPage')}
         </a>
         {canManage ? (
-          <Button variant="danger" size="md" onClick={onStop}>
-            <X className="size-4" aria-hidden />
+          <Button
+            variant="danger"
+            size="md"
+            onClick={onStop}
+            leftIcon={<X className="size-4" aria-hidden />}
+          >
             {t('buildInPublic.stop')}
           </Button>
         ) : null}
@@ -625,10 +598,15 @@ function BuildInPublicManageRow({
   );
 }
 
-// The public-only follow-on to the Access card (Story 6.12 · Subtask 6.12.8,
-// design/public-projects Panel 6) — rendered ONLY while the project is public:
+// The public-only follow-on to the Access card (Story 6.12 · Subtask 6.12.8 +
+// 6.16.6, design/public-projects Panel 6) — rendered ONLY while the project is
+// public:
 //   • the shareable public link (a stable, crawlable `/p/<key>` URL + Copy);
-//   • the Overview/README entry point → the dedicated editor (Panel 7).
+//   • the "Hero & overview" row → an "Edit on the public page →" link that opens
+//     the public Overview with the on-page in-place editor (Subtask 6.16.5).
+// The old in-settings Overview split-editor (`EditOverview`, Panel 7) is REMOVED
+// (6.16.6, explicit user request) — there is one editing surface, on the public
+// page itself, where the page IS the preview.
 // Deviation from the Panel-6 mock, noted in the PR: the mock drew Copy/Rotate/
 // Disable, but the locked model (Yue, 2026-06-14) is a FULLY PUBLIC, crawlable,
 // SEO/GEO-indexed page, and the 6.12.4 public route is the stable project key
@@ -637,17 +615,7 @@ function BuildInPublicManageRow({
 // fold "stop sharing" into the access control above (set a non-public level) —
 // the GitHub / Canny model. "Rotate" is dropped (no stated use case; rung-1
 // "no complexity for nothing").
-function PublicShareSection({
-  projectKey,
-  publicOverviewMd,
-  canManage,
-  onEditOverview,
-}: {
-  projectKey: string;
-  publicOverviewMd: string | null;
-  canManage: boolean;
-  onEditOverview: () => void;
-}) {
+function PublicShareSection({ projectKey, canManage }: { projectKey: string; canManage: boolean }) {
   const t = useTranslations('settings');
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -656,6 +624,9 @@ function PublicShareSection({
   // client-side, so build the display/copy value after mount to avoid a
   // hydration mismatch. The path itself (`/p/<key>`) renders immediately.
   const publicPath = `/p/${projectKey}`;
+  // `?edit=1` lands the admin on the public Overview already in edit mode — the
+  // single editing surface (Subtask 6.16.5's on-page editor).
+  const editPath = `${publicPath}?edit=1`;
 
   async function copyLink() {
     const href =
@@ -668,12 +639,6 @@ function PublicShareSection({
       toast({ variant: 'error', title: t('public.copyError') });
     }
   }
-
-  const overviewSnippet = (publicOverviewMd ?? '')
-    .replace(/[#>*_`~\-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120);
 
   return (
     <div className="flex flex-col gap-6">
@@ -693,12 +658,18 @@ function PublicShareSection({
             <Link2 className="text-(--el-text-muted) size-4 shrink-0" aria-hidden />
             <span className="truncate font-mono text-xs text-(--el-text)">{publicPath}</span>
           </span>
-          <Button variant="secondary" size="md" onClick={copyLink}>
-            {copied ? (
-              <Check className="size-4 text-(--el-success)" aria-hidden />
-            ) : (
-              <Copy className="size-4" aria-hidden />
-            )}
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={copyLink}
+            leftIcon={
+              copied ? (
+                <Check className="size-4 text-(--el-success)" aria-hidden />
+              ) : (
+                <Copy className="size-4" aria-hidden />
+              )
+            }
+          >
             {copied ? t('public.copied') : t('public.copy')}
           </Button>
         </div>
@@ -708,44 +679,34 @@ function PublicShareSection({
         </div>
       </Card>
 
-      {/* Overview / README entry point → the dedicated editor (Panel 7) */}
+      {/* Hero & overview → the on-page editor (design Panel 6 `.ov-link-row`,
+          Subtask 6.16.6). Editing happens in place on the public page; this is
+          just the entry point. Admin-gated — a non-admin sees the copy without
+          the link. */}
       <Card
         header={
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-sans text-base font-semibold text-(--el-text)">
-                {t('public.overviewHeading')}
-              </h2>
-              <p className="text-(--el-text-muted) font-sans text-xs">
-                {t('public.overviewSubheading')}
-              </p>
-            </div>
-            {canManage ? (
-              <Button variant="secondary" size="md" onClick={onEditOverview}>
-                <FileText className="size-4" aria-hidden />
-                {t('public.editOverview')}
-              </Button>
-            ) : null}
+          <div>
+            <h2 className="font-sans text-base font-semibold text-(--el-text)">
+              {t('public.heroOverviewHeading')}
+            </h2>
+            <p className="text-(--el-text-muted) font-sans text-xs">
+              {t('public.heroOverviewSubheading')}
+            </p>
           </div>
         }
       >
-        <div className="flex items-center gap-3 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-card-padding)">
-          <FileText className="text-(--el-text-muted) size-4 shrink-0" aria-hidden />
-          <p className="text-(--el-text-secondary) min-w-0 flex-1 truncate font-sans text-sm">
-            {overviewSnippet || t('public.overviewEmpty')}
-          </p>
-          {canManage ? (
-            <button
-              type="button"
-              onClick={onEditOverview}
-              className="text-(--el-link) hover:text-(--el-link-pressed) inline-flex shrink-0 items-center gap-1 font-sans text-xs font-medium"
-            >
-              {t('public.overviewEdit')}
-              <ArrowRight className="size-3" aria-hidden />
-            </button>
-          ) : null}
-        </div>
-        <p className="text-(--el-text-muted) mt-2 font-sans text-xs">{t('public.overviewNote')}</p>
+        {canManage ? (
+          <a
+            href={editPath}
+            className="text-(--el-link) hover:text-(--el-link-pressed) inline-flex items-center gap-1.5 font-sans text-sm font-medium"
+          >
+            {t('public.editOnPublicPage')}
+            <ArrowRight className="size-4" aria-hidden />
+          </a>
+        ) : null}
+        <p className="text-(--el-text-muted) mt-2 font-sans text-xs">
+          {t('public.heroOverviewNote')}
+        </p>
       </Card>
     </div>
   );

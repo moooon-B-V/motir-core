@@ -4,7 +4,6 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { projectsService } from '@/lib/services/projectsService';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectMembersSettings } from './_components/ProjectMembersSettings';
@@ -38,18 +37,13 @@ export default async function ProjectMembersPage() {
 
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
-  const [members, access, workspaceMembers, workspace, wsRole, publicOverviewMd] =
-    await Promise.all([
-      projectMembersService.listMembers(actor),
-      projectMembersService.getAccess(actor),
-      workspacesService.listMembers(ctx.workspaceId, ctx.userId),
-      workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
-      workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
-      projectsService.getPublicOverview({
-        key: ctx.project.identifier,
-        ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      }),
-    ]);
+  const [members, access, workspaceMembers, workspace, wsRole] = await Promise.all([
+    projectMembersService.listMembers(actor),
+    projectMembersService.getAccess(actor),
+    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+    workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
+    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
+  ]);
 
   const myMembership = members.find((m) => m.userId === ctx.userId);
   const canManage = isWorkspaceManager(wsRole) || myMembership?.role === 'admin';
@@ -71,7 +65,6 @@ export default async function ProjectMembersPage() {
         projectName={ctx.project.name}
         workspaceName={workspace?.name ?? ''}
         accessLevel={access.accessLevel}
-        publicOverviewMd={publicOverviewMd}
         members={members}
         workspaceMembers={workspaceMembers}
         currentUserId={ctx.userId}
