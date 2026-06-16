@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { McpContextResolver } from './context';
+import type { McpContextResolver, McpScopesResolver } from './context';
+import { scopeGatedServer } from './scopeGate';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { LIST_READY_TOOL_NAME, registerListReady } from './tools/listReady';
 import { NEXT_READY_TOOL_NAME, registerNextReady } from './tools/nextReady';
@@ -78,41 +79,55 @@ export const MCP_TOOL_NAMES = [
  * compile error). */
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 
-/** Register every MCP tool on `server`, wiring each to `resolveContext`. */
-export function registerMcpTools(server: McpServer, resolveContext: McpContextResolver): void {
+/**
+ * Register every MCP tool, wiring each to `resolveContext`.
+ *
+ * When `resolveScopes` is supplied (production passes `scopesFromExtra`), the
+ * server is wrapped in the per-token SCOPE GATE (Subtask 7.7.17): every tool
+ * call is rejected with a typed scope-denied error unless the token's granted
+ * scopes include the tool's scope — an ADDITIONAL gate in front of the
+ * unchanged 6.4 role checks. Omitting it (the tool round-trip tests) applies no
+ * scope narrowing, preserving the pre-7.7.17 behaviour.
+ */
+export function registerMcpTools(
+  server: McpServer,
+  resolveContext: McpContextResolver,
+  resolveScopes?: McpScopesResolver,
+): void {
+  const target = resolveScopes ? scopeGatedServer(server, resolveScopes) : server;
   // Read + dispatch tools (7.8.4).
-  registerGetWorkItem(server, resolveContext);
-  registerListReady(server, resolveContext);
-  registerNextReady(server, resolveContext);
+  registerGetWorkItem(target, resolveContext);
+  registerListReady(target, resolveContext);
+  registerNextReady(target, resolveContext);
   // Write tools (7.8.5).
-  registerCreateWorkItem(server, resolveContext);
-  registerTransitionStatus(server, resolveContext);
-  registerAddComment(server, resolveContext);
+  registerCreateWorkItem(target, resolveContext);
+  registerTransitionStatus(target, resolveContext);
+  registerAddComment(target, resolveContext);
   // Query tool (7.8.6).
-  registerSearchWorkItems(server, resolveContext);
+  registerSearchWorkItems(target, resolveContext);
   // Identity (added by 7.9.1, consumed by the CLI's auth commands).
-  registerWhoami(server, resolveContext);
+  registerWhoami(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
-  registerListSprints(server, resolveContext);
-  registerCreateSprint(server, resolveContext);
-  registerUpdateSprint(server, resolveContext);
-  registerDeleteSprint(server, resolveContext);
-  registerMoveToSprint(server, resolveContext);
-  registerMoveToBacklog(server, resolveContext);
-  registerStartSprint(server, resolveContext);
-  registerCompleteSprint(server, resolveContext);
+  registerListSprints(target, resolveContext);
+  registerCreateSprint(target, resolveContext);
+  registerUpdateSprint(target, resolveContext);
+  registerDeleteSprint(target, resolveContext);
+  registerMoveToSprint(target, resolveContext);
+  registerMoveToBacklog(target, resolveContext);
+  registerStartSprint(target, resolveContext);
+  registerCompleteSprint(target, resolveContext);
   // Integration-state tools (7.8.11) — the 7.9 CLI session loop's write surface.
-  registerMarkIntegrated(server, resolveContext);
-  registerCompleteSession(server, resolveContext);
+  registerMarkIntegrated(target, resolveContext);
+  registerCompleteSession(target, resolveContext);
   // Link tools (7.8.13) — the dependency-edge primitive over the Epic-2 link service.
-  registerLinkWorkItems(server, resolveContext);
+  registerLinkWorkItems(target, resolveContext);
   // Edit + soft-remove tools (7.8.14) — patch fields create can't set, and the
   // archive/restore pair over the shipped work-item services.
-  registerUpdateWorkItem(server, resolveContext);
-  registerArchiveWorkItem(server, resolveContext);
+  registerUpdateWorkItem(target, resolveContext);
+  registerArchiveWorkItem(target, resolveContext);
   // Permanent delete (2.8.5) — the irreversible subtree-cascade counterpart of
   // archive, over the shipped 2.8.2 deleteWorkItem service.
-  registerDeleteWorkItem(server, resolveContext);
+  registerDeleteWorkItem(target, resolveContext);
 }
 
 /**
@@ -120,10 +135,16 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
  * request (stateless streamable HTTP); tests build one and connect it to an
  * in-memory client. `resolveContext` supplies each tool's actor — production
  * passes `contextFromExtra` (reads the bearer-resolved `AuthInfo`); tests pass a
- * fixed-context resolver.
+ * fixed-context resolver. `resolveScopes`, when given, enables the per-token
+ * scope gate (Subtask 7.7.17) — production passes `scopesFromExtra`; a test
+ * passes a fixed-scope resolver to exercise scope narrowing, and omits it to run
+ * a tool unnarrowed.
  */
-export function buildMcpServer(resolveContext: McpContextResolver): McpServer {
+export function buildMcpServer(
+  resolveContext: McpContextResolver,
+  resolveScopes?: McpScopesResolver,
+): McpServer {
   const server = new McpServer(MCP_SERVER_INFO);
-  registerMcpTools(server, resolveContext);
+  registerMcpTools(server, resolveContext, resolveScopes);
   return server;
 }

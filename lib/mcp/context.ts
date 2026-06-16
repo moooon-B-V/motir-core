@@ -2,6 +2,7 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerRequest, ServerNotification } from '@modelcontextprotocol/sdk/types.js';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { isTokenScope, type TokenScope } from './scopes';
 
 // The MCP layer's actor plumbing (Story 7.8 · Subtask 7.8.4).
 //
@@ -93,4 +94,30 @@ export function contextFromExtra(extra: McpRequestExtra): ServiceContext {
   const authExtra = readAuthExtra(extra.authInfo);
   if (!authExtra) throw new McpMissingContextError();
   return { userId: authExtra.userId, workspaceId: authExtra.workspaceId };
+}
+
+/**
+ * Resolves the GRANTED token scopes for one MCP tool call from the request
+ * `extra` — the source the dispatch gate (Story 7.7 · Subtask 7.7.17) narrows
+ * the owner's 6.4 role against. Production wiring: {@link scopesFromExtra}.
+ * The registry takes it as a SEPARATE injectable resolver from
+ * {@link McpContextResolver} so a test can vary the granted set independently of
+ * the acting context — and so a server built WITHOUT one applies no scope
+ * narrowing (the pre-7.7.17 behaviour the tool round-trip tests rely on).
+ */
+export type McpScopesResolver = (extra: McpRequestExtra) => TokenScope[];
+
+/**
+ * Production {@link McpScopesResolver}: lift the token's granted scopes the auth
+ * gate stashed in `extra.authInfo.extra.scopes` (Subtask 7.7.16) into a typed
+ * {@link TokenScope} list, dropping any unknown string defensively. Throws
+ * {@link McpMissingContextError} if the actor is absent (a gate
+ * misconfiguration) — the same contract {@link contextFromExtra} holds, so the
+ * two resolvers fail identically rather than the scope check silently passing on
+ * an empty set.
+ */
+export function scopesFromExtra(extra: McpRequestExtra): TokenScope[] {
+  const authExtra = readAuthExtra(extra.authInfo);
+  if (!authExtra) throw new McpMissingContextError();
+  return authExtra.scopes.filter(isTokenScope);
 }

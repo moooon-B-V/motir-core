@@ -70,6 +70,38 @@ more PATs — the MCP tool surface has no token-management tool. Cross-user toke
 ids read as not-found (the 404-not-403 contract), so a token only ever
 sees/mutates its owner's tokens.
 
+## Token scopes
+
+Every token carries a set of **scopes** — the capability boundary for that
+token. At dispatch, each tool call is gated by the granted scopes: if the
+tool's scope is not in the token's set, the call is rejected with a typed
+**`SCOPE_NOT_GRANTED`** error _before_ any work runs.
+
+**Scope NARROWS; it does not replace the role.** The token still acts as its
+owner, so the same workspace/project access checks apply on every call (a
+foreign or unreachable item is still a 404-not-403 not-found). A call must pass
+**both** gates: the token must hold the tool's scope **and** the owner's role
+must permit the operation. A token whose owner is an admin but whose
+`work_items:delete` scope is off still cannot delete; a token that holds the
+delete scope still cannot delete in a workspace its owner can't reach.
+
+The scopes and the tools each one gates:
+
+| Scope                | Gates                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`                                |
+| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`        |
+| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                      |
+| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                        |
+| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog` |
+| `integration`        | `mark_integrated`, `complete_session`                                                                                     |
+
+**Default grant set.** A token minted without an explicit scope choice gets
+**every scope EXCEPT `work_items:delete`** — full read + write + archive +
+sprint + integration, with the single irreversible cascade-delete opt-in only.
+Archive stays on by default (it is recoverable); only `delete_work_item`, which
+cascades to the whole subtree, must be granted deliberately.
+
 ## Wiring an agent
 
 Use the endpoint URL for your deployment. In **local development** it is:
