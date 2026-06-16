@@ -1,0 +1,2229 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Token scope selection (Story 7.7 · 7.7.18)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — TOKEN SCOPE SELECTION UI. Story 7.7's 7.7.18
+      design gate. EXTENDS the API-tokens surface designed in 7.7.2
+      (design/settings/account-settings.mock.html, Panels 3-8), which covers the
+      list / create / shown-once / revoke / empty flows but has NO scope-selection
+      UI. This asset adds exactly that, and nothing else changes in the flow.
+
+      It specifies two things the 7.7.19 code subtask builds against:
+        A. The create-token modal's PERMISSION-SCOPE picker — the 6 capability
+           scopes from 7.7.16 (read · work-items write · archive · delete ·
+           sprints · integration) as plain-language Switch toggles. To show every
+           scope AT ONCE with no scrolling, the modal WIDENS and the scopes lay out
+           in TWO COLUMNS grouped by capability. Default: ALL on EXCEPT work-items
+           delete. The destructive delete toggle is a rose danger row, OFF by
+           default, so granting it is a deliberate act.
+        B. The token-LIST granted-scope display — each row gets a compact summary
+           Pill (Full access / Standard / Read only / Custom) + a persistent rose
+           "Can delete" chip whenever delete is granted (a dangerous capability is
+           never hidden behind a summary) + a disclosure that expands a detail
+           sub-row of the individual granted-scope chips. No row bloat.
+
+      NB — TWO senses of "scope" on this surface, do not conflate:
+        * BINDING scope (bug 7.21, already shipped in 7.7.2) — the org → workspace
+          a token is bound to. Unchanged here.
+        * PERMISSION scope (THIS asset, 7.7.16) — what the token may DO. New.
+
+      WIDTH, not scroll (Yue, 2026-06-16): the 6-toggle picker is shown WHOLE — the
+      modal uses its width (a wider panel + a 2-column scope grid) so the user sees
+      all options without scrolling. No hidden overflow.
+
+      Built FROM the real design system: the token block is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*); the markup
+      mirrors the SHIPPED primitives — Card, Switch (role="switch"), Pill, Button,
+      Input, Combobox trigger, Modal. Colour strictly via --el-* (finding #54);
+      shape strictly via element-semantic tokens; tints carry the hue in the
+      BACKGROUND with --el-text-strong text (finding #35, AA). The CSS block below
+      is the SAME one account-settings.mock.html uses, so the code subtask composes
+      identical primitives — no Pencil->code gap.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) Create modal — the WIDE form: metadata (Label · Workspace · Expires) +
+            the 2-column permission grid, every scope visible (default: all on
+            except delete).
+        (2) The Work-items group with Delete turned ON — close-up of the rose
+            danger row (the deliberate grant).
+        (3) Permission picker — DISABLED / error state (every scope off -> CTA
+            blocked, inline helper).
+        (4) Token list — granted-scope column (summary pill + "Can delete" chip),
+            rows collapsed.
+        (5) Token list — a row EXPANDED to its scope-detail chip sub-row.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1040px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1040px;
+      }
+      .panel {
+        max-width: 1040px;
+        margin: 0 auto;
+      }
+
+      /* ── App shell (the area chrome: one rail + content) — mirrors
+           design/projects/settings-area.mock.html ─────────────────────────── */
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .shell {
+        display: flex;
+        min-height: 600px;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      /* the user identity (REPLACES the ProjectSwitcher while in the account area) */
+      .me {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .me .av {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .me .meta {
+        min-width: 0;
+      }
+      .me .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .me .em {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+
+      /* nav groups + rows (SidebarSection.label + SidebarNavItem) */
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .nav-row.soon {
+        cursor: default;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon:hover {
+        background: transparent;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon .ni {
+        color: var(--el-text-faint);
+      }
+      .soon-chip {
+        margin-left: auto;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+      }
+
+      /* content area */
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        margin-bottom: 22px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+        max-width: 64ch;
+        line-height: 1.5;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: 680px;
+      }
+
+      /* ── Card primitive (components/ui/Card) — header slot + body ─────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+        max-width: 54ch;
+        line-height: 1.5;
+      }
+      .card-body {
+        padding: 4px var(--spacing-card-padding) 8px;
+      }
+
+      /* ── Settings row grammar (label/desc on the left, control on the right) ── */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow .sl {
+        min-width: 0;
+      }
+      .srow .sl .name {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .sl .desc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+        line-height: 1.45;
+        max-width: 42ch;
+      }
+      .srow .sc {
+        flex: none;
+      }
+      /* Combobox trigger (components/ui/Combobox.tsx) — input-shaped select */
+      .select {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 200px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .select .chev {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+
+      /* Switch (components/ui/Switch.tsx) */
+      .sw {
+        position: relative;
+        width: 36px;
+        height: 20px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
+        cursor: pointer;
+      }
+      .sw .kn {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        transition: transform 0.12s ease;
+      }
+      .sw.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .sw.on .kn {
+        transform: translateX(16px);
+        background: #fff;
+      }
+      .sw.dis {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      /* notifications matrix (NotificationPreferencesCard — grid 1fr 5rem 5rem) */
+      .matrix {
+        display: grid;
+        grid-template-columns: 1fr 5rem 5rem;
+        align-items: center;
+      }
+      .matrix .mh {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 0 0 10px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .matrix .mh.c {
+        text-align: center;
+      }
+      .matrix .me-row {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .matrix .me-row .ed {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .matrix .cell {
+        display: flex;
+        justify-content: center;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .matrix > div:nth-last-child(-n + 3) {
+        border-bottom: 0;
+      }
+
+      /* ── Token table (a Card-held row list; org-members roster grammar) ──── */
+      .ttable {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--font-sans);
+      }
+      .ttable thead th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 0 12px 8px;
+        border-bottom: 1px solid var(--el-border);
+        white-space: nowrap;
+      }
+      .ttable thead th.right,
+      .ttable tbody td.right {
+        text-align: right;
+      }
+      .ttable tbody td {
+        padding: 14px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 14px;
+        color: var(--el-text);
+        vertical-align: middle;
+      }
+      .ttable tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .ttable .label {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .ttable .meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .ttable .meta.muted {
+        color: var(--el-text-muted);
+      }
+      .ttable tr.revoked td .label,
+      .ttable tr.revoked td .meta {
+        color: var(--el-text-faint);
+      }
+      .code-chip {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+        white-space: nowrap;
+      }
+
+      /* Pill (components/ui/Pill.tsx) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      /* Button (components/ui/Button.tsx) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-danger:hover {
+        opacity: 0.9;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-danger);
+      }
+      .icon-btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) — Radix Dialog panel + overlay ──── */
+      .mstage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 40px 16px;
+        display: flex;
+        justify-content: center;
+      }
+      .overlay-tint {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: var(--radius-card);
+      }
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal.modal-sm {
+        max-width: 24rem;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal-desc {
+        margin: 4px 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .modal-head {
+        margin-bottom: var(--spacing-md);
+        padding-right: 28px;
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+      }
+      .modal-close .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .modal-foot {
+        margin-top: 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .field .helper {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .input input {
+        flex: 1;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .select.full {
+        display: flex;
+        width: 100%;
+      }
+      .secret-row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .secret-field {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--el-tint-peach);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+      }
+      .callout .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .callout p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+      }
+      .callout.danger .ic {
+        color: var(--el-danger);
+      }
+
+      /* ── EmptyState (components/ui/EmptyState.tsx) ───────────────────────── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: var(--spacing-card-padding);
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: var(--spacing-md);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: var(--spacing-sm) 0 0;
+        max-width: 54ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .empty p a {
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .empty .action {
+        margin-top: var(--spacing-md);
+      }
+
+      /* ── Toast (components/ui/Toast.tsx) — success variant ──────────────── */
+      .toast-stage {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 10px,
+            rgba(120, 118, 113, 0.04) 10px,
+            rgba(120, 118, 113, 0.04) 20px
+          ),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        height: 150px;
+        overflow: hidden;
+      }
+      .toast {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        width: 360px;
+        max-width: calc(100% - 32px);
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .toast .t-ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .toast .t-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .toast .t-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .toast .t-desc {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .toast .t-close {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .toast .t-close .ic {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         7.7.18 ADDITIONS — token scope selection. New tones + scope-picker
+         layout. Colour via --el-* only; shape via element-semantic tokens only.
+         ════════════════════════════════════════════════════════════════════ */
+
+      /* summary-pill tones (compose the shipped Pill primitive's tone set) */
+      .pill--mint {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill--rose {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill .ic {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* WIDE create modal — uses width instead of scrolling so every scope shows
+         at once (Yue, 2026-06-16). 7.7.19 widens the modal (a max-w-[42rem]
+         className on the shipped Modal, or a new size token). */
+      .modal.wide {
+        max-width: 42rem;
+      }
+      /* metadata fields that pair side-by-side (Workspace + Expires) */
+      .meta-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      /* the 2-column permission grid: capability groups split across two columns
+         so all 6 scopes are visible without a scroll region */
+      .scope-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 28px;
+        align-items: start;
+      }
+      .scope-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .scopes {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .scope-grp + .scope-grp {
+        margin-top: 14px;
+      }
+      .scope-grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        margin-bottom: 6px;
+      }
+      /* one scope row: icon + label/desc on the left, Switch on the right */
+      .scope-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .scope-grp .scope-row:last-child {
+        border-bottom: 0;
+      }
+      .scope-main {
+        display: flex;
+        gap: 10px;
+        min-width: 0;
+      }
+      .scope-main > .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-muted);
+      }
+      .scope-text {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .scope-name {
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .scope-desc {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.35;
+      }
+      /* the rose Danger row that holds the delete scope (distinct + off) */
+      .scope-danger {
+        margin-top: 8px;
+        background: var(--el-tint-rose);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+      }
+      .scope-danger .scope-row {
+        border-bottom: 0;
+        padding: 0;
+      }
+      .scope-danger .scope-main > .ic {
+        color: var(--el-danger);
+      }
+      .scope-danger .scope-name {
+        color: var(--el-text-strong);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .scope-danger .scope-name .tag {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-danger);
+      }
+      .scope-danger .scope-desc {
+        color: var(--el-text-strong);
+        opacity: 0.85;
+      }
+      /* inline form-error helper (every scope off) */
+      .scope-error {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-danger);
+        margin-top: 10px;
+      }
+      .scope-error .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* the granted-scope cell summary + disclosure in the token list */
+      .scope-cell {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .disclose {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .disclose:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .disclose .chev {
+        width: 15px;
+        height: 15px;
+        transition: transform 0.12s ease;
+      }
+      .disclose.open .chev {
+        transform: rotate(180deg);
+      }
+      /* the expanded detail sub-row */
+      .scope-detail td {
+        padding: 0 16px 14px 0;
+      }
+      .scope-detail-inner {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+      }
+      .scope-detail-lead {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-right: 4px;
+      }
+      .scope-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+      }
+      .scope-chip .ic {
+        width: 12px;
+        height: 12px;
+        color: var(--el-text-muted);
+      }
+      .scope-chip.danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+        border-color: transparent;
+      }
+      .scope-chip.danger .ic {
+        color: var(--el-danger);
+      }
+      /* a review caption under a panel */
+      .note {
+        max-width: 1040px;
+        margin: 8px auto 0;
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .note strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Token scope selection — wide create modal + list display</h1>
+        <p>
+          Story 7.7 · Subtask 7.7.18 — extends design/settings/account-settings (7.7.2). Built from
+          the real design system (--el-* colour + element-semantic shape tokens). Reference for the
+          7.7.19 code subtask. All 6 scopes shown at once (width, not scroll).
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- ════════════ PANEL 1 — wide create modal, all scopes visible ════════════ -->
+    <div class="panel-label">
+      1 · Create token — the WIDE Modal. Metadata (Label, then Workspace + Expires side by side) on
+      top; the PERMISSIONS picker below as a 2-column grid grouped by capability, so all 6 scopes
+      (7.7.16) are visible AT ONCE with no scrolling. Default: every scope ON except Delete, the
+      rose danger row, OFF. Binding scope (workspace) is unchanged from 7.7.2.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal wide">
+          <div class="modal-head">
+            <h3 class="modal-title">Create API token</h3>
+            <p class="modal-desc">
+              The token will be shown once, right after you create it. Store it somewhere safe.
+            </p>
+          </div>
+          <button class="modal-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-body">
+            <div class="field">
+              <label for="m-label">Label</label>
+              <div class="input"><input id="m-label" value="claude-code" /></div>
+              <span class="helper"
+                >A name to recognise this token by — e.g. the agent or machine using it.</span
+              >
+            </div>
+            <div class="meta-cols">
+              <div class="field">
+                <label for="m-ws">Workspace</label>
+                <div
+                  class="input"
+                  id="m-ws"
+                  style="color: var(--el-text-secondary); background: var(--el-muted)"
+                >
+                  Default
+                </div>
+                <span class="helper">Only reaches work in this workspace.</span>
+              </div>
+              <div class="field">
+                <label for="m-exp">Expires</label>
+                <div class="select full" id="m-exp">
+                  90 days<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <span class="helper">After this the token stops working.</span>
+              </div>
+            </div>
+
+            <!-- the PERMISSIONS picker (7.7.18) — 2-column grid, all visible -->
+            <div class="field">
+              <label id="perm-label">Permissions</label>
+              <span class="helper"
+                >Choose what this token is allowed to do. You can grant less than your own access,
+                never more.</span
+              >
+              <div class="scope-cols" role="group" aria-labelledby="perm-label">
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Read</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Read everything</span>
+                          <span class="scope-desc"
+                            >View work items, boards, sprints, comments, and reports.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Read everything"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Sprints</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-desc"
+                            >Create sprints and move work items in and out of them.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Manage sprints"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Integrations</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Connect integrations</span>
+                          <span class="scope-desc"
+                            >Link external tools and post activity back to Motir.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Connect integrations"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Work items</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Edit work items</span>
+                          <span class="scope-desc"
+                            >Create and update work items, comments, links, and attachments.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Edit work items"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Archive work items</span>
+                          <span class="scope-desc"
+                            >Archive and restore work items. This can be undone.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Archive work items"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <!-- DANGER row — distinct rose treatment, OFF by default -->
+                    <div class="scope-danger">
+                      <div class="scope-row">
+                        <div class="scope-main">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          <div class="scope-text">
+                            <span class="scope-name"
+                              >Delete work items <span class="tag">· Danger</span></span
+                            >
+                            <span class="scope-desc"
+                              >Permanently delete a work item and its entire subtree. This can't be
+                              undone.</span
+                            >
+                          </div>
+                        </div>
+                        <span
+                          class="sw"
+                          role="switch"
+                          aria-checked="false"
+                          aria-label="Delete work items"
+                          ><span class="kn"></span
+                        ></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create token</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <strong>Width, not scroll.</strong> The wider panel + 2-column grid shows all six scopes at
+      once — no hidden overflow, nothing the user has to scroll to discover.
+      <strong>Default = all on except Delete:</strong> a token made without touching the picker can
+      read, edit, manage sprints, archive, and connect integrations, but not delete. Granting Delete
+      is a deliberate flip.
+    </p>
+
+    <!-- ════════════ PANEL 2 — Work-items group, Delete turned ON ════════════ -->
+    <div class="panel-label">
+      2 · The Work-items group with Delete turned ON — a close-up of the deliberate grant. The rose
+      danger row, the "Danger" tag, the trash icon, and the "can't be undone" caption stay; only the
+      Switch flips on.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="modal" style="max-width: 26rem">
+          <div class="modal-head">
+            <h3 class="modal-title">Work items</h3>
+            <p class="modal-desc">What this token can do to work items.</p>
+          </div>
+          <div class="modal-body">
+            <div class="scopes">
+              <div class="scope-grp">
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Edit work items</span>
+                      <span class="scope-desc"
+                        >Create and update work items, comments, links, and attachments.</span
+                      >
+                    </div>
+                  </div>
+                  <span class="sw on" role="switch" aria-checked="true" aria-label="Edit work items"
+                    ><span class="kn"></span
+                  ></span>
+                </div>
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Archive work items</span>
+                      <span class="scope-desc"
+                        >Archive and restore work items. This can be undone.</span
+                      >
+                    </div>
+                  </div>
+                  <span
+                    class="sw on"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="Archive work items"
+                    ><span class="kn"></span
+                  ></span>
+                </div>
+                <div class="scope-danger">
+                  <div class="scope-row">
+                    <div class="scope-main">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                      <div class="scope-text">
+                        <span class="scope-name"
+                          >Delete work items <span class="tag">· Danger</span></span
+                        >
+                        <span class="scope-desc"
+                          >Permanently delete a work item and its entire subtree. This can't be
+                          undone.</span
+                        >
+                      </div>
+                    </div>
+                    <span
+                      class="sw on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="Delete work items"
+                      ><span class="kn"></span
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — disabled / error state (every scope off) ════════════ -->
+    <div class="panel-label">
+      3 · Error / disabled state — every scope off. A token must grant at least one permission, so
+      the inline error shows and the "Create token" CTA is disabled.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="modal" style="max-width: 26rem">
+          <div class="modal-head">
+            <h3 class="modal-title">Permissions</h3>
+            <p class="modal-desc">Choose what this token is allowed to do.</p>
+          </div>
+          <div class="modal-body">
+            <div class="scopes">
+              <div class="scope-grp">
+                <div class="scope-grp-label">Read</div>
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Read everything</span>
+                      <span class="scope-desc"
+                        >View work items, boards, sprints, comments, and reports.</span
+                      >
+                    </div>
+                  </div>
+                  <span class="sw" role="switch" aria-checked="false" aria-label="Read everything"
+                    ><span class="kn"></span
+                  ></span>
+                </div>
+              </div>
+              <div class="scope-grp">
+                <div class="scope-grp-label">Work items</div>
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Edit work items</span>
+                      <span class="scope-desc"
+                        >Create and update work items, comments, links, and attachments.</span
+                      >
+                    </div>
+                  </div>
+                  <span class="sw" role="switch" aria-checked="false" aria-label="Edit work items"
+                    ><span class="kn"></span
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div class="scope-error">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              Grant at least one permission to create a token.
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary" disabled style="opacity: 0.5; cursor: not-allowed">
+              Create token
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — token list with the granted-scope column ════════════ -->
+    <div class="panel-label">
+      4 · Token list — the new Scopes column. A compact summary Pill (Full access / Standard / Read
+      only / Custom); whenever Delete is granted, a persistent rose "Can delete" chip rides
+      alongside it so the dangerous grant is never hidden behind a summary. The chevron expands the
+      detail.
+    </div>
+    <div class="panel" style="max-width: 1180px">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Your tokens</h3>
+            <p class="hsub">Shown once at creation, then stored only as a hash.</p>
+          </div>
+          <button class="btn btn-primary btn-sm">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create token
+          </button>
+        </div>
+        <div class="card-body">
+          <table class="ttable">
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Token</th>
+                <th>Scopes</th>
+                <th>Workspace</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th class="right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="label">claude-code</span></td>
+                <td><span class="code-chip">motir_pat_AbC1…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--mint">Full access</span>
+                    <span class="pill pill--rose"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>Can
+                      delete</span
+                    >
+                    <button
+                      class="disclose"
+                      aria-label="Show scopes for claude-code"
+                      aria-expanded="false"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </span>
+                </td>
+                <td><span class="meta">Default</span></td>
+                <td><span class="meta">12 Jun 2026</span></td>
+                <td><span class="meta">in 90 days</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token claude-code">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td><span class="label">planner-bot</span></td>
+                <td><span class="code-chip">motir_pat_Zq9K…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--neutral">Standard</span>
+                    <button
+                      class="disclose"
+                      aria-label="Show scopes for planner-bot"
+                      aria-expanded="false"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </span>
+                </td>
+                <td><span class="meta">Default</span></td>
+                <td><span class="meta">28 May 2026</span></td>
+                <td><span class="pill pill--warning">in 5 days</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token planner-bot">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td><span class="label">readonly-dash</span></td>
+                <td><span class="code-chip">motir_pat_Pw3R…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--neutral">Read only</span>
+                    <button
+                      class="disclose"
+                      aria-label="Show scopes for readonly-dash"
+                      aria-expanded="false"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </span>
+                </td>
+                <td><span class="meta">Default</span></td>
+                <td><span class="meta">03 Jun 2026</span></td>
+                <td><span class="meta">Never</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token readonly-dash">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
+              </tr>
+              <tr class="revoked">
+                <td><span class="label">old-ci-runner</span></td>
+                <td><span class="code-chip">motir_pat_M4tT…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--neutral">Custom</span>
+                  </span>
+                </td>
+                <td><span class="meta muted">Default</span></td>
+                <td><span class="meta muted">02 Apr 2026</span></td>
+                <td><span class="meta muted">—</span></td>
+                <td class="right"><span class="pill pill--neutral">Revoked</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 — a row expanded to its scope detail ════════════ -->
+    <div class="panel-label">
+      5 · A row expanded — the chevron opens a detail sub-row listing every granted scope as a chip.
+      Delete reads as a rose danger chip. Plain-language names, no raw scope strings.
+    </div>
+    <div class="panel" style="max-width: 1180px">
+      <div class="card">
+        <div class="card-body">
+          <table class="ttable">
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th>Token</th>
+                <th>Scopes</th>
+                <th>Workspace</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th class="right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 0">
+                <td><span class="label">claude-code</span></td>
+                <td><span class="code-chip">motir_pat_AbC1…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--mint">Full access</span>
+                    <span class="pill pill--rose"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>Can
+                      delete</span
+                    >
+                    <button
+                      class="disclose open"
+                      aria-label="Hide scopes for claude-code"
+                      aria-expanded="true"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </span>
+                </td>
+                <td><span class="meta">Default</span></td>
+                <td><span class="meta">12 Jun 2026</span></td>
+                <td><span class="meta">in 90 days</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token claude-code">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
+              </tr>
+              <tr class="scope-detail">
+                <td colspan="7">
+                  <div class="scope-detail-inner">
+                    <span class="scope-detail-lead">This token can:</span>
+                    <span class="scope-chip"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>Read
+                      everything</span
+                    >
+                    <span class="scope-chip"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>Edit work
+                      items</span
+                    >
+                    <span class="scope-chip"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>Manage
+                      sprints</span
+                    >
+                    <span class="scope-chip"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>Archive
+                      work items</span
+                    >
+                    <span class="scope-chip"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>Connect
+                      integrations</span
+                    >
+                    <span class="scope-chip danger"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>Delete work
+                      items</span
+                    >
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td><span class="label">planner-bot</span></td>
+                <td><span class="code-chip">motir_pat_Zq9K…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--neutral">Standard</span>
+                    <button
+                      class="disclose"
+                      aria-label="Show scopes for planner-bot"
+                      aria-expanded="false"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </span>
+                </td>
+                <td><span class="meta">Default</span></td>
+                <td><span class="meta">28 May 2026</span></td>
+                <td><span class="pill pill--warning">in 5 days</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token planner-bot">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
+          />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-sun"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2" />
+          <path d="M12 20v2" />
+          <path d="m4.93 4.93 1.41 1.41" />
+          <path d="m17.66 17.66 1.41 1.41" />
+          <path d="M2 12h2" />
+          <path d="M20 12h2" />
+          <path d="m6.34 17.66-1.41 1.41" />
+          <path d="m19.07 4.93-1.41 1.41" />
+        </g>
+        <g
+          id="i-moon"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+        </g>
+        <g
+          id="i-monitor"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="3" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </g>
+        <g
+          id="i-type"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="4 7 4 4 20 4 20 7" />
+          <line x1="9" x2="15" y1="20" y2="20" />
+          <line x1="12" x2="12" y1="4" y2="20" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          <line x1="10" x2="10" y1="11" y2="17" />
+          <line x1="14" x2="14" y1="11" y2="17" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-pen"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h9" />
+          <path
+            d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"
+          />
+        </g>
+        <g
+          id="i-archive"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="5" x="2" y="3" rx="1" />
+          <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+          <path d="M10 12h4" />
+        </g>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-plug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 22v-5" />
+          <path d="M9 8V2" />
+          <path d="M15 8V2" />
+          <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
+        </g>
+        <g
+          id="i-shield-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>
