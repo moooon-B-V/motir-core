@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   ArrowRight,
@@ -98,6 +99,7 @@ export function ProjectMembersSettings({
 }: ProjectMembersSettingsProps) {
   const t = useTranslations('settings');
   const { toast } = useToast();
+  const router = useRouter();
 
   const [accessLevel, setAccessLevel] = useState<ProjectAccessLevel>(initialAccessLevel);
   const [members, setMembers] = useState<ProjectMemberDTO[]>(initialMembers);
@@ -194,6 +196,16 @@ export function ProjectMembersSettings({
         variant: 'success',
         title: t('access.levelChangedToast', { level: t(`access.level.${level}`) }),
       });
+      // The access write also feeds a SECOND surface: the project-shell header's
+      // build-in-public slot (TopNav), which is server-rendered from the layout's
+      // `accessLevel` read (Subtask 6.17.7). This page's own access cell stays
+      // optimistic (a client island seeded via useState — router.refresh can't
+      // clobber it), but the server-rendered header slot needs an explicit
+      // re-read to swap the "Build in public" CTA ↔ the "Building in public"
+      // linked indicator on start/stop. `router.refresh()` reaches that server
+      // surface (page-state-after-mutation: keep the optimistic cell AND refresh
+      // the server surface). Without it, stopping leaves a stale indicator up.
+      router.refresh();
     } catch {
       setAccessLevel(prevLevel);
       setMembers(prevMembers);
