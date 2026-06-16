@@ -2485,3 +2485,175 @@ All copy goes in the issues i18n namespace (the locale set the app ships).
   delete-with-count + note-line grammars (`saved-filters.mock.html`).
 - If a genuinely new primitive is ever needed, that is a NEW `design/` subtask
   — not a 2.8.4 code workaround.
+
+## Archived work items view + Restore UX (Story 2.9 · 2.9.1 → 2.9.3)
+
+`archived.mock.html` is the design asset for the **archived work items view** —
+the durable surface that replaces the transient **Undo** toast in
+`WorkItemActionsMenu.tsx` (commented there as "the only restore path until an
+archived-items view ships"). It is the design gate for the code subtask
+**2.9.3**. Built from the live `--el-*` tokens + the shipped primitives the
+active list already uses (`list.mock.html`), so 2.9.3 composes the same
+vocabulary with no Pencil→code gap and **no new primitive**. Mirror product:
+Jira's dedicated **Archived issues** view with per-item Restore.
+
+### Placement — a dedicated `/issues/archived` route (rung-1 decision)
+
+**Decision: a dedicated route `/issues/archived`, reachable from the work-items
+navigator toolbar via a low-prominence `[Archived]` ghost link** (panel 5). The
+three options the card named were a dedicated route, a navigator filter/segment,
+or a project-settings page.
+
+- **Rung 1 (Jira) says "dedicated view," and we keep that** — Jira surfaces
+  archived work in its own view, not as a navigator sort/segment.
+- **Justified deviation on _location_:** Jira's archived view is admin-gated
+  under settings because Jira's archive is an **admin bulk operation**. Motir's
+  archive is the opposite — an **editor-level, reversible, per-item action**
+  surfaced right in the work-item `⋯` menu (`assertCanEdit`,
+  `workItemsService.archiveWorkItem`, the single-node "Linear shape"). So the
+  restore surface belongs **next to the work** (under the work navigator), not
+  behind project admin. One concrete reason earns the deviation: the user who
+  archived an item from its `⋯` menu is the one who restores it, and they live in
+  the navigator, not in settings.
+- **A navigator SEGMENT was rejected** ("no complexity for nothing"): every
+  navigator read filters `archivedAt IS NULL` (`workItemRepository` forest CTE +
+  every flat/count arm), and the navigator's sort, Tree view, inline-edit,
+  advanced + saved filters are all built around **live** items. Bolting an
+  "archived" mode onto `/issues` would fork all of those paths for a rarely-used
+  read. A dedicated **flat** route keeps the archived surface simple and leaves
+  the live navigator untouched.
+
+**Entry point (panel 5):** a quiet `[Archived]` ghost link (lucide `archive`)
+is added to the `/issues` toolbar **before** `[Filter]`, with a small count
+badge so a user knows there's something there without opening it. It links to
+`/issues/archived`; the archived page carries a `← Work items` back link
+(`--el-link`) home. This is the one change 2.9.3 makes to the live navigator
+toolbar (`IssueListToolbar`).
+
+### Anatomy — a flat, paginated list (NOT a tree)
+
+Motir's archive is single-node (children stay live — the deliberate Linear
+shape, `workItemsService.ts:1469`), so archived items do **not** form a tree.
+The view is therefore a **flat, server-paged list**, reusing the active List's
+container chrome (`rounded-(--radius-card)` bordered box, `--el-surface-soft`
+header) and `IssueListPager` footer verbatim. The columns are a focused subset
+of the active list plus the two archive-specific facts:
+
+| Column      | Width (px) | Cell                                                 | Source                                    |
+| ----------- | ---------- | ---------------------------------------------------- | ----------------------------------------- |
+| Title       | `1fr`      | `IssueTypeIcon` (type hue) · mono identifier · title | the item (reused row vocabulary)          |
+| Status      | 130        | `Pill` by lifecycle category (`STATUS_TONE`)         | the item's last status (kept on archive)  |
+| Archived by | 175        | initial-letter `Avatar` · name                       | the **`archived` revision** `changedById` |
+| Archived    | 140        | formatted date                                       | the **`archived` revision** `createdAt`   |
+| _(actions)_ | 120 (end)  | per-row `[Restore]` button — **canEdit only**        | —                                         |
+
+Grid template: `minmax(0,1fr) 130px 175px 140px 120px`. **No** Priority /
+Assignee / Reporter / Due / Est. columns — the archived view answers "what did
+we archive, by whom, when, and can I get it back," so it keeps the row identity
+
+- archive provenance and drops the planning columns ("no complexity for
+  nothing"). The whole row (minus the action cell) links to `/issues/[identifier]`
+  so the item is still reachable; the `[Restore]` button is a sibling control
+  outside the link (it doesn't navigate).
+
+**Default order = most-recently-archived first** (`archived.createdAt` desc) —
+the freshest mistake to undo sits on top. (Headers are static here, not
+sortable; sortable columns are an Epic-6 saved-views concern, like the active
+list.)
+
+**Reading "Archived by / at" — the data note for 2.9.3.** `archiveWorkItem`
+records an `'archived'` revision (`workItemRevisionsService.recordRevision`,
+diff `{ archivedAt: { from: null, to } }`) with `changedById`. The view reads
+**that revision** for the actor + timestamp (the `workItem.archivedAt` column
+gives the timestamp but not the actor). A re-archived item may have several
+`'archived'` revisions — use the **latest** one.
+
+### Restore — an inline action with a success toast
+
+Restore is **reversible** (re-archive the item from its `⋯` menu), so it is an
+**inline per-row action with a success toast** — NOT a confirm dialog, and
+**without an Undo button** (unlike the archive toast, whose Undo IS the restore;
+restoring needs no undo because re-archiving is the inverse).
+
+- **Affordance:** a small **secondary `Button`** (`size="sm"`, lucide
+  `rotate-ccw` + "Restore"), right-aligned in the actions cell. `aria-label`
+  "Restore {key}".
+- **In flight (panel 1):** clicking it POSTs `unarchiveWorkItem`; the row fades
+  - locks optimistically (`opacity` + `pointer-events:none`, `aria-busy`), the
+    button reads "Restoring…" disabled. The list is a **client island**, so on the
+    200 the row is **removed locally** (the page-state-after-mutation contract —
+    not a `router.refresh()`); the pager count decrements. The E2E waits on the
+    unarchive **200** before asserting the row is gone (the authoritative-signal
+    rule).
+- **Confirmation:** the shipped success **`Toast`** — `{key} restored` (the
+  existing `workItemActions.restoredToast` string, reused verbatim) with a
+  `--el-success` `CircleCheck`. No action button on this toast.
+- **Error:** reuse `workItemActions.archiveErrorTitle` / `archiveErrorBody`
+  ("Couldn't archive" → here a generic restore failure) as an error `Toast`; the
+  row un-fades and stays (nothing changed server-side).
+
+### Access — view vs. restore
+
+Two distinct gates, matching the shipped service:
+
+- **View the page = `canBrowse`.** Anyone who can browse the project may open
+  `/issues/archived` and audit what was archived (mirrors the `/issues`
+  navigator's `canBrowse` gate, `projectAccessService.getSavedFilterCapabilities`).
+  A non-browsable project renders the `NoAccessState` (same as `/issues`).
+- **Restore = `canEdit`.** `unarchiveWorkItem` is `assertCanEdit`-gated (same as
+  archive). A viewer who can browse but **not** edit sees the list with the
+  **Restore column dropped entirely** (panel 4) — hidden, never shown-disabled,
+  mirroring `WorkItemActionsMenu`'s hidden-not-disabled capability pattern. The
+  grid drops to `minmax(0,1fr) 130px 175px 140px` (the `.view-only` modifier).
+
+### Empty + loading
+
+- **Empty (panel 2)** — the shipped `EmptyState` Card with an `Archive` glyph:
+  **"Nothing archived"** / "Archived work items show up here. Archive one from
+  its ⋯ menu to hide it from boards and lists while keeping its history." +
+  a secondary **"Back to work items"** button (there is nothing to restore here,
+  so the action routes home, not to "New").
+- **Loading (panel 3)** — the flat shimmer skeleton (same columns), including a
+  Restore-button placeholder in the actions cell. No layout shift on settle.
+
+### Pagination — reuses IssueListPager (finding #57)
+
+The archived list **must not load every row** (a long-lived project accretes
+archived items): it is **server-paged** like the active List, **page size 50**,
+reusing `IssueListPager` verbatim — `Showing 1–50 of N` (N = total archived
+count) + Prev/numbered/Next with ellipsis truncation, the current page the accent
+chip + `aria-current="page"`, URL-driven `?page=`. The repository read is a NEW
+arm filtering **`archivedAt IS NOT NULL`** (every existing arm filters
+`IS NULL`) — flagged for 2.9.3 as the one new data path.
+
+### Tokens / a11y
+
+- Colour only via `--el-*`: status via `Pill` tones, type icons via `--el-type-*`,
+  the success toast via `--el-success`, the restore button + back link via
+  `--el-link` / `--el-border`. No Tier-0 `--color-*`.
+- Shape via element-semantic tokens (`--radius-card` / `--radius-control` /
+  `--radius-btn` / `--radius-badge`, `--spacing-control-*`, `--height-control`,
+  `--shadow-elevated` / `--shadow-card`) so the surface re-shapes under
+  `data-display-style`.
+- The list is `role="table"` with `columnheader`s; the Restore button is a real
+  `<button>` with a per-item `aria-label`; the in-flight row carries `aria-busy`;
+  the toast is `role="status"`. The page is in scope for the strict shell-a11y
+  sweep. Toggle dark in the mock to confirm token parity.
+
+### States in the mockup
+
+Panels: **(0)** the archived view in the `/issues/archived` shell (back link +
+header + flat table + pager) · **(1)** Restore in flight (the row faded/locked +
+the "{key} restored" success toast) · **(2)** empty state · **(3)** flat loading
+skeleton · **(4)** the view-only state (canBrowse, not canEdit — Restore column
+dropped) · **(5)** the navigator entry point (the `[Archived]` toolbar link on
+`/issues`).
+
+### Out of scope (documented extension slots)
+
+**Bulk Restore** (multi-select + a bulk action bar) — Jira has it, but Motir's
+archive is per-item from the `⋯` menu today, so single-row Restore matches the
+current archive shape; bulk select is an Epic-6 list-actions concern, noted not
+built. **Sortable / configurable columns**, a **search/filter within archived**,
+and **permanent delete from the archived view** (delete is `canManage` and lives
+in `WorkItemActionsMenu` + the 2.8 delete dialog) are also out of scope for 2.9.3.
