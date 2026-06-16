@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { apiTokensService } from '@/lib/services/apiTokensService';
-import { InvalidApiTokenLabelError } from '@/lib/apiTokens/errors';
+import { InvalidApiTokenLabelError, InvalidApiTokenScopeError } from '@/lib/apiTokens/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 
 // /api/me/api-tokens (Story 7.8 · Subtask 7.8.3) — the current user's API tokens
@@ -20,10 +20,11 @@ import { NotAMemberError } from '@/lib/workspaces/errors';
 //
 // Routes are HTTP-only (CLAUDE.md): parse → one service call → typed-error→status.
 //   GET  → 200 { tokens: ApiTokenDto[] }
-//   POST { label, expiresInDays, workspaceId } → 201 { token, dto }
+//   POST { label, expiresInDays, workspaceId, scopes? } → 201 { token, dto }
 //     — `token` is the FULL plaintext secret, returned ONCE; the client shows it
 //     once with a copy affordance and it is then irretrievable. A `workspaceId`
-//     the caller is not a member of → 403.
+//     the caller is not a member of → 403. `scopes` is the optional 7.7.16
+//     capability list (omit → default-all-minus-delete); an unknown scope → 422.
 
 /** The expiry options the 7.8.2 settings select offers (30 / 90 / 365 days, or
  * `null` for never). The route validates against this exact set so an arbitrary
@@ -53,10 +54,11 @@ export async function POST(req: Request): Promise<Response> {
       { status: 400 },
     );
   }
-  const { label, expiresInDays, workspaceId } = (body ?? {}) as {
+  const { label, expiresInDays, workspaceId, scopes } = (body ?? {}) as {
     label?: unknown;
     expiresInDays?: unknown;
     workspaceId?: unknown;
+    scopes?: unknown;
   };
 
   if (typeof label !== 'string') {
@@ -85,14 +87,34 @@ export async function POST(req: Request): Promise<Response> {
     expiresAt = new Date(Date.now() + expiresInDays * DAY_MS);
   }
 
+  // `scopes`: absent/undefined → the service applies the default-all-minus-delete
+  // set; when present it must be an array of strings (the SHAPE check). The
+  // service validates each string against the 7.7.16 scope registry and rejects
+  // an unknown value with InvalidApiTokenScopeError (422 below) — the route
+  // never owns the canonical scope list.
+  if (
+    scopes !== undefined &&
+    !(Array.isArray(scopes) && scopes.every((s) => typeof s === 'string'))
+  ) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: 'scopes must be an array of strings.' },
+      { status: 400 },
+    );
+  }
+
   try {
     const result = await apiTokensService.create(session.user.id, workspaceId, {
       label,
       expiresAt,
+      scopes: scopes as string[] | undefined,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (err) {
     if (err instanceof InvalidApiTokenLabelError) {
+      return NextResponse.json({ code: err.code }, { status: 422 });
+    }
+    // An unknown/unrecognized scope string (7.7.16 typed error) — 422.
+    if (err instanceof InvalidApiTokenScopeError) {
       return NextResponse.json({ code: err.code }, { status: 422 });
     }
     // A workspace the caller is not a member of (or a forged id) — 404-not-403

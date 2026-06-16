@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { KeyRound, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, KeyRound, Plus, Trash2 } from 'lucide-react';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { Card } from '@/components/ui/Card';
@@ -13,6 +13,7 @@ import { CreateTokenModal } from './CreateTokenModal';
 import { RevokeTokenDialog } from './RevokeTokenDialog';
 import type { ApiTokenDto } from './apiTokensClient';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
+import { grantedScopeMeta, grantsDelete, summarizeScopes } from './scopeMeta';
 
 // The API tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
 // `account-settings.mock.html` Panels 3 + 7. It owns the token-list state
@@ -65,6 +66,17 @@ export function ApiTokensManager({
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => setNow(Date.now()), []);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Which rows have their scope-detail sub-row expanded (the chevron disclose).
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function handleCreated(token: ApiTokenDto) {
     setTokens((prev) => [token, ...prev]);
@@ -138,6 +150,7 @@ export function ApiTokensManager({
                 <tr className="border-b border-(--el-border)">
                   <Th>{t('columns.label')}</Th>
                   <Th>{t('columns.token')}</Th>
+                  <Th>{t('columns.scopes')}</Th>
                   <Th>{t('columns.workspace')}</Th>
                   <Th>{t('columns.created')}</Th>
                   <Th>{t('columns.expires')}</Th>
@@ -151,59 +164,138 @@ export function ApiTokensManager({
                   const dateClass = revoked
                     ? 'text-(--el-text-faint)'
                     : 'text-(--el-text-secondary)';
+                  const summary = summarizeScopes(token.scopes);
+                  const hasDelete = grantsDelete(token.scopes);
+                  const expanded = expandedIds.has(token.id);
                   return (
-                    <tr key={token.id} className="border-b border-(--el-border-soft) last:border-0">
-                      <td className="py-(--spacing-control-y) pr-4 align-middle">
-                        <span
-                          className={`font-sans text-sm font-medium ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
-                        >
-                          {token.label}
-                        </span>
-                      </td>
-                      <td className="py-(--spacing-control-y) pr-4 align-middle">
-                        <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-xs text-(--el-code-text)">
-                          {token.tokenPrefix}…
-                        </code>
-                      </td>
-                      <td className="py-(--spacing-control-y) pr-4 align-middle">
-                        <span
-                          className={`font-sans text-sm ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'}`}
-                        >
-                          {multiOrg
-                            ? `${token.organization.name} · ${token.workspace.name}`
-                            : token.workspace.name}
-                        </span>
-                      </td>
-                      <td className="py-(--spacing-control-y) pr-4 align-middle">
-                        <span className={`font-sans text-sm ${dateClass}`}>
-                          {formatDate(token.createdAt, locale)}
-                        </span>
-                      </td>
-                      <td className="py-(--spacing-control-y) pr-4 align-middle">
-                        {renderExpires(token, now, locale, t)}
-                      </td>
-                      <td className="py-(--spacing-control-y) pr-4 align-middle">
-                        <span className={`font-sans text-sm ${dateClass}`}>
-                          {token.lastUsedAt
-                            ? formatDate(token.lastUsedAt, locale)
-                            : t('lastUsedNever')}
-                        </span>
-                      </td>
-                      <td className="py-(--spacing-control-y) text-right align-middle">
-                        {revoked ? (
-                          <Pill tone="neutral">{t('revoked')}</Pill>
-                        ) : (
-                          <button
-                            type="button"
-                            aria-label={t('revokeAria', { label: token.label })}
-                            onClick={() => setRevokeTarget(token)}
-                            className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-danger) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    <Fragment key={token.id}>
+                      <tr
+                        className={`border-(--el-border-soft) ${expanded ? '' : 'border-b last:border-0'}`}
+                      >
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          <span
+                            className={`font-sans text-sm font-medium ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
                           >
-                            <Trash2 className="size-4" aria-hidden />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                            {token.label}
+                          </span>
+                        </td>
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          <code className="rounded-(--radius-control) bg-(--el-code-bg) px-1.5 py-0.5 font-mono text-xs text-(--el-code-text)">
+                            {token.tokenPrefix}…
+                          </code>
+                        </td>
+                        {/* Scopes — a semantic summary Pill (mint "Full access" /
+                            neutral Standard·Read only·Custom), a persistent rose
+                            "Can delete" pill whenever delete is granted (never
+                            hidden behind the summary), and a chevron disclosing
+                            the per-scope detail. Revoked rows show the muted
+                            summary only (7.7.18 Panel 4). */}
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          <span className="inline-flex items-center gap-1.5">
+                            {summary === 'full' && !revoked ? (
+                              <Pill severity="success">{t('scopes.summary.full')}</Pill>
+                            ) : (
+                              <Pill tone="neutral">{t(`scopes.summary.${summary}`)}</Pill>
+                            )}
+                            {hasDelete && !revoked ? (
+                              <Pill severity="danger">
+                                <Trash2 className="size-3" aria-hidden />
+                                {t('scopes.canDelete')}
+                              </Pill>
+                            ) : null}
+                            {revoked ? null : (
+                              <button
+                                type="button"
+                                aria-label={t(
+                                  expanded ? 'scopes.hideScopes' : 'scopes.showScopes',
+                                  {
+                                    label: token.label,
+                                  },
+                                )}
+                                aria-expanded={expanded}
+                                onClick={() => toggleExpanded(token.id)}
+                                className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                              >
+                                <ChevronDown
+                                  className={`size-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                                  aria-hidden
+                                />
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          <span
+                            className={`font-sans text-sm ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'}`}
+                          >
+                            {multiOrg
+                              ? `${token.organization.name} · ${token.workspace.name}`
+                              : token.workspace.name}
+                          </span>
+                        </td>
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          <span className={`font-sans text-sm ${dateClass}`}>
+                            {formatDate(token.createdAt, locale)}
+                          </span>
+                        </td>
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          {renderExpires(token, now, locale, t)}
+                        </td>
+                        <td className="py-(--spacing-control-y) pr-4 align-middle">
+                          <span className={`font-sans text-sm ${dateClass}`}>
+                            {token.lastUsedAt
+                              ? formatDate(token.lastUsedAt, locale)
+                              : t('lastUsedNever')}
+                          </span>
+                        </td>
+                        <td className="py-(--spacing-control-y) text-right align-middle">
+                          {revoked ? (
+                            <Pill tone="neutral">{t('revoked')}</Pill>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label={t('revokeAria', { label: token.label })}
+                              onClick={() => setRevokeTarget(token)}
+                              className="inline-flex size-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-danger) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                            >
+                              <Trash2 className="size-4" aria-hidden />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {expanded && !revoked ? (
+                        <tr className="border-b border-(--el-border-soft) last:border-0">
+                          <td colSpan={8} className="pr-4 pb-3.5 align-top">
+                            <div className="flex flex-wrap items-center gap-1.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
+                              <span className="mr-1 font-sans text-xs text-(--el-text-muted)">
+                                {t('scopes.detailLead')}
+                              </span>
+                              {grantedScopeMeta(token.scopes).map((m) => {
+                                const Icon = m.Icon;
+                                const chipName = t(`scopes.${m.i18nKey}.name`);
+                                return m.danger ? (
+                                  <span
+                                    key={m.scope}
+                                    className="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent bg-(--el-tint-rose) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
+                                  >
+                                    <Icon className="size-3 text-(--el-danger)" aria-hidden />
+                                    {chipName}
+                                  </span>
+                                ) : (
+                                  <span
+                                    key={m.scope}
+                                    className="inline-flex items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-secondary)"
+                                  >
+                                    <Icon className="size-3 text-(--el-text-muted)" aria-hidden />
+                                    {chipName}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>

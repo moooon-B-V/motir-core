@@ -1676,11 +1676,58 @@
       "columns": {
         "label": "Label",
         "token": "Token",
+        "scopes": "Scopes",
         "workspace": "Workspace",
         "created": "Created",
         "expires": "Expires",
         "lastUsed": "Last used",
         "actions": "Actions"
+      },
+      "scopes": {
+        "permissionsLabel": "Permissions",
+        "permissionsHelper": "Choose what this token is allowed to do. You can grant less than your own access, never more.",
+        "groupLabels": {
+          "read": "Read",
+          "sprints": "Sprints",
+          "integrations": "Integrations",
+          "workItems": "Work items"
+        },
+        "read": {
+          "name": "Read everything",
+          "desc": "View work items, boards, sprints, comments, and reports."
+        },
+        "sprintsWrite": {
+          "name": "Manage sprints",
+          "desc": "Create sprints and move work items in and out of them."
+        },
+        "integration": {
+          "name": "Connect integrations",
+          "desc": "Link external tools and post activity back to Motir."
+        },
+        "workItemsWrite": {
+          "name": "Edit work items",
+          "desc": "Create and update work items, comments, links, and attachments."
+        },
+        "workItemsArchive": {
+          "name": "Archive work items",
+          "desc": "Archive and restore work items. This can be undone."
+        },
+        "workItemsDelete": {
+          "name": "Delete work items",
+          "desc": "Permanently delete a work item and its entire subtree. This can't be undone."
+        },
+        "dangerTag": "· Danger",
+        "emptyError": "Grant at least one permission to create a token.",
+        "summary": {
+          "full": "Full access",
+          "standard": "Standard",
+          "readonly": "Read only",
+          "custom": "Custom"
+        },
+        "canDelete": "Can delete",
+        "detailLead": "This token can:",
+        "showScopes": "Show scopes for {label}",
+        "hideScopes": "Hide scopes for {label}"
       },
       "expiresIn": "in {days, plural, one {# day} other {# days}}",
       "expiresNever": "Never",

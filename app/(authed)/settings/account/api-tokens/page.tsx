@@ -26,8 +26,13 @@ export default async function AccountApiTokensPage() {
     getWorkspaceContext(),
   ]);
 
+  // The tokens TABLE is wide (8 columns incl. the 7.7.19 Scopes column), so this
+  // pane uses the table-pane width (the workspace-jobs precedent), NOT the 42rem
+  // form-pane width its sibling account panes (language / notifications) use —
+  // the design's token list panel is ~1180px. The header copy stays narrow for
+  // reading (its own max-w below).
   return (
-    <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
+    <div className="mx-auto flex max-w-[64rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h2 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h2>
         <p className="max-w-[34rem] font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>

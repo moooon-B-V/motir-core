@@ -3,6 +3,8 @@
 // (7.8.3) and back. The `tokenHash` NEVER appears in a DTO; the plaintext
 // secret appears in exactly one place ever — `CreateApiTokenResult.token`.
 
+import type { TokenScope } from '@/lib/mcp/scopes';
+
 /** One token as the settings list renders it. Display-safe: the `tokenPrefix`
  * is a hint, never the secret, and there is no `tokenHash`. Dates are ISO
  * strings (the API-boundary convention). */
@@ -23,6 +25,11 @@ export interface ApiTokenDto {
    * MCP gate resolves the request workspace from it. */
   workspace: { id: string; name: string };
   organization: { id: string; name: string };
+  /** The granted capability scopes (Story 7.7 · Subtask 7.7.16) the list
+   * displays — the create-modal picker persists them and the row summarises
+   * them (`read` / `work_items:write` / `work_items:archive` /
+   * `work_items:delete` / `sprints:write` / `integration`). */
+  scopes: TokenScope[];
 }
 
 /** One workspace a token can be scoped to (bug 7.21) — the create modal's

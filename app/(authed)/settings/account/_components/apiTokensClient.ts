@@ -1,4 +1,5 @@
 import type { ApiTokenDto, CreateApiTokenResult } from '@/lib/dto/apiTokens';
+import type { TokenScope } from '@/lib/mcp/scopes';
 
 // Thin fetch layer over the 7.8.3 routes (`/api/me/api-tokens`) for the API
 // tokens pane's client island. The island owns its own list state and does
@@ -34,6 +35,9 @@ export async function createToken(input: {
   expiresInDays: ExpiryChoice;
   /** The workspace the token is scoped to (bug 7.21) — chosen in the modal. */
   workspaceId: string;
+  /** The granted capability scopes (Story 7.7 · Subtask 7.7.16) toggled in the
+   * modal's Permissions picker — the default set is all-minus-delete. */
+  scopes: TokenScope[];
 }): Promise<CreateApiTokenResult> {
   const res = await fetch(BASE, {
     method: 'POST',
