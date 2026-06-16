@@ -20,7 +20,6 @@ import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Pill } from '@/components/ui/Pill';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
@@ -223,29 +222,25 @@ export default async function IssueDetailPage({
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
       <div className="flex flex-col gap-6">
-        {/* Header — type icon · identifier · parent breadcrumb · status · title +
+        {/* Header — type icon · identifier · parent breadcrumb · title +
           Edit link. The breadcrumb (2.4.3) renders the ancestor chain right
-          after the identifier, per the detail.png eyebrow. */}
+          after the identifier, per the detail.png eyebrow. (Status lives in the
+          core-fields rail's StatusPicker, not the eyebrow — 2.4.13.) */}
         <header className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
             <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
-            {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb + status
-              Pill share a `min-w-0 flex-1` cell so the breadcrumb has a BOUNDED
-              track to truncate against — its inner `<span className="truncate">`
-              (ParentBreadcrumb) only fires inside a bounded parent. Without this
-              cell the breadcrumb sits as a bare flex child and resolves to its
-              min-content width (a flex item defaults to `min-width:auto`), so a
-              long ancestor chain pushes the whole page wider than the viewport and
-              clips the right cluster + core-fields rail. Grouping the Pill in the
-              SAME cell keeps it glued to the breadcrumb, so short / no-ancestor
-              items render exactly as before (the cell collapses to content width
-              at the left). */}
+            {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
+              a `min-w-0 flex-1` cell so it has a BOUNDED track to truncate against
+              — its inner `<span className="truncate">` (ParentBreadcrumb) only
+              fires inside a bounded parent. Without this cell the breadcrumb sits
+              as a bare flex child and resolves to its min-content width (a flex
+              item defaults to `min-width:auto`), so a long ancestor chain pushes
+              the whole page wider than the viewport and clips the right cluster +
+              core-fields rail. Short / no-ancestor items render exactly as before
+              (the cell collapses to content width at the left). */}
             <div className="flex min-w-0 flex-1 items-center gap-x-3">
               <ParentBreadcrumb ancestors={detail.ancestors} />
-              <Pill tone="neutral" className="shrink-0">
-                {item.status}
-              </Pill>
             </div>
             <div className="ml-auto flex items-center gap-3">
               {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads
