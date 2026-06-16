@@ -6,11 +6,23 @@ import { buttonVariants } from '@/components/ui/Button';
 import type { PublicProjectOverviewDto } from '@/lib/dto/publicProjects';
 import { PublicSubmitRequest } from './PublicSubmitRequest';
 
-// The Overview hero (Story 6.12 · Subtask 6.12.4 · design Panel 1 `.hero`). A
-// bordered card with a soft corner-wash (two radial --el-hero-wash-* tints over
-// --el-page-bg — decorative only; ALL text sits on --el-page-bg, AA-safe,
-// finding #35). Logo tile + serif name + meta Pills + tagline + CTA row + the
-// at-a-glance stat strip. Server component; colour via --el-* tokens.
+// The Overview hero (Story 6.12 · Subtask 6.12.4 · authorable since 6.16.4 ·
+// design Panel 1 `.hero`). A bordered card with a soft corner-wash (two radial
+// --el-hero-wash-* tints over --el-page-bg — decorative only; ALL text sits on
+// --el-page-bg, AA-safe, finding #35). Logo tile + serif name + authored meta
+// Pills + authored tagline + CTA row + the at-a-glance stat strip. Server
+// component; colour via --el-* tokens.
+
+// The authored hero tags cycle these tint tones by index — lavender → mint →
+// neutral — reproducing the design's spread (design Panel 1 `.hero-meta` /
+// `.tag-chip`) for an arbitrary authored tag list. Each carries the hue in the
+// tint BACKGROUND with --el-text-strong (charcoal) text, AA-safe (finding #35);
+// the empty string falls back to the Pill's own `tone="neutral"` surface.
+const TAG_TONES = [
+  'border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)',
+  'border-transparent bg-(--el-tint-mint) text-(--el-text-strong)',
+  '',
+];
 
 function compact(n: number): string {
   if (n >= 1000) {
@@ -29,10 +41,11 @@ export async function PublicOverviewHero({
 }) {
   const t = await getTranslations('publicProjects');
   const initial = overview.name.trim().charAt(0).toUpperCase() || 'P';
-  // The hero tagline is the generic public-project line (i18n); the project's
-  // authored, project-specific framing (e.g. Motir's "Vibe your whole project…")
-  // lives at the top of the README body, rendered below the hero via MarkdownView.
-  const tagline = t('autoIntroTagline');
+  // The hero tagline is the project's authored, project-specific framing (e.g.
+  // Motir's "Vibe your whole project…", a `publicTagline` since 6.16.4 — this
+  // REVERSES the 6.12.4 decision that the framing lives in the README body); the
+  // generic i18n line is the unset fallback so the hero is never blank.
+  const tagline = overview.publicTagline ?? t('autoIntroTagline');
   const stats: Array<{ n: number; l: string }> = [
     { n: overview.stats.publicRequests, l: t('statPublicRequests') },
     { n: overview.stats.upvotes, l: t('statUpvotes') },
@@ -58,22 +71,15 @@ export async function PublicOverviewHero({
           <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight text-(--el-text)">
             {overview.name}
           </h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <Pill
-              tone="neutral"
-              className="border-transparent bg-(--el-tint-lavender) text-(--el-text-strong)"
-            >
-              {t('metaVibeProject')}
-            </Pill>
-            <Pill
-              tone="neutral"
-              className="border-transparent bg-(--el-tint-mint) text-(--el-text-strong)"
-            >
-              {t('metaOpenSource')}
-            </Pill>
-            <Pill tone="neutral">{t('metaLicense')}</Pill>
-            <Pill tone="neutral">{t('metaMcpNative')}</Pill>
-          </div>
+          {overview.publicTags.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {overview.publicTags.map((tag, i) => (
+                <Pill key={tag} tone="neutral" className={TAG_TONES[i % TAG_TONES.length]}>
+                  {tag}
+                </Pill>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 
