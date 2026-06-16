@@ -2801,3 +2801,211 @@ Detail `⋯` menu (archived): `Restore` · `Delete…` · |
 - **A per-descendant archived/live breakdown table** in the confirm — the warning
   names the live COUNT + kind breakdown, not a row-by-row list (matches the 2.8
   cascade grammar, which never itemised descendants either).
+
+## Archived banner on the detail page (Story 2.9 · 2.9.8 → 2.9.6)
+
+`detail-archived.mock.html` is the design asset for the **archived banner on the
+work-item detail page** — the design gate for the code subtask **2.9.6
+(MOTIR-995)**. The 2.9 list view (above) answers "what did we archive, by whom,
+when, and can I get it back" from the dedicated `/issues/archived` route; this
+banner answers the complementary question on the **item's own detail page**: a
+viewer who opens an archived item directly (a bookmarked link, a link from
+activity / a comment, a board peek) must immediately see that it is archived and
+be able to restore it.
+
+### Reachability — the precondition that makes this banner real (verified)
+
+An archived item's detail page **renders** — it is NOT a 404. The detail read
+`workItemsService.getIssueDetail` → `workItemRepository.findByIdentifier` is a
+plain `findUnique` on `(projectId, identifier)` and does **NOT** filter
+`archivedAt` (unlike the navigator forest CTE / list / children / sprint reads,
+which all filter `archivedAt IS NULL`). So the item is fully reachable and
+readable on its detail route; the banner is the page's archived-state signal, not
+dead UI. (Verified against shipped code at plan/design time — rung 2.)
+
+### Placement — top of the main column, above Description (a NEW slot)
+
+The banner is the **FIRST element of the detail page's main column, directly
+above the Description card** (`<main>` in `app/(authed)/issues/[key]/page.tsx`).
+A whole-item state announcement belongs at the top of the page body, before the
+content, where it's the first thing a reader sees — matching how Jira / Linear
+surface an archived/closed banner.
+
+> **⚠️ Placement reconciliation — flagged for 2.9.6 (rung 2 over the card's
+> prose).** The subtask card asked to "reuse the SHIPPED readiness-banner
+> PLACEMENT (`page.tsx` ~L317, full-width, top of main column)". Shipped reality
+> differs: on the **detail page** the `ReadinessBadge` renders **inside
+> `RelationshipsPanel`** (the 2.4.5 relationships section at ~L317, AFTER
+> Description + Explanation), **not** as a standalone top-of-column banner.
+> "Top of main column" is true of the **peek modal** (`quick-view`, 2.5.20),
+> where the readiness banner IS panel-2's first main-column element — the card
+> conflated the two surfaces. So this design **reuses the readiness banner's
+> VISUAL MOLD** (`ReadinessBadge`: full-width, lead glyph + bold title +
+> secondary line) but introduces a **new slot** at the very top of `<main>`. The
+> code subtask (2.9.6) **adds a new top-of-`<main>` element**; it does NOT modify
+> the in-panel `ReadinessBadge`. (The readiness badge and the archived banner can
+> coexist — an archived item can still be blocked — but in practice the readiness
+> badge is suppressed once an item isn't todo-category, so they rarely stack.)
+
+A secondary, always-visible **"Archived" chip** also sits in the header eyebrow,
+**following the breadcrumb**, so the archived state is legible even when the page
+is scrolled past the banner — the same role the `(archived)` mark plays in the
+field pickers.
+
+> **⚠️ Eyebrow has NO status Pill — reconciled with 2.4.13 (MOTIR-996).** The
+> shipped eyebrow used to render a `<Pill tone="neutral">{item.status}</Pill>`
+> beside the breadcrumb, but **subtask 2.4.13 removes it** (it was a redundant,
+> untinted duplicate of the rail's `StatusPicker` status —
+> `app/(authed)/issues/[key]/page.tsx:246`). So the "Archived" chip is **NOT**
+> placed beside a status Pill (there is none); it follows the breadcrumb directly
+> and is the **only** eyebrow tag. This is deliberately consistent with 2.4.13's
+> intent — the chip carries a **real, non-duplicated** state (archived is shown
+> nowhere else in the eyebrow), unlike the redundant status tag 2.4.13 deletes,
+> so it does not reintroduce the clutter that subtask removes. Canonical status
+> stays rail-only (`CoreFieldsPanel`).
+
+### Tone — neutral / muted, NOT a colored alert and NOT danger
+
+Archived is a **calm, factual, reversible** state — not an error, not a warning,
+not danger. So the banner does **NOT** reuse the readiness tints (mint
+`--el-tint-mint` ready / peach `--el-tint-peach` blocked, which carry semantic
+urgency) and **NEVER** `--el-danger`. Instead:
+
+| Element        | Token                                                                       | Role                                              |
+| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------- |
+| Banner fill    | `--el-surface-soft`                                                         | a quiet, recessive callout — distinct from a tint |
+| Banner border  | `--el-border` (1px hairline)                                                | defines the box on the page surface               |
+| Banner radius  | `--radius-card`                                                             | same family as the readiness banner               |
+| Lead glyph     | lucide **`archive`** in `--el-text-muted`                                   | the same glyph the `⋯` menu + 2.9 list view use   |
+| Headline       | `--el-text-strong`                                                          | AA-safe emphasis                                  |
+| Meta line      | `--el-text-secondary`; actor in `--el-text-strong`                          | archived-by / at + the explanatory tail           |
+| Eyebrow chip   | `Pill` mold, `--el-surface` + `--el-border`, glyph `--el-text-muted`        | neutral, not a colored `Pill` tone                |
+| Restore button | secondary `Button`, `--el-border` + `--radius-btn`; glyph `--el-text-muted` | the lightweight reversible action                 |
+
+State is conveyed by **text + glyph, never colour alone** (the banner reads as
+archived from its copy + the archive glyph, so it's AA-safe and colour-blind-safe
+even though it carries no hue). Colour flows only through `--el-*`; shape only
+through the element-semantic shape tokens — so the banner re-skins under
+`data-palette` and re-shapes under `data-display-style`. The chip reuses the
+**`BuildingInPublicBadge` mold** (a `Pill` with a lead glyph) but in the neutral
+register rather than a build-tinted one.
+
+### Copy
+
+- **Headline:** **"This work item is archived"**.
+- **Meta line (canEdit):** **"Archived by {name} · {date} · It's hidden from
+  boards and lists but kept with its history. Restore it to bring it back."** The
+  "Restore it to bring it back" tail is dropped in the view-only variant (that
+  viewer can't restore).
+- **Eyebrow chip:** **"Archived"** (with the `archive` glyph).
+- **Restore button:** **"Restore"** (lucide `rotate-ccw`), `aria-label`
+  **"Restore {key}"** — the same affordance + verb as the 2.9 list view's per-row
+  Restore, so the two surfaces share one vocabulary.
+
+### Archived-by / archived-at — the data note for 2.9.6
+
+Same source as the 2.9.3 list view: the **latest `'archived'` revision**
+(`workItemRevisionsService.recordRevision`, diff `{ archivedAt: { from: null, to } }`)
+gives the **actor** (`changedById`) and the **timestamp** (`createdAt`). The
+`workItem.archivedAt` column gives the timestamp but not the actor, so the actor
+must come from the revision. A re-archived item has several `'archived'`
+revisions — use the **most recent**. The current detail DTO (`getIssueDetail`)
+returns `item.archivedAt` but **not** the archived-by actor; surfacing the actor
+
+- formatted timestamp on the detail page is the one new data path 2.9.6 adds (read
+  the latest `'archived'` revision for this item) — flagged here so the code subtask
+  plans it, exactly as 2.9.3 flagged the `archivedAt IS NOT NULL` list arm.
+
+### Restore — the action, and its gating
+
+- **Affordance:** a secondary `Button` (`size="sm"`, lucide `rotate-ccw` +
+  "Restore"), right-aligned in the banner. It POSTs `unarchiveWorkItem`
+  (`DELETE /api/work-items/[id]/archive`), the same call the 2.9 list view's
+  Restore uses.
+- **Page-state after restore (the page-state-after-mutation contract):** the
+  detail page is **server-rendered**, so on the unarchive 200 the page does a
+  **`router.refresh()`** — the server re-reads the item (now `archivedAt: null`),
+  the banner + eyebrow chip disappear, and the page returns to its active form. A
+  success **`Toast`** confirms — reuse the existing `workItemActions.restoredToast`
+  **"{key} restored"** string (verbatim, the same toast the list view shows), no
+  action button. On error reuse the existing archive-error toast strings; the
+  banner stays. (E2E: arm `waitForResponse` on the unarchive DELETE → 200 BEFORE
+  asserting the banner is gone — the authoritative-signal rule.)
+- **Gating — `canEdit`.** `unarchiveWorkItem` is `assertCanEdit`-gated (same as
+  archive). A viewer who can browse but **not** edit sees the banner **without the
+  Restore button** — hidden, never shown-disabled (the `WorkItemActionsMenu`
+  hidden-not-disabled capability pattern, mirroring the 2.9 list view's dropped
+  Restore column). The same `canEdit` the detail page already computes for inline
+  edit / the `⋯` menu gates the button.
+- **Restore is the banner's ONLY action — Delete lives in the detail `⋯` menu
+  (per 2.9.7).** The sibling design **2.9.7** (the section above) places permanent
+  **`Delete…`** (canManage) on an archived item's detail page in the standard
+  `⋯` actions menu (`Restore` + `Delete…` below the separator), and explicitly
+  scopes the banner to "the prominent Restore" only. This design honours that
+  split: the banner carries the common, safe, reversible Restore one click away;
+  the rare, irreversible, higher-privilege Delete stays one level deep in the
+  `⋯`, danger-toned. The banner does **not** add a Delete affordance.
+
+### Read-only posture — DECISION: stays fully editable, banner is the only signal
+
+**Decision:** an archived item's detail page stays **fully functional and
+editable** — inline field controls are **NOT** dimmed or disabled; the banner
+(plus the eyebrow chip) is the **only** signal. There is no global read-lock.
+
+**Rationale:**
+
+- Motir's archive is a **reversible, single-node, editor-level** action (the
+  deliberate "Linear shape" — `workItemsService.archiveWorkItem`,
+  `workItemsService.ts:1469`), undoable in one click. A whole-page read-lock is a
+  heavy lifecycle gesture that doesn't match a soft, restorable hide.
+- A global disable would force **every inline editor on the page** (status,
+  assignee, priority, due, estimate, title, description, relationships, custom
+  fields, labels, comments…) to grow and maintain an "archived-disabled" state —
+  real, spreading complexity for a state the user reverses instantly. "No
+  complexity for nothing."
+- Editing an archived item before restoring it is occasionally legitimate (fix a
+  title or re-point a link, then restore).
+- **Justified deviation from the mirror (Jira):** Jira makes archived issues
+  read-until-restored — but Jira's archive is a **heavier admin bulk lifecycle**,
+  whereas Motir's is the lightweight reversible per-item editor action, so the
+  read-lock rationale doesn't transfer. The deviation is recorded with its reason
+  (the rung-1 justified-deviation rule).
+- **Documented future option:** if a real need emerges (e.g. archived items must
+  freeze for audit/compliance, or to prevent edit-then-forget-to-restore churn), a
+  read-until-restored posture can be added later — dim the inline controls + route
+  edits through "Restore to edit". Not built now; noted so the decision is
+  revisitable, not silently foreclosed.
+
+### Active contrast
+
+An **active** (non-archived) item shows **no banner and no "Archived" chip** —
+the eyebrow is just type · key · breadcrumb · actions (no status Pill either,
+post-2.4.13), and the main column opens with the Description card as it does
+today. The banner + chip render **iff** `item.archivedAt != null`. (Mock panel 2
+draws the active state for the side-by-side contrast.)
+
+### a11y
+
+- The banner is a `role="status"` region (a state announcement, not an alert —
+  archived is not urgent), so a screen reader surfaces it without interrupting.
+  The archive glyph is `aria-hidden` (the headline carries the meaning); the
+  Restore button is a real `<button>` with `aria-label="Restore {key}"`.
+- AA contrast holds: `--el-text-strong` headline + `--el-text-secondary` meta on
+  the `--el-surface-soft` fill; no hue carries meaning, so it's colour-blind-safe.
+  The page is in scope for the strict shell-a11y axe sweep; toggle dark in the
+  mock to confirm token parity.
+
+### States in the mockup
+
+Panels: **(0)** PLACEMENT — the archived detail page (header + the banner atop the
+main column, above Description + the 2-col body) · **(1)** the banner isolated +
+annotated (tone, glyph, copy, archived-by/at, Restore) · **(2)** ACTIVE contrast —
+the same detail header with no chip and no banner (Description is first) · **(3)**
+VIEW-ONLY (`canBrowse`, not `canEdit`) — the banner WITHOUT the Restore button.
+
+### Out of scope (documented extension slots)
+
+The **read-until-restored** posture (above — deferred with its trigger). **Bulk**
+archive/restore from the detail page (archive is per-item). A **re-archive** action
+in the banner (re-archiving lives in the `⋯` menu, unchanged — the banner only
+restores). These are noted, not built.
