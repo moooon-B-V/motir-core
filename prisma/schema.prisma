@@ -2677,6 +2677,13 @@ model ApiToken {
   lastUsedAt  DateTime? @map("last_used_at")
   /// Soft revoke — set, never deleted. A revoked token fails `verify`.
   revokedAt   DateTime? @map("revoked_at")
+  /// Per-token capability scopes (Story 7.7 · Subtask 7.7.16) — the access
+  /// boundary that NARROWS the owner's 6.4 role to a subset of MCP operations.
+  /// Each entry is a `TokenScope` (`lib/mcp/scopes.ts`); the dispatch gate
+  /// (7.7.17) allows a tool only if the token carries the scope it maps to. A
+  /// token minted without an explicit choice gets `DEFAULT_TOKEN_SCOPES` (all
+  /// scopes except `work_items:delete`), applied by `apiTokensService.create`.
+  scopes      String[]  @default([])
   createdAt   DateTime  @default(now()) @map("created_at")
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

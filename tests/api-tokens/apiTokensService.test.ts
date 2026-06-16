@@ -9,7 +9,9 @@ import {
   ApiTokenRevokedError,
   InvalidApiTokenError,
   InvalidApiTokenLabelError,
+  InvalidApiTokenScopeError,
 } from '@/lib/apiTokens/errors';
+import { DEFAULT_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -304,6 +306,69 @@ describe('verify', () => {
     await apiTokensService.verify(token);
     const after = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(after.lastUsedAt!.getTime()).toBeGreaterThan(stale.getTime());
+  });
+});
+
+describe('scopes (Subtask 7.7.16)', () => {
+  it('defaults to all scopes EXCEPT work_items:delete when none are given', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto } = await apiTokensService.create(owner.id, workspace.id, { label: 'default' });
+    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    expect([...row.scopes].sort()).toEqual([...DEFAULT_TOKEN_SCOPES].sort());
+    expect(row.scopes).not.toContain('work_items:delete');
+  });
+
+  it('persists an explicit scope list verbatim (de-duplicated)', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'narrow',
+      scopes: ['read', 'work_items:write', 'read'],
+    });
+    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    expect([...row.scopes].sort()).toEqual(['read', 'work_items:write']);
+  });
+
+  it('can grant the delete scope when explicitly requested', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'with-delete',
+      scopes: ['read', 'work_items:delete'],
+    });
+    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    expect(row.scopes).toContain('work_items:delete');
+  });
+
+  it('accepts an empty explicit scope list (a read-nothing token)', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'empty',
+      scopes: [],
+    });
+    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    expect(row.scopes).toEqual([]);
+  });
+
+  it('rejects an unknown scope string and mints nothing', async () => {
+    const { owner, workspace } = await makeUserWs();
+    await expect(
+      apiTokensService.create(owner.id, workspace.id, {
+        label: 'bad',
+        scopes: ['read', 'work_items:nuke'],
+      }),
+    ).rejects.toBeInstanceOf(InvalidApiTokenScopeError);
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('verify returns the token’s granted scopes alongside the user + workspace', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { token } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'verify-scopes',
+      scopes: ['read', 'sprints:write'],
+    });
+    const resolved = await apiTokensService.verify(token);
+    expect([...resolved.scopes].sort()).toEqual(['read', 'sprints:write']);
+    expect(resolved.user.id).toBe(owner.id);
+    expect(resolved.workspaceId).toBe(workspace.id);
   });
 });
 

@@ -38,6 +38,10 @@ export interface CreateApiTokenInput {
   tokenHash: string;
   tokenPrefix: string;
   expiresAt: Date | null;
+  /** The token's granted capability scopes (Story 7.7 · Subtask 7.7.16) — the
+   * service resolves these (the caller's choice, or the default-all-minus-delete
+   * set) and validates them before they reach here. */
+  scopes: string[];
 }
 
 export const apiTokenRepository = {

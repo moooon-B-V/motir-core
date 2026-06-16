@@ -11,7 +11,9 @@ import {
   ApiTokenRevokedError,
   InvalidApiTokenError,
   InvalidApiTokenLabelError,
+  InvalidApiTokenScopeError,
 } from '@/lib/apiTokens/errors';
+import { DEFAULT_TOKEN_SCOPES, isTokenScope, type TokenScope } from '@/lib/mcp/scopes';
 import type { ApiTokenDto, CreateApiTokenResult, TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 
 // API-token service (Story 7.8 · Subtask 7.8.1) — the auth substrate every
@@ -47,6 +49,11 @@ export interface CreateApiTokenInput {
   /** Absolute expiry, or null/undefined to never expire. The settings UI
    * derives this from its 30/90/365-day-or-never select. */
   expiresAt?: Date | null;
+  /** The capability scopes to grant (Story 7.7 · Subtask 7.7.16). Omit/undefined
+   * = the default-all-minus-delete set (`DEFAULT_TOKEN_SCOPES`); an explicit list
+   * narrows the grant. Every entry must be a known `TokenScope` or create rejects
+   * with `InvalidApiTokenScopeError` (422). */
+  scopes?: string[];
 }
 
 function normalizeLabel(label: string): string {
@@ -55,6 +62,20 @@ function normalizeLabel(label: string): string {
     throw new InvalidApiTokenLabelError();
   }
   return trimmed;
+}
+
+/**
+ * Resolve the scopes a `create` call persists: the default-all-minus-delete set
+ * when the caller passes none, else the explicit list — validated so every
+ * entry is a known {@link TokenScope}, rejecting any unknown string with
+ * {@link InvalidApiTokenScopeError} (422). Returns a de-duplicated list.
+ */
+function resolveScopes(requested: string[] | undefined): TokenScope[] {
+  if (requested === undefined) return [...DEFAULT_TOKEN_SCOPES];
+  const invalid = requested.filter((scope) => !isTokenScope(scope));
+  if (invalid.length > 0) throw new InvalidApiTokenScopeError(invalid);
+  // Validated above, so every entry is a TokenScope; de-dup to a stable set.
+  return [...new Set(requested as TokenScope[])];
 }
 
 export const apiTokensService = {
@@ -71,6 +92,9 @@ export const apiTokensService = {
     input: CreateApiTokenInput,
   ): Promise<CreateApiTokenResult> {
     const label = normalizeLabel(input.label);
+    // Validate + default the scopes BEFORE the membership round-trip, so a bad
+    // scope list fails fast (422) without touching the DB.
+    const scopes = resolveScopes(input.scopes);
     // The token BINDS to `workspaceId` (bug 7.21), so the user must be a member
     // of it — the create UI only offers the user's own workspaces, but the
     // server is the authority (a forged id throws NotAMemberError → 403).
@@ -85,6 +109,7 @@ export const apiTokensService = {
           tokenHash: hashToken(token),
           tokenPrefix: tokenPrefixOf(token),
           expiresAt: input.expiresAt ?? null,
+          scopes,
         },
         tx,
       ),
@@ -152,14 +177,16 @@ export const apiTokensService = {
    * and returns the owning User PLUS the workspace the token is BOUND to
    * (bug 7.21) — the MCP bearer gate resolves the request workspace from this
    * `workspaceId`, NOT the owner's default workspace, so a token minted in
-   * workspace A always acts on A.
+   * workspace A always acts on A — AND the token's granted `scopes` (Story 7.7
+   * · Subtask 7.7.16), so the dispatch gate (7.7.17) can narrow the owner's 6.4
+   * role to the operations the scopes permit.
    *
    * Returns the raw Prisma User (not a DTO) deliberately: the only caller is
    * internal infrastructure (the 7.8.4 transport gate building the request
    * actor), the same internal-caller exception `usersService.findOrCreateOAuthUser`
    * documents — there is no public-API shape for "the authenticated principal".
    */
-  async verify(plaintext: string): Promise<{ user: User; workspaceId: string }> {
+  async verify(plaintext: string): Promise<{ user: User; workspaceId: string; scopes: string[] }> {
     const tokenHash = hashToken(plaintext);
     return withSystemContext(async (tx) => {
       const row = await apiTokenRepository.findByTokenHash(tokenHash, tx);
@@ -174,7 +201,7 @@ export const apiTokensService = {
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {
         await apiTokenRepository.touchLastUsed(row.id, now, tx);
       }
-      return { user: row.user, workspaceId: row.workspaceId };
+      return { user: row.user, workspaceId: row.workspaceId, scopes: row.scopes };
     });
   },
 };

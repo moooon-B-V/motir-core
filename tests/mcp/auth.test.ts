@@ -59,6 +59,18 @@ describe('verifyMcpToken', () => {
     expect((info?.extra as { workspaceId: string }).workspaceId).not.toBe(fx.workspaceId);
   });
 
+  it('carries the token’s granted scopes on AuthInfo.extra (Subtask 7.7.16)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+      label: 'scoped',
+      scopes: ['read', 'work_items:write'],
+    });
+
+    const info = await verifyMcpToken(reqWithBearer(), token);
+    const scopes = (info?.extra as { scopes?: string[] }).scopes ?? [];
+    expect([...scopes].sort()).toEqual(['read', 'work_items:write']);
+  });
+
   it('rejects an absent / malformed / unknown token (→ 401)', async () => {
     expect(await verifyMcpToken(reqWithBearer())).toBeUndefined();
     expect(await verifyMcpToken(reqWithBearer('not-a-motir-token'))).toBeUndefined();
