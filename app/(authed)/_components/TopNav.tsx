@@ -5,6 +5,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from './NotificationBell';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
+import { BuildInPublicButton } from './build-in-public/BuildInPublicButton';
 import { ReportButton } from './ReportButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
@@ -36,6 +37,12 @@ export interface TopNavProps {
    * the bell's initial badge value (resolved once in the layout, then polled by
    * the client). Null when there's no active workspace (the bell is hidden). */
   initialUnreadCount: number | null;
+  /** The active project's key when the PRIMARY "Build in public" entry point
+   * (Subtask 6.17.3 · design Panel 10a) should show — i.e. the actor can manage
+   * a project whose access level is not yet `public`. Null otherwise (no active
+   * project, a non-admin, or an already-public project — where the 6.17.4 status
+   * badge takes this same header slot). Resolved server-side in the layout. */
+  buildInPublicProjectKey: string | null;
 }
 
 export async function TopNav({
@@ -45,6 +52,7 @@ export async function TopNav({
   activeWorkspaceId,
   user,
   initialUnreadCount,
+  buildInPublicProjectKey,
 }: TopNavProps) {
   const t = await getTranslations('shell');
   return (
@@ -71,6 +79,9 @@ export async function TopNav({
           />
         </div>
         <div className="flex items-center gap-2">
+          {buildInPublicProjectKey ? (
+            <BuildInPublicButton projectKey={buildInPublicProjectKey} />
+          ) : null}
           <CreateIssueButton />
           <CommandPaletteTrigger />
           <ReportButton />

@@ -15,6 +15,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
 import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
 import { TopNav } from './_components/TopNav';
+import { BuildInPublicNudge } from './_components/build-in-public/BuildInPublicNudge';
 import { SidebarNav } from './_components/SidebarNav';
 import { ShellTierNav } from './_components/ShellTierNav';
 import { CommandPaletteProvider } from './_components/CommandPaletteProvider';
@@ -113,6 +114,18 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     ? { canBrowse: settingsCaps.canBrowse, canManage: settingsCaps.canManage }
     : undefined;
 
+  // The discoverable "Build in public" entry point (Story 6.17 · Subtask 6.17.3)
+  // — shown only to a project ADMIN on a project that is NOT yet `public`. Gating
+  // here (server-side) means the entry points (the PRIMARY header button + the
+  // shell nudge) need no client access read, and a single `router.refresh()`
+  // after going public re-renders this tree to hide them (the 6.17.4 status badge
+  // then takes the header slot). Null = no entry point (no project / non-admin /
+  // already public).
+  const buildInPublicProjectKey =
+    canManage && activeProject && activeProject.accessLevel !== 'public'
+      ? activeProject.identifier
+      : null;
+
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
   // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
@@ -166,6 +179,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     activeWorkspaceId={activeWorkspaceId}
                     user={{ name: session.user.name, email: session.user.email }}
                     initialUnreadCount={initialUnreadCount}
+                    buildInPublicProjectKey={buildInPublicProjectKey}
                   />
                 }
                 sidebar={
@@ -179,7 +193,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   />
                 }
               >
-                <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+                <div className="px-4 py-6 sm:px-6 lg:px-8">
+                  {/* The dismissible, one-time build-in-public nudge (Subtask
+                      6.17.3 · design Panel 10b) — a project-shell reinforcement
+                      of the PRIMARY header button; same admin + non-public gate,
+                      then client-side dismissal + a settings-area suppression. */}
+                  {buildInPublicProjectKey ? (
+                    <BuildInPublicNudge projectKey={buildInPublicProjectKey} />
+                  ) : null}
+                  {children}
+                </div>
               </AppLayout>
 
               {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The

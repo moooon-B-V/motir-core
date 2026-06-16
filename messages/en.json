@@ -1353,7 +1353,17 @@
       "bulletSignIn": "Visitors sign in <b>only to</b> submit a request, upvote, or comment — they can't edit anything.",
       "bulletPrivate": "Stays private: <b>assignees, estimates, and internal comments</b> are never shown.",
       "reassurance": "You can stop building in public anytime — the page goes offline and the public link stops working. Submitted requests and upvotes are kept.",
-      "confirmCta": "Start building in public"
+      "confirmCta": "Start building in public",
+      "entryButton": "Build in public",
+      "nudgeTitle": "Want eyes on your work?",
+      "nudgeSub": "Build this project in public — share the roadmap and collect requests.",
+      "nudgeDismiss": "Dismiss",
+      "promoTitle": "Build this project in public",
+      "promoSub": "Turn the project into a public build-in-public page.",
+      "promoBullet1": "Share your board, roadmap, and work items with anyone — no account needed, indexable by search engines.",
+      "promoBullet2": "Let people submit, upvote, and comment on requests — they sign in only to act.",
+      "promoBullet3": "Internal fields stay private — assignees, estimates, and internal comments are never shown.",
+      "learnMore": "Learn more"
     },
     "public": {
       "linkHeading": "Public link",
