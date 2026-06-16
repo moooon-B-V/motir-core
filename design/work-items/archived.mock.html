@@ -1,0 +1,1392 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Archived work items view + Restore UX (Story 2.9 · 2.9.1 → 2.9.3)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the ARCHIVED WORK ITEMS view + the Restore
+      UX — the durable surface that replaces the transient "Undo" toast in
+      WorkItemActionsMenu.tsx ("the only restore path until an archived-items
+      view ships"). This is the design gate for Subtask 2.9.3 (the code).
+
+      PLACEMENT DECISION (rung 1 = Jira, justified deviation): a DEDICATED ROUTE
+      `/issues/archived`, reachable from the work-items navigator toolbar via a
+      low-prominence [Archived] link. Jira surfaces archived work in a dedicated
+      "Archived issues" VIEW (not a navigator segment) — we keep the dedicated
+      view, but locate it UNDER the work navigator rather than in admin settings,
+      because Motir's archive is an EDITOR-level, reversible, per-item action
+      surfaced right in the work-item ⋯ menu (`assertCanEdit`, the Linear shape),
+      NOT Jira's admin bulk-archive. So the restore surface belongs next to the
+      work (view = `canBrowse`, restore = `canEdit`), not behind project admin.
+      A navigator SEGMENT was rejected: every navigator read filters
+      `archivedAt IS NULL`, and its sort / tree view / inline-edit / advanced +
+      saved filters are all built around LIVE items — bolting an "archived" mode
+      onto it would fork all of those. A dedicated flat route keeps the archived
+      surface simple and leaves the live navigator untouched.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens), and the
+      markup mirrors the SHIPPED primitives the active list uses (list.mock.html):
+      the bordered Card table, IssueTypeIcon (lucide in the --el-type-* hue), the
+      mono identifier, the initial-letter Avatar, the status Pill tones, the
+      IssueListPager footer, EmptyState, and the success Toast. The archived list
+      REUSES that row vocabulary un-nested and adds only: an "Archived by" + an
+      "Archived" (date) column read from the `archived` revision, and a per-row
+      [Restore] affordance (canEdit-gated). NO new primitive.
+
+      Covers (multi-panel): (0) the archived view in the page shell — the flat
+      list with the Restore column + the pager · (1) Restore in flight — the row
+      fades out optimistically + the "{key} restored" success toast · (2) empty
+      state · (3) loading skeleton (flat) · (4) the VIEW-ONLY state (canBrowse,
+      not canEdit) — no Restore column · (5) the navigator entry point (the
+      [Archived] toolbar link on /issues). Toggle dark to confirm token parity.
+      See design-notes.md → "Archived work items view + Restore UX".
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-success: var(--color-success);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-success: #2fbf4f;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1200px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1200px;
+        margin: 0 auto;
+        position: relative;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 36px 0 10px;
+        padding-left: 2px;
+        max-width: 1200px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      /* ── Page shell — header (mirrors app/(authed)/issues/page.tsx) ───────── */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      /* Back link — a ghost text link back to the live navigator (lucide arrow-left) */
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      .back-link .ic {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.is-disabled {
+        color: var(--el-text-muted);
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      /* The new [Archived] navigator affordance — a quiet ghost link. The count
+         badge tells the user there IS something here without opening it. */
+      .tb-btn.ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tb-btn.ghost:hover {
+        background: var(--el-surface);
+      }
+      .tb-btn .count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      /* ── The flat Archived list table ─────────────────────────────────────── */
+      /* Container chrome mirrors IssueTreeTable / list.mock.html */
+      .list-table {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      /* Column grid: Title · Status · Archived by · Archived · [Restore].
+         The Restore action column drops out entirely in the view-only state. */
+      .lt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 130px 175px 140px 120px;
+        align-items: center;
+        column-gap: 16px;
+        padding: 0 20px 0 16px;
+      }
+      /* view-only state: no Restore column (and no can-edit affordance) */
+      .lt-grid.view-only {
+        grid-template-columns: minmax(0, 1fr) 130px 175px 140px;
+      }
+      .lt-head {
+        height: 40px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .th {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .th.end {
+        justify-content: flex-end;
+      }
+
+      .lt-row {
+        height: 48px;
+        border-bottom: 1px solid var(--el-border);
+        color: inherit;
+      }
+      .lt-row:last-child {
+        border-bottom: 0;
+      }
+      .lt-row:hover {
+        background: var(--el-surface);
+      }
+      /* the row body (everything but the Restore button) links to the item */
+      .row-link {
+        display: contents;
+        text-decoration: none;
+        color: inherit;
+      }
+      .lt-row:hover .cell-title .ttl {
+        text-decoration: underline;
+      }
+      /* Restoring → the row fades + locks while the unarchive POST is in flight */
+      .lt-row.is-restoring {
+        opacity: 0.45;
+        pointer-events: none;
+      }
+
+      /* Title cell — IssueTypeIcon · mono identifier · title (no indent/chevron) */
+      .cell-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-title .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .cell-title .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* Avatar — initial-letter, mirrors issueCellPrimitives Avatar */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .cell-person {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-person .nm {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .cell-meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill--planned {
+        background: var(--el-tint-lavender);
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* Restore button — a small secondary Button (variant="secondary",
+         size="sm"); lucide rotate-ccw. Right-aligned in its cell. canEdit-gated:
+         absent (column dropped) for a viewer who can browse but not edit. */
+      .cell-action {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .btn-restore {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .btn-restore:hover {
+        background: var(--el-surface);
+      }
+      .btn-restore:focus-visible {
+        outline: none;
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+      .btn-restore .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* EmptyState (components/ui/EmptyState.tsx) = Card + icon + copy */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-muted);
+      }
+      .empty .ic-wrap svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 400;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 8px 0 0;
+        max-width: 48ch;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .empty .action {
+        margin-top: 16px;
+      }
+      .btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 18px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .btn-secondary .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+
+      /* Loading skeleton — FLAT shimmer rows, same columns */
+      .sk {
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.55;
+        }
+      }
+      .bar {
+        display: block;
+        height: 12px;
+        border-radius: 4px;
+        background: var(--el-muted);
+      }
+      .chip-sk {
+        display: block;
+        height: 20px;
+        width: 64px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+      }
+      .dot-sk {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--el-muted);
+        flex: none;
+      }
+      .av-sk {
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        flex: none;
+      }
+      .btn-sk {
+        display: block;
+        height: 30px;
+        width: 88px;
+        margin-left: auto;
+        border-radius: var(--radius-btn);
+        background: var(--el-muted);
+      }
+
+      /* ── Pagination footer (reuses IssueListPager) — the last row inside the
+         bordered box. "Showing 1–50 of N" + prev/next + page numbers. ─────────── */
+      .lt-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .lt-count {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .lt-count strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .pager {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .pg-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pg-btn:hover {
+        background: var(--el-surface);
+      }
+      .pg-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .pg-btn.is-current {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+        cursor: default;
+      }
+      .pg-btn.is-disabled {
+        color: var(--el-text-faint);
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      .pg-btn.is-disabled .ic {
+        color: var(--el-text-faint);
+      }
+      .pg-ellipsis {
+        min-width: 24px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--el-text-faint);
+        user-select: none;
+      }
+
+      /* ── Toast (components/ui/Toast.tsx), success variant ─────────────────── */
+      .toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 260px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+      }
+      .toast .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-success);
+      }
+      .toast .msg {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      /* Where the live toast region sits (bottom-right). Shown in-panel here. */
+      .toast-dock {
+        position: absolute;
+        right: 8px;
+        bottom: -8px;
+      }
+      .note {
+        margin: 0 0 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Archived work items view + Restore UX</h1>
+        <p>
+          Story 2.9 · design for 2.9.3. A dedicated <code>/issues/archived</code> route — the
+          durable restore surface that replaces the transient Undo toast. Built from the real
+          design-system tokens / primitives.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <!-- story = book-open -->
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <!-- task = square-check-big -->
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <!-- subtask = list-checks -->
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <!-- rotate-ccw = restore -->
+        <g
+          id="i-rotate-ccw"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </g>
+        <!-- archive -->
+        <g
+          id="i-archive"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="5" x="2" y="3" rx="1" />
+          <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+          <path d="M10 12h4" />
+        </g>
+        <!-- arrow-left -->
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <!-- circle-check = success toast -->
+        <g
+          id="i-circle-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-chevron-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 5h.01" />
+          <path d="M3 12h.01" />
+          <path d="M3 19h.01" />
+          <path d="M8 5h13" />
+          <path d="M8 12h13" />
+          <path d="M8 19h13" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 0 — Archived view in the page shell ════════════ -->
+    <div class="panel-label">
+      0 · The archived view at <code>/issues/archived</code> — a flat, paginated list. Each row
+      keeps its type glyph · key · title · last status, and adds WHO + WHEN it was archived (from
+      the `archived` revision) + a per-row [Restore] (canEdit-gated).
+    </div>
+    <div class="panel">
+      <a class="back-link">
+        <svg class="ic" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Work items
+      </a>
+      <div class="page-head">
+        <div>
+          <h2>Archived work items</h2>
+          <p class="sub">
+            Hidden from boards, lists, and search — their history is kept. Restore to bring one
+            back.
+          </p>
+        </div>
+      </div>
+
+      <div class="list-table" role="table" aria-label="Archived work items">
+        <!-- header row -->
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader">Title</div>
+          <div class="th" role="columnheader">Status</div>
+          <div class="th" role="columnheader">Archived by</div>
+          <div class="th" role="columnheader">Archived</div>
+          <div class="th end" role="columnheader"><span class="sr-only">Actions</span></div>
+        </div>
+
+        <!-- rows: flat, most-recently-archived first -->
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-bug"
+                ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+              ><span class="lr-id">PROD-49</span
+              ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span></span
+            >
+            <span><span class="pill pill--inprogress">in-review</span></span>
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 15, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-49">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+              ><span class="lr-id">PROD-37</span
+              ><span class="ttl">Spike: evaluate magic-link vs. OTP for passwordless</span></span
+            >
+            <span><span class="pill pill--planned">todo</span></span>
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 14, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-37">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+              ><span class="lr-id">PROD-28</span
+              ><span class="ttl">SAML SSO (dropped from Q3 scope)</span></span
+            >
+            <span><span class="pill pill--planned">todo</span></span>
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta">Jun 11, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-28">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-subtask"
+                ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+              ><span class="lr-id">PROD-61</span
+              ><span class="ttl">Duplicate: wire reset-password rate limit</span></span
+            >
+            <span><span class="pill pill--done">done</span></span>
+            <span class="cell-person"
+              ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+            >
+            <span class="cell-meta">Jun 9, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-61">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+              ><span class="lr-id">PROD-19</span
+              ><span class="ttl">Old onboarding checklist copy</span></span
+            >
+            <span><span class="pill pill--done">done</span></span>
+            <span class="cell-person"
+              ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+            >
+            <span class="cell-meta">Jun 3, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-19">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+
+        <!-- pager footer (IssueListPager) -->
+        <div class="lt-foot">
+          <span class="lt-count">Showing <strong>1–50</strong> of <strong>63</strong></span>
+          <nav class="pager" aria-label="Pagination">
+            <button class="pg-btn is-disabled" aria-label="Previous page" aria-disabled="true">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-left" /></svg>
+            </button>
+            <button class="pg-btn is-current" aria-current="page">1</button>
+            <button class="pg-btn">2</button>
+            <button class="pg-btn" aria-label="Next page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+            </button>
+          </nav>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 1 — Restore in flight + success toast ════════════ -->
+    <div class="panel-label">
+      1 · Restore — clicking [Restore] POSTs the unarchive; the row fades + locks optimistically and
+      drops out on the 200, and the success toast confirms it. Restore is itself reversible
+      (re-archive from the item), so NO Undo button is needed — unlike the archive toast.
+    </div>
+    <div class="panel">
+      <div class="list-table" role="table" aria-label="Archived work items">
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader">Title</div>
+          <div class="th" role="columnheader">Status</div>
+          <div class="th" role="columnheader">Archived by</div>
+          <div class="th" role="columnheader">Archived</div>
+          <div class="th end" role="columnheader"><span class="sr-only">Actions</span></div>
+        </div>
+
+        <!-- the row being restored: faded + locked -->
+        <div class="lt-grid lt-row is-restoring" role="row" aria-busy="true">
+          <span class="row-link">
+            <span class="cell-title"
+              ><span class="type-icon t-bug"
+                ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+              ><span class="lr-id">PROD-49</span
+              ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span></span
+            >
+            <span><span class="pill pill--inprogress">in-review</span></span>
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 15, 2026</span>
+          </span>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" disabled aria-label="Restoring PROD-49">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restoring…
+            </button>
+          </span>
+        </div>
+
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-task"
+                ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+              ><span class="lr-id">PROD-37</span
+              ><span class="ttl">Spike: evaluate magic-link vs. OTP for passwordless</span></span
+            >
+            <span><span class="pill pill--planned">todo</span></span>
+            <span class="cell-person"
+              ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+            >
+            <span class="cell-meta">Jun 14, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-37">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+
+        <div class="lt-grid lt-row" role="row">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+              ><span class="lr-id">PROD-28</span
+              ><span class="ttl">SAML SSO (dropped from Q3 scope)</span></span
+            >
+            <span><span class="pill pill--planned">todo</span></span>
+            <span class="cell-person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="cell-meta">Jun 11, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-28">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <!-- the success toast (bottom-right region) -->
+      <div class="toast-dock">
+        <div class="toast" role="status">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-check" /></svg>
+          <span class="msg">PROD-49 restored</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — empty state ════════════ -->
+    <div class="panel-label">
+      2 · Empty — no archived items. The EmptyState Card with an [archive] glyph + a route back to
+      the live navigator (there is nothing to restore here).
+    </div>
+    <div class="panel" style="max-width: 760px">
+      <a class="back-link">
+        <svg class="ic" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Work items
+      </a>
+      <div class="card empty">
+        <span class="ic-wrap"
+          ><svg viewBox="0 0 24 24"><use href="#i-archive" /></svg
+        ></span>
+        <h3>Nothing archived</h3>
+        <p>
+          Archived work items show up here. Archive one from its ⋯ menu to hide it from boards and
+          lists while keeping its history.
+        </p>
+        <div class="action">
+          <button class="btn-secondary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to work items
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — loading skeleton (flat) ════════════ -->
+    <div class="panel-label">
+      3 · Loading — the flat shimmer skeleton (same columns, incl. the Restore-button placeholder).
+    </div>
+    <div class="panel">
+      <div class="list-table sk" aria-hidden="true">
+        <div class="lt-grid lt-head">
+          <span class="th">Title</span>
+          <span class="th">Status</span>
+          <span class="th">Archived by</span>
+          <span class="th">Archived</span>
+          <span class="th end"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 220px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 70px"></span
+          ></span>
+          <span class="bar" style="width: 80px"></span>
+          <span class="btn-sk"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 170px"></span
+          ></span>
+          <span class="chip-sk" style="width: 64px"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 70px"></span
+          ></span>
+          <span class="bar" style="width: 80px"></span>
+          <span class="btn-sk"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 250px"></span
+          ></span>
+          <span class="chip-sk" style="width: 72px"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 70px"></span
+          ></span>
+          <span class="bar" style="width: 80px"></span>
+          <span class="btn-sk"></span>
+        </div>
+        <div class="lt-grid lt-row">
+          <span class="cell-title"
+            ><span class="dot-sk"></span><span class="bar" style="width: 56px"></span
+            ><span class="bar" style="width: 190px"></span
+          ></span>
+          <span class="chip-sk" style="width: 80px"></span>
+          <span class="cell-person"
+            ><span class="av-sk"></span><span class="bar" style="width: 70px"></span
+          ></span>
+          <span class="bar" style="width: 80px"></span>
+          <span class="btn-sk"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — view-only state (canBrowse, not canEdit) ════════════ -->
+    <div class="panel-label">
+      4 · View-only — a viewer who can browse but NOT edit sees the same list, but the Restore
+      column is dropped entirely (no shown-disabled buttons — mirrors the ⋯ menu's
+      hidden-not-disabled pattern). They can audit what was archived; restoring needs the edit
+      capability.
+    </div>
+    <div class="panel">
+      <div class="list-table" role="table" aria-label="Archived work items">
+        <div class="lt-grid view-only lt-head" role="row">
+          <div class="th" role="columnheader">Title</div>
+          <div class="th" role="columnheader">Status</div>
+          <div class="th" role="columnheader">Archived by</div>
+          <div class="th" role="columnheader">Archived</div>
+        </div>
+        <a class="lt-grid view-only lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-bug"
+              ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+            ><span class="lr-id">PROD-49</span
+            ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span></span
+          >
+          <span><span class="pill pill--inprogress">in-review</span></span>
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span class="cell-meta">Jun 15, 2026</span>
+        </a>
+        <a class="lt-grid view-only lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-28</span
+            ><span class="ttl">SAML SSO (dropped from Q3 scope)</span></span
+          >
+          <span><span class="pill pill--planned">todo</span></span>
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span class="cell-meta">Jun 11, 2026</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 — the navigator entry point ════════════ -->
+    <div class="panel-label">
+      5 · Entry point — on the live <code>/issues</code> navigator, a quiet [Archived] ghost link is
+      added to the toolbar (before [Filter]), with a count badge so a user knows there's something
+      there. It navigates to <code>/issues/archived</code>. The rest of the toolbar is unchanged.
+    </div>
+    <div class="panel">
+      <div class="page-head" style="margin-bottom: 0">
+        <div>
+          <h2>Work items</h2>
+          <p class="sub">All work items in Motir — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn ghost" aria-label="Archived work items">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>Archived<span
+              class="count-badge"
+              >63</span
+            >
+          </button>
+          <button class="tb-btn is-disabled" title="Filtering arrives in a later update">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-sliders" /></svg>Filter
+          </button>
+          <button class="tb-btn" aria-haspopup="menu" aria-expanded="false">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg>List<svg
+              class="caret"
+              viewBox="0 0 24 24"
+            >
+              <use href="#i-chevron-down" />
+            </svg>
+          </button>
+          <button class="tb-btn primary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New work item
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
