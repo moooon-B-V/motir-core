@@ -41,6 +41,44 @@ The asset is **multi-panel** (review EACH, not just the first — mistake #31):
 - **(5)** the **running / error / resume** states — the streaming job (tied to
   the 7.1.4 job stream), the discovery-failed `ErrorState` with retry, and the
   "docs already exist — resume" state.
+- **(6)** the **self-host connect-gate** — on a self-hosted instance the Plan
+  page is PRESENT but connect-gated ("Connect Motir AI to start planning"),
+  because the chat is a client for the closed cloud planner (see the cloud-gated
+  note below).
+
+---
+
+## ⚠️ Cloud-gated AI — the chat is a CLIENT for the closed cloud planner (Yue, 2026-06-16)
+
+**The chat front door is the UI of the AI planner, and the planner intelligence
+(`motir-ai`) is closed-source + cloud-hosted, metered through the Epic-9 gateway
+(MOTIR-674).** So the chat is a _thin client_: every message it sends goes to the
+hosted planner. This subtask's UI ships in open `motir-core` (7.2.7 is a
+`motir-core` subtask), but it has no local brain to talk to — exactly the GitLab
+Duo shape (the Duo chat UI ships in self-managed GitLab; it is inert until the
+cloud AI gateway is connected with a subscription).
+
+**Consequences this design bakes in:**
+
+- **Hosted motir.co** — the chat works (talks to hosted `motir-ai`, metered); the
+  landing page (panels 1–5) is the full experience.
+- **Self-hosted `motir-core`** — the PM tracker works fully and the **open
+  external-agent dispatch** path works with no cloud (generate a prompt → run it
+  in your own coding agent). But the **planner chat is PRESENT-but-connect-gated**
+  (Yue's decision, 2026-06-16): the Plan page renders panel 6 — _"Connect Motir AI
+  to start planning"_ — until the operator connects a **Motir Cloud account /
+  token** (→ the hosted planner, metered; this is the self-host upsell). It never
+  silently breaks, and it offers the free dispatch path as the no-cloud
+  alternative.
+- **Root landing differs by deploy:** hosted root = the working chat front door
+  (panel 1); self-host root = the PM app (login → boards), with the Plan page
+  reachable and showing the connect-gate. The marketing nav (panel 1) is
+  cloud-only chrome and does not render on self-host.
+- A **BYOK self-host of the planner** (the operator points the chat at their own
+  LLM via the gateway, running a license-gated `motir-ai`) is an OPEN product
+  decision, NOT assumed here — panel 6's "Connect Motir AI" is the cloud-token
+  path; a BYOK variant would be an additional connect option if that path is ever
+  taken.
 
 ---
 
@@ -211,6 +249,31 @@ A responsive grid of three `Card` state panels:
   already exist" + a body + a `Button variant="secondary"` "Resume editing" and a
   `Button variant="ghost"` "Start over".
 
+## Panel 6 — self-host connect-gate ("AI not connected")
+
+The Plan page as a **self-hosted** operator sees it before connecting Motir AI —
+the chat is PRESENT (it's in open `motir-core`) but **connect-gated** (the
+cloud-gated-AI decision above). Drawn inside the real app shell so it reads
+unambiguously as the Plan page, not a marketing surface:
+
+- **Context badge** in the chat header — a neutral `Pill`-grammar chip
+  (`--el-muted`, lucide `cloud`) reading **"Self-hosted · Motir AI add-on"**, so
+  the operator knows why the chat is gated.
+- **Connect card** (centered, `EmptyState` grammar) — a `--el-tint-lavender`
+  glyph tile (lucide `cloud`), `font-serif` **"Connect Motir AI to start
+  planning"**, a body explaining that planning / discovery / direction docs are
+  powered by the **hosted Motir AI** service, and a primary
+  `Button size="lg"` **"Connect Motir AI"** (lucide `plug-zap`) → the
+  Motir-Cloud-token connect flow (the self-host upsell).
+- **No-cloud alternative** — under a divider, a muted line linking to the
+  **open external-agent dispatch** path ("dispatch work items to your own coding
+  agent — built in, needs no cloud connection"), so a self-hoster who won't
+  connect still has a working AI-adjacent path. This is the free, GPL,
+  `motir-core` capability — not a dead end.
+
+This panel is the run-time face of the cloud-gated note: it does NOT exist on
+hosted motir.co (where the chat works); it is the self-host state.
+
 ## i18n
 
 A new **`plan` (AI planning) namespace** + landing strings, same locale set as
@@ -254,22 +317,23 @@ in to start planning"), `gate.sub`, `gate.savedLabel` ("Your idea — saved"),
 
 ## Primitives composed (no hand-rolling)
 
-| Element                       | Shipped primitive                                                                                                                                                                                                                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| marketing top-nav             | the `PublicTopBar` grammar (`app/(public)/_components/PublicTopBar.tsx`) + `components/ui/Button.tsx`                                                                                                                                                                                     |
-| landing / state / doc / layer | `components/ui/Card.tsx`                                                                                                                                                                                                                                                                  |
-| prompt box + composer input   | `components/ui/Textarea.tsx`                                                                                                                                                                                                                                                              |
-| login gate                    | `components/ui/Modal.tsx` + the shipped `(auth)/sign-in` + `sign-up` flow (`design/auth`)                                                                                                                                                                                                 |
-| eyebrow / pin / delegate      | `components/ui/Pill.tsx` (tint tones)                                                                                                                                                                                                                                                     |
-| primary / ghost / secondary   | `components/ui/Button.tsx`                                                                                                                                                                                                                                                                |
-| sidebar rail                  | `components/ui/Sidebar.tsx`                                                                                                                                                                                                                                                               |
-| 3-doc tabs                    | `components/ui/Segmented.tsx`                                                                                                                                                                                                                                                             |
-| doc render + light-edit       | `components/ui/MarkdownView.tsx` · `MarkdownEditor.tsx`                                                                                                                                                                                                                                   |
-| running job / writing step    | `components/ui/Spinner.tsx`                                                                                                                                                                                                                                                               |
-| discovery-failed state        | `components/ui/ErrorState.tsx`                                                                                                                                                                                                                                                            |
-| message bubble                | **new ARRANGEMENT** = `Card` + `Avatar` (`issueCellPrimitives`) + `MarkdownView` (see the bubble note — no new primitive)                                                                                                                                                                 |
-| avatar                        | `issueCellPrimitives.tsx` `Avatar` (initial-letter disc)                                                                                                                                                                                                                                  |
-| icons                         | lucide-react (`sparkles`, `circle-help`, `pin`, `wand-sparkles`, `send-horizontal`, `file-text`, `pencil-line`, `rotate-cw`, `history`, `triangle-alert`, `check`, `mail`, `lock-keyhole`, `arrow-right`, `circle-dot`, `square-kanban`, `layout-grid`) + the Google / GitHub brand marks |
+| Element                       | Shipped primitive                                                                                                                                                                                                                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| marketing top-nav             | the `PublicTopBar` grammar (`app/(public)/_components/PublicTopBar.tsx`) + `components/ui/Button.tsx`                                                                                                                                                                                                          |
+| landing / state / doc / layer | `components/ui/Card.tsx`                                                                                                                                                                                                                                                                                       |
+| prompt box + composer input   | `components/ui/Textarea.tsx`                                                                                                                                                                                                                                                                                   |
+| login gate                    | `components/ui/Modal.tsx` + the shipped `(auth)/sign-in` + `sign-up` flow (`design/auth`)                                                                                                                                                                                                                      |
+| eyebrow / pin / delegate      | `components/ui/Pill.tsx` (tint tones)                                                                                                                                                                                                                                                                          |
+| primary / ghost / secondary   | `components/ui/Button.tsx`                                                                                                                                                                                                                                                                                     |
+| sidebar rail                  | `components/ui/Sidebar.tsx`                                                                                                                                                                                                                                                                                    |
+| 3-doc tabs                    | `components/ui/Segmented.tsx`                                                                                                                                                                                                                                                                                  |
+| doc render + light-edit       | `components/ui/MarkdownView.tsx` · `MarkdownEditor.tsx`                                                                                                                                                                                                                                                        |
+| running job / writing step    | `components/ui/Spinner.tsx`                                                                                                                                                                                                                                                                                    |
+| discovery-failed state        | `components/ui/ErrorState.tsx`                                                                                                                                                                                                                                                                                 |
+| self-host connect-gate        | `components/ui/EmptyState.tsx` grammar (Card + glyph + title + body + action) + the `Pill` context badge                                                                                                                                                                                                       |
+| message bubble                | **new ARRANGEMENT** = `Card` + `Avatar` (`issueCellPrimitives`) + `MarkdownView` (see the bubble note — no new primitive)                                                                                                                                                                                      |
+| avatar                        | `issueCellPrimitives.tsx` `Avatar` (initial-letter disc)                                                                                                                                                                                                                                                       |
+| icons                         | lucide-react (`sparkles`, `circle-help`, `pin`, `wand-sparkles`, `send-horizontal`, `file-text`, `pencil-line`, `rotate-cw`, `history`, `triangle-alert`, `check`, `mail`, `lock-keyhole`, `arrow-right`, `circle-dot`, `square-kanban`, `layout-grid`, `cloud`, `plug-zap`) + the Google / GitHub brand marks |
 
 No new design-system entry is invented in this Story. If a future need arises
 that a shipped primitive can't cover, that is a NEW `design/` subtask, not a code

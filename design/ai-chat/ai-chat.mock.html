@@ -45,6 +45,11 @@
             visible, the "Generate the plan" CTA (drawn; wired in 7.3).
         (5) in-progress + error + resume states — the running job (7.1.4 stream),
             the discovery-failed ErrorState (retry), the "docs exist — resume".
+        (6) SELF-HOST connect-gate — the chat is a CLIENT for the closed cloud
+            planner (motir-ai), so on a self-hosted instance the Plan page is
+            PRESENT but connect-gated: "Connect Motir AI to start planning" (Yue,
+            2026-06-16). The free, open external-agent dispatch path is offered as
+            the no-cloud alternative.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -1256,6 +1261,76 @@
         justify-content: center;
         align-items: center;
       }
+
+      /* ─────────────── Panel 6 — self-host "AI not connected" connect-gate ─────────────── */
+      .ctx-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-muted);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      .ctx-badge .ic-sm {
+        color: var(--el-text-muted);
+      }
+      .connect-wrap {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 24px;
+      }
+      .connect {
+        max-width: 460px;
+        text-align: center;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        padding: 34px 30px 28px;
+      }
+      .connect .glyph {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .connect h3 {
+        margin: 0 0 9px;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .connect p {
+        margin: 0 0 18px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .connect .alt {
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--el-border);
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .connect .alt a {
+        color: var(--el-link);
+        font-weight: 600;
+        text-decoration: none;
+      }
     </style>
   </head>
   <body>
@@ -1509,6 +1584,30 @@
           <rect width="7" height="7" x="14" y="3" rx="1" />
           <rect width="7" height="7" x="14" y="14" rx="1" />
           <rect width="7" height="7" x="3" y="14" rx="1" />
+        </g>
+        <g
+          id="i-cloud"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+        </g>
+        <g
+          id="i-plug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z" />
+          <path d="m2 22 3-3" />
+          <path d="M7.5 13.5 10 11" />
+          <path d="M10.5 16.5 13 14" />
+          <path d="m18 3-4 4h6l-4 4" />
         </g>
         <!-- GitHub mark (brand, fill) -->
         <g id="i-github" fill="currentColor" stroke="none">
@@ -2018,6 +2117,75 @@
                 <svg class="ic" viewBox="0 0 24 24"><use href="#i-file" /></svg> Resume editing
               </button>
               <button class="btn btn-ghost">Start over</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — self-host "AI not connected" connect-gate ════════════════ -->
+    <div class="panel-label">
+      Panel 6 — self-hosted · the Plan page when Motir AI isn’t connected
+      (present-but-connect-gated)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="shell">
+          <!-- same app shell — the chat page is PRESENT on self-host, just gated -->
+          <div class="rail">
+            <a class="brand"
+              ><span class="tile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+              ></span>
+              Motir</a
+            >
+            <div class="navitem active">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Plan
+            </div>
+            <div class="navitem">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Issues
+            </div>
+            <div class="navitem">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-kanban" /></svg> Boards
+            </div>
+            <div class="navitem">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-grid" /></svg> Dashboard
+            </div>
+          </div>
+
+          <div class="chatmain">
+            <div class="chathead">
+              <div class="t">
+                <svg class="ic" viewBox="0 0 24 24" style="color: var(--el-accent-on-surface)">
+                  <use href="#i-sparkles" />
+                </svg>
+                Plan
+              </div>
+              <span class="ctx-badge"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-cloud" /></svg> Self-hosted ·
+                Motir AI add-on</span
+              >
+            </div>
+            <div class="connect-wrap">
+              <div class="connect">
+                <div class="glyph">
+                  <svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-cloud" /></svg>
+                </div>
+                <h3>Connect Motir AI to start planning</h3>
+                <p>
+                  Planning, discovery, and the direction docs are powered by
+                  <strong style="color: var(--el-text)">Motir AI</strong> — a hosted service.
+                  Connect your Motir Cloud account to turn it on for this self-hosted workspace.
+                </p>
+                <button class="btn btn-primary btn-lg">
+                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg> Connect Motir AI
+                </button>
+                <div class="alt">
+                  No account yet? You can still
+                  <a>dispatch work items to your own coding agent</a> — that path is built in and
+                  needs no cloud connection.
+                </div>
+              </div>
             </div>
           </div>
         </div>
