@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { verifyJobToken } from './jobToken.js';
+import { verifyJobToken } from './jobToken';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Authenticates an incoming ai→core read-back request (the /api/internal/ai/*

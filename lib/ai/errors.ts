@@ -4,7 +4,7 @@
 // failures that sit underneath it — into motir-core typed errors, so no caller
 // ever branches on a raw HTTP status or an upstream JSON shape.
 
-import type { Problem, JobStatus, ResultEnvelope } from './types.js';
+import type { Problem, JobStatus, ResultEnvelope } from './types';
 
 export abstract class MotirAiError extends Error {
   abstract readonly code: string;

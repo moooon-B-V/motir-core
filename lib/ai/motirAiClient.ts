@@ -10,13 +10,13 @@ import 'server-only';
 // submits jobs (minting the §4b job-scoped read-back token), polls them, and
 // streams them, mapping the §5 problem+json taxonomy to motir-core typed errors.
 
-import { mintJobToken } from './jobToken.js';
+import { mintJobToken } from './jobToken';
 import {
   MotirAiConfigError,
   MotirAiUnavailableError,
   errorFromProblem,
   type JobView,
-} from './errors.js';
+} from './errors';
 import type {
   JobContextBag,
   JobKind,
@@ -25,7 +25,7 @@ import type {
   RawJobResponse,
   RequestEnvelope,
   Tenant,
-} from './types.js';
+} from './types';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
 // motir-ai reads/proposes only what this user could (contract §4b).
