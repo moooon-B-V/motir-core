@@ -220,6 +220,8 @@ describe('projectSquareService.listDirectory — input validation', () => {
       score: 3,
       ts: null,
       id: 'abc123',
+      search: null,
+      category: null,
     });
     await expect(
       projectSquareService.listDirectory({ rank: 'recent', cursor: crossRank }),
@@ -230,24 +232,72 @@ describe('projectSquareService.listDirectory — input validation', () => {
 describe('ranked cursor codec', () => {
   it('round-trips a numeric (popular) keyset position', () => {
     const c = decodeRankedCursor(
-      encodeRankedCursor({ rank: 'popular', window: null, score: 7, ts: null, id: 'abc' }),
+      encodeRankedCursor({
+        rank: 'popular',
+        window: null,
+        score: 7,
+        ts: null,
+        id: 'abc',
+        search: null,
+        category: null,
+      }),
     );
-    expect(c).toEqual({ rank: 'popular', window: null, score: 7, ts: null, id: 'abc' });
+    expect(c).toEqual({
+      rank: 'popular',
+      window: null,
+      score: 7,
+      ts: null,
+      id: 'abc',
+      search: null,
+      category: null,
+    });
   });
 
   it('round-trips a timestamp (recent) keyset position', () => {
     const iso = '2026-06-14T12:00:00.000Z';
     const c = decodeRankedCursor(
-      encodeRankedCursor({ rank: 'recent', window: null, score: null, ts: iso, id: 'xyz' }),
+      encodeRankedCursor({
+        rank: 'recent',
+        window: null,
+        score: null,
+        ts: iso,
+        id: 'xyz',
+        search: null,
+        category: null,
+      }),
     );
-    expect(c).toEqual({ rank: 'recent', window: null, score: null, ts: iso, id: 'xyz' });
+    expect(c).toEqual({
+      rank: 'recent',
+      window: null,
+      score: null,
+      ts: iso,
+      id: 'xyz',
+      search: null,
+      category: null,
+    });
   });
 
   it('round-trips a trending position carrying its window', () => {
     const c = decodeRankedCursor(
-      encodeRankedCursor({ rank: 'trending', window: 'day', score: 12, ts: null, id: 'q1' }),
+      encodeRankedCursor({
+        rank: 'trending',
+        window: 'day',
+        score: 12,
+        ts: null,
+        id: 'q1',
+        search: null,
+        category: null,
+      }),
     );
-    expect(c).toEqual({ rank: 'trending', window: 'day', score: 12, ts: null, id: 'q1' });
+    expect(c).toEqual({
+      rank: 'trending',
+      window: 'day',
+      score: 12,
+      ts: null,
+      id: 'q1',
+      search: null,
+      category: null,
+    });
   });
 
   it('throws InvalidProjectSquareCursorError on malformed / mis-shaped tokens', () => {
