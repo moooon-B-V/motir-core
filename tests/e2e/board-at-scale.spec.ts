@@ -351,6 +351,27 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
     await expectNoLoadMore(page); // no per-lane "Load more" either (3.8.5)
   });
 
+  test('the over-cap banner "Refine filter" CTA opens the board filter (Story 6.15.3/6.15.4)', async ({
+    page,
+  }) => {
+    // The over-cap board is the only real surface where the banner renders, so
+    // its "Refine filter" CTA → board-filter-popover wiring (6.15.3) is proven
+    // here, over the real stack. (The CTA→onRefine→context-open seam is unit-
+    // tested in tests/components/board-filter.test.tsx; this is the composition.)
+    await signInBoardSeedOwnerAndOpenBoard(page);
+    await expect(overCapBanner(page)).toBeVisible();
+
+    // Closed: the quick-filter popover's facet listboxes are not mounted.
+    await expect(page.getByRole('listbox', { name: 'Kind' })).toHaveCount(0);
+
+    // Click the banner CTA — it opens the board's quick [Filter] popover through
+    // BoardFilterUiContext (the seam was dead before 6.15.3).
+    await page.getByTestId('board-overcap-filter').click();
+    const dialog = page.getByRole('dialog', { name: 'Filter work items' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('listbox', { name: 'Work type' })).toBeVisible();
+  });
+
   test('hides the over-cap banner on an under-cap board (flat AND swimlane)', async ({ page }) => {
     // The small tenant's board is well under the cap → truncated false → no banner.
     await signIn(page, small.email, SEED_LARGE_OWNER_PASSWORD);
