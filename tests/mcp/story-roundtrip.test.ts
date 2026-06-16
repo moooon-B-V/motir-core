@@ -5,7 +5,8 @@ import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
-import { TOKEN_SCOPES, DEFAULT_TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { TOKEN_SCOPES, DEFAULT_TOKEN_SCOPES, toolScope, type TokenScope } from '@/lib/mcp/scopes';
+import { SCOPE_NOT_GRANTED_CODE } from '@/lib/mcp/scopeGate';
 import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import { decodeFilterEnvelope, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
@@ -84,6 +85,27 @@ async function fullToken(fx: WorkItemFixture, label = 'full'): Promise<string> {
     scopes: [...TOKEN_SCOPES],
   });
   return token;
+}
+
+/** Mint a PAT bound to the fixture's workspace with EXACTLY `scopes` granted —
+ * the lever for the scope matrix (a restricted set, the default set, a
+ * delete-enabled set). The owner's ROLE is unchanged; only the token's
+ * capability is narrowed, so a denial here isolates SCOPE from the 6.4 role. */
+async function scopedToken(
+  fx: WorkItemFixture,
+  scopes: TokenScope[],
+  label = 'scoped',
+): Promise<string> {
+  const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, { label, scopes });
+  return token;
+}
+
+/** Did the tool result come back as the typed scope-denied error? `callTool`'s
+ * return is a union broader than `CallToolResult`, so read the fields off the
+ * raw result (the same shape `structured` reads). */
+function isScopeDenied(res: unknown): boolean {
+  const r = res as { isError?: boolean; content?: unknown };
+  return r.isError === true && JSON.stringify(r.content ?? '').includes(SCOPE_NOT_GRANTED_CODE);
 }
 
 /** Create a task via the service (the create-modal write) and return its key. */
@@ -486,6 +508,232 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const row = await db.sprint.findFirstOrThrow({ where: { id: sprintId } });
       expect(row.state).toBe('complete');
       await client.close();
+    });
+  });
+
+  // ───────────── token scope matrix — scope gating end-to-end ────────────────
+  //
+  // The 4th pillar (Subtask 7.8.20). The permission-parity pillar above isolated
+  // the 6.4 ROLE check by handing the non-member a FULL-scope token; this pillar
+  // isolates the per-token SCOPE gate (Subtask 7.7.17) by handing the OWNER
+  // (whose role allows everything) a token with a RESTRICTED scope set, and
+  // drives it through the SAME real `/api/mcp` route + `scopesFromExtra`
+  // resolver. The pure decision + in-memory wiring live in `scope-gate.test.ts`
+  // / `scopes.test.ts` (the totality + registry-loop guards that fail CI when a
+  // tool is added without a scope); THIS proves the gate end-to-end over a real
+  // bearer PAT, and that scope NARROWS but does not REPLACE the role.
+
+  describe('token scope matrix — the scope gate over the real bearer PAT', () => {
+    /** Seed a project with two items + a planned sprint, all in the CALLER's own
+     * workspace, and return the arg map (keyed total over the registry) aimed at
+     * them — so a GRANTED tool actually executes against reachable data and an
+     * UNGRANTED one is gated before touching it. */
+    async function ownArgMap(fx: WorkItemFixture): Promise<{
+      argFor: Record<McpToolName, Record<string, unknown>>;
+      item1: string;
+      item2: string;
+    }> {
+      const item1 = await makeTask(fx, 'Scope-1');
+      const item2 = await makeTask(fx, 'Scope-2');
+      const sprint = await sprintsService.createSprint(
+        fx.projectId,
+        { name: 'Scope sprint' },
+        fx.ctx,
+      );
+      const argFor: Record<McpToolName, Record<string, unknown>> = {
+        whoami: {},
+        get_work_item: { key: item1 },
+        list_ready: { projectKey: 'PROD' },
+        next_ready: { projectKey: 'PROD' },
+        search_work_items: { projectKey: 'PROD' },
+        list_sprints: { projectKey: 'PROD' },
+        create_work_item: { projectKey: 'PROD', kind: 'task', title: 'scoped create' },
+        update_work_item: { key: item1, title: 'scoped edit' },
+        transition_status: { key: item1, status: 'in_progress' },
+        add_comment: { key: item1, body: 'scoped comment' },
+        link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
+        unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
+        archive_work_item: { key: item2 },
+        unarchive_work_item: { key: item2 },
+        delete_work_item: { key: item2 },
+        create_sprint: { projectKey: 'PROD', name: 'scoped sprint 2' },
+        update_sprint: { sprintId: sprint.id, name: 'scoped renamed' },
+        delete_sprint: { sprintId: sprint.id },
+        move_to_sprint: { keys: [item1], sprintId: sprint.id },
+        move_to_backlog: { keys: [item1] },
+        start_sprint: { sprintId: sprint.id },
+        complete_sprint: { sprintId: sprint.id, carryOverTo: 'backlog' },
+        mark_integrated: { key: item1, sessionBranch: 'feat/scoped' },
+        complete_session: { sessionBranch: 'feat/scoped' },
+      };
+      // Totality guard — a tool added to MCP_TOOL_NAMES without a scope-matrix
+      // arg fails the suite by construction (the registry-loop guarantee the
+      // acceptance criteria require, here at the real-route level too).
+      expect(Object.keys(argFor).sort()).toEqual([...MCP_TOOL_NAMES].sort());
+      return { argFor, item1, item2 };
+    }
+
+    it('a RESTRICTED (read-only) token: every read tool executes, every other tool is scope-denied', async () => {
+      const fx = await makeWorkItemFixture();
+      const { argFor, item1 } = await ownArgMap(fx);
+
+      // A token granted ONLY the `read` scope — its owner is the workspace owner,
+      // so the ROLE permits everything; only the token narrows it.
+      const client = await connect(await scopedToken(fx, ['read'], 'read-only'));
+      for (const name of MCP_TOOL_NAMES) {
+        const res = await client.callTool({ name, arguments: argFor[name] });
+        if (toolScope(name) === 'read') {
+          // Granted: the gate lets it through and it executes successfully
+          // against the caller's own reachable data.
+          expect(res.isError, `read tool ${name} should execute`).toBeFalsy();
+        } else {
+          // Ungranted: rejected with the typed scope-denied error BEFORE the
+          // service runs (not a 404, not a success).
+          expect(isScopeDenied(res), `${name} must be scope-denied for a read-only token`).toBe(
+            true,
+          );
+        }
+      }
+      await client.close();
+
+      // The gate fired before every write: item1 is byte-for-byte untouched —
+      // not renamed, not transitioned, not archived, no comment landed.
+      const after = await workItemsService.getIssueDetail(fx.projectId, item1, fx.ctx);
+      expect(after.item.title).toBe('Scope-1');
+      expect(after.item.status).toBe('todo');
+      expect(after.item.archivedAt).toBeNull();
+      const itemRow = await db.workItem.findFirstOrThrow({ where: { identifier: item1 } });
+      expect(await db.comment.count({ where: { workItemId: itemRow.id } })).toBe(0);
+    });
+
+    it('the DEFAULT token (all-minus-delete) passes the gate for every tool EXCEPT delete_work_item', async () => {
+      const fx = await makeWorkItemFixture();
+      const { argFor } = await ownArgMap(fx);
+
+      // The default grant set (every scope except work_items:delete), minted by
+      // OMITTING the scopes option — exactly what the create modal sends.
+      expect(DEFAULT_TOKEN_SCOPES).not.toContain('work_items:delete');
+      const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+        label: 'default',
+      });
+      const client = await connect(token);
+
+      // The gate's verdict per tool: only delete_work_item is withheld. (We
+      // assert the GATE decision — that downstream execution is correct is the
+      // tool/UI-parity pillar's job — so this stays robust to mutation ordering.)
+      for (const name of MCP_TOOL_NAMES) {
+        const res = await client.callTool({ name, arguments: argFor[name] });
+        if (name === 'delete_work_item') {
+          expect(isScopeDenied(res), 'delete is the one default-off tool').toBe(true);
+        } else {
+          expect(isScopeDenied(res), `${name} should pass the default token's gate`).toBe(false);
+        }
+      }
+      await client.close();
+    });
+
+    it('a DEFAULT token DOES the non-delete work — a representative write/archive/sprint/integration all succeed', async () => {
+      const fx = await makeWorkItemFixture();
+      const key = await makeTask(fx, 'Default does work');
+      const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+        label: 'default-does',
+      });
+      const client = await connect(token);
+
+      // work_items:write — transition lands the board-drag revision.
+      const moved = await client.callTool({
+        name: 'transition_status',
+        arguments: { key, status: 'in_progress' },
+      });
+      expect(moved.isError).toBeFalsy();
+      // work_items:archive — recoverable soft-remove (on by default).
+      const archived = await client.callTool({ name: 'archive_work_item', arguments: { key } });
+      expect(archived.isError).toBeFalsy();
+      await client.callTool({ name: 'unarchive_work_item', arguments: { key } });
+      // sprints:write — create a sprint.
+      const sprintRes = await client.callTool({
+        name: 'create_sprint',
+        arguments: { projectKey: 'PROD', name: 'Default sprint' },
+      });
+      expect(sprintRes.isError).toBeFalsy();
+      // integration — mark the item integrated against a session branch.
+      const integrated = await client.callTool({
+        name: 'mark_integrated',
+        arguments: { key, sessionBranch: 'feat/default' },
+      });
+      expect(integrated.isError).toBeFalsy();
+
+      // The committed effects are real, not just gate-passed: the item moved off
+      // todo and is unarchived, and mark_integrated landed it in_review with the
+      // session branch stamped (its documented one-transaction effect). The
+      // sprint was created too.
+      const detail = await workItemsService.getIssueDetail(fx.projectId, key, fx.ctx);
+      expect(detail.item.status).toBe('in_review');
+      expect(detail.item.sessionBranch).toBe('feat/default');
+      expect(detail.item.archivedAt).toBeNull();
+      expect(await db.sprint.count({ where: { projectId: fx.projectId } })).toBe(1);
+      await client.close();
+    });
+
+    it('a DELETE-enabled token deletes a throwaway subtree (the one opt-in scope)', async () => {
+      const fx = await makeWorkItemFixture();
+      const story = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'story', title: 'Throwaway parent' },
+        fx.ctx,
+      );
+      const child = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: 'Throwaway child', parentId: story.id },
+        fx.ctx,
+      );
+
+      // A token granted the delete scope (+ read to resolve the key) — nothing
+      // more. The owner's role reaches the subtree, so scope is the only gate.
+      const client = await connect(await scopedToken(fx, ['read', 'work_items:delete'], 'deleter'));
+      const deleted = await client.callTool({
+        name: 'delete_work_item',
+        arguments: { key: story.identifier },
+      });
+      expect(deleted.isError).toBeFalsy();
+      await client.close();
+
+      // The whole subtree is gone (the cascade), proving the delete-enabled token
+      // actually performed the irreversible op.
+      expect(await db.workItem.count({ where: { id: { in: [story.id, child.id] } } })).toBe(0);
+    });
+
+    it('scope ∩ role — a granted scope still 404s when the role denies; an allowed role still scope-denies when the scope is absent', async () => {
+      // Tenant A owns the target item.
+      const a = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
+      const key = await makeTask(a, 'A-only');
+
+      // (1) Scope GRANTED (full), role DENIES — an OUTSIDER's full-scope token
+      // aimed at A's item reads as not-found (the 404-not-403 contract), NOT a
+      // scope error: scope narrows the role, it cannot widen a role that can't
+      // even see the resource.
+      const outsider = await makeWorkItemFixture({ name: 'Rival', identifier: 'ZZZ' });
+      const crossTenant = await connect(await fullToken(outsider, 'outsider-full'));
+      const roleDenied = await crossTenant.callTool({
+        name: 'transition_status',
+        arguments: { key, status: 'in_progress' },
+      });
+      expect(roleDenied.isError).toBe(true);
+      expect(JSON.stringify(roleDenied.content)).toContain('NOT_FOUND');
+      expect(isScopeDenied(roleDenied), 'role-denied is a 404, not a scope error').toBe(false);
+      await crossTenant.close();
+
+      // (2) Role ALLOWS (A's owner), scope ABSENT (read-only) — the gate fires
+      // FIRST and returns the scope-denied error, never reaching the role check.
+      const scopeShort = await connect(await scopedToken(a, ['read'], 'a-read-only'));
+      const scopeDenied = await scopeShort.callTool({
+        name: 'transition_status',
+        arguments: { key, status: 'in_progress' },
+      });
+      expect(isScopeDenied(scopeDenied), 'scope-absent → scope-denied').toBe(true);
+      await scopeShort.close();
+
+      // The item never moved under either denied call.
+      const after = await workItemsService.getIssueDetail(a.projectId, key, a.ctx);
+      expect(after.item.status).toBe('todo');
     });
   });
 });
