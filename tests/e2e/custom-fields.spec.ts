@@ -178,6 +178,21 @@ function fieldCard(page: Page, label: string): Locator {
   return editToggle(page, label).locator('..').locator('..');
 }
 
+/** The inline custom-field set commits through `setCustomFieldValueAction` — an
+ *  OPTIMISTIC Server Action POSTed to the issue route. The card shows the picked
+ *  value the INSTANT it's chosen (a local override, no router.refresh), BEFORE
+ *  the POST commits, so the on-screen text is NOT a commit signal. A reload (or a
+ *  DB read) that races the in-flight write reads the PRE-write row — the
+ *  MOTIR-989 flake at the Severity card. Arm this BEFORE the committing action
+ *  and await it before reloading/reading — the authoritative-signal rule
+ *  (motir-core/CLAUDE.md). Same shape as the Stakeholder waiter below. */
+function fieldSetCommitted(page: Page, issueIdentifier: string) {
+  return page.waitForResponse(
+    (r) =>
+      r.request().method() === 'POST' && r.url().includes(issueIdentifier) && r.status() === 200,
+  );
+}
+
 test.beforeEach(async () => {
   await resetDatabase();
 });
@@ -230,16 +245,22 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await expect(showMore).toHaveAttribute('aria-expanded', 'false');
   await showMore.click();
 
-  // text — commits on blur (the Estimate grammar).
+  // text — commits on blur (the Estimate grammar). Each set is an OPTIMISTIC
+  // Server Action: await its POST before reading, or the reload below races the
+  // in-flight write (MOTIR-989). Arm the waiter BEFORE the committing action.
   await editToggle(page, 'Customer').click();
   await page.getByRole('textbox', { name: 'Customer', exact: true }).fill('Acme Corp');
+  const customerWrite = fieldSetCommitted(page, issue.identifier);
   await page.keyboard.press('Tab');
+  await customerWrite;
   await expect(fieldCard(page, 'Customer')).toContainText('Acme Corp');
 
   // number.
   await editToggle(page, 'Effort').click();
   await page.getByRole('textbox', { name: 'Effort', exact: true }).fill('3.5');
+  const effortWrite = fieldSetCommitted(page, issue.identifier);
   await page.keyboard.press('Tab');
+  await effortWrite;
   await expect(fieldCard(page, 'Effort')).toContainText('3.5');
 
   // date — the DatePicker grid; pick today (the aria-current cell), the one
@@ -247,13 +268,20 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await editToggle(page, 'Go-live').click();
   const calendar = page.getByRole('dialog', { name: 'Go-live' });
   await expect(calendar).toBeVisible();
+  const goLiveWrite = fieldSetCommitted(page, issue.identifier);
   await calendar.locator('button[aria-current="date"]').click();
+  await goLiveWrite;
   const todayIso = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`;
   await expect(fieldCard(page, 'Go-live')).toContainText(formatDate(todayIso, 'en'));
 
-  // select — the Combobox opens on edit; pick High.
+  // select — the Combobox opens on edit; pick High. This is the set that flaked
+  // at :265 (MOTIR-989): the optimistic card text passed instantly while the
+  // POST was still in flight, then the reload read the pre-write row. Wait on
+  // the committed POST before the reload.
   await editToggle(page, 'Severity').click();
+  const severityWrite = fieldSetCommitted(page, issue.identifier);
   await page.getByRole('option', { name: 'High', exact: true }).click();
+  await severityWrite;
   await expect(fieldCard(page, 'Severity')).toContainText('High');
 
   // ── Reload: the four values persist; Stakeholder still sits behind the
