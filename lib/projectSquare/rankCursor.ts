@@ -15,11 +15,13 @@ import {
 //     createdAt) value) (+ id)
 //
 // The cursor ALSO pins the `rank` (and, for trending, the `window`) it was
-// minted under, so the service can reject a cursor replayed against a DIFFERENT
-// rank/window — switching tabs must restart pagination, never seek into an
-// order the value was never computed in. A tampered/cross-rank token decodes to
-// {@link InvalidProjectSquareCursorError} → the route answers 400 rather than
-// silently resetting to page 1 (which would mask a client bug).
+// minted under — AND, since Subtask 6.13.3, the active search query + category
+// NARROWING — so the service can reject a cursor replayed against a DIFFERENT
+// rank/window/search/category: switching tabs OR changing the search/filter must
+// restart pagination, never seek into a set the value was never computed in. A
+// tampered/cross-view token decodes to {@link InvalidProjectSquareCursorError} →
+// the route answers 400 rather than silently resetting to page 1 (which would
+// mask a client bug).
 //
 // Encoded as base64url(JSON) — a single URL-safe opaque token the client never
 // parses.
@@ -34,6 +36,17 @@ export interface RankedDirectoryCursor {
   ts: string | null;
   /** The last row's id — the stable keyset tiebreak. */
   id: string;
+  /**
+   * The 6.13.3 NARROWING the page was minted under — the normalized search query
+   * (null when unfiltered) and the category slug (null when unfiltered). A
+   * search/category narrows the SET but not the ORDER, so the keyset still seeks
+   * correctly within a CONSISTENT narrowing; but a cursor REPLAYED under a
+   * DIFFERENT narrowing would seek into a set the score was never computed in, so
+   * the service rejects the mismatch and the client restarts paging — the same
+   * "changing the view restarts pagination" posture rank/window already enforce.
+   */
+  search: string | null;
+  category: string | null;
 }
 
 /** Encode a ranked keyset position into the opaque page token. */
@@ -44,6 +57,8 @@ export function encodeRankedCursor(cursor: RankedDirectoryCursor): string {
     s: cursor.score,
     t: cursor.ts,
     i: cursor.id,
+    q: cursor.search,
+    c: cursor.category,
   });
   return Buffer.from(json, 'utf8').toString('base64url');
 }
@@ -79,13 +94,18 @@ export function decodeRankedCursor(raw: string): RankedDirectoryCursor {
 
   if (typeof obj.i !== 'string' || obj.i.length === 0) throw new InvalidProjectSquareCursorError();
 
+  // The 6.13.3 narrowing the cursor was minted under: each is a string or null
+  // (absent → null, the unfiltered page). Any other type is a tampered token.
+  const search = nullableString(obj.q);
+  const category = nullableString(obj.c);
+
   if (rank === 'recent') {
     // Recent rides a timestamp key; reject a non-ISO / unparseable ts.
     if (typeof obj.t !== 'string' || Number.isNaN(new Date(obj.t).getTime())) {
       throw new InvalidProjectSquareCursorError();
     }
     if (obj.s !== null && obj.s !== undefined) throw new InvalidProjectSquareCursorError();
-    return { rank, window, score: null, ts: obj.t, id: obj.i };
+    return { rank, window, score: null, ts: obj.t, id: obj.i, search, category };
   }
 
   // trending / popular ride a numeric score key.
@@ -93,5 +113,16 @@ export function decodeRankedCursor(raw: string): RankedDirectoryCursor {
     throw new InvalidProjectSquareCursorError();
   }
   if (obj.t !== null && obj.t !== undefined) throw new InvalidProjectSquareCursorError();
-  return { rank, window, score: obj.s, ts: null, id: obj.i };
+  return { rank, window, score: obj.s, ts: null, id: obj.i, search, category };
+}
+
+/**
+ * Coerce an optional cursor field to `string | null`: `undefined`/`null` → null
+ * (the unfiltered narrowing), a string → itself, anything else → a tampered
+ * token ({@link InvalidProjectSquareCursorError}).
+ */
+function nullableString(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return value;
+  throw new InvalidProjectSquareCursorError();
 }
