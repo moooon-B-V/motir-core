@@ -26,6 +26,7 @@ import type {
   ExecutorDto,
   WorkItemSummaryDto,
   TreeLevelDto,
+  PagedArchivedWorkItemsDto,
 } from '@/lib/dto/workItems';
 
 // Server Actions for the create-issue surface (Subtask 2.3.3). Transport only:
@@ -254,6 +255,44 @@ export async function listChildIssuesAction(
   } catch (err) {
     if (err instanceof WorkItemNotFoundError) {
       return { ok: false, error: 'That issue no longer exists.' };
+    }
+    throw err;
+  }
+}
+
+// ── Archived items read (Story 2.9 · Subtask 2.9.2) ────────────────────────
+// Transport for the archive-management surface (the view UI is 2.9.3): resolve
+// the session + active project, call the shipped read, return the page. The
+// service gates on `canBrowse` and treats a cross-workspace/missing project as
+// a not-found (surfaced here as a benign error, never a leak). `page` is the
+// 1-based pager position; the service clamps it to the last page.
+
+/** 1-based page of the archived view (defaults to page 1). */
+export interface ListArchivedWorkItemsInput {
+  page?: number;
+}
+
+export type ListArchivedWorkItemsResult =
+  | { ok: true; data: PagedArchivedWorkItemsDto }
+  | { ok: false; error: string };
+
+export async function listArchivedWorkItemsAction(
+  input: ListArchivedWorkItemsInput = {},
+): Promise<ListArchivedWorkItemsResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) return { ok: false, error: 'No active project.' };
+  try {
+    const data = await workItemsService.listArchivedWorkItems(
+      ctx.projectId,
+      { page: input.page },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return { ok: true, data };
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError) {
+      return { ok: false, error: 'That project no longer exists.' };
     }
     throw err;
   }
