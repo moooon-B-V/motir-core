@@ -1156,6 +1156,40 @@ export const workItemRepository = {
   },
 
   /**
+   * Per-kind count of the LIVE (non-archived) DESCENDANTS of a subtree, in ONE
+   * round-trip via a recursive CTE (Story 2.9 · Subtask 2.9.9). The root is
+   * EXCLUDED (`depth > 1`) and only rows with `archivedAt IS NULL` are counted,
+   * so this is the live slice of `findSubtree` the delete-preview reports
+   * alongside the full cascade count: archiving is single-node, so an archived
+   * parent can still own live descendants a cascade delete would destroy.
+   * `kind` is cast to text (the plain enum label); `count` is cast to `int` so
+   * `$queryRaw` returns a JS number rather than a Postgres `bigint`. Kinds with
+   * zero live descendants simply do not appear (GROUP BY emits matched rows
+   * only) — the service folds the rows into the DTO's `liveByKind` map.
+   */
+  async countLiveDescendantsByKind(
+    rootId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ kind: WorkItemKind; count: number }>> {
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ kind: WorkItemKind; count: number }>>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."parentId", w."kind", w."archivedAt", 1 AS depth
+          FROM "work_item" w
+          WHERE w."id" = ${rootId}
+        UNION ALL
+        SELECT w."id", w."parentId", w."kind", w."archivedAt", s.depth + 1
+          FROM "work_item" w
+          JOIN subtree s ON w."parentId" = s."id"
+      )
+      SELECT "kind"::text AS "kind", COUNT(*)::int AS "count"
+        FROM subtree
+        WHERE depth > 1
+          AND "archivedAt" IS NULL
+        GROUP BY "kind"`;
+  },
+
+  /**
    * The ANCESTOR chain of a work item — its parent, grandparent, … up to the
    * root — in ONE round-trip via a recursive CTE walking UP the `parentId`
    * edge (the inverse of `findSubtree`). Excludes the item itself; returns the

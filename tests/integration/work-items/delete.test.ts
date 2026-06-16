@@ -249,8 +249,15 @@ describe('getDeletePreview — cascade impact', () => {
 
     const preview = await workItemsService.getDeletePreview(story.id, fx.ctx);
 
-    // story (root) + sub1 + sub2 = 3 rows; 2 descendants, both subtasks.
-    expect(preview).toEqual({ totalCount: 3, descendantCount: 2, byKind: { subtask: 2 } });
+    // story (root) + sub1 + sub2 = 3 rows; 2 descendants, both subtasks. Nothing
+    // archived, so the live split equals the full descendant breakdown.
+    expect(preview).toEqual({
+      totalCount: 3,
+      descendantCount: 2,
+      byKind: { subtask: 2 },
+      liveDescendantCount: 2,
+      liveByKind: { subtask: 2 },
+    });
     // It's a READ — the subtree is untouched.
     expect(await exists(story.id)).toBe(true);
     expect(await exists(sub1.id)).toBe(true);
@@ -277,7 +284,86 @@ describe('getDeletePreview — cascade impact', () => {
       totalCount: 1,
       descendantCount: 0,
       byKind: {},
+      liveDescendantCount: 0,
+      liveByKind: {},
     });
+  });
+
+  it('splits live vs archived: an archived parent still owns LIVE descendants the cascade destroys', async () => {
+    const fx = await makeWorkItemFixture();
+    const { epic, story, sub1, sub2, story2 } = await makeTree(fx);
+
+    // Archive the mid-level `story`. Archiving is single-node, so its children
+    // sub1 / sub2 stay LIVE on the active board — and a cascade delete of `epic`
+    // would still destroy them. The full count keeps the archived `story`.
+    await workItemsService.archiveWorkItem(story.id, fx.ctx);
+
+    const preview = await workItemsService.getDeletePreview(epic.id, fx.ctx);
+
+    // Full cascade (live + archived) is unchanged: 4 descendants, 2 stories + 2 subtasks.
+    expect(preview.totalCount).toBe(5);
+    expect(preview.descendantCount).toBe(4);
+    expect(preview.byKind).toEqual({ story: 2, subtask: 2 });
+    // Live split EXCLUDES the archived `story`, but keeps its still-live children
+    // and the live sibling `story2`: 1 story + 2 subtasks.
+    expect(preview.liveDescendantCount).toBe(3);
+    expect(preview.liveByKind).toEqual({ story: 1, subtask: 2 });
+    // Sanity: the still-live children are really sub1 / sub2 (untouched read).
+    expect(await exists(sub1.id)).toBe(true);
+    expect(await exists(sub2.id)).toBe(true);
+    expect(await exists(story2.id)).toBe(true);
+  });
+
+  it('counts only the non-archived descendants in the live split (mixed subtree)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { epic, sub1, story2 } = await makeTree(fx);
+
+    // Archive a leaf (sub1) AND a sibling story (story2) — a mix across kinds.
+    await workItemsService.archiveWorkItem(sub1.id, fx.ctx);
+    await workItemsService.archiveWorkItem(story2.id, fx.ctx);
+
+    const preview = await workItemsService.getDeletePreview(epic.id, fx.ctx);
+
+    // Full breakdown still counts every descendant.
+    expect(preview.descendantCount).toBe(4);
+    expect(preview.byKind).toEqual({ story: 2, subtask: 2 });
+    // Live = the surviving `story` + `sub2`: 1 story + 1 subtask.
+    expect(preview.liveDescendantCount).toBe(2);
+    expect(preview.liveByKind).toEqual({ story: 1, subtask: 1 });
+  });
+
+  it('reports zero live descendants when the whole descendant subtree is archived', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, sub1, sub2 } = await makeTree(fx);
+
+    await workItemsService.archiveWorkItem(sub1.id, fx.ctx);
+    await workItemsService.archiveWorkItem(sub2.id, fx.ctx);
+
+    const preview = await workItemsService.getDeletePreview(story.id, fx.ctx);
+
+    // Full cascade still names both subtask descendants…
+    expect(preview.descendantCount).toBe(2);
+    expect(preview.byKind).toEqual({ subtask: 2 });
+    // …but none are live, so the live warning is empty.
+    expect(preview.liveDescendantCount).toBe(0);
+    expect(preview.liveByKind).toEqual({});
+  });
+
+  it('excludes the root from the live split even when the root itself is archived', async () => {
+    const fx = await makeWorkItemFixture();
+    const { story, sub1, sub2 } = await makeTree(fx);
+
+    // Archive the ROOT being previewed; its live children must still be counted,
+    // and the (archived) root must NOT inflate the live count.
+    await workItemsService.archiveWorkItem(story.id, fx.ctx);
+
+    const preview = await workItemsService.getDeletePreview(story.id, fx.ctx);
+
+    expect(preview.descendantCount).toBe(2);
+    expect(preview.liveDescendantCount).toBe(2); // sub1 + sub2, root excluded
+    expect(preview.liveByKind).toEqual({ subtask: 2 });
+    expect(await exists(sub1.id)).toBe(true);
+    expect(await exists(sub2.id)).toBe(true);
   });
 
   it('rejects a non-admin member with NotProjectAdminError (no impact-preview leak)', async () => {
