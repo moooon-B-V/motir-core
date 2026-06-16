@@ -145,6 +145,27 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     expect(screen.getByText('Bo Philips')).toBeTruthy();
   });
 
+  it('selecting "Building in public" opens the confirm dialog and PATCHes public only on confirm', async () => {
+    renderAdmin({ accessLevel: 'open', members: [members[0]!] });
+
+    // Selecting the reframed `public` level opens the explainer/confirm (6.17.2)
+    // — it must NOT write access on the bare radio click.
+    fireEvent.click(screen.getByRole('radio', { name: /Building in public/ }));
+    expect(screen.getByRole('button', { name: 'Start building in public' })).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Confirming fires the shipped access PATCH with the `public` enum value.
+    fireEvent.click(screen.getByRole('button', { name: 'Start building in public' }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/projects/PROD/access',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
+    expect(body).toEqual({ accessLevel: 'public' });
+  });
+
   it('restores the row and surfaces the last-admin message when a remove is rejected', async () => {
     fetchMock.mockResolvedValue({
       ok: false,

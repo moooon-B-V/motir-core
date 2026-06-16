@@ -136,12 +136,18 @@ test('@smoke a public project: admin makes it public, anyone reads it logged-out
   await page.goto('/settings/project/members');
   const accessGroup = page.getByRole('radiogroup', { name: 'Project access level' });
   await expect(accessGroup).toBeVisible({ timeout: 30_000 });
+  // Story 6.17.2 reframed the `public` level as "Building in public" and gates
+  // it behind an explainer/confirm dialog — the access write fires on the
+  // dialog's confirm, NOT the bare radio click.
+  await accessGroup.getByRole('radio', { name: /^Building in public/ }).click();
+  const confirmDialog = page.getByRole('dialog');
+  await expect(confirmDialog).toBeVisible();
   const accessSaved = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === `/api/projects/${PUBLIC_KEY}/access` &&
       r.request().method() === 'PATCH',
   );
-  await accessGroup.getByRole('radio', { name: /^Public/ }).click();
+  await confirmDialog.getByRole('button', { name: 'Start building in public' }).click();
   expect((await accessSaved).status(), 'set-access → public returns 200').toBe(200);
 
   // ── 2. a LOGGED-OUT visitor reads the public surface (a fresh, session-less
