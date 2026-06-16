@@ -19,6 +19,13 @@ export interface SwitchProps {
   disabled?: boolean;
   /** Accessible name — required unless an external `<label htmlFor=id>` exists. */
   'aria-label'?: string;
+  /**
+   * Accessible name by reference — the id of a visible label element. Use this
+   * instead of `aria-label` when the label already renders on screen (so the
+   * name stays in sync with the visible text). One of `aria-label` /
+   * `aria-labelledby` should be set, else the switch announces no purpose.
+   */
+  'aria-labelledby'?: string;
   id?: string;
   className?: string;
 }
@@ -30,6 +37,7 @@ export function Switch({
   id,
   className,
   'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledby,
 }: SwitchProps) {
   return (
     <button
@@ -38,6 +46,7 @@ export function Switch({
       id={id}
       aria-checked={checked}
       aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledby}
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
