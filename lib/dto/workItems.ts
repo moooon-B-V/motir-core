@@ -671,9 +671,22 @@ export interface CompleteSessionResultDto {
  * `{ subtask: 5, task: 1, bug: 1 }`), the zero-count kinds omitted. A leaf item
  * returns `{ totalCount: 1, descendantCount: 0, byKind: {} }`. This is a READ —
  * the destructive write is `deleteWorkItem` (2.8.2).
+ *
+ * `liveDescendantCount` + `liveByKind` (Story 2.9 · Subtask 2.9.9) split out the
+ * NON-archived descendants the cascade would ALSO destroy. Motir's archive is
+ * single-node (archiving a parent never archives its children —
+ * `workItemsService.archiveWorkItem`), so an archived parent can still own LIVE
+ * descendants on the active boards/lists, and `deleteWorkItem` cascades the WHOLE
+ * subtree (`findSubtree`) — permanently destroying those live items too. The
+ * archived-item delete-confirm (2.9.10) warns about exactly that count.
+ * `liveDescendantCount` is a strict subset of `descendantCount` (the root is
+ * excluded from both; archived descendants are in `descendantCount`/`byKind` but
+ * not here); `liveByKind` is its per-kind breakdown, zero-count kinds omitted.
  */
 export interface WorkItemDeletePreviewDto {
   totalCount: number;
   descendantCount: number;
   byKind: Partial<Record<WorkItemKindDto, number>>;
+  liveDescendantCount: number;
+  liveByKind: Partial<Record<WorkItemKindDto, number>>;
 }

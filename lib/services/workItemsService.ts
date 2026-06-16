@@ -1603,13 +1603,21 @@ export const workItemsService = {
    * words. Returns the subtree size (the "Delete N items" magnitude), the
    * descendant count, and the per-kind breakdown of the DESCENDANTS.
    *
+   * It ALSO splits out the LIVE (non-archived) descendants (Story 2.9 · Subtask
+   * 2.9.9): archiving is single-node (a parent's children stay live), so an
+   * archived parent can still own non-archived descendants on the active
+   * boards/lists that the cascade delete would ALSO destroy. `totalCount` /
+   * `descendantCount` / `byKind` remain the FULL cascade count (live + archived);
+   * `liveDescendantCount` / `liveByKind` are the live subset the archived-item
+   * confirm modal (2.9.10) warns about.
+   *
    * Gated on the SAME `assertCanManage` capability `deleteWorkItem` requires: a
    * viewer who could not perform the delete must not be able to probe the
    * subtree shape (no impact-preview leak). Tenant-gated identically — a missing
    * / cross-workspace id is a 404 `WorkItemNotFoundError`, no existence leak. A
-   * pure read: no lock, no transaction (the gate + the subtree are two reads,
-   * and a benign race just yields a slightly stale count the confirm tolerates;
-   * the delete itself re-resolves the subtree under a FOR-UPDATE lock).
+   * pure read: no lock, no transaction (the gate + the reads are independent, and
+   * a benign race just yields a slightly stale count the confirm tolerates; the
+   * delete itself re-resolves the subtree under a FOR-UPDATE lock).
    */
   async getDeletePreview(id: string, ctx: ServiceContext): Promise<WorkItemDeletePreviewDto> {
     // Resolve + tenant-gate (404 on cross-workspace / missing) before the gate,
@@ -1627,7 +1635,18 @@ export const workItemsService = {
       byKind[kind] = (byKind[kind] ?? 0) + 1;
     }
     const totalCount = subtree.length;
-    return { totalCount, descendantCount: totalCount - 1, byKind };
+
+    // The live (non-archived) descendant slice — counted by kind in SQL (root
+    // excluded). A strict subset of `byKind`: archived descendants are in the
+    // full breakdown but not here.
+    const liveByKind: Partial<Record<WorkItemKindDto, number>> = {};
+    let liveDescendantCount = 0;
+    for (const { kind, count } of await workItemRepository.countLiveDescendantsByKind(id)) {
+      liveByKind[kind as WorkItemKindDto] = count;
+      liveDescendantCount += count;
+    }
+
+    return { totalCount, descendantCount: totalCount - 1, byKind, liveDescendantCount, liveByKind };
   },
 
   /**

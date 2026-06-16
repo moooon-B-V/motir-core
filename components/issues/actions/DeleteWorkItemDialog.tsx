@@ -62,7 +62,14 @@ export function DeleteWorkItemDialog({
       .catch(() => {
         // A preview read that fails still lets the user delete — fall back to a
         // leaf-shaped confirm (no count) rather than trapping them in a spinner.
-        if (active) setPreview({ totalCount: 1, descendantCount: 0, byKind: {} });
+        if (active)
+          setPreview({
+            totalCount: 1,
+            descendantCount: 0,
+            byKind: {},
+            liveDescendantCount: 0,
+            liveByKind: {},
+          });
       });
     return () => {
       active = false;

@@ -6,8 +6,10 @@ import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/error
 
 // GET /api/work-items/[id]/delete-preview (Story 2.8 · Subtask 2.8.7) — the
 // cascade IMPACT the delete-confirm dialog (2.8.4) reads BEFORE the user
-// confirms: `{ totalCount, descendantCount, byKind }` over the item's subtree.
-// Thin HTTP layer over `workItemsService.getDeletePreview`; the item id is the
+// confirms: `{ totalCount, descendantCount, byKind }` over the item's subtree,
+// PLUS the live (non-archived) split `{ liveDescendantCount, liveByKind }` the
+// archived-item confirm (2.9.10) warns about (Subtask 2.9.9). Thin HTTP layer
+// passing the service DTO straight through. The item id is the
 // path param, the workspace + actor come from the session context. No db / no
 // transaction here (CLAUDE.md). Gated on the same MANAGE capability the delete
 // itself needs, so a viewer who can't delete can't probe the subtree shape.
