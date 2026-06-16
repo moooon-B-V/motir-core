@@ -306,6 +306,30 @@ less than your own access, never more.") sits above the grouped toggle list:
 - **Default render:** Read / Edit / Manage sprints / Archive / Connect
   integrations all **on** (accent track); **Delete off**.
 
+Panel 1 shows the form **untruncated** so every scope is visible at once; the
+next section is how it actually fits a viewport.
+
+## Panel 2 — how it fits the viewport (REQUIRED build instruction)
+
+The 6-toggle picker makes the create form **taller than a short viewport**, so
+the dialog must not grow off-screen. The shipped `Modal` already solves this: its
+`Dialog.Content` is `flex max-h-[90vh] flex-col overflow-hidden`, and a tall body
+goes in **`Modal.Body`** (`flex-1 min-h-0 overflow-y-auto` — the ring-safe scroll
+recipe) with a pinned **`Modal.Footer`**. The Modal source comment names this very
+case ("the create modal … pushing the Create button out of view").
+
+> ⚠️ **7.7.19 must migrate the create form to `Modal.Body` + `Modal.Footer`.** The
+> _currently shipped_ `CreateTokenModal` wraps its fields in a plain
+> `<form className="flex flex-col gap-4">` and a bare `<div>` for the shown-once
+> phase — fine while the form is short, but adding the picker overflows the cap.
+> Move the form fields (Label · Workspace · Permissions · Expires) into
+> `<Modal.Body className="gap-4">` and keep the actions in `<Modal.Footer>`, so the
+> header (title/description) and the Cancel / Create footer stay **pinned** while
+> only the field column scrolls. Apply the same to the shown-once phase if it ever
+> grows. No new layout primitive — this is the existing `Modal.Body`/`Modal.Footer`
+> recipe (see `components/ui/Modal.tsx`). Panel 2 renders this capped + scrolled
+> state: header and footer pinned, the fields clipped to a scroll region.
+
 ## The Danger-zone delete toggle (distinct treatment, off by default)
 
 `work_items:delete` lives in its **own rose box** (`.scope-danger`:
@@ -318,11 +342,11 @@ visible act**:
 - The scope glyph (`trash-2`) is `--el-danger`; the name is `--el-text-strong`;
   the "This can't be undone" caption is `--el-text-strong` (AA on the rose tint —
   finding #35).
-- The `Switch` is **OFF** by default. Flipping it on is shown in **Panel 2** — the
+- The `Switch` is **OFF** by default. Flipping it on is shown in **Panel 3** — the
   box, icon, and caption stay; only the track turns accent. (Confirmed AA in light
-  AND dark — Panel 2 + the dark toggle.)
+  AND dark — Panel 3 + the dark toggle.)
 
-## Panel 3 — disabled / error state (every scope off)
+## Panel 4 — disabled / error state (every scope off)
 
 A token must grant **at least one** permission. With every toggle off:
 
@@ -335,7 +359,7 @@ A token must grant **at least one** permission. With every toggle off:
 This is the only NEW validation state; create / shown-once / revoke / empty are
 exactly 7.7.2.
 
-## Panel 4 — token-list granted-scope display (the "Scopes" column)
+## Panel 5 — token-list granted-scope display (the "Scopes" column)
 
 The list (`ApiTokensManager`, Panel 3 of 7.7.2) gains a **Scopes** column between
 **Token** and **Workspace** — compact, **no row bloat**:
@@ -357,7 +381,7 @@ The list (`ApiTokensManager`, Panel 3 of 7.7.2) gains a **Scopes** column betwee
 - **Revoked rows** show the muted summary only (no chevron) — consistent with the
   7.7.2 revoked-row muting.
 
-## Panel 5 — expanded scope detail
+## Panel 6 — expanded scope detail
 
 The chevron opens a **detail sub-row** (`.scope-detail` → a `td colspan`),
 a `--el-surface-soft` card holding a "This token can:" lead + one **chip per

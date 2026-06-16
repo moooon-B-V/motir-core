@@ -39,15 +39,18 @@
       identical primitives — no Pencil->code gap.
 
       Covers (multi-panel — review EACH, mistake #31):
-        (1) Create modal — full form WITH the new permission-scope picker
-            (default: all on except delete).
-        (2) Scope picker — close-up of the grouped toggles + the rose Danger zone
-            delete toggle (off, distinct treatment).
-        (3) Scope picker — DISABLED / error state (every scope off -> CTA blocked,
+        (1) Create modal — full form WITH the new permission-scope picker, shown
+            untruncated (default: all on except delete).
+        (2) How it FITS — the same modal capped at max-h-[90vh] with the fields in
+            a scrolling Modal.Body and a pinned Modal.Footer (never grows
+            off-screen; 7.7.19 must adopt Modal.Body/Footer).
+        (3) Scope picker — close-up of the grouped toggles + the rose Danger zone
+            delete toggle turned ON (deliberate grant, distinct treatment).
+        (4) Scope picker — DISABLED / error state (every scope off -> CTA blocked,
             inline helper).
-        (4) Token list — granted-scope column (summary pill + "Can delete" chip),
+        (5) Token list — granted-scope column (summary pill + "Can delete" chip),
             rows collapsed.
-        (5) Token list — a row EXPANDED to its scope-detail chip sub-row.
+        (6) Token list — a row EXPANDED to its scope-detail chip sub-row.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -1282,6 +1285,46 @@
         color: var(--el-text);
         font-weight: 600;
       }
+
+      /* The shipped Modal caps at max-h-[90vh] and lays out as a flex column;
+         a tall body goes in Modal.Body (flex-1 overflow-y-auto) with a pinned
+         Modal.Footer. These classes demonstrate that recipe for the create
+         modal once the scope picker makes it tall (Panel 2). */
+      .modal.capped {
+        display: flex;
+        flex-direction: column;
+        max-height: 540px;
+        padding-bottom: 0;
+      }
+      .modal.capped .modal-head {
+        flex: none;
+      }
+      /* the Modal.Body scroll region — flex-1, scrolls, footer stays pinned */
+      .modal-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        /* ring-safe inset, mirrors Modal.Body's -m-1.5 p-1.5 */
+        margin: -6px -6px 0;
+        padding: 6px 6px 0;
+      }
+      .modal.capped .modal-foot {
+        flex: none;
+        margin-top: 0;
+        padding: 16px 0;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      /* a faux viewport frame so the 90vh cap reads in a static screenshot */
+      .viewport {
+        height: 600px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
     </style>
   </head>
   <body>
@@ -1307,9 +1350,11 @@
 
     <!-- ════════════ PANEL 1 — create modal, full form with the scope picker (default) ════════════ -->
     <div class="panel-label">
-      1 · Create token — the full Modal with the new PERMISSIONS picker. The 6 scopes (7.7.16) as
-      grouped, plain-language Switch toggles. Default: every scope ON except Delete, which sits in
-      its own rose Danger zone, OFF. Binding scope (workspace) + Expires are unchanged from 7.7.2.
+      1 · Create token — the full Modal with the new PERMISSIONS picker, shown UNTRUNCATED so every
+      scope is visible. The 6 scopes (7.7.16) as grouped, plain-language Switch toggles. Default:
+      every scope ON except Delete, which sits in its own rose Danger zone, OFF. Binding scope
+      (workspace) + Expires are unchanged from 7.7.2. In-app the dialog never grows this tall — see
+      Panel 2 for how it fits the viewport.
     </div>
     <div class="panel">
       <div class="mstage">
@@ -1506,9 +1551,129 @@
       but cannot delete. Granting Delete is always a separate, deliberate flip.
     </p>
 
-    <!-- ════════════ PANEL 2 — danger toggle ON (deliberate grant) ════════════ -->
+    <!-- ════════════ PANEL 2 — how it fits the viewport (capped + scrolled body, pinned footer) ════════════ -->
     <div class="panel-label">
-      2 · The Danger zone with Delete turned ON — a close-up of the deliberate grant. The rose box,
+      2 · How it fits — the shipped Modal caps at max-h-[90vh] and is a flex column, so the fields
+      go in a scrolling Modal.Body while the Cancel / Create footer stays pinned. (Today's
+      CreateTokenModal uses a plain &lt;form&gt;; the scope picker makes it tall enough that 7.7.19
+      must move the fields into Modal.Body + Modal.Footer — see design-notes.) Never grows
+      off-screen.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="viewport">
+          <div class="modal capped">
+            <div class="modal-head">
+              <h3 class="modal-title">Create API token</h3>
+              <p class="modal-desc">
+                The token will be shown once, right after you create it. Store it somewhere safe.
+              </p>
+            </div>
+            <button class="modal-close" aria-label="Close">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+            </button>
+            <div class="modal-scroll">
+              <div class="field">
+                <label for="m2-label">Label</label>
+                <div class="input"><input id="m2-label" value="claude-code" /></div>
+                <span class="helper"
+                  >A name to recognise this token by — e.g. the agent or machine using it.</span
+                >
+              </div>
+              <div class="field">
+                <label for="m2-ws">Workspace</label>
+                <div
+                  class="input"
+                  id="m2-ws"
+                  style="color: var(--el-text-secondary); background: var(--el-muted)"
+                >
+                  Default
+                </div>
+                <span class="helper">The token can only reach work in this workspace.</span>
+              </div>
+              <div class="field">
+                <label id="perm2-label">Permissions</label>
+                <span class="helper"
+                  >Choose what this token is allowed to do. You can grant less than your own access,
+                  never more.</span
+                >
+                <div class="scopes" role="group" aria-labelledby="perm2-label">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Read</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Read everything</span>
+                          <span class="scope-desc"
+                            >View work items, boards, sprints, comments, and reports.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Read everything"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Create &amp; change</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Edit work items</span>
+                          <span class="scope-desc"
+                            >Create and update work items, comments, links, and attachments.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Edit work items"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-desc"
+                            >Create sprints and move work items in and out of them.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Manage sprints"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-primary">Create token</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — danger toggle ON (deliberate grant) ════════════ -->
+    <div class="panel-label">
+      3 · The Danger zone with Delete turned ON — a close-up of the deliberate grant. The rose box,
       the danger icon, and the "can't be undone" caption stay; only the Switch flips on.
     </div>
     <div class="panel">
@@ -1568,9 +1733,9 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 3 — disabled / error state (every scope off) ════════════ -->
+    <!-- ════════════ PANEL 4 — disabled / error state (every scope off) ════════════ -->
     <div class="panel-label">
-      3 · Error / disabled state — every scope off. A token must grant at least one permission, so
+      4 · Error / disabled state — every scope off. A token must grant at least one permission, so
       the inline error shows and the "Create token" CTA is disabled.
     </div>
     <div class="panel">
@@ -1632,9 +1797,9 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 4 — token list with the granted-scope column ════════════ -->
+    <!-- ════════════ PANEL 5 — token list with the granted-scope column ════════════ -->
     <div class="panel-label">
-      4 · Token list — the new Scopes column. A compact summary Pill (Full access / Standard / Read
+      5 · Token list — the new Scopes column. A compact summary Pill (Full access / Standard / Read
       only / Custom); whenever Delete is granted, a persistent rose "Can delete" chip rides
       alongside it so the dangerous grant is never hidden behind a summary. The chevron expands the
       detail.
@@ -1759,9 +1924,9 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 5 — a row expanded to its scope detail ════════════ -->
+    <!-- ════════════ PANEL 6 — a row expanded to its scope detail ════════════ -->
     <div class="panel-label">
-      5 · A row expanded — the chevron opens a detail sub-row listing every granted scope as a chip.
+      6 · A row expanded — the chevron opens a detail sub-row listing every granted scope as a chip.
       Delete reads as a rose danger chip. Plain-language names, no raw scope strings.
     </div>
     <div class="panel" style="max-width: 1180px">
