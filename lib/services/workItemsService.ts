@@ -2374,15 +2374,28 @@ export const workItemsService = {
       watcherRepository.existsFor(item.id, ctx.userId),
     ]);
 
-    const [blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, readiness] =
-      await Promise.all([
-        workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
-        workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
-        workItemRepository.findByIds(relatesLinks.map((l) => l.toId)),
-        workItemRepository.findByIds(duplicatesLinks.map((l) => l.toId)),
-        workItemRepository.findByIds(clonesLinks.map((l) => l.toId)),
-        this.getReadiness(item.id, ctx),
-      ]);
+    const [
+      blockerRows,
+      blockingRows,
+      relatesRows,
+      duplicatesRows,
+      clonesRows,
+      readiness,
+      archivedActor,
+    ] = await Promise.all([
+      workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
+      workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
+      workItemRepository.findByIds(relatesLinks.map((l) => l.toId)),
+      workItemRepository.findByIds(duplicatesLinks.map((l) => l.toId)),
+      workItemRepository.findByIds(clonesLinks.map((l) => l.toId)),
+      this.getReadiness(item.id, ctx),
+      // Who archived it (2.9.6) — ONLY for an archived item; an active item
+      // skips the read entirely (no extra round-trip on the common path). The
+      // banner names the actor from this; the timestamp rides `item.archivedAt`.
+      item.archivedAt
+        ? workItemRevisionRepository.findLatestArchivedActor(item.id)
+        : Promise.resolve(null),
+    ]);
 
     const ancestors = ancestorRows.map(toWorkItemSummaryDto);
     const blockedBy = toRelationshipLinks(blockedByLinks, blockerRows, 'toId');
@@ -2407,6 +2420,7 @@ export const workItemsService = {
       customFields: customFieldRows.map(toCustomFieldWithValueDto),
       watcherCount,
       viewerIsWatching,
+      archivedBy: archivedActor,
     };
   },
 

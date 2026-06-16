@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
 import { IllegalParentTypeError, WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -334,6 +335,32 @@ describe('unarchiveWorkItem', () => {
     await expect(
       workItemsService.unarchiveWorkItem('00000000-0000-0000-0000-000000000000', fx.ctx),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
+});
+
+// ── getIssueDetail — archived banner data (2.9.6) ─────────────────────────
+
+describe('getIssueDetail — archivedBy', () => {
+  it('an archived item carries archivedBy (the actor) + archivedAt for the banner', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+    await workItemsService.archiveWorkItem(item.id, fx.ctx);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, item.identifier, fx.ctx);
+    expect(detail.item.archivedAt).not.toBeNull();
+    expect(detail.archivedBy?.id).toBe(fx.ctx.userId);
+  });
+
+  it('a LIVE item carries no archivedBy (null) — and skips the actor read', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+
+    // The actor read fires ONLY for an archived item (no extra round-trip live).
+    const spy = vi.spyOn(workItemRevisionRepository, 'findLatestArchivedActor');
+    const detail = await workItemsService.getIssueDetail(fx.projectId, item.identifier, fx.ctx);
+    expect(detail.item.archivedAt).toBeNull();
+    expect(detail.archivedBy).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
