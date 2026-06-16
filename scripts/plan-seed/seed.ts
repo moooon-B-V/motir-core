@@ -80,7 +80,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { PLAN, ROOT_BUGS } from './data';
 import { composeDescription, mapTypeAndExecutor } from './mapItem';
-import { MOTIR_PUBLIC_OVERVIEW_MD } from './motirOverview';
+import { MOTIR_PUBLIC_OVERVIEW_MD, MOTIR_PUBLIC_TAGLINE, MOTIR_PUBLIC_TAGS } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import {
   PLAN_STATUS_MAP,
@@ -326,12 +326,18 @@ async function main() {
     }
     // Story 6.12: the live tenant IS the public showcase — `public` so anyone
     // on the web reads its Overview / board / work items at /p/PROD with no
-    // sign-in (the 6.12.4 anonymous public view), and its `publicOverviewMd` is
-    // seeded to Motir's canonical README so the Overview renders real copy.
+    // sign-in (the 6.12.4 anonymous public view), and its public hero
+    // (`publicTagline` + `publicTags` + `publicOverviewMd`) is seeded to Motir's
+    // canonical copy so the Overview renders real copy (Story 6.16 · 6.16.7 split
+    // the tagline + tags out of the README body into their own hero fields).
     await projectRepository.setAccessLevel(project.id, 'public', { stampMadePublicAt: true }, tx);
-    await projectRepository.updatePublicFields(
+    await projectRepository.setPublicOverview(
       project.id,
-      { publicOverviewMd: MOTIR_PUBLIC_OVERVIEW_MD },
+      {
+        publicOverviewMd: MOTIR_PUBLIC_OVERVIEW_MD,
+        publicTagline: MOTIR_PUBLIC_TAGLINE,
+        publicTags: MOTIR_PUBLIC_TAGS,
+      },
       tx,
     );
   });
