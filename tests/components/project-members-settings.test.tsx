@@ -11,6 +11,14 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 // Access UI. Drives the 6.4.4 REST API via global fetch (stubbed) and asserts
 // the optimistic add/remove/role/access flows + the read-only (non-admin) view.
 
+// The access write also refreshes the server-rendered shell header build-in-public
+// slot (Subtask 6.17.7) via router.refresh() — mock next/navigation so the
+// component's useRouter() resolves in happy-dom, and so the refresh is assertable.
+const { refreshSpy } = vi.hoisted(() => ({ refreshSpy: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: refreshSpy }),
+}));
+
 const SELF = 'u-self';
 
 const members: ProjectMemberDTO[] = [
@@ -28,6 +36,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  refreshSpy.mockReset();
   // Default: echo a generic OK so the optimistic path resolves; specific tests
   // override per-call.
   fetchMock.mockResolvedValue({
@@ -207,6 +216,10 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     );
     const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
     expect(body).toEqual({ accessLevel: 'open' });
+    // The revert must ALSO refresh the server-rendered shell header slot so the
+    // "Building in public" indicator swaps back to the CTA without a hard reload
+    // (Subtask 6.17.7 — the stopping case that was previously stale).
+    await waitFor(() => expect(refreshSpy).toHaveBeenCalledTimes(1));
   });
 
   it('public + non-admin: shows the badge + View public page read-only, with no Stop action (6.17.4)', () => {

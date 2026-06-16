@@ -1362,6 +1362,7 @@
       "promoBullet3": "Internal fields stay private — assignees, estimates, and internal comments are never shown.",
       "learnMore": "Learn more",
       "statusBadge": "Building in public",
+      "manageAriaLabel": "Building in public — manage",
       "viewPublicPage": "View public page",
       "stop": "Stop",
       "stopConfirmTitle": "Stop building in public?",

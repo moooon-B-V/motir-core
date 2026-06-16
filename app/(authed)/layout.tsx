@@ -113,16 +113,27 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     ? { canBrowse: settingsCaps.canBrowse, canManage: settingsCaps.canManage }
     : undefined;
 
-  // The discoverable "Build in public" entry point (Story 6.17 · Subtask 6.17.3)
-  // — shown only to a project ADMIN on a project that is NOT yet `public`. Gating
-  // here (server-side) means the PRIMARY header button (TopNav) needs no client
-  // access read, and a single `router.refresh()` after going public re-renders
-  // this tree to hide it (the 6.17.4 status badge then takes the header slot).
-  // Null = no entry point (no project / non-admin / already public).
+  // The single stateful build-in-public header slot (Story 6.17 · design
+  // §6.17.6 · Panel 12), resolved server-side here so TopNav needs no client
+  // access read and a single `router.refresh()` after a toggle swaps its state
+  // (the slot is server-rendered — page-state-after-mutation surface kind 2):
+  //
+  // - `buildInPublicProjectKey` (Subtask 6.17.3) — the PRIMARY "Build in public"
+  //   CTA, shown only to a project ADMIN on a project that is NOT yet `public`.
+  //   Null otherwise (no project / non-admin / already public).
+  // - `buildingInPublic` (Subtask 6.17.7) — true once the active project IS
+  //   `public`, when the SAME slot becomes the clickable "Building in public"
+  //   status indicator linking to settings. Shown to ALL team members (no
+  //   `canManage` read — status to the team, control gated at the destination;
+  //   the GitHub / Linear / Notion model, design §6.17.6c).
+  //
+  // The two are mutually exclusive by construction (a project is either public
+  // or not), so the slot renders exactly ONE — never both, never empty.
   const buildInPublicProjectKey =
     canManage && activeProject && activeProject.accessLevel !== 'public'
       ? activeProject.identifier
       : null;
+  const buildingInPublic = !!activeProject && activeProject.accessLevel === 'public';
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
@@ -178,6 +189,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     user={{ name: session.user.name, email: session.user.email }}
                     initialUnreadCount={initialUnreadCount}
                     buildInPublicProjectKey={buildInPublicProjectKey}
+                    buildingInPublic={buildingInPublic}
                   />
                 }
                 sidebar={
