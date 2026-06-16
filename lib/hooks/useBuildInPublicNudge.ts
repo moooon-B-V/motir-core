@@ -9,9 +9,12 @@ import { useCallback, useSyncExternalStore } from 'react';
  * cached snapshot read through `useSyncExternalStore`), which is the
  * lint-clean, SSR-safe way to read localStorage here (no setState-in-effect).
  *
- * SSR + the first hydration render paint the nudge HIDDEN (the stable server
- * snapshot), so a dismissed nudge never flashes; right after hydration the
- * stored value applies, revealing the nudge only when it hasn't been dismissed.
+ * SSR + the first hydration render paint the nudge SHOWN (the stable server
+ * snapshot = not-dismissed) — so for the common, not-yet-dismissed case the
+ * nudge is present from first paint and never pops in post-hydration (which
+ * would shift the page content down and race any click landing just below it).
+ * Right after hydration the stored value applies: an already-dismissed nudge
+ * collapses once (a rare, one-time reverse shift), everyone else stays put.
  * Keyed per project so dismissing one project's nudge doesn't hide another's.
  */
 const STORAGE_PREFIX = 'motir.buildInPublic.nudgeDismissed.';
@@ -62,7 +65,7 @@ export function useBuildInPublicNudge(projectKey: string): [boolean, () => void]
   const dismissed = useSyncExternalStore(
     subscribe,
     () => getSnapshot(projectKey),
-    () => true, // server snapshot: hidden, stable
+    () => false, // server snapshot: shown (not-dismissed), stable — no post-hydration shift
   );
   const dismiss = useCallback(() => dismissBuildInPublicNudge(projectKey), [projectKey]);
   return [dismissed, dismiss];
