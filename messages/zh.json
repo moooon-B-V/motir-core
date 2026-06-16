@@ -1353,7 +1353,17 @@
       "bulletSignIn": "访客<b>仅在</b>提交请求、点赞或评论时才需登录——他们无法编辑任何其他内容。",
       "bulletPrivate": "保持私密：<b>负责人、估算和内部评论</b>始终不会显示。",
       "reassurance": "你可以随时停止公开构建——页面将下线，公开链接也会失效。已提交的请求和点赞会被保留。",
-      "confirmCta": "开始公开构建"
+      "confirmCta": "开始公开构建",
+      "statusBadge": "公开构建中",
+      "viewPublicPage": "查看公开页面",
+      "stop": "停止",
+      "stopConfirmTitle": "停止公开构建？",
+      "stopConfirmLead": "项目将恢复到之前的访问权限。以下是会发生的变化：",
+      "stopBulletOffline": "公开页面将<b>下线</b>——访客和搜索引擎将无法再打开它。",
+      "stopBulletLink": "公开<b>链接将失效</b>，直到你再次开始公开构建。",
+      "stopBulletKept": "已提交的请求、点赞和评论都会<b>保留</b>——不会删除任何内容。",
+      "stopReassurance": "你可以随时在设置中重新开始公开构建。",
+      "stopConfirmCta": "停止公开构建"
     },
     "public": {
       "linkHeading": "公开链接",
@@ -2984,7 +2994,8 @@
     "detailSideChildren": "子项",
     "detailSideProgress": "进度",
     "detailSideParent": "父级",
-    "detailSideHidden": "已隐藏"
+    "detailSideHidden": "已隐藏",
+    "buildingInPublicChip": "公开构建中"
   },
   "workItemActions": {
     "menuTrigger": "更多操作",

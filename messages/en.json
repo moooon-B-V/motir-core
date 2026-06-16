@@ -1353,7 +1353,17 @@
       "bulletSignIn": "Visitors sign in <b>only to</b> submit a request, upvote, or comment — they can't edit anything.",
       "bulletPrivate": "Stays private: <b>assignees, estimates, and internal comments</b> are never shown.",
       "reassurance": "You can stop building in public anytime — the page goes offline and the public link stops working. Submitted requests and upvotes are kept.",
-      "confirmCta": "Start building in public"
+      "confirmCta": "Start building in public",
+      "statusBadge": "Building in public",
+      "viewPublicPage": "View public page",
+      "stop": "Stop",
+      "stopConfirmTitle": "Stop building in public?",
+      "stopConfirmLead": "The project goes back to its previous access. Here's what happens:",
+      "stopBulletOffline": "The public page <b>goes offline</b> — visitors and search engines can no longer open it.",
+      "stopBulletLink": "The public <b>link stops working</b> until you build in public again.",
+      "stopBulletKept": "Submitted requests, upvotes, and comments are <b>kept</b> — nothing is deleted.",
+      "stopReassurance": "You can start building in public again anytime from Settings.",
+      "stopConfirmCta": "Stop building in public"
     },
     "public": {
       "linkHeading": "Public link",
@@ -2984,7 +2994,8 @@
     "detailSideChildren": "Children",
     "detailSideProgress": "Progress",
     "detailSideParent": "Parent",
-    "detailSideHidden": "Hidden"
+    "detailSideHidden": "Hidden",
+    "buildingInPublicChip": "Building in public"
   },
   "workItemActions": {
     "menuTrigger": "More actions",

@@ -187,6 +187,35 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     ).toBeTruthy();
   });
 
+  it('public + admin: shows the building-in-public status badge + manage row, and Stop confirms a revert to open (6.17.4)', async () => {
+    renderAdmin({ accessLevel: 'public', members: [members[0]!] });
+    // The status/manage row renders the live public link + a Stop action.
+    expect(screen.getByRole('link', { name: 'View public page' })).toBeTruthy();
+    const stop = screen.getByRole('button', { name: 'Stop' });
+
+    // Stop opens the reverse confirm; it must NOT write access on the bare click.
+    fireEvent.click(stop);
+    expect(screen.getByRole('button', { name: 'Stop building in public' })).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Confirming reverts to the `open` level via the shipped access PATCH.
+    fireEvent.click(screen.getByRole('button', { name: 'Stop building in public' }));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/projects/PROD/access',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
+    expect(body).toEqual({ accessLevel: 'open' });
+  });
+
+  it('public + non-admin: shows the badge + View public page read-only, with no Stop action (6.17.4)', () => {
+    renderAdmin({ accessLevel: 'public', canManage: false, members: [members[0]!] });
+    expect(screen.getByRole('link', { name: 'View public page' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+  });
+
   it('non-admins get a read-only view (no edit affordances, role chips only)', () => {
     renderAdmin({ canManage: false });
     expect(screen.getByText('Read-only')).toBeTruthy();

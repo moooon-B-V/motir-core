@@ -1,13 +1,18 @@
 import Link from 'next/link';
-import { Globe } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
-import { Pill } from '@/components/ui/Pill';
+import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBadge';
 import { buttonVariants } from '@/components/ui/Button';
 
 // The public top bar (Story 6.12 · Subtask 6.12.4 · design Panel 2 `.pub-topbar`).
-// Logo tile + project name + the "Public" globe Pill + key/workspace, and a
-// logged-out Sign in / Start free CTA on the right (NOT a signed-in identity —
-// the page is anonymous to view). Server component; colour via --el-* tokens.
+// Logo tile + project name + the "Building in public" status badge +
+// key/workspace, and a logged-out Sign in / Start free CTA on the right (NOT a
+// signed-in identity — the page is anonymous to view). Server component; colour
+// via --el-* tokens.
+//
+// Story 6.17.4 reframes the old "Public" globe Pill to the build-in-public
+// status badge (megaphone + "Building in public", design Panels 1–2) — the same
+// badge shown in the authed settings access row, so the status reads identically
+// to visitors and the team.
 
 export async function PublicTopBar({
   name,
@@ -32,13 +37,7 @@ export async function PublicTopBar({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-[14.5px] font-bold text-(--el-text)">{name}</span>
-            <Pill
-              tone="neutral"
-              className="gap-1 border-transparent bg-(--el-public-banner-bg) text-(--el-public-banner-text)"
-            >
-              <Globe className="h-3 w-3 text-(--el-info)" aria-hidden />
-              {t('publicChip')}
-            </Pill>
+            <BuildingInPublicBadge label={t('buildingInPublicChip')} />
           </div>
           <span className="font-mono text-xs text-(--el-text-faint)">
             {identifier} · {workspaceName}
