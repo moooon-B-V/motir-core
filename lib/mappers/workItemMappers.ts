@@ -1,11 +1,13 @@
 import type { WorkItem } from '@prisma/client';
 import type {
+  ArchivedWorkItemRow,
   WorkItemForestRow,
   WorkItemListRow,
   WorkItemSubtreeRow,
   WorkItemTreeRow,
 } from '@/lib/repositories/workItemRepository';
 import type {
+  ArchivedWorkItemDto,
   WorkItemDto,
   WorkItemListItemDto,
   WorkItemSummaryDto,
@@ -178,5 +180,22 @@ export function toWorkItemTreeRowDto(row: WorkItemTreeRow): WorkItemTreeRowDto {
     ...toWorkItemListItemDto(row),
     parentId: row.parentId,
     hasChildren: row.hasChildren,
+  };
+}
+
+/**
+ * An archived-list row (Subtask 2.9.2) → DTO: the flat-list shape plus the
+ * archive metadata — the `archivedAt` stamp (ISO-normalized) and the resolved
+ * `archivedBy` actor. The actor is `null` when the read found no `'archived'`
+ * revision author (the row keeps its archived `id`, the view shows a "former
+ * member" fallback).
+ */
+export function toArchivedWorkItemDto(row: ArchivedWorkItemRow): ArchivedWorkItemDto {
+  return {
+    ...toWorkItemListItemDto(row),
+    archivedAt: row.archivedAt.toISOString(),
+    archivedBy: row.archivedById
+      ? { id: row.archivedById, name: row.archivedByName, image: row.archivedByImage }
+      : null,
   };
 }

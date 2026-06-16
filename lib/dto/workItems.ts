@@ -388,6 +388,48 @@ export interface PagedIssueListDto {
 }
 
 /**
+ * The actor who archived a work item (Subtask 2.9.2), resolved from the latest
+ * `'archived'` revision — Avatar · name, the same shape the activity feed and
+ * comment author use. `name` / `image` are nullable so a deleted-but-restricted
+ * referent renders a "former member" fallback instead of crashing the view; the
+ * `id` is always kept. The whole object is `null` when no `'archived'` revision
+ * resolved an actor.
+ */
+export interface ArchivedByActorDto {
+  id: string;
+  name: string | null;
+  image: string | null;
+}
+
+/**
+ * One row of the ARCHIVED items view (Story 2.9 · Subtask 2.9.2) — a flat List
+ * item PLUS the archive metadata the management surface shows and restores from:
+ * the `archivedAt` ISO stamp (the list's sort key) and the `archivedBy` actor.
+ * Archived items are a FLAT set (archive is single-node — no cascade), so there
+ * is no tree metadata, exactly like {@link WorkItemListItemDto}.
+ */
+export interface ArchivedWorkItemDto extends WorkItemListItemDto {
+  /** ISO-8601 soft-delete instant — the list is ordered most-recent first. */
+  archivedAt: string;
+  /** Who archived it (latest `'archived'` revision), or `null` if unresolved. */
+  archivedBy: ArchivedByActorDto | null;
+}
+
+/**
+ * One server-paged page of the archived view (Subtask 2.9.2) — the same paging
+ * envelope as {@link PagedIssueListDto}: the page's `items` (≤ `pageSize`), the
+ * `total` archived count, the 1-based `page` (clamped to the last page when the
+ * request overshot), and the `pageSize`. LIMIT/OFFSET-paged — never the whole
+ * archive at once.
+ */
+export interface PagedArchivedWorkItemsDto {
+  items: ArchivedWorkItemDto[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
  * One node of a LAZY tree level (Subtask 2.5.13, finding #57) — the same render
  * fields as a flat List item PLUS `parentId` (placement) and `hasChildren`
  * (drives the expand chevron without pre-loading the subtree). Returned by

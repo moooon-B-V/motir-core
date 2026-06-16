@@ -125,6 +125,24 @@ export interface WorkItemTreeRow extends WorkItemListRow {
 }
 
 /**
+ * One row of the ARCHIVED list read (Subtask 2.9.2) — the same per-row render
+ * fields as `WorkItemListRow` PLUS the two bits the archive-management surface
+ * (Story 2.9) needs and that no active-view read carries: the `archivedAt`
+ * stamp (the soft-delete instant the list orders by) and the actor who archived
+ * it, resolved by the SAME single read from the latest `'archived'` revision
+ * (`changedById` + the user's display name / avatar, left-joined). `archivedBy*`
+ * is nullable because the revision's author is `onDelete: Restrict` but a future
+ * data path could still leave it absent — the mapper degrades to `null` (a
+ * "former member" fallback) rather than dropping the row.
+ */
+export interface ArchivedWorkItemRow extends WorkItemListRow {
+  archivedAt: Date;
+  archivedById: string | null;
+  archivedByName: string | null;
+  archivedByImage: string | null;
+}
+
+/**
  * One CANDIDATE row of the ready set (Subtask 7.0.2): the FULL `work_item` row
  * (so the `readyMappers` `toReadyItemDto(row: WorkItem, …)` can consume it
  * directly — the 7.0.3 mapper takes a `WorkItem` + resolved context) PLUS the
@@ -1353,6 +1371,87 @@ export const workItemRepository = {
           AND ${notInTriageSql('w')}
           AND ${notExcludedSql('w', filter.excludeIds)}
           AND (${matched})`;
+    return rows[0]?.count ?? 0;
+  },
+
+  /**
+   * The ARCHIVED items of a project (Subtask 2.9.2) — the inverse of the
+   * pervasive `archivedAt IS NULL` row filter: a single non-recursive scan of
+   * the soft-deleted (`archivedAt IS NOT NULL`) items, un-nested (archive is
+   * single-node — a parent's archive does NOT cascade, so archived items are a
+   * FLAT set, never a forest; this deliberately does NOT reuse the recursive
+   * `findProjectForest` CTE). Same `projectId` + `workspaceId` tenant gate as
+   * the active reads (finding #26) and the same triage exclusion (the public
+   * submission inbox has its own surface), so this is the literal complement of
+   * the `/issues` list within the management views. Ordered by `archivedAt DESC`
+   * (most-recently archived first) with a stable `key ASC` tiebreak so OFFSET
+   * paging is deterministic, and windowed by `page` (LIMIT/OFFSET) so it never
+   * ships the whole archive. The archiver is resolved in the SAME read via a
+   * LATERAL pick of the latest `'archived'` revision joined to `user`. Read-only
+   * path → `db` singleton.
+   */
+  async findArchivedByProject(
+    projectId: string,
+    workspaceId: string,
+    page: { limit: number; offset: number },
+    tx?: Prisma.TransactionClient,
+  ): Promise<ArchivedWorkItemRow[]> {
+    const client = tx ?? db;
+    return client.$queryRaw<ArchivedWorkItemRow[]>`
+      SELECT w."id",
+             w."kind"::text       AS "kind",
+             w."key",
+             w."identifier",
+             w."title",
+             w."status",
+             w."priority"::text   AS "priority",
+             w."assigneeId",
+             w."reporterId",
+             w."dueDate",
+             w."estimateMinutes",
+             w."storyPoints",
+             w."updatedAt",
+             w."archivedAt",
+             ar."changedById"     AS "archivedById",
+             abu."name"           AS "archivedByName",
+             abu."image"          AS "archivedByImage"
+        FROM "work_item" w
+        LEFT JOIN LATERAL (
+          SELECT r."changedById"
+            FROM "work_item_revision" r
+            WHERE r."workItemId" = w."id"
+              AND r."changeKind" = 'archived'
+            ORDER BY r."changedAt" DESC
+            LIMIT 1
+        ) ar ON TRUE
+        LEFT JOIN "user" abu ON abu."id" = ar."changedById"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NOT NULL
+          AND ${notInTriageSql('w')}
+        ORDER BY w."archivedAt" DESC, w."key" ASC
+        LIMIT ${page.limit} OFFSET ${page.offset}`;
+  },
+
+  /**
+   * COUNT of a project's ARCHIVED items (Subtask 2.9.2) — the denominator of the
+   * archive view's pager, the same `projectId` + `workspaceId` + triage gate as
+   * {@link findArchivedByProject} but counting the `archivedAt IS NOT NULL` set.
+   * `::int` casts Postgres' `bigint`. Read-only path → `db` singleton.
+   */
+  async countArchivedByProject(
+    projectId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NOT NULL
+          AND ${notInTriageSql('w')}`;
     return rows[0]?.count ?? 0;
   },
 

@@ -69,6 +69,7 @@ import {
   toWorkItemTreeNodeDto,
   toWorkItemListItemDto,
   toWorkItemTreeRowDto,
+  toArchivedWorkItemDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
@@ -114,6 +115,7 @@ import type {
   WorkItemKindDto,
   WorkItemTypeDto,
   PagedIssueListDto,
+  PagedArchivedWorkItemsDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
   WorkItemSubtreeDto,
@@ -1833,6 +1835,45 @@ export const workItemsService = {
     );
 
     return { items: rows.map(toWorkItemListItemDto), total, page, pageSize };
+  },
+
+  /**
+   * The project's ARCHIVED items, paginated (Story 2.9 · Subtask 2.9.2) — the
+   * read behind the archive-management surface. The inverse of every active
+   * view's `archivedAt IS NULL` filter: a FLAT, `archivedAt DESC` page of the
+   * soft-deleted items, each carrying its `archivedAt` stamp + the actor who
+   * archived it (resolved from the latest `'archived'` revision in the same
+   * read). Same project + workspace gate as {@link getProjectIssuesList} (a
+   * cross-tenant `projectId` → `ProjectNotFoundError`, no existence leak), and
+   * the **read gate is `canBrowse`** (the 2.9.1 view-access decision — viewing
+   * the archive is a browse, the same right as the active views; restoring is
+   * the separate edit-gated `unarchiveWorkItem`). `pageSize` reuses the List's
+   * {@link ISSUE_LIST_PAGE_SIZE} clamp, and an out-of-range `page` clamps to the
+   * last page (count-first, like the List). An empty archive → `total: 0`,
+   * `page: 1`, `items: []`.
+   */
+  async listArchivedWorkItems(
+    projectId: string,
+    params: { page?: number; pageSize?: number },
+    ctx: ServiceContext,
+  ): Promise<PagedArchivedWorkItemsDto> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    const pageSize = clampIssuePageSize(params.pageSize);
+    const total = await workItemRepository.countArchivedByProject(projectId, project.workspaceId);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(1, params.page ?? 1), totalPages);
+    const offset = (page - 1) * pageSize;
+
+    const rows = await workItemRepository.findArchivedByProject(projectId, project.workspaceId, {
+      limit: pageSize,
+      offset,
+    });
+    return { items: rows.map(toArchivedWorkItemDto), total, page, pageSize };
   },
 
   /**
