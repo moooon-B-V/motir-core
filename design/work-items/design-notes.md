@@ -2654,6 +2654,150 @@ dropped) · **(5)** the navigator entry point (the `[Archived]` toolbar link on
 **Bulk Restore** (multi-select + a bulk action bar) — Jira has it, but Motir's
 archive is per-item from the `⋯` menu today, so single-row Restore matches the
 current archive shape; bulk select is an Epic-6 list-actions concern, noted not
-built. **Sortable / configurable columns**, a **search/filter within archived**,
-and **permanent delete from the archived view** (delete is `canManage` and lives
-in `WorkItemActionsMenu` + the 2.8 delete dialog) are also out of scope for 2.9.3.
+built. **Sortable / configurable columns** and a **search/filter within
+archived** are also out of scope for 2.9.3. **Permanent delete from the archived
+view** was out of scope for 2.9.3 — it is now designed in **2.9.7** (the next
+section) and built by **2.9.5**.
+
+## Delete affordance in the archived view + archived-item delete-confirm (Story 2.9 · 2.9.7)
+
+2.9.7 is the design gate for **2.9.5** (MOTIR-994 — deleting an archived work
+item). It EXTENDS two existing assets rather than adding a new surface:
+`archived.mock.html` gains the **Delete affordance** (panels 6–8), and
+`delete-confirm.mock.html` gains the **archived-item confirm variant** with the
+live-descendant warning (panels 6–7). **No new primitive, no new modal** — the
+confirm is the shipped `DeleteWorkItemDialog` (2.8.4) with one added warning row.
+
+### Where Delete sits — Restore inline, Delete in the row `⋯` (the decision)
+
+The archived list row already has a primary inline **`[Restore]`** button
+(canEdit, 2.9.3). 2.9.7 adds **permanent Delete** beside it as a single danger
+**`Delete…`** row inside a per-row **`⋯` overflow menu** (the shipped Popover
+`RowActionsMenu` vocabulary — the same menu the live list/board rows and the 2.8
+delete mock use; there `Archive→Restore` is the only swap).
+
+- **Why Restore stays the inline button and Delete goes in the `⋯`** (not both in
+  one menu, not a bare trash icon): the archived view's whole job is _getting
+  things back_, so Restore is the common, safe, reversible primary action and
+  must stay one click away — demoting it behind a menu to make room for Delete
+  would slow the dominant path. Delete is the opposite — rare, irreversible,
+  higher-privilege — so it belongs one level deep, danger-toned, with a trailing
+  `…` that signals a confirm follows. A bare red trash icon-button was rejected
+  (misclick risk + breaks the established `⋯ → Delete…` vocabulary). This refines
+  the card's "⋯ carrying Restore + Delete…" example: Restore is prominent inline,
+  the `⋯` is purely the canManage/Delete affordance, so the menu maps 1:1 to a
+  capability. (Mirror, rung 1: Jira's archived view keeps Restore prominent and
+  puts destructive/admin actions in an overflow; Linear's archived view is the
+  same shape.)
+
+### The gate split (independent capabilities) — panel 7
+
+Restore = **`canEdit`**, Delete = **`canManage`** — the SHIPPED capability
+(`projectAccessService.getCapabilities → { canBrowse, canEdit, canManage }`;
+`workItemsService.deleteWorkItem`/`getDeletePreview` both call `assertCanManage`,
+`workItemsService.ts:1569`/`:1619`). The 2.8 delete mock's `canDelete` label is
+this same gate. The two are **independent**, so the actions cell is total over
+all four combinations (each affordance HIDDEN — never shown-disabled — when its
+gate is unmet, mirroring `WorkItemActionsMenu`):
+
+| `canEdit` | `canManage` | Actions cell                                          |
+| --------- | ----------- | ----------------------------------------------------- |
+| ✓         | ✓           | `[Restore]` + `⋯`(`Delete…`)                          |
+| ✓         | ✗           | `[Restore]` only (no `⋯` — no Delete to host)         |
+| ✗         | ✓           | `⋯`(`Delete…`) only (no inline Restore)               |
+| ✗         | ✗           | column dropped entirely (the panel-4 view-only state) |
+
+So "a row can show Restore but not Delete" (the editor case) and its inverse both
+fall out cleanly. The grid column widened **120→150px** to seat `[Restore]` + `⋯`.
+
+### On the DETAIL page — panel 8
+
+Delete **does** appear on an archived item's detail page, in the standard detail
+`⋯` actions menu (the same `RowActionsMenu` as the live detail page, with
+`Archive→Restore` swapped): **`Restore`** (canEdit) + a danger **`Delete…`**
+(canManage) below the separator. **The detail BANNER and its prominent Restore
+button are a SEPARATE design — 2.9.8 (→ code 2.9.6) — and are NOT specified
+here**; 2.9.7 only places the Delete affordance the card asks about. 2.9.8 should
+keep the banner as the prominent Restore and leave Delete in the `⋯`.
+
+### The archived-item confirm modal — the live-descendant warning (the one new thing)
+
+The confirm is the **shipped `DeleteWorkItemDialog`** (2.8.4) reused verbatim —
+same `role="alertdialog"` Modal, same 5.3.6 count grammar (`totalCount` /
+descendant count / per-kind breakdown), same atomic-failure error state, same
+`deletedToast` (`{key} deleted`). There is **no Archive escape hatch** in this
+variant (the item is already archived), so that mint callout is omitted.
+
+The ONE new element is the **live-descendant warning**. Motir's archive is
+**single-node** (`workItemsService.ts:1469` — archiving a parent never archives
+its children), so an archived parent can still own **non-archived, LIVE**
+descendants on the active boards/lists. `deleteWorkItem` cascades the **whole
+subtree** (`:1560`, `findSubtree`), so deleting the archived parent permanently
+destroys those live items too — surprising, because the parent was "tucked away."
+
+- **Panel 6 — archived parent WITH live descendants.** A distinct **peach/amber
+  caution callout** (`--el-tint-peach` bg + `--el-warning` border/icon +
+  `--el-text-strong`, lucide `triangle-alert`) sits directly under the body,
+  ABOVE the normal cascade `dep-list`. Headline **"Some of what's beneath this
+  isn't archived."** + body **"Deleting also permanently removes N active work
+  items that aren't archived — [kind breakdown]. They're still live on your
+  boards and lists. (Archiving an item never archives its children.)"** The peach
+  tone is deliberately a THIRD callout colour, distinct from the mint
+  archive/safe callout and the rose/danger error callout and the amber dep-list
+  _rows_ — so the surprise is unmistakable and never colour-only (the count is in
+  words). The `dep-list` then drops its redundant "N descendants" row (the warning
+  already named them) and keeps the history + links rows; the button is unchanged
+  (`Delete N items`, `1 + descendants`).
+- **Panel 7 — archived parent, ALL descendants archived (the contrast).** When the
+  **live count is 0**, the peach warning is **suppressed** — nothing active is at
+  risk — and the dialog is the ordinary cascade confirm, with a calm
+  archive-glyph row: **"N descendants will also be deleted — [breakdown]. All of
+  them are already archived — nothing here is live on your boards."** This boundary
+  is what makes panel 6's warning meaningful.
+- An archived **leaf** (no descendants) reuses the leaf dialog (2.8 panel 3)
+  unchanged — no warning, "It has no child items."
+
+**Data note for 2.9.5 (the one new data path).** `getDeletePreview`
+(`workItemsService.ts:1614`) returns `{ totalCount, descendantCount, byKind }`
+today but does **not** split archived vs live descendants. 2.9.5 must extend the
+preview with a **live-(non-archived)-descendant count + per-kind breakdown**
+(count the subtree rows where `archivedAt IS NULL`, excluding the root) to drive
+the panel-6 copy; the warning shows iff that count > 0. This is the analogue of
+2.8.1's "cascade-count backend" extension slot — the design specifies the UX, the
+code subtask adds the count.
+
+### Copy strings (added by 2.9.7)
+
+Live-descendant warning headline: `Some of what's beneath this isn't archived.` ·
+body: `Deleting also permanently removes N active work items that aren't archived — [kind breakdown]. They're still live on your boards and lists. (Archiving an item never archives its children.)` · |
+All-archived row: `N descendants will also be deleted — [kind breakdown]. All of them are already archived — nothing here is live on your boards.` · |
+Archived-row `⋯` menu: `Delete…` (danger) · |
+Detail `⋯` menu (archived): `Restore` · `Delete…` · |
+(Restore button / `{key} restored` / `{key} deleted` toasts are existing 2.9.3 /
+2.8.4 strings, reused.) All copy in the issues / `workItemActions` i18n namespace.
+
+### Tokens / a11y
+
+- Colour only via Tier-3 `--el-*`: the `⋯` overflow + its `Delete…` row use the
+  `RowActionsMenu` vocab (`--el-danger` on the danger row, `--el-tint-rose` hover);
+  the new live-descendant warning uses `--el-tint-peach` + `--el-warning` (the
+  warning tint, a third distinct callout tone). The gate-matrix capability chips
+  put the state in the tint background with `--el-text-strong` (on) / a
+  strikethrough `--el-text-faint` (off) — the state is in text + line-through,
+  never colour alone. No Tier-0 `--color-*`.
+- Shape via element-semantic tokens (`--radius-card`/`-control`/`-badge`,
+  `--spacing-control-*`, `--height-control`, `--shadow-elevated`/`-modal`) so the
+  surfaces reshape under `data-display-style`.
+- A11y: the `⋯` is a real `<button>` with a per-row `aria-label` +
+  `aria-haspopup="menu"`; the menu is `role="menu"` with `role="menuitem"` rows;
+  the confirm stays `role="alertdialog"` (Cancel default focus, `Esc`/✕ cancel);
+  the live-descendant warning is a `role="note"` whose consequence is stated in
+  words. Light + dark parity via the token flip (toggle in both mocks).
+
+### Out of scope (documented extension slots)
+
+- **Bulk delete** from the archived view (multi-select + an aggregated count) —
+  same Epic-6 list-actions concern as bulk Restore; single-row Delete ships now.
+- **A per-descendant archived/live breakdown table** in the confirm — the warning
+  names the live COUNT + kind breakdown, not a row-by-row list (matches the 2.8
+  cascade grammar, which never itemised descendants either).

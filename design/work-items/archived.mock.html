@@ -3,12 +3,38 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · Archived work items view + Restore UX (Story 2.9 · 2.9.1 → 2.9.3)</title>
+    <title>
+      Design mock · Archived work items view — Restore + Delete UX (Story 2.9 · 2.9.1 → 2.9.3,
+      2.9.7)
+    </title>
     <!--
       DESIGN ASSET (HTML mockup) for the ARCHIVED WORK ITEMS view + the Restore
       UX — the durable surface that replaces the transient "Undo" toast in
       WorkItemActionsMenu.tsx ("the only restore path until an archived-items
       view ships"). This is the design gate for Subtask 2.9.3 (the code).
+
+      2.9.7 EXTENSION — the DELETE affordance in the archived view (the design
+      gate for 2.9.5, the code). Permanent delete is now reachable from the
+      archived view, beside Restore. The decision (panels 6–7, see notes):
+        • Restore stays the PRIMARY one-click inline button — the view's whole
+          job is getting things back, the common/safe/reversible action; it must
+          NOT be demoted behind a click. Gate: canEdit.
+        • Delete is a RARE, irreversible, higher-privilege action, so it lives
+          one level deep in a row ⋯ overflow menu as a single danger `Delete…`
+          row — the same RowActionsMenu vocab the live list/board + the 2.8
+          delete mock use (there Archive→Restore is the only swap). Gate:
+          canManage (the SHIPPED capability — workItemsService.ts:1569
+          `assertCanManage`; the 2.8 mock's "canDelete" label is this same gate).
+        • The two gates are INDEPENDENT, so the actions cell is drawn for every
+          combination (panel 7): both → Restore + ⋯ · canEdit only → Restore,
+          no ⋯ · canManage only → ⋯ Delete…, no Restore · neither → the column
+          is dropped (the pre-existing view-only state, panel 4).
+        • Detail page (panel 8): Delete DOES appear on an archived item's detail
+          ⋯ menu (Restore · Delete…), same gates. The detail BANNER + its Restore
+          button are a SEPARATE design (2.9.8 → code 2.9.6) and are NOT drawn
+          here; this panel only places the Delete affordance the card asks about.
+      The archived-item CONFIRM modal (with the live-descendant cascade warning)
+      is designed in delete-confirm.mock.html (panels 6–7 there), not here.
 
       PLACEMENT DECISION (rung 1 = Jira, justified deviation): a DEDICATED ROUTE
       `/issues/archived`, reachable from the work-items navigator toolbar via a
@@ -32,16 +58,23 @@
       mono identifier, the initial-letter Avatar, the status Pill tones, the
       IssueListPager footer, EmptyState, and the success Toast. The archived list
       REUSES that row vocabulary un-nested and adds only: an "Archived by" + an
-      "Archived" (date) column read from the `archived` revision, and a per-row
-      [Restore] affordance (canEdit-gated). NO new primitive.
+      "Archived" (date) column read from the `archived` revision, a per-row
+      [Restore] affordance (canEdit-gated), and — 2.9.7 — a per-row ⋯ overflow
+      carrying a danger `Delete…` (canManage-gated). NO new primitive (the ⋯ menu
+      is the same Popover RowActionsMenu the live rows + the 2.8 delete mock use).
 
       Covers (multi-panel): (0) the archived view in the page shell — the flat
       list with the Restore column + the pager · (1) Restore in flight — the row
       fades out optimistically + the "{key} restored" success toast · (2) empty
       state · (3) loading skeleton (flat) · (4) the VIEW-ONLY state (canBrowse,
-      not canEdit) — no Restore column · (5) the navigator entry point (the
-      [Archived] toolbar link on /issues). Toggle dark to confirm token parity.
-      See design-notes.md → "Archived work items view + Restore UX".
+      not canEdit/canManage) — no actions column · (5) the navigator entry point
+      (the [Archived] toolbar link on /issues) · (6 · 2.9.7) the row ⋯ menu OPEN
+      with Restore + Delete… · (7 · 2.9.7) the gate-split matrix (the actions cell
+      for every canEdit×canManage combination) · (8 · 2.9.7) the archived-item
+      DETAIL ⋯ menu (Restore · Delete…) — where Delete lives on the detail page.
+      Toggle dark to confirm token parity.
+      See design-notes.md → "Archived work items view + Restore UX" and
+      "… Delete affordance + archived-item delete-confirm (2.9.7)".
     -->
     <style>
       /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
@@ -324,16 +357,18 @@
         overflow: hidden;
         background: var(--el-page-bg);
       }
-      /* Column grid: Title · Status · Archived by · Archived · [Restore].
-         The Restore action column drops out entirely in the view-only state. */
+      /* Column grid: Title · Status · Archived by · Archived · [actions].
+         The actions column holds [Restore] (canEdit) + a ⋯ overflow carrying
+         Delete… (canManage); it drops out entirely only when the viewer has
+         NEITHER capability (the view-only state). Widened 120→150 for ⋯. */
       .lt-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 130px 175px 140px 120px;
+        grid-template-columns: minmax(0, 1fr) 130px 175px 140px 150px;
         align-items: center;
         column-gap: 16px;
         padding: 0 20px 0 16px;
       }
-      /* view-only state: no Restore column (and no can-edit affordance) */
+      /* view-only state: no actions column (no canEdit AND no canManage) */
       .lt-grid.view-only {
         grid-template-columns: minmax(0, 1fr) 130px 175px 140px;
       }
@@ -503,7 +538,9 @@
          absent (column dropped) for a viewer who can browse but not edit. */
       .cell-action {
         display: flex;
+        align-items: center;
         justify-content: flex-end;
+        gap: 4px;
       }
       .btn-restore {
         display: inline-flex;
@@ -534,6 +571,150 @@
         height: 14px;
         flex: none;
         color: var(--el-text-muted);
+      }
+
+      /* ── The ⋯ overflow (canManage) — a square icon-button → Popover menu ──── */
+      /* The same RowActionsMenu vocab as the live list/board + delete-confirm. */
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 6px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-muted);
+        cursor: pointer;
+        flex: none;
+      }
+      .icon-btn.active,
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .icon-btn:focus-visible {
+        outline: none;
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+      .icon-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* Popover content (RowActionsMenu vocabulary) — copied 1:1 from
+         delete-confirm.mock.html so the two surfaces stay identical. */
+      .menu {
+        width: 220px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu.anchored {
+        position: absolute;
+        z-index: 25;
+      }
+      .menu .mhead {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 6px 8px 4px;
+      }
+      .menu .msep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 0;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover {
+        background: var(--el-surface);
+      }
+      .opt .og {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+      }
+      .opt.danger {
+        color: var(--el-danger);
+      }
+      .opt.danger .og {
+        color: var(--el-danger);
+      }
+      .opt.danger:hover {
+        background: var(--el-tint-rose);
+      }
+
+      /* ── Detail-context card (panel 8) — mirrors work-items/detail header ──── */
+      .detail-ctx {
+        position: relative;
+        width: 560px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 16px 18px;
+      }
+      .dc-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .dc-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+      }
+      .dc-spacer {
+        flex: 1;
+      }
+      .dc-title {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.3;
+      }
+      /* The archived eyebrow chip on the detail header (a stand-in for the 2.9.8
+         banner — NOT designed here; just enough context to place Delete). */
+      .archived-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 2px var(--spacing-control-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .archived-chip svg {
+        width: 12px;
+        height: 12px;
       }
 
       /* EmptyState (components/ui/EmptyState.tsx) = Card + icon + copy */
@@ -749,6 +930,76 @@
         margin: 0 0 10px;
         font-size: 13px;
         color: var(--el-text-secondary);
+      }
+
+      /* ── Gate-split matrix (panel 7) — 4 actions-cell samples + captions ──── */
+      .gate-row {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .gate-card {
+        flex: 1 1 250px;
+        min-width: 240px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .gate-card .caps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .cap-chip {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+      }
+      .cap-chip.on {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .cap-chip.off {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        text-decoration: line-through;
+      }
+      .gate-card .demo {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+        min-height: 36px;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border);
+      }
+      .gate-card .demo .none {
+        font-size: 12px;
+        font-style: italic;
+        color: var(--el-text-faint);
+        margin-right: auto;
+      }
+      .gate-card .gloss {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .gate-card .gloss strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
       }
     </style>
   </head>
@@ -972,6 +1223,32 @@
           <path d="M5 12h14" />
           <path d="M12 5v14" />
         </g>
+        <g
+          id="i-ellipsis"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+          <line x1="10" x2="10" y1="11" y2="17" />
+          <line x1="14" x2="14" y1="11" y2="17" />
+        </g>
       </defs>
     </svg>
 
@@ -1024,6 +1301,14 @@
             <button class="btn-restore" type="button" aria-label="Restore PROD-49">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
             </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-49"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
           </span>
         </div>
 
@@ -1044,6 +1329,14 @@
           <span class="cell-action">
             <button class="btn-restore" type="button" aria-label="Restore PROD-37">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-37"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
             </button>
           </span>
         </div>
@@ -1066,6 +1359,14 @@
             <button class="btn-restore" type="button" aria-label="Restore PROD-28">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
             </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-28"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
           </span>
         </div>
 
@@ -1087,6 +1388,14 @@
             <button class="btn-restore" type="button" aria-label="Restore PROD-61">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
             </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-61"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
           </span>
         </div>
 
@@ -1107,6 +1416,14 @@
           <span class="cell-action">
             <button class="btn-restore" type="button" aria-label="Restore PROD-19">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-19"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
             </button>
           </span>
         </div>
@@ -1163,6 +1480,16 @@
             <button class="btn-restore" type="button" disabled aria-label="Restoring PROD-49">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restoring…
             </button>
+            <button
+              class="icon-btn"
+              type="button"
+              disabled
+              aria-label="More actions for PROD-49"
+              aria-haspopup="menu"
+              style="opacity: 0.5; cursor: default"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
           </span>
         </div>
 
@@ -1184,6 +1511,14 @@
             <button class="btn-restore" type="button" aria-label="Restore PROD-37">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
             </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-37"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
           </span>
         </div>
 
@@ -1204,6 +1539,14 @@
           <span class="cell-action">
             <button class="btn-restore" type="button" aria-label="Restore PROD-28">
               <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+            <button
+              class="icon-btn"
+              type="button"
+              aria-label="More actions for PROD-28"
+              aria-haspopup="menu"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
             </button>
           </span>
         </div>
@@ -1310,10 +1653,10 @@
 
     <!-- ════════════ PANEL 4 — view-only state (canBrowse, not canEdit) ════════════ -->
     <div class="panel-label">
-      4 · View-only — a viewer who can browse but NOT edit sees the same list, but the Restore
-      column is dropped entirely (no shown-disabled buttons — mirrors the ⋯ menu's
-      hidden-not-disabled pattern). They can audit what was archived; restoring needs the edit
-      capability.
+      4 · View-only — a viewer who can browse but holds NEITHER canEdit NOR canManage sees the same
+      list with the entire actions column dropped (no shown-disabled buttons — mirrors the ⋯ menu's
+      hidden-not-disabled pattern). They can audit what was archived; Restore needs canEdit and
+      Delete needs canManage (panel 7 covers the in-between gate combinations).
     </div>
     <div class="panel">
       <div class="list-table" role="table" aria-label="Archived work items">
@@ -1385,6 +1728,189 @@
           <button class="tb-btn primary">
             <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>New work item
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 6 — the row ⋯ menu OPEN (Delete…) [2.9.7] ════════════ -->
+    <div class="panel-label">
+      6 · 2.9.7 — the per-row <code>⋯</code> overflow, open. Restore stays the PRIMARY inline button
+      (the common, safe, reversible action — the view's whole job); permanent Delete is the rare,
+      irreversible, higher-privilege action, so it lives one click deep in the <code>⋯</code> as a
+      single danger <code>Delete…</code> row (trailing <code>…</code> = a confirm follows; it never
+      deletes on click). Choosing it opens the archived-item confirm modal (<code
+        >delete-confirm.mock.html</code
+      >
+      panels 6–7).
+    </div>
+    <div class="panel">
+      <div class="list-table" role="table" aria-label="Archived work items">
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader">Title</div>
+          <div class="th" role="columnheader">Status</div>
+          <div class="th" role="columnheader">Archived by</div>
+          <div class="th" role="columnheader">Archived</div>
+          <div class="th end" role="columnheader"><span class="sr-only">Actions</span></div>
+        </div>
+
+        <div class="lt-grid lt-row" role="row" style="position: relative">
+          <a class="row-link" href="#">
+            <span class="cell-title"
+              ><span class="type-icon t-bug"
+                ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+              ><span class="lr-id">PROD-49</span
+              ><span class="ttl">OAuth callback drops the `state` param on Safari ≤16</span></span
+            >
+            <span><span class="pill pill--inprogress">in-review</span></span>
+            <span class="cell-person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="cell-meta">Jun 15, 2026</span>
+          </a>
+          <span class="cell-action">
+            <button class="btn-restore" type="button" aria-label="Restore PROD-49">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+            </button>
+            <button
+              class="icon-btn active"
+              type="button"
+              aria-label="More actions for PROD-49"
+              aria-haspopup="menu"
+              aria-expanded="true"
+            >
+              <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+            </button>
+          </span>
+          <!-- the ⋯ menu, open, anchored to the row's right edge -->
+          <div
+            class="menu anchored"
+            role="menu"
+            aria-label="Actions for PROD-49"
+            style="top: 44px; right: 16px"
+          >
+            <div class="mhead">PROD-49</div>
+            <div class="opt danger" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+              <span class="lbl">Delete…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 7 — the gate-split matrix [2.9.7] ════════════ -->
+    <div class="panel-label">
+      7 · 2.9.7 — the actions cell for every <code>canEdit</code> ×
+      <code>canManage</code> combination. The two capabilities are INDEPENDENT (Restore =
+      <code>canEdit</code>, Delete = <code>canManage</code> — the shipped
+      <code>assertCanManage</code>), so a row can show Restore but not Delete, and vice-versa. Each
+      affordance is HIDDEN, never shown-disabled, when its gate is unmet (mirroring
+      <code>WorkItemActionsMenu</code>); when NEITHER is held the whole actions column is dropped
+      (panel 4).
+    </div>
+    <div class="gate-row">
+      <!-- both -->
+      <div class="gate-card">
+        <div class="caps">
+          <span class="cap-chip on">canEdit</span><span class="cap-chip on">canManage</span>
+        </div>
+        <div class="demo">
+          <button class="btn-restore" type="button" aria-label="Restore (sample)">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+          </button>
+          <button class="icon-btn" type="button" aria-label="More actions (sample)">
+            <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+          </button>
+        </div>
+        <p class="gloss"><strong>Restore + ⋯ Delete…</strong> — admin / owner. The full cell.</p>
+      </div>
+
+      <!-- canEdit only -->
+      <div class="gate-card">
+        <div class="caps">
+          <span class="cap-chip on">canEdit</span><span class="cap-chip off">canManage</span>
+        </div>
+        <div class="demo">
+          <button class="btn-restore" type="button" aria-label="Restore (sample)">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+          </button>
+        </div>
+        <p class="gloss">
+          <strong>Restore only</strong> — an editor can un-archive but not permanently delete; the
+          <code>⋯</code> is absent (no Delete to host).
+        </p>
+      </div>
+
+      <!-- canManage only -->
+      <div class="gate-card">
+        <div class="caps">
+          <span class="cap-chip off">canEdit</span><span class="cap-chip on">canManage</span>
+        </div>
+        <div class="demo">
+          <button class="icon-btn" type="button" aria-label="More actions (sample)">
+            <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+          </button>
+        </div>
+        <p class="gloss">
+          <strong>⋯ Delete… only</strong> — the rare admin-but-not-editor case; can delete, no
+          inline Restore button.
+        </p>
+      </div>
+
+      <!-- neither -->
+      <div class="gate-card">
+        <div class="caps">
+          <span class="cap-chip off">canEdit</span><span class="cap-chip off">canManage</span>
+        </div>
+        <div class="demo"><span class="none">— actions column dropped —</span></div>
+        <p class="gloss">
+          <strong>View-only</strong> (<code>canBrowse</code> only) — audit what was archived; the
+          grid drops to 4 columns (panel 4).
+        </p>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 8 — the archived-item DETAIL ⋯ menu [2.9.7] ════════════ -->
+    <div class="panel-label">
+      8 · 2.9.7 — where Delete lives on the archived item's DETAIL page. Delete DOES appear there,
+      in the standard detail <code>⋯</code> actions menu (the same RowActionsMenu as the live detail
+      page, with <code>Archive→Restore</code> swapped): <code>Restore</code> (canEdit) +
+      <code>Delete…</code> (canManage) below the danger separator. The prominent Restore affordance
+      + the archived banner are a SEPARATE design (2.9.8 → code 2.9.6) and are not drawn here; this
+      panel only places the Delete affordance the card asks about.
+    </div>
+    <div class="panel">
+      <div class="detail-ctx">
+        <div class="dc-top">
+          <span class="archived-chip">
+            <svg viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+            Archived
+          </span>
+          <span class="dc-key">PROD-49</span>
+          <span class="dc-spacer"></span>
+          <button class="icon-btn active" aria-label="More actions" aria-expanded="true">
+            <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+          </button>
+        </div>
+        <div class="dc-title">OAuth callback drops the `state` param on Safari ≤16</div>
+
+        <!-- the detail actions menu, open, anchored to ⋯ -->
+        <div
+          class="menu anchored"
+          role="menu"
+          aria-label="Actions for PROD-49"
+          style="top: 52px; right: 18px"
+        >
+          <div class="mhead">PROD-49</div>
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>
+            <span class="lbl">Restore</span>
+          </div>
+          <div class="msep"></div>
+          <div class="opt danger" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+            <span class="lbl">Delete…</span>
+          </div>
         </div>
       </div>
     </div>
