@@ -1362,6 +1362,7 @@
       "promoBullet3": "内部字段保持私密——负责人、估算和内部评论始终不会显示。",
       "learnMore": "了解更多",
       "statusBadge": "公开构建中",
+      "manageAriaLabel": "公开构建中 · 管理",
       "viewPublicPage": "查看公开页面",
       "stop": "停止",
       "stopConfirmTitle": "停止公开构建？",

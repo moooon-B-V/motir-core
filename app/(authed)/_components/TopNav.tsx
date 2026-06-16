@@ -6,6 +6,7 @@ import { NotificationBell } from './NotificationBell';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
 import { BuildInPublicButton } from './build-in-public/BuildInPublicButton';
+import { BuildingInPublicHeaderLink } from './build-in-public/BuildingInPublicHeaderLink';
 import { ReportButton } from './ReportButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
@@ -40,9 +41,18 @@ export interface TopNavProps {
   /** The active project's key when the PRIMARY "Build in public" entry point
    * (Subtask 6.17.3 · design Panel 10a) should show — i.e. the actor can manage
    * a project whose access level is not yet `public`. Null otherwise (no active
-   * project, a non-admin, or an already-public project — where the 6.17.4 status
-   * badge takes this same header slot). Resolved server-side in the layout. */
+   * project, a non-admin, or an already-public project — where the 6.17.6/6.17.7
+   * "Building in public" linked indicator takes this same header slot instead).
+   * Resolved server-side in the layout. */
   buildInPublicProjectKey: string | null;
+  /** Whether the active project is currently building in public
+   * (`accessLevel === 'public'`). When true, the same header slot shows the
+   * clickable "Building in public" status indicator (Subtask 6.17.7 · design
+   * §6.17.6 · Panel 12) linking to the build-in-public settings, shown to ALL
+   * team members (no `canManage` read — unlike the non-public CTA above). The
+   * two are mutually exclusive by construction (a project is either public or
+   * not), so the slot renders exactly ONE — never both, never empty. */
+  buildingInPublic: boolean;
 }
 
 export async function TopNav({
@@ -53,6 +63,7 @@ export async function TopNav({
   user,
   initialUnreadCount,
   buildInPublicProjectKey,
+  buildingInPublic,
 }: TopNavProps) {
   const t = await getTranslations('shell');
   return (
@@ -79,8 +90,14 @@ export async function TopNav({
           />
         </div>
         <div className="flex items-center gap-2">
+          {/* The single stateful build-in-public slot (design §6.17.6 · Panel
+              12): the admin "Build in public" CTA when the project is NOT
+              public, OR the all-members "Building in public" linked indicator
+              when it IS — exactly one, never both, never empty. */}
           {buildInPublicProjectKey ? (
             <BuildInPublicButton projectKey={buildInPublicProjectKey} />
+          ) : buildingInPublic ? (
+            <BuildingInPublicHeaderLink />
           ) : null}
           <CreateIssueButton />
           <CommandPaletteTrigger />
