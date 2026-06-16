@@ -113,6 +113,17 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     ? { canBrowse: settingsCaps.canBrowse, canManage: settingsCaps.canManage }
     : undefined;
 
+  // The discoverable "Build in public" entry point (Story 6.17 · Subtask 6.17.3)
+  // — shown only to a project ADMIN on a project that is NOT yet `public`. Gating
+  // here (server-side) means the PRIMARY header button (TopNav) needs no client
+  // access read, and a single `router.refresh()` after going public re-renders
+  // this tree to hide it (the 6.17.4 status badge then takes the header slot).
+  // Null = no entry point (no project / non-admin / already public).
+  const buildInPublicProjectKey =
+    canManage && activeProject && activeProject.accessLevel !== 'public'
+      ? activeProject.identifier
+      : null;
+
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
   // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
@@ -166,6 +177,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     activeWorkspaceId={activeWorkspaceId}
                     user={{ name: session.user.name, email: session.user.email }}
                     initialUnreadCount={initialUnreadCount}
+                    buildInPublicProjectKey={buildInPublicProjectKey}
                   />
                 }
                 sidebar={
