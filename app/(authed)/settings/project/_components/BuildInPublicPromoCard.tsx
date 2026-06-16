@@ -45,7 +45,7 @@ export function BuildInPublicPromoCard({ projectKey }: { projectKey: string }) {
           </span>
           <div>
             <h2 className="font-serif text-lg font-semibold text-(--el-text)">{t('promoTitle')}</h2>
-            <p className="mt-0.5 font-sans text-xs text-(--el-text-muted)">{t('promoSub')}</p>
+            <p className="mt-0.5 font-sans text-xs text-(--el-text-secondary)">{t('promoSub')}</p>
           </div>
         </div>
 

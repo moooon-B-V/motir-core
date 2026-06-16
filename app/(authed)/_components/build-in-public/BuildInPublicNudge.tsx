@@ -40,7 +40,7 @@ export function BuildInPublicNudge({ projectKey }: { projectKey: string }) {
         <Rocket className="size-[18px] shrink-0 text-(--el-accent)" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="font-sans text-sm font-semibold text-(--el-text)">{t('nudgeTitle')}</p>
-          <p className="font-sans text-xs text-(--el-text-muted)">{t('nudgeSub')}</p>
+          <p className="font-sans text-xs text-(--el-text-secondary)">{t('nudgeSub')}</p>
         </div>
         <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
           {t('confirmCta')}

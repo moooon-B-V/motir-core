@@ -1363,7 +1363,17 @@
       "promoBullet1": "Share your board, roadmap, and work items with anyone — no account needed, indexable by search engines.",
       "promoBullet2": "Let people submit, upvote, and comment on requests — they sign in only to act.",
       "promoBullet3": "Internal fields stay private — assignees, estimates, and internal comments are never shown.",
-      "learnMore": "Learn more"
+      "learnMore": "Learn more",
+      "statusBadge": "Building in public",
+      "viewPublicPage": "View public page",
+      "stop": "Stop",
+      "stopConfirmTitle": "Stop building in public?",
+      "stopConfirmLead": "The project goes back to its previous access. Here's what happens:",
+      "stopBulletOffline": "The public page <b>goes offline</b> — visitors and search engines can no longer open it.",
+      "stopBulletLink": "The public <b>link stops working</b> until you build in public again.",
+      "stopBulletKept": "Submitted requests, upvotes, and comments are <b>kept</b> — nothing is deleted.",
+      "stopReassurance": "You can start building in public again anytime from Settings.",
+      "stopConfirmCta": "Stop building in public"
     },
     "public": {
       "linkHeading": "Public link",
@@ -2873,10 +2883,6 @@
     "submitRequest": "Submit a request",
     "viewRoadmap": "View the roadmap",
     "github": "GitHub",
-    "metaVibeProject": "Vibe project",
-    "metaOpenSource": "Open source",
-    "metaLicense": "GPL-3.0",
-    "metaMcpNative": "MCP-native",
     "statPublicRequests": "Public requests",
     "statUpvotes": "Upvotes",
     "statPlanned": "Planned",
@@ -2994,7 +3000,8 @@
     "detailSideChildren": "Children",
     "detailSideProgress": "Progress",
     "detailSideParent": "Parent",
-    "detailSideHidden": "Hidden"
+    "detailSideHidden": "Hidden",
+    "buildingInPublicChip": "Building in public"
   },
   "workItemActions": {
     "menuTrigger": "More actions",

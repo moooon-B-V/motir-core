@@ -84,6 +84,20 @@ function toRankedCardRow(r: {
   };
 }
 
+/**
+ * Escape the SQL-LIKE metacharacters (`\`, `%`, `_`) in a user-supplied search
+ * term so it is matched LITERALLY inside an `ILIKE '%…%'` contains-pattern — a
+ * typed `%` or `_` must be a real character, not a wildcard. Backslash is
+ * escaped first (so it can't double-escape a following metachar), then `%`/`_`;
+ * Postgres' default LIKE escape character is `\`, so no `ESCAPE` clause is
+ * needed. The term itself is still bound as a parameter (never concatenated into
+ * SQL), so this is about MATCH CORRECTNESS, not injection safety — the parameter
+ * binding already guarantees the latter.
+ */
+function escapeLikePattern(term: string): string {
+  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 // Project repository — single Prisma operations on the `project` table.
 // Writes require `tx` (compile-time guarantee they run in a transaction);
 // pure read paths use the `db` singleton. No business logic, no DTO
@@ -291,8 +305,22 @@ export const projectRepository = {
     cursor?: ProjectDirectoryRankCursor;
     /** Required for `trending` — the recency-window cutoff (a bound JS Date). */
     cutoff?: Date;
+    /**
+     * The 6.13.3 SEARCH narrowing — a name/description contains-match. Compiled
+     * to a parameterized `ILIKE '%term%'` over `name` + `public_overview_md`
+     * (the trgm GIN index serves it); the caller has already trimmed it, so a
+     * present value is non-empty. Absent → no search predicate.
+     */
+    search?: string;
+    /**
+     * The 6.13.3 CATEGORY/TAG narrowing — a curated tag slug (the caller has
+     * already validated it against the vocabulary). Compiled to an EXISTS over
+     * `project_tag_assignment` joined to `project_tag` by slug. Absent → no tag
+     * predicate.
+     */
+    categorySlug?: string;
   }): Promise<ProjectDirectoryRankedRow[]> {
-    const { rank, take, cursor, cutoff } = options;
+    const { rank, take, cursor, cutoff, search, categorySlug } = options;
 
     // The shared card projection + the cross-org join + the single public filter
     // (the `accessLevel = 'public'` predicate lives HERE so no non-public project
@@ -306,11 +334,35 @@ export const projectRepository = {
       p."createdAt" AS "createdAt",
       o."name" AS "orgName",
       o."slug" AS "orgSlug"`;
+    // The 6.13.3 NARROWING predicates, ANDed into the single public-filter WHERE
+    // so they bind at the base scan (every rank's CTE reads through `fromPublic`,
+    // so the narrowing composes with all three ranks AND the keyset cursor for
+    // free). Both are PARAMETERIZED — no user string is concatenated into SQL
+    // (the 6.1.1 injection-safety posture):
+    //   • search → a case-insensitive contains-match over the project `name` +
+    //     the public `public_overview_md` overview. LIKE metacharacters in the
+    //     user input are escaped (`escapeLikePattern`) so a typed `%`/`_` matches
+    //     literally, not as a wildcard; Postgres' default `\` LIKE escape then
+    //     applies. The trgm GIN index (this subtask's migration) serves it.
+    //   • category → an EXISTS over the project↔tag join resolved by slug. Only
+    //     the `public` projects already in `fromPublic` are considered, so the
+    //     tag filter can never surface a non-public project.
+    const searchPredicate =
+      search !== undefined
+        ? Prisma.sql` AND (p."name" ILIKE ${'%' + escapeLikePattern(search) + '%'} OR p."public_overview_md" ILIKE ${'%' + escapeLikePattern(search) + '%'})`
+        : Prisma.empty;
+    const categoryPredicate =
+      categorySlug !== undefined
+        ? Prisma.sql` AND EXISTS (
+            SELECT 1 FROM "project_tag_assignment" pta
+              JOIN "project_tag" pt ON pt."id" = pta."tag_id"
+             WHERE pta."project_id" = p."id" AND pt."slug" = ${categorySlug})`
+        : Prisma.empty;
     const fromPublic = Prisma.sql`
       FROM "project" p
       JOIN "workspace" w ON w."id" = p."workspaceId"
       JOIN "organization" o ON o."id" = w."organizationId"
-      WHERE p."accessLevel" = 'public'::"project_access_level" AND p."archivedAt" IS NULL`;
+      WHERE p."accessLevel" = 'public'::"project_access_level" AND p."archivedAt" IS NULL${searchPredicate}${categoryPredicate}`;
 
     if (rank === 'recent') {
       // Timestamp rank: COALESCE(madePublicAt, createdAt) DESC, id DESC.
@@ -388,21 +440,6 @@ export const projectRepository = {
       sortScore: Number(r.sortScore),
       sortTs: null,
     }));
-  },
-
-  /**
-   * Set the project's PUBLIC-facing fields (Story 6.12) — the authored
-   * `publicOverviewMd` README body, the only public-safe content field
-   * 6.12.3 added. Used by the 6.12.8 settings editor and by `db:seed` (to seed
-   * Motir's own canonical overview). `tx` REQUIRED; the caller has already
-   * tenant-/admin-gated the project. Only the provided fields are written.
-   */
-  async updatePublicFields(
-    id: string,
-    data: { publicOverviewMd?: string | null },
-    tx: Prisma.TransactionClient,
-  ): Promise<Project> {
-    return tx.project.update({ where: { id }, data });
   },
 
   /**

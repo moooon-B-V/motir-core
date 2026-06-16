@@ -1,18 +1,27 @@
-// Motir's own canonical public Overview/README (Story 6.12 · Subtask 6.12.4).
+// Motir's own canonical public Overview/README + hero fields (Story 6.12 ·
+// Subtask 6.12.4; Story 6.16 · Subtask 6.16.7 split the hero out of the body).
 //
-// Seeded onto the `motir` project's `publicOverviewMd` so the live public tenant
-// renders real copy (not the empty-fallback auto-intro). The copy is the
-// design/public-projects/ Panel 1 text 1:1 (see design-notes.md "Copy index" +
-// story-6.12.ts §6.12.4): a tagline, PART 1 (the self-improving loop), PART 2
-// ("Vibe project" — the three layers, end to end), then Contribute. Framed as
-// THREE LAYERS end-to-end — NEVER "AI project management".
+// Seeded onto the `motir` project's public hero — `publicTagline` (the hero
+// subtitle), `publicTags` (the hero meta pills), and `publicOverviewMd` (the
+// README body) — so the live public tenant renders real copy (not the
+// empty-fallback auto-intro). The copy is the design/public-projects/ Panel 1
+// text 1:1 (see design-notes.md "Copy index" + story-6.12.ts §6.12.4): the
+// tagline + tags now live in their own fields; the body is PART 1 (the
+// self-improving loop), PART 2 ("Vibe project" — the three layers, end to end),
+// then Contribute. Framed as THREE LAYERS end-to-end — NEVER "AI project
+// management".
 //
 // Plain GitHub-flavoured Markdown (headings + a numbered list + a bullet list +
 // links), so the shipped MarkdownView renders it on the public Overview tab.
 
-export const MOTIR_PUBLIC_OVERVIEW_MD = `Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it, and ship it, end to end. You're looking at Motir, built in Motir.
+// The hero subtitle (Story 6.16) — seeded onto `publicTagline`, no longer the
+// opening line of the README body.
+export const MOTIR_PUBLIC_TAGLINE = `Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it, and ship it, end to end. You're looking at Motir, built in Motir.`;
 
-## You're looking at Motir, inside Motir
+// The hero meta pills (Story 6.16) — seeded onto `publicTags`.
+export const MOTIR_PUBLIC_TAGS = ['Vibe project', 'Open source', 'GPL-3.0', 'MCP-native'];
+
+export const MOTIR_PUBLIC_OVERVIEW_MD = `## You're looking at Motir, inside Motir
 
 This is Motir's own project — the live board, roadmap, and backlog we use to build Motir. We build Motir with Motir: every feature here started as a work item on this board, moved through these columns, and was shipped by the same agents that turn work items into code.
 

@@ -46,3 +46,20 @@ export class InvalidProjectSquareWindowError extends Error {
     this.name = 'InvalidProjectSquareWindowError';
   }
 }
+
+/**
+ * A client supplied a `category` query param (Subtask 6.13.3) that is not a slug
+ * in the curated topic vocabulary (`lib/projectTags/vocabulary.ts`). The route
+ * maps this to 400. An absent `category` is NOT an error — the directory is
+ * unnarrowed; this fires only on a present-but-unknown slug. Rejecting (rather
+ * than silently returning an empty page) keeps an off-vocabulary slug from
+ * masking a client bug, the same posture the rank/window/cursor validators use —
+ * and the square only ever links real categories from the `/categories` facet.
+ */
+export class InvalidProjectSquareCategoryError extends Error {
+  readonly code = 'INVALID_CATEGORY' as const;
+  constructor() {
+    super('Invalid project-square category.');
+    this.name = 'InvalidProjectSquareCategoryError';
+  }
+}
