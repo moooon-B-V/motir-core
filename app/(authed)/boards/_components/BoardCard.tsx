@@ -8,7 +8,10 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import type { BoardCardDto } from '@/lib/dto/boards';
+import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
 import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
+import { useNotifyIssuesChanged } from '../../_components/CreateIssueProvider';
 
 // BoardCard (Subtask 3.2.3 · drag wired in 3.2.4) — the compact issue card per
 // `design/boards/board.mock.html` (`.bcard`). It REUSES the shipped issue
@@ -125,29 +128,52 @@ export function BoardCard({
   onOpenQuickView: (identifier: string) => void;
 }) {
   const t = useTranslations('boards');
+  const { canEdit, canManage } = useProjectAccess();
+  const notifyIssuesChanged = useNotifyIssuesChanged();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
   });
 
   return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      onClick={() => onOpenQuickView(card.identifier)}
-      aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
-      data-testid={`board-card-${card.identifier}`}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
-      // While lifted, the resting card is the dashed ghost marking the insertion
-      // slot (the DragOverlay carries the visible clone); `touch-none` keeps a
-      // touch-drag from scrolling the column. `cursor-grab` is the affordance.
-      className={`${CARD_CLASS} cursor-grab touch-none ${
-        isDragging ? 'border-dashed opacity-40' : ''
-      }`}
-      {...attributes}
-      {...listeners}
-    >
-      <BoardCardView card={card} assigneeName={assigneeName} />
-    </button>
+    // `relative group/card` hosts the card button + the hover-revealed ⋯ menu
+    // OVERLAY (2.8.4). The menu is a SIBLING of the draggable button, never a
+    // child — nesting an interactive control inside the card button would be a
+    // nested-interactive a11y violation and would steal the drag pointer.
+    <div className="group/card relative">
+      <button
+        ref={setNodeRef}
+        type="button"
+        onClick={() => onOpenQuickView(card.identifier)}
+        aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
+        data-testid={`board-card-${card.identifier}`}
+        style={{ transform: CSS.Translate.toString(transform), transition }}
+        // While lifted, the resting card is the dashed ghost marking the insertion
+        // slot (the DragOverlay carries the visible clone); `touch-none` keeps a
+        // touch-drag from scrolling the column. `cursor-grab` is the affordance.
+        className={`${CARD_CLASS} w-full cursor-grab touch-none ${
+          isDragging ? 'border-dashed opacity-40' : ''
+        }`}
+        {...attributes}
+        {...listeners}
+      >
+        <BoardCardView card={card} assigneeName={assigneeName} />
+      </button>
+      {/* Hidden until the card is hovered / the menu is focused — and
+        `pointer-events-none` while hidden so it never intercepts a click/drag
+        meant for the card corner. */}
+      <div className="absolute right-1.5 top-1.5 opacity-0 transition-opacity group-hover/card:pointer-events-auto group-hover/card:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 pointer-events-none">
+        <WorkItemActionsMenu
+          itemId={card.id}
+          identifier={card.identifier}
+          title={card.title}
+          canEdit={canEdit}
+          canManage={canManage}
+          onDeleted={notifyIssuesChanged}
+          onArchived={notifyIssuesChanged}
+          triggerClassName="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) text-(--el-text-muted) shadow-(--shadow-subtle) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        />
+      </div>
+    </div>
   );
 }
 

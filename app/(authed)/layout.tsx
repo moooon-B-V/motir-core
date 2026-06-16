@@ -106,6 +106,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
         })
       : null;
   const canEdit = settingsCaps?.canEdit ?? false;
+  // The project-admin MANAGE gate — the work-item ⋯ menu's Delete action (2.8.4)
+  // consumes it via ProjectAccessProvider, mirroring deleteWorkItem's assertCanManage.
+  const canManage = settingsCaps?.canManage ?? false;
   const settingsAccess = settingsCaps
     ? { canBrowse: settingsCaps.canBrowse, canManage: settingsCaps.canManage }
     : undefined;
@@ -147,7 +150,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
           context. */}
       <CommandPaletteProvider>
         <CreateIssueProvider hasProject={Boolean(activeProject)} canEdit={canEdit}>
-          <ProjectAccessProvider canEdit={canEdit}>
+          <ProjectAccessProvider canEdit={canEdit} canManage={canManage}>
             {/* ReportProvider (Subtask 6.11.7) owns the in-app report-widget
                 modal + open state, mounted once so the top-nav and inbox-header
                 "Report" triggers drive the same dialog. The widget posts to the
