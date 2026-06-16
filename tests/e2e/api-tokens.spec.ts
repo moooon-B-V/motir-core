@@ -83,3 +83,39 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
 
   await expect(page.getByRole('row', { name: /claude-code/ }).getByText('Revoked')).toBeVisible();
 });
+
+// The expiry half of the create flow (Story 7.7 · Subtask 7.7.12, the
+// story-closing settings check): a token minted with a CHOSEN expiry (not the
+// 90-day default) lists that expiry as a relative "in N days", proving the
+// label + expiry → list-shows-expiry path the card calls out.
+test('create with a chosen expiry → the list shows the expiry', async ({ page }) => {
+  await signUp(page, 'tokens-expiry-e2e@example.com');
+
+  await page.goto('/settings/account/api-tokens');
+  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Create token' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await dialog.getByLabel('Label').fill('ci-token');
+
+  // Pick a non-default expiry via the Expires combobox (default is 90 days).
+  await dialog.getByRole('combobox', { name: 'Expires' }).click();
+  await dialog.getByRole('option', { name: '30 days' }).click();
+
+  const createResp = page.waitForResponse(
+    (r) => r.url().endsWith('/api/me/api-tokens') && r.request().method() === 'POST',
+  );
+  await dialog.getByRole('button', { name: 'Create token', exact: true }).click();
+  expect((await createResp).status()).toBe(201);
+
+  await expect(dialog.getByRole('heading', { name: 'Token created' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toBeHidden();
+
+  // The row carries the truncated prefix AND the chosen expiry as "in N days".
+  const row = page.getByRole('row', { name: /ci-token/ });
+  await expect(row).toBeVisible();
+  await expect(row.getByText(/^motir_pat_.+…$/)).toBeVisible();
+  await expect(row.getByText(/in \d+ days/)).toBeVisible();
+});

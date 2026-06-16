@@ -185,6 +185,36 @@ export default defineConfig({
         'lib/mappers/apiTokenMappers.ts',
         'lib/apiTokens/token.ts',
         'lib/apiTokens/errors.ts',
+        // Story 7.7 (Motir MCP server) · Subtask 7.7.12 — the story-closing
+        // suite extends the gate to the MCP tool surface: the registry and every
+        // tool module. (The shared field-schema / summary / normalize helpers
+        // under `tools/` — workItemRef / sprintRef / readyFilters — are NOT tool
+        // modules and stay ungated.) `tests/mcp/story-roundtrip` drives them over
+        // the real `/api/mcp` transport; `tests/mcp/tool-coverage` walks the
+        // per-tool summary / edge branches.
+        'lib/mcp/registry.ts',
+        'lib/mcp/tools/getWorkItem.ts',
+        'lib/mcp/tools/listReady.ts',
+        'lib/mcp/tools/nextReady.ts',
+        'lib/mcp/tools/createWorkItem.ts',
+        'lib/mcp/tools/transitionStatus.ts',
+        'lib/mcp/tools/addComment.ts',
+        'lib/mcp/tools/searchWorkItems.ts',
+        'lib/mcp/tools/whoami.ts',
+        'lib/mcp/tools/listSprints.ts',
+        'lib/mcp/tools/createSprint.ts',
+        'lib/mcp/tools/updateSprint.ts',
+        'lib/mcp/tools/deleteSprint.ts',
+        'lib/mcp/tools/moveToSprint.ts',
+        'lib/mcp/tools/moveToBacklog.ts',
+        'lib/mcp/tools/startSprint.ts',
+        'lib/mcp/tools/completeSprint.ts',
+        'lib/mcp/tools/markIntegrated.ts',
+        'lib/mcp/tools/completeSession.ts',
+        'lib/mcp/tools/linkWorkItems.ts',
+        'lib/mcp/tools/updateWorkItem.ts',
+        'lib/mcp/tools/archiveWorkItem.ts',
+        'lib/mcp/tools/deleteWorkItem.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -331,6 +361,44 @@ export default defineConfig({
         'lib/mappers/apiTokenMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/apiTokens/token.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/apiTokens/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 7.7 · Subtask 7.7.12 — the MCP registry + every tool module.
+        'lib/mcp/registry.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/getWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/listReady.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/createWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/addComment.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/searchWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/listSprints.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/createSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/updateSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/deleteSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/moveToSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/moveToBacklog.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/startSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/completeSprint.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/markIntegrated.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/linkWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/updateWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/archiveWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/tools/deleteWorkItem.ts': { branches: 90, functions: 90, lines: 90 },
+        // These four gate on functions + lines only: each carries DEFENSIVE
+        // branches unreachable under shipped invariants, so a 90% BRANCH bar
+        // would fail on un-coverable code.
+        //   • whoami: the `user.name || user.email` fallback — `User.name` is
+        //     non-nullable, so the email arm never runs.
+        //   • transition_status: the illegal-transition enricher's open-policy
+        //     arm (no IllegalTransitionError is thrown under `open`), its
+        //     status-not-in-workflow guard (the item's status is always a real
+        //     workflow status), and its terminal-status arm (no status in the
+        //     default restricted workflow has zero outgoing transitions).
+        //   • next_ready: the `contextRefs.length > 0` summary arm —
+        //     `contextRefs` is not yet a persisted field, so it is always empty.
+        //   • complete_session: the `reason ?? 'failed'` fallback — a `failed`
+        //     outcome always carries the typed error's message.
+        'lib/mcp/tools/whoami.ts': { functions: 90, lines: 90 },
+        'lib/mcp/tools/transitionStatus.ts': { functions: 90, lines: 90 },
+        'lib/mcp/tools/nextReady.ts': { functions: 90, lines: 90 },
+        'lib/mcp/tools/completeSession.ts': { functions: 90, lines: 90 },
       },
     },
   },
