@@ -9,6 +9,7 @@ import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueList
 import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
 import { collectFilterReferentIds } from '@/lib/filters/registry';
 import { workflowsService } from '@/lib/services/workflowsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -123,7 +124,7 @@ export default async function IssuesPage({
   // no label condition. The page calls services only (never Prisma).
   const referencedLabelIds = ast ? collectFilterReferentIds(ast).labelIds : [];
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [workflow, members, sprints, customFields, components, referencedLabels] =
+  const [workflow, members, sprints, customFields, components, referencedLabels, archivedCount] =
     await Promise.all([
       workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
       // Assignable users scoped by access level (6.4.6): private → project members.
@@ -142,6 +143,9 @@ export default async function IssuesPage({
       }),
       componentsService.listComponents(ctx.project.identifier, wsCtx),
       labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
+      // The [Archived] entry-point's count badge (Story 2.9 · Subtask 2.9.3) —
+      // a cheap COUNT(*) of the project's archived items.
+      workItemsService.countArchivedWorkItems(ctx.projectId, wsCtx),
     ]);
 
   // The actor's saved-filter tier (Subtask 6.2.3) — passed to the toolbar's
@@ -172,6 +176,7 @@ export default async function IssuesPage({
               referencedLabels={referencedLabels}
               projectKey={ctx.project.identifier}
               viewer={viewer}
+              archivedCount={archivedCount}
             />
           </header>
 
