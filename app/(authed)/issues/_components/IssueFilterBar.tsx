@@ -124,7 +124,7 @@ function OptionRow({
 
 function FacetLabel({ label, count }: { label: string; count: number }) {
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-faint) uppercase">
+    <div className="flex items-center gap-1.5 px-2 py-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
       {label}
       {count > 0 ? <span className="text-(--el-text-muted)">· {count}</span> : null}
     </div>
