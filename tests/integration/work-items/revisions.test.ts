@@ -227,6 +227,48 @@ describe('archiveWorkItem — revision', () => {
   });
 });
 
+// ── findLatestArchivedActor (the 2.9.6 detail-banner data path) ──────────────
+
+describe('findLatestArchivedActor', () => {
+  it('resolves the actor of the latest "archived" revision (the banner WHO)', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+    await workItemsService.archiveWorkItem(created.id, fx.ctx);
+
+    const actor = await workItemRevisionRepository.findLatestArchivedActor(created.id);
+    expect(actor?.id).toBe(fx.ctx.userId);
+    // The display name + avatar ride the same read (joined from `user`).
+    expect(actor).toHaveProperty('name');
+    expect(actor).toHaveProperty('image');
+  });
+
+  it('takes the MOST RECENT "archived" revision when an item was re-archived', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+    // Archive → restore → archive again: two "archived" revisions exist; the
+    // method must pick the latest (it shares listByWorkItem's total order).
+    await workItemsService.archiveWorkItem(created.id, fx.ctx);
+    await workItemsService.unarchiveWorkItem(created.id, fx.ctx);
+    await workItemsService.archiveWorkItem(created.id, fx.ctx);
+
+    const archivedRevs = (await workItemRevisionRepository.listByWorkItem(created.id)).filter(
+      (r) => r.changeKind === 'archived',
+    );
+    expect(archivedRevs).toHaveLength(2);
+
+    const actor = await workItemRevisionRepository.findLatestArchivedActor(created.id);
+    expect(actor?.id).toBe(fx.ctx.userId);
+  });
+
+  it('returns null for an item that has no "archived" revision (defensive)', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(createInput(fx), fx.ctx);
+    // A live item: only a "created" revision, no "archived" one.
+    const actor = await workItemRevisionRepository.findLatestArchivedActor(created.id);
+    expect(actor).toBeNull();
+  });
+});
+
 // ── link / unlink revisions (FROM item only) ─────────────────────────────────
 
 describe('linkWorkItems / unlinkWorkItems — revisions', () => {

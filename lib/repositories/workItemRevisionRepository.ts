@@ -65,6 +65,30 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * The ACTOR of the latest `'archived'` revision of one work item (Story 2.9 ·
+   * Subtask 2.9.6) — the detail page's archived banner reads WHO archived it
+   * from here (the WHEN comes from `work_item.archivedAt`). A re-archived item
+   * has several `'archived'` revisions, so we take the most recent
+   * (`changedAt DESC`, `id DESC` as the deterministic tiebreaker — the same
+   * total order {@link listByWorkItem} uses). The author join resolves the
+   * display name + avatar in the SAME read. Returns `null` when the item has no
+   * `'archived'` revision (an item archived by a path that recorded none —
+   * defensive; in practice `archiveWorkItem` always records one). Read-only
+   * path → `db` singleton. Scopes the LATERAL pick the 2.9.3 list read does in
+   * `workItemRepository.findArchivedByProject` down to one item.
+   */
+  async findLatestArchivedActor(
+    workItemId: string,
+  ): Promise<{ id: string; name: string | null; image: string | null } | null> {
+    const revision = await db.workItemRevision.findFirst({
+      where: { workItemId, changeKind: 'archived' },
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+      select: { changedBy: { select: { id: true, name: true, image: true } } },
+    });
+    return revision?.changedBy ?? null;
+  },
+
+  /**
    * How many of a work item's revisions are DISPLAYABLE in the History feed
    * (Subtask 5.5.1) — the `totalCount` behind the tab badge / "Show more"
    * copy. A revision displays unless it is an `updated`-family row whose

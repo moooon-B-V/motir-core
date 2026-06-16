@@ -1,5 +1,6 @@
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { Archive } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -21,6 +22,10 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { Pill } from '@/components/ui/Pill';
+import { formatDate } from '@/lib/utils/datetime';
+import type { Locale } from '@/lib/i18n/locales';
+import { ArchivedBanner } from './_components/ArchivedBanner';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
@@ -219,6 +224,15 @@ export default async function IssueDetailPage({
         })
       : null;
 
+  // Archived state (Story 2.9 · Subtask 2.9.6) — an archived item's detail page
+  // renders (the read doesn't filter `archivedAt`), so it gets a top-of-main
+  // banner + an eyebrow chip as the archived-state signal. The WHEN is formatted
+  // server-side (locale-aware, the same `formatDate` the 2.9.3 list view uses);
+  // the WHO rides `detail.archivedBy` (latest `'archived'` revision).
+  const isArchived = item.archivedAt != null;
+  const locale = (await getLocale()) as Locale;
+  const archivedAtLabel = item.archivedAt ? formatDate(item.archivedAt, locale) : '';
+
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
       <div className="flex flex-col gap-6">
@@ -241,6 +255,16 @@ export default async function IssueDetailPage({
               (the cell collapses to content width at the left). */}
             <div className="flex min-w-0 flex-1 items-center gap-x-3">
               <ParentBreadcrumb ancestors={detail.ancestors} />
+              {/* 2.9.6: the always-visible "Archived" chip follows the breadcrumb
+                so the archived state stays legible when the page is scrolled past
+                the banner. Neutral register (NOT a colored Pill tone) — the only
+                eyebrow tag (the status Pill was removed in 2.4.13). */}
+              {isArchived ? (
+                <Pill className="shrink-0 border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)">
+                  <Archive className="size-3 text-(--el-text-muted)" aria-hidden />
+                  {t('archivedEntry')}
+                </Pill>
+              ) : null}
             </div>
             <div className="ml-auto flex items-center gap-3">
               {/* Epic/parent subtree roll-up (4.3.5) — labelled so it never reads
@@ -291,6 +315,17 @@ export default async function IssueDetailPage({
           bug-issue-detail-eyebrow-overflows-viewport. */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_18rem]">
           <main className="flex min-w-0 flex-col gap-6">
+            {/* 2.9.6: the archived banner is the FIRST element of the main column,
+              above Description — the page's archived-state signal + Restore. */}
+            {isArchived ? (
+              <ArchivedBanner
+                itemId={item.id}
+                identifier={item.identifier}
+                archivedByName={detail.archivedBy?.name ?? null}
+                archivedAtLabel={archivedAtLabel}
+                canEdit={canEdit}
+              />
+            ) : null}
             <ContentSectionCard
               title={t('description')}
               subtitle={t('descriptionGloss')}

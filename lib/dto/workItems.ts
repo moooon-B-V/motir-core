@@ -216,6 +216,16 @@ export interface IssueDetailDto {
   watcherCount: number;
   /** Whether the CALLER watches it — the eye control's filled/outline state. */
   viewerIsWatching: boolean;
+  /**
+   * Who archived this item (Story 2.9 · Subtask 2.9.6) — present ONLY when the
+   * item is archived (`item.archivedAt != null`), resolved from the latest
+   * `'archived'` revision (the same source as the 2.9.3 list view). `null` for
+   * an active item, OR when the item is archived but no `'archived'` revision
+   * resolved an actor (defensive — `item.archivedAt` carries the WHEN
+   * regardless). The detail page's archived banner names the WHO from this and
+   * the WHEN from `item.archivedAt`.
+   */
+  archivedBy: ArchivedByActorDto | null;
 }
 
 /**
