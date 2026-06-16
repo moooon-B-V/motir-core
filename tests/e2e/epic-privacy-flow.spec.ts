@@ -179,13 +179,11 @@ test('@smoke epic privacy: admin makes a project public + an epic private, a cro
 
   // ── 1b. admin marks the epic PRIVATE via the 6.14.7 control ─────────────────
   await page.goto(`/issues/${seed.epic.identifier}`);
-  // The privacy control renders its label as adjacent text + the shared Switch
-  // primitive; that primitive drops `aria-labelledby`, so the switch has no
-  // accessible NAME (a shipped a11y defect, logged as a bug — not in scope here).
-  // The issue-detail page has exactly one switch, so select by role alone, and
-  // anchor on the control's visible label so a future second switch fails loudly.
+  // The privacy control names its switch via the visible "Make this epic
+  // private" label (`aria-labelledby`), now forwarded by the shared Switch
+  // primitive (MOTIR-801) — so target it by its accessible NAME.
   await expect(page.getByText(PRIVACY_LABEL, { exact: true })).toBeVisible({ timeout: 30_000 });
-  const privacySwitch = page.getByRole('switch');
+  const privacySwitch = page.getByRole('switch', { name: PRIVACY_LABEL });
   await expect(privacySwitch).toBeVisible({ timeout: 30_000 });
   // The control is project-admin-gated; the admin is an admin → it's enabled.
   // (The non-admin 403 gate is pinned by the 6.14.8 service-layer matrix.)
@@ -279,7 +277,7 @@ test('@smoke epic privacy: admin makes a project public + an epic private, a cro
 
   // ── 4. admin UNSETS privacy → the public viewer now sees the children LIVE ──
   await page.goto(`/issues/${seed.epic.identifier}`);
-  const switchAgain = page.getByRole('switch');
+  const switchAgain = page.getByRole('switch', { name: PRIVACY_LABEL });
   await expect(switchAgain).toHaveAttribute('aria-checked', 'true');
   const madePublic = page.waitForResponse(
     (r) =>
