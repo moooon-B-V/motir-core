@@ -448,6 +448,18 @@ describe('setPublicOverview — public hero authoring (6.16.3)', () => {
     expect((await readHero(project.id)).publicTagline).toBeNull();
   });
 
+  it("saves Motir's own 149-char hero tagline (bug 6.16 / MOTIR-982 — the limit must hold it)", async () => {
+    const { key, project, ownerCtx } = await makeFixture('hero-tagline-motir');
+    const motirTagline =
+      "Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it, and ship it, end to end. You're looking at Motir, built in Motir.";
+    expect(motirTagline.length).toBe(149);
+    expect(motirTagline.length).toBeLessThanOrEqual(PUBLIC_TAGLINE_MAX_LENGTH);
+
+    await projectsService.setPublicOverview({ key, ctx: ownerCtx, publicTagline: motirTagline });
+
+    expect((await readHero(project.id)).publicTagline).toBe(motirTagline);
+  });
+
   it('rejects a single over-long tag with ProjectTagsInvalidError(tag_too_long)', async () => {
     const { key, ownerCtx } = await makeFixture('hero-tag-long');
     const err = await projectsService
