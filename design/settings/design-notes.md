@@ -276,14 +276,14 @@ toggles (`role="switch"`, accent track when on). Default state: **ALL on EXCEPT
 delete.** Each row is `icon + name + one-line description` on the left, the
 `Switch` on the right, hairline-separated within a group.
 
-| Scope key (7.7.16)   | Group           | Label (plain)        | Description                                                                  | Default | lucide icon  |
-| -------------------- | --------------- | -------------------- | ---------------------------------------------------------------------------- | ------- | ------------ |
-| `read`               | Read            | Read everything      | View work items, boards, sprints, comments, and reports.                     | **on**  | `eye`        |
-| `work_items:write`   | Create & change | Edit work items      | Create and update work items, comments, links, and attachments.              | **on**  | `square-pen` |
-| `sprints:write`      | Create & change | Manage sprints       | Create sprints and move work items in and out of them.                       | **on**  | `zap`        |
-| `work_items:archive` | Create & change | Archive work items   | Archive and restore work items. This can be undone.                          | **on**  | `archive`    |
-| `integration`        | Integrations    | Connect integrations | Link external tools and post activity back to Motir.                         | **on**  | `plug`       |
-| `work_items:delete`  | **Danger zone** | Delete work items    | Permanently delete a work item and its entire subtree. This can't be undone. | **OFF** | `trash-2`    |
+| Scope key (7.7.16)   | Group (column)                     | Label (plain)        | Description                                                                  | Default | lucide icon  |
+| -------------------- | ---------------------------------- | -------------------- | ---------------------------------------------------------------------------- | ------- | ------------ |
+| `read`               | Read (left)                        | Read everything      | View work items, boards, sprints, comments, and reports.                     | **on**  | `eye`        |
+| `sprints:write`      | Sprints (left)                     | Manage sprints       | Create sprints and move work items in and out of them.                       | **on**  | `zap`        |
+| `integration`        | Integrations (left)                | Connect integrations | Link external tools and post activity back to Motir.                         | **on**  | `plug`       |
+| `work_items:write`   | Work items (right)                 | Edit work items      | Create and update work items, comments, links, and attachments.              | **on**  | `square-pen` |
+| `work_items:archive` | Work items (right)                 | Archive work items   | Archive and restore work items. This can be undone.                          | **on**  | `archive`    |
+| `work_items:delete`  | Work items (right, **danger row**) | Delete work items    | Permanently delete a work item and its entire subtree. This can't be undone. | **OFF** | `trash-2`    |
 
 > The exact scope-key spelling above mirrors what 7.7.16 ships; if 7.7.16's final
 > keys differ, 7.7.19 maps label→key by the **group + meaning**, not the literal
@@ -291,62 +291,61 @@ delete.** Each row is `icon + name + one-line description` on the left, the
 
 ## Panel 1 — create modal with the Permissions picker (default)
 
-The shipped create `Modal` (`size="md"`, Panel 4 of 7.7.2) gains a **Permissions**
-`field` between the Workspace (binding) field and the Expires field. A
-section label + helper ("Choose what this token is allowed to do. You can grant
-less than your own access, never more.") sits above the grouped toggle list:
+### ⚠️ Width, not scroll (Yue, 2026-06-16) — show all scopes at once
 
-- **Group labels** reuse the `grp-label` grammar — `--font-mono`, uppercase,
-  `--el-text-faint`. Groups in order: **Read · Create & change · Integrations**,
-  then the **Danger zone**.
+A scrolled picker hides options: the user can't tell more scopes exist below the
+fold. So the create modal **uses its width** instead. It **WIDENS** and lays the
+fields out so all six scopes are visible without any scroll region:
+
+- **The modal widens** from the 7.7.2 `size="md"` (28rem) to **~42rem**. 7.7.19
+  applies a `max-w-[42rem]` className to the shipped `Modal` (or adds a size token
+  if we want it reusable) — the size-variant rems are the swap-safe knob; a one-off
+  `max-w-[…]` className is the same pattern the peek/lightbox modals already use.
+- **Metadata pairs up:** Label is full-width; **Workspace + Expires sit side by
+  side** in a 2-column row (`.meta-cols`) — using the width and saving a row.
+- **The permission picker is a 2-COLUMN grid** (`.scope-cols`), capability groups
+  split across the columns so the whole set fits:
+  - **Left column:** **Read** (Read everything) · **Sprints** (Manage sprints) ·
+    **Integrations** (Connect integrations).
+  - **Right column:** **Work items** — Edit work items · Archive work items ·
+    then the **Delete danger row**.
 - Each **scope row** (`.scope-row`): a 16px lucide glyph in `--el-text-muted`, the
-  name (`text-sm font-medium --el-text`), the description (`text-xs
---el-text-muted`), and a `Switch` on the right. Hairline `--el-border-soft`
-  between rows inside a group.
-- **Default render:** Read / Edit / Manage sprints / Archive / Connect
-  integrations all **on** (accent track); **Delete off**.
+  name (`text-sm font-medium --el-text`), the one-line description (`text-xs
+--el-text-muted`), and a `Switch` on the right. Hairline `--el-border-soft` between
+  rows inside a group; `grp-label` captions (`--font-mono`, uppercase,
+  `--el-text-faint`) head each group.
+- **Default render:** Read / Manage sprints / Connect integrations / Edit /
+  Archive all **on** (accent track); **Delete off**.
 
-Panel 1 shows the form **untruncated** so every scope is visible at once; the
-next section is how it actually fits a viewport.
+No scroll, no hidden overflow — the whole capability set reads at a glance, and the
+Cancel / Create footer sits directly below the grid. (If a future scope count grows
+the grid beyond the 90vh cap, the shipped `Modal` still caps at `max-h-[90vh]` and a
+`Modal.Body` wrapper would scroll as the fallback — but at six scopes the width
+layout fits comfortably and is the intended shape.)
 
-## Panel 2 — how it fits the viewport (REQUIRED build instruction)
+## The Delete danger row (distinct treatment, off by default)
 
-The 6-toggle picker makes the create form **taller than a short viewport**, so
-the dialog must not grow off-screen. The shipped `Modal` already solves this: its
-`Dialog.Content` is `flex max-h-[90vh] flex-col overflow-hidden`, and a tall body
-goes in **`Modal.Body`** (`flex-1 min-h-0 overflow-y-auto` — the ring-safe scroll
-recipe) with a pinned **`Modal.Footer`**. The Modal source comment names this very
-case ("the create modal … pushing the Create button out of view").
+`work_items:delete` is the LAST row of the **Work items** group (right column),
+rendered as its **own rose danger row** (`.scope-danger`: `bg-(--el-tint-rose)`,
+`border-(--el-border-soft)`, `rounded-(--radius-card)`), set apart from the safe
+scopes so granting deletion is a **deliberate, visible act**:
 
-> ⚠️ **7.7.19 must migrate the create form to `Modal.Body` + `Modal.Footer`.** The
-> _currently shipped_ `CreateTokenModal` wraps its fields in a plain
-> `<form className="flex flex-col gap-4">` and a bare `<div>` for the shown-once
-> phase — fine while the form is short, but adding the picker overflows the cap.
-> Move the form fields (Label · Workspace · Permissions · Expires) into
-> `<Modal.Body className="gap-4">` and keep the actions in `<Modal.Footer>`, so the
-> header (title/description) and the Cancel / Create footer stay **pinned** while
-> only the field column scrolls. Apply the same to the shown-once phase if it ever
-> grows. No new layout primitive — this is the existing `Modal.Body`/`Modal.Footer`
-> recipe (see `components/ui/Modal.tsx`). Panel 2 renders this capped + scrolled
-> state: header and footer pinned, the fields clipped to a scroll region.
-
-## The Danger-zone delete toggle (distinct treatment, off by default)
-
-`work_items:delete` lives in its **own rose box** (`.scope-danger`:
-`bg-(--el-tint-rose)`, `border-(--el-border-soft)`, `rounded-(--radius-card)`,
-`p-3.5`), set apart from the safe scopes so granting deletion is a **deliberate,
-visible act**:
-
-- The group label reads **"Danger zone"** in **`--el-danger`** with a
-  `shield-alert` glyph.
+- The scope name carries a small **"· Danger"** `tag` in **`--el-danger`**
+  (`--font-mono`, uppercase) — colour-plus-text, never colour alone (finding #35).
 - The scope glyph (`trash-2`) is `--el-danger`; the name is `--el-text-strong`;
-  the "This can't be undone" caption is `--el-text-strong` (AA on the rose tint —
-  finding #35).
-- The `Switch` is **OFF** by default. Flipping it on is shown in **Panel 3** — the
-  box, icon, and caption stay; only the track turns accent. (Confirmed AA in light
-  AND dark — Panel 3 + the dark toggle.)
+  the "This can't be undone" caption is `--el-text-strong` (AA on the rose tint).
+- The `Switch` is **OFF** by default. Flipping it on is shown in **Panel 2** — the
+  rose row, tag, icon, and caption stay; only the track turns accent. (Confirmed AA
+  in light AND dark — Panel 2 + the dark toggle on the wide modal.)
 
-## Panel 4 — disabled / error state (every scope off)
+## Panel 2 — Work-items group with Delete turned ON (the deliberate grant)
+
+A close-up of the right column's **Work items** group with the delete `Switch`
+flipped **on**: Edit / Archive as plain rows above, then the rose danger row with
+its accent track now on. Confirms the danger treatment in its granted state — the
+distinct rose styling persists, so an on delete scope still reads as dangerous.
+
+## Panel 3 — disabled / error state (every scope off)
 
 A token must grant **at least one** permission. With every toggle off:
 
@@ -359,7 +358,7 @@ A token must grant **at least one** permission. With every toggle off:
 This is the only NEW validation state; create / shown-once / revoke / empty are
 exactly 7.7.2.
 
-## Panel 5 — token-list granted-scope display (the "Scopes" column)
+## Panel 4 — token-list granted-scope display (the "Scopes" column)
 
 The list (`ApiTokensManager`, Panel 3 of 7.7.2) gains a **Scopes** column between
 **Token** and **Workspace** — compact, **no row bloat**:
@@ -381,7 +380,7 @@ The list (`ApiTokensManager`, Panel 3 of 7.7.2) gains a **Scopes** column betwee
 - **Revoked rows** show the muted summary only (no chevron) — consistent with the
   7.7.2 revoked-row muting.
 
-## Panel 6 — expanded scope detail
+## Panel 5 — expanded scope detail
 
 The chevron opens a **detail sub-row** (`.scope-detail` → a `td colspan`),
 a `--el-surface-soft` card holding a "This token can:" lead + one **chip per
@@ -393,34 +392,37 @@ only — never the raw `work_items:*` keys. The chevron flips to point up
 ## Token / a11y rules honoured (additions to the 7.7.2 list)
 
 - **Colour** strictly via `--el-*`: the accent Switch track; `--el-tint-rose` +
-  `--el-danger` for the danger zone / delete chips; `--el-tint-mint` for the Full
-  access pill; `--el-text-muted` scope glyphs; `--el-text-strong` on every tint
-  (AA — finding #35, verified light + dark). No Tier-0 `--color-*`.
-- **Shape** via element-semantic tokens only — `--radius-card` (danger box,
+  `--el-danger` for the delete danger row / "Can delete" chip; `--el-tint-mint`
+  for the Full access pill; `--el-text-muted` scope glyphs; `--el-text-strong` on
+  every tint (AA — finding #35, verified light + dark). No Tier-0 `--color-*`.
+- **Shape** via element-semantic tokens only — `--radius-card` (danger row,
   detail card, summary `--radius-badge`), `--radius-control` (disclose button),
   `--spacing-chip-*` (chips), `--spacing-control-*`. No raw `rounded-md` / `p-1`.
-- **Not colour-alone** (finding #35): the danger zone pairs rose tint + icon +
-  "can't be undone" copy + a "Danger zone" label; the delete grant carries the
-  text chip "Can delete", not a bare colour; every scope toggle has a text label
-  and `aria-label`.
+- **Not colour-alone** (finding #35): the delete danger row pairs rose tint + the
+  `trash-2` icon + the "can't be undone" copy + a "· Danger" text tag; the delete
+  grant in the list carries the text chip "Can delete", not a bare colour; every
+  scope toggle has a text label and `aria-label`.
 - **A11y:** scope toggles are `role="switch"` + `aria-checked` + `aria-label`,
   wrapped in a `role="group"` labelled by the "Permissions" heading; the disclose
   control is a real `<button>` with `aria-expanded` + a descriptive `aria-label`
   ("Show scopes for {label}"); the empty-scope error is inline form text. The
   detail sub-row is plain table markup.
-- **Dark mode** confirmed (toggle in the mock): the rose danger box, mint/rose
+- **Dark mode** confirmed (toggle in the mock): the rose delete row, mint/rose
   pills, and accent switches all flip via the token layer and stay AA.
 
 ## Primitives composed (additions — no hand-rolling)
 
-| Element                          | Shipped primitive                                                   |
-| -------------------------------- | ------------------------------------------------------------------- |
-| scope toggles                    | `components/ui/Switch.tsx` (`role="switch"`)                        |
-| summary / "Can delete" / chips   | `components/ui/Pill.tsx` (mint / rose / neutral tones)              |
-| Permissions section + danger box | `components/ui/Card.tsx` callout grammar + the `field` form row     |
-| disclose / expand                | a ghost icon `button` (the existing `icon-btn` grammar) + `chevron` |
-| modal / CTA / inputs             | unchanged from 7.7.2 (`Modal` / `Button` / `Input` / `Combobox`)    |
+| Element                          | Shipped primitive                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| scope toggles                    | `components/ui/Switch.tsx` (`role="switch"`)                                                  |
+| summary / "Can delete" / chips   | `components/ui/Pill.tsx` (mint / rose / neutral tones)                                        |
+| Permissions section + danger row | `components/ui/Card.tsx` callout grammar + the `field` form row                               |
+| 2-column scope grid              | layout-only CSS grid (`.scope-cols`) — gaps are layout, not shape                             |
+| disclose / expand                | a ghost icon `button` (the existing `icon-btn` grammar) + `chevron`                           |
+| modal / CTA / inputs             | unchanged from 7.7.2 (`Modal` / `Button` / `Input` / `Combobox`), the modal widened to ~42rem |
 
 No new primitive is invented. The "Can delete" rose pill and mint "Full access"
-pill are existing `Pill` tones; the danger box is the callout grammar already used
-by the shown-once warning + revoke confirm.
+pill are existing `Pill` tones; the delete danger row is the callout grammar
+already used by the shown-once warning + revoke confirm. The 2-column grid is
+layout-only (sibling gaps, not a control's own shape), so it stays raw per the
+shape-token rule.

@@ -14,10 +14,11 @@
       It specifies two things the 7.7.19 code subtask builds against:
         A. The create-token modal's PERMISSION-SCOPE picker — the 6 capability
            scopes from 7.7.16 (read · work-items write · archive · delete ·
-           sprints · integration) as grouped, plain-language Switch toggles.
-           Default: ALL on EXCEPT work-items delete. The destructive delete scope
-           sits in its own rose "Danger zone" box, OFF by default, so granting it
-           is a deliberate act.
+           sprints · integration) as plain-language Switch toggles. To show every
+           scope AT ONCE with no scrolling, the modal WIDENS and the scopes lay out
+           in TWO COLUMNS grouped by capability. Default: ALL on EXCEPT work-items
+           delete. The destructive delete toggle is a rose danger row, OFF by
+           default, so granting it is a deliberate act.
         B. The token-LIST granted-scope display — each row gets a compact summary
            Pill (Full access / Standard / Read only / Custom) + a persistent rose
            "Can delete" chip whenever delete is granted (a dangerous capability is
@@ -29,6 +30,10 @@
           a token is bound to. Unchanged here.
         * PERMISSION scope (THIS asset, 7.7.16) — what the token may DO. New.
 
+      WIDTH, not scroll (Yue, 2026-06-16): the 6-toggle picker is shown WHOLE — the
+      modal uses its width (a wider panel + a 2-column scope grid) so the user sees
+      all options without scrolling. No hidden overflow.
+
       Built FROM the real design system: the token block is copied 1:1 from
       app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*); the markup
       mirrors the SHIPPED primitives — Card, Switch (role="switch"), Pill, Button,
@@ -39,18 +44,16 @@
       identical primitives — no Pencil->code gap.
 
       Covers (multi-panel — review EACH, mistake #31):
-        (1) Create modal — full form WITH the new permission-scope picker, shown
-            untruncated (default: all on except delete).
-        (2) How it FITS — the same modal capped at max-h-[90vh] with the fields in
-            a scrolling Modal.Body and a pinned Modal.Footer (never grows
-            off-screen; 7.7.19 must adopt Modal.Body/Footer).
-        (3) Scope picker — close-up of the grouped toggles + the rose Danger zone
-            delete toggle turned ON (deliberate grant, distinct treatment).
-        (4) Scope picker — DISABLED / error state (every scope off -> CTA blocked,
-            inline helper).
-        (5) Token list — granted-scope column (summary pill + "Can delete" chip),
+        (1) Create modal — the WIDE form: metadata (Label · Workspace · Expires) +
+            the 2-column permission grid, every scope visible (default: all on
+            except delete).
+        (2) The Work-items group with Delete turned ON — close-up of the rose
+            danger row (the deliberate grant).
+        (3) Permission picker — DISABLED / error state (every scope off -> CTA
+            blocked, inline helper).
+        (4) Token list — granted-scope column (summary pill + "Can delete" chip),
             rows collapsed.
-        (6) Token list — a row EXPANDED to its scope-detail chip sub-row.
+        (5) Token list — a row EXPANDED to its scope-detail chip sub-row.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -1086,7 +1089,32 @@
         height: 13px;
       }
 
-      /* the permission-scope picker block inside the create modal */
+      /* WIDE create modal — uses width instead of scrolling so every scope shows
+         at once (Yue, 2026-06-16). 7.7.19 widens the modal (a max-w-[42rem]
+         className on the shipped Modal, or a new size token). */
+      .modal.wide {
+        max-width: 42rem;
+      }
+      /* metadata fields that pair side-by-side (Workspace + Expires) */
+      .meta-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      /* the 2-column permission grid: capability groups split across two columns
+         so all 6 scopes are visible without a scroll region */
+      .scope-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 28px;
+        align-items: start;
+      }
+      .scope-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
       .scopes {
         display: flex;
         flex-direction: column;
@@ -1109,7 +1137,7 @@
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        gap: 16px;
+        gap: 14px;
         padding: 10px 0;
         border-bottom: 1px solid var(--el-border-soft);
       }
@@ -1147,24 +1175,13 @@
         color: var(--el-text-muted);
         line-height: 1.35;
       }
-      /* the rose Danger-zone box that holds the delete scope */
+      /* the rose Danger row that holds the delete scope (distinct + off) */
       .scope-danger {
-        margin-top: 14px;
+        margin-top: 8px;
         background: var(--el-tint-rose);
         border: 1px solid var(--el-border-soft);
         border-radius: var(--radius-card);
-        padding: 12px 14px;
-      }
-      .scope-danger .scope-grp-label {
-        color: var(--el-danger);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 8px;
-      }
-      .scope-danger .scope-grp-label .ic {
-        width: 13px;
-        height: 13px;
+        padding: 10px 12px;
       }
       .scope-danger .scope-row {
         border-bottom: 0;
@@ -1175,6 +1192,17 @@
       }
       .scope-danger .scope-name {
         color: var(--el-text-strong);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .scope-danger .scope-name .tag {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-danger);
       }
       .scope-danger .scope-desc {
         color: var(--el-text-strong);
@@ -1188,7 +1216,7 @@
         font-family: var(--font-sans);
         font-size: 12px;
         color: var(--el-danger);
-        margin-top: 8px;
+        margin-top: 10px;
       }
       .scope-error .ic {
         width: 13px;
@@ -1272,7 +1300,7 @@
       .scope-chip.danger .ic {
         color: var(--el-danger);
       }
-      /* a couple of two-line review captions under a panel */
+      /* a review caption under a panel */
       .note {
         max-width: 1040px;
         margin: 8px auto 0;
@@ -1285,56 +1313,16 @@
         color: var(--el-text);
         font-weight: 600;
       }
-
-      /* The shipped Modal caps at max-h-[90vh] and lays out as a flex column;
-         a tall body goes in Modal.Body (flex-1 overflow-y-auto) with a pinned
-         Modal.Footer. These classes demonstrate that recipe for the create
-         modal once the scope picker makes it tall (Panel 2). */
-      .modal.capped {
-        display: flex;
-        flex-direction: column;
-        max-height: 540px;
-        padding-bottom: 0;
-      }
-      .modal.capped .modal-head {
-        flex: none;
-      }
-      /* the Modal.Body scroll region — flex-1, scrolls, footer stays pinned */
-      .modal-scroll {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        /* ring-safe inset, mirrors Modal.Body's -m-1.5 p-1.5 */
-        margin: -6px -6px 0;
-        padding: 6px 6px 0;
-      }
-      .modal.capped .modal-foot {
-        flex: none;
-        margin-top: 0;
-        padding: 16px 0;
-        border-top: 1px solid var(--el-border);
-        background: var(--el-page-bg);
-      }
-      /* a faux viewport frame so the 90vh cap reads in a static screenshot */
-      .viewport {
-        height: 600px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
-        <h1>Token scope selection — create-modal toggles + list display</h1>
+        <h1>Token scope selection — wide create modal + list display</h1>
         <p>
           Story 7.7 · Subtask 7.7.18 — extends design/settings/account-settings (7.7.2). Built from
           the real design system (--el-* colour + element-semantic shape tokens). Reference for the
-          7.7.19 code subtask.
+          7.7.19 code subtask. All 6 scopes shown at once (width, not scroll).
         </p>
       </div>
       <button
@@ -1348,18 +1336,17 @@
       </button>
     </div>
 
-    <!-- ════════════ PANEL 1 — create modal, full form with the scope picker (default) ════════════ -->
+    <!-- ════════════ PANEL 1 — wide create modal, all scopes visible ════════════ -->
     <div class="panel-label">
-      1 · Create token — the full Modal with the new PERMISSIONS picker, shown UNTRUNCATED so every
-      scope is visible. The 6 scopes (7.7.16) as grouped, plain-language Switch toggles. Default:
-      every scope ON except Delete, which sits in its own rose Danger zone, OFF. Binding scope
-      (workspace) + Expires are unchanged from 7.7.2. In-app the dialog never grows this tall — see
-      Panel 2 for how it fits the viewport.
+      1 · Create token — the WIDE Modal. Metadata (Label, then Workspace + Expires side by side) on
+      top; the PERMISSIONS picker below as a 2-column grid grouped by capability, so all 6 scopes
+      (7.7.16) are visible AT ONCE with no scrolling. Default: every scope ON except Delete, the
+      rose danger row, OFF. Binding scope (workspace) is unchanged from 7.7.2.
     </div>
     <div class="panel">
       <div class="mstage">
         <div class="overlay-tint"></div>
-        <div class="modal">
+        <div class="modal wide">
           <div class="modal-head">
             <h3 class="modal-title">Create API token</h3>
             <p class="modal-desc">
@@ -1377,228 +1364,36 @@
                 >A name to recognise this token by — e.g. the agent or machine using it.</span
               >
             </div>
-            <div class="field">
-              <label for="m-ws">Workspace</label>
-              <div
-                class="input"
-                id="m-ws"
-                style="color: var(--el-text-secondary); background: var(--el-muted)"
-              >
-                Default
+            <div class="meta-cols">
+              <div class="field">
+                <label for="m-ws">Workspace</label>
+                <div
+                  class="input"
+                  id="m-ws"
+                  style="color: var(--el-text-secondary); background: var(--el-muted)"
+                >
+                  Default
+                </div>
+                <span class="helper">Only reaches work in this workspace.</span>
               </div>
-              <span class="helper">The token can only reach work in this workspace.</span>
+              <div class="field">
+                <label for="m-exp">Expires</label>
+                <div class="select full" id="m-exp">
+                  90 days<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <span class="helper">After this the token stops working.</span>
+              </div>
             </div>
 
-            <!-- the PERMISSIONS picker (7.7.18) -->
+            <!-- the PERMISSIONS picker (7.7.18) — 2-column grid, all visible -->
             <div class="field">
               <label id="perm-label">Permissions</label>
               <span class="helper"
                 >Choose what this token is allowed to do. You can grant less than your own access,
                 never more.</span
               >
-              <div class="scopes" role="group" aria-labelledby="perm-label">
-                <div class="scope-grp">
-                  <div class="scope-grp-label">Read</div>
-                  <div class="scope-row">
-                    <div class="scope-main">
-                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
-                      <div class="scope-text">
-                        <span class="scope-name">Read everything</span>
-                        <span class="scope-desc"
-                          >View work items, boards, sprints, comments, and reports.</span
-                        >
-                      </div>
-                    </div>
-                    <span
-                      class="sw on"
-                      role="switch"
-                      aria-checked="true"
-                      aria-label="Read everything"
-                      ><span class="kn"></span
-                    ></span>
-                  </div>
-                </div>
-
-                <div class="scope-grp">
-                  <div class="scope-grp-label">Create &amp; change</div>
-                  <div class="scope-row">
-                    <div class="scope-main">
-                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
-                      <div class="scope-text">
-                        <span class="scope-name">Edit work items</span>
-                        <span class="scope-desc"
-                          >Create and update work items, comments, links, and attachments.</span
-                        >
-                      </div>
-                    </div>
-                    <span
-                      class="sw on"
-                      role="switch"
-                      aria-checked="true"
-                      aria-label="Edit work items"
-                      ><span class="kn"></span
-                    ></span>
-                  </div>
-                  <div class="scope-row">
-                    <div class="scope-main">
-                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
-                      <div class="scope-text">
-                        <span class="scope-name">Manage sprints</span>
-                        <span class="scope-desc"
-                          >Create sprints and move work items in and out of them.</span
-                        >
-                      </div>
-                    </div>
-                    <span
-                      class="sw on"
-                      role="switch"
-                      aria-checked="true"
-                      aria-label="Manage sprints"
-                      ><span class="kn"></span
-                    ></span>
-                  </div>
-                  <div class="scope-row">
-                    <div class="scope-main">
-                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
-                      <div class="scope-text">
-                        <span class="scope-name">Archive work items</span>
-                        <span class="scope-desc"
-                          >Archive and restore work items. This can be undone.</span
-                        >
-                      </div>
-                    </div>
-                    <span
-                      class="sw on"
-                      role="switch"
-                      aria-checked="true"
-                      aria-label="Archive work items"
-                      ><span class="kn"></span
-                    ></span>
-                  </div>
-                </div>
-
-                <div class="scope-grp">
-                  <div class="scope-grp-label">Integrations</div>
-                  <div class="scope-row">
-                    <div class="scope-main">
-                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
-                      <div class="scope-text">
-                        <span class="scope-name">Connect integrations</span>
-                        <span class="scope-desc"
-                          >Link external tools and post activity back to Motir.</span
-                        >
-                      </div>
-                    </div>
-                    <span
-                      class="sw on"
-                      role="switch"
-                      aria-checked="true"
-                      aria-label="Connect integrations"
-                      ><span class="kn"></span
-                    ></span>
-                  </div>
-                </div>
-
-                <!-- DANGER ZONE — delete, visually distinct + OFF by default -->
-                <div class="scope-danger">
-                  <div class="scope-grp-label">
-                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>Danger
-                    zone
-                  </div>
-                  <div class="scope-row">
-                    <div class="scope-main">
-                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
-                      <div class="scope-text">
-                        <span class="scope-name">Delete work items</span>
-                        <span class="scope-desc"
-                          >Permanently delete a work item and its entire subtree. This can't be
-                          undone.</span
-                        >
-                      </div>
-                    </div>
-                    <span
-                      class="sw"
-                      role="switch"
-                      aria-checked="false"
-                      aria-label="Delete work items"
-                      ><span class="kn"></span
-                    ></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="field">
-              <label for="m-exp">Expires</label>
-              <div class="select full" id="m-exp">
-                90 days<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
-              </div>
-              <span class="helper"
-                >After this, the token stops working and agents must be re-issued one.</span
-              >
-            </div>
-          </div>
-          <div class="modal-foot">
-            <button class="btn btn-ghost">Cancel</button>
-            <button class="btn btn-primary">Create token</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <p class="note">
-      <strong>Default = all on except Delete.</strong> A token created without touching the picker
-      can read, edit, manage sprints, archive, and connect integrations — the everyday agent set —
-      but cannot delete. Granting Delete is always a separate, deliberate flip.
-    </p>
-
-    <!-- ════════════ PANEL 2 — how it fits the viewport (capped + scrolled body, pinned footer) ════════════ -->
-    <div class="panel-label">
-      2 · How it fits — the shipped Modal caps at max-h-[90vh] and is a flex column, so the fields
-      go in a scrolling Modal.Body while the Cancel / Create footer stays pinned. (Today's
-      CreateTokenModal uses a plain &lt;form&gt;; the scope picker makes it tall enough that 7.7.19
-      must move the fields into Modal.Body + Modal.Footer — see design-notes.) Never grows
-      off-screen.
-    </div>
-    <div class="panel">
-      <div class="mstage">
-        <div class="overlay-tint"></div>
-        <div class="viewport">
-          <div class="modal capped">
-            <div class="modal-head">
-              <h3 class="modal-title">Create API token</h3>
-              <p class="modal-desc">
-                The token will be shown once, right after you create it. Store it somewhere safe.
-              </p>
-            </div>
-            <button class="modal-close" aria-label="Close">
-              <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
-            </button>
-            <div class="modal-scroll">
-              <div class="field">
-                <label for="m2-label">Label</label>
-                <div class="input"><input id="m2-label" value="claude-code" /></div>
-                <span class="helper"
-                  >A name to recognise this token by — e.g. the agent or machine using it.</span
-                >
-              </div>
-              <div class="field">
-                <label for="m2-ws">Workspace</label>
-                <div
-                  class="input"
-                  id="m2-ws"
-                  style="color: var(--el-text-secondary); background: var(--el-muted)"
-                >
-                  Default
-                </div>
-                <span class="helper">The token can only reach work in this workspace.</span>
-              </div>
-              <div class="field">
-                <label id="perm2-label">Permissions</label>
-                <span class="helper"
-                  >Choose what this token is allowed to do. You can grant less than your own access,
-                  never more.</span
-                >
-                <div class="scopes" role="group" aria-labelledby="perm2-label">
+              <div class="scope-cols" role="group" aria-labelledby="perm-label">
+                <div class="scope-col">
                   <div class="scope-grp">
                     <div class="scope-grp-label">Read</div>
                     <div class="scope-row">
@@ -1621,7 +1416,52 @@
                     </div>
                   </div>
                   <div class="scope-grp">
-                    <div class="scope-grp-label">Create &amp; change</div>
+                    <div class="scope-grp-label">Sprints</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-desc"
+                            >Create sprints and move work items in and out of them.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Manage sprints"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Integrations</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Connect integrations</span>
+                          <span class="scope-desc"
+                            >Link external tools and post activity back to Motir.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Connect integrations"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Work items</div>
                     <div class="scope-row">
                       <div class="scope-main">
                         <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
@@ -1642,11 +1482,11 @@
                     </div>
                     <div class="scope-row">
                       <div class="scope-main">
-                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
                         <div class="scope-text">
-                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-name">Archive work items</span>
                           <span class="scope-desc"
-                            >Create sprints and move work items in and out of them.</span
+                            >Archive and restore work items. This can be undone.</span
                           >
                         </div>
                       </div>
@@ -1654,67 +1494,91 @@
                         class="sw on"
                         role="switch"
                         aria-checked="true"
-                        aria-label="Manage sprints"
+                        aria-label="Archive work items"
                         ><span class="kn"></span
                       ></span>
+                    </div>
+                    <!-- DANGER row — distinct rose treatment, OFF by default -->
+                    <div class="scope-danger">
+                      <div class="scope-row">
+                        <div class="scope-main">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          <div class="scope-text">
+                            <span class="scope-name"
+                              >Delete work items <span class="tag">· Danger</span></span
+                            >
+                            <span class="scope-desc"
+                              >Permanently delete a work item and its entire subtree. This can't be
+                              undone.</span
+                            >
+                          </div>
+                        </div>
+                        <span
+                          class="sw"
+                          role="switch"
+                          aria-checked="false"
+                          aria-label="Delete work items"
+                          ><span class="kn"></span
+                        ></span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="modal-foot">
-              <button class="btn btn-ghost">Cancel</button>
-              <button class="btn btn-primary">Create token</button>
-            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create token</button>
           </div>
         </div>
       </div>
     </div>
+    <p class="note">
+      <strong>Width, not scroll.</strong> The wider panel + 2-column grid shows all six scopes at
+      once — no hidden overflow, nothing the user has to scroll to discover.
+      <strong>Default = all on except Delete:</strong> a token made without touching the picker can
+      read, edit, manage sprints, archive, and connect integrations, but not delete. Granting Delete
+      is a deliberate flip.
+    </p>
 
-    <!-- ════════════ PANEL 3 — danger toggle ON (deliberate grant) ════════════ -->
+    <!-- ════════════ PANEL 2 — Work-items group, Delete turned ON ════════════ -->
     <div class="panel-label">
-      3 · The Danger zone with Delete turned ON — a close-up of the deliberate grant. The rose box,
-      the danger icon, and the "can't be undone" caption stay; only the Switch flips on.
+      2 · The Work-items group with Delete turned ON — a close-up of the deliberate grant. The rose
+      danger row, the "Danger" tag, the trash icon, and the "can't be undone" caption stay; only the
+      Switch flips on.
     </div>
     <div class="panel">
       <div class="mstage">
-        <div class="modal" style="max-width: 30rem">
+        <div class="modal" style="max-width: 26rem">
           <div class="modal-head">
-            <h3 class="modal-title">Permissions</h3>
-            <p class="modal-desc">The granted set decides what the agent can do with this token.</p>
+            <h3 class="modal-title">Work items</h3>
+            <p class="modal-desc">What this token can do to work items.</p>
           </div>
           <div class="modal-body">
             <div class="scopes">
               <div class="scope-grp">
-                <div class="scope-grp-label">Read</div>
                 <div class="scope-row">
                   <div class="scope-main">
-                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
                     <div class="scope-text">
-                      <span class="scope-name">Read everything</span>
+                      <span class="scope-name">Edit work items</span>
                       <span class="scope-desc"
-                        >View work items, boards, sprints, comments, and reports.</span
+                        >Create and update work items, comments, links, and attachments.</span
                       >
                     </div>
                   </div>
-                  <span class="sw on" role="switch" aria-checked="true" aria-label="Read everything"
+                  <span class="sw on" role="switch" aria-checked="true" aria-label="Edit work items"
                     ><span class="kn"></span
                   ></span>
                 </div>
-              </div>
-              <div class="scope-danger">
-                <div class="scope-grp-label">
-                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>Danger
-                  zone
-                </div>
                 <div class="scope-row">
                   <div class="scope-main">
-                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
                     <div class="scope-text">
-                      <span class="scope-name">Delete work items</span>
+                      <span class="scope-name">Archive work items</span>
                       <span class="scope-desc"
-                        >Permanently delete a work item and its entire subtree. This can't be
-                        undone.</span
+                        >Archive and restore work items. This can be undone.</span
                       >
                     </div>
                   </div>
@@ -1722,9 +1586,32 @@
                     class="sw on"
                     role="switch"
                     aria-checked="true"
-                    aria-label="Delete work items"
+                    aria-label="Archive work items"
                     ><span class="kn"></span
                   ></span>
+                </div>
+                <div class="scope-danger">
+                  <div class="scope-row">
+                    <div class="scope-main">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                      <div class="scope-text">
+                        <span class="scope-name"
+                          >Delete work items <span class="tag">· Danger</span></span
+                        >
+                        <span class="scope-desc"
+                          >Permanently delete a work item and its entire subtree. This can't be
+                          undone.</span
+                        >
+                      </div>
+                    </div>
+                    <span
+                      class="sw on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="Delete work items"
+                      ><span class="kn"></span
+                    ></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1733,14 +1620,14 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 4 — disabled / error state (every scope off) ════════════ -->
+    <!-- ════════════ PANEL 3 — disabled / error state (every scope off) ════════════ -->
     <div class="panel-label">
-      4 · Error / disabled state — every scope off. A token must grant at least one permission, so
+      3 · Error / disabled state — every scope off. A token must grant at least one permission, so
       the inline error shows and the "Create token" CTA is disabled.
     </div>
     <div class="panel">
       <div class="mstage">
-        <div class="modal" style="max-width: 30rem">
+        <div class="modal" style="max-width: 26rem">
           <div class="modal-head">
             <h3 class="modal-title">Permissions</h3>
             <p class="modal-desc">Choose what this token is allowed to do.</p>
@@ -1765,7 +1652,7 @@
                 </div>
               </div>
               <div class="scope-grp">
-                <div class="scope-grp-label">Create &amp; change</div>
+                <div class="scope-grp-label">Work items</div>
                 <div class="scope-row">
                   <div class="scope-main">
                     <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
@@ -1797,9 +1684,9 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 5 — token list with the granted-scope column ════════════ -->
+    <!-- ════════════ PANEL 4 — token list with the granted-scope column ════════════ -->
     <div class="panel-label">
-      5 · Token list — the new Scopes column. A compact summary Pill (Full access / Standard / Read
+      4 · Token list — the new Scopes column. A compact summary Pill (Full access / Standard / Read
       only / Custom); whenever Delete is granted, a persistent rose "Can delete" chip rides
       alongside it so the dangerous grant is never hidden behind a summary. The chevron expands the
       detail.
@@ -1924,9 +1811,9 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 6 — a row expanded to its scope detail ════════════ -->
+    <!-- ════════════ PANEL 5 — a row expanded to its scope detail ════════════ -->
     <div class="panel-label">
-      6 · A row expanded — the chevron opens a detail sub-row listing every granted scope as a chip.
+      5 · A row expanded — the chevron opens a detail sub-row listing every granted scope as a chip.
       Delete reads as a rose danger chip. Plain-language names, no raw scope strings.
     </div>
     <div class="panel" style="max-width: 1180px">
