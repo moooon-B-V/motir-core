@@ -16,6 +16,8 @@ import {
   InvalidProjectNameError,
   ProjectNotFoundError,
   ProjectOverviewTooLongError,
+  ProjectTaglineTooLongError,
+  ProjectTagsInvalidError,
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
@@ -65,9 +67,50 @@ const SLUG_MAX_LENGTH = 60;
 // Generous — a long README fits — but bounds the stored public-projection
 // payload a single admin edit can write.
 const PUBLIC_OVERVIEW_MAX_LENGTH = 50_000;
+// Server caps on the public hero fields (Story 6.16 · Subtask 6.16.2), edited
+// in-place on the public page. The tagline is a short subtitle; tags are a
+// small set of short meta pills. Exported so the backend write path (6.16.3)
+// validates against the same bounds the schema columns hold.
+export const PUBLIC_TAGLINE_MAX_LENGTH = 140;
+export const PUBLIC_TAGS_MAX_COUNT = 8;
+export const PUBLIC_TAG_MAX_LENGTH = 24;
 const SLUG_SUFFIX_LENGTH = 4;
 const SLUG_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const RETRY_ATTEMPTS = 5;
+
+/**
+ * Normalize the authored public hero TAGS (Story 6.16 · Subtask 6.16.3): trim
+ * each, drop empties, de-duplicate case-insensitively (keeping the first
+ * spelling + author order), and enforce the caps. A single tag over
+ * {@link PUBLIC_TAG_MAX_LENGTH} or more than {@link PUBLIC_TAGS_MAX_COUNT} tags
+ * (after cleaning) throws {@link ProjectTagsInvalidError}. Returns the cleaned,
+ * ordered array stored verbatim on the project.
+ */
+function normalizePublicTags(raw: string[]): string[] {
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const entry of raw) {
+    const trimmed = entry.trim();
+    if (trimmed.length === 0) continue; // drop empties
+    if (trimmed.length > PUBLIC_TAG_MAX_LENGTH) {
+      throw new ProjectTagsInvalidError(
+        'tag_too_long',
+        `Each tag must be at most ${PUBLIC_TAG_MAX_LENGTH} characters.`,
+      );
+    }
+    const dedupeKey = trimmed.toLowerCase();
+    if (seen.has(dedupeKey)) continue; // dedupe (case-insensitive)
+    seen.add(dedupeKey);
+    tags.push(trimmed);
+  }
+  if (tags.length > PUBLIC_TAGS_MAX_COUNT) {
+    throw new ProjectTagsInvalidError(
+      'too_many',
+      `At most ${PUBLIC_TAGS_MAX_COUNT} tags are allowed.`,
+    );
+  }
+  return tags;
+}
 
 function deriveIdentifierBase(name: string): string {
   const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -653,32 +696,62 @@ export const projectsService = {
   },
 
   /**
-   * Set the project's public Overview/README Markdown body (Story 6.12 ·
-   * Subtask 6.12.8 — the dedicated "Edit overview" authoring view). Admin-gated
-   * (the same `assertCanManage` gate as `updateDetails`). The body is trimmed;
-   * an empty body clears the field (`null`) so the public Overview tab (6.12.4)
-   * falls back to its slim auto-intro. A generous server cap guards the stored
-   * public-projection payload. Returns the project DTO (the inline save reads
-   * the success response as confirmation — no whole-tree refresh).
+   * Set the project's public HERO fields — the Overview/README body (Story 6.12
+   * · Subtask 6.12.8) plus the tagline + tags (Story 6.16 · Subtask 6.16.3, the
+   * in-place public-page editing). Admin-gated (the same `assertCanManage` gate
+   * as `updateDetails`). A PARTIAL author: each field is optional, so an absent
+   * field is left untouched (the `updateDetails` idiom) and a caller can save one
+   * field in place without clobbering the others. Validation per field:
+   *   - `publicOverviewMd` — trimmed; empty clears it (`null`); capped at
+   *     `PUBLIC_OVERVIEW_MAX_LENGTH` (`ProjectOverviewTooLongError`).
+   *   - `publicTagline` — trimmed; empty / `null` clears it (`null`); capped at
+   *     `PUBLIC_TAGLINE_MAX_LENGTH` (`ProjectTaglineTooLongError`).
+   *   - `publicTags` — trimmed + empties dropped + de-duplicated; each capped at
+   *     `PUBLIC_TAG_MAX_LENGTH` and the count at `PUBLIC_TAGS_MAX_COUNT`
+   *     (`ProjectTagsInvalidError`).
+   * One transaction. Returns the project DTO (the inline save reads the success
+   * response as confirmation — no whole-tree refresh).
    */
   async setPublicOverview(input: {
     key: string;
     ctx: WorkspaceContext;
-    publicOverviewMd: string;
+    publicOverviewMd?: string;
+    publicTagline?: string | null;
+    publicTags?: string[];
   }): Promise<ProjectDTO> {
-    const trimmed = input.publicOverviewMd.trim();
-    if (trimmed.length > PUBLIC_OVERVIEW_MAX_LENGTH) {
-      throw new ProjectOverviewTooLongError(PUBLIC_OVERVIEW_MAX_LENGTH);
+    // Validate + shape the partial write BEFORE opening the transaction (no DB
+    // touch on a rejected edit).
+    const data: {
+      publicOverviewMd?: string | null;
+      publicTagline?: string | null;
+      publicTags?: string[];
+    } = {};
+
+    if (input.publicOverviewMd !== undefined) {
+      const trimmed = input.publicOverviewMd.trim();
+      if (trimmed.length > PUBLIC_OVERVIEW_MAX_LENGTH) {
+        throw new ProjectOverviewTooLongError(PUBLIC_OVERVIEW_MAX_LENGTH);
+      }
+      data.publicOverviewMd = trimmed.length > 0 ? trimmed : null;
     }
+
+    if (input.publicTagline !== undefined) {
+      const trimmed = (input.publicTagline ?? '').trim();
+      if (trimmed.length > PUBLIC_TAGLINE_MAX_LENGTH) {
+        throw new ProjectTaglineTooLongError(PUBLIC_TAGLINE_MAX_LENGTH);
+      }
+      data.publicTagline = trimmed.length > 0 ? trimmed : null;
+    }
+
+    if (input.publicTags !== undefined) {
+      data.publicTags = normalizePublicTags(input.publicTags);
+    }
+
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
       await projectAccessService.assertCanManage(project.id, input.ctx, tx);
 
-      const updated = await projectRepository.setPublicOverview(
-        project.id,
-        trimmed.length > 0 ? trimmed : null,
-        tx,
-      );
+      const updated = await projectRepository.setPublicOverview(project.id, data, tx);
       const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
       return toProjectDTO(updated, aliases);
     });

@@ -385,6 +385,30 @@ model Project {
   /// (never a blank page), so every existing project backfills to NULL with no
   /// migration data step.
   publicOverviewMd    String?             @map("public_overview_md")
+  /// The moment the project most recently BECAME `public` (Story 6.13 · Subtask
+  /// 6.13.4) — the "newest" axis the project square's Recent/New rank orders by
+  /// (GitLab Explore → Newest). Stamped by `setAccessLevel` whenever the access
+  /// level transitions INTO `public` (a re-publish re-stamps, so it always
+  /// reflects the latest go-public moment); left untouched when access leaves
+  /// `public` (a non-public project never appears in the square anyway).
+  /// Nullable — projects made public before this column existed, and every
+  /// non-public project, backfill to NULL with no migration data step; the
+  /// Recent rank COALESCEs NULL to `createdAt` so such rows still order
+  /// deterministically (their creation moment as the fallback "made public").
+  madePublicAt        DateTime?           @map("made_public_at")
+  /// Public hero subtitle (Story 6.16 · Subtask 6.16.2) — the short tagline
+  /// shown under the project name on the public hero, edited in-place by the
+  /// project admin. A public-SAFE field: it rides the public projection only
+  /// when the project is `public`. Nullable — unset falls back to a generic
+  /// i18n tagline (never a blank subtitle), so every existing project backfills
+  /// to NULL with no migration data step.
+  publicTagline       String?             @map("public_tagline")
+  /// Public hero meta pills (Story 6.16 · Subtask 6.16.2) — the short tags
+  /// shown as pills on the public hero, edited in-place by the project admin. A
+  /// public-SAFE field: it rides the public projection only when the project is
+  /// `public`. Defaults to an empty array — an unset field shows no pills, so
+  /// every existing project backfills to `[]` with no migration data step.
+  publicTags          String[]            @default([]) @map("public_tags")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read
@@ -457,6 +481,11 @@ model Project {
   // Retired project keys (Story 6.8). Cascade: deleting a project FREES its
   // reserved keys (the verified Jira rule — only deletion un-reserves a key).
   keyAliases             ProjectKeyAlias[]
+  // Public-project topic tags (Story 6.13 · Subtask 6.13.5) — the assignments
+  // linking this project to the shared topic vocabulary (`ProjectTag`). Cascade:
+  // deleting a project sheds its tag assignments; the tag rows are a shared
+  // vocabulary and survive.
+  tagAssignments         ProjectTagAssignment[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -689,23 +718,23 @@ enum PointScale {
 /// only via `archivedAt` — work-item history must survive (the Project
 /// pattern). RLS on this table lands in Subtask 1.4.5, not here.
 model WorkItem {
-  id                     String                    @id @default(cuid())
-  workspaceId            String
-  projectId              String
-  parentId               String?
-  kind                   WorkItemKind
-  key                    Int
-  identifier             String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
-  title                  String
-  descriptionMd          String?                   @db.Text // "what to do" — Markdown source
-  explanationMd          String?                   @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
-  explanationSource      WorkItemExplanationSource @default(user_authored)
-  status                 String                    @default("open")
-  priority               WorkItemPriority          @default(medium)
-  assigneeId             String?
-  reporterId             String
-  dueDate                DateTime?
-  estimateMinutes        Int?
+  id                   String                    @id @default(cuid())
+  workspaceId          String
+  projectId            String
+  parentId             String?
+  kind                 WorkItemKind
+  key                  Int
+  identifier           String // "PROD-42" — denormalized from project.identifier + key for search/index efficiency
+  title                String
+  descriptionMd        String?                   @db.Text // "what to do" — Markdown source
+  explanationMd        String?                   @db.Text // "why this matters" — distinct from description; mostly AI-drafted, user-owned
+  explanationSource    WorkItemExplanationSource @default(user_authored)
+  status               String                    @default("open")
+  priority             WorkItemPriority          @default(medium)
+  assigneeId           String?
+  reporterId           String
+  dueDate              DateTime?
+  estimateMinutes      Int?
   // Work-item TYPE + EXECUTOR (Story 2.7 · Subtask 2.7.3) — the nature of the
   // executable work (`code` / `design` / `decision` / …) and WHO does it
   // (`coding_agent` | `human`). Both NULLABLE and DISTINCT from `kind`: only
@@ -718,8 +747,8 @@ model WorkItem {
   // overridable. The split exists for the Epic-7 AI dispatch layer (route by
   // `type` → prompt template; by `executor` → agent-dispatch vs human-assign);
   // see docs/decisions/work-item-type-taxonomy.md (the 2.7.2 ADR).
-  type                   WorkItemType?
-  executor               Executor?
+  type                 WorkItemType?
+  executor             Executor?
   // The agile STORY-POINT estimate (Story 4.3) — SEPARATE from the `estimateMinutes`
   // TIME estimate above; both columns coexist and the project's `estimationStatistic`
   // config picks which one is THE planning estimate the surfaces display + roll up.
@@ -729,8 +758,8 @@ model WorkItem {
   // NULL = unestimated (contributes 0 to a roll-up). camelCase with NO `@map`, matching
   // this table's existing columns (the same within-table-consistency call recorded for
   // `sprintId` / `backlogRank` — decision-authority rung 2 > the card's `@map` prose).
-  storyPoints            Decimal?                  @db.Decimal(6, 2)
-  position               String                    @db.Text
+  storyPoints          Decimal?                  @db.Decimal(6, 2)
+  position             String                    @db.Text
   // Agile association + backlog rank (Story 4.1). `sprintId` is the issue's
   // sprint (NULL = in the backlog); `onDelete: SetNull` so deleting/clearing a
   // sprint never deletes its issues (they fall back to the backlog). `backlogRank`
@@ -741,9 +770,9 @@ model WorkItem {
   // stay camelCase to match this table's existing columns (the `board` table is
   // snake_case-mapped, but `work_item`'s 20 existing columns are not — within-table
   // consistency wins, decision-authority rung 2 > the card's `@map` prose).
-  sprintId               String?
-  backlogRank            String?                   @db.Text
-  archivedAt             DateTime?
+  sprintId             String?
+  backlogRank          String?                   @db.Text
+  archivedAt           DateTime?
   // Triage marker (Story 6.11 · Subtask 6.11.3, per docs/decisions/triage-model.md
   // §1). NON-NULL ⇔ the item lives in the triage inbox and has NOT graduated to
   // the planned tree; NULL ⇔ a normal, graduated (or never-triage) item. Set at
@@ -753,12 +782,12 @@ model WorkItem {
   // `cancelled` once declined/merged) the whole time — the exclusion predicate is
   // the single, total `triagedAt IS NULL`. `DateTime?` (not a boolean) gives the
   // queue read newest-first ordering + an age display for free.
-  triagedAt              DateTime?
+  triagedAt            DateTime?
   // Snooze (6.11.5): a triage item drops out of the ACTIVE queue until this time
   // OR new activity, whichever first. Does NOT affect the normal-read exclusion —
   // a snoozed item is still `triagedAt`-marked, so still hidden from every tree /
   // board / list / ready / search read.
-  snoozedUntil           DateTime?
+  snoozedUntil         DateTime?
   // Triage submitter (Story 6.11 · Subtask 6.11.4, the 2026-06-14 signed-in-only
   // revision). The human who SUBMITTED a triage item — ALWAYS a real account: a
   // workspace member (the in-app "report a bug / request a feature" widget) OR a
@@ -775,7 +804,7 @@ model WorkItem {
   // submitter must never delete or block the work item — the `reporter`
   // (`Restrict`) is the durable owner; a departed submitter just loses
   // attribution.
-  submittedByUserId      String?
+  submittedByUserId    String?
   // Epic-level privacy on public projects (Story 6.14 · Subtask 6.14.3, per
   // docs/decisions/epic-privacy.md §1). When TRUE on an EPIC-kind item, the
   // epic's DESCENDANTS (stories / tasks / subtasks) and its aggregate TELLS
@@ -793,7 +822,7 @@ model WorkItem {
   // the locked model needs is binary (hiding the row is a named non-goal), so a
   // boolean is the complete state space — migrating to an enum later is a
   // contained change if a third visibility mode is ever added (ADR §1).
-  publicChildrenHidden   Boolean                   @default(false)
+  publicChildrenHidden Boolean                   @default(false)
   // Integration branch (Story 7.8 · Subtask 7.8.11) — the session branch this
   // item's work currently sits on after a run integrated it (status moved to
   // `in_review` via `mark_integrated`). NON-NULL ⇔ the item is integrated-
@@ -806,9 +835,9 @@ model WorkItem {
   // human merges the session PR). Indexed for the `complete_session` lookup
   // (every item recorded on a branch) — a plain `String?` matching this table's
   // camelCase, no-`@map` columns.
-  sessionBranch          String?
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
+  sessionBranch        String?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
   workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1859,6 +1888,59 @@ model WorkItemComponent {
   // the `reassignItems` move branch all walk this.
   @@index([componentId])
   @@map("work_item_component")
+}
+
+/// A project TOPIC TAG (Story 6.13 · Subtask 6.13.5) — the category axis that
+/// makes the public-project SQUARE browsable by topic (the GitHub-Topics /
+/// GitLab-Topics mirror). UNLIKE `label` / `component` (project-scoped
+/// folksonomies), a tag is a SHARED, NORMALIZED vocabulary row reused across
+/// every project: one `ProjectTag` per topic, many projects assigned to it via
+/// `ProjectTagAssignment`. The vocabulary is CURATED (the admin assigns from the
+/// bounded set in `lib/projectTags/vocabulary.ts`, never mints free-text — the
+/// "clean browse axis, not a long tail of near-dupes" decision the card seals),
+/// so a tag carries no workspace/tenant scope: it is system-level reference data
+/// the service materializes by `slug` on first assignment (idempotent upsert).
+/// `slug` is the stable URL-safe handle the 6.13.3 category filter keys off;
+/// `label` is the display name.
+model ProjectTag {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  assignments ProjectTagAssignment[]
+
+  @@map("project_tag")
+}
+
+/// Project ↔ tag join (Subtask 6.13.5) — a project carries multiple topic
+/// tags, a tag spans multiple projects (the shared-vocabulary shape). BOTH FKs
+/// are modelled as Prisma `@relation` on both sides (the CLAUDE.md
+/// FK-as-`@relation` rule — no raw-SQL-only FK), and BOTH Cascade: deleting a
+/// project sheds its assignments, and removing a tag from the vocabulary sheds
+/// the assignments that referenced it (the assignment is pure linkage, never the
+/// owner of either side).
+///
+/// `@@unique([projectId, tagId])` keeps a tag assigned at most once per project
+/// (the set semantics the per-project tagging service relies on) AND serves the
+/// forward "tags of project Y" read as its left-prefix. The `@@index([tagId])`
+/// is the reverse edge the tag-FACET read walks — "how many PUBLIC projects
+/// carry tag X" — counting through to `project.access_level = 'public'` (the
+/// 6.13.2 filter the category counts respect), so a tag's count is its
+/// public-project count and a tag with only non-public projects never inflates
+/// the square.
+model ProjectTagAssignment {
+  id        String   @id @default(cuid())
+  projectId String   @map("project_id")
+  tagId     String   @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag     ProjectTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, tagId])
+  @@index([tagId])
+  @@map("project_tag_assignment")
 }
 
 /// A watcher row (Story 5.4 · Subtask 5.4.1): `userId` follows `workItemId`

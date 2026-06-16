@@ -328,7 +328,7 @@ async function main() {
     // on the web reads its Overview / board / work items at /p/PROD with no
     // sign-in (the 6.12.4 anonymous public view), and its `publicOverviewMd` is
     // seeded to Motir's canonical README so the Overview renders real copy.
-    await projectRepository.setAccessLevel(project.id, 'public', tx);
+    await projectRepository.setAccessLevel(project.id, 'public', { stampMadePublicAt: true }, tx);
     await projectRepository.updatePublicFields(
       project.id,
       { publicOverviewMd: MOTIR_PUBLIC_OVERVIEW_MD },

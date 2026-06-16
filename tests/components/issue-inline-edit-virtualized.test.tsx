@@ -50,6 +50,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
     canCreate: true,
     issuesChangedAt: createIssue.issuesChangedAt,
   }),
+  useNotifyIssuesChanged: () => () => {},
 }));
 
 import { IssueTreeTable } from '@/app/(authed)/issues/_components/IssueTreeTable';

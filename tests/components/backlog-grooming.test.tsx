@@ -29,6 +29,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
     canCreate: true,
     issuesChangedAt: 0,
   }),
+  useNotifyIssuesChanged: () => () => {},
 }));
 
 import { BacklogContainer } from '@/app/(authed)/backlog/_components/BacklogContainer';

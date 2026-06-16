@@ -125,7 +125,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **23 tools**.
+`initialize` handshake and registers **24 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -341,6 +341,27 @@ Restore an archived work item — the inverse of `archive_work_item` (Jira
 | `key` | string | yes      | Work item identifier. |
 
 **Output** — `structuredContent`: the restored `WorkItemDto` (`archivedAt` null).
+
+#### `delete_work_item`
+
+**PERMANENTLY** delete a work item **and its entire subtree** — the root plus
+every descendant, and all their links / comments / history, are removed in one
+transaction. This is **irreversible**: there is no undo, unlike
+`archive_work_item`. Pick **archive** for a recoverable soft-remove that takes a
+single card out of the ready set, **delete** to erase a mistaken subtree for
+good. Gated on the same project-admin **manage** capability the UI's delete
+requires (a member who can edit but not manage gets a typed access error); a
+missing / cross-tenant key is an indistinguishable 404 not-found.
+
+| Input | Type   | Required | Notes                 |
+| ----- | ------ | -------- | --------------------- |
+| `key` | string | yes      | Work item identifier. |
+
+**Output** — `structuredContent`: the deletion summary
+`{ deleted: true, id, identifier, title, totalCount, descendantCount, byKind }` —
+`totalCount` is the number of rows removed (root + descendants), `descendantCount`
+is `totalCount − 1`, and `byKind` is the per-kind breakdown of the descendants
+(captured before the cascade). A denied or not-found key returns a typed error.
 
 ### Search
 

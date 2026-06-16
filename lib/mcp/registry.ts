@@ -29,10 +29,11 @@ import {
   UNARCHIVE_WORK_ITEM_TOOL_NAME,
   registerArchiveWorkItem,
 } from './tools/archiveWorkItem';
+import { DELETE_WORK_ITEM_TOOL_NAME, registerDeleteWorkItem } from './tools/deleteWorkItem';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
-// 7.8.10 / 7.8.11 / 7.8.13 / 7.8.14) — the single place that assembles the
-// server's tool surface.
+// 7.8.10 / 7.8.11 / 7.8.13 / 7.8.14 / 2.8.5) — the single place that assembles
+// the server's tool surface.
 // This is the SEAM each later subtask extends: add the tool module under
 // `tools/`, import its `register*`, and add one line to `registerMcpTools` —
 // without touching the transport (`app/api/mcp/route.ts`) or the auth gate
@@ -68,6 +69,7 @@ export const MCP_TOOL_NAMES = [
   UPDATE_WORK_ITEM_TOOL_NAME,
   ARCHIVE_WORK_ITEM_TOOL_NAME,
   UNARCHIVE_WORK_ITEM_TOOL_NAME,
+  DELETE_WORK_ITEM_TOOL_NAME,
 ] as const;
 
 /** Register every MCP tool on `server`, wiring each to `resolveContext`. */
@@ -102,6 +104,9 @@ export function registerMcpTools(server: McpServer, resolveContext: McpContextRe
   // archive/restore pair over the shipped work-item services.
   registerUpdateWorkItem(server, resolveContext);
   registerArchiveWorkItem(server, resolveContext);
+  // Permanent delete (2.8.5) — the irreversible subtree-cascade counterpart of
+  // archive, over the shipped 2.8.2 deleteWorkItem service.
+  registerDeleteWorkItem(server, resolveContext);
 }
 
 /**

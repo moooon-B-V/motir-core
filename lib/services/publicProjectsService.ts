@@ -126,8 +126,14 @@ async function resolvePublicProject(identifier: string, actorUserId: string | nu
   // The gate is the authority on visibility (it throws ProjectNotFoundError on a
   // non-public project) — reuse it, never re-derive the public check. It also
   // reports member-vs-non-member in the same round-trip (6.14.4).
-  const { isMember } = await projectAccessService.resolvePublicBrowse(project.id, actorUserId);
-  return { project, isMember };
+  // The gate reports member-vs-non-member (6.14.4) AND whether the viewer may
+  // manage the project (6.16.3 — the public page's in-place Edit gate) in the
+  // same round-trip.
+  const { isMember, canManage } = await projectAccessService.resolvePublicBrowse(
+    project.id,
+    actorUserId,
+  );
+  return { project, isMember, canManage };
 }
 
 /**
@@ -357,13 +363,13 @@ export const publicProjectsService = {
     identifier: string,
     actorUserId: string | null,
   ): Promise<PublicProjectOverviewDto> {
-    const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
+    const { project, isMember, canManage } = await resolvePublicProject(identifier, actorUserId);
     const hiddenIds = await resolveHiddenIds(project, isMember);
     const [workspace, stats] = await Promise.all([
       workspaceRepository.findById(project.workspaceId),
       computeStats(project.id, project.workspaceId, hiddenIds),
     ]);
-    return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats);
+    return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats, canManage);
   },
 
   /**

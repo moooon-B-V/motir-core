@@ -16,7 +16,15 @@ import {
   InvalidProjectNameError,
   NotProjectAdminError,
   ProjectNotFoundError,
+  ProjectOverviewTooLongError,
+  ProjectTaglineTooLongError,
+  ProjectTagsInvalidError,
 } from '@/lib/projects/errors';
+import {
+  PUBLIC_TAG_MAX_LENGTH,
+  PUBLIC_TAGS_MAX_COUNT,
+  PUBLIC_TAGLINE_MAX_LENGTH,
+} from '@/lib/services/projectsService';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from './helpers/db';
 
@@ -367,5 +375,130 @@ describe('getDetails', () => {
     // The repo's no-tx read path (the `?? db` branch) also resolves the aliases.
     const direct = await projectKeyAliasRepository.findManyByProject(details.id);
     expect(direct.map((a) => a.identifier)).toEqual(['PROD']);
+  });
+});
+
+// Subtask 6.16.3 — the public-hero WRITE path: `setPublicOverview` now authors
+// the README body PLUS the tagline + tags (a partial, admin-gated, validated
+// author). Reads back the persisted columns directly to prove what was stored.
+describe('setPublicOverview — public hero authoring (6.16.3)', () => {
+  async function readHero(projectId: string) {
+    const row = await db.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { publicOverviewMd: true, publicTagline: true, publicTags: true },
+    });
+    return row;
+  }
+
+  it('persists all three fields in one call; trims tagline + normalizes tags', async () => {
+    const { key, project, ownerCtx } = await makeFixture('hero-all');
+
+    await projectsService.setPublicOverview({
+      key,
+      ctx: ownerCtx,
+      publicOverviewMd: '  # Readme  ',
+      publicTagline: '  Plan, build, ship  ',
+      publicTags: ['  Agile ', 'agile', '', 'Roadmap', 'Open Source'],
+    });
+
+    const hero = await readHero(project.id);
+    expect(hero.publicOverviewMd).toBe('# Readme');
+    expect(hero.publicTagline).toBe('Plan, build, ship');
+    // trimmed; the case-insensitive duplicate ("agile") dropped; empties dropped;
+    // first spelling + author order kept.
+    expect(hero.publicTags).toEqual(['Agile', 'Roadmap', 'Open Source']);
+  });
+
+  it('is a PARTIAL author — an omitted field is left untouched', async () => {
+    const { key, project, ownerCtx } = await makeFixture('hero-partial');
+    await projectsService.setPublicOverview({
+      key,
+      ctx: ownerCtx,
+      publicTagline: 'First tagline',
+      publicTags: ['alpha'],
+    });
+
+    // A later edit that only sets the body must not wipe the tagline/tags.
+    await projectsService.setPublicOverview({ key, ctx: ownerCtx, publicOverviewMd: 'Body' });
+
+    const hero = await readHero(project.id);
+    expect(hero.publicOverviewMd).toBe('Body');
+    expect(hero.publicTagline).toBe('First tagline');
+    expect(hero.publicTags).toEqual(['alpha']);
+  });
+
+  it('empty / blank tagline clears it to null', async () => {
+    const { key, project, ownerCtx } = await makeFixture('hero-clear');
+    await projectsService.setPublicOverview({ key, ctx: ownerCtx, publicTagline: 'something' });
+    await projectsService.setPublicOverview({ key, ctx: ownerCtx, publicTagline: '   ' });
+
+    expect((await readHero(project.id)).publicTagline).toBeNull();
+  });
+
+  it('rejects a too-long tagline with ProjectTaglineTooLongError (no write)', async () => {
+    const { key, project, ownerCtx } = await makeFixture('hero-tagline-long');
+    await expect(
+      projectsService.setPublicOverview({
+        key,
+        ctx: ownerCtx,
+        publicTagline: 'x'.repeat(PUBLIC_TAGLINE_MAX_LENGTH + 1),
+      }),
+    ).rejects.toBeInstanceOf(ProjectTaglineTooLongError);
+
+    expect((await readHero(project.id)).publicTagline).toBeNull();
+  });
+
+  it('rejects a single over-long tag with ProjectTagsInvalidError(tag_too_long)', async () => {
+    const { key, ownerCtx } = await makeFixture('hero-tag-long');
+    const err = await projectsService
+      .setPublicOverview({
+        key,
+        ctx: ownerCtx,
+        publicTags: ['ok', 'y'.repeat(PUBLIC_TAG_MAX_LENGTH + 1)],
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProjectTagsInvalidError);
+    expect((err as ProjectTagsInvalidError).reason).toBe('tag_too_long');
+  });
+
+  it('rejects too many tags (after dedupe) with ProjectTagsInvalidError(too_many)', async () => {
+    const { key, ownerCtx } = await makeFixture('hero-tag-count');
+    const tooMany = Array.from({ length: PUBLIC_TAGS_MAX_COUNT + 1 }, (_, i) => `tag-${i}`);
+    const err = await projectsService
+      .setPublicOverview({ key, ctx: ownerCtx, publicTags: tooMany })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProjectTagsInvalidError);
+    expect((err as ProjectTagsInvalidError).reason).toBe('too_many');
+  });
+
+  it('rejects a too-long README body with ProjectOverviewTooLongError', async () => {
+    const { key, ownerCtx } = await makeFixture('hero-body-long');
+    await expect(
+      projectsService.setPublicOverview({
+        key,
+        ctx: ownerCtx,
+        publicOverviewMd: 'x'.repeat(50_001),
+      }),
+    ).rejects.toBeInstanceOf(ProjectOverviewTooLongError);
+  });
+
+  it('is admin-gated — a plain workspace member is rejected with NotProjectAdminError', async () => {
+    const { key, project, workspace } = await makeFixture('hero-gate');
+    const member = await addWorkspaceMember(workspace.id, 'hero-member@example.com');
+    const memberCtx: WorkspaceContext = { userId: member.id, workspaceId: workspace.id };
+
+    await expect(
+      projectsService.setPublicOverview({
+        key,
+        ctx: memberCtx,
+        publicTagline: 'sneaky',
+        publicTags: ['x'],
+      }),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+
+    // The denied edit wrote nothing.
+    const hero = await readHero(project.id);
+    expect(hero.publicTagline).toBeNull();
+    expect(hero.publicTags).toEqual([]);
   });
 });

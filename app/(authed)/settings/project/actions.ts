@@ -15,6 +15,8 @@ import {
   NotProjectAdminError,
   ProjectNotFoundError,
   ProjectOverviewTooLongError,
+  ProjectTaglineTooLongError,
+  ProjectTagsInvalidError,
 } from '@/lib/projects/errors';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
@@ -85,11 +87,18 @@ export async function updateProjectDetailsAction(
 
 export type UpdateOverviewResult =
   | { ok: true; project: ProjectDTO }
-  | { ok: false; code: 'TOO_LONG' | 'NOT_ADMIN' | 'UNKNOWN' };
+  | {
+      ok: false;
+      code: 'TOO_LONG' | 'TAGLINE_TOO_LONG' | 'TAGS_INVALID' | 'NOT_ADMIN' | 'UNKNOWN';
+    };
 
 export interface UpdateProjectOverviewInput {
-  /** The full public Overview/README Markdown body; empty clears it. */
-  publicOverviewMd: string;
+  /** The full public Overview/README Markdown body; empty clears it. Omit to leave unchanged. */
+  publicOverviewMd?: string;
+  /** The public hero tagline; empty / null clears it. Omit to leave unchanged. */
+  publicTagline?: string | null;
+  /** The public hero tags (trimmed/deduped/capped server-side). Omit to leave unchanged. */
+  publicTags?: string[];
 }
 
 export async function updateProjectOverviewAction(
@@ -101,10 +110,14 @@ export async function updateProjectOverviewAction(
       key,
       ctx: { userId, workspaceId },
       publicOverviewMd: input.publicOverviewMd,
+      publicTagline: input.publicTagline,
+      publicTags: input.publicTags,
     });
     return { ok: true, project };
   } catch (err) {
     if (err instanceof ProjectOverviewTooLongError) return { ok: false, code: 'TOO_LONG' };
+    if (err instanceof ProjectTaglineTooLongError) return { ok: false, code: 'TAGLINE_TOO_LONG' };
+    if (err instanceof ProjectTagsInvalidError) return { ok: false, code: 'TAGS_INVALID' };
     if (err instanceof NotProjectAdminError) return { ok: false, code: 'NOT_ADMIN' };
     if (err instanceof ProjectNotFoundError) return { ok: false, code: 'UNKNOWN' };
     throw err;
