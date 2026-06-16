@@ -74,7 +74,7 @@ describe('BuildInPublicButton (PRIMARY header entry)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start building in public' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchSpy.mock.calls[0];
+    const [url, init] = fetchSpy.mock.calls[0]!;
     expect(url).toBe('/api/projects/MOTIR/access');
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({ accessLevel: 'public' });
