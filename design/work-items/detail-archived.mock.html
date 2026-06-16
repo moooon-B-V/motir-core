@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Archived banner on the work-item detail page (Story 2.9 · 2.9.8 → 2.9.6)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the ARCHIVED BANNER on the work-item detail
+      page — the design gate for the code subtask 2.9.6 (MOTIR-995). A soft
+      archive (`workItemsService.archiveWorkItem` — `archivedAt`, single-node,
+      reversible) is reachable on its detail page (the detail read
+      `workItemRepository.findByIdentifier` is a plain `findUnique` and does NOT
+      filter `archivedAt`, so the page renders for an archived item), and this
+      banner is how the page announces the archived state + offers Restore.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens), and the
+      markup mirrors the SHIPPED primitives — the detail header (IssueTypeIcon in
+      the --el-type-* hue, the mono identifier, ParentBreadcrumb — note 2.4.13
+      / MOTIR-996 removes the redundant neutral status Pill from the eyebrow, so
+      status is rail-only and the only eyebrow tag here is the "Archived" chip),
+      the two-column body, and the banner itself which REUSES the shipped
+      ReadinessBadge MOLD (components/ui/ReadinessBadge.tsx — a full-width tinted
+      banner: lead glyph + bold title + secondary line) — only the TONE changes:
+      archived is a NEUTRAL/muted state (--el-surface-soft fill + --el-border
+      hairline + archive glyph in --el-text-muted), NOT a colored alert and NOT
+      danger. The "Archived" eyebrow chip reuses the BuildingInPublicBadge mold
+      (a Pill with a lead glyph). NO new primitive.
+
+      ── PLACEMENT NOTE (rung-2 reconciliation — flagged for 2.9.6) ──
+      The card asked to "reuse the SHIPPED readiness-banner PLACEMENT
+      (page.tsx ~L317, full-width, top of main column)". Shipped reality differs:
+      on the DETAIL page the ReadinessBadge renders INSIDE RelationshipsPanel
+      (app/(authed)/issues/[key]/page.tsx ~L317 → the 2.4.5 relationships
+      section, AFTER Description + Explanation), NOT as a standalone top-of-column
+      banner. "Top of main column" is true of the PEEK modal (quick-view, 2.5.20),
+      not the detail page. So this design reuses the readiness banner's VISUAL
+      MOLD but introduces a NEW slot: the archived banner is the FIRST element of
+      <main>, ABOVE the Description card — the correct page-level placement for a
+      whole-item state announcement (matches Jira / Linear's archived banner), and
+      what the card intends. The code subtask adds a new top-of-<main> element; it
+      does NOT modify the in-panel ReadinessBadge.
+
+      Covers (multi-panel): (0) PLACEMENT — the archived detail page, header +
+      banner-atop-main + 2-col body · (1) the banner isolated + annotated (tone,
+      glyph, copy, archived-by/at, Restore) · (2) ACTIVE contrast — same header,
+      NO chip, NO banner (Description is first) · (3) VIEW-ONLY (canBrowse, not
+      canEdit) — the banner WITHOUT the Restore button. Toggle dark to confirm
+      token parity. See design-notes.md → "Archived banner on the detail page".
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-btn: 8px;
+        --radius-control: 6px;
+        --radius-md: 8px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --spacing-card-padding: 24px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 80px;
+      }
+      .review-head {
+        max-width: 1040px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel {
+        max-width: 1040px;
+        margin: 0 auto 14px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 28px 0 10px;
+        padding-left: 2px;
+        max-width: 1040px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      /* ── Faithful primitive classes ─────────────────────────────────────── */
+      /* the page surface a detail route renders into */
+      .page {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 28px 32px 32px;
+        box-shadow: var(--shadow-card);
+      }
+
+      /* Card (components/ui/Card.tsx) */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-card);
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .section-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .section-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+
+      /* SectionLabel */
+      .section-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Detail header (eyebrow + title) ── */
+      .detail-header {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-bottom: 24px;
+      }
+      .eyebrow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+      }
+      .eyebrow .id {
+        font-family: var(--font-mono);
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .breadcrumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .breadcrumb a {
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .breadcrumb a:hover {
+        text-decoration: underline;
+      }
+      .eyebrow .spacer {
+        margin-left: auto;
+      }
+      .header-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+      }
+      .icon-btn {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        border: 1px solid transparent;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+      }
+      .detail-title {
+        font-family: var(--font-serif);
+        font-size: 27px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      /* Pill (components/ui/Pill.tsx): hue in tint background, --el-text-strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .pill--inprogress {
+        background: var(--el-tint-sky);
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      /* the "Archived" eyebrow chip — BuildingInPublicBadge mold: a Pill with a
+         lead glyph, here in the NEUTRAL/muted register (NOT a colored tone) */
+      .pill--archived {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--archived svg {
+        color: var(--el-text-muted);
+      }
+
+      /* IssueTypeIcon — lucide glyph in the type hue */
+      .type-icon {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+
+      /* ════ THE ARCHIVED BANNER — ReadinessBadge mold, NEUTRAL tone ════
+         Reuses the readiness banner's shape (full-width, lead glyph + body),
+         but archived is a calm factual state, so the fill is the quiet
+         --el-surface-soft with an --el-border hairline (NOT a mint/peach tint
+         and NOT --el-danger). Glyph: lucide `archive` in --el-text-muted. */
+      .archived-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+      }
+      .archived-banner .ab-icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-muted);
+      }
+      .archived-banner .ab-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+      }
+      .ab-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .ab-meta {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .ab-meta strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      /* Restore — secondary Button (size sm), lucide rotate-ccw + "Restore",
+         right-aligned. canEdit-gated: hidden (not disabled) when absent. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+        flex: none;
+        align-self: center;
+      }
+      .btn:hover {
+        background: var(--el-surface);
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* Two-column detail skeleton */
+      .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 288px;
+        gap: 24px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .prose {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      .prose p {
+        margin: 0 0 10px;
+      }
+      .ghost {
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        color: var(--el-text-faint);
+        font-size: 13px;
+        background: transparent;
+      }
+      .ghost strong {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .rail-box {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .rail-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .rail-value {
+        font-size: 13px;
+        color: var(--el-text);
+      }
+
+      /* annotation callout (mock-only, not part of the design) */
+      .anno {
+        max-width: 1040px;
+        margin: 6px auto 0;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+        padding-left: 2px;
+      }
+      .anno code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Archived banner on the work-item detail page</h1>
+        <p>
+          Story 2.9 · design gate for 2.9.6 (MOTIR-995). The detail page announces an archived item
+          + offers Restore. Built from the real design-system tokens/primitives.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke, used by <use>) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-archive"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="5" x="2" y="3" rx="1" />
+          <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+          <path d="M10 12h4" />
+        </g>
+        <g
+          id="i-rotate-ccw"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — placement in the detail page ════════════════ -->
+    <div class="panel-label">
+      0 · Placement — the archived banner is the FIRST element of the main column, above Description
+      (a new top-of-&lt;main&gt; slot; see the placement note in the header comment)
+    </div>
+    <div class="panel">
+      <div class="page">
+        <div class="detail-header">
+          <div class="eyebrow">
+            <span class="type-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+            ></span>
+            <span class="id">PROD-128</span>
+            <span class="breadcrumb"
+              ><a href="#">Epic 2: Issue tracking core</a> ›
+              <a href="#">2.9 Archive management</a></span
+            >
+            <!-- The always-visible "Archived" marker, following the breadcrumb.
+              NOTE: there is NO status Pill here — 2.4.13 (MOTIR-996) removes the
+              redundant neutral status Pill from the eyebrow; status is rail-only
+              (CoreFieldsPanel StatusPicker). So this chip is the ONLY eyebrow
+              tag, and it carries a real, non-duplicated state. -->
+            <span class="pill pill--archived"
+              ><svg viewBox="0 0 24 24"><use href="#i-archive" /></svg>Archived</span
+            >
+            <span class="spacer"></span>
+            <span class="header-actions">
+              <span class="icon-btn" title="Watch"
+                ><svg class="type-icon" style="width: 16px; height: 16px" viewBox="0 0 24 24">
+                  <use href="#i-task" /></svg
+              ></span>
+              <span class="icon-btn" title="Actions"
+                ><svg class="type-icon" style="width: 16px; height: 16px" viewBox="0 0 24 24">
+                  <use href="#i-more" /></svg
+              ></span>
+            </span>
+          </div>
+          <h1 class="detail-title">Restore deduplicates link rows on the detail panel</h1>
+        </div>
+
+        <div class="detail-grid">
+          <div class="col">
+            <!-- THE NEW ELEMENT — top of main, above Description -->
+            <div class="archived-banner">
+              <svg class="ab-icon" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+              <div class="ab-body">
+                <span class="ab-title">This work item is archived</span>
+                <span class="ab-meta"
+                  >Archived by <strong>Bo Philips</strong> · Jun 14, 2026 · It's hidden from boards
+                  and lists but kept with its history. Restore it to bring it back.</span
+                >
+              </div>
+              <button class="btn">
+                <svg viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+              </button>
+            </div>
+
+            <section class="card" aria-label="Description">
+              <div class="section-head">
+                <h2>Description</h2>
+                <span class="gloss">— what to do</span>
+              </div>
+              <div class="prose">
+                <p>
+                  The relationships panel renders one row per link, but a re-archived item can carry
+                  duplicate <em>blocked-by</em> edges. Restore should collapse them before the panel
+                  reads.
+                </p>
+              </div>
+            </section>
+
+            <div class="ghost"><strong>Explanation</strong> — why this matters (2.4.2)</div>
+            <div class="ghost">
+              <strong>Relationships</strong> — dependencies &amp; links (2.4.5)
+            </div>
+            <div class="ghost"><strong>Activity</strong> — comments &amp; history (Epic 5)</div>
+          </div>
+          <div class="col">
+            <div class="rail-box">
+              <span class="rail-label">Status</span><span class="rail-value">In Progress</span>
+            </div>
+            <div class="rail-box">
+              <span class="rail-label">Assignee</span><span class="rail-value">Odie</span>
+            </div>
+            <div class="rail-box">
+              <span class="rail-label">Priority</span><span class="rail-value">Medium</span>
+            </div>
+            <div class="ghost" style="text-align: center">core-fields rail (2.4.2)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="anno">
+      <strong>Read-only posture (decision):</strong> the page stays
+      <strong>fully editable</strong> — the banner is the only signal; inline controls are NOT
+      dimmed/disabled. Motir's archive is a reversible, single-node, editor-level action (the Linear
+      shape), so a global read-lock would add a disabled state to every field editor for something
+      the user undoes in one click. Justified deviation from Jira (which makes archived issues
+      read-only — but Jira's archive is a heavier admin lifecycle). See design-notes for the
+      rationale + the documented future option.
+    </p>
+
+    <!-- ════════════════ PANEL 1 — the banner isolated ════════════════ -->
+    <div class="panel-label">
+      1 · The banner, isolated — tone · glyph · copy · archived-by/at · Restore
+    </div>
+    <div class="panel" style="max-width: 720px">
+      <div class="archived-banner">
+        <svg class="ab-icon" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+        <div class="ab-body">
+          <span class="ab-title">This work item is archived</span>
+          <span class="ab-meta"
+            >Archived by <strong>Bo Philips</strong> · Jun 14, 2026 · It's hidden from boards and
+            lists but kept with its history. Restore it to bring it back.</span
+          >
+        </div>
+        <button class="btn">
+          <svg viewBox="0 0 24 24"><use href="#i-rotate-ccw" /></svg>Restore
+        </button>
+      </div>
+    </div>
+    <p class="anno">
+      Tone: <code>--el-surface-soft</code> fill + <code>--el-border</code> hairline +
+      <code>archive</code> glyph in <code>--el-text-muted</code> — a calm, factual register,
+      distinct from the mint/peach readiness tints and never <code>--el-danger</code>. Headline
+      <code>--el-text-strong</code>; the archived-by/at line reads from the latest
+      <code>archived</code> revision (<code>changedById</code> + <code>createdAt</code>, the same
+      data note as 2.9.3's list view). State is conveyed by TEXT + glyph, never colour alone
+      (AA-safe).
+    </p>
+
+    <!-- ════════════════ PANEL 2 — active contrast (no banner) ════════════════ -->
+    <div class="panel-label">2 · Active contrast — an ACTIVE item shows no chip and no banner</div>
+    <div class="panel">
+      <div class="page">
+        <div class="detail-header">
+          <div class="eyebrow">
+            <span class="type-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+            ></span>
+            <span class="id">PROD-130</span>
+            <span class="breadcrumb"
+              ><a href="#">Epic 2: Issue tracking core</a> ›
+              <a href="#">2.9 Archive management</a></span
+            >
+            <!-- ACTIVE item: no Archived chip AND no status Pill (2.4.13 removed
+              it) — the eyebrow is just type · key · breadcrumb · actions. -->
+            <span class="spacer"></span>
+            <span class="header-actions">
+              <span class="icon-btn" title="Watch"
+                ><svg class="type-icon" style="width: 16px; height: 16px" viewBox="0 0 24 24">
+                  <use href="#i-task" /></svg
+              ></span>
+              <span class="icon-btn" title="Actions"
+                ><svg class="type-icon" style="width: 16px; height: 16px" viewBox="0 0 24 24">
+                  <use href="#i-more" /></svg
+              ></span>
+            </span>
+          </div>
+          <h1 class="detail-title">Watch control desyncs after a rapid toggle</h1>
+        </div>
+
+        <div class="detail-grid">
+          <div class="col">
+            <!-- NO archived banner — Description is the first element -->
+            <section class="card" aria-label="Description">
+              <div class="section-head">
+                <h2>Description</h2>
+                <span class="gloss">— what to do</span>
+              </div>
+              <div class="prose">
+                <p>
+                  Pressing the watch shortcut twice quickly resolves the two PATCHes out of order;
+                  the older response clobbers the newest optimistic state. Sequence-guard the
+                  reconcile.
+                </p>
+              </div>
+            </section>
+            <div class="ghost"><strong>Explanation</strong> — why this matters (2.4.2)</div>
+            <div class="ghost">
+              <strong>Relationships</strong> — dependencies &amp; links (2.4.5)
+            </div>
+            <div class="ghost"><strong>Activity</strong> — comments &amp; history (Epic 5)</div>
+          </div>
+          <div class="col">
+            <div class="rail-box">
+              <span class="rail-label">Status</span><span class="rail-value">In Progress</span>
+            </div>
+            <div class="rail-box">
+              <span class="rail-label">Assignee</span><span class="rail-value">Julian</span>
+            </div>
+            <div class="rail-box">
+              <span class="rail-label">Priority</span><span class="rail-value">High</span>
+            </div>
+            <div class="ghost" style="text-align: center">core-fields rail (2.4.2)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — view-only (no Restore) ════════════════ -->
+    <div class="panel-label">
+      3 · View-only (canBrowse, NOT canEdit) — the banner stays (an archived item is still
+      readable), but the Restore button is HIDDEN, not shown-disabled
+    </div>
+    <div class="panel" style="max-width: 720px">
+      <div class="archived-banner">
+        <svg class="ab-icon" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+        <div class="ab-body">
+          <span class="ab-title">This work item is archived</span>
+          <span class="ab-meta"
+            >Archived by <strong>Bo Philips</strong> · Jun 14, 2026 · It's hidden from boards and
+            lists but kept with its history.</span
+          >
+        </div>
+        <!-- no Restore button: unarchiveWorkItem is assertCanEdit-gated -->
+      </div>
+    </div>
+    <p class="anno">
+      Restore is gated on <code>canEdit</code> (the <code>unarchiveWorkItem</code>
+      <code>DELETE /api/work-items/[id]/archive</code> is <code>assertCanEdit</code>-gated). A
+      viewer who can browse but not edit sees the banner WITHOUT the Restore button — hidden, never
+      shown-disabled (the <code>WorkItemActionsMenu</code> hidden-not-disabled pattern, mirroring
+      the 2.9 list view's dropped Restore column). The "restore it to bring it back" tail of the
+      copy is also dropped, since this viewer can't.
+    </p>
+  </body>
+</html>
