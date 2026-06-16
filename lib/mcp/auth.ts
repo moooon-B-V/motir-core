@@ -63,8 +63,9 @@ export async function verifyMcpToken(
 
   let user;
   let workspaceId: string;
+  let scopes: string[];
   try {
-    ({ user, workspaceId } = await apiTokensService.verify(token));
+    ({ user, workspaceId, scopes } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -78,8 +79,9 @@ export async function verifyMcpToken(
 
   // The request workspace IS the workspace the token was bound to at mint time
   // (bug 7.21) — NOT the owner's default workspace. The per-tool 6.4 gates
-  // enforce access with it.
-  const extra: McpAuthExtra = { userId: user.id, workspaceId, userName: user.name };
+  // enforce access with it. The token's granted `scopes` ride alongside so the
+  // dispatch gate (7.7.17) can narrow the role to the permitted operations.
+  const extra: McpAuthExtra = { userId: user.id, workspaceId, userName: user.name, scopes };
   return {
     token,
     clientId: user.id,

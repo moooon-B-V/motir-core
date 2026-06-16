@@ -44,6 +44,11 @@ export interface McpAuthExtra {
   workspaceId: string;
   /** The token owner's display name — carried for log/diagnostic context only. */
   userName: string | null;
+  /** The token's granted capability scopes (Story 7.7 · Subtask 7.7.16) —
+   * carried so the dispatch gate (7.7.17) can narrow the owner's 6.4 role to
+   * the operations these scopes permit. Each entry is a `TokenScope`
+   * (`lib/mcp/scopes.ts`); validated at mint time. */
+  scopes: string[];
 }
 
 /**
@@ -67,7 +72,16 @@ function readAuthExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
   const { userId, workspaceId } = extra as Record<string, unknown>;
   if (typeof userId !== 'string' || typeof workspaceId !== 'string') return null;
   const userName = (extra as Record<string, unknown>).userName;
-  return { userId, workspaceId, userName: typeof userName === 'string' ? userName : null };
+  const rawScopes = (extra as Record<string, unknown>).scopes;
+  const scopes = Array.isArray(rawScopes)
+    ? rawScopes.filter((s): s is string => typeof s === 'string')
+    : [];
+  return {
+    userId,
+    workspaceId,
+    userName: typeof userName === 'string' ? userName : null,
+    scopes,
+  };
 }
 
 /**

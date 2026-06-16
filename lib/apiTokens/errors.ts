@@ -11,6 +11,8 @@
 //   ApiTokenRevokedError  → 401 — the token resolved but was soft-revoked.
 //   ApiTokenExpiredError  → 401 — the token resolved but is past `expiresAt`.
 //   InvalidApiTokenLabelError → 422 — blank / over-cap label at create.
+//   InvalidApiTokenScopeError → 422 — an unrecognized scope string at create
+//                           (Story 7.7 · Subtask 7.7.16).
 //
 // The three verify-failure errors are kept DISTINCT (not collapsed to one)
 // so the 7.8.4 gate can surface the precise reason to the agent — "revoked"
@@ -21,6 +23,17 @@ export class InvalidApiTokenLabelError extends Error {
   constructor(message = 'A token label is required and must be at most 100 characters.') {
     super(message);
     this.name = 'InvalidApiTokenLabelError';
+  }
+}
+
+export class InvalidApiTokenScopeError extends Error {
+  readonly code = 'API_TOKEN_INVALID_SCOPE' as const;
+  /** The unknown scope strings that were rejected. */
+  readonly invalidScopes: string[];
+  constructor(invalidScopes: string[]) {
+    super(`Unknown API token scope(s): ${invalidScopes.join(', ')}.`);
+    this.name = 'InvalidApiTokenScopeError';
+    this.invalidScopes = invalidScopes;
   }
 }
 

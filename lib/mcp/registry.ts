@@ -72,6 +72,12 @@ export const MCP_TOOL_NAMES = [
   DELETE_WORK_ITEM_TOOL_NAME,
 ] as const;
 
+/** One of the server's stable tool names — the union over {@link MCP_TOOL_NAMES}.
+ * The token-scope map (`lib/mcp/scopes.ts`) is keyed by this, so the map stays
+ * total over the registry by construction (a tool added without a scope is a
+ * compile error). */
+export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
+
 /** Register every MCP tool on `server`, wiring each to `resolveContext`. */
 export function registerMcpTools(server: McpServer, resolveContext: McpContextResolver): void {
   // Read + dispatch tools (7.8.4).
