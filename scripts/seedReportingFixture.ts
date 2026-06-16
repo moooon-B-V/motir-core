@@ -288,22 +288,35 @@ export async function seedReportingFixture(): Promise<ReportingSeedManifest> {
       `(${sizes.richItems} rich, ${sizes.savedFilters} filters, ${sizes.rules} rules)…`,
   );
 
-  // ── Idempotent clear: drop this fixture's prior workspace(s) only ─────────
+  // ── Idempotent clear: drop this fixture's prior tenant(s) only ────────────
+  // Story 6.10 put an Organization ABOVE the workspace — createWorkspace mints
+  // one per fixture run (workspace.organizationId → organization, onDelete:
+  // Cascade), reusing the workspace's globally-unique slug for org.slug too.
+  // Cascade only flows parent→child, so deleting just the WORKSPACE orphans its
+  // ORG; the leftover org's slug then collides on the next reseed
+  // (`organization_slug_key`), which the E2E `runReportingSeed()` retry path
+  // only survives via createWorkspace's NON-deterministic random-suffix retry —
+  // the bug MOTIR-988 empty-census flake. So clear the ORG root explicitly (the
+  // `new-tenant-root-truncate-helper` class: a tier above an existing root must
+  // be removed by name, not reached by a child's cascade). We match the
+  // fixture's fixed org NAME (createWorkspace sets org.name = the workspace
+  // name) so a leaked/orphaned org from a prior crashed-mid-run reseed is swept
+  // too, leaving the base slug free for a clean, collision-proof attempt-0.
   const existingOwner = await db.user.findUnique({ where: { email: SEED_REPORTING_OWNER_EMAIL } });
-  if (existingOwner) {
-    const memberships = await db.workspaceMembership.findMany({
-      where: { userId: existingOwner.id },
-      include: { workspace: true },
+  const priorWorkspaces = await db.workspace.findMany({
+    where: { organization: { name: SEED_REPORTING_WORKSPACE_NAME } },
+    select: { id: true },
+  });
+  if (priorWorkspaces.length > 0) {
+    // work_item.parent is onDelete:NoAction — clear the set in one statement
+    // first; the org-delete cascade (org → workspace → work_item) trips the
+    // self-FK otherwise.
+    await db.workItem.deleteMany({
+      where: { workspaceId: { in: priorWorkspaces.map((w) => w.id) } },
     });
-    for (const m of memberships) {
-      if (m.workspace.name === SEED_REPORTING_WORKSPACE_NAME) {
-        // work_item.parent is onDelete:NoAction — clear the set in one statement
-        // first; the workspace then cascades everything else.
-        await db.workItem.deleteMany({ where: { workspaceId: m.workspaceId } });
-        await db.workspace.delete({ where: { id: m.workspaceId } });
-      }
-    }
   }
+  // Deleting the org cascades the workspace, memberships, projects and the rest.
+  await db.organization.deleteMany({ where: { name: SEED_REPORTING_WORKSPACE_NAME } });
 
   // ── Tenant: owner + member pool, workspace, project, project enrolment ────
   const owner =
