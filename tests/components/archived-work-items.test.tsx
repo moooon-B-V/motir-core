@@ -75,7 +75,7 @@ describe('ArchivedWorkItemsList', () => {
   it('canEdit: Restore removes the row only after the unarchive 200 (page-state)', async () => {
     let resolveFetch: (v: { ok: boolean }) => void = () => {};
     const fetchMock = vi.fn(
-      () =>
+      (..._args: unknown[]) =>
         new Promise((res) => {
           resolveFetch = res;
         }),
@@ -88,8 +88,9 @@ describe('ArchivedWorkItemsList', () => {
 
     // Optimistic-only: the row is still present + marked busy until the 200.
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toContain('/api/work-items/wi_49/archive');
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'DELETE' });
+    const call = fetchMock.mock.calls[0];
+    expect(call?.[0]).toContain('/api/work-items/wi_49/archive');
+    expect(call?.[1]).toMatchObject({ method: 'DELETE' });
     expect(screen.getByTestId('archived-row-PROD-49').getAttribute('aria-busy')).toBe('true');
 
     // The authoritative 200 — NOW the row leaves the list + a success toast shows.
@@ -163,6 +164,7 @@ describe('toArchivedRows', () => {
 
   it('resolves the status label/category and formats the archived date', () => {
     const [row] = toArchivedRows([dto({})], workflow, 'en');
+    expect(row).toBeDefined();
     expect(row).toMatchObject({
       identifier: 'PROD-49',
       kind: 'bug',
@@ -175,8 +177,8 @@ describe('toArchivedRows', () => {
 
   it('falls back to the raw key + null category for an unclassifiable status, and null archivedBy', () => {
     const [row] = toArchivedRows([dto({ status: 'mystery', archivedBy: null })], workflow, 'en');
-    expect(row.statusLabel).toBe('mystery');
-    expect(row.statusCategory).toBeNull();
-    expect(row.archivedByName).toBeNull();
+    expect(row?.statusLabel).toBe('mystery');
+    expect(row?.statusCategory).toBeNull();
+    expect(row?.archivedByName).toBeNull();
   });
 });
