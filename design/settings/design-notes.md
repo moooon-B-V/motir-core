@@ -7,9 +7,10 @@ grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                |
-| ------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens). |
+| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                 |
+| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)     | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes). |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -241,3 +242,161 @@ expiresField,expiresHelper,submit,cancel}`, `expiry.{d30,d90,d365,never}`,
 No new design-system primitive is invented for this surface. If a future need
 arises that a shipped primitive can't cover, that is a NEW `design/` subtask, not
 a code workaround.
+
+---
+
+# Token scope selection — `token-scopes.mock.html` (Story 7.7 · 7.7.18)
+
+The reference the **7.7.19** code subtask builds against. It EXTENDS the
+API-tokens surface designed in 7.7.2 (Panels 3–8 of `account-settings.mock.html`,
+which cover list / create / shown-once / revoke / empty) by adding the one thing
+that design lacked: **permission-scope selection**. Nothing else in the
+create→shown-once→revoke flow changes. Built from the SAME token block + shipped
+primitives as `account-settings.mock.html`, so 7.7.19 composes identical
+primitives — no Pencil→code gap.
+
+### ⚠️ Two senses of "scope" — do not conflate
+
+- **Binding scope** (bug 7.21, already shipped in 7.7.2 / `CreateTokenModal`) —
+  the **org → workspace** a token is bound to (the "Workspace" field, reading
+  `Default` for a lone workspace). **Unchanged here.**
+- **Permission scope** (THIS asset, the 7.7.16 scope list) — **what the token may
+  DO**. New. Rendered as the create-modal "Permissions" picker + the list's
+  "Scopes" column.
+
+The 7.7.16 canonical scope list is the source of truth for the scope KEYS; this
+asset owns their **plain-language labels/descriptions** (written for Yue's
+non-developer acceptance — Principle #18 — never the raw `work_items:write`
+string) and their **grouping + default state**.
+
+## The 6 scopes — labels, copy, group, default, icon
+
+The picker renders the 6 scopes (7.7.16) as grouped, plain-language **`Switch`**
+toggles (`role="switch"`, accent track when on). Default state: **ALL on EXCEPT
+delete.** Each row is `icon + name + one-line description` on the left, the
+`Switch` on the right, hairline-separated within a group.
+
+| Scope key (7.7.16)   | Group           | Label (plain)        | Description                                                                  | Default | lucide icon  |
+| -------------------- | --------------- | -------------------- | ---------------------------------------------------------------------------- | ------- | ------------ |
+| `read`               | Read            | Read everything      | View work items, boards, sprints, comments, and reports.                     | **on**  | `eye`        |
+| `work_items:write`   | Create & change | Edit work items      | Create and update work items, comments, links, and attachments.              | **on**  | `square-pen` |
+| `sprints:write`      | Create & change | Manage sprints       | Create sprints and move work items in and out of them.                       | **on**  | `zap`        |
+| `work_items:archive` | Create & change | Archive work items   | Archive and restore work items. This can be undone.                          | **on**  | `archive`    |
+| `integration`        | Integrations    | Connect integrations | Link external tools and post activity back to Motir.                         | **on**  | `plug`       |
+| `work_items:delete`  | **Danger zone** | Delete work items    | Permanently delete a work item and its entire subtree. This can't be undone. | **OFF** | `trash-2`    |
+
+> The exact scope-key spelling above mirrors what 7.7.16 ships; if 7.7.16's final
+> keys differ, 7.7.19 maps label→key by the **group + meaning**, not the literal
+> string. The labels/descriptions/grouping/default here are the binding spec.
+
+## Panel 1 — create modal with the Permissions picker (default)
+
+The shipped create `Modal` (`size="md"`, Panel 4 of 7.7.2) gains a **Permissions**
+`field` between the Workspace (binding) field and the Expires field. A
+section label + helper ("Choose what this token is allowed to do. You can grant
+less than your own access, never more.") sits above the grouped toggle list:
+
+- **Group labels** reuse the `grp-label` grammar — `--font-mono`, uppercase,
+  `--el-text-faint`. Groups in order: **Read · Create & change · Integrations**,
+  then the **Danger zone**.
+- Each **scope row** (`.scope-row`): a 16px lucide glyph in `--el-text-muted`, the
+  name (`text-sm font-medium --el-text`), the description (`text-xs
+--el-text-muted`), and a `Switch` on the right. Hairline `--el-border-soft`
+  between rows inside a group.
+- **Default render:** Read / Edit / Manage sprints / Archive / Connect
+  integrations all **on** (accent track); **Delete off**.
+
+## The Danger-zone delete toggle (distinct treatment, off by default)
+
+`work_items:delete` lives in its **own rose box** (`.scope-danger`:
+`bg-(--el-tint-rose)`, `border-(--el-border-soft)`, `rounded-(--radius-card)`,
+`p-3.5`), set apart from the safe scopes so granting deletion is a **deliberate,
+visible act**:
+
+- The group label reads **"Danger zone"** in **`--el-danger`** with a
+  `shield-alert` glyph.
+- The scope glyph (`trash-2`) is `--el-danger`; the name is `--el-text-strong`;
+  the "This can't be undone" caption is `--el-text-strong` (AA on the rose tint —
+  finding #35).
+- The `Switch` is **OFF** by default. Flipping it on is shown in **Panel 2** — the
+  box, icon, and caption stay; only the track turns accent. (Confirmed AA in light
+  AND dark — Panel 2 + the dark toggle.)
+
+## Panel 3 — disabled / error state (every scope off)
+
+A token must grant **at least one** permission. With every toggle off:
+
+- An inline **`.scope-error`** ("Grant at least one permission to create a token.")
+  in `--el-danger` with an `alert` glyph appears under the picker.
+- The **"Create token" CTA is disabled** (the existing `disabled`/`loading` CTA
+  grammar — 7.7.2 already disables it on an empty label; this adds the empty-scope
+  condition). The binding `workspaceId` check from 7.7.2 is unchanged.
+
+This is the only NEW validation state; create / shown-once / revoke / empty are
+exactly 7.7.2.
+
+## Panel 4 — token-list granted-scope display (the "Scopes" column)
+
+The list (`ApiTokensManager`, Panel 3 of 7.7.2) gains a **Scopes** column between
+**Token** and **Workspace** — compact, **no row bloat**:
+
+- A single **summary `Pill`** classifies the grant, semantic not numeric (Yue
+  reads meaning, not `5 of 6`):
+  - **Full access** — all 6 (incl. delete) → `Pill` **mint** tone
+    (`--el-tint-mint`, `--el-text-strong`).
+  - **Standard** — the default set (all minus delete) → `Pill` **neutral**.
+  - **Read only** — `read` alone → `Pill` **neutral**.
+  - **Custom** — any other subset → `Pill` **neutral**.
+- **`work_items:delete` is never hidden behind a summary.** Whenever delete is
+  granted, a **persistent rose `Pill` "Can delete"** (`--el-tint-rose`,
+  `--el-text-strong`, `trash-2` glyph) rides beside the summary — the dangerous
+  capability is always visible at a glance, mirroring the create-modal's
+  danger-zone emphasis.
+- A **chevron `disclose` button** (`chevron-down`, `--radius-control`,
+  `aria-expanded`) expands the row.
+- **Revoked rows** show the muted summary only (no chevron) — consistent with the
+  7.7.2 revoked-row muting.
+
+## Panel 5 — expanded scope detail
+
+The chevron opens a **detail sub-row** (`.scope-detail` → a `td colspan`),
+a `--el-surface-soft` card holding a "This token can:" lead + one **chip per
+granted scope** (icon + plain label). The **Delete** chip reads as a rose
+**`.scope-chip.danger`** (`--el-tint-rose`, `--el-text-strong`). Plain names
+only — never the raw `work_items:*` keys. The chevron flips to point up
+(`.disclose.open`).
+
+## Token / a11y rules honoured (additions to the 7.7.2 list)
+
+- **Colour** strictly via `--el-*`: the accent Switch track; `--el-tint-rose` +
+  `--el-danger` for the danger zone / delete chips; `--el-tint-mint` for the Full
+  access pill; `--el-text-muted` scope glyphs; `--el-text-strong` on every tint
+  (AA — finding #35, verified light + dark). No Tier-0 `--color-*`.
+- **Shape** via element-semantic tokens only — `--radius-card` (danger box,
+  detail card, summary `--radius-badge`), `--radius-control` (disclose button),
+  `--spacing-chip-*` (chips), `--spacing-control-*`. No raw `rounded-md` / `p-1`.
+- **Not colour-alone** (finding #35): the danger zone pairs rose tint + icon +
+  "can't be undone" copy + a "Danger zone" label; the delete grant carries the
+  text chip "Can delete", not a bare colour; every scope toggle has a text label
+  and `aria-label`.
+- **A11y:** scope toggles are `role="switch"` + `aria-checked` + `aria-label`,
+  wrapped in a `role="group"` labelled by the "Permissions" heading; the disclose
+  control is a real `<button>` with `aria-expanded` + a descriptive `aria-label`
+  ("Show scopes for {label}"); the empty-scope error is inline form text. The
+  detail sub-row is plain table markup.
+- **Dark mode** confirmed (toggle in the mock): the rose danger box, mint/rose
+  pills, and accent switches all flip via the token layer and stay AA.
+
+## Primitives composed (additions — no hand-rolling)
+
+| Element                          | Shipped primitive                                                   |
+| -------------------------------- | ------------------------------------------------------------------- |
+| scope toggles                    | `components/ui/Switch.tsx` (`role="switch"`)                        |
+| summary / "Can delete" / chips   | `components/ui/Pill.tsx` (mint / rose / neutral tones)              |
+| Permissions section + danger box | `components/ui/Card.tsx` callout grammar + the `field` form row     |
+| disclose / expand                | a ghost icon `button` (the existing `icon-btn` grammar) + `chevron` |
+| modal / CTA / inputs             | unchanged from 7.7.2 (`Modal` / `Button` / `Input` / `Combobox`)    |
+
+No new primitive is invented. The "Can delete" rose pill and mint "Full access"
+pill are existing `Pill` tones; the danger box is the callout grammar already used
+by the shown-once warning + revoke confirm.
