@@ -10,9 +10,10 @@ import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository'
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectsService } from '@/lib/services/projectsService';
 import { triageService, type TriageSubmissionKind } from '@/lib/services/triageService';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { toCommentDto } from '@/lib/mappers/commentMappers';
 import {
@@ -370,6 +371,43 @@ export const publicProjectsService = {
       computeStats(project.id, project.workspaceId, hiddenIds),
     ]);
     return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats, canManage);
+  },
+
+  /**
+   * Persist the public hero fields (tagline + tags + README body) FROM THE
+   * PUBLIC PAGE — the save behind the on-page in-place editor (Story 6.16 ·
+   * Subtask 6.16.5). The settings-area author (6.12.8) keys off the active
+   * project cookie; the public `/p/<identifier>` page can be open while a
+   * DIFFERENT project is active, so this entry point keys off the public
+   * `identifier` instead and resolves the project's workspace itself.
+   *
+   * Admin-gated TWICE — defense in depth: the public browse gate already reports
+   * `canManage` (admin-only; anonymous / cross-org → false), and we reject a
+   * non-admin here with `NotProjectAdminError` (→ the action's 403) BEFORE any
+   * write; the delegated `projectsService.setPublicOverview` then re-runs its own
+   * `assertCanManage` inside the write transaction. A partial author: each field
+   * is optional (absent = untouched), validation + normalization live in the
+   * delegate (the single source of truth for the field rules). `actorUserId` is
+   * nullable — an anonymous caller never resolves `canManage`, so it 403s.
+   */
+  async setPublicOverview(
+    identifier: string,
+    actorUserId: string | null,
+    input: {
+      publicOverviewMd?: string;
+      publicTagline?: string | null;
+      publicTags?: string[];
+    },
+  ): Promise<void> {
+    const { project, canManage } = await resolvePublicProject(identifier, actorUserId);
+    if (!canManage || actorUserId === null) throw new NotProjectAdminError(project.id);
+    await projectsService.setPublicOverview({
+      key: identifier,
+      ctx: { userId: actorUserId, workspaceId: project.workspaceId },
+      publicOverviewMd: input.publicOverviewMd,
+      publicTagline: input.publicTagline,
+      publicTags: input.publicTags,
+    });
   },
 
   /**

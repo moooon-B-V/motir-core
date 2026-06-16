@@ -24,7 +24,7 @@ import {
   PUBLIC_TAG_MAX_LENGTH,
   PUBLIC_TAGS_MAX_COUNT,
   PUBLIC_TAGLINE_MAX_LENGTH,
-} from '@/lib/services/projectsService';
+} from '@/lib/publicProjects/limits';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from './helpers/db';
 
