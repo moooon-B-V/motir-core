@@ -1,45 +1,31 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
 import { ToastProvider } from '@/components/ui/Toast';
 
 // The discoverable build-in-public entry points (Story 6.17 · Subtask 6.17.3 ·
-// design/public-projects Panel 10): the PRIMARY project-shell header button, the
-// dismissible one-time nudge, and the Settings → General promo card. All three
-// open the reusable 6.17.2 explainer/confirm dialog and, on confirm, run the
-// shared `useGoPublic` write — PATCH /api/projects/[key]/access with
-// accessLevel:'public', then toast + router.refresh (server-gated visibility, so
-// the refresh is the whole page-state-after-mutation story).
+// design/public-projects Panel 10): the PRIMARY project-shell header button and
+// the durable Settings → General promo card. Both open the reusable 6.17.2
+// explainer/confirm dialog and, on confirm, run the shared `useGoPublic` write —
+// PATCH /api/projects/[key]/access with accessLevel:'public', then toast +
+// router.refresh (server-gated visibility, so the refresh is the whole
+// page-state-after-mutation story).
+// (The Panel-10b shell nudge is deferred — a global content-flow banner above
+// the dnd board pushes swimlane drop targets off-screen; see the PR notes.)
 
-const { refreshSpy, pathnameRef } = vi.hoisted(() => ({
-  refreshSpy: vi.fn(),
-  pathnameRef: { current: '/boards' },
-}));
+const { refreshSpy } = vi.hoisted(() => ({ refreshSpy: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: refreshSpy }),
-  usePathname: () => pathnameRef.current,
 }));
 
 import { BuildInPublicButton } from '@/app/(authed)/_components/build-in-public/BuildInPublicButton';
-import { BuildInPublicNudge } from '@/app/(authed)/_components/build-in-public/BuildInPublicNudge';
 import { BuildInPublicPromoCard } from '@/app/(authed)/settings/project/_components/BuildInPublicPromoCard';
-import { resetBuildInPublicNudgeForTests } from '@/lib/hooks/useBuildInPublicNudge';
 
 function withToast(ui: React.ReactElement) {
   return <ToastProvider>{ui}</ToastProvider>;
 }
-
-beforeEach(() => {
-  pathnameRef.current = '/boards';
-  resetBuildInPublicNudgeForTests();
-  try {
-    window.localStorage.clear();
-  } catch {
-    /* ignore */
-  }
-});
 
 afterEach(() => {
   cleanup();
@@ -91,28 +77,6 @@ describe('BuildInPublicButton (PRIMARY header entry)', () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
     expect(refreshSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe('BuildInPublicNudge (dismissible shell entry)', () => {
-  it('shows on a project work surface and persists dismissal', async () => {
-    render(withToast(<BuildInPublicNudge projectKey="MOTIR" />));
-    expect(screen.getByText('Want eyes on your work?')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    await waitFor(() => expect(screen.queryByText('Want eyes on your work?')).toBeNull());
-
-    // A fresh mount stays hidden — the dismissal is persisted.
-    resetBuildInPublicNudgeForTests();
-    cleanup();
-    render(withToast(<BuildInPublicNudge projectKey="MOTIR" />));
-    expect(screen.queryByText('Want eyes on your work?')).toBeNull();
-  });
-
-  it('is suppressed on the settings area (the promo card owns it there)', () => {
-    pathnameRef.current = '/settings/project';
-    render(withToast(<BuildInPublicNudge projectKey="MOTIR" />));
-    expect(screen.queryByText('Want eyes on your work?')).toBeNull();
   });
 });
 
