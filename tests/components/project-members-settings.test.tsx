@@ -50,7 +50,6 @@ function renderAdmin(overrides: Partial<React.ComponentProps<typeof ProjectMembe
         projectName="motir"
         workspaceName="moooon"
         accessLevel="private"
-        publicOverviewMd={null}
         members={members}
         workspaceMembers={workspaceMembers}
         currentUserId={SELF}
@@ -214,6 +213,23 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     renderAdmin({ accessLevel: 'public', canManage: false, members: [members[0]!] });
     expect(screen.getByRole('link', { name: 'View public page' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+  });
+
+  it('public + admin: the Hero & overview entry links to the on-page editor (?edit=1), with no embedded editor (6.16.6)', () => {
+    renderAdmin({ accessLevel: 'public', members: [members[0]!] });
+    // The in-settings split editor is GONE — there is a single editing surface,
+    // on the public page itself.
+    expect(screen.queryByRole('button', { name: 'Edit overview' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Project overview Markdown' })).toBeNull();
+    // The entry point is an "Edit on the public page" link deep-linking into
+    // edit mode (`?edit=1`).
+    const link = screen.getByRole('link', { name: /Edit on the public page/ });
+    expect(link.getAttribute('href')).toBe('/p/PROD?edit=1');
+  });
+
+  it('public + non-admin: the Hero & overview entry hides the edit link (6.16.6)', () => {
+    renderAdmin({ accessLevel: 'public', canManage: false, members: [members[0]!] });
+    expect(screen.queryByRole('link', { name: /Edit on the public page/ })).toBeNull();
   });
 
   it('non-admins get a read-only view (no edit affordances, role chips only)', () => {
