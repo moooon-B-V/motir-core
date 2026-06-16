@@ -391,21 +391,6 @@ export const projectRepository = {
   },
 
   /**
-   * Set the project's PUBLIC-facing fields (Story 6.12) — the authored
-   * `publicOverviewMd` README body, the only public-safe content field
-   * 6.12.3 added. Used by the 6.12.8 settings editor and by `db:seed` (to seed
-   * Motir's own canonical overview). `tx` REQUIRED; the caller has already
-   * tenant-/admin-gated the project. Only the provided fields are written.
-   */
-  async updatePublicFields(
-    id: string,
-    data: { publicOverviewMd?: string | null },
-    tx: Prisma.TransactionClient,
-  ): Promise<Project> {
-    return tx.project.update({ where: { id }, data });
-  },
-
-  /**
    * Acquire a row-level lock on the project inside the caller's transaction —
    * the guarding read for the key-change flow (Story 6.8 · projectsService
    * `changeKey`): lock the row, then run the collision guards + the bulk
