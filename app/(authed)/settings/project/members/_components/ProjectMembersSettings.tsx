@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   Copy,
+  ExternalLink,
   Eye,
   FileText,
   Info,
@@ -13,18 +14,21 @@ import {
   Lock,
   Megaphone,
   Users,
+  X,
 } from 'lucide-react';
 import type { ProjectAccessLevel } from '@prisma/client';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
+import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBadge';
 import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { EditOverview } from './EditOverview';
 import { BuildInPublicDialog } from './BuildInPublicDialog';
+import { StopBuildInPublicDialog } from './StopBuildInPublicDialog';
 
 // ProjectMembersSettings (Story 6.4 · Subtask 6.4.5) — the project-settings
 // Members + Access UI, built against design/projects/access-members.mock.html
@@ -115,6 +119,9 @@ export function ProjectMembersSettings({
   // Panel 11). Selecting the `public` level opens it instead of mutating
   // immediately — going public is a confirmed action, never a bare toggle.
   const [buildConfirmOpen, setBuildConfirmOpen] = useState(false);
+  // The reverse "Stop building in public?" confirm (Story 6.17.4, design Panel
+  // 12), opened from the status/manage row's Stop action.
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
 
   function setPending(userId: string, on: boolean) {
     setPendingUserIds((prev) => {
@@ -152,6 +159,16 @@ export function ProjectMembersSettings({
   async function confirmBuildInPublic() {
     await applyAccess('public');
     setBuildConfirmOpen(false);
+  }
+
+  // The confirm handler for the STOP-building-in-public dialog (Story 6.17.4) —
+  // reverts the project to the `open` access level (the standard non-public
+  // state; we don't persist a prior level, and the card specifies the `open`
+  // fallback) via the same optimistic `setAccessLevel` path, then closes the
+  // dialog. Going non-public clears the badge + the public-only sections below.
+  async function confirmStop() {
+    await applyAccess('open');
+    setStopConfirmOpen(false);
   }
 
   // The optimistic access write. Keeps `setAccessLevel('public')` as the single
@@ -419,15 +436,35 @@ export function ProjectMembersSettings({
         pending={accessPending}
       />
 
-      {/* ── Public link + Overview (only while the project is public, 6.12.8) ── */}
+      {/* ── Building-in-public status + manage / stop + public link + Overview
+          (only while the project is public) ─────────────────────────────── */}
       {accessLevel === 'public' ? (
-        <PublicShareSection
-          projectKey={projectKey}
-          publicOverviewMd={overviewMd}
-          canManage={canManage}
-          onEditOverview={() => setEditingOverview(true)}
-        />
+        <>
+          {/* The status badge + manage / stop row (Story 6.17.4, design Panel
+              12) — admins get Stop; non-admins see the badge + link read-only. */}
+          <BuildInPublicManageRow
+            projectKey={projectKey}
+            canManage={canManage}
+            onStop={() => setStopConfirmOpen(true)}
+          />
+          <PublicShareSection
+            projectKey={projectKey}
+            publicOverviewMd={overviewMd}
+            canManage={canManage}
+            onEditOverview={() => setEditingOverview(true)}
+          />
+        </>
       ) : null}
+
+      {/* The reverse "Stop building in public?" confirm (Story 6.17.4, design
+          Panel 12). Stopping reverts to a non-public level; the access write
+          fires only on confirm. */}
+      <StopBuildInPublicDialog
+        open={stopConfirmOpen}
+        onOpenChange={setStopConfirmOpen}
+        onConfirm={confirmStop}
+        pending={accessPending}
+      />
 
       {/* ── Members ────────────────────────────────────────────────────── */}
       <Card
@@ -541,6 +578,50 @@ function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label:
       <Icon className="size-3" aria-hidden />
       {label}
     </Pill>
+  );
+}
+
+// The "Building in public" status + manage row (Story 6.17 · Subtask 6.17.4,
+// design/public-projects Panel 12) — rendered in the access area while the
+// project is public. Pairs the status badge with the live public URL, a "View
+// public page" link, and (admins only) a "Stop" action that opens the reverse
+// confirm. Non-admins see the badge + link read-only (no Stop) — the gate stays
+// legible rather than the control vanishing, matching the Members card.
+function BuildInPublicManageRow({
+  projectKey,
+  canManage,
+  onStop,
+}: {
+  projectKey: string;
+  canManage: boolean;
+  onStop: () => void;
+}) {
+  const t = useTranslations('settings');
+  const publicPath = `/p/${projectKey}`;
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <BuildingInPublicBadge label={t('buildInPublic.statusBadge')} className="self-start" />
+          <span className="text-(--el-text-muted) truncate font-mono text-xs">{publicPath}</span>
+        </div>
+        <a
+          href={publicPath}
+          target="_blank"
+          rel="noreferrer"
+          className={buttonVariants({ variant: 'secondary', size: 'md' })}
+        >
+          <ExternalLink className="size-4" aria-hidden />
+          {t('buildInPublic.viewPublicPage')}
+        </a>
+        {canManage ? (
+          <Button variant="danger" size="md" onClick={onStop}>
+            <X className="size-4" aria-hidden />
+            {t('buildInPublic.stop')}
+          </Button>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 
