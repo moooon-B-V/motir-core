@@ -456,6 +456,13 @@
      sits on --el-page-bg, never on the wash, so AA holds — finding #35) */
   --el-hero-wash-a: var(--color-tint-lavender);
   --el-hero-wash-b: var(--color-tint-sky);
+  /* "Building in public" (Story 6.17.2/6.17.4) — the reframed `public` access
+     option glyph + the "Live"/status badge. Tier-0 flips (--color-tint-lavender
+     and --color-charcoal both re-skin under [data-theme="dark"]) re-skin these
+     automatically, so they live in Tier 3 once with no dark-block entry. */
+  --el-build-bg: var(--color-tint-lavender); /* badge / reframed-option tint */
+  --el-build-text: var(--color-charcoal); /* AA ~10:1 on the lavender tint, both themes */
+  --el-build-glyph: var(--color-primary); /* the megaphone accent glyph */
 
   /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);

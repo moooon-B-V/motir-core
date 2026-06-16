@@ -8,10 +8,10 @@ import {
   Copy,
   Eye,
   FileText,
-  Globe,
   Info,
   Link2,
   Lock,
+  Megaphone,
   Users,
 } from 'lucide-react';
 import type { ProjectAccessLevel } from '@prisma/client';
@@ -24,6 +24,7 @@ import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { EditOverview } from './EditOverview';
+import { BuildInPublicDialog } from './BuildInPublicDialog';
 
 // ProjectMembersSettings (Story 6.4 · Subtask 6.4.5) — the project-settings
 // Members + Access UI, built against design/projects/access-members.mock.html
@@ -51,17 +52,19 @@ import { EditOverview } from './EditOverview';
 const ACCESS_LEVELS = ['public', 'open', 'limited', 'private'] as const;
 type AccessLevel = (typeof ACCESS_LEVELS)[number];
 
-// Per-level icon (design Panel 6: globe / users / eye / lock).
-const ACCESS_ICON: Record<ProjectAccessLevel, typeof Globe> = {
-  public: Globe,
+// Per-level icon (design Panel 6: megaphone / users / eye / lock). `public`
+// reads as "Building in public" (Story 6.17.2 reframe), so its glyph is the
+// build-in-public megaphone, not a globe.
+const ACCESS_ICON: Record<ProjectAccessLevel, typeof Megaphone> = {
+  public: Megaphone,
   open: Users,
   limited: Eye,
   private: Lock,
 };
 // Icon-tile tint per level — hue in the tint with strong text (AA, finding #35):
-// public = sky, open = mint, limited = peach, private = lavender.
+// public = build lavender, open = mint, limited = peach, private = lavender.
 const ACCESS_TINT: Record<ProjectAccessLevel, string> = {
-  public: 'bg-(--el-tint-sky)',
+  public: 'bg-(--el-build-bg)',
   open: 'bg-(--el-tint-mint)',
   limited: 'bg-(--el-tint-peach)',
   private: 'bg-(--el-tint-lavender)',
@@ -108,6 +111,10 @@ export function ProjectMembersSettings({
   // totality contract). `overviewMd` holds the committed body for the snippet.
   const [editingOverview, setEditingOverview] = useState(false);
   const [overviewMd, setOverviewMd] = useState(publicOverviewMd ?? '');
+  // The "Start building in public?" explainer/confirm (Story 6.17.2, design
+  // Panel 11). Selecting the `public` level opens it instead of mutating
+  // immediately — going public is a confirmed action, never a bare toggle.
+  const [buildConfirmOpen, setBuildConfirmOpen] = useState(false);
 
   function setPending(userId: string, on: boolean) {
     setPendingUserIds((prev) => {
@@ -128,8 +135,29 @@ export function ProjectMembersSettings({
   }
 
   // ── Access level ──────────────────────────────────────────────────────────
-  async function changeAccess(level: AccessLevel) {
+  // Selecting a level. Going `public` is gated behind the build-in-public
+  // explainer/confirm (Story 6.17.2) — the mutation fires only on confirm, so
+  // the radio doesn't flip until then. Every other level applies immediately.
+  function changeAccess(level: AccessLevel) {
     if (!canManage || level === accessLevel || accessPending) return;
+    if (level === 'public') {
+      setBuildConfirmOpen(true);
+      return;
+    }
+    void applyAccess(level);
+  }
+
+  // The confirm handler for the build-in-public dialog — runs the actual write
+  // (the shipped 6.4 `setAccessLevel` path) and closes the dialog on resolve.
+  async function confirmBuildInPublic() {
+    await applyAccess('public');
+    setBuildConfirmOpen(false);
+  }
+
+  // The optimistic access write. Keeps `setAccessLevel('public')` as the single
+  // mutation (Story 6.17.2: reframe the label, never fork the model).
+  async function applyAccess(level: AccessLevel) {
+    if (level === accessLevel) return;
     const prevLevel = accessLevel;
     const prevMembers = members;
     setAccessLevel(level);
@@ -329,14 +357,25 @@ export function ProjectMembersSettings({
                 } ${canManage ? 'enabled:hover:border-(--el-border-strong)' : ''}`}
               >
                 <span
-                  className={`inline-flex size-9 shrink-0 items-center justify-center rounded-(--radius-control) ${ACCESS_TINT[level]} text-(--el-text-strong)`}
+                  className={`inline-flex size-9 shrink-0 items-center justify-center rounded-(--radius-control) ${ACCESS_TINT[level]} ${
+                    level === 'public' ? 'text-(--el-build-glyph)' : 'text-(--el-text-strong)'
+                  }`}
                   aria-hidden
                 >
                   <Icon className="size-5" />
                 </span>
                 <span className="flex-1">
-                  <span className="block font-sans text-sm font-medium text-(--el-text)">
+                  <span className="flex items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
                     {t(`access.level.${level}`)}
+                    {/* "Live" status chip on the selected build-in-public option
+                        (Story 6.17.2, design Panel 6). The full shell-header
+                        status badge + stop/manage path is Story 6.17.4. */}
+                    {level === 'public' && selected ? (
+                      <Pill className="border-transparent bg-(--el-build-bg) text-(--el-build-text)">
+                        <Megaphone className="size-3" aria-hidden />
+                        {t('buildInPublic.liveBadge')}
+                      </Pill>
+                    ) : null}
                   </span>
                   <span className="text-(--el-text-muted) block font-sans text-xs">
                     {t(`access.levelDesc.${level}`, { workspaceName })}
@@ -368,6 +407,17 @@ export function ProjectMembersSettings({
           </div>
         ) : null}
       </Card>
+
+      {/* The "Start building in public?" explainer/confirm (Story 6.17.2, design
+          Panel 11) — a reusable piece the discoverable entry points (6.17.3)
+          also open. Selecting the `public` level opens it; the access write
+          fires only on confirm. */}
+      <BuildInPublicDialog
+        open={buildConfirmOpen}
+        onOpenChange={setBuildConfirmOpen}
+        onConfirm={confirmBuildInPublic}
+        pending={accessPending}
+      />
 
       {/* ── Public link + Overview (only while the project is public, 6.12.8) ── */}
       {accessLevel === 'public' ? (

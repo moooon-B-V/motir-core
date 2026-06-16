@@ -169,12 +169,17 @@ test('@smoke epic privacy: admin makes a project public + an epic private, a cro
   await page.goto('/settings/project/members');
   const accessGroup = page.getByRole('radiogroup', { name: 'Project access level' });
   await expect(accessGroup).toBeVisible({ timeout: 30_000 });
+  // Story 6.17.2 reframed `public` as "Building in public" and gates it behind an
+  // explainer/confirm dialog — the access write fires on the dialog confirm.
+  await accessGroup.getByRole('radio', { name: /^Building in public/ }).click();
+  const confirmDialog = page.getByRole('dialog');
+  await expect(confirmDialog).toBeVisible();
   const accessSaved = page.waitForResponse(
     (r) =>
       new URL(r.url()).pathname === `/api/projects/${PUBLIC_KEY}/access` &&
       r.request().method() === 'PATCH',
   );
-  await accessGroup.getByRole('radio', { name: /^Public/ }).click();
+  await confirmDialog.getByRole('button', { name: 'Start building in public' }).click();
   expect((await accessSaved).status(), 'set-access → public returns 200').toBe(200);
 
   // ── 1b. admin marks the epic PRIVATE via the 6.14.7 control ─────────────────

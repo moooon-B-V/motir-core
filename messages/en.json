@@ -1301,13 +1301,13 @@
         "open": "Open",
         "limited": "Limited",
         "private": "Private",
-        "public": "Public"
+        "public": "Building in public"
       },
       "levelDesc": {
         "open": "Any member of the {workspaceName} workspace can view and edit this project.",
         "limited": "Any workspace member can view and comment, but only project members can edit.",
         "private": "Only people added to the project below can find or open it. Hidden from everyone else.",
-        "public": "Anyone on the web can view this project without signing in. Only signed-in accounts can submit requests, upvote, or comment."
+        "public": "Publish this project to the web as a build-in-public page — anyone can follow the board, roadmap, and work items without an account, indexable by search engines. Visitors sign in only to submit, upvote, or comment. It's the same public access level, presented as a status you can start and stop anytime."
       },
       "goPrivateNote": "The {count, plural, one {# person} other {# people}} who can currently access <strong>{projectName}</strong> will be added as project members so no one loses access. You can adjust roles or remove them in the Members list.",
       "levelChangedToast": "Project access set to {level}",
@@ -1343,13 +1343,25 @@
       "errorLastAdmin": "This is the only project admin — assign another admin first.",
       "errorGeneric": "Something went wrong. Please try again."
     },
+    "buildInPublic": {
+      "liveBadge": "Live",
+      "confirmTitle": "Start building in public?",
+      "confirmLead": "Your project becomes a public page anyone on the web can open — no account needed, and search engines can index it. Here's exactly what changes:",
+      "whatBecomesLabel": "What becomes public",
+      "bulletBoard": "Your <b>board</b> and <b>roadmap</b> — status, progress, and what's shipping.",
+      "bulletItems": "Your <b>work items</b> — titles, types, and descriptions, crawlable by search engines.",
+      "bulletSignIn": "Visitors sign in <b>only to</b> submit a request, upvote, or comment — they can't edit anything.",
+      "bulletPrivate": "Stays private: <b>assignees, estimates, and internal comments</b> are never shown.",
+      "reassurance": "You can stop building in public anytime — the page goes offline and the public link stops working. Submitted requests and upvotes are kept.",
+      "confirmCta": "Start building in public"
+    },
     "public": {
       "linkHeading": "Public link",
       "linkSubheading": "Share this project with anyone — no account needed to view.",
       "copy": "Copy",
       "copied": "Copied",
       "copyError": "Couldn't copy the link.",
-      "linkNote": "Anyone can open this link with no sign-in, and the page is crawlable by search engines. Visitors sign in only to submit, upvote, or comment. To stop sharing, set the access level above to anything other than Public.",
+      "linkNote": "Anyone can open this link with no sign-in, and the page is crawlable by search engines. Visitors sign in only to submit, upvote, or comment. To stop sharing, set the access level above to anything other than Building in public.",
       "overviewHeading": "Project overview (public landing)",
       "overviewSubheading": "A README-style intro shown on the public Overview tab — the first thing a visitor sees.",
       "editOverview": "Edit overview",
