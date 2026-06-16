@@ -3,13 +3,31 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock · Delete a work item — confirm UX (Story 2.8 · 2.8.1 → 2.8.4)</title>
+    <title>
+      Design mock · Delete a work item — confirm UX (Story 2.8 · 2.8.1 → 2.8.4; + 2.9.7
+      archived-item variant)
+    </title>
     <!--
       DESIGN ASSET (HTML mockup) for DELETING a work item — the planning-time
       design gate for Story 2.8 (subtask 2.8.1; the UI code is 2.8.4, blocked on
       this). Story 2.8 = PERMANENT delete with a subtree CASCADE (Jira parity),
       sitting NEXT TO the already-shipped soft ARCHIVE (archivedAt, single-node,
       reversible-by-nature — workItemsService.archiveWorkItem).
+
+      2.9.7 EXTENSION (panels 6–7) — the confirm modal when the item being
+      deleted was reached from the ARCHIVED view (the design gate for 2.9.5).
+      Same Modal, same 5.3.6 grammar — the ONE new thing is the LIVE-DESCENDANT
+      cascade warning. Because archive is SINGLE-NODE (archiving a parent never
+      archived its children — workItemsService.ts:1469), an archived parent can
+      still own NON-archived, LIVE descendants on the active boards/lists.
+      Deleting it permanently destroys those live items too (deleteWorkItem
+      cascades the WHOLE subtree — workItemsService.ts:1560, findSubtree). That
+      is surprising (you're deleting something already "tucked away"), so panel 6
+      adds a distinct PEACH/amber warning callout naming the live count, clearly
+      separated from the normal all-archived case (panel 7). DATA NOTE for 2.9.5:
+      getDeletePreview (workItemsService.ts:1614) returns total/descendant/byKind
+      but does NOT yet split archived vs live — 2.9.5 must extend it with a
+      live-(non-archived)-descendant count + breakdown to drive this copy.
 
       The two destructive actions, kept deliberately distinct:
         • Archive — SOFT, single node, RECOVERABLE. Hides the item from active
@@ -43,7 +61,10 @@
       points — list-row + board-card ⋯ menus, and the PERMISSION-GATED menu (no
       Archive/Delete) · (2) confirm dialog — CASCADE (N descendants) · (3) confirm
       dialog — LEAF (no children) · (4) states — in-flight + error · (5) legend +
-      archive-vs-delete table. Toggle dark for token parity.
+      archive-vs-delete table · (6 · 2.9.7) ARCHIVED parent with LIVE descendants
+      — the live-descendant warning · (7 · 2.9.7) ARCHIVED parent, all-archived
+      descendants — the contrast case (no live warning). Toggle dark for token
+      parity.
     -->
     <style>
       /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
@@ -683,6 +704,41 @@
         flex: none;
         margin-top: 1px;
         color: var(--el-danger);
+      }
+
+      /* ── Live-descendant warning (2.9.7) — a PEACH/amber caution callout, ──
+         distinct from the mint archive callout (safe/green), the rose+danger
+         ERROR callout, and the plain amber dep-list ROWS. Peach is the warning
+         tint; the triangle-alert + a bold headline make the surprise — deleting
+         an archived (hidden) parent also nukes its LIVE children — unmistakable.
+         Tier-3 only: --el-tint-peach bg + --el-warning border/icon. */
+      .warn-live {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-peach);
+        border: 1px solid var(--el-warning);
+        font-size: 12.5px;
+        color: var(--el-text-strong);
+        line-height: 1.5;
+        margin: 0 0 14px;
+      }
+      .warn-live > svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .warn-live .wl-head {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+      .warn-live strong {
+        font-weight: 700;
       }
 
       /* ── Legend (panel 5) ───────────────────────────────────────────────── */
@@ -1363,6 +1419,155 @@
     </p>
 
     <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 6 — ARCHIVED parent with LIVE descendants (2.9.7) — the NEW warning
+    ═════════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      6 · 2.9.7 — deleting an item from the ARCHIVED view, when it still owns LIVE descendants
+    </div>
+    <div class="float-row">
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="del-a-t"
+        aria-describedby="del-a-d"
+      >
+        <h3 class="modal-title" id="del-a-t">Delete this work item?</h3>
+        <button class="modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+        </button>
+        <p class="mdesc" id="del-a-d">
+          This permanently deletes
+          <strong>PROD-49 “OAuth callback drops the `state` param on Safari ≤16”</strong> and
+          everything beneath it. <strong>This can't be undone.</strong>
+        </p>
+
+        <!-- THE NEW THING (2.9.7): the live-descendant warning, peach/amber, distinct -->
+        <div class="warn-live" role="note">
+          <svg viewBox="0 0 24 24"><use href="#i-triangle-alert" /></svg>
+          <span>
+            <span class="wl-head">Some of what's beneath this isn't archived.</span>
+            Deleting also permanently removes
+            <strong>5 active work items that aren't archived</strong>
+            — 4 subtasks, 1 task. They're still live on your boards and lists. (Archiving an item
+            never archives its children.)
+          </span>
+        </div>
+
+        <ul class="dep-list">
+          <li>
+            <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+            <span>
+              All <strong>comments, attachments, and activity history</strong> on these 6 items go
+              with them.
+            </span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24"><use href="#i-link" /></svg>
+            <span>
+              <strong>Links</strong> from other items (blocks, relates to, duplicates) are removed.
+            </span>
+          </li>
+        </ul>
+        <div class="modal-footer">
+          <button class="btn secondary">Cancel</button>
+          <button class="btn danger">
+            <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+            Delete 6 items
+          </button>
+        </div>
+      </div>
+
+      <div class="stack" style="max-width: 330px; padding-top: 4px">
+        <div class="cap">The one new case 2.9.7 designs</div>
+        <p style="margin: 0; font-size: 13px; color: var(--el-text-secondary); line-height: 1.6">
+          Archive is <strong>single-node</strong> — archiving this item never archived its children,
+          so they're still <strong>live</strong> on the boards. Deleting the archived parent
+          cascades to them anyway. The <strong>peach warning</strong> names the
+          <strong>live</strong> count (here all 5 descendants are live), distinct from the amber
+          descendant rows and the mint archive callout — so the surprise is impossible to miss.
+          There is <em>no</em> Archive escape hatch here: the item is already archived.
+        </p>
+      </div>
+    </div>
+    <p class="row-note">
+      The <strong>live count</strong> is the non-archived subset of the subtree (it can be fewer
+      than the total descendants when some children were archived individually).
+      <strong>Data note for 2.9.5:</strong>
+      <code>getDeletePreview</code> (<code>workItemsService.ts:1614</code>) returns total /
+      descendant / per-kind today but does NOT split archived vs live — 2.9.5 extends it with a
+      live-(non-archived)-descendant count + breakdown to drive this copy. The button count is the
+      whole subtree (<code>1 + descendants</code> = 6), unchanged.
+    </p>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 7 — ARCHIVED parent, ALL descendants archived (2.9.7) — contrast
+    ═════════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      7 · 2.9.7 — the contrast: an archived parent whose descendants are ALL archived too (no live
+      items at risk → no peach warning)
+    </div>
+    <div class="float-row">
+      <div
+        class="modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="del-aa-t"
+        aria-describedby="del-aa-d"
+      >
+        <h3 class="modal-title" id="del-aa-t">Delete this work item?</h3>
+        <button class="modal-close" aria-label="Close">
+          <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+        </button>
+        <p class="mdesc" id="del-aa-d">
+          This permanently deletes <strong>PROD-28 “SAML SSO (dropped from Q3 scope)”</strong> and
+          everything beneath it. <strong>This can't be undone.</strong>
+        </p>
+        <ul class="dep-list">
+          <li>
+            <svg viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+            <span>
+              <strong>3 descendants</strong> will also be deleted — 2 subtasks, 1 task.
+              <strong>All of them are already archived</strong> — nothing here is live on your
+              boards.
+            </span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+            <span>
+              All <strong>comments, attachments, and activity history</strong> on these 4 items go
+              with them.
+            </span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24"><use href="#i-link" /></svg>
+            <span>
+              <strong>Links</strong> from other items (blocks, relates to, duplicates) are removed.
+            </span>
+          </li>
+        </ul>
+        <div class="modal-footer">
+          <button class="btn secondary">Cancel</button>
+          <button class="btn danger">
+            <svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+            Delete 4 items
+          </button>
+        </div>
+      </div>
+
+      <div class="stack" style="max-width: 330px; padding-top: 4px">
+        <div class="cap">All-archived → no surprise</div>
+        <p style="margin: 0; font-size: 13px; color: var(--el-text-secondary); line-height: 1.6">
+          When the live-descendant count is <strong>0</strong> (every descendant is archived too),
+          the peach warning is <strong>suppressed</strong> — there are no active items to lose, so
+          the dialog is the ordinary cascade confirm, with a calm note that everything here is
+          already archived. This is the boundary that makes panel 6's warning meaningful. An
+          archived <em>leaf</em> (no descendants) reuses the leaf dialog (panel 3) unchanged.
+        </p>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
          PANEL 5 — Legend · archive vs delete
     ═════════════════════════════════════════════════════════════════════════ -->
     <div class="panel-label">5 · Archive vs Delete — the two destructive actions</div>
@@ -1405,8 +1610,10 @@
             <td>Permission</td>
             <td><code style="font-family: var(--font-mono); font-size: 12px">canEdit</code></td>
             <td>
-              <code style="font-family: var(--font-mono); font-size: 12px">canDelete</code> (Jira
-              "Delete Issues")
+              <code style="font-family: var(--font-mono); font-size: 12px">canManage</code> (Jira
+              "Delete Issues"; the shipped
+              <code style="font-family: var(--font-mono); font-size: 12px">assertCanManage</code> —
+              "canDelete" above is the conceptual label for this same gate)
             </td>
           </tr>
           <tr>
@@ -1449,6 +1656,18 @@
         >Couldn't delete this item. Nothing was changed — the item and its descendants are intact.
         Check your connection and try again.</code
       >
+      &nbsp;|&nbsp; <strong>2.9.7 live-descendant warning</strong> (archived parent with live
+      children): headline <code>Some of what's beneath this isn't archived.</code> · body
+      <code
+        >Deleting also permanently removes N active work items that aren't archived — [kind
+        breakdown]. They're still live on your boards and lists. (Archiving an item never archives
+        its children.)</code
+      >
+      &nbsp;|&nbsp; 2.9.7 all-archived row:
+      <code
+        >N descendants will also be deleted — [kind breakdown]. All of them are already archived —
+        nothing here is live on your boards.</code
+      >
     </div>
     <p class="row-note">
       Tokens: colour only via Tier-3 <code>--el-*</code>; the danger row/button use
@@ -1456,9 +1675,12 @@
       <code>--el-success</code>
       (the safe/recoverable cue), and — since Tier 0 has no red tint — the error callout uses
       <code>--el-tint-rose</code> with <code>--el-danger</code> ink (the design system's honest
-      danger surface; no new Tier-0 colour). No new primitive: the menu is <code>Popover</code>, the
-      dialog is <code>Modal</code>, the buttons are <code>Button</code>. AA-safe; every consequence
-      is stated in words, not colour alone.
+      danger surface; no new Tier-0 colour). The <strong>2.9.7</strong> live-descendant warning uses
+      <code>--el-tint-peach</code> + <code>--el-warning</code> (the warning tint — a third distinct
+      callout tone, separate from mint/safe and rose/error). No new primitive: the menu is
+      <code>Popover</code>, the dialog is <code>Modal</code>, the buttons are <code>Button</code>.
+      AA-safe; every consequence — including the live-descendant count — is stated in words, not
+      colour alone.
     </p>
   </body>
 </html>
