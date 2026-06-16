@@ -47,6 +47,32 @@ export class ProjectOverviewTooLongError extends Error {
   }
 }
 
+// The public hero TAGLINE exceeds its maximum length (Story 6.16 · Subtask
+// 6.16.3). The tagline rides the public projection, so a generous-but-bounded
+// server cap keeps a single edit from bloating the hero. Maps to 400.
+export class ProjectTaglineTooLongError extends Error {
+  readonly code = 'PROJECT_TAGLINE_TOO_LONG' as const;
+  constructor(readonly max: number) {
+    super(`The project tagline must be at most ${max} characters.`);
+    this.name = 'ProjectTaglineTooLongError';
+  }
+}
+
+// The public hero TAGS are invalid (Story 6.16 · Subtask 6.16.3) — either too
+// many tags (after trimming empties + de-duplicating) or a single tag that is
+// too long. One typed error covers both causes; the `reason` distinguishes them
+// for the surface's copy. Maps to 400.
+export class ProjectTagsInvalidError extends Error {
+  readonly code = 'PROJECT_TAGS_INVALID' as const;
+  constructor(
+    readonly reason: 'too_many' | 'tag_too_long',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ProjectTagsInvalidError';
+  }
+}
+
 // The new key is not a legal project key. STRICT (reject, don't normalize): an
 // explicit admin key change must not silently pad/truncate a malformed key the
 // way the create-time `normalizeIdentifier` does — renaming every issue to a key
