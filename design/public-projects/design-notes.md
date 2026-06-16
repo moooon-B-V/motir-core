@@ -62,20 +62,21 @@ no Pencil→code gap.
 > (badge + Edit-page button for an admin viewing a public project), and the 6.16
 > in-place editor replaces 6.12.8's settings split editor in BOTH framings.
 
-| Surface                          | Asset                          | Gates                                                                                        |
-| -------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
-| **Public Overview / README**     | `public-projects.mock.html`    | **6.12.4** (render) + **6.16.4** (authorable tagline + tags)                                 |
-| **Admin "Edit page" affordance** | `public-projects.mock.html`    | **6.16.5** (`viewerCanManage` only)                                                          |
-| **In-place edit mode**           | `public-projects.mock.html`    | **6.16.5** (tagline + tags + README via `MarkdownEditor` + sticky Save bar)                  |
-| **Public read-only view**        | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                                      |
-| **Public roadmap**               | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                                         |
-| **Submit + duplicate detect**    | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                                       |
-| **Request detail**               | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                            |
-| **Make-public + share link**     | `public-projects.mock.html`    | **6.12.8** (Access control + link) + **6.16.6** (drop editor → on-page link)                 |
-| **Public work-item DETAIL**      | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)               |
-| **Build-in-public reframe**      | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                       |
-| **Build-in-public entry pt**     | `public-projects.mock.html`    | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10 |
-| **Build-in-public badge**        | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                               |
+| Surface                          | Asset                          | Gates                                                                                                      |
+| -------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| **Public Overview / README**     | `public-projects.mock.html`    | **6.12.4** (render) + **6.16.4** (authorable tagline + tags)                                               |
+| **Admin "Edit page" affordance** | `public-projects.mock.html`    | **6.16.5** (`viewerCanManage` only)                                                                        |
+| **In-place edit mode**           | `public-projects.mock.html`    | **6.16.5** (tagline + tags + README via `MarkdownEditor` + sticky Save bar)                                |
+| **Public read-only view**        | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                                                    |
+| **Public roadmap**               | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                                                       |
+| **Submit + duplicate detect**    | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                                                     |
+| **Request detail**               | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                                          |
+| **Make-public + share link**     | `public-projects.mock.html`    | **6.12.8** (Access control + link) + **6.16.6** (drop editor → on-page link)                               |
+| **Public work-item DETAIL**      | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)                             |
+| **Build-in-public reframe**      | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                                     |
+| **Build-in-public entry pt**     | `public-projects.mock.html`    | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10               |
+| **Build-in-public badge**        | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                                             |
+| **Public-state header slot**     | `public-projects.mock.html`    | **6.17.6** (active "Building in public" indicator, linked to settings — design gate for 6.17.7) — Panel 12 |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 `6.12.1` in `dependsOn` and is `blocked` until this asset lands. The
@@ -186,11 +187,16 @@ duplicate-detection portal set.
     items crawlable; sign-in only to act; internal fields stay stripped) + a
     reassurance note (stop anytime, requests kept) + a Cancel / "Start building in
     public" footer.
-12. **(12)** **STATUS badge + STOP / manage path** (6.17.4) — the "Building in
-    public" badge shown in the authed project-shell header + settings access row
-    when access = `public`, the manage row (View public page · Stop), and the
-    reverse **"Stop building in public?"** confirm Modal (warn tone — page goes
-    offline, link stops working, requests/upvotes kept).
+12. **(12)** **STATUS badge + STOP / manage path** (6.17.4) **+ the PUBLIC-STATE
+    HEADER SLOT** (6.17.6) — the "Building in public" badge shown in the authed
+    project-shell header + settings access row when access = `public`, the manage
+    row (View public page · Stop), and the reverse **"Stop building in public?"**
+    confirm Modal (warn tone — page goes offline, link stops working,
+    requests/upvotes kept). The header slot is drawn as the **single stateful
+    slot** (6.17.6): the promoted "Build in public" CTA when not public (6.17.3),
+    and once public the SAME slot becomes a **clickable** "Building in public"
+    status indicator that links to the settings manage/stop home — never both,
+    never empty.
 
 ## Where it lives
 
@@ -581,6 +587,95 @@ shipped element.)
   `modal-note.warn` (can restart anytime) + a Cancel / "Stop building in public"
   `btn-danger` footer. Stopping reverts to the project's previous access level.
 
+### The public-state header slot (6.17.6 · Panel 12) — the active "Building in public" indicator, linked to settings
+
+**The bug this closes.** The project-shell header has a single build-in-public
+**slot** (the right cluster of `app/(authed)/_components/TopNav.tsx:82`). It
+renders the 6.17.3 `BuildInPublicButton` "Build in public" CTA **only when the
+project is NOT public** — `app/(authed)/layout.tsx:122-125` nulls
+`buildInPublicProjectKey` once `accessLevel === 'public'`. So once a project IS
+building in public the slot goes **empty**: the 6.17.3a / 6.17.4 intent (the
+SAME slot becomes the status indicator once public) was specified but **never
+shipped**. 6.17.6 designs that public state; 6.17.7 builds it.
+
+**The slot is a SINGLE stateful slot — exactly one state, never both, never
+empty:**
+
+| Project state          | Slot content                                                     | Who sees it                                                  | Action                               |
+| ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------ |
+| **not public**         | `.btn-build` **"Build in public"** CTA (6.17.3a)                 | project **admins** (`canManage && accessLevel !== 'public'`) | opens the Panel-11 confirm           |
+| **building in public** | the clickable **"Building in public"** status indicator (6.17.6) | **all** team members (`accessLevel === 'public'`)            | links to `/settings/project/members` |
+
+**(a) Reads as a live status first.** The indicator reuses the shipped
+`BuildingInPublicBadge` / `pill-building` visual language verbatim: a lavender
+`--el-build-bg` chip, AA-safe `--el-build-text` label, accent `--el-build-glyph`
+megaphone, `--radius-badge` shape — so the team instantly recognises the same
+chip they see in Settings and the public visitor chrome. Status primacy is
+deliberate: in the header the first read must be "this project is building in
+public **right now**", not "here is a button".
+
+**(b) Is a LINK to the build-in-public settings — form = badge-as-link, not a
+button.** The chip is rendered as an `<a href="/settings/project/members">`
+(the `BuildInPublicManageRow` home — View public page / Stop). Chosen over a
+`btn-build`-style button wrapping the badge because a full button reads as an
+_action_ first and would visually compete with the sibling header buttons
+(`New`, Create, etc.); a badge-link keeps the **status** reading primary while
+still being unambiguously interactive. Interactive affordances on the
+`a.pill-building`:
+
+- **trailing settings-gear glyph** (`#i-settings` / lucide `Settings`, muted
+  `--el-build-text` at ~0.55 opacity) — signals the click goes to _settings_
+  (not the public page; that's the separate `#i-external-link` "View public
+  page" affordance in the manage row).
+- **hover** — bg shifts toward the accent
+  (`color-mix(in srgb, var(--el-accent) 16%, var(--el-build-bg))`), mirroring
+  `.btn-build:hover`, with `cursor: pointer`.
+- **focus-visible** — a 2px `--focus-ring-color` outline at `2px` offset (the
+  app focus-ring token), so keyboard users get the same ring as every control.
+- **accessible name** — `aria-label="Building in public — manage"` (visible
+  text "Building in public" + the gear's intent spoken once). The gear `<svg>`
+  is `aria-hidden`.
+
+**Copy.** Visible label **"Building in public"** (unchanged from 6.17.4 — the
+same string the badge already uses). Accessible name **"Building in public —
+manage"**. No new visible string; the en/zh `settings.buildInPublic.statusBadge`
+key already supplies the label, and the "— manage" suffix is an
+`aria-label`-only addition (6.17.7 wires it, e.g. a
+`settings.buildInPublic.manageAriaLabel` or composed from the existing label).
+
+**(c) Visibility / admin-gating decision — ALL team members see the indicator
+and ALL get the link; the destructive control stays admin-only IN settings.**
+Unlike the non-public CTA (gated `canManage` server-side, because only an admin
+can turn a project public), the public-state indicator is shown to **every team
+member who can see the shell while `accessLevel === 'public'`** — no `canManage`
+read in the header — and the link routes everyone to
+`/settings/project/members`. The manage/stop page is itself role-aware: it
+already shows non-admins the badge + "View public page" **read-only** and gates
+only **Stop** behind `assertCanManage` (`ProjectMembersSettings.tsx`
+`BuildInPublicManageRow`, `canManage ? <Stop/> : null`). So a non-admin clicking
+the indicator lands on a legible read-only manage view, never a permission wall.
+
+- _Mirror justification (rung 1)._ GitHub surfaces a repo's **Public** badge to
+  every collaborator in the repo header and links visibility management from
+  Settings (where the change-visibility control is itself permission-gated);
+  Linear and Notion show a **Published / public** status indicator to the whole
+  workspace in the top bar and route any member's click to the share/visibility
+  settings, where the destructive un-publish is role-gated. None hide the
+  _status_ by role; all gate the _control_ at the destination. Motir matches:
+  status visible to the team, control gated in settings. This also keeps the
+  header gating simpler than the CTA's — a pure `accessLevel === 'public'`
+  check, no capability read.
+
+**For 6.17.7 (the code subtask this gates).** The slot logic moves from
+"render the CTA only when `buildInPublicProjectKey`" to a two-state slot:
+`layout.tsx` should additionally pass the public-state signal (e.g. the active
+project's key when `accessLevel === 'public'`, ungated by `canManage`) so
+`TopNav` renders the linked indicator; the CTA path (admin + non-public) is
+unchanged. The indicator is a plain `<a>` (no client state) so it can stay in
+the server-rendered `TopNav`. Reuse `BuildingInPublicBadge` for the visual,
+wrapping it in the link + gear (or add a small `BuildingInPublicHeaderLink`
+that composes it).
+
 ## Public work-item DETAIL page (Story 6.14 · gate 6.14.12) — `public-item-detail.mock.html`
 
 The read-only PUBLIC work-item detail page at `/p/[identifier]/items/[key]` — the
@@ -706,7 +801,12 @@ pattern, mistake #20): `--el-public-banner-bg`, `--el-public-banner-text`,
 **`--el-build-text`** (→ `--color-charcoal`, AA ~10:1 on the lavender tint), and
 **`--el-build-glyph`** (→ `--color-primary`, the megaphone accent) — the
 "Building in public" status badge + the reframed access option. Same growth rule:
-add to Tier 3, consume via `--el-*`.
+add to Tier 3, consume via `--el-*`. **Story 6.17.6 adds NO new tokens** — the
+public-state header indicator reuses the same three build tokens (`--el-build-bg`
+chip / `--el-build-text` label + trailing gear at ~0.55 opacity / `--el-build-glyph`
+megaphone), `color-mix(--el-accent 16%, --el-build-bg)` for hover (mirroring
+`.btn-build:hover`), and `--focus-ring-color` for the focus ring — all already in
+the swap layer; shape is `--radius-badge` (it IS the badge).
 
 **Story 6.16 adds NO new `--el-*` tokens** — the in-place editing surfaces reuse
 existing tokens (`--el-accent` / `--el-accent-on-surface`, `--el-tint-lavender/mint/rose`,
@@ -830,8 +930,11 @@ swap layer must reach every element).
   this project"** / **"You're submitting a little too fast. … Your draft is
   saved."** / **"Retry" / "Keep editing"**.
 - Build in public — status badge (6.17.4): **"Building in public"** (+ short form
-  **"Live"** on the access option). Promoted header button (6.17.3): **"Build in
-  public"** (compact label on the persistent project-header `.btn-build`).
+  **"Live"** on the access option). Public-state header indicator (6.17.6): same
+  visible label **"Building in public"**, accessible name **"Building in public —
+  manage"** (the slot links to `/settings/project/members`). Promoted header
+  button (6.17.3): **"Build in public"** (compact label on the persistent
+  project-header `.btn-build`).
   Entry-point promo (6.17.3):
   **"Build this project in public"** · **"Turn the project into a public
   build-in-public page."** · bullets **"Share your board, roadmap, and work items

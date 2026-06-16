@@ -2363,6 +2363,39 @@
         background: color-mix(in srgb, var(--el-accent) 18%, var(--el-page-bg));
       }
 
+      /* The PUBLIC-state header slot indicator (6.17.6) — the SAME `pill-building`
+         status chip, made into a LINK to the build-in-public settings. It reads
+         as the live "Building in public" status first (status primacy: identical
+         lavender --el-build-bg tint + AA --el-build-text + accent --el-build-glyph
+         megaphone), and gains a secondary manage affordance: a pointer cursor, a
+         hover bg-shift toward the accent (mirrors .btn-build:hover), a
+         focus-visible ring, and a trailing settings gear glyph (muted
+         --el-build-text) signalling the click goes to settings. Shown to ALL team
+         members when access = public; the destination (/settings/project/members)
+         is itself role-aware (Stop is admin-only), so the header link is never
+         role-gated — the GitHub / Linear / Notion model. This fills the slot the
+         non-public .btn-build CTA occupies: the slot shows exactly ONE of them,
+         never both, never empty. */
+      a.pill-building {
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 120ms ease;
+      }
+      a.pill-building .gear {
+        width: 12px;
+        height: 12px;
+        color: var(--el-build-text);
+        opacity: 0.55;
+        margin-left: 1px;
+      }
+      a.pill-building:hover {
+        background: color-mix(in srgb, var(--el-accent) 16%, var(--el-build-bg));
+      }
+      a.pill-building:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+
       /* The discoverable entry point (6.17.3): a Settings → General promo card,
          and a dismissible project-shell nudge. NOT a bare dropdown option. */
       .promo {
@@ -2520,6 +2553,28 @@
         border-radius: 0 0 var(--radius-card) var(--radius-card);
         padding: 16px;
         background: var(--el-page-bg);
+      }
+      /* mock-only caption that labels which STATE of the single stateful header
+         slot a row shows (6.17.6) — not a shipped element. */
+      .slot-state {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 7px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: var(--el-text-muted);
+      }
+      .slot-state .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: var(--el-build-glyph);
+        flex: none;
+      }
+      .slot-state.off .dot {
+        background: var(--el-text-faint);
       }
 
       /* the Modal explainer/confirm (mirror components/ui/Modal.tsx, size md) */
@@ -4402,34 +4457,78 @@ build Motir. Every feature here started as a work item on this board.
 
     <!-- ════════════════ PANEL 12 — "Building in public" STATUS badge + stop / manage path (6.17.4) ════════════════ -->
     <div class="panel-label">
-      (12) STATUS badge + STOP / manage path (6.17.4) — a "Building in public" badge on the project
-      (authed shell header + settings) when access = public, plus the manage row and the reverse
-      "stop" confirm.
+      (12) STATUS badge + STOP / manage path (6.17.4) + the PUBLIC-STATE HEADER SLOT (6.17.6) — the
+      project-shell header slot is a SINGLE stateful slot: a promoted "Build in public" CTA when not
+      public (6.17.3), and once public the SAME slot becomes a clickable "Building in public" status
+      indicator that links to the settings manage/stop home (6.17.6). Plus the settings access
+      manage row and the reverse "stop" confirm.
     </div>
     <div class="panel cols2 uneven">
-      <!-- the badge in context + the manage/stop entry -->
+      <!-- the SINGLE stateful header slot (6.17.6) + the settings manage/stop entry -->
       <div class="badge-ctx">
         <div class="ctx-strip">
           <svg class="ic" style="width: 13px; height: 13px"><use href="#i-route" /></svg>
-          Project shell · header (admin view, when public)
+          Project shell · header slot — ONE stateful slot (6.17.6)
         </div>
         <div
-          class="shellbar"
+          class="ctx-wrap"
           style="border-radius: 0 0 var(--radius-card) var(--radius-card); border-top: none"
         >
-          <span class="crumb">Motir <span class="sep">/</span> Board</span>
-          <span class="pill pill-building"
-            ><svg class="ic"><use href="#i-megaphone" /></svg> Building in public</span
-          >
-          <span class="spacer"></span>
-          <button class="btn btn-outline">
-            <svg class="ic"><use href="#i-external-link" /></svg> View public page
-          </button>
+          <!-- STATE A — NOT public: the promoted "Build in public" CTA (6.17.3, admins) -->
+          <div class="slot-state off">
+            <span class="dot"></span> When NOT public — the promoted CTA (6.17.3 · admins only)
+          </div>
+          <div class="shellbar">
+            <span class="crumb">Motir <span class="sep">/</span> Board</span>
+            <span class="spacer"></span>
+            <button class="btn btn-build">
+              <svg class="ic"><use href="#i-megaphone" /></svg> Build in public
+            </button>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-plus" /></svg> New
+            </button>
+          </div>
+
+          <!-- STATE B — building in public: the SAME slot becomes a clickable status
+               indicator that links to the build-in-public settings (6.17.6, all members) -->
+          <div class="slot-state" style="margin-top: 16px">
+            <span class="dot"></span> When building in public — the linked status indicator (6.17.6
+            · all members)
+          </div>
+          <div class="shellbar">
+            <span class="crumb">Motir <span class="sep">/</span> Board</span>
+            <span class="spacer"></span>
+            <a
+              class="pill pill-building"
+              href="/settings/project/members"
+              aria-label="Building in public — manage"
+            >
+              <svg class="ic"><use href="#i-megaphone" /></svg> Building in public
+              <svg class="gear" aria-hidden="true"><use href="#i-settings" /></svg>
+            </a>
+            <button class="btn btn-outline">
+              <svg class="ic"><use href="#i-plus" /></svg> New
+            </button>
+          </div>
+
+          <div class="acct-note" style="margin-top: 14px">
+            <svg class="ic"><use href="#i-megaphone" /></svg>
+            <span
+              >The header slot shows exactly <b>one</b> of these — never both, never empty. Today it
+              goes <b>empty</b> once public (the bug 6.17.6 fixes). The public-state indicator
+              reuses the <code>BuildingInPublicBadge</code> visual (lavender
+              <code>--el-build-bg</code> + AA <code>--el-build-text</code> + accent megaphone) so it
+              reads as a live status, and is a <b>link</b> to
+              <code>/settings/project/members</code> with a trailing settings gear + accessible name
+              <i>"Building in public — manage"</i>. Shown to all team members; the
+              <b>Stop</b> control lives in settings and stays admin-only.</span
+            >
+          </div>
         </div>
 
-        <div class="ctx-strip" style="margin-top: 6px">
+        <div class="ctx-strip" style="margin-top: 14px">
           <svg class="ic" style="width: 13px; height: 13px"><use href="#i-columns" /></svg>
-          Project settings · access
+          Project settings · access (the link target — manage / stop home)
         </div>
         <div
           class="manage-row"
@@ -4451,11 +4550,12 @@ build Motir. Every feature here started as a work item on this board.
           </button>
         </div>
         <div class="acct-note">
-          <svg class="ic"><use href="#i-megaphone" /></svg>
+          <svg class="ic"><use href="#i-shield" /></svg>
           <span
-            >The badge appears wherever the project is identified to its team while access is
-            <code>public</code>; it disappears the moment building-in-public is stopped. "Stop"
-            opens the confirm at right.</span
+            >Where the header indicator links to. The badge also appears wherever the project is
+            identified to its team while access is <code>public</code>, and disappears the moment
+            building-in-public is stopped. Non-admins land here read-only (badge + View, no
+            <b>Stop</b>); "Stop" opens the confirm at right.</span
           >
         </div>
       </div>
@@ -4724,6 +4824,21 @@ build Motir. Every feature here started as a work item on this board.
           <rect width="18" height="18" x="3" y="3" rx="2" />
           <path d="M9 3v18" />
           <path d="M15 3v18" />
+        </symbol>
+        <!-- settings (gear) — the manage/settings affordance on the public-state header link (6.17.6) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
         </symbol>
         <!-- list (work items) -->
         <symbol
