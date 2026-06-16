@@ -340,7 +340,7 @@ export async function seedCollabFixture(): Promise<CollabSeedManifest> {
         tx,
       );
     }
-    await projectRepository.setAccessLevel(project.id, 'open', tx);
+    await projectRepository.setAccessLevel(project.id, 'open', { stampMadePublicAt: false }, tx);
   });
   // Land every member on this project at sign-in (the seed-large convenience).
   await db.workspaceMembership.updateMany({

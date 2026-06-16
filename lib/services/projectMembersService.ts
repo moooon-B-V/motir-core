@@ -279,7 +279,16 @@ export const projectMembersService = {
         );
       }
 
-      const updated = await projectRepository.setAccessLevel(project.id, level, tx);
+      // Stamp `madePublicAt` only on the transition INTO `public` (Subtask
+      // 6.13.4 — the project square's Recent rank's "newest" axis). A re-save of
+      // an already-public project keeps its original go-public moment.
+      const stampMadePublicAt = level === 'public' && project.accessLevel !== 'public';
+      const updated = await projectRepository.setAccessLevel(
+        project.id,
+        level,
+        { stampMadePublicAt },
+        tx,
+      );
       return toProjectAccessDTO(updated);
     });
   },

@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { db } from '@/lib/db';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import type { ProjectSquareRank } from '@/lib/projectSquare/rank';
 
 /**
  * One row of the PROJECT SQUARE directory read (Story 6.13 · Subtask 6.13.2) —
@@ -31,6 +32,56 @@ export interface ProjectDirectoryRow {
 export interface ProjectDirectoryCursor {
   createdAt: Date;
   id: string;
+}
+
+/**
+ * One row of a RANKED project-square page (Story 6.13 · Subtask 6.13.4) — the
+ * same card projection as {@link ProjectDirectoryRow} PLUS the row's computed
+ * rank sort key, which the service turns into the next page's keyset cursor.
+ * Exactly one of `sortScore` (the `trending` / `popular` integer key) and
+ * `sortTs` (the `recent` timestamp key) is non-null, per the requested rank.
+ */
+export interface ProjectDirectoryRankedRow extends ProjectDirectoryRow {
+  sortScore: number | null;
+  sortTs: Date | null;
+}
+
+/**
+ * A ranked keyset position the directory read seeks strictly past (Subtask
+ * 6.13.4): a numeric `score` for the `trending` / `popular` ranks, or a `ts`
+ * timestamp for the `recent` rank — each paired with the last row's `id` (the
+ * stable tiebreak that makes every rank a deterministic TOTAL order).
+ */
+export type ProjectDirectoryRankCursor = { score: number; id: string } | { ts: Date; id: string };
+
+/**
+ * Trending-score weights (Subtask 6.13.4): a recent UPVOTE counts more than a
+ * recent work-item ACTIVITY event, so demand (someone asked for it) outranks
+ * mere churn. The exact weights only shift relative ordering — every rank stays
+ * a deterministic total order via the `id` tiebreak regardless — so they are a
+ * tunable product knob, not a correctness lever.
+ */
+const TRENDING_VOTE_WEIGHT = 3;
+const TRENDING_ACTIVITY_WEIGHT = 1;
+
+/** Map a ranked raw SQL row's card columns → the shared {@link ProjectDirectoryRow} shape. */
+function toRankedCardRow(r: {
+  id: string;
+  identifier: string;
+  name: string;
+  publicOverviewMd: string | null;
+  createdAt: Date;
+  orgName: string;
+  orgSlug: string;
+}): ProjectDirectoryRow {
+  return {
+    id: r.id,
+    identifier: r.identifier,
+    name: r.name,
+    publicOverviewMd: r.publicOverviewMd,
+    createdAt: r.createdAt,
+    org: { name: r.orgName, slug: r.orgSlug },
+  };
 }
 
 // Project repository — single Prisma operations on the `project` table.
@@ -202,6 +253,144 @@ export const projectRepository = {
   },
 
   /**
+   * A RANKED page of the PROJECT SQUARE (Story 6.13 · Subtask 6.13.4) — the same
+   * cross-org `public`, non-archived projects {@link listPublicDirectory}
+   * returns, but ordered by one of the three demand ranks instead of creation
+   * order, and keyset-paginated over THAT rank's sort key (finding #57 — a
+   * system-level list is never load-all). Each rank is a DETERMINISTIC TOTAL
+   * order — the rank key with a stable `id DESC` tiebreak — so the keyset cursor
+   * skips/duplicates no row across pages even on tied keys:
+   *
+   *   • `popular`  — LIFETIME total upvotes across the project's public requests
+   *     (the "most-starred" axis; 6.12.6 shipped no viewer count, so upvotes are
+   *     the real lifetime signal — the documented `ProjectSquareStatsDto` gap).
+   *   • `trending` — RECENT demand inside `cutoff..now`: windowed upvotes
+   *     (weighted {@link TRENDING_VOTE_WEIGHT}) + windowed work-item activity
+   *     (weighted {@link TRENDING_ACTIVITY_WEIGHT}), so a freshly-surging project
+   *     outranks a higher-lifetime-but-stale one. `cutoff` is a bound JS Date the
+   *     SERVICE computes (`now - windowMs`) — NEVER SQL `NOW()` (a timestamp /
+   *     timestamptz session-TZ skew, flaky in CI; the `aggregateCreatedByBucket`
+   *     rule). REQUIRED for this rank.
+   *   • `recent`   — newly-made-public: `COALESCE(madePublicAt, createdAt)` DESC,
+   *     so a project sorts by when it became public, falling back to its creation
+   *     moment when it predates the `made_public_at` column (every row therefore
+   *     has a non-null key — no NULL-ordering ambiguity).
+   *
+   * The score subqueries are CORRELATED per project — computed at read time over
+   * the live 6.12.6 vote/activity rows, NOT a denormalized rank column this story
+   * must keep fresh. If this proves too costly at scale, the durable shape is a
+   * bounded MATERIALIZED read (still deterministic + cursored), not a
+   * load-all-then-sort-in-memory shortcut. Scalar subqueries (not joins) keep the
+   * per-project aggregates from fanning out the row set. Read-only cross-org path
+   * → `db` singleton + the in-SQL `accessLevel = 'public'` filter (the
+   * RLS-secondary posture the other anonymous public reads use; finding #26).
+   */
+  async listPublicDirectoryRanked(options: {
+    rank: ProjectSquareRank;
+    take: number;
+    cursor?: ProjectDirectoryRankCursor;
+    /** Required for `trending` — the recency-window cutoff (a bound JS Date). */
+    cutoff?: Date;
+  }): Promise<ProjectDirectoryRankedRow[]> {
+    const { rank, take, cursor, cutoff } = options;
+
+    // The shared card projection + the cross-org join + the single public filter
+    // (the `accessLevel = 'public'` predicate lives HERE so no non-public project
+    // leaks through any rank). `public_overview_md` is `@map`-ed; the rest of the
+    // project/org columns are camelCase, so they are quoted as-is.
+    const cardCols = Prisma.sql`
+      p."id" AS "id",
+      p."identifier" AS "identifier",
+      p."name" AS "name",
+      p."public_overview_md" AS "publicOverviewMd",
+      p."createdAt" AS "createdAt",
+      o."name" AS "orgName",
+      o."slug" AS "orgSlug"`;
+    const fromPublic = Prisma.sql`
+      FROM "project" p
+      JOIN "workspace" w ON w."id" = p."workspaceId"
+      JOIN "organization" o ON o."id" = w."organizationId"
+      WHERE p."accessLevel" = 'public'::"project_access_level" AND p."archivedAt" IS NULL`;
+
+    if (rank === 'recent') {
+      // Timestamp rank: COALESCE(madePublicAt, createdAt) DESC, id DESC.
+      const tsCursor = cursor && 'ts' in cursor ? cursor : undefined;
+      const keyset = tsCursor
+        ? Prisma.sql`WHERE ("sortTs" < ${tsCursor.ts} OR ("sortTs" = ${tsCursor.ts} AND "id" < ${tsCursor.id}))`
+        : Prisma.empty;
+      const rows = await db.$queryRaw<
+        Array<{
+          id: string;
+          identifier: string;
+          name: string;
+          publicOverviewMd: string | null;
+          createdAt: Date;
+          orgName: string;
+          orgSlug: string;
+          sortTs: Date;
+        }>
+      >(Prisma.sql`
+        WITH ranked AS (
+          SELECT ${cardCols}, COALESCE(p."made_public_at", p."createdAt") AS "sortTs"
+          ${fromPublic}
+        )
+        SELECT * FROM ranked
+        ${keyset}
+        ORDER BY "sortTs" DESC, "id" DESC
+        LIMIT ${take}`);
+      return rows.map((r) => ({ ...toRankedCardRow(r), sortScore: null, sortTs: r.sortTs }));
+    }
+
+    // Numeric ranks (`popular` / `trending`): score DESC, id DESC.
+    const scoreExpr =
+      rank === 'popular'
+        ? Prisma.sql`(
+            SELECT COUNT(*) FROM "public_request_vote" v
+              JOIN "work_item" wi ON wi."id" = v."work_item_id"
+             WHERE wi."projectId" = p."id"
+          )::int`
+        : // `trending` — windowed upvotes + windowed activity, weighted. The
+          // `cutoff` Date is bound, never SQL NOW() (the timestamp-TZ-skew rule).
+          Prisma.sql`(
+              (SELECT COUNT(*) FROM "public_request_vote" v
+                 JOIN "work_item" wi ON wi."id" = v."work_item_id"
+                WHERE wi."projectId" = p."id" AND v."created_at" >= ${cutoff})::int * ${TRENDING_VOTE_WEIGHT}
+            + (SELECT COUNT(*) FROM "work_item" wa
+                WHERE wa."projectId" = p."id" AND wa."archivedAt" IS NULL
+                  AND wa."triagedAt" IS NULL AND wa."updatedAt" >= ${cutoff})::int * ${TRENDING_ACTIVITY_WEIGHT}
+          )::int`;
+    const scoreCursor = cursor && 'score' in cursor ? cursor : undefined;
+    const keyset = scoreCursor
+      ? Prisma.sql`WHERE ("sortScore" < ${scoreCursor.score} OR ("sortScore" = ${scoreCursor.score} AND "id" < ${scoreCursor.id}))`
+      : Prisma.empty;
+    const rows = await db.$queryRaw<
+      Array<{
+        id: string;
+        identifier: string;
+        name: string;
+        publicOverviewMd: string | null;
+        createdAt: Date;
+        orgName: string;
+        orgSlug: string;
+        sortScore: number;
+      }>
+    >(Prisma.sql`
+      WITH ranked AS (
+        SELECT ${cardCols}, ${scoreExpr} AS "sortScore"
+        ${fromPublic}
+      )
+      SELECT * FROM ranked
+      ${keyset}
+      ORDER BY "sortScore" DESC, "id" DESC
+      LIMIT ${take}`);
+    return rows.map((r) => ({
+      ...toRankedCardRow(r),
+      sortScore: Number(r.sortScore),
+      sortTs: null,
+    }));
+  },
+
+  /**
    * Set the project's PUBLIC-facing fields (Story 6.12) — the authored
    * `publicOverviewMd` README body, the only public-safe content field
    * 6.12.3 added. Used by the 6.12.8 settings editor and by `db:seed` (to seed
@@ -275,13 +464,28 @@ export const projectRepository = {
     return tx.project.update({ where: { id }, data: { workflowPolicyMode: mode } });
   },
 
-  /** Set the project's browse-access level (Story 6.4 · Subtask 6.4.4). */
+  /**
+   * Set the project's browse-access level (Story 6.4 · Subtask 6.4.4). When
+   * `stampMadePublicAt` is set (the service passes it on a transition INTO
+   * `public`, Subtask 6.13.4), also stamp `madePublicAt = now()` — the "newest"
+   * axis the project square's Recent rank orders by. The service stamps only on
+   * the not-public → public edge, so a re-save of an already-public project
+   * keeps its original go-public moment; a re-publish after going private gets a
+   * fresh stamp.
+   */
   async setAccessLevel(
     id: string,
     accessLevel: ProjectAccessLevel,
+    options: { stampMadePublicAt: boolean },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
-    return tx.project.update({ where: { id }, data: { accessLevel } });
+    return tx.project.update({
+      where: { id },
+      data: {
+        accessLevel,
+        ...(options.stampMadePublicAt ? { madePublicAt: new Date() } : {}),
+      },
+    });
   },
 
   /**
