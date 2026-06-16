@@ -521,7 +521,6 @@
     "colStatus": "状态",
     "backToWorkItems": "工作项",
     "archivedEntry": "已归档",
-    "archivedEntryAria": "已归档的工作项",
     "archivedHeading": "已归档的工作项",
     "archivedSubtitle": "已从看板、列表和搜索中隐藏，但其历史会被保留。恢复即可重新启用。",
     "archivedColArchivedBy": "归档人",

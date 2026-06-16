@@ -84,10 +84,13 @@ export async function IssueListToolbar({
     <div className="flex items-center gap-2">
       {/* The [Archived] navigator entry-point (Story 2.9 · Subtask 2.9.3) — a
           quiet ghost link before [Filter] that opens /issues/archived, with a
-          count badge so the user knows there's something there. */}
+          count badge so the user knows there's something there. Its accessible
+          name is the visible "Archived" text (+ count) — deliberately NOT an
+          "Archived work items" aria-label, which would be a SUPERSTRING of the
+          sidebar "Work Items" nav link and break every getByRole({name:'Work
+          Items'}) locator under strict mode (the superstring-label gotcha). */}
       <Link
         href="/issues/archived"
-        aria-label={t('archivedEntryAria')}
         className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border border-transparent px-3 font-sans text-sm text-(--el-text-secondary) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <Archive className="h-4 w-4 text-(--el-text-muted)" aria-hidden />

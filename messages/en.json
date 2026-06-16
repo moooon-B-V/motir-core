@@ -521,7 +521,6 @@
     "colStatus": "Status",
     "backToWorkItems": "Work items",
     "archivedEntry": "Archived",
-    "archivedEntryAria": "Archived work items",
     "archivedHeading": "Archived work items",
     "archivedSubtitle": "Hidden from boards, lists, and search — their history is kept. Restore to bring one back.",
     "archivedColArchivedBy": "Archived by",
