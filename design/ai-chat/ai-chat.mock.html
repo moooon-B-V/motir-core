@@ -1,0 +1,1518 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · AI chat front door + discovery Q&amp;A + direction docs (Story 7.2 · 7.2.1,
+      gating 7.2.7 + 7.2.8)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the `ai-chat` surface — the AI PLANNING
+      FRONT DOOR (Story 7.2). No `design/ai-chat/` asset existed; the 7.2.1
+      design gate produces this. It is the layout source of truth for the UI
+      code subtasks 7.2.7 (the streaming chat UI) and 7.2.8 (the direction-docs
+      render + light-edit view), which both carry 7.2.1 in `dependsOn`. This is
+      the FIRST human-facing AI surface in Epic 7, so it sets the visual grammar
+      the rest of the planning flow (7.3 review, 7.4 diff, 7.6 dispatch) reuses.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + the shape tokens + Tier-3 --el-*),
+      and the markup composes the SHIPPED primitives — Card, Button, Textarea,
+      Popover, the Markdown render/edit (MarkdownView + MarkdownEditor), Segmented
+      (the 3-doc tabs), Pill (pin / delegate chips), Spinner (streaming + job),
+      EmptyState / ErrorState, Toast, and the initial-letter Avatar. The chat
+      MESSAGE BUBBLE is a NEW ARRANGEMENT of these primitives (a tinted Card
+      surface + Avatar + MarkdownView) — no new design-system vocabulary, exactly
+      as 7.0.1 made the /ready dispatch card a new arrangement. design-notes.md
+      records this decision (and why it is NOT a separate design subtask).
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) chat front door (empty / first run) — heading + explainer + the
+            prompt Textarea + the "What happens next?" popover (OPEN).
+        (2) discovery interview (mid-conversation, streaming) — alternating
+            user/assistant bubbles, a streaming/typing affordance, and the
+            PIN-vs-DELEGATE decision (one pinned answer + one delegated).
+        (3) the three direction docs (vision / discovery / feasibility) as
+            editable Markdown — Discovery active, its PINNED-vs-DELEGATED split
+            visible, the "Generate the plan" CTA (drawn; wired in 7.3).
+        (4) in-progress + error + resume states — the running job, the
+            discovery-failed ErrorState (retry), the "docs already exist" resume.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ───────────────────────── component CSS (this surface) ─────────────────────────
+         Composes the shipped primitives' grammar (tokens only — no Tier-0 utilities,
+         no raw rounded-*/
+      p-* ). Class names map 1:1 to the primitive each block draws. */
+
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic-sm {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .ic-lg {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+
+      /* ── the app surface frame each panel sits in (the page shell, 1.5.1) ── */
+      .surface {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .surface-pad {
+        padding: 28px clamp(20px, 4vw, 56px);
+      }
+
+      /* ── Card primitive (components/ui/Card.tsx) ── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+
+      /* ── Button primitive (components/ui/Button.tsx) ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+
+      /* ── Textarea primitive (components/ui/Textarea.tsx) ── */
+      .prompt {
+        width: 100%;
+        box-sizing: border-box;
+        resize: vertical;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      .prompt::placeholder {
+        color: var(--el-text-muted);
+      }
+      .prompt-focus {
+        border-color: var(--el-accent-on-surface);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+
+      /* ── Pill primitive (components/ui/Pill.tsx) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-pinned {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-delegated {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+
+      /* ── chat transcript (a NEW ARRANGEMENT — see design-notes) ── */
+      .chat {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .msg {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .msg-user {
+        flex-direction: row-reverse;
+      }
+      /* Avatar primitive (issueCellPrimitives) — initial-letter disc */
+      .avatar {
+        width: 28px;
+        height: 28px;
+        flex: none;
+        border-radius: var(--radius-pill);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .avatar-user {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .avatar-ai {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* the message bubble = a tinted Card surface (Card primitive + tokens) */
+      .bubble {
+        max-width: 78%;
+        border-radius: var(--radius-card);
+        padding: 12px 15px;
+        font-size: 14px;
+        line-height: 1.6;
+        border: 1px solid var(--el-border);
+      }
+      .bubble-ai {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        border-top-left-radius: var(--radius-sm);
+      }
+      .bubble-user {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        border-color: transparent;
+        border-top-right-radius: var(--radius-sm);
+      }
+      .bubble p {
+        margin: 0;
+      }
+      .bubble p + p {
+        margin-top: 8px;
+      }
+      .who {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        margin-bottom: 5px;
+        letter-spacing: 0.01em;
+      }
+      .msg-user .who {
+        text-align: right;
+      }
+
+      /* streaming / typing affordance (Spinner primitive + animated caret) */
+      .typing {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        padding-top: 2px;
+      }
+      .typing span {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--el-text-muted);
+        animation: blink 1.2s infinite ease-in-out both;
+      }
+      .typing span:nth-child(2) {
+        animation-delay: 0.18s;
+      }
+      .typing span:nth-child(3) {
+        animation-delay: 0.36s;
+      }
+      @keyframes blink {
+        0%,
+        80%,
+        100% {
+          opacity: 0.25;
+        }
+        40% {
+          opacity: 1;
+        }
+      }
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.05em;
+        vertical-align: text-bottom;
+        margin-left: 1px;
+        background: var(--el-accent-on-surface);
+        animation: caret 1s steps(1) infinite;
+      }
+      @keyframes caret {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      /* the PIN-vs-DELEGATE decision block (under a decision question) */
+      .decision {
+        margin-top: 12px;
+        border-top: 1px dashed var(--el-border-strong);
+        padding-top: 11px;
+      }
+      .decision-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-bottom: 9px;
+      }
+      .opts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        padding: 7px 13px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt:hover {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface);
+      }
+      .opt-delegate {
+        border-style: dashed;
+        color: var(--el-text-secondary);
+      }
+      .opt-delegate .ic {
+        color: var(--el-accent-on-surface);
+      }
+      .answered {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .answered b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* the composer at the foot of the chat (Textarea + send icon-btn) */
+      .composer {
+        position: relative;
+        max-width: 760px;
+        margin: 18px auto 0;
+      }
+      .composer .send {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        width: var(--height-btn-sm);
+        height: var(--height-btn-sm);
+        padding: 0;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      /* ── front door (panel 1) ── */
+      .door {
+        max-width: 620px;
+        margin: 0 auto;
+        text-align: center;
+      }
+      .door .mark {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .door h2 {
+        font-family: var(--font-serif);
+        font-size: 27px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .door .proj {
+        color: var(--el-accent-on-surface);
+      }
+      .door .lede {
+        margin: 11px auto 22px;
+        max-width: 460px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .door-input {
+        text-align: left;
+        position: relative;
+      }
+      .door .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 12px;
+      }
+
+      /* Popover primitive (components/ui/Popover.tsx) */
+      .popover {
+        position: relative;
+        width: 340px;
+        margin: 14px auto 0;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 16px 17px;
+        text-align: left;
+      }
+      .popover::before {
+        content: '';
+        position: absolute;
+        top: -7px;
+        left: 50%;
+        transform: translateX(-50%) rotate(45deg);
+        width: 12px;
+        height: 12px;
+        background: var(--el-page-bg);
+        border-left: 1px solid var(--el-border);
+        border-top: 1px solid var(--el-border);
+      }
+      .popover h4 {
+        margin: 0 0 9px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .pop-step {
+        display: flex;
+        gap: 10px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .pop-step + .pop-step {
+        margin-top: 11px;
+      }
+      .pop-num {
+        flex: none;
+        width: 19px;
+        height: 19px;
+        border-radius: var(--radius-pill);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .pop-step b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* ── direction docs (panel 3) ── */
+      .docs-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      .docs-head h3 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .docs-head p {
+        margin: 3px 0 0;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      /* Segmented primitive (components/ui/Segmented.tsx) */
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        font-weight: 500;
+        padding: 6px 13px;
+        border-radius: var(--radius-sm);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .seg-active {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+        border-color: var(--el-border);
+      }
+      .doc {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .doc-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .doc-bar .name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .doc-bar .name .ic {
+        color: var(--el-accent-on-surface);
+      }
+      /* MarkdownView / MarkdownEditor primitive (prose body) */
+      .prose {
+        padding: 20px 24px 24px;
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .prose h1 {
+        font-family: var(--font-serif);
+        font-size: 21px;
+        font-weight: 600;
+        margin: 0 0 10px;
+      }
+      .prose h2 {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-muted);
+        margin: 22px 0 10px;
+      }
+      .prose p {
+        margin: 0 0 11px;
+        color: var(--el-text-secondary);
+      }
+      .prose strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      /* the editable-field affordance — hover reveals the inline edit pencil */
+      .editable {
+        position: relative;
+        border-radius: var(--radius-control);
+        padding: 6px 8px;
+        margin: -6px -8px 5px;
+        border: 1px solid transparent;
+      }
+      .editable:hover {
+        background: var(--el-surface-soft);
+        border-color: var(--el-border);
+      }
+      .editable .edit {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        color: var(--el-text-muted);
+        opacity: 0;
+      }
+      .editable:hover .edit {
+        opacity: 1;
+      }
+      /* the PINNED / DELEGATED split inside the discovery doc */
+      .decisions {
+        display: grid;
+        gap: 9px;
+        margin: 4px 0 6px;
+      }
+      .dec-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        padding: 11px 13px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .dec-row .body {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .dec-row .body b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .doc-cta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--el-border);
+      }
+      .doc-cta .note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        max-width: 460px;
+      }
+
+      /* ── state cards (panel 4) ── */
+      .states {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .state {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+        padding: 26px 22px;
+        text-align: center;
+      }
+      .state .glyph {
+        width: 46px;
+        height: 46px;
+        margin: 0 auto 14px;
+        border-radius: var(--radius-card);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .glyph-run {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .glyph-err {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .glyph-resume {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
+      .state h4 {
+        margin: 0 0 7px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .state p {
+        margin: 0 0 16px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* Spinner primitive — the running-job progress ring */
+      .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid currentColor;
+        border-top-color: transparent;
+        border-radius: var(--radius-pill);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .runbar {
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--el-muted);
+        overflow: hidden;
+        margin: 4px 0 14px;
+      }
+      .runbar i {
+        display: block;
+        height: 100%;
+        width: 62%;
+        border-radius: var(--radius-pill);
+        background: var(--el-accent);
+      }
+      .state .steps {
+        text-align: left;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 0 0 6px;
+        display: grid;
+        gap: 6px;
+      }
+      .state .steps div {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .state .steps .done {
+        color: var(--el-success);
+      }
+      .state .steps .now {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      .center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .gap6 {
+        gap: 6px;
+      }
+      .stack {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>AI chat front door — discovery &amp; direction docs</h1>
+        <p>
+          Story 7.2 · design for 7.2.1, gating 7.2.7 (chat UI) + 7.2.8 (docs view). Built from the
+          real design-system tokens / primitives. Multi-panel — review each.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) — paths copied 1:1 from lucide-react -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </g>
+        <g
+          id="i-help"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-send"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"
+          />
+          <path d="M6 12h16" />
+        </g>
+        <g
+          id="i-pin"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 17v5" />
+          <path
+            d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+          />
+        </g>
+        <g
+          id="i-wand"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"
+          />
+          <path d="m14 7 3 3" />
+          <path d="M5 6v4" />
+          <path d="M19 14v4" />
+          <path d="M10 2v2" />
+          <path d="M7 8H3" />
+          <path d="M21 16h-4" />
+          <path d="M11 3H9" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13 21h8" />
+          <path d="m15 5 4 4" />
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+        </g>
+        <g
+          id="i-file"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-check-circle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-rotate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-history"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l4 2" />
+        </g>
+        <g
+          id="i-dots"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M16 10a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 14.286V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+          />
+          <path
+            d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 1 — chat front door (first run / empty) ════════════════ -->
+    <div class="panel-label">Panel 1 — chat front door · first run / empty</div>
+    <div class="panel">
+      <div class="surface surface-pad">
+        <div class="door">
+          <div class="mark">
+            <svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+          </div>
+          <h2>Let’s plan <span class="proj">Motir</span></h2>
+          <p class="lede">
+            Describe what you want to build. Motir will ask a few questions, then draft three
+            direction docs — vision, discovery, and feasibility — to plan from.
+          </p>
+          <div class="door-input">
+            <textarea
+              class="prompt prompt-focus"
+              rows="4"
+              placeholder="e.g. A work tracker for small startup teams — issues, boards, sprints, and AI that turns a chat into a plan…"
+            ></textarea>
+            <div class="row">
+              <button class="btn btn-ghost btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-help" /></svg> What happens
+                next?
+              </button>
+              <button class="btn btn-primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Start discovery
+              </button>
+            </div>
+          </div>
+
+          <!-- Popover primitive, shown OPEN (anchored under the "What happens next?" button) -->
+          <div class="popover" role="dialog" aria-label="What happens next?">
+            <h4>
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-help" /></svg> What happens next?
+            </h4>
+            <div class="pop-step">
+              <span class="pop-num">1</span>
+              <div><b>You describe it.</b> Tell Motir what you’re building, in your words.</div>
+            </div>
+            <div class="pop-step">
+              <span class="pop-num">2</span>
+              <div>
+                <b>Motir interviews you.</b> A short “do you care?” Q&amp;A. Answer to <b>pin</b> a
+                decision, or let Motir <b>decide</b> the ones you don’t.
+              </div>
+            </div>
+            <div class="pop-step">
+              <span class="pop-num">3</span>
+              <div>
+                <b>It drafts three docs.</b> Vision, discovery, and feasibility — yours to review
+                and lightly edit.
+              </div>
+            </div>
+            <div class="pop-step">
+              <span class="pop-num">4</span>
+              <div>
+                <b>You generate the plan.</b> The docs become an issue tree you can dispatch.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — discovery interview (streaming) ════════════════ -->
+    <div class="panel-label">Panel 2 — discovery interview · mid-conversation, streaming</div>
+    <div class="panel">
+      <div class="surface surface-pad">
+        <div class="chat">
+          <!-- 1 · assistant framing -->
+          <div class="msg">
+            <span class="avatar avatar-ai">M</span>
+            <div style="max-width: 78%">
+              <div class="who">Motir</div>
+              <div class="bubble bubble-ai">
+                <p>
+                  Got it — a work tracker for small teams: issues, boards, sprints. I’ll ask a few
+                  things only where it changes the plan. The rest I’ll decide for you.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2 · user reply -->
+          <div class="msg msg-user">
+            <span class="avatar avatar-user">Y</span>
+            <div style="max-width: 78%">
+              <div class="who">You</div>
+              <div class="bubble bubble-user"><p>We’re six people. Keep it lean.</p></div>
+            </div>
+          </div>
+
+          <!-- 3 · assistant decision question (gets PINNED below) -->
+          <div class="msg">
+            <span class="avatar avatar-ai">M</span>
+            <div style="max-width: 78%">
+              <div class="who">Motir</div>
+              <div class="bubble bubble-ai">
+                <p>Which deploy target should I assume for the build plan?</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 · user PINS an answer -->
+          <div class="msg msg-user">
+            <span class="avatar avatar-user">Y</span>
+            <div style="max-width: 78%">
+              <div class="who">You</div>
+              <div class="bubble bubble-user">
+                <p style="display: flex; align-items: center; gap: 8px">
+                  <span class="pill pill-pinned"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned</span
+                  >
+                  Vercel.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5 · assistant decision question (gets DELEGATED below) -->
+          <div class="msg">
+            <span class="avatar avatar-ai">M</span>
+            <div style="max-width: 78%">
+              <div class="who">Motir</div>
+              <div class="bubble bubble-ai">
+                <p>And the deploy region — any preference, or should I pick a sensible default?</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6 · user DELEGATES -->
+          <div class="msg msg-user">
+            <span class="avatar avatar-user">Y</span>
+            <div style="max-width: 78%">
+              <div class="who">You</div>
+              <div class="bubble bubble-user">
+                <p style="display: flex; align-items: center; gap: 8px">
+                  <span class="pill pill-delegated"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                    decide</span
+                  >
+                  No preference.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 7 · assistant streaming a new decision question + the LIVE pin/delegate affordance -->
+          <div class="msg">
+            <span class="avatar avatar-ai">M</span>
+            <div style="max-width: 78%">
+              <div class="who">Motir</div>
+              <div class="bubble bubble-ai">
+                <p>
+                  One more. Do you want single sign-on (SSO) on day one, or is an email magic-link
+                  enough to start<span class="caret"></span>
+                </p>
+                <div class="decision">
+                  <div class="decision-hint">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Answer to pin
+                    it — or let Motir decide.
+                  </div>
+                  <div class="opts">
+                    <button class="opt">Email magic-link</button>
+                    <button class="opt">SSO on day one</button>
+                    <button class="opt opt-delegate">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You decide
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="typing" aria-label="Motir is typing">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- composer (Textarea + send icon-button) -->
+        <div class="composer">
+          <textarea
+            class="prompt"
+            rows="2"
+            placeholder="Type a reply, or pick an option above…"
+          ></textarea>
+          <button class="send" aria-label="Send">
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-send" /></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — the three direction docs (review / light-edit) ════════════════ -->
+    <div class="panel-label">
+      Panel 3 — direction docs · vision / discovery / feasibility (Discovery active)
+    </div>
+    <div class="panel">
+      <div class="surface surface-pad">
+        <div class="docs-head">
+          <div>
+            <h3>Direction docs</h3>
+            <p>Review and lightly edit before generating the plan.</p>
+          </div>
+          <!-- Segmented primitive — the three-doc tabs -->
+          <div class="segmented" role="tablist" aria-label="Direction docs">
+            <span class="seg" role="tab"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Vision</span
+            >
+            <span class="seg seg-active" role="tab" aria-selected="true"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Discovery</span
+            >
+            <span class="seg" role="tab"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Feasibility</span
+            >
+          </div>
+        </div>
+
+        <div class="doc">
+          <div class="doc-bar">
+            <span class="name"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg>
+              discovery.md</span
+            >
+            <span style="display: flex; align-items: center; gap: 10px">
+              <span style="font-size: 11px; color: var(--el-text-muted)"
+                >Edited just now · draft</span
+              >
+              <button class="icon-btn" aria-label="Edit document">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              </button>
+            </span>
+          </div>
+          <div class="prose">
+            <h1>Discovery</h1>
+            <div class="editable">
+              <svg class="ic-sm edit" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              <p>
+                Motir is a work tracker for <strong>small startup teams</strong> (≈6 people). The
+                build stays lean: issues, boards, and sprints first; AI planning layered on once the
+                core is usable. Click any block to edit.
+              </p>
+            </div>
+
+            <h2>Decisions</h2>
+            <div class="decisions">
+              <div class="dec-row">
+                <span class="pill pill-pinned"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned</span
+                >
+                <div class="body"><b>Deploy target:</b> Vercel — you chose this.</div>
+              </div>
+              <div class="dec-row">
+                <span class="pill pill-pinned"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned</span
+                >
+                <div class="body"><b>Team size:</b> 6 people — scope stays lean.</div>
+              </div>
+              <div class="dec-row">
+                <span class="pill pill-delegated"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg>
+                  Delegated</span
+                >
+                <div class="body">
+                  <b>Deploy region:</b> Motir will choose a sensible default (eu-west).
+                </div>
+              </div>
+              <div class="dec-row">
+                <span class="pill pill-delegated"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg>
+                  Delegated</span
+                >
+                <div class="body">
+                  <b>Auth:</b> Motir will choose — email magic-link first, SSO later.
+                </div>
+              </div>
+            </div>
+
+            <h2>Out of scope (for now)</h2>
+            <div class="editable">
+              <svg class="ic-sm edit" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              <p>Time tracking, billing, and a public roadmap — revisit after the core ships.</p>
+            </div>
+
+            <div class="doc-cta">
+              <div class="note">
+                Edits here update the docs. The plan is generated from all three in the next step.
+              </div>
+              <!-- the 7.3 hand-off CTA — DRAWN here, WIRED in 7.3 -->
+              <button class="btn btn-primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Looks right —
+                generate the plan
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — in-progress + error + resume states ════════════════ -->
+    <div class="panel-label">Panel 4 — running · error · resume</div>
+    <div class="panel">
+      <div class="states">
+        <!-- (4a) running job — tied to the 7.1.4 job stream -->
+        <div class="state">
+          <div class="glyph glyph-run"><div class="spinner"></div></div>
+          <h4>Drafting your direction docs</h4>
+          <div class="runbar"><i></i></div>
+          <div class="steps">
+            <div class="done">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Vision drafted
+            </div>
+            <div class="now">
+              <div class="spinner" style="width: 13px; height: 13px"></div>
+              Discovery — writing…
+            </div>
+            <div>
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Feasibility queued
+            </div>
+          </div>
+          <p style="margin-top: 10px; font-size: 12px; color: var(--el-text-muted)">
+            Streams live from the planning job (7.1.4). You can leave — it keeps running.
+          </p>
+        </div>
+
+        <!-- (4b) discovery failed — ErrorState primitive + retry -->
+        <div class="state">
+          <div class="glyph glyph-err">
+            <svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+          </div>
+          <h4>Discovery couldn’t finish</h4>
+          <p>
+            The planning job stopped before the docs were ready. Your answers are saved — retry to
+            pick up where it left off.
+          </p>
+          <button class="btn btn-secondary">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Try again
+          </button>
+        </div>
+
+        <!-- (4c) docs already exist — resume -->
+        <div class="state">
+          <div class="glyph glyph-resume">
+            <svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-history" /></svg>
+          </div>
+          <h4>Docs already exist</h4>
+          <p>
+            You drafted direction docs for <strong>Motir</strong> on Jun 14. Pick up where you left
+            off, or start a new discovery.
+          </p>
+          <div class="stack">
+            <button class="btn btn-secondary">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-file" /></svg> Resume editing
+            </button>
+            <button class="btn btn-ghost">Start over</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
