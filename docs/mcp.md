@@ -87,14 +87,14 @@ delete scope still cannot delete in a workspace its owner can't reach.
 
 The scopes and the tools each one gates:
 
-| Scope                | Gates                                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`                                           |
-| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent` |
-| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                 |
-| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                   |
-| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`            |
-| `integration`        | `mark_integrated`, `complete_session`                                                                                                |
+| Scope                | Gates                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`                                                          |
+| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind` |
+| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                |
+| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                  |
+| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                           |
+| `integration`        | `mark_integrated`, `complete_session`                                                                                                               |
 
 **Default grant set.** A token minted without an explicit scope choice gets
 **every scope EXCEPT `work_items:delete`** — full read + write + archive +
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **25 tools**.
+`initialize` handshake and registers **26 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -329,8 +329,10 @@ which can only set kind/title/parentKey/description/priority/story-points on
 create. Patch any
 subset of the UI-editable fields; an omitted field is left unchanged, and an
 explicit `null` clears a nullable one. The workflow **status** is NOT edited here
-(use `transition_status`), and neither is `kind`/`parent` — re-parenting is a
-structural move with its own tool (`move_to_parent`).
+(use `transition_status`), and neither is `kind`/`parent` — each is a structural
+move with its own tool (`change_kind` for the hierarchy kind, `move_to_parent`
+for the parent). Note `type`/`executor` here are the **work type** axis
+(code/design/test/…), a different thing from the hierarchy `kind`.
 The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected),
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
@@ -352,6 +354,38 @@ the UI; the same Story-6.4 edit gate gates the call.
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
 assignee, a `type`/`executor` on a non-leaf, or an out-of-range `storyPoints`
 value returns a typed error.
+
+#### `change_kind`
+
+**Reclassify** a work item: change its hierarchy **kind** between `story`,
+`task`, `bug`, and `subtask`. This is the structural change `update_work_item`
+leaves out (kind is "a structural move, not a field edit") and `create_work_item`
+can set only at creation — so an agent that mis-typed an item can fix it
+**without** the delete-and-recreate that would lose its identifier, history,
+comments, and links. The sibling of `move_to_parent` (parent is the other
+structural move update can't do).
+
+This changes the hierarchy **kind**, NOT the **work type** — the `type`
+(code/design/test/…) and `executor` axis stays on `update_work_item`. `epic` is
+not an available target (epics are planner/seed scaffolding, excluded from the
+agent surface exactly as in `create_work_item`).
+
+The new kind must keep the kind-parent matrix legal on **both** sides: it must be
+a legal child of the item's **current parent**, and must legally parent **every
+existing child** — else `ILLEGAL_PARENT_TYPE`. A container kind (`story`) cannot
+keep a leaf-only **work type**, so reclassifying a typed leaf into a container
+without first clearing its `type` returns `TYPE_NOT_ALLOWED_ON_KIND`. Same
+Story-6.4 edit gate as the UI; a missing / cross-tenant key is an
+indistinguishable 404.
+
+| Input  | Type                                      | Required | Notes                                           |
+| ------ | ----------------------------------------- | -------- | ----------------------------------------------- |
+| `key`  | string                                    | yes      | Work item identifier, e.g. `"PROD-7"`.          |
+| `kind` | `"story" \| "task" \| "bug" \| "subtask"` | yes      | The new hierarchy kind. `epic` is not a target. |
+
+**Output** — `structuredContent`: the reclassified `WorkItemDto` (its `kind`
+updated). An illegal parent/child pairing or a type-bearing container returns a
+typed error.
 
 #### `archive_work_item`
 

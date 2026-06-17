@@ -32,6 +32,7 @@ import {
   registerArchiveWorkItem,
 } from './tools/archiveWorkItem';
 import { DELETE_WORK_ITEM_TOOL_NAME, registerDeleteWorkItem } from './tools/deleteWorkItem';
+import { CHANGE_KIND_TOOL_NAME, registerChangeKind } from './tools/changeKind';
 
 // The MCP tool registry (Story 7.8 · Subtask 7.8.4, extended by 7.8.5 / 7.8.6 /
 // 7.8.10 / 7.8.11 / 7.8.13 / 7.8.14 / 2.8.5) — the single place that assembles
@@ -70,6 +71,7 @@ export const MCP_TOOL_NAMES = [
   LINK_WORK_ITEMS_TOOL_NAME,
   UNLINK_WORK_ITEMS_TOOL_NAME,
   UPDATE_WORK_ITEM_TOOL_NAME,
+  CHANGE_KIND_TOOL_NAME,
   ARCHIVE_WORK_ITEM_TOOL_NAME,
   UNARCHIVE_WORK_ITEM_TOOL_NAME,
   DELETE_WORK_ITEM_TOOL_NAME,
@@ -129,6 +131,9 @@ export function registerMcpTools(
   // Edit + soft-remove tools (7.8.14) — patch fields create can't set, and the
   // archive/restore pair over the shipped work-item services.
   registerUpdateWorkItem(target, resolveContext);
+  // Reclassify (MOTIR-1020) — change a work item's KIND, the structural change
+  // update_work_item leaves out (sibling of move_to_parent's parent change).
+  registerChangeKind(target, resolveContext);
   registerArchiveWorkItem(target, resolveContext);
   // Permanent delete (2.8.5) — the irreversible subtree-cascade counterpart of
   // archive, over the shipped 2.8.2 deleteWorkItem service.
