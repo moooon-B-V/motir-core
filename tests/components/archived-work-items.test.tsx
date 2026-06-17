@@ -4,18 +4,21 @@ import type { ReactElement } from 'react';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
+import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import type { ArchivedRowData } from '@/app/(authed)/issues/archived/_components/archivedRows';
 import { toArchivedRows } from '@/app/(authed)/issues/archived/_components/archivedRows';
 import { ArchivedWorkItemsList } from '@/app/(authed)/issues/archived/_components/ArchivedWorkItemsList';
 import type { ArchivedWorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 
-// The archived work items view + Restore (Story 2.9 · Subtask 2.9.3) under
-// happy-dom — the client island's render, the canEdit gating, and the
-// page-state-after-mutation contract (Restore removes the row on the unarchive
-// 200). The route is URL-driven, so we stub next/navigation; Restore POSTs via
-// `unarchiveWorkItem` (fetch), so we stub fetch and assert the row leaves the
-// DOM only AFTER the authoritative 200, never on the optimistic click alone.
+// The archived work items view + Restore + Delete (Story 2.9 · Subtasks 2.9.3 /
+// 2.9.5) under happy-dom — the client island's render, the canEdit (Restore) /
+// canManage (Delete) gate matrix, and the page-state-after-mutation contract
+// (both Restore and Delete remove the row on the authoritative 200/204). The
+// route is URL-driven, so we stub next/navigation; the actions POST/DELETE via
+// fetch, so we stub fetch and assert the row leaves the DOM only AFTER the
+// authoritative response, never on the optimistic click alone. `canManage` comes
+// from `useProjectAccess()`, so we wrap renders in a ProjectAccessProvider.
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -23,8 +26,17 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/issues/archived',
 }));
 
-function render(ui: ReactElement) {
-  return renderWithIntl(<ToastProvider>{ui}</ToastProvider>);
+// `canManage` is read from the provider (the WorkItemRowActions pattern), so
+// every render wraps one — defaulting to NOT manageable, so the 2.9.3 tests keep
+// their pre-Delete behaviour (the actions column is then canEdit-only).
+function render(ui: ReactElement, { canManage = false }: { canManage?: boolean } = {}) {
+  return renderWithIntl(
+    <ToastProvider>
+      <ProjectAccessProvider canEdit canManage={canManage}>
+        {ui}
+      </ProjectAccessProvider>
+    </ToastProvider>,
+  );
 }
 
 const ROWS: ArchivedRowData[] = [
@@ -130,6 +142,98 @@ describe('ArchivedWorkItemsList', () => {
     render(<ArchivedWorkItemsList rows={[]} total={0} page={1} pageSize={50} canEdit />);
     expect(screen.getByText('Nothing archived')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  // The gate matrix (2.9.5 / design-notes §2.9.7): Restore = canEdit, Delete (the
+  // `⋯` menu) = canManage, independent — each affordance HIDDEN when its gate is
+  // unmet, the column dropped only when neither is present.
+  it('canManage gates the row `⋯` Delete affordance independently of Restore', () => {
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />, {
+      canManage: true,
+    });
+    const first = screen.getByTestId('archived-row-PROD-49');
+    // canEdit → inline Restore; canManage → the `⋯` menu beside it.
+    expect(within(first).getByRole('button', { name: 'Restore PROD-49' })).toBeTruthy();
+    expect(within(first).getByRole('button', { name: 'Actions for PROD-49' })).toBeTruthy();
+    // The `⋯` is PURELY the Delete affordance — opening it shows only Delete….
+    fireEvent.click(within(first).getByRole('button', { name: 'Actions for PROD-49' }));
+    expect(screen.getByRole('menuitem', { name: 'Delete…' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Edit details' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+  });
+
+  it('canManage WITHOUT canEdit: the `⋯` Delete shows but no inline Restore', () => {
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit={false} />, {
+      canManage: true,
+    });
+    // The actions column stays (Delete is available), but Restore is gone.
+    expect(screen.getByText('Actions')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Restore/ })).toBeNull();
+    expect(
+      within(screen.getByTestId('archived-row-PROD-49')).getByRole('button', {
+        name: 'Actions for PROD-49',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('canManage: Delete… removes the row only after the delete 204 (page-state)', async () => {
+    let resolveDelete: (v: Response) => void = () => {};
+    const fetchMock = vi.fn((...args: unknown[]) => {
+      const [url] = args;
+      if (String(url).includes('/delete-preview')) {
+        // The archived leaf preview — no descendants, no live-descendant warning.
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              totalCount: 1,
+              descendantCount: 0,
+              byKind: {},
+              liveDescendantCount: 0,
+              liveByKind: {},
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
+      // The DELETE — held open so we can assert optimistic-vs-authoritative.
+      return new Promise<Response>((res) => {
+        resolveDelete = res;
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />, {
+      canManage: true,
+    });
+
+    fireEvent.click(
+      within(screen.getByTestId('archived-row-PROD-49')).getByRole('button', {
+        name: 'Actions for PROD-49',
+      }),
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete…' }));
+
+    // The confirm dialog opens; once the preview resolves, the leaf delete button
+    // is enabled. Confirming fires the DELETE to the right item.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Delete work item' })).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete work item' }));
+
+    const deleteCall = fetchMock.mock.calls.find((c) => !String(c[0]).includes('/delete-preview'));
+    expect(deleteCall?.[0]).toContain('/api/work-items/wi_49');
+    expect(deleteCall?.[1]).toMatchObject({ method: 'DELETE' });
+    // Optimistic-only is NOT enough — the row is still present until the 204.
+    expect(screen.getByTestId('archived-row-PROD-49')).toBeTruthy();
+
+    // The authoritative 204 — NOW the row leaves the list + the deleted toast shows.
+    resolveDelete(new Response(null, { status: 204 }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('archived-row-PROD-49')).toBeNull();
+    });
+    expect(screen.getByText('PROD-49 deleted')).toBeTruthy();
+    // The other row is untouched.
+    expect(screen.getByTestId('archived-row-PROD-28')).toBeTruthy();
   });
 });
 

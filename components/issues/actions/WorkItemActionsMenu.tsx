@@ -22,10 +22,13 @@ import { archiveWorkItem, unarchiveWorkItem, WorkItemActionError } from './workI
 const ITEM_CLASS =
   'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none disabled:opacity-50';
 
-const DANGER_ITEM_CLASS =
+// Exported so single-action surfaces (e.g. the archived-list row's Delete-only
+// `⋯` menu, Subtask 2.9.5) reuse the SAME danger-row + trigger vocabulary as the
+// full menu — one source of truth, no token drift.
+export const MENU_DANGER_ITEM_CLASS =
   'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-danger) hover:bg-(--el-tint-rose) focus-visible:bg-(--el-tint-rose) focus-visible:outline-none';
 
-const DEFAULT_TRIGGER_CLASS =
+export const MENU_TRIGGER_CLASS =
   'inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
 
 export function WorkItemActionsMenu({
@@ -126,7 +129,7 @@ export function WorkItemActionsMenu({
           // (board card / list row), mirroring the backlog RowActionsMenu.
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
-          className={triggerClassName ?? DEFAULT_TRIGGER_CLASS}
+          className={triggerClassName ?? MENU_TRIGGER_CLASS}
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden />
         </Popover.Trigger>
@@ -172,7 +175,7 @@ export function WorkItemActionsMenu({
               <button
                 type="button"
                 role="menuitem"
-                className={DANGER_ITEM_CLASS}
+                className={MENU_DANGER_ITEM_CLASS}
                 onClick={() => {
                   setOpen(false);
                   setDialogOpen(true);

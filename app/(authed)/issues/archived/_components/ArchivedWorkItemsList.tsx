@@ -15,7 +15,9 @@ import {
   unarchiveWorkItem,
   WorkItemActionError,
 } from '@/components/issues/actions/workItemActionsClient';
+import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { cn } from '@/lib/utils/cn';
+import { ArchivedRowDeleteMenu } from './ArchivedRowDeleteMenu';
 import type { ArchivedRowData } from './archivedRows';
 
 // The archived work items view (Story 2.9 · Subtask 2.9.3), per
@@ -24,13 +26,22 @@ import type { ArchivedRowData } from './archivedRows';
 // reusing the active List's container chrome, row vocabulary (IssueTypeIcon ·
 // mono id · title · status Pill · initial Avatar), and IssueListPager footer.
 //
-// It is a CLIENT ISLAND so Restore can remove the row optimistically: per the
-// page-state-after-mutation contract, the success response IS the confirmation,
-// so on the unarchive 200 we drop the row LOCALLY (no router.refresh) and decrement
-// the pager total — the restored item reappears in the active /issues + board
-// views on the next navigation (those are separate server-read routes). Restore
-// is `canEdit`-gated: a browse-only viewer sees the list with the action column
-// dropped entirely (hidden, not shown-disabled — the WorkItemActionsMenu pattern).
+// It is a CLIENT ISLAND so Restore + Delete remove the row optimistically: per
+// the page-state-after-mutation contract, the success response IS the
+// confirmation, so on the unarchive / delete 200 we drop the row LOCALLY (no
+// router.refresh) and decrement the pager total — a restored item reappears in
+// the active /issues + board views, and a deleted subtree disappears from them,
+// on their next (separate server-read) navigation.
+//
+// The actions cell is TOTAL over the two independent capabilities (Subtask
+// 2.9.5, design-notes §2.9.7), each affordance HIDDEN — never shown-disabled —
+// when its gate is unmet (the WorkItemActionsMenu pattern):
+//   • Restore — the prominent inline `[Restore]` button, gated `canEdit`.
+//   • Delete  — a danger `Delete…` row inside a per-row `⋯` overflow menu, gated
+//     `canManage` (read from `useProjectAccess()`, not a server prop — the
+//     `WorkItemRowActions` pattern). The `⋯` is PURELY the Delete affordance.
+// When NEITHER gate is met the whole actions column is dropped (the view-only
+// state). `canManage` comes from the provider mounted in the authed layout.
 //
 // Pagination is URL-driven (?page=) so the Server Component re-reads each page;
 // the parent keys this island by page, so the optimistic-removed set resets on
@@ -64,12 +75,27 @@ export function ArchivedWorkItemsList({
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
+  // Delete is project-admin (canManage) — the same gate the server enforces
+  // (`deleteWorkItem`/`getDeletePreview` → `assertCanManage`). Read from the
+  // provider mounted in the authed layout (the WorkItemRowActions pattern), so
+  // no new server prop has to thread through the page.
+  const { canManage } = useProjectAccess();
 
-  // Optimistic restore: the ids removed (restored) this page + the ids whose
-  // unarchive POST is in flight (the row fades + locks). Both reset when the
-  // parent remounts the island on a page change (keyed by `page`).
+  // Optimistic removal: the ids removed (restored OR deleted) this page + the
+  // ids whose unarchive POST is in flight (the row fades + locks). Adding to a
+  // Set is monotonic, so out-of-order restore/delete completions never clobber
+  // each other (no seq counter needed). Both reset when the parent remounts the
+  // island on a page change (keyed by `page`).
   const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
+
+  // Delete success — the ArchivedRowDeleteMenu's dialog already ran the DELETE +
+  // showed the `{key} deleted` toast; here we just drop the row locally (which
+  // also decrements `effectiveTotal`, the pager denominator). Same removal set
+  // as Restore.
+  const onDeleted = useCallback((id: string) => {
+    setRemovedIds((prev) => new Set(prev).add(id));
+  }, []);
 
   const onPage = useCallback(
     (next: number) => {
@@ -125,9 +151,13 @@ export function ArchivedWorkItemsList({
 
   const visibleRows = rows.filter((r) => !removedIds.has(r.id));
   const effectiveTotal = Math.max(0, total - removedIds.size);
-  // Grid: Title · Status · Archived by · Archived (· Restore when canEdit).
-  const gridTemplate = canEdit
-    ? 'minmax(0,1fr) 130px 175px 140px 120px'
+  // The actions column shows when EITHER capability is present; it's dropped only
+  // when neither Restore nor Delete is available (the view-only state).
+  const showActions = canEdit || canManage;
+  // Grid: Title · Status · Archived by · Archived (· actions when showActions).
+  // The actions track is 150px (was 120px) to seat `[Restore]` + `⋯` together.
+  const gridTemplate = showActions
+    ? 'minmax(0,1fr) 130px 175px 140px 150px'
     : 'minmax(0,1fr) 130px 175px 140px';
 
   return (
@@ -153,7 +183,7 @@ export function ArchivedWorkItemsList({
               <div role="columnheader" className={COL_HEADER}>
                 <span className="truncate">{t('archivedColArchived')}</span>
               </div>
-              {canEdit ? (
+              {showActions ? (
                 <div role="columnheader" className={cn(COL_HEADER, 'justify-end')}>
                   <span className="sr-only">{t('archivedColActions')}</span>
                 </div>
@@ -218,20 +248,32 @@ export function ArchivedWorkItemsList({
                     </span>
                   </div>
 
-                  {canEdit ? (
-                    <div role="cell" className="relative z-10 flex items-center justify-end">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={restoring}
-                        leftIcon={
-                          restoring ? undefined : <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                        }
-                        aria-label={t('archivedRestoreAria', { key: row.identifier })}
-                        onClick={() => void onRestore(row)}
-                      >
-                        {restoring ? t('archivedRestoring') : t('archivedRestore')}
-                      </Button>
+                  {showActions ? (
+                    <div role="cell" className="relative z-10 flex items-center justify-end gap-1">
+                      {canEdit ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          loading={restoring}
+                          leftIcon={
+                            restoring ? undefined : (
+                              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                            )
+                          }
+                          aria-label={t('archivedRestoreAria', { key: row.identifier })}
+                          onClick={() => void onRestore(row)}
+                        >
+                          {restoring ? t('archivedRestoring') : t('archivedRestore')}
+                        </Button>
+                      ) : null}
+                      {canManage ? (
+                        <ArchivedRowDeleteMenu
+                          itemId={row.id}
+                          identifier={row.identifier}
+                          title={row.title}
+                          onDeleted={() => onDeleted(row.id)}
+                        />
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
