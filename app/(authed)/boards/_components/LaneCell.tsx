@@ -86,9 +86,13 @@ export function LaneCell({
         ref={setNodeRef}
         data-testid={`lane-cell-${columnId}-${laneKey}`}
         data-over={isOver ? 'true' : undefined}
+        // Over-highlight uses an INSET ring (not an `outline`): the board scrolls
+        // (`overflow-x/y-auto`), and an outline is painted outside the box, so its
+        // edge strip falls outside the scroll viewport and gets clipped (bug 7.24,
+        // same as BoardColumn). An inset ring stays inside the box. Don't revert.
         className={`flex min-h-[28px] w-72 shrink-0 items-center justify-center rounded-(--radius-card) border border-dashed px-2.5 py-4 text-center text-xs transition-colors ${
           isOver
-            ? 'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-text-strong) outline outline-2 outline-(--el-accent)'
+            ? 'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-text-strong) inset-ring-2 inset-ring-(--el-accent)'
             : 'border-(--el-border) text-(--el-text-muted)'
         }`}
       >
@@ -103,7 +107,7 @@ export function LaneCell({
       data-testid={`lane-cell-${columnId}-${laneKey}`}
       data-over={isOver ? 'true' : undefined}
       className={`w-72 shrink-0 rounded-(--radius-card) transition-colors ${
-        isOver ? 'bg-(--el-tint-lavender) outline outline-2 outline-(--el-accent)' : ''
+        isOver ? 'bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)' : ''
       }`}
     >
       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>

@@ -121,7 +121,13 @@ export function BoardColumn({
     // cards rather than shrinking to fit. This is a viewport-relative LAYOUT height,
     // not a shaped-control size, so a raw `calc` is correct (no `--height-*` token).
     // The card body scrolls internally. While a card is dragged over, the accent
-    // ring + lavender tint mark it as the drop target.
+    // ring + lavender tint mark it as the drop target. The ring is an INSET ring
+    // (`inset-ring`, drawn inside the box), NOT an `outline`: the flat board is a
+    // horizontally-scrolling row (`BoardContainer` `overflow-x-auto`), and an
+    // `outline` is painted OUTSIDE the border box, so its top/bottom strip falls
+    // outside the scroll viewport and gets clipped — the over-highlight's top edge
+    // appeared cut off (bug 7.24). An inset ring stays within the box and follows
+    // the card radius, so it can't be clipped. Do NOT revert to `outline`.
     <section
       ref={setNodeRef}
       aria-label={t('columnLabel', { name: column.name, count: column.totalCount })}
@@ -129,7 +135,7 @@ export function BoardColumn({
       data-over={isOver ? 'true' : undefined}
       className={`flex h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
         isOver
-          ? 'border-(--el-accent) bg-(--el-tint-lavender) outline outline-2 outline-(--el-accent)'
+          ? 'border-(--el-accent) bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)'
           : 'border-(--el-border)'
       }`}
     >
