@@ -64,7 +64,7 @@ export default async function RootLayout({
       <head>
         {/*
           FOUC prevention: run before React hydrates to apply the user's
-          saved theme + display-style to <html>. Without this the page
+          saved theme + style to <html>. Without this the page
           briefly flashes the SSR default before the client applies
           localStorage preferences.
 

@@ -87,7 +87,7 @@
 /* The mention chip (Subtask 5.1.4) — the comments.mock.html panel-5 treatment:
    hue in the tint BACKGROUND with strong text (AA, finding #35), badge radius +
    the small-chip kbd padding pair (element shape tokens — they flip with
-   data-display-style). One rule covers BOTH surfaces: the editor's mention node
+   data-style). One rule covers BOTH surfaces: the editor's mention node
    and MarkdownView's rendered token, since each sits inside .motir-prose. */
 .motir-prose .mention-chip {
   display: inline-flex;

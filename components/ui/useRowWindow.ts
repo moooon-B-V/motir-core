@@ -18,7 +18,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 //      is what lets its strict-axe component tests be deterministic under
 //      happy-dom — happy-dom does no layout, so `getBoundingClientRect` is 0).
 //      BOARD CARDS are VARIABLE height (the title clamps to 1–2 lines) and their
-//      padding is `--spacing-card-padding`, which the display-style swap layer
+//      padding is `--spacing-card-padding`, which the style swap layer
 //      flips — so a single fixed ROW_PX would be wrong across cards AND across
 //      display styles. This hook therefore MEASURES each row.
 //   2. The mirror product (Jira / Linear) virtualizes variable-height board cards

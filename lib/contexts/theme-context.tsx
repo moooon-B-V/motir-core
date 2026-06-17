@@ -13,10 +13,10 @@ import {
 import {
   THEME_DEFAULTS,
   THEME_STORAGE_KEYS,
-  type DisplayStyle,
   type ResolvedThemePattern,
   type ThemePattern,
 } from '@/lib/theme/types';
+import { DEFAULT_STYLE_ID, isStyleId, type StyleId } from '@/lib/theme/styles';
 
 /**
  * Theme context for Motir's two-axis design system.
@@ -40,9 +40,10 @@ import {
 interface ThemeContextValue {
   pattern: ThemePattern;
   resolvedPattern: ResolvedThemePattern;
-  displayStyle: DisplayStyle;
+  /** The active named style (`data-style`) — Axis 2, independent of palette. */
+  styleId: StyleId;
   setPattern: (pattern: ThemePattern) => void;
-  setDisplayStyle: (displayStyle: DisplayStyle) => void;
+  setStyleId: (styleId: StyleId) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -86,9 +87,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [pattern, setPatternState] = useState<ThemePattern>(() =>
     readStorage<ThemePattern>(THEME_STORAGE_KEYS.pattern, THEME_DEFAULTS.pattern),
   );
-  const [displayStyle, setDisplayStyleState] = useState<DisplayStyle>(() =>
-    readStorage<DisplayStyle>(THEME_STORAGE_KEYS.displayStyle, THEME_DEFAULTS.displayStyle),
-  );
+  const [styleId, setStyleIdState] = useState<StyleId>(() => {
+    // A stale / unknown stored value (e.g. a pre-7.3.32 `default`/`soft`
+    // display-style leftover) resolves to the default, never a dead id.
+    const stored = readStorage<string>(THEME_STORAGE_KEYS.style, THEME_DEFAULTS.style);
+    return isStyleId(stored) ? stored : DEFAULT_STYLE_ID;
+  });
 
   // Subscribe to OS color-scheme changes. Only consulted when pattern='system'.
   const osColorScheme = useSyncExternalStore(
@@ -107,8 +111,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [resolvedPattern]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-display-style', displayStyle);
-  }, [displayStyle]);
+    document.documentElement.setAttribute('data-style', styleId);
+  }, [styleId]);
 
   const setPattern = useCallback((next: ThemePattern) => {
     setPatternState(next);
@@ -119,18 +123,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const setDisplayStyle = useCallback((next: DisplayStyle) => {
-    setDisplayStyleState(next);
+  const setStyleId = useCallback((next: StyleId) => {
+    setStyleIdState(next);
     try {
-      window.localStorage.setItem(THEME_STORAGE_KEYS.displayStyle, next);
+      window.localStorage.setItem(THEME_STORAGE_KEYS.style, next);
     } catch {
       // localStorage unavailable — accept that the choice won't persist.
     }
   }, []);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ pattern, resolvedPattern, displayStyle, setPattern, setDisplayStyle }),
-    [pattern, resolvedPattern, displayStyle, setPattern, setDisplayStyle],
+    () => ({ pattern, resolvedPattern, styleId, setPattern, setStyleId }),
+    [pattern, resolvedPattern, styleId, setPattern, setStyleId],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

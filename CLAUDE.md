@@ -437,20 +437,22 @@ primary because almost every component referenced Tier 0 directly).
 
 ## ⚠️ Shape (radius + spacing + sizing) flows through element-semantic shape tokens
 
-**EXTREMELY IMPORTANT: SHAPE is the second swappable axis (alongside COLOR).
-A future `data-display-style="…"` — and ultimately a whole different getdesign.md
-design system — must be able to re-shape the WHOLE UI the same way
-`data-palette="…"` re-skins it. "Shape" is NOT just radius: it is radius +
-component padding + control sizing + shadow. So every shaped surface a component
-renders MUST reference an element-semantic shape token — the ones the
-`[data-display-style]` block in `globals.css` overrides — NEVER the generic
+**EXTREMELY IMPORTANT: SHAPE/FEEL is the second swappable axis (alongside COLOR).
+The `data-style="…"` named-style axis (registry in `lib/theme/styles.ts`) — and
+ultimately a whole different getdesign.md design system — must be able to
+re-shape the WHOLE UI the same way `data-palette="…"` re-skins it. "Shape" is NOT
+just radius: it is radius + component padding + control sizing + shadow. So every
+shaped surface a component renders MUST reference an element-semantic shape token
+— the ones a `[data-style]` block in `globals.css` overrides — NEVER the generic
 Tier-0 scale (`--radius-xs/sm/md/lg/xl`, `--spacing-xs/sm/md/…`) and NEVER a
 fixed raw utility (`rounded-md`, `p-1`, `px-2.5`, `h-9`, `shadow-md`). All of
-those bypass the swap layer: flipping the display style leaves them unshaped.**
+those bypass the swap layer: flipping the style leaves them unshaped.**
 
 This is the exact analogue of the colour rule above. The generic Tier-0 scales
 are inert (like Tier-0 `--color-*`); the element-semantic tokens are the swap
-layer (like `--el-*`). Only `[data-display-style]` tokens flip.
+layer (like `--el-*`). Only `[data-style]` tokens flip. A `[data-style]` block
+overrides ONLY shape/feel tokens, never a colour token — colour is the
+independent `data-palette` axis.
 
 ### Radius — by surface
 
@@ -482,11 +484,11 @@ layer (like `--el-*`). Only `[data-display-style]` tokens flip.
 
 - ✅ **Reference an element-semantic shape token** for a surface's radius,
   its own padding, and its height/size. Need a role not exposed yet? ADD the
-  token to `globals.css` `@theme` AND to the `[data-display-style='soft']`
+  token to `globals.css` `@theme` AND to the `[data-style='soft-playful']`
   block (so it actually flips), then consume it — the same per-component growth
   pattern the colour rule uses.
 - ✅ `rounded-full` is fine ONLY for genuinely circular things (spinner, avatar,
-  colour swatch, status dot) — not display-style-dependent.
+  colour swatch, status dot) — not style-dependent.
 - ✅ Layout-only spacing — gaps between siblings (`gap-2`), one-off margins
   (`mb-1`), page gutters — may stay raw; it is not a surface's shape. Only a
   control's OWN box padding / radius / size is shape.
@@ -499,7 +501,7 @@ layer (like `--el-*`). Only `[data-display-style]` tokens flip.
 
 This rule was adopted alongside the shape-swap work: components had collapsed
 the SHAPE axis by reaching for the generic radius scale (`--radius-sm` ×11) +
-raw `rounded-md` and fixed `p-1`/`px-2.5`/`h-9`, so `data-display-style` only
+raw `rounded-md` and fixed `p-1`/`px-2.5`/`h-9`, so the style swap only
 reshaped buttons/cards/inputs/modals and left menus, dialog-close buttons,
 tooltips, badges, kbd, and sidebar rows fixed. The same token set + migration
 lands in the upstream `nextjs-prisma-vercel-starter-with-design`, so a getdesign
@@ -515,7 +517,7 @@ update a design asset (a `type: design` subtask, or any change to a mock), you
 MUST land all three, with a shared basename:
 
 1. **`design-notes.md`** — the spec: every primitive used, the exact copy, and
-   the `--el-*` colour + `[data-display-style]` shape-token role for every
+   the `--el-*` colour + `[data-style]` shape-token role for every
    element. (One per area; it indexes that area's surfaces.)
 2. **The asset SOURCE** — a self-contained **`<surface>.mock.html`** built from
    the real design system (the `components/ui/*` primitives' markup + the

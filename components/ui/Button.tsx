@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils/cn';
  *
  * Variants × sizes × states. The `loading` state shows an inline Spinner
  * and disables the button. Use semantic Tailwind token classes; never
- * hardcode colors. Shape responds to `data-display-style` via
+ * hardcode colors. Shape responds to `data-style` via
  * `--radius-btn` (rectangles in default, pills in `soft`).
  *
  * @example
@@ -25,7 +25,7 @@ export const buttonVariants = cva(
     'inline-flex items-center justify-center gap-2',
     // Typography
     'font-sans text-sm font-medium leading-none',
-    // Shape — semantic tokens that flip with display-style
+    // Shape — semantic tokens that flip with the active style
     'rounded-(--radius-btn)',
     // Interaction
     'transition-[transform,background-color,border-color,color] duration-(--transition-duration)',

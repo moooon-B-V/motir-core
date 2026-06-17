@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils/cn';
 // `--el-text-strong` ink — AA-safe, finding #35), so this is the tiny local
 // variant the spec allows. Decorative (`aria-hidden`); the caller renders the
 // submitter name alongside for the accessible name. Circle → `rounded-full`
-// (genuinely circular, display-style-independent).
+// (genuinely circular, style-independent).
 
 const TINTS = [
   'bg-(--el-tint-mint)',
