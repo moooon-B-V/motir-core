@@ -28,6 +28,13 @@ export interface SprintPickerProps {
   autoOpen?: boolean;
   /** Fired when the picker menu closes without/after a pick (2.5.5). */
   onClose?: () => void;
+  /**
+   * Label for the empty / null sentinel — the FIRST row and the trigger when no
+   * sprint is set. Defaults to "Backlog". The detail rail passes "None" for a
+   * DONE/cancelled item (it is excluded from the backlog, so "Backlog" would be
+   * inconsistent), keeping the picker value identical to the read-mode value.
+   */
+  emptyLabel?: string;
 }
 
 export function SprintPicker({
@@ -38,8 +45,12 @@ export function SprintPicker({
   disabled,
   autoOpen,
   onClose,
+  emptyLabel,
 }: SprintPickerProps) {
   const t = useTranslations('ui');
+  // The null sentinel's label — "Backlog" by default, "None" for a terminal item
+  // (the rail passes it so the picker and the read value never disagree).
+  const backlogLabel = emptyLabel ?? t('sprintPicker.backlog');
 
   // Assignable = active + planned. A COMPLETED sprint is excluded UNLESS it is
   // the current value (so the trigger can still show it) — the archived-option
@@ -62,7 +73,7 @@ export function SprintPicker({
     );
 
   const options: ComboboxOption<string>[] = [
-    { value: BACKLOG, label: t('sprintPicker.backlog') },
+    { value: BACKLOG, label: backlogLabel },
     ...selectable.map((s) => ({
       value: s.id,
       label: s.name,
@@ -81,7 +92,7 @@ export function SprintPicker({
       value={value ?? BACKLOG}
       onChange={(v) => onChange(v === BACKLOG ? null : v)}
       label={t('sprintPicker.label')}
-      placeholder={t('sprintPicker.backlog')}
+      placeholder={backlogLabel}
       searchable={searchable}
       searchPlaceholder={t('sprintPicker.searchPlaceholder')}
       emptyText={t('sprintPicker.emptyText')}

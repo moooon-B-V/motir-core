@@ -3066,9 +3066,12 @@ basis for the state-gate decision below.
 - **Editor** — the AssigneePicker-shaped **`Combobox`** (`components/ui/Combobox`,
   `autoOpen`): trigger (`--height-control`, `--radius-input`, up/down glyph),
   menu (`--shadow-elevated`, `--radius-card`). Rows:
-  - **First row = "Backlog"** (muted italic) — the clear / move-home path,
-    matching the filter's `sprint-select` **Backlog-first** precedent (a
-    meaningful sentinel, not the generic "None").
+  - **First row = the null sentinel** (muted italic) — the clear / move-home
+    path, matching the filter's `sprint-select` **Backlog-first** precedent (a
+    meaningful sentinel). Its label is **status-aware and mirrors the read-mode
+    value**: "Backlog" for an ACTIVE item, "None" for a DONE/cancelled one (which
+    is excluded from the backlog) — the picker value never disagrees with the
+    displayed value.
   - the **Active** sprint (secondary "Active"), then **Planned**/future sprints
     (secondary "Planned"); the selected row carries the `Check` in `--el-accent`.
   - **Completed** sprints are **excluded** from the menu (you do not schedule into

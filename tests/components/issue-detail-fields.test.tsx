@@ -357,4 +357,13 @@ describe('CoreFieldsPanel — Sprint field (2.4.14)', () => {
 
     expect(setSprintSpy).toHaveBeenCalledWith('wi_1', null);
   });
+
+  it('picker sentinel reads "None" (not "Backlog") for a done item', () => {
+    renderWithSprints(makeItem({ sprintId: null, status: 'done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Sprint' }));
+    // The null sentinel mirrors the read value — "None", since a done item is
+    // excluded from the backlog.
+    expect(screen.getByRole('option', { name: 'None' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: 'Backlog' })).toBeNull();
+  });
 });

@@ -182,6 +182,12 @@ export function CoreFieldsPanel({
   const reporter = members.find((m) => m.userId === eff.reporterId);
   const assignee = members.find((m) => m.userId === eff.assigneeId);
   const statusMeta = workflow.statuses.find((s) => s.key === eff.status);
+  // The Sprint field's empty label is status-aware: an ACTIVE item with no sprint
+  // sits in the Backlog, but a DONE/cancelled one is EXCLUDED from the backlog
+  // (backlogService.backlogExcludedStatusKeys → every category 'done' status), so
+  // it reads "None". Used for BOTH the read value AND the picker sentinel so the
+  // two never disagree.
+  const sprintEmptyLabel = statusMeta?.category === 'done' ? t('none') : t('backlog');
   const currentSprint = eff.sprintId ? sprints.find((s) => s.id === eff.sprintId) : undefined;
 
   // Drop the optimistic override for the given field keys (on error / stale).
@@ -535,6 +541,7 @@ export function CoreFieldsPanel({
               sprints={sprints}
               value={eff.sprintId}
               onChange={commitSprint}
+              emptyLabel={sprintEmptyLabel}
               onClose={() => setEditing(null)}
               autoOpen
               disabled={isPending || readOnly}
@@ -547,14 +554,8 @@ export function CoreFieldsPanel({
                 <span className="text-(--el-text-muted) italic">({t('sprintCompleted')})</span>
               ) : null}
             </span>
-          ) : statusMeta?.category === 'done' ? (
-            // A done / cancelled item is EXCLUDED from the backlog
-            // (backlogService.backlogExcludedStatusKeys → every category 'done'
-            // status), so it is not "in the Backlog" even with no sprint — show
-            // the neutral empty value, not a contradictory "Backlog".
-            muted(t('none'))
           ) : (
-            muted(t('backlog'))
+            muted(sprintEmptyLabel)
           )}
         </FieldCard>
       ) : null}
