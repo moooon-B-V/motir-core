@@ -2721,7 +2721,8 @@
       "newWorkspace": "新建工作区",
       "switchOrg": "切换组织",
       "createOrg": "创建组织",
-      "workspacesCount": "{count} 个工作区"
+      "workspacesCount": "{count} 个工作区",
+      "usage": "用量与费用"
     },
     "settings": {
       "title": "组织设置",
@@ -3223,5 +3224,97 @@
     "topicEmptyTitle": "暂无公开的 {topic} 项目",
     "topicEmptyBody": "尚无团队在此主题下公开项目。先去浏览整个广场吧。",
     "backToSquare": "返回项目广场"
+  },
+  "aiUsage": {
+    "title": "用量与费用",
+    "subtitle": "{org} 组织的 Token 费用 —— 跨所有工作区在规划中消耗的额度。额度是所有模型共享的用量配额。",
+    "breadcrumb": "组织 · {org} · 用量与费用",
+    "summary": {
+      "balance": "额度余额",
+      "credits": "{n} 额度",
+      "tier": "{tier} 套餐",
+      "allotmentRemaining": "本月 {allotment} 额度配额还剩 {pct}%",
+      "spentAllTime": "累计消耗",
+      "since": "自组织创建以来",
+      "spentThisMonth": "本月消耗",
+      "deltaUp": "环比上月 +{pct}%",
+      "deltaDown": "环比上月 −{pct}%",
+      "monthlySpend": "每月消耗",
+      "monthlySpendSub": "全组织每月扣减的额度。最近 6 个月。",
+      "creditsChip": "额度",
+      "creditsUnit": "额度"
+    },
+    "affordance": "额度是内部用量配额 —— 不是货币，这也不是账单。每次规划运行按其消耗的 token 扣减额度。购买更多额度与变更套餐将在后续版本随计费功能推出。",
+    "drill": {
+      "scope": "范围",
+      "orgLevel": "组织总计",
+      "workspaceLevel": "工作区",
+      "projectLevel": "项目",
+      "orgSegment": "{org}（组织）",
+      "note": "下钻会将每个面板 —— 余额占比、按模型明细与运行记录 —— 重新限定到当前层级。",
+      "pickWorkspace": "工作区",
+      "pickProject": "项目",
+      "backToOrg": "返回组织总计"
+    },
+    "byModel": {
+      "title": "按模型",
+      "subtitle": "本月组织的额度按模型的去向。Token 决定额度成本；更贵的模型每 token 扣减更多。",
+      "model": "模型",
+      "tokensIn": "输入 Token",
+      "tokensOut": "输出 Token",
+      "share": "额度占比",
+      "credits": "额度",
+      "foot": "输入 {in} token · 输出 {out}",
+      "footCredits": "{n} 额度",
+      "count": "{n} 个模型"
+    },
+    "activity": {
+      "title": "近期活动",
+      "subtitle": "每一次扣减额度的规划运行，按时间倒序。已按当前范围（{scope}）筛选。较早的运行按页加载。",
+      "runs": "运行",
+      "total": "共 {n} 条",
+      "scopeNote": "范围：{scope}",
+      "when": "时间",
+      "run": "运行",
+      "model": "模型",
+      "tokens": "Token",
+      "credits": "额度",
+      "kindGenerate": "生成计划",
+      "kindExpand": "展开故事",
+      "kindAugment": "扩充树",
+      "kindReplan": "重新规划",
+      "kindOther": "规划运行",
+      "pagerShowing": "显示第 {from}–{to} 条，共 {total} 条",
+      "pagerPage": "第 {n} / {m} 页",
+      "prev": "上一页",
+      "next": "下一页",
+      "unknownProject": "未知项目"
+    },
+    "member": {
+      "readOnly": "只读",
+      "yourProject": "{project} · 你的项目",
+      "thisProjectMonth": "本项目 · 本月",
+      "yourShare": "你所在项目的份额。无组织总计，无其他工作区。",
+      "lockNote": "组织级总计、跨工作区下钻以及完整运行记录仅对组织所有者和管理员可见。如需组织级用量，请联系组织管理员。",
+      "noProjectTitle": "暂无可显示的项目用量",
+      "noProjectDescription": "你是该组织的成员，但尚未加入任何项目。加入项目后，项目费用会显示在这里。"
+    },
+    "lowBalance": {
+      "title": "额度即将用尽。",
+      "body": "还剩 {n} 额度 —— 约为本月配额的 {pct}%。规划仍可使用；较大的生成可能耗尽余额。购买更多额度将在后续随计费功能推出。"
+    },
+    "outOfCredits": {
+      "title": "规划已暂停 —— 额度已用尽",
+      "body": "{org} 组织已用完本月全部额度，新的规划运行已暂停。既有计划仍可完整编辑。",
+      "passiveSlot": "购买更多额度与变更套餐将在后续版本随计费功能推出。该入口将出现在此处。"
+    },
+    "states": {
+      "emptyTitle": "暂无用量",
+      "emptyDescription": "当你的团队运行 AI 规划器后，每次运行的额度费用都会显示在这里 —— 按工作区、项目和模型细分。",
+      "openPlanner": "打开规划器",
+      "errorTitle": "无法加载用量",
+      "errorDescription": "获取该组织用量时出错。数据暂时不可用 —— 你的额度是安全的。",
+      "loading": "正在加载用量…"
+    }
   }
 }

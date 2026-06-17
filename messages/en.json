@@ -2721,7 +2721,8 @@
       "newWorkspace": "New workspace",
       "switchOrg": "Switch organization",
       "createOrg": "Create organization",
-      "workspacesCount": "{count, plural, one {# workspace} other {# workspaces}}"
+      "workspacesCount": "{count, plural, one {# workspace} other {# workspaces}}",
+      "usage": "Usage & cost"
     },
     "settings": {
       "title": "Organization settings",
@@ -3223,5 +3224,97 @@
     "topicEmptyTitle": "No public {topic} projects yet",
     "topicEmptyBody": "No team has published a public project in this topic yet. Explore the full square instead.",
     "backToSquare": "Back to the project square"
+  },
+  "aiUsage": {
+    "title": "Usage & cost",
+    "subtitle": "Token cost for the {org} organization — credits spent planning across all its workspaces. Credits are a usage allotment shared across every model.",
+    "breadcrumb": "Organization · {org} · Usage & cost",
+    "summary": {
+      "balance": "Credit balance",
+      "credits": "{n} credits",
+      "tier": "{tier} tier",
+      "allotmentRemaining": "{pct}% of this month's {allotment}-credit allotment remaining",
+      "spentAllTime": "Spent all time",
+      "since": "Since the org was created",
+      "spentThisMonth": "Spent this month",
+      "deltaUp": "+{pct}% vs last month",
+      "deltaDown": "−{pct}% vs last month",
+      "monthlySpend": "Monthly spend",
+      "monthlySpendSub": "Credits debited per month, org-wide. Last 6 months.",
+      "creditsChip": "Credits",
+      "creditsUnit": "credits"
+    },
+    "affordance": "Credits are an internal usage allotment — not a currency, and this is not a bill. One planning run debits credits by the tokens it consumed. Buying more credits and plan changes arrive with billing in a later release.",
+    "drill": {
+      "scope": "Scope",
+      "orgLevel": "Org total",
+      "workspaceLevel": "Workspace",
+      "projectLevel": "Project",
+      "orgSegment": "{org} (org)",
+      "note": "Drilling re-scopes every panel — the balance share, the per-model breakdown and the run log — to the active level.",
+      "pickWorkspace": "Workspace",
+      "pickProject": "Project",
+      "backToOrg": "Back to org total"
+    },
+    "byModel": {
+      "title": "By model",
+      "subtitle": "Where the org's credits went this month, per model. Tokens drive the credit cost; a costlier model debits more per token.",
+      "model": "Model",
+      "tokensIn": "Tokens in",
+      "tokensOut": "Tokens out",
+      "share": "Share of credits",
+      "credits": "Credits",
+      "foot": "{in} tokens in · {out} out",
+      "footCredits": "{n} credits",
+      "count": "{n} models"
+    },
+    "activity": {
+      "title": "Recent activity",
+      "subtitle": "Every planning run that debited credits, newest first. Filtered to the current scope ({scope}). Older runs load a page at a time.",
+      "runs": "Runs",
+      "total": "{n} total",
+      "scopeNote": "Scope: {scope}",
+      "when": "When",
+      "run": "Run",
+      "model": "Model",
+      "tokens": "Tokens",
+      "credits": "Credits",
+      "kindGenerate": "Generate plan",
+      "kindExpand": "Expand story",
+      "kindAugment": "Augment tree",
+      "kindReplan": "Re-plan",
+      "kindOther": "Planning run",
+      "pagerShowing": "Showing {from}–{to} of {total}",
+      "pagerPage": "Page {n} of {m}",
+      "prev": "Prev",
+      "next": "Next",
+      "unknownProject": "Unknown project"
+    },
+    "member": {
+      "readOnly": "Read-only",
+      "yourProject": "{project} · your project",
+      "thisProjectMonth": "This project · this month",
+      "yourShare": "Your project's share. No org total, no other workspaces.",
+      "lockNote": "Org-wide totals, the cross-workspace drill-up and the full run log are visible to organization owners and admins only. Ask an org admin for org-level usage.",
+      "noProjectTitle": "No project usage to show",
+      "noProjectDescription": "You are a member of this organization but not yet part of a project. Project cost appears here once you join one."
+    },
+    "lowBalance": {
+      "title": "Running low on credits.",
+      "body": "{n} credits left — about {pct}% of this month's allotment. Planning still works; large generations may exhaust the balance. Buying more credits arrives with billing later."
+    },
+    "outOfCredits": {
+      "title": "Planning is paused — you're out of credits",
+      "body": "The {org} organization has used all of this month's credits, so new planning runs are paused. Existing plans stay fully editable.",
+      "passiveSlot": "Buying more credits and changing your plan arrive with billing in a later release. This is where that option will appear."
+    },
+    "states": {
+      "emptyTitle": "No usage yet",
+      "emptyDescription": "Once your team runs the AI planner, every run's credit cost shows up here — broken down by workspace, project and model.",
+      "openPlanner": "Open the planner",
+      "errorTitle": "Couldn't load usage",
+      "errorDescription": "Something went wrong fetching this organization's usage. The figures are temporarily unavailable — your credits are safe.",
+      "loading": "Loading usage…"
+    }
   }
 }

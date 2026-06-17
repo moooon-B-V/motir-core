@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Check, ChevronDown, CreditCard, Plus, Settings, Users } from 'lucide-react';
+import { Check, ChevronDown, Coins, CreditCard, Plus, Settings, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { Pill } from '@/components/ui/Pill';
@@ -94,6 +94,15 @@ export function OrgControl({ activeOrg, orgs }: OrgControlProps) {
               <MenuLink href="/settings/organization/members" onNavigate={() => setOpen(false)}>
                 <Users className="text-(--el-text-muted) h-4 w-4" aria-hidden />
                 {t('menu.members')}
+              </MenuLink>
+            </li>
+            <li>
+              {/* Usage & cost — the org cost dashboard (7.2.11, design ai-usage
+                  panel 1). The usage half of the "Billing & usage" promise; the
+                  billing/checkout half stays "Coming soon" (Epic 8). */}
+              <MenuLink href="/settings/organization/usage" onNavigate={() => setOpen(false)}>
+                <Coins className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                {t('menu.usage')}
               </MenuLink>
             </li>
             <li>

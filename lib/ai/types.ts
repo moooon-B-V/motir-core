@@ -74,3 +74,51 @@ export interface JobStreamEvent {
   event: string;
   data: unknown;
 }
+
+// ── GET /v1/usage — the org cost dashboard read (Subtask 7.2.11) ──────────────
+// The drill level the cost view is scoped to. motir-core narrows a non-admin
+// member to `project` server-side; it never trusts a client-sent scope.
+export type UsageScope = 'org' | 'workspace' | 'project';
+
+// The query motir-core sends motir-ai (over the service-credential boundary).
+// Ids are motir-core's own (org/workspace/project) — motir-ai keys its
+// AiOrganization/AiProject to them (Subtask 7.2.16).
+export interface UsageQuery {
+  coreOrganizationId: string;
+  scope: UsageScope;
+  coreWorkspaceId?: string | null;
+  coreProjectId?: string | null;
+  page?: number;
+  pageSize?: number;
+}
+
+// The raw GET /v1/usage wire body (motir-ai's usageService.UsageResponseDto).
+// `balance` + `tier` are ALWAYS org-level (one ledger per org); spend +
+// breakdown + runs follow the active drill scope. Credits are an internal usage
+// unit, never a currency. The motir-core read-through service enriches the
+// ws/project ids with names before it reaches the browser.
+export interface RawUsageRun {
+  jobId: string;
+  jobKind: string;
+  model: string | null;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  inputTokens: number;
+  outputTokens: number;
+  credits: number;
+  startedAt: string; // ISO
+}
+
+export interface RawUsageResponse {
+  scope: UsageScope;
+  coreOrganizationId: string;
+  coreWorkspaceId: string | null;
+  coreProjectId: string | null;
+  balance: number;
+  tier: { key: string; name: string; monthlyCreditAllotment: number } | null;
+  totalSpend: number;
+  monthSpend: number;
+  monthlyHistory: { yearMonth: string; credits: number }[];
+  perModel: { model: string; inputTokens: number; outputTokens: number; credits: number }[];
+  recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
+}
