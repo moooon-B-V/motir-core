@@ -78,6 +78,15 @@ function awaitSprintWrite(page: Page) {
   );
 }
 
+/** The Sprint FieldCard's content (label + value), reached via its "Edit Sprint"
+ * toggle (button → header row → Card content wrapper). Value assertions MUST be
+ * scoped to it: the shell's project nav renders its own "Backlog" link and the
+ * activity feed names the sprint, so an unscoped `getByText` is a strict-mode
+ * violation (two matches). */
+function sprintField(page: Page) {
+  return page.getByRole('button', { name: 'Edit Sprint' }).locator('..').locator('..');
+}
+
 test('@smoke inline Sprint field: Backlog → a sprint, persists across reload', async ({ page }) => {
   const email = 'e2e-sprint-field@example.com';
   await signUp(page, email);
@@ -87,7 +96,7 @@ test('@smoke inline Sprint field: Backlog → a sprint, persists across reload',
 
   await page.goto(`/issues/${item.identifier}`);
   // Starts in the backlog (the muted-italic value, not "None").
-  await expect(page.getByText('Backlog')).toBeVisible();
+  await expect(sprintField(page).getByText('Backlog')).toBeVisible();
 
   // Edit → the picker autoOpens; pick the planned sprint (option name = label +
   // "Planned" secondary, so match on the name substring).
@@ -99,7 +108,7 @@ test('@smoke inline Sprint field: Backlog → a sprint, persists across reload',
   // Persisted server-side + after a reload the field names the sprint.
   await expect.poll(async () => (await getItem(page, item.id)).sprintId).toBe(sprint.id);
   await page.reload();
-  await expect(page.getByText('Sprint A')).toBeVisible();
+  await expect(sprintField(page).getByText('Sprint A')).toBeVisible();
 });
 
 test('@smoke ⋯ "Add to active sprint" assigns to the active sprint', async ({ page }) => {
