@@ -1,0 +1,2567 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Motir start-fresh onboarding (Story 7.3 · 7.3.1) — public landing/chat front
+      door → login gate → authed entry → wizard (discovery + direction docs) + states
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the `ai-chat` surface — Motir's START-FRESH
+      ONBOARDING flow (Story 7.3, subtask 7.3.1 / MOTIR-827). SUPERSEDES the old
+      7.2.1 chat design (MOTIR-489) + the old 7.15.1 wizard design: the chat front
+      door renders INSIDE the onboarding wizard shell, so they are co-designed here
+      as one flow. Gates every UI subtask in 7.3 (7.3.5 chat UI, 7.3.6 docs view,
+      7.3.11 wizard shell).
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*), and the
+      markup composes the SHIPPED primitives — Card, Button, Textarea, Modal,
+      Segmented, Pill, Spinner, ErrorState, MarkdownView — plus the real app shell
+      (Sidebar + ShellTierNav) and the real (auth) card grammar. NO Tier-0
+      --color-* used directly, no raw rounded/p/h utilities. The chat MESSAGE
+      BUBBLE is a NEW ARRANGEMENT of shipped primitives (a tinted Card + Avatar +
+      MarkdownView) — no new design-system vocabulary.
+
+      ⚠️ Grounded in SHIPPED REALITY (the MOTIR.md design rule): the earlier
+      MOTIR-489 mock invented a `Plan` nav entry + an assumed rail — REDONE here.
+      The real primary nav is Dashboard · Work Items · Ready · Boards · Backlog ·
+      Triage · Reports (app/(authed)/_components/SidebarNav.tsx; label "Work Items",
+      never "Issues"; NO `Plan` entry). The authed door into the wizard is the real
+      ProjectSwitcher "Create project" affordance.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) PUBLIC LANDING = the chat front door (logged-out DOOR into the wizard)
+        (2) LOGIN GATE — raised on submit; the typed idea is PRESERVED
+        (3) AUTHED ENTRY / ACCESS PATH — the real shell + ProjectSwitcher open
+            (the authed DOOR into the wizard)
+        (4) WIZARD SHELL + discovery chat — the 6-step frame; chat embeds in it;
+            pin-vs-delegate; streaming
+        (5) DIRECTION DOCS — vision / discovery / feasibility, light-edit,
+            pinned-vs-delegated split, "generate the plan" CTA (wired in 7.4)
+        (6) STATES — running / discovery-failed / resume / Connect Motir AI gate
+      Toggle dark mode (top-right) to confirm token parity. See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Typography (next/font vars in-app; static fallbacks here) */
+        --font-sans:
+          ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: 'Source Serif 4', Georgia, serif;
+        --font-mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        /* Tier 3 — element tokens (components consume ONLY these) */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* Tier 1 — dark overrides (copied from app/globals.css) */
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design) ───────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        padding: 28px 24px 96px;
+        transition:
+          background 150ms ease,
+          color 150ms ease;
+      }
+      .review-head {
+        max-width: 1120px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1120px;
+      }
+      .panel {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+      .surface {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic-sm {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .ic-lg {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+
+      /* ── Button primitive (components/ui/Button.tsx) ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-lg {
+        height: var(--height-btn-lg);
+        font-size: 14px;
+        padding: 0 22px;
+      }
+      .btn-block {
+        width: 100%;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+
+      /* ── Pill primitive (components/ui/Pill.tsx) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-pinned {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-delegated {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-accent {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+
+      /* ── Card primitive ── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+
+      /* ── Avatar (issueCellPrimitives — initial-letter disc) ── */
+      .avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-pill);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex: none;
+      }
+      .avatar-accent {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .avatar-user {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+
+      /* ─────────────── Panel 1 — public landing (marketing nav + hero) ─────────────── */
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .brand .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 14px 28px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .navlinks {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .navlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .navlink:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .navauth {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .hero {
+        text-align: center;
+        padding: 60px 24px 52px;
+        background:
+          radial-gradient(120% 90% at 50% -10%, var(--el-hero-wash-a) 0%, transparent 60%),
+          var(--el-page-bg);
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+        padding: 6px 12px;
+        border-radius: var(--radius-pill);
+        margin-bottom: 20px;
+      }
+      .hero h2 {
+        font-family: var(--font-serif);
+        font-size: 44px;
+        line-height: 1.08;
+        font-weight: 600;
+        margin: 0 auto;
+        max-width: 720px;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+      }
+      .hero .sub {
+        margin: 18px auto 0;
+        max-width: 620px;
+        font-size: 16px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .hero .sub b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .promptbox {
+        max-width: 660px;
+        margin: 32px auto 0;
+        text-align: left;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 16px 16px 12px;
+      }
+      .promptbox textarea {
+        width: 100%;
+        border: none;
+        resize: none;
+        background: transparent;
+        font-family: var(--font-sans);
+        font-size: 15px;
+        line-height: 1.5;
+        color: var(--el-text);
+        outline: none;
+        padding: 4px 4px 0;
+      }
+      .promptbox textarea::placeholder {
+        color: var(--el-text-muted);
+      }
+      .pb-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 12px;
+        padding-top: 11px;
+        border-top: 1px solid var(--el-border);
+      }
+      .pb-foot .hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        max-width: 680px;
+        margin: 16px auto 0;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-pill);
+        padding: 7px 13px;
+        cursor: pointer;
+      }
+      .chip:hover {
+        border-color: var(--el-accent-on-surface);
+        color: var(--el-text);
+      }
+      .layers {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        max-width: 880px;
+        margin: 40px auto 8px;
+        padding: 0 24px;
+      }
+      .layer {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+        text-align: left;
+      }
+      .layer .tile {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+      .layer .step {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .layer h4 {
+        margin: 3px 0 5px;
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .layer p {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* ─────────────── Panel 2 — login gate (Modal over dimmed landing) ─────────────── */
+      .gate-stage {
+        position: relative;
+        background:
+          radial-gradient(120% 90% at 50% -10%, var(--el-hero-wash-a) 0%, transparent 60%),
+          var(--el-page-bg);
+        padding: 40px 24px;
+        min-height: 540px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .gate-stage::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 15, 15, 0.42);
+      }
+      .modal {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 416px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 28px 28px 24px;
+      }
+      .modal .gate-brand {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 14px;
+      }
+      .modal h3 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        text-align: center;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .modal .gate-sub {
+        text-align: center;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 18px;
+      }
+      .saved {
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-control);
+        padding: 11px 13px;
+        margin-bottom: 18px;
+      }
+      .saved .lbl {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-accent-on-surface);
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+      }
+      .saved p {
+        margin: 6px 0 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+      }
+      .oauth-btn {
+        width: 100%;
+        height: var(--height-btn-md);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        margin-bottom: 9px;
+      }
+      .oauth-btn:hover {
+        background: var(--el-surface);
+      }
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 14px 0;
+        color: var(--el-text-faint);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .divider::before,
+      .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--el-border);
+      }
+      .input {
+        width: 100%;
+        height: var(--height-input);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 var(--spacing-input-x);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        outline: none;
+        margin-bottom: 9px;
+      }
+      .input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .gate-foot {
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-top: 14px;
+      }
+      .gate-foot a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      /* ─────────────── Panel 3 — authed shell + ProjectSwitcher (access path) ─────────────── */
+      .shell {
+        position: relative;
+        background: var(--el-page-bg);
+      }
+      .topbar {
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topbar-l,
+      .topbar-r {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tier {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .tier:hover {
+        background: var(--el-surface);
+      }
+      .tier .sep {
+        color: var(--el-text-faint);
+        font-weight: 400;
+      }
+      .tier .muted {
+        color: var(--el-text-muted);
+        font-weight: 500;
+      }
+      .tier .proj {
+        color: var(--el-accent-on-surface);
+      }
+      .kbd {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+        border-radius: var(--radius-kbd);
+        padding: 2px 5px;
+        margin-left: 4px;
+      }
+      .searchbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        color: var(--el-text-muted);
+        font-size: 12.5px;
+        cursor: text;
+        min-width: 160px;
+      }
+      .shell-body {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        min-height: 460px;
+      }
+      .sidebar {
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+      }
+      .nav-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding: 6px 10px 4px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+        border: 1px solid transparent;
+        margin-bottom: 2px;
+        cursor: pointer;
+      }
+      .nav-item:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-item .ic {
+        color: var(--el-text-muted);
+      }
+      .nav-item.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-item.active .ic {
+        color: var(--el-accent-on-surface);
+      }
+      .nav-badge {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-muted);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 7px;
+      }
+      .nav-sep {
+        height: 1px;
+        background: var(--el-sidebar-border);
+        margin: 8px 4px;
+        border: 0;
+      }
+      .shell-main {
+        padding: 28px;
+        background: var(--el-page-bg);
+      }
+      .shell-main .ph {
+        height: 14px;
+        border-radius: var(--radius-pill);
+        background: var(--el-surface);
+      }
+      /* ProjectSwitcher Popover (open) */
+      .pop {
+        position: absolute;
+        top: 50px;
+        left: 120px;
+        z-index: 5;
+        width: 280px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+      }
+      .pop-lbl {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding: 7px 10px 4px;
+      }
+      .pop-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pop-row:hover {
+        background: var(--el-surface);
+      }
+      .pop-row .dot {
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        flex: none;
+      }
+      .pop-row .dot.teal {
+        background: var(--color-accent-teal);
+      }
+      .pop-row .check {
+        margin-left: auto;
+        color: var(--el-accent-on-surface);
+      }
+      .pop-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 5px 2px;
+      }
+      .pop-row.create {
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+        background: var(--el-tint-lavender);
+      }
+      .pop-row.create .ic {
+        color: var(--el-accent-on-surface);
+      }
+      .annot {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin: 12px 0 0;
+        padding: 10px 12px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .annot .ic {
+        color: var(--el-accent-on-surface);
+        margin-top: 1px;
+      }
+
+      /* ─────────────── Panel 4 + 5 — wizard shell ─────────────── */
+      .wiz-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 22px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .wiz-head .meta {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .stepper {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 14px 22px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        flex-wrap: wrap;
+      }
+      .step {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+      }
+      .step .dot {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-pill);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1.5px solid var(--el-border-strong);
+        font-size: 11px;
+        color: var(--el-text-faint);
+        background: var(--el-page-bg);
+      }
+      .step.done {
+        color: var(--el-text-secondary);
+      }
+      .step.done .dot {
+        background: var(--el-success);
+        border-color: var(--el-success);
+        color: var(--el-text-inverted);
+      }
+      .step.active {
+        color: var(--el-accent-on-surface);
+      }
+      .step.active .dot {
+        border-color: var(--el-accent);
+        color: var(--el-accent-on-surface);
+        box-shadow: 0 0 0 3px var(--el-tint-lavender);
+      }
+      .step-sep {
+        width: 18px;
+        height: 1px;
+        background: var(--el-border);
+      }
+      .chat {
+        padding: 24px;
+        max-width: 760px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .msg {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .msg.user {
+        flex-direction: row-reverse;
+      }
+      .msg .who {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        margin: 0 0 5px;
+      }
+      .msg.user .who {
+        text-align: right;
+      }
+      .bubble {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text);
+        max-width: 520px;
+      }
+      .bubble.assistant {
+        background: var(--el-surface-soft);
+        border-top-left-radius: var(--radius-sm);
+      }
+      .bubble.from-user {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        border-color: transparent;
+        border-top-right-radius: var(--radius-sm);
+      }
+      .bubble p {
+        margin: 0;
+      }
+      .bubble p + p {
+        margin-top: 8px;
+      }
+      .pin-row {
+        margin-top: 8px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.05em;
+        background: var(--el-accent-on-surface);
+        margin-left: 2px;
+        vertical-align: text-bottom;
+        animation: blink 1s steps(1) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      .typing {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        margin-top: 8px;
+        padding-left: 2px;
+      }
+      .typing span {
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--el-text-faint);
+        animation: bounce 1.2s infinite ease-in-out;
+      }
+      .typing span:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .typing span:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+      @keyframes bounce {
+        0%,
+        60%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.5;
+        }
+        30% {
+          transform: translateY(-4px);
+          opacity: 1;
+        }
+      }
+      .decision {
+        border-top: 1px dashed var(--el-border-strong);
+        margin-top: 4px;
+        padding-top: 14px;
+      }
+      .decision .hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-bottom: 10px;
+      }
+      .opts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .opt {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-pill);
+        padding: 7px 13px;
+        cursor: pointer;
+      }
+      .opt:hover {
+        border-color: var(--el-accent-on-surface);
+      }
+      .opt-delegate {
+        color: var(--el-accent-on-surface);
+        background: transparent;
+        border: 1px dashed var(--el-accent-on-surface);
+      }
+      .composer {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 24px 24px;
+      }
+      .composer-box {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 10px 10px 10px 14px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .composer-box textarea {
+        flex: 1;
+        border: none;
+        resize: none;
+        background: transparent;
+        outline: none;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+        padding: 5px 0;
+      }
+      .composer-box textarea::placeholder {
+        color: var(--el-text-muted);
+      }
+      .send {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        border: none;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      /* Panel 5 — direction docs */
+      .docs {
+        padding: 22px 24px 24px;
+        max-width: 820px;
+        margin: 0 auto;
+      }
+      .docs-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .docs-head h3 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .docs-head p {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .segmented {
+        display: inline-flex;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 3px;
+        gap: 2px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+        padding: 6px 12px;
+        cursor: pointer;
+      }
+      .seg[aria-selected='true'] {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        box-shadow: var(--shadow-subtle);
+      }
+      .doc-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .doc-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .doc-bar .file {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .doc-body {
+        padding: 20px 22px;
+      }
+      .doc-body h4 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .doc-body p {
+        margin: 0 0 12px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .editable {
+        position: relative;
+        border-radius: var(--radius-control);
+        padding: 4px 30px 4px 8px;
+        margin: 0 -8px 12px;
+      }
+      .editable:hover {
+        background: var(--el-surface-soft);
+      }
+      .editable .pen {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        color: var(--el-text-faint);
+      }
+      .editable:hover .pen {
+        color: var(--el-text-muted);
+      }
+      .dec-head {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 20px 0 10px;
+      }
+      .dec-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-top: 1px solid var(--el-border);
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .dec-row .q {
+        flex: 1;
+      }
+      .dec-row .val {
+        color: var(--el-text-secondary);
+        font-size: 12.5px;
+      }
+      .docs-cta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 20px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+        flex-wrap: wrap;
+      }
+      .docs-cta .note {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ─────────────── Panel 6 — states ─────────────── */
+      .states {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+        padding: 24px;
+      }
+      .state {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg);
+      }
+      .state .glyph {
+        width: 38px;
+        height: 38px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+      .g-lav {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .g-rose {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .g-sky {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
+      .g-yellow {
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .state h4 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        color: var(--el-text);
+      }
+      .state p {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .progress {
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--el-muted);
+        overflow: hidden;
+        margin-bottom: 14px;
+      }
+      .progress > span {
+        display: block;
+        height: 100%;
+        width: 58%;
+        background: var(--el-accent);
+      }
+      .steplist {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .steplist .row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .steplist .row.done {
+        color: var(--el-text);
+      }
+      .steplist .ic.ok {
+        color: var(--el-success);
+      }
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-pill);
+        border: 2px solid var(--el-border);
+        border-top-color: var(--el-accent-on-surface);
+        animation: spin 0.7s linear infinite;
+        flex: none;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .state-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .savedline {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 9px 11px;
+        margin-bottom: 14px;
+      }
+      .learn {
+        color: var(--el-link);
+        text-decoration: none;
+        font-size: 12.5px;
+        font-weight: 600;
+        align-self: center;
+      }
+      @media (max-width: 720px) {
+        .states,
+        .layers {
+          grid-template-columns: 1fr;
+        }
+        .shell-body {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Motir — start-fresh onboarding (Story 7.3 · 7.3.1 / MOTIR-827)</h1>
+        <p>
+          The whole journey: public landing/chat front door → login gate → authed entry → the
+          onboarding wizard (discovery chat + 3 direction docs) → states. Composes the shipped
+          design system; grounded in the real shell nav (Dashboard · Work Items · Ready · Boards ·
+          Backlog · Triage · Reports — no "Plan" entry). Supersedes the old 7.2.1 + 7.15.1 designs.
+        </p>
+      </div>
+      <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
+    </div>
+
+    <!-- ════════════ PANEL 1 — PUBLIC LANDING = the chat front door (logged-out DOOR) ════════════ -->
+    <div class="panel-label">Panel 1 · Public landing = the chat front door (logged-out)</div>
+    <div class="panel">
+      <div class="surface">
+        <!-- marketing top-nav (cloud-only chrome; PublicTopBar grammar) -->
+        <div class="topnav">
+          <a class="brand">
+            <span class="tile"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+            ></span>
+            Motir
+          </a>
+          <nav class="navlinks">
+            <a class="navlink">Product</a>
+            <a class="navlink">Resources</a>
+            <a class="navlink">Pricing</a>
+            <a class="navlink">Docs</a>
+          </nav>
+          <div class="navauth">
+            <button class="btn btn-ghost btn-sm">Log in</button>
+            <button class="btn btn-primary btn-sm">Sign up</button>
+          </div>
+        </div>
+        <!-- hero -->
+        <div class="hero">
+          <span class="eyebrow"
+            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Vibe
+            project</span
+          >
+          <h2>What do you want to build?</h2>
+          <p class="sub">
+            You've heard of vibe coding. A <b>vibe project</b> takes it to the whole thing —
+            describe your idea and Motir plans the work, tracks it, and ships the code, end to end.
+          </p>
+          <!-- the chat prompt box = the front door (a Card holding a Textarea + action) -->
+          <div class="promptbox">
+            <textarea rows="3" aria-label="Describe what you want to build">
+A tool for freelancers to send invoices and track which clients have paid</textarea
+            >
+            <div class="pb-foot">
+              <span class="hint"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock" /></svg> Free to start ·
+                no card</span
+              >
+              <button class="btn btn-primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Start planning
+              </button>
+            </div>
+          </div>
+          <!-- starter chips -->
+          <div class="chips">
+            <button class="chip">
+              A marketplace for local tutors
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+            </button>
+            <button class="chip">
+              An internal bug-bounty tracker
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+            </button>
+            <button class="chip">
+              A habit tracker with streaks
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+            </button>
+          </div>
+        </div>
+        <!-- three-layer trust strip -->
+        <div class="layers">
+          <div class="layer">
+            <span class="tile"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+            ></span>
+            <div class="step">Step 1 · Plan</div>
+            <h4>AI planner</h4>
+            <p>Describe your idea in chat; Motir turns it into a structured issue tree.</p>
+          </div>
+          <div class="layer">
+            <span class="tile"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-kanban" /></svg
+            ></span>
+            <div class="step">Step 2 · Track</div>
+            <h4>MCP-native tracker</h4>
+            <p>Boards, sprints, and a backlog — the system of record your team works in.</p>
+          </div>
+          <div class="layer">
+            <span class="tile"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg
+            ></span>
+            <div class="step">Step 3 · Ship</div>
+            <h4>Hosted coding agent</h4>
+            <p>Dispatch ready work to a coding agent that opens the PR back to you.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — LOGIN GATE (idea preserved) ════════════ -->
+    <div class="panel-label">
+      Panel 2 · Login gate — raised on submit; the typed idea is preserved
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="gate-stage">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+            <div class="gate-brand">
+              <span class="brand"
+                ><span class="tile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                ></span>
+                Motir</span
+              >
+            </div>
+            <h3 id="gate-title">Sign in to start planning</h3>
+            <p class="gate-sub">
+              Your idea is saved — sign in and we'll pick up right where you left off.
+            </p>
+            <div class="saved">
+              <span class="lbl"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your idea —
+                saved</span
+              >
+              <p>"A tool for freelancers to send invoices and track which clients have paid"</p>
+            </div>
+            <button class="oauth-btn">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-google" /></svg> Continue with
+              Google
+            </button>
+            <button class="oauth-btn">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-github" /></svg> Continue with
+              GitHub
+            </button>
+            <div class="divider">or</div>
+            <input class="input" type="email" placeholder="you@company.com" aria-label="Email" />
+            <button class="btn btn-primary btn-block">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-mail" /></svg> Continue with email
+            </button>
+            <p class="gate-foot">Already have an account? <a>Log in</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — AUTHED ENTRY / ACCESS PATH (authed DOOR) ════════════ -->
+    <div class="panel-label">
+      Panel 3 · Authed entry — the real shell + ProjectSwitcher (the access path)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="shell">
+          <!-- real top bar -->
+          <div class="topbar">
+            <div class="topbar-l">
+              <button class="icon-btn" aria-label="Toggle sidebar">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-panel-left" /></svg>
+              </button>
+              <div class="tier">
+                Acme <span class="sep">/</span> <span class="muted">Engineering</span>
+                <span class="sep">/</span> <span class="proj">Invoices</span>
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </div>
+            </div>
+            <div class="topbar-r">
+              <button class="btn btn-secondary btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Create
+                issue
+              </button>
+              <span class="searchbox"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                <span class="kbd">⌘K</span></span
+              >
+              <button class="icon-btn" aria-label="Theme">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sun" /></svg>
+              </button>
+              <button class="icon-btn" aria-label="Notifications">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-bell" /></svg>
+              </button>
+              <span class="avatar avatar-user" aria-hidden="true">YZ</span>
+            </div>
+          </div>
+          <!-- shell body: real sidebar + main -->
+          <div class="shell-body">
+            <aside class="sidebar" aria-label="Primary">
+              <div class="nav-eyebrow">Project</div>
+              <a class="nav-item active"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-grid" /></svg> Dashboard</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Work
+                Items</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg> Ready
+                <span class="nav-badge">7</span></a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-columns" /></svg> Boards</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list" /></svg> Backlog</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-inbox" /></svg> Triage</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bar-chart" /></svg> Reports</a
+              >
+              <hr class="nav-sep" />
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-settings" /></svg> Settings</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Job runs</a
+              >
+              <a class="nav-item"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-book-open" /></svg> Docs</a
+              >
+            </aside>
+            <main class="shell-main">
+              <div class="ph" style="width: 38%"></div>
+              <div class="ph" style="width: 88%; margin-top: 16px; height: 10px"></div>
+              <div class="ph" style="width: 80%; margin-top: 10px; height: 10px"></div>
+              <div class="ph" style="width: 64%; margin-top: 10px; height: 10px"></div>
+              <div class="annot">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                <span
+                  ><b>Entry / access path.</b> The onboarding wizard is reached from the public hero
+                  (Panel 1, logged-out) <b>or</b> the project switcher's “Create project” (authed,
+                  shown open here) — drawn, not just named.</span
+                >
+              </div>
+            </main>
+          </div>
+          <!-- ProjectSwitcher Popover, OPEN (anchored at the top-bar project switcher) -->
+          <div class="pop" role="menu" aria-label="Switch project">
+            <div class="pop-lbl">Engineering · projects</div>
+            <div class="pop-row">
+              <span class="dot">IN</span> Invoices
+              <svg class="ic check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+            </div>
+            <div class="pop-row"><span class="dot teal">MA</span> Marketing site</div>
+            <div class="pop-row"><span class="dot teal">MO</span> Mobile app</div>
+            <div class="pop-sep"></div>
+            <div class="pop-row create" role="menuitem">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg> Plan a new project
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — WIZARD SHELL + discovery chat ════════════ -->
+    <div class="panel-label">
+      Panel 4 · Onboarding wizard — discovery chat embedded in the multi-step frame
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wiz-head">
+          <span class="brand"
+            ><span class="tile"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+            ></span>
+            New project</span
+          >
+          <div style="display: flex; align-items: center; gap: 14px">
+            <span class="meta">Discovery · step 2 of 6</span>
+            <button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-history" /></svg> Save &amp; exit
+            </button>
+          </div>
+        </div>
+        <!-- the 6-step stepper -->
+        <div class="stepper" aria-label="Onboarding steps">
+          <span class="step done"
+            ><span class="dot"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            Name</span
+          >
+          <span class="step-sep"></span>
+          <span class="step active" aria-current="step"><span class="dot">2</span> Discovery</span>
+          <span class="step-sep"></span>
+          <span class="step"><span class="dot">3</span> Convention</span>
+          <span class="step-sep"></span>
+          <span class="step"><span class="dot">4</span> Generate</span>
+          <span class="step-sep"></span>
+          <span class="step"><span class="dot">5</span> Review</span>
+          <span class="step-sep"></span>
+          <span class="step"><span class="dot">6</span> Dispatch</span>
+        </div>
+        <!-- embedded discovery chat -->
+        <div class="chat">
+          <!-- assistant picks up the preserved landing prompt -->
+          <div class="msg">
+            <span class="avatar avatar-accent" aria-hidden="true">M</span>
+            <div>
+              <p class="who">Motir</p>
+              <div class="bubble assistant">
+                <p>
+                  Great — an invoicing tool for freelancers. To shape the plan, who's the primary
+                  user: a solo freelancer, or a small agency managing several freelancers?
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- user pinned answer -->
+          <div class="msg user">
+            <span class="avatar avatar-user" aria-hidden="true">YZ</span>
+            <div>
+              <p class="who">You</p>
+              <div class="bubble from-user"><p>Solo freelancers — keep it simple.</p></div>
+              <div class="pin-row">
+                <span class="pill pill-pinned"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned · Solo
+                  freelancers</span
+                >
+              </div>
+            </div>
+          </div>
+          <!-- assistant question -->
+          <div class="msg">
+            <span class="avatar avatar-accent" aria-hidden="true">M</span>
+            <div>
+              <p class="who">Motir</p>
+              <div class="bubble assistant">
+                <p>
+                  Got it. Should payments be collected in-app (e.g. Stripe), or do you just want to
+                  record payments made elsewhere?
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- user delegated answer -->
+          <div class="msg user">
+            <span class="avatar avatar-user" aria-hidden="true">YZ</span>
+            <div>
+              <p class="who">You</p>
+              <div class="bubble from-user"><p>Not sure yet — you choose what's standard.</p></div>
+              <div class="pin-row">
+                <span class="pill pill-delegated"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                  decide</span
+                >
+              </div>
+            </div>
+          </div>
+          <!-- in-flight assistant (streaming) + live decision affordance -->
+          <div class="msg">
+            <span class="avatar avatar-accent" aria-hidden="true">M</span>
+            <div style="flex: 1">
+              <p class="who">Motir</p>
+              <div class="bubble assistant">
+                <p>
+                  Makes sense. One more: how should invoices be delivered to clients<span
+                    class="caret"
+                    aria-hidden="true"
+                  ></span>
+                </p>
+              </div>
+              <div class="typing" role="status" aria-label="Motir is typing">
+                <span></span><span></span><span></span>
+              </div>
+              <div class="decision">
+                <span class="hint"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Answer to pin
+                  it — or let Motir decide.</span
+                >
+                <div class="opts">
+                  <button class="opt">Email a PDF link</button>
+                  <button class="opt">Shareable web link</button>
+                  <button class="opt">Both</button>
+                  <button class="opt opt-delegate">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You decide
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- composer -->
+        <div class="composer">
+          <div class="composer-box">
+            <textarea rows="1" placeholder="Reply to Motir…" aria-label="Message"></textarea>
+            <button class="send" aria-label="Send">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-send" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 — DIRECTION DOCS (review / light-edit) ════════════ -->
+    <div class="panel-label">
+      Panel 5 · Direction docs — vision / discovery / feasibility (light-edit)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wiz-head">
+          <span class="brand"
+            ><span class="tile"
+              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+            ></span>
+            New project</span
+          >
+          <span class="meta">Review · step 5 of 6</span>
+        </div>
+        <div class="stepper" aria-label="Onboarding steps">
+          <span class="step done"
+            ><span class="dot"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            Name</span
+          >
+          <span class="step-sep"></span>
+          <span class="step done"
+            ><span class="dot"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            Discovery</span
+          >
+          <span class="step-sep"></span>
+          <span class="step done"
+            ><span class="dot"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            Convention</span
+          >
+          <span class="step-sep"></span>
+          <span class="step done"
+            ><span class="dot"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
+            ></span>
+            Generate</span
+          >
+          <span class="step-sep"></span>
+          <span class="step active" aria-current="step"><span class="dot">5</span> Review</span>
+          <span class="step-sep"></span>
+          <span class="step"><span class="dot">6</span> Dispatch</span>
+        </div>
+        <div class="docs">
+          <div class="docs-head">
+            <div>
+              <h3>Direction docs</h3>
+              <p>Review and lightly edit before Motir generates the issue tree.</p>
+            </div>
+            <!-- Segmented (3-doc tabs) — role=tablist -->
+            <div class="segmented" role="tablist" aria-label="Direction docs">
+              <button class="seg" role="tab" aria-selected="false">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Vision
+              </button>
+              <button class="seg" role="tab" aria-selected="true">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Discovery
+              </button>
+              <button class="seg" role="tab" aria-selected="false">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg> Feasibility
+              </button>
+            </div>
+          </div>
+          <div class="doc-card">
+            <div class="doc-bar">
+              <span class="file"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file" /></svg>
+                discovery.md</span
+              >
+              <span style="display: inline-flex; align-items: center; gap: 8px">
+                Edited just now · draft
+                <button class="icon-btn" aria-label="Edit document">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                </button>
+              </span>
+            </div>
+            <div class="doc-body">
+              <h4>Discovery — Invoices for freelancers</h4>
+              <div class="editable">
+                <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                <p style="margin: 0">
+                  <b>Problem.</b> Solo freelancers lose hours chasing late payments across email and
+                  spreadsheets, with no single view of who has paid.
+                </p>
+              </div>
+              <div class="editable">
+                <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                <p style="margin: 0">
+                  <b>Primary user.</b> A solo freelancer who sends a handful of invoices a month and
+                  wants to see, at a glance, what's outstanding.
+                </p>
+              </div>
+              <div class="dec-head">Decisions</div>
+              <div class="dec-row">
+                <span class="q">Primary user</span>
+                <span class="val">Solo freelancers</span>
+                <span class="pill pill-pinned"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned</span
+                >
+              </div>
+              <div class="dec-row">
+                <span class="q">Payment collection</span>
+                <span class="val">Motir will choose the standard approach</span>
+                <span class="pill pill-delegated"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                  decide</span
+                >
+              </div>
+            </div>
+          </div>
+          <!-- the 7.4 hand-off: DRAWN here, WIRED in 7.4 -->
+          <div class="docs-cta">
+            <span class="note"
+              >Generating creates the epic → story → subtask tree you'll review next.</span
+            >
+            <button class="btn btn-primary btn-lg">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Looks right —
+              generate the plan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 6 — STATES ════════════ -->
+    <div class="panel-label">
+      Panel 6 · States — running · discovery-failed · resume · Connect Motir AI
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="states">
+          <!-- running (tied to the planning job stream) -->
+          <div class="state">
+            <span class="glyph g-lav"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+            ></span>
+            <h4>Drafting your direction docs</h4>
+            <p>
+              Motir is turning the discovery interview into vision, discovery, and feasibility docs.
+            </p>
+            <div class="progress"><span></span></div>
+            <div class="steplist">
+              <div class="row done">
+                <svg class="ic-sm ok" viewBox="0 0 24 24"><use href="#i-check" /></svg> Vision —
+                done
+              </div>
+              <div class="row"><span class="spinner"></span> Discovery — writing…</div>
+              <div class="row">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-history" /></svg> Feasibility —
+                queued
+              </div>
+            </div>
+          </div>
+          <!-- discovery-failed (ErrorState shape) -->
+          <div class="state">
+            <span class="glyph g-rose"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ></span>
+            <h4>Discovery couldn't finish</h4>
+            <p>
+              The planner hit an error before the docs were complete. Your answers are saved — you
+              can pick up where you left off.
+            </p>
+            <div class="savedline">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> 6 answers saved ·
+              2 pinned, 1 delegated
+            </div>
+            <div class="state-actions">
+              <button class="btn btn-secondary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Try again
+              </button>
+            </div>
+          </div>
+          <!-- resume -->
+          <div class="state">
+            <span class="glyph g-sky"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-history" /></svg
+            ></span>
+            <h4>Docs already exist</h4>
+            <p>
+              You started planning this project earlier. Resume editing the direction docs, or start
+              over from a fresh idea.
+            </p>
+            <div class="state-actions">
+              <button class="btn btn-secondary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> Resume editing
+              </button>
+              <button class="btn btn-ghost">Start over</button>
+            </div>
+          </div>
+          <!-- Connect Motir AI (self-host connect-gate) -->
+          <div class="state">
+            <span class="glyph g-yellow"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-plug" /></svg
+            ></span>
+            <h4>Connect Motir AI</h4>
+            <p>
+              Planning runs on Motir Cloud. Connect your workspace to a Motir Cloud token to start
+              planning.
+            </p>
+            <div class="state-actions">
+              <button class="btn btn-primary">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg> Connect Motir AI
+              </button>
+              <a class="learn">Self-hosted? Learn more</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────── SVG icon defs (lucide 24×24; decorative, aria-hidden) ─────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </g>
+        <g
+          id="i-send"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"
+          />
+          <path d="M6 12h16" />
+        </g>
+        <g
+          id="i-pin"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 17v5" />
+          <path
+            d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+          />
+        </g>
+        <g
+          id="i-wand"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"
+          />
+          <path d="m14 7 3 3" />
+          <path d="M5 6v4" />
+          <path d="M19 14v4" />
+          <path d="M10 2v2" />
+          <path d="M7 8H3" />
+          <path d="M21 16h-4" />
+          <path d="M11 3H9" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13 21h8" />
+          <path d="m15 5 4 4" />
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+        </g>
+        <g
+          id="i-file"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-rotate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-history"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l4 2" />
+        </g>
+        <g
+          id="i-arrow-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="16" r="1" />
+          <rect x="3" y="10" width="18" height="12" rx="2" />
+          <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+        </g>
+        <g
+          id="i-circle-dot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="1" />
+        </g>
+        <g
+          id="i-circle-play"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polygon points="10 8 16 12 10 16 10 8" />
+        </g>
+        <g
+          id="i-kanban"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M8 7v7" />
+          <path d="M12 7v4" />
+          <path d="M16 7v9" />
+        </g>
+        <g
+          id="i-grid"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="9" x="3" y="3" rx="1" />
+          <rect width="7" height="5" x="14" y="3" rx="1" />
+          <rect width="7" height="9" x="14" y="12" rx="1" />
+          <rect width="7" height="5" x="3" y="16" rx="1" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="7" x="3" y="3" rx="1" />
+          <rect width="7" height="7" x="3" y="14" rx="1" />
+          <path d="M14 4h7" />
+          <path d="M14 9h7" />
+          <path d="M14 15h7" />
+          <path d="M14 20h7" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <g
+          id="i-bar-chart"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 3v18h18" />
+          <path d="M18 17V9" />
+          <path d="M13 17V5" />
+          <path d="M8 17v-3" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-list-checks"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-book-open"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-panel-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+        </g>
+        <g
+          id="i-sun"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2" />
+          <path d="M12 20v2" />
+          <path d="m4.93 4.93 1.41 1.41" />
+          <path d="m17.66 17.66 1.41 1.41" />
+          <path d="M2 12h2" />
+          <path d="M20 12h2" />
+          <path d="m6.34 17.66-1.41 1.41" />
+          <path d="m19.07 4.93-1.41 1.41" />
+        </g>
+        <g
+          id="i-plug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 22v-5" />
+          <path d="M9 8V2" />
+          <path d="M15 8V2" />
+          <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
+        </g>
+        <!-- GitHub mark (brand, fill) -->
+        <g id="i-github" fill="currentColor" stroke="none">
+          <path
+            d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"
+          />
+        </g>
+        <!-- Google G (brand, 4-colour fill — the intentional brand exception) -->
+        <g id="i-google" stroke="none">
+          <path
+            fill="#4285F4"
+            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.83z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83C6.71 7.31 9.14 5.38 12 5.38z"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <script>
+      function toggleTheme() {
+        var el = document.documentElement;
+        el.dataset.theme = el.dataset.theme === 'dark' ? 'light' : 'dark';
+      }
+    </script>
+  </body>
+</html>
