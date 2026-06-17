@@ -33,7 +33,14 @@ const CANONICAL_ERROR_CODES = [
 ] as const;
 
 // contract.md §2.3 — the jobKind enum. KEEP IN SYNC with motir-ai.
-const CANONICAL_JOB_KINDS = ['noop', 'generate_tree', 'expand_item', 'augment', 'replan'] as const;
+const CANONICAL_JOB_KINDS = [
+  'noop',
+  'discovery',
+  'generate_tree',
+  'expand_item',
+  'augment',
+  'replan',
+] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).
 const EXPECTED_MAPPING: Record<string, new (...args: never[]) => MotirAiError> = {
