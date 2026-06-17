@@ -3009,3 +3009,128 @@ The **read-until-restored** posture (above — deferred with its trigger). **Bul
 archive/restore from the detail page (archive is per-item). A **re-archive** action
 in the banner (re-archiving lives in the `⋯` menu, unchanged — the banner only
 restores). These are noted, not built.
+
+## Sprint on the work-item detail — rail field + "Add to active sprint" (Story 2.4 · 2.4.15 → 2.4.14)
+
+`sprint-field.mock.html` (→ `sprint-field.png`) is the design for **sprint
+membership on the work-item detail**: a **Sprint** inline-edit FieldCard on the
+core-fields rail, and an **"Add to active sprint"** quick action in the shared
+`⋯` actions menu. It gates code subtask **2.4.14 (MOTIR-1003)**, which carries
+2.4.15 in `dependsOn` (`is_blocked_by`).
+
+**Why this is a design subtask (the design gate, mistake #31).** Both additions
+land on ALREADY-designed surfaces that do not include them, so each is an
+undesigned element — not mere grammar reuse:
+
+- `detail.pen`'s core-fields rail draws Status · Type · Work type · Executor ·
+  Priority · Assignee · Reporter · Parent · (Labels · Components) · Due · Story
+  points · Estimate — there is **no Sprint field**. This is exactly the case
+  **custom fields** hit (5.3.5 → 5.3.7): they reused `FieldCard` + `Combobox`
+  verbatim and STILL needed a design asset because placement / value rendering /
+  the picker sentinel were unspecified. Sprint is the same shape.
+- `delete-confirm.mock.html` fixes the `⋯` `WorkItemActionsMenu` item set
+  (Edit details · Copy link · — · Archive · Delete…) with no sprint action, and
+  pins a hard law: permission-gated rows are **hidden, "never shown-disabled."**
+  The card asks for a row "greyed out + tooltip when there is no active sprint"
+  — which contradicts that law and must be resolved by design.
+
+**Mirror (rung 1) = Jira.** Jira's Details panel carries Sprint directly above
+the Story-point estimate; Jira/Linear **disable-and-explain** context actions
+that are not currently applicable and reserve **removal** for permission — the
+basis for the state-gate decision below.
+
+### The Sprint FieldCard (panels 0–1)
+
+- **Placement** — inserts **between Due date and Story points** (cluster: Due ·
+  **Sprint** · Story points · Estimate), pairing Sprint with the agile estimate
+  (Jira's ordering). It is `CoreFieldsPanel.tsx`'s `FieldCard` verbatim — Card
+  (`--radius-card`, `--shadow-card`, `--el-border`, px-3.5/py-2.5) · uppercase
+  11px `--el-text-secondary` label · corner chevron `<button>` (rotates 180° in
+  edit mode) · value line mt-1.5/14px. **No new chrome.** Built-ins never
+  reorder; Sprint is new, so existing relative order is preserved.
+- **Visibility** — shown for sprintable kinds. For **epics** (which span sprints
+  in Jira and are never assigned to one) the recommendation is to **hide** the
+  card; 2.4.14 confirms against the data model (whether `epic.sprintId` is
+  permitted). Drawn here for a story.
+- **Value line** — in a sprint: 16px `--el-text-secondary` **Goal** glyph (lucide
+  `goal`, the Due/Estimate glyph grammar) + the sprint **name** plain
+  ("Sprint 7"). Backlog (`sprintId` null): muted-italic **"Backlog"** in
+  `--el-text-secondary` (the Parent card's `None` convention — NOT "None";
+  backlog is the real default home of an unscheduled item). A current value whose
+  sprint is **completed** stays shown with a muted `(completed)` mark in
+  `--el-text-muted` (the archived-option precedent) — never colour alone.
+- **Editor** — the AssigneePicker-shaped **`Combobox`** (`components/ui/Combobox`,
+  `autoOpen`): trigger (`--height-control`, `--radius-input`, up/down glyph),
+  menu (`--shadow-elevated`, `--radius-card`). Rows:
+  - **First row = "Backlog"** (muted italic) — the clear / move-home path,
+    matching the filter's `sprint-select` **Backlog-first** precedent (a
+    meaningful sentinel, not the generic "None").
+  - the **Active** sprint (secondary "Active"), then **Planned**/future sprints
+    (secondary "Planned"); the selected row carries the `Check` in `--el-accent`.
+  - **Completed** sprints are **excluded** from the menu (you do not schedule into
+    a closed sprint); a current completed value still renders in the trigger with
+    the `(completed)` mark.
+  - **Searchable at ≥8 sprints** (the Combobox `searchable` rule) — the search row
+    (`--el-border`, `--radius-input`, `search` glyph) appears; smaller sets open
+    straight to the list.
+- **Page-state (for 2.4.14)** — changing the sprint is an inline edit: keep the
+  optimistic value, **no `router.refresh()`** of the cell (the
+  inline-edit-no-tree-refresh rule). The assign goes through
+  `backlogService.assignToSprint` (the 4.2 / `move_to_sprint` path), which also
+  ranks the item at the sprint tail; the field waits on that response.
+
+### "Add to active sprint" in the `⋯` menu (panels 2–3)
+
+- **Access path** — the shared `⋯` `WorkItemActionsMenu` on the detail header
+  (drawn open over a header slice: type glyph · `PROD-N` mono · serif title ·
+  the active `icon-btn`). The new row (Goal glyph) joins the **top
+  non-destructive group, after "Edit details"**: **Edit details · Add to active
+  sprint · Copy link** · — · Archive · Delete…. `canEdit` gates it. One click
+  assigns to the project's **currently-active** sprint and confirms with the
+  shipped success **Toast** ("Added PROD-N to <sprint>").
+- **Disabled-vs-hidden (the conflict resolution)** — the menu's "hidden, never
+  shown-disabled" law governs **capability**: `!canEdit` still **removes** the
+  row entirely (panel 3, viewer). But **"no active sprint"** and **"already in
+  the active sprint"** are transient **state** gates — the user HAS the
+  capability, the precondition just is not met now. Hiding would flicker the row
+  in/out as sprints start/complete and hide that the feature exists. So in those
+  states the row is **shown disabled (opacity-50) + a `Tooltip`** naming the
+  reason ("No active sprint" / "Already in the active sprint"). This is a
+  **justified deviation** from the hide-law, scoped to state gates only; the
+  Tooltip-on-a-disabled-row is the one new menu sub-pattern (the menu's other
+  rows carry none). Tooltip = the ink bubble (`--el-text` bg, `--el-text-inverted`
+  text, `--radius-control`, `--spacing-tooltip-*`).
+- **Shared reach** — the row lives in the shared menu, so it appears wherever the
+  menu mounts (detail header, **list rows, board cards**), like Archive/Delete —
+  a surface-agnostic per-item action; quick triage into the running sprint from a
+  row/card is the use case.
+
+### Tokens + primitives
+
+Colour via `--el-*` only (no Tier-0): `--el-text` / `--el-text-secondary` /
+`--el-text-muted` ink, `--el-accent` for the selected `Check`, `--el-success` on
+the confirmation Toast, `--el-danger` on the unchanged Delete row,
+`--el-border`/`--el-border-soft` hairlines. Shape via element-semantic tokens
+(`--radius-card`/`-input`/`-control`, `--shadow-card`/`-elevated`/`-subtle`,
+`--height-control`, `--spacing-control-*`/`-tooltip-*`). Primitives reused
+verbatim: `FieldCard`, `Combobox`, `WorkItemActionsMenu` (Popover), `Tooltip`,
+`Toast`. No new chrome beyond the disabled-row Tooltip treatment.
+
+### States in the mockup
+
+Panels: **(0)** PLACEMENT + value — the Due · Sprint · Story-points cluster with
+Sprint populated, the Backlog state, and the completed-current mark · **(1)** EDIT
+— the Combobox open (Backlog sentinel · Active+Check · Planned) and the ≥8
+searchable variant · **(2)** `⋯` MENU enabled — the detail header with the menu
+open, the new row live, + the success Toast · **(3)** `⋯` MENU disabled — "No
+active sprint" and "Already in the active sprint" (each disabled + Tooltip), and
+the viewer case (row absent).
+
+### Out of scope (documented extension slots)
+
+**Removing** an item from a sprint other than via the Backlog sentinel (there is
+no separate "remove from sprint" affordance — picking Backlog IS the remove).
+**Multi-select / bulk** "add to active sprint" from the list/board (this design
+is the per-item menu row; bulk lives with the backlog/board bulk tools, 4.2).
+A sprint-state **badge** on the value line beyond the `(completed)` mark (kept
+clean — Jira renders the sprint name plain). These are noted, not built.
