@@ -4,11 +4,15 @@ Design reference for the `ai-chat` UI area — **Motir's start-fresh onboarding
 journey** (Story 7.3, `MOTIR-804`), designed as a **visual planning canvas** in
 the spirit of cofounder.co: the process is the hero, the chat is a quiet rail.
 
-> **The spine of the whole design — one visual process:**
-> **Idea → Discover · Shape · Validate → Plan** (→ Dispatch)
+> **The spine of the whole design — one continuous road:**
+> **Idea → Discover · Shape · Validate → Plan → Epic 1 → Epic 2 → Epic 3 → …**
 
 The user describes an idea; it flows through **three stages** and materializes as
-a generated issue tree (a dispatchable backlog). This asset is the layout source
+a generated issue tree (a dispatchable backlog). **The canvas is not thrown away
+once planning ends — it becomes the project's persistent ROADMAP**: the same road
+continues through the epics, and each epic expands into its own sub-roadmap (the
+work-item tree in the same node/road language). Onboarding and the roadmap are one
+surface (panels 7–8). This asset is the layout source
 of truth for every UI subtask in Story 7.3 — the chat front-door UI (`7.3.5`), the
 stage-output render/edit view (`7.3.6`), the wizard/canvas shell (`7.3.11`) and the
 orchestration it embeds (`7.3.9`). It is built FROM the real design system
@@ -106,14 +110,16 @@ Every shell/nav/auth surface is drawn to fit what is actually implemented:
 
 ## Surfaces (multi-panel — review EVERY panel, mistake #31)
 
-| #   | Panel                   | What it fixes                                                                                                                                                    |
-| --- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Public landing**      | the idea prompt + the **visual pipeline preview** (`Idea → Discover · Shape · Validate → Plan`) — "what's going to happen", made visual; replaces `app/page.tsx` |
-| 2   | **Login gate**          | the `Modal` on a logged-out submit; the **preserved-idea** callout; OAuth + email                                                                                |
-| 3   | **Authed access path**  | the REAL shell + nav; the ProjectSwitcher open on "Plan a new project"                                                                                           |
-| 4   | **The planning canvas** | the spatial stage pipeline as the MAIN STAGE; the chat as a **compact right rail** driving the active stage (pin-vs-delegate)                                    |
-| 5   | **A stage as a step**   | the active stage's captured direction as **structured fields + decision chips** (pinned/delegated), inline-edit — NOT a document                                 |
-| 6   | **Plan + states**       | the **issue tree materializing on the canvas** + "Review & dispatch"; the canvas states (generating / failed / resume / Connect Motir AI)                        |
+| #   | Panel                         | What it fixes                                                                                                                                                                                 |
+| --- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Public landing**            | the idea prompt + the **visual pipeline preview** (`Idea → Discover · Shape · Validate → Plan`) — "what's going to happen", made visual; replaces `app/page.tsx`                              |
+| 2   | **Login gate**                | the `Modal` on a logged-out submit; the **preserved-idea** callout; OAuth + email                                                                                                             |
+| 3   | **Authed access path**        | the REAL shell + nav; the ProjectSwitcher open on "Plan a new project"                                                                                                                        |
+| 4   | **The planning canvas**       | the spatial stage pipeline as the MAIN STAGE; the chat as a **compact right rail** driving the active stage (pin-vs-delegate)                                                                 |
+| 5   | **Stage review + transition** | the SAME shell — Discover collapsed to done, **Shape expanded in place** into review/edit, the rail re-pointed to "Shape · chat", and **"Continue to Validate →"** (the drawn 4→5 transition) |
+| 6   | **Plan + states**             | the **issue tree materializing on the canvas** + "Review & dispatch"; the canvas states (generating / failed / resume / Connect Motir AI)                                                     |
+| 7   | **The project roadmap**       | the road CONTINUES past planning: a collapsed planning origin → **Epic 1 → Epic 2 (you-are-here) → Epic 3 → +more**, each with progress/status — the persistent roadmap                       |
+| 8   | **Epic expanded**             | one epic opened into its **sub-roadmap** — its stories → subtasks tree in the same road/node language (kind hues + status); the work-item tree as a roadmap                                   |
 
 ---
 
@@ -164,16 +170,27 @@ caption names both doors.
   icon-button. The rail is clearly **secondary** — the glowing active stage node on
   the canvas is the focal point.
 
-### Panel 5 — a completed stage as a visual step (NOT a document)
+### Panel 5 — stage review + the drawn 4→5 transition (SAME shell)
 
-A persistent **stage tracker** across the top (Discover done + green connector →
-**Shape active** → Validate up-next → Plan last). Below, **"The shape of it"** (mono
-"STAGE 2 · SHAPE — REVIEW & ADJUST BEFORE VALIDATING") renders the captured
-direction as **structured fields** (Problem · Primary user, hover-reveal inline-edit
-`pencil`) + a **Key decisions** table whose rows carry the Pinned (mint, `pin`) /
-Delegated (lavender, `wand-sparkles`) chips. A footnote ("nothing is generated until
-you finish Validate") + a primary **"Continue to Validate →"**. No filename, no
-Markdown-file framing — it is the stage's output.
+Panel 5 is **the same screen as panel 4** — the persistent `canvas + chat rail`,
+not a separate layout. The flow within a stage: the rail asks → the active stage
+node **expands in place** and fills with structured direction → when it has enough,
+the node flips to a **review/edit** state with **"Continue to [next] →"** (that
+button is the drawn transition). Here:
+
+- **Discover** has collapsed to a **done** node ("Done · invoicing +
+  payment-tracking · solo freelancers").
+- **Shape** is the active node, **expanded in place** into "The shape of it"
+  (`In scope` / `Out of scope (v1)` fields with hover-reveal inline-edit `pencil`
+  - a **Core decisions** table whose rows carry the Pinned (mint, `pin`) /
+    Delegated (lavender, `wand-sparkles`) chips), ending in a primary **"Continue to
+    Validate →"**.
+- The **chat rail re-points** from "Discover · chat" (panel 4) to **"Shape · chat"**
+  with a Shape-specific Q&A — it stays present but quiet.
+
+**De-duplicated per stage** (no field repeats): Discover = what / who · Shape =
+in-scope / out-of-scope-v1 + core decisions · Validate = feasibility flags. No
+filename, no Markdown-file framing — it is the stage's output on the canvas.
 
 ### Panel 6 — plan materialized + states
 
@@ -188,6 +205,41 @@ Markdown-file framing — it is the stage's output.
   off** (resume: "Resume" + "Start over"); **Connect Motir AI** (`--el-tint-yellow`,
   `plug` glyph — the self-host connect-gate: "Planning runs on Motir Cloud…" +
   "Connect Motir AI" primary + "Self-hosted? Learn more").
+- **Bridge:** once dispatched, this same canvas becomes the persistent roadmap
+  (panel 7) — the road continues into the epics.
+
+### Panel 7 — the project roadmap (the canvas, persistent)
+
+The canvas is not thrown away after planning. The **road continues** on the same
+dotted-grid surface: a collapsed **"planning origin"** cluster ("PLANNING · DONE":
+✓ Idea · ✓ Discover · ✓ Shape · ✓ Validate · ✓ Plan) → **Epic 1** (done) → **Epic
+2** (active, a `map-pin` **"You are here"** marker + an **"Open roadmap"** affordance
+→ panel 8) → **Epic 3** (up next, ghosted) → **+ more epics**. Each epic node: an
+`--el-type-epic` glyph, the epic title, a progress meter (e.g. "3 / 8 done"), a
+story count, and a status. Connectors: green (done) → glowing accent (active) →
+dashed (upcoming). A mono section label "ROADMAP · <project>" and a "Board view"
+toggle (the roadmap is one VIEW of the work-item tree, alongside boards/backlog).
+
+### Panel 8 — an epic expanded into its sub-roadmap (work-item tree as a road)
+
+One epic node **opened in place**: the parent road stays visible (compact, the epic
+marked OPEN), and below it the epic's **stories → subtasks** render in the SAME
+node/road language — stories as nodes (`--el-type-story` green), their subtasks
+beneath (`--el-type-subtask` teal), each with per-item status (done check /
+in-progress / todo). A "TRACES TO SHAPE · VALIDATE" lineage chip reinforces the
+self-similar pattern (a roadmap = a planning origin + a tree of work, at every
+level). This is **a new PRESENTATION of the shipped work-item tree** (epics →
+stories → subtasks), not a new data model.
+
+> **⚠️ Scope flag — panels 7–8 are beyond Story 7.3 (Yue, 2026-06-17).** The
+> persistent **roadmap canvas** (the road continuing through epics + epic→sub-roadmap
+> expansion) is a new project VIEW — a first-class surface in the mirror products
+> (Jira Timeline/Roadmaps, Linear Roadmaps), and a recognised PM-tool view. Story
+> 7.3 is _start-fresh onboarding_; the roadmap is drawn here because it is the same
+> visual system and the continuity is the point, but its **BUILD needs its own
+> owning story** (proposed: an Epic-7 story "Planning canvas → persistent project
+> roadmap", `dependsOn` the 7.3 canvas shell + the work-item tree read). Tracked so
+> the plan stays honest — not silently folded into 7.3's build scope.
 
 ---
 
@@ -214,22 +266,23 @@ Markdown-file framing — it is the stage's output.
 
 ## Primitives composed (no hand-rolling)
 
-| Element                                               | Shipped primitive                                                                                             |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| marketing top-nav                                     | a `PublicTopBar`-style nav + `Button.tsx`                                                                     |
-| stage node / state / direction card                   | `components/ui/Card.tsx` (tints) — `.snode` is a NEW ARRANGEMENT of Card, no new primitive                    |
-| canvas + dotted grid + connectors                     | NEW ARRANGEMENT (CSS `radial-gradient` grid + token-styled connector lines) — no new design-system vocabulary |
-| prompt box + composer + email                         | `Textarea.tsx` · `Input.tsx`                                                                                  |
-| login gate                                            | `Modal.tsx` + the `(auth)` flow                                                                               |
-| eyebrow / pin / delegate / decision chip / stage meta | `Pill.tsx` (tint tones)                                                                                       |
-| primary / ghost / secondary                           | `Button.tsx`                                                                                                  |
-| app shell + sidebar (panel 3)                         | `app/(authed)/layout.tsx` · `Sidebar.tsx` · `SidebarNav.tsx` · `ShellTierNav.tsx`                             |
-| authed access path                                    | `ProjectSwitcher.tsx` (Popover + "Plan a new project")                                                        |
-| running job / writing step                            | `Spinner.tsx`                                                                                                 |
-| discovery-failed state                                | `ErrorState.tsx`                                                                                              |
-| message bubble                                        | NEW ARRANGEMENT = `Card` + `Avatar` + `MarkdownView` (no new primitive)                                       |
-| avatar                                                | the initial-letter disc (`issueCellPrimitives`)                                                               |
-| icons                                                 | lucide-react + the Google / GitHub brand marks                                                                |
+| Element                                               | Shipped primitive                                                                                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| marketing top-nav                                     | a `PublicTopBar`-style nav + `Button.tsx`                                                                                                              |
+| stage node / state / direction card                   | `components/ui/Card.tsx` (tints) — `.snode` is a NEW ARRANGEMENT of Card, no new primitive                                                             |
+| canvas + dotted grid + connectors                     | NEW ARRANGEMENT (CSS `radial-gradient` grid + token-styled connector lines) — no new design-system vocabulary                                          |
+| roadmap epic / story / subtask nodes (panels 7–8)     | NEW ARRANGEMENT of `Card` + the `--el-type-{epic,story,subtask}` kind hues + the connector language — a new presentation of the shipped work-item tree |
+| prompt box + composer + email                         | `Textarea.tsx` · `Input.tsx`                                                                                                                           |
+| login gate                                            | `Modal.tsx` + the `(auth)` flow                                                                                                                        |
+| eyebrow / pin / delegate / decision chip / stage meta | `Pill.tsx` (tint tones)                                                                                                                                |
+| primary / ghost / secondary                           | `Button.tsx`                                                                                                                                           |
+| app shell + sidebar (panel 3)                         | `app/(authed)/layout.tsx` · `Sidebar.tsx` · `SidebarNav.tsx` · `ShellTierNav.tsx`                                                                      |
+| authed access path                                    | `ProjectSwitcher.tsx` (Popover + "Plan a new project")                                                                                                 |
+| running job / writing step                            | `Spinner.tsx`                                                                                                                                          |
+| discovery-failed state                                | `ErrorState.tsx`                                                                                                                                       |
+| message bubble                                        | NEW ARRANGEMENT = `Card` + `Avatar` + `MarkdownView` (no new primitive)                                                                                |
+| avatar                                                | the initial-letter disc (`issueCellPrimitives`)                                                                                                        |
+| icons                                                 | lucide-react + the Google / GitHub brand marks                                                                                                         |
 
 No new design-system primitive is invented — the canvas, stage nodes, and
 connectors are new ARRANGEMENTS of shipped primitives + tokens (the same latitude

@@ -1771,6 +1771,293 @@
         color: var(--el-link);
         text-decoration: none;
       }
+
+      /* ─────────────── Panels 7–8 — the persistent ROADMAP ───────────────
+         The same canvas the planning ran on becomes the project's permanent
+         roadmap: the "road" continues from the planning origin through the epics,
+         and each epic expands into its own sub-roadmap (a NEW PRESENTATION of the
+         shipped work-item tree: epic → story → subtask, in the same node language). */
+      .rmap-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .rmap-bar .mono {
+        color: var(--el-text-muted);
+      }
+      .road {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        padding: 32px 26px;
+        overflow-x: auto;
+      }
+      .road.compact {
+        padding: 18px 26px;
+      }
+      .conn.is-done {
+        color: var(--el-success);
+      }
+      .conn.is-done .line,
+      .conn.is-done .vline {
+        border-top-style: solid;
+        border-left-style: solid;
+      }
+      /* planning origin — collapsed, done (the road's start) */
+      .origin {
+        flex: 0 0 auto;
+        align-self: center;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        min-width: 168px;
+      }
+      .origin .mono {
+        margin-bottom: 9px;
+        color: var(--el-text-muted);
+      }
+      .orow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+      }
+      .ostep {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .ostep svg {
+        color: var(--el-success);
+      }
+      .osep {
+        color: var(--el-text-faint);
+      }
+      /* epic station on the road */
+      .estation {
+        position: relative;
+        flex: 0 0 192px;
+        align-self: stretch;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .estation .etile {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--el-type-epic) 15%, var(--el-page-bg));
+        color: var(--el-type-epic);
+      }
+      .estation .est-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .estation .est-head .mono {
+        color: var(--el-text-faint);
+      }
+      .etitle {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--el-text);
+        line-height: 1.25;
+      }
+      .emeter {
+        height: 5px;
+        border-radius: var(--radius-pill);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .emeter i {
+        display: block;
+        height: 100%;
+        background: var(--el-accent);
+      }
+      .emeter i.ok {
+        background: var(--el-success);
+      }
+      .emeta {
+        display: flex;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
+      .est-foot {
+        margin-top: auto;
+      }
+      .est-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .est-status.done {
+        color: var(--el-success);
+      }
+      .est-status.up {
+        color: var(--el-text-muted);
+      }
+      .estation.is-active {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 1px var(--el-accent),
+          0 12px 36px -14px var(--el-accent);
+      }
+      .estation.is-upcoming {
+        background: var(--el-surface-soft);
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .estation.is-upcoming .etitle {
+        color: var(--el-text-muted);
+      }
+      .estation .yah {
+        position: absolute;
+        top: -10px;
+        left: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        padding: 3px 8px;
+        border-radius: var(--radius-badge);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .estation.more {
+        flex: 0 0 92px;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        border-style: dashed;
+        background: transparent;
+        box-shadow: none;
+        color: var(--el-text-faint);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+      /* panel 8 — an epic expanded into its sub-roadmap (the work-item tree) */
+      .subroad-wrap {
+        padding: 6px 26px 28px;
+      }
+      .subroad-wrap .sr-cap {
+        margin: 4px 0 14px;
+        color: var(--el-text-muted);
+      }
+      .subroad {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        overflow-x: auto;
+      }
+      .storynode {
+        flex: 0 0 226px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .storynode .sn-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .storynode .sg {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--el-type-story) 16%, var(--el-page-bg));
+        color: var(--el-type-story);
+        flex: none;
+      }
+      .storynode .snt {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+        line-height: 1.25;
+      }
+      .storynode.is-active {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 1px var(--el-accent),
+          0 10px 28px -12px var(--el-accent);
+      }
+      .storynode.is-upcoming {
+        background: var(--el-surface-soft);
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .subtasks {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 7px;
+      }
+      .stask {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        padding: 4px 0;
+      }
+      .stask .sd {
+        color: var(--el-type-subtask);
+        flex: none;
+      }
+      .stask.done {
+        color: var(--el-text-muted);
+      }
+      .stask.done .sd {
+        color: var(--el-success);
+      }
+      .stask .st-state {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .lineage {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
     </style>
   </head>
 
@@ -1907,6 +2194,15 @@ A tool for freelancers to send invoices and track which clients have paid</texta
                 ></span>
                 <div class="stitle">Your plan</div>
                 <div class="sstate">Epics → stories → a dispatchable backlog.</div>
+              </div>
+              <!-- the road keeps going — the plan IS the roadmap (foreshadows panels 7–8) -->
+              <div class="conn"><span class="line"></span></div>
+              <div
+                class="snode is-upcoming pipe-end"
+                style="flex: 0 0 120px; justify-content: center"
+              >
+                <div class="stitle">→ your epics</div>
+                <div class="sstate">The canvas becomes your roadmap.</div>
               </div>
             </div>
           </div>
@@ -2254,118 +2550,204 @@ A tool for freelancers to send invoices and track which clients have paid</texta
           <span class="r"><span class="wz-step">Stage 2 of 3 · Shape</span></span>
         </div>
 
-        <!-- persistent stage tracker -->
-        <div class="track">
-          <div class="tnode done">
-            <span class="tg"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-            ></span>
-            <div class="tt"><b>Discover</b><span>Done</span></div>
-          </div>
-          <span class="tconn done"></span>
-          <div class="tnode active">
-            <span class="tg"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
-            ></span>
-            <div class="tt"><b>Shape</b><span>Stage 2 of 3</span></div>
-          </div>
-          <span class="tconn"></span>
-          <div class="tnode upcoming">
-            <span class="tg"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg
-            ></span>
-            <div class="tt"><b>Validate</b><span>Up next</span></div>
-          </div>
-          <span class="tconn"></span>
-          <div class="tnode upcoming">
-            <span class="tg"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-network" /></svg
-            ></span>
-            <div class="tt"><b>Plan</b><span>Last</span></div>
-          </div>
-        </div>
-
-        <section class="canvas dotted" style="padding: 26px">
-          <div class="dir">
-            <div class="dir-head">
-              <span class="stile lav"
-                ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
-              ></span>
-              <div>
-                <h3>The shape of it</h3>
-                <div class="mono">Stage 2 · Shape — review & adjust before validating</div>
-              </div>
+        <!-- SAME shell as panel 4: persistent canvas + chat rail. The active stage
+             (Shape) has expanded IN PLACE into its review-&-continue state; the rail
+             has re-pointed from "Discover · chat" to "Shape · chat". -->
+        <div class="wz-body">
+          <section class="canvas dotted">
+            <div class="canvas-head">
+              <h3>Your planning canvas</h3>
+              <span class="mono">Idea → Discover · Shape · Validate → Plan</span>
             </div>
-
-            <div class="dfield">
-              <button class="icon-btn edit" aria-label="Edit problem">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              </button>
-              <div class="dlabel">Problem</div>
-              <div class="dval">
-                Freelancers lose hours chasing late payments across email and spreadsheets, with no
-                single view of who has paid.
+            <div class="vpipe">
+              <!-- idea (preserved) -->
+              <div class="idea-node">
+                <span class="stile accent" style="width: 32px; height: 32px"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
+                ></span>
+                <div>
+                  <div class="mono">Your idea</div>
+                  <div class="q">
+                    “A tool for freelancers to send invoices and track which clients have paid”
+                  </div>
+                </div>
               </div>
-            </div>
+              <div class="conn v is-done"><span class="vline"></span></div>
 
-            <div class="dfield">
-              <button class="icon-btn edit" aria-label="Edit primary user">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              </button>
-              <div class="dlabel">Primary user</div>
-              <div class="dval">
-                A solo freelancer who sends a handful of invoices a month and wants, at a glance,
-                what’s outstanding.
+              <!-- Discover — now DONE, collapsed -->
+              <div class="snode" style="flex-direction: row; align-items: center; gap: 11px">
+                <span class="stile mint"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-check" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Discover</div>
+                  <span class="mono">Done · invoicing + payment-tracking · solo freelancers</span>
+                </div>
               </div>
-            </div>
+              <div class="conn v is-active"><span class="vline"></span></div>
 
-            <div class="dfield">
-              <div class="dlabel">Key decisions</div>
-              <div class="decisions">
-                <div class="drow">
-                  <span class="dk">Who is it for</span>
-                  <span class="dv"
-                    >Solo freelancers
-                    <span class="pill pill-pinned"
-                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
-                      Pinned</span
-                    ></span
+              <!-- Shape — ACTIVE, expanded into review & continue (the drawn 4→5 transition) -->
+              <div class="active-node">
+                <div class="an-head">
+                  <span class="stile lav"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
+                  ></span>
+                  <div class="an-t"><b>Shape</b><span>Stage 2 · review & continue</span></div>
+                  <span class="pill pill-accent" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Direction
+                    captured</span
                   >
                 </div>
-                <div class="drow">
-                  <span class="dk">Payment collection</span>
-                  <span class="dv"
-                    >Motir picks the standard
-                    <span class="pill pill-delegated"
+
+                <div class="dfield">
+                  <button class="icon-btn edit" aria-label="Edit what's in scope">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <div class="dlabel">In scope</div>
+                  <div class="dval">
+                    Create &amp; send invoices · track who has paid · an at-a-glance outstanding
+                    view.
+                  </div>
+                </div>
+                <div class="dfield">
+                  <button class="icon-btn edit" aria-label="Edit what's out of scope">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  </button>
+                  <div class="dlabel">Out of scope · v1</div>
+                  <div class="dval">In-app payment processing · multi-user / team accounts.</div>
+                </div>
+                <div class="dfield">
+                  <div class="dlabel">Core decisions</div>
+                  <div class="decisions">
+                    <div class="drow">
+                      <span class="dk">Payment collection</span>
+                      <span class="dv"
+                        >Record-only — no in-app collection
+                        <span class="pill pill-pinned"
+                          ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
+                          Pinned</span
+                        ></span
+                      >
+                    </div>
+                    <div class="drow">
+                      <span class="dk">Invoice delivery</span>
+                      <span class="dv"
+                        >Email a PDF
+                        <span class="pill pill-pinned"
+                          ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
+                          Pinned</span
+                        ></span
+                      >
+                    </div>
+                    <div class="drow">
+                      <span class="dk">Payment reminders</span>
+                      <span class="dv"
+                        >Motir picks the standard
+                        <span class="pill pill-delegated"
+                          ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                          decide</span
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </div>
+
+                <div class="dir-foot">
+                  <span class="note"
+                    >Edited just now · nothing is generated until you finish Validate.</span
+                  >
+                  <button class="btn btn-primary">
+                    Continue to Validate
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="conn v"><span class="vline"></span></div>
+
+              <!-- upcoming -->
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
+              >
+                <span class="stile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Validate</div>
+                  <span class="mono">Up next</span>
+                </div>
+              </div>
+              <div class="conn v"><span class="vline"></span></div>
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
+              >
+                <span class="stile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Plan — your backlog</div>
+                  <span class="mono">Generated last</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- the SAME rail, re-pointed to the Shape stage -->
+          <aside class="rail" aria-label="Shape chat">
+            <div class="rail-head">
+              <span class="dot" aria-hidden="true"></span>
+              <span class="mono">Shape · chat</span>
+            </div>
+            <div class="rail-body">
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  Should Motir send payment reminders automatically, or leave that to you?
+                </div>
+              </div>
+              <div class="msg me">
+                <span class="av user" aria-hidden="true">YZ</span>
+                <div>
+                  <div class="bubble">Automatic is fine — you pick the cadence.</div>
+                  <span class="pill pill-delegated" style="margin-top: 5px"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                    decide</span
+                  >
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  Got it. Anything explicitly out of scope for v1?<span
+                    class="caret"
+                    aria-hidden="true"
+                  ></span>
+                  <div class="decide">
+                    <span class="opt">In-app payments</span>
+                    <span class="opt">Multi-user</span>
+                    <span class="opt">Both</span>
+                    <span class="opt delegate"
                       ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
                       decide</span
-                    ></span
-                  >
-                </div>
-                <div class="drow">
-                  <span class="dk">Invoice delivery</span>
-                  <span class="dv"
-                    >Email a PDF
-                    <span class="pill pill-pinned"
-                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
-                      Pinned</span
-                    ></span
-                  >
+                    >
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div class="dir-foot">
-              <span class="note"
-                >Edited just now · nothing is generated until you finish Validate.</span
+              <div class="typing" aria-label="Motir is typing"><i></i><i></i><i></i></div>
+              <span class="hint"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Answer to pin it
+                — or let Motir decide.</span
               >
-              <button class="btn btn-primary">
-                Continue to Validate
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+            </div>
+            <div class="composer">
+              <span class="ph-text">Reply to Motir…</span>
+              <button class="send" aria-label="Send">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-send" /></svg>
               </button>
             </div>
-          </div>
-        </section>
+          </aside>
+        </div>
       </div>
     </div>
 
@@ -2534,6 +2916,242 @@ A tool for freelancers to send invoices and track which clients have paid</texta
                   AI
                 </button>
                 <a class="link">Self-hosted? Learn more</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 7 — THE PERSISTENT ROADMAP (the canvas keeps going) ════════════ -->
+    <div class="panel-label">
+      Panel 7 · The canvas IS the project roadmap — the road continues from planning through the
+      epics (a new presentation of the shipped work-item tree)
+    </div>
+    <div class="panel">
+      <div class="surface" style="padding: 0">
+        <div class="rmap-bar">
+          <span class="mono">Roadmap · Invoicing for freelancers</span>
+          <span style="display: inline-flex; gap: 8px; align-items: center">
+            <button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Find
+            </button>
+            <button class="btn btn-secondary btn-sm">Board view</button>
+          </span>
+        </div>
+        <div class="road dotted">
+          <!-- the planning origin — done, collapsed: the same 3 stages, now the road's start -->
+          <div class="origin">
+            <div class="mono">Planning · done</div>
+            <div class="orow">
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Idea</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Discover</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Shape</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Validate</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Plan</span
+              >
+            </div>
+          </div>
+          <div class="conn is-done"><span class="line"></span></div>
+
+          <!-- Epic 1 — done -->
+          <div class="estation">
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <span class="mono">Epic 1</span>
+            </div>
+            <div class="etitle">Send an invoice</div>
+            <div class="emeter"><i class="ok" style="width: 100%"></i></div>
+            <div class="emeta"><span>5 / 5 done</span><span>·</span><span>2 stories</span></div>
+            <div class="est-foot">
+              <span class="est-status done"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Done</span
+              >
+            </div>
+          </div>
+          <div class="conn is-active"><span class="line"></span></div>
+
+          <!-- Epic 2 — active (you are here) -->
+          <div class="estation is-active">
+            <span class="yah"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-map-pin" /></svg> You are
+              here</span
+            >
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <span class="mono">Epic 2</span>
+            </div>
+            <div class="etitle">Get paid on time</div>
+            <div class="emeter"><i style="width: 38%"></i></div>
+            <div class="emeta"><span>3 / 8 done</span><span>·</span><span>3 stories</span></div>
+            <div class="est-foot">
+              <button class="btn btn-ghost btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-network" /></svg> Open roadmap
+              </button>
+            </div>
+          </div>
+          <div class="conn"><span class="line"></span></div>
+
+          <!-- Epic 3 — up next -->
+          <div class="estation is-upcoming">
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <span class="mono">Epic 3</span>
+            </div>
+            <div class="etitle">Reminders &amp; client list</div>
+            <div class="emeter"><i style="width: 0"></i></div>
+            <div class="emeta"><span>0 / 6 done</span><span>·</span><span>2 stories</span></div>
+            <div class="est-foot">
+              <span class="est-status up"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Up
+                next</span
+              >
+            </div>
+          </div>
+          <div class="conn"><span class="line"></span></div>
+          <div class="estation more">+ more epics</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 8 — AN EPIC EXPANDED INTO ITS SUB-ROADMAP ════════════ -->
+    <div class="panel-label">
+      Panel 8 · An epic opens into its own sub-roadmap — stories → subtasks, the same road language
+      (self-similar: a roadmap = a planning origin + a tree)
+    </div>
+    <div class="panel">
+      <div class="surface" style="padding: 0">
+        <div class="rmap-bar">
+          <span class="mono">Roadmap · Invoicing for freelancers · Epic 2</span>
+          <button class="btn btn-ghost btn-sm">← Back to roadmap</button>
+        </div>
+
+        <!-- the parent road stays visible; Epic 2 is the one opened -->
+        <div class="road compact dotted">
+          <div class="origin" style="min-width: 0; padding: 9px 12px">
+            <div class="orow">
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning</span
+              >
+            </div>
+          </div>
+          <div class="conn is-done"><span class="line"></span></div>
+          <div class="estation" style="flex: 0 0 138px">
+            <div class="est-head"><span class="mono">Epic 1</span></div>
+            <div class="etitle" style="font-size: 13px">Send an invoice</div>
+            <div class="est-status done" style="font-size: 11px">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Done
+            </div>
+          </div>
+          <div class="conn is-active"><span class="line"></span></div>
+          <div class="estation is-active" style="flex: 0 0 156px">
+            <span class="yah"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-map-pin" /></svg> Open</span
+            >
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <span class="mono">Epic 2</span>
+            </div>
+            <div class="etitle" style="font-size: 13px">Get paid on time</div>
+            <div class="emeter"><i style="width: 38%"></i></div>
+          </div>
+          <div class="conn"><span class="line"></span></div>
+          <div class="estation is-upcoming" style="flex: 0 0 138px">
+            <div class="est-head"><span class="mono">Epic 3</span></div>
+            <div class="etitle" style="font-size: 13px">Reminders &amp; client list</div>
+          </div>
+        </div>
+
+        <!-- the expanded epic's sub-roadmap = its work-item tree, in the same node language -->
+        <div class="subroad-wrap">
+          <div class="mono sr-cap">
+            Epic 2 · Get paid on time — stories → subtasks
+            <span class="lineage" style="margin-left: 8px"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> traces to Shape
+              · Validate</span
+            >
+          </div>
+          <div class="subroad">
+            <!-- Story 1 — done -->
+            <div class="storynode">
+              <div class="sn-head">
+                <span class="sg"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                ></span>
+                <div class="snt">Payment status</div>
+              </div>
+              <div class="subtasks">
+                <div class="stask done">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg> Status
+                  data model <span class="st-state">done</span>
+                </div>
+                <div class="stask done">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  Mark-as-paid action <span class="st-state">done</span>
+                </div>
+              </div>
+            </div>
+            <div class="conn"><span class="line"></span></div>
+
+            <!-- Story 2 — active -->
+            <div class="storynode is-active">
+              <div class="sn-head">
+                <span class="sg"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                ></span>
+                <div class="snt">Outstanding view</div>
+              </div>
+              <div class="subtasks">
+                <div class="stask done">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  Outstanding query <span class="st-state">done</span>
+                </div>
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  Dashboard widget <span class="st-state">in progress</span>
+                </div>
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Empty
+                  + loading states <span class="st-state">todo</span>
+                </div>
+              </div>
+            </div>
+            <div class="conn"><span class="line"></span></div>
+
+            <!-- Story 3 — up next -->
+            <div class="storynode is-upcoming">
+              <div class="sn-head">
+                <span class="sg"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                ></span>
+                <div class="snt">Overdue flags</div>
+              </div>
+              <div class="subtasks">
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  Overdue rule <span class="st-state">todo</span>
+                </div>
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Badge
+                  + filter <span class="st-state">todo</span>
+                </div>
               </div>
             </div>
           </div>
@@ -2989,6 +3607,19 @@ A tool for freelancers to send invoices and track which clients have paid</texta
             fill="#EA4335"
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.83C6.71 7.31 9.14 5.38 12 5.38z"
           />
+        </g>
+        <g
+          id="i-map-pin"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+          />
+          <circle cx="12" cy="10" r="3" />
         </g>
       </defs>
     </svg>
