@@ -64,6 +64,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   add_comment: 'work_items:write',
   link_work_items: 'work_items:write',
   unlink_work_items: 'work_items:write',
+  move_to_parent: 'work_items:write',
+  change_kind: 'work_items:write',
   // work_items:archive
   archive_work_item: 'work_items:archive',
   unarchive_work_item: 'work_items:archive',

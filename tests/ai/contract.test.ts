@@ -90,7 +90,12 @@ describe('contract: request envelope (§3.1)', () => {
   const CANONICAL_REQUEST = {
     envelopeVersion: 'v1',
     jobKind: 'noop',
-    tenant: { workspaceId: 'ws_1', projectId: 'pj_1', projectKey: 'MOTIR' },
+    tenant: {
+      organizationId: 'org_1',
+      workspaceId: 'ws_1',
+      projectId: 'pj_1',
+      projectKey: 'MOTIR',
+    },
     context: { prompt: 'ping', rootItemKey: null, discovery: null, code: null },
     readBackToken: 'eyJ...token',
   };

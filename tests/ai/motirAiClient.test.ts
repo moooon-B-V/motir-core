@@ -8,7 +8,12 @@ import {
   MotirAiJobNotFoundError,
 } from '@/lib/ai/errors';
 
-const tenant = { workspaceId: 'ws_1', projectId: 'pj_1', projectKey: 'MOTIR' };
+const tenant = {
+  organizationId: 'org_1',
+  workspaceId: 'ws_1',
+  projectId: 'pj_1',
+  projectKey: 'MOTIR',
+};
 const actor: RequestActor = { userId: 'user_1' };
 
 function jsonResponse(body: unknown, status = 200): Response {
