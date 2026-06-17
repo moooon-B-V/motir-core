@@ -146,6 +146,28 @@ describe('create_work_item', () => {
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.content)).toContain('ILLEGAL_PARENT_TYPE');
   });
+
+  // Story points on create (Subtask 7.8.21) — born with a points value, and the
+  // shared validation rejects a malformed one before a key is burned.
+  it('creates an item with storyPoints set', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'task', title: 'Sized', storyPoints: 8 },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    expect((res.structuredContent as { storyPoints: number | null }).storyPoints).toBe(8);
+  });
+
+  it('rejects an out-of-range storyPoints on create with a typed validation error', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'task', title: 'Too big', storyPoints: 10000 },
+      fx.ctx,
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain('INVALID_ESTIMATE');
+  });
 });
 
 describe('transition_status', () => {

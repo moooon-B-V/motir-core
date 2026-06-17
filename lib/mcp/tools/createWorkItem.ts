@@ -45,6 +45,16 @@ const inputSchema = {
     .nativeEnum(WorkItemPriority)
     .optional()
     .describe('Optional priority (lowest…highest); omit for the project default.'),
+  storyPoints: z
+    .number()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .describe(
+      'Optional story-point estimate (the agile sizing number, distinct from a ' +
+        'time estimate). A non-negative number ≤ 9999.99 with at most two decimal ' +
+        'places; omit (or null) to leave it unestimated.',
+    ),
 };
 
 interface CreateWorkItemArgs {
@@ -54,6 +64,7 @@ interface CreateWorkItemArgs {
   parentKey?: string;
   descriptionMd?: string;
   priority?: WorkItemPriority;
+  storyPoints?: number | null;
 }
 
 /** Compact human-readable summary of a freshly-created work item. */
@@ -94,6 +105,10 @@ export async function runCreateWorkItem(
       parentId,
       descriptionMd: args.descriptionMd ?? null,
       ...(args.priority ? { priority: args.priority } : {}),
+      // Story points (7.8.21): forward only when supplied — both a number and an
+      // explicit null pass through (the service validates + treats null as
+      // unestimated); omitted leaves the column default.
+      ...(args.storyPoints !== undefined ? { storyPoints: args.storyPoints } : {}),
     };
     const dto = await workItemsService.createWorkItem(input, ctx);
     return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);
@@ -113,7 +128,8 @@ export function registerCreateWorkItem(
       description:
         'Create a work item (story, task, bug, or subtask) in a project, optionally under a ' +
         'parent. The reporter is the token owner. Use kind "bug" under a story/epic to LOG A ' +
-        'BUG. Honors the same kind-parent rules and access checks as the UI.',
+        'BUG. Optionally set a story-point estimate. Honors the same kind-parent rules and ' +
+        'access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runCreateWorkItem(args, resolveContext(extra)),
