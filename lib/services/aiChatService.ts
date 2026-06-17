@@ -1,4 +1,6 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 
@@ -13,15 +15,19 @@ import type { ProjectContext } from '@/lib/projects';
 // Project resolution + the auth/membership gate happen in the route layer
 // (getSession + getActiveProject, the project analogue of getSession — mirrors
 // /api/board); this service receives the already-resolved ProjectContext and
-// builds the tenant from it (no second project round-trip — the whole reason
-// getActiveProject returns the DTO).
+// builds the tenant from it. The project fields come straight off the context
+// (no second project round-trip); the only extra read is the workspace's ORG —
+// the billing entity the job-submit tenant must carry (7.2.16), resolved the
+// same RLS-aware way aiJobsService does.
 
 export const aiChatService = {
   // Submit a user turn into a `discovery` job for the actor's active project.
   // The prompt rides in the context bag; motir-ai owns the interview state
   // across turns. Returns the jobId the stream route subscribes to.
   async submitDiscoveryTurn(prompt: string, ctx: ProjectContext): Promise<{ jobId: string }> {
+    const organizationId = await resolveOrganizationId(ctx);
     const tenant = {
+      organizationId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
@@ -38,3 +44,15 @@ export const aiChatService = {
     return streamJob(jobId);
   },
 };
+
+// Resolve the active workspace's organization id — the billing entity the
+// job-submit tenant carries (7.2.16). RLS-aware: the read runs inside
+// `withWorkspaceContext` so the workspace policy admits the row under the
+// non-bypass app role. Mirrors aiJobsService.resolveOrganizationId.
+async function resolveOrganizationId(ctx: ProjectContext): Promise<string> {
+  return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    const workspace = await workspaceRepository.findByIdInTx(ctx.workspaceId, tx);
+    if (!workspace) throw new Error(`workspace ${ctx.workspaceId} not found`);
+    return workspace.organizationId;
+  });
+}
