@@ -87,14 +87,14 @@ delete scope still cannot delete in a workspace its owner can't reach.
 
 The scopes and the tools each one gates:
 
-| Scope                | Gates                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`                                |
-| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`        |
-| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                      |
-| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                        |
-| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog` |
-| `integration`        | `mark_integrated`, `complete_session`                                                                                     |
+| Scope                | Gates                                                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`                                           |
+| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent` |
+| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                 |
+| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                   |
+| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`            |
+| `integration`        | `mark_integrated`, `complete_session`                                                                                                |
 
 **Default grant set.** A token minted without an explicit scope choice gets
 **every scope EXCEPT `work_items:delete`** — full read + write + archive +
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **24 tools**.
+`initialize` handshake and registers **25 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -329,7 +329,8 @@ which can only set kind/title/parentKey/description/priority/story-points on
 create. Patch any
 subset of the UI-editable fields; an omitted field is left unchanged, and an
 explicit `null` clears a nullable one. The workflow **status** is NOT edited here
-(use `transition_status`), and neither is `kind`/`parent` (a structural move).
+(use `transition_status`), and neither is `kind`/`parent` — re-parenting is a
+structural move with its own tool (`move_to_parent`).
 The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected),
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
@@ -398,6 +399,32 @@ missing / cross-tenant key is an indistinguishable 404 not-found.
 `totalCount` is the number of rows removed (root + descendants), `descendantCount`
 is `totalCount − 1`, and `byKind` is the per-kind breakdown of the descendants
 (captured before the cascade). A denied or not-found key returns a typed error.
+
+#### `move_to_parent`
+
+**Re-parent** a work item: move it under a different parent, or promote it to a
+top-level root. This is the structural move `create_work_item` (parent is
+set only at create) and `update_work_item` (a field patch, not a structural
+move) deliberately leave out — so an agent can re-home a card **without** the
+delete-and-recreate hack that would lose its identifier, history, comments, and
+links. Re-parenting is its own verb for the same reason status
+(`transition_status`) and sprint membership (`move_to_sprint`) are.
+
+Pass `parentKey` to move the item under that parent (appended to the parent's
+children at a freshly-minted position), or `null` to promote it to a top-level
+root. The same rules as the UI's tree/board re-parent apply: the new parent must
+be a **kind-legal** parent in the **same project**, and the move may not create a
+**cycle** (under itself or a descendant) or exceed the **4-level depth** limit —
+each returns a typed error naming the violation. Same Story-6.4 edit gate as the
+UI; a missing / cross-tenant key is an indistinguishable 404.
+
+| Input       | Type           | Required | Notes                                                                                     |
+| ----------- | -------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `key`       | string         | yes      | The work item to move, e.g. `"PROD-7"`.                                                   |
+| `parentKey` | string \| null | yes      | The new parent's identifier, or `null` to promote to a top-level root. Same-project only. |
+
+**Output** — `structuredContent`: the re-parented `WorkItemDto` (its `parentId`
+now the new parent, or `null` at the top level).
 
 ### Search
 
