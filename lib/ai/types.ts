@@ -6,8 +6,18 @@
 
 export const ENVELOPE_VERSION = 'v1' as const;
 
-// The jobKind enum — only `noop` runs today (7.1.7); the rest are reserved.
-export const JOB_KINDS = ['noop', 'generate_tree', 'expand_item', 'augment', 'replan'] as const;
+// The jobKind enum. `noop` is the 7.1.7 walking skeleton; `discovery` is the
+// 7.3 onboarding interview the chat front door submits (aiChatService) — its
+// user turns ride in `JobContextBag.prompt` and the drafted direction docs in
+// `JobContextBag.discovery`; the rest are reserved for the 7.4+ generation jobs.
+export const JOB_KINDS = [
+  'noop',
+  'discovery',
+  'generate_tree',
+  'expand_item',
+  'augment',
+  'replan',
+] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
 export interface Tenant {
