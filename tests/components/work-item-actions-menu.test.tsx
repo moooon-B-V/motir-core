@@ -61,6 +61,62 @@ describe('WorkItemActionsMenu — permission gating', () => {
   });
 });
 
+describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
+  function openArchivedMenu(props: { canEdit: boolean; canManage: boolean }) {
+    render(
+      <WorkItemActionsMenu
+        itemId="wi-1"
+        identifier="PROD-1"
+        title="A bug"
+        archived
+        onDeleted={vi.fn()}
+        onArchived={vi.fn()}
+        {...props}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
+  }
+
+  it('swaps Archive→Restore for the canEdit row, and keeps Delete… for a manager', () => {
+    openArchivedMenu({ canEdit: true, canManage: true });
+    expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
+    // The active Archive row is gone — it is the Restore row in archived mode.
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Delete…' })).toBeTruthy();
+  });
+
+  it('hides Delete for a non-manager (Restore still shown for an editor)', () => {
+    openArchivedMenu({ canEdit: true, canManage: false });
+    expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
+  });
+
+  it('opens the ARCHIVED confirm variant from Delete… — no "Archive instead" escape hatch', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          totalCount: 1,
+          descendantCount: 0,
+          byKind: {},
+          liveDescendantCount: 0,
+          liveByKind: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    openArchivedMenu({ canEdit: true, canManage: true });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete…' }));
+
+    // The confirm dialog opens; the archived variant omits the active variant's
+    // "Archive instead" escape hatch (the item is already archived).
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Delete work item' })).toBeTruthy(),
+    );
+    expect(screen.queryByRole('button', { name: /Archive instead/ })).toBeNull();
+  });
+});
+
 describe('DeleteWorkItemDialog — cascade count', () => {
   it('names the per-kind descendant breakdown and puts the magnitude on the button', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(

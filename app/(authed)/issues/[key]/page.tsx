@@ -293,13 +293,16 @@ export default async function IssueDetailPage({
               />
               {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
                 · Delete… (Edit folded in here). Permission-gated: Edit/Archive
-                on canEdit, Delete on canManageProject. */}
+                on canEdit, Delete on canManageProject. 2.9.11: on an archived
+                item the menu swaps Archive→Restore and Delete… opens the
+                archived confirm. */}
               <WorkItemDetailActions
                 itemId={item.id}
                 identifier={item.identifier}
                 title={item.title}
                 canEdit={canEdit}
                 canManage={canManageProject}
+                archived={isArchived}
               />
             </div>
           </div>

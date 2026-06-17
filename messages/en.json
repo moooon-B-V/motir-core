@@ -3083,6 +3083,7 @@
     "copyLink": "Copy link",
     "linkCopied": "Link copied",
     "archive": "Archive",
+    "restore": "Restore",
     "delete": "Delete…",
     "deleteTitle": "Delete this work item?",
     "deleteCascadeBody": "This permanently deletes <b>{key} “{title}”</b> and everything beneath it. <b>This can’t be undone.</b>",
