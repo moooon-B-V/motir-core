@@ -46,20 +46,23 @@
       ErrorState family, Skeleton (loading). No new primitive is introduced.
 
       Covers (multi-panel — review EACH; mistake #31):
-        (1) ORG COST SUMMARY (populated, the PRIMARY view) — the org balance hero (org name + tier),
+        (1) ACCESS PATH — FROM WHICH UI the page is reached. The org menu (TopNav, the 6.10
+            org-admin entry holding Settings / Members) carries a "Usage & cost" item that opens
+            this page. The entry affordance is DRAWN, not just named (design covers the access path).
+        (2) ORG COST SUMMARY (populated, the PRIMARY view) — the org balance hero (org name + tier),
             total + this-month spend, and a month-over-month trend. "credits, not a bill" affordance.
-        (2) DRILL-DOWN org → workspace → project — the scope control / breadcrumb drilling the SAME
+        (3) DRILL-DOWN org → workspace → project — the scope control / breadcrumb drilling the SAME
             cost view from the org TOTAL → a workspace → a project; all three levels drawn.
-        (3) PER-MODEL usage breakdown — per model: tokens in/out + credits this month + a usage bar,
+        (4) PER-MODEL usage breakdown — per model: tokens in/out + credits this month + a usage bar,
             palette-tinted (not grey-only), at whichever drill level is active.
-        (4) RECENT ACTIVITY / per-run log (PAGINATED) — recent planning runs: time, job kind, model,
+        (5) RECENT ACTIVITY / per-run log (PAGINATED) — recent planning runs: time, job kind, model,
             tokens, credits debited. Paginated (at-scale, NOT load-all).
-        (5) LIMITED MEMBER VIEW — a non-admin member (6.10.4) sees only THEIR OWN project's slice,
+        (6) LIMITED MEMBER VIEW — a non-admin member (6.10.4) sees only THEIR OWN project's slice,
             read-only: no org total, no cross-workspace drill-up. Drawn beside the org-admin view.
-        (6) LOW-BALANCE + OUT-OF-CREDITS states — a --el-warning tint banner (NOT a page-tinted
+        (7) LOW-BALANCE + OUT-OF-CREDITS states — a --el-warning tint banner (NOT a page-tinted
             surface, finding #35) and the zero/blocked state with NO active buy control (the Epic-8
             upgrade slot is a passive placeholder).
-        (7) EMPTY / LOADING / ERROR states — first-run empty, the loading skeleton (fetch over 7.1),
+        (8) EMPTY / LOADING / ERROR states — first-run empty, the loading skeleton (fetch over 7.1),
             and the fetch-failed (motir-ai boundary down) state with a clear Retry.
       Toggle dark mode to confirm token parity. See design-notes.md for the per-surface primitive +
       copy + --el-* role spec.
@@ -914,6 +917,164 @@
       .miniwrap > .mb {
         padding: 14px 16px 16px;
       }
+
+      /* ── TopNav + org menu (the ACCESS PATH — mirrors TopNav.tsx + org-admin) ─ */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: var(--el-surface);
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        max-width: 220px;
+      }
+      .trigger .org-ava {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .trigger .tlabel {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .mini-search {
+        height: var(--height-btn-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .mini-search svg {
+        width: 14px;
+        height: 14px;
+      }
+      .user-ava {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+      }
+      .menu {
+        position: relative;
+        margin-top: 6px;
+        width: 300px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-head {
+        padding: 8px 10px 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt.active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .opt .ot {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt .ot .od {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .opt svg.li {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .opt.active svg.li {
+        color: var(--el-accent-on-surface);
+      }
+      .entry-call {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+      }
+      .entry-call svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent-on-surface);
+        flex: none;
+      }
     </style>
   </head>
   <body>
@@ -941,9 +1102,80 @@
       </button>
     </div>
 
-    <!-- ════════════════ PANEL 1 — org cost summary (PRIMARY) ════════════════ -->
+    <!-- ════════════════ PANEL 1 — the ACCESS PATH (how the page is reached) ════════════════ -->
     <div class="panel-label">
-      1 · Org cost summary (populated — the PRIMARY view) — the org credit balance as the hero, the
+      1 · Access path — FROM WHICH UI the page is reached. The org menu in the TopNav (the 6.10
+      org-admin entry, same menu that holds Settings / Members) carries a “Usage &amp; cost” item;
+      clicking it opens this dashboard. Drawn, not just named — show the door, not only the room.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <!-- the shell TopNav — the org button is the entry to the whole org-admin area -->
+        <div class="topnav">
+          <div class="left">
+            <button class="trigger" aria-label="Organization menu">
+              <span class="org-ava">M</span>
+              <span class="tlabel">moooon</span>
+              <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+            </button>
+          </div>
+          <div class="right">
+            <span class="mini-search"
+              ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search</span
+            >
+            <span class="user-ava">Z</span>
+          </div>
+        </div>
+        <!-- the org menu OPEN — "Usage & cost" is the entry affordance for THIS page -->
+        <div style="padding: 18px 20px 22px">
+          <p style="font-size: 12px; color: var(--el-text-muted); margin: 0 0 12px">
+            <strong style="color: var(--el-text-secondary)">The “moooon ▾” org menu, open.</strong>
+            The same menu that opens org <em>Settings</em> and <em>Members</em> (6.10) now carries a
+            <strong>“Usage &amp; cost”</strong> item — the door to this dashboard. Billing/checkout
+            stays a separate “Coming soon” slot (Epic 8); usage is the half that ships here.
+          </p>
+          <div class="menu" style="margin: 0">
+            <div class="menu-head">moooon</div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+              <span class="ot"><span class="nm">Settings</span></span>
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+              <span class="ot"><span class="nm">Members</span></span>
+            </div>
+            <!-- THE ENTRY POINT for this designed page -->
+            <div class="opt active">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-coins" /></svg>
+              <span class="ot"
+                ><span class="nm">Usage &amp; cost</span
+                ><span class="od">Token credits across all workspaces</span></span
+              >
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-sparkle" /></svg>
+              <span class="ot"
+                ><span class="nm">Billing</span><span class="od">Coming soon</span></span
+              >
+            </div>
+            <div class="menu-sep"></div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+              <span class="ot"><span class="nm">New workspace</span></span>
+            </div>
+          </div>
+          <p class="entry-call">
+            <svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>
+            Selecting “Usage &amp; cost” opens the page below (breadcrumb: Organization · moooon ·
+            Usage &amp; cost).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — org cost summary (PRIMARY) ════════════════ -->
+    <div class="panel-label">
+      2 · Org cost summary (populated — the PRIMARY view) — the org credit balance as the hero, the
       org name + tier, total + this-month spend, and a month-over-month trend. Credits are an
       internal allotment, NOT a bill (a quiet affordance says so). The org admin’s home for cost.
     </div>
@@ -1047,9 +1279,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 2 — drill-down org → workspace → project ════════════════ -->
+    <!-- ════════════════ PANEL 3 — drill-down org → workspace → project ════════════════ -->
     <div class="panel-label">
-      2 · Drill-down org → workspace → project — one scope control drills the SAME cost view from
+      3 · Drill-down org → workspace → project — one scope control drills the SAME cost view from
       the org TOTAL down to a chosen workspace, then a chosen project. All three levels drawn; the
       path (where you are, how to go up) is explicit. The 7.2.x metering grain supports each level.
     </div>
@@ -1255,9 +1487,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 3 — per-model usage breakdown ════════════════ -->
+    <!-- ════════════════ PANEL 4 — per-model usage breakdown ════════════════ -->
     <div class="panel-label">
-      3 · Per-model usage breakdown — per model: tokens in / out and the credits that cost this
+      4 · Per-model usage breakdown — per model: tokens in / out and the credits that cost this
       month, with a usage bar so a pricier model is visibly the bigger drain. Palette-tinted per
       model (not grey-only · finding #54). Shown at whichever drill level is active (here:
       org-wide).
@@ -1346,9 +1578,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 4 — recent activity / per-run log (PAGINATED) ════════════════ -->
+    <!-- ════════════════ PANEL 5 — recent activity / per-run log (PAGINATED) ════════════════ -->
     <div class="panel-label">
-      4 · Recent activity / per-run log (PAGINATED) — each planning run’s time, job kind, model,
+      5 · Recent activity / per-run log (PAGINATED) — each planning run’s time, job kind, model,
       tokens and credits debited. An org accrues thousands of runs, so this is paginated / lazy —
       NOT load-all (the at-scale rule · finding #57). Scoped to the active drill level.
     </div>
@@ -1479,9 +1711,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 5 — limited member view (role gating) ════════════════ -->
+    <!-- ════════════════ PANEL 6 — limited member view (role gating) ════════════════ -->
     <div class="panel-label">
-      5 · Limited member view — a non-admin org member (6.10.4) sees ONLY their own project’s cost
+      6 · Limited member view — a non-admin org member (6.10.4) sees ONLY their own project’s cost
       slice, read-only: no org-wide total, no cross-workspace drill-up, no run log for others. Drawn
       beside the org-admin view so the role gating is visible in the design.
     </div>
@@ -1559,9 +1791,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 6 — low-balance + out-of-credits states ════════════════ -->
+    <!-- ════════════════ PANEL 7 — low-balance + out-of-credits states ════════════════ -->
     <div class="panel-label">
-      6 · Low-balance + out-of-credits — a --el-warning tint BANNER (not a page-level tinted surface
+      7 · Low-balance + out-of-credits — a --el-warning tint BANNER (not a page-level tinted surface
       · finding #35) when the balance runs low, and the zero/blocked state that explains planning is
       paused. NO active buy/upgrade control — the Epic-8 upgrade flow attaches to a passive slot.
     </div>
@@ -1617,9 +1849,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 7 — empty / loading / error states ════════════════ -->
+    <!-- ════════════════ PANEL 8 — empty / loading / error states ════════════════ -->
     <div class="panel-label">
-      7 · Empty / loading / error — the first-run empty state (no usage yet), the loading skeleton
+      8 · Empty / loading / error — the first-run empty state (no usage yet), the loading skeleton
       while fetching over 7.1, and the fetch-failed state (the motir-ai boundary is down) with a
       clear Retry — not a broken-looking zero.
     </div>
@@ -1896,6 +2128,75 @@
           <path
             d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
           />
+        </g>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
         </g>
       </defs>
     </svg>

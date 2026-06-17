@@ -10,9 +10,9 @@ colour tokens + `[data-display-style]` shape tokens + the shipped
 `components/ui/*` primitives), so the code subtask composes the same primitives
 — no Pencil→code gap.
 
-| Surface                                                          | Asset                               | Notes                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Org cost dashboard (balance · drill · model · runs · states)** | **`usage.mock.html`** (HTML mockup) | The whole org-level token-cost surface. Multi-panel: cost summary · org→workspace→project drill-down · per-model breakdown · paginated run log · limited member view · low-balance/out-of-credits · empty/loading/error. **Gates 7.2.11 (MOTIR-824).** A `usage.png` full-page export sits beside it (the board-visible face). |
+| Surface                                                          | Asset                               | Notes                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Org cost dashboard (balance · drill · model · runs · states)** | **`usage.mock.html`** (HTML mockup) | The whole org-level token-cost surface. Multi-panel: **access path (org-menu entry)** · cost summary · org→workspace→project drill-down · per-model breakdown · paginated run log · limited member view · low-balance/out-of-credits · empty/loading/error. **Gates 7.2.11 (MOTIR-824).** A `usage.png` full-page export sits beside it (the board-visible face). |
 
 ## What this area is
 
@@ -45,7 +45,7 @@ breadcrumb.
 - **Atlassian / Jira Cloud** — usage/billing is an **org-admin** concern at
   `admin.atlassian.com`, gated to org admins; site/project members below don't
   see org-wide billing. This is why the full view is org-admin-gated and a
-  plain member sees only their own slice (panel 5; the 6.10.4 gate).
+  plain member sees only their own slice (panel 6; the 6.10.4 gate).
 
 ### ⚠️ Out of scope here (named, NOT drawn) — display only, NOT checkout
 
@@ -61,10 +61,10 @@ The **one** forward-looking affordance allowed is a **passive "out of credits"
 empty/blocked state that NAMES the limit** (so the user understands why planning
 paused) **without** an active purchase control. **Epic 8 will attach the upgrade
 flow to that passive slot later** — it is drawn here as a dashed placeholder
-(panel 6b's `.passive-slot`), the same shape the org-admin settings use for the
+(panel 7b's `.passive-slot`), the same shape the org-admin settings use for the
 "Billing & usage — Coming soon" card. Credits are an **internal usage unit**,
 labelled **"credits"** everywhere, **never** a currency (`$`/`€`); a quiet
-"credits, not a bill" affordance (panel 1) frames the balance as an allotment.
+"credits, not a bill" affordance (panel 2) frames the balance as an allotment.
 
 ## Where it lives
 
@@ -72,14 +72,14 @@ labelled **"credits"** everywhere, **never** a currency (`$`/`€`); a quiet
   `app/(authed)/settings/organization/usage/page.tsx` (sibling of the 6.10
   `settings/organization/` + `settings/organization/members/` routes), entered
   from the org menu's **"Usage & cost"** item. **Org-owner/admin gated** for the
-  full view; a non-admin org member gets the **limited own-project** view (panel 5) rather than a 404 — they legitimately have a project cost slice to see.
+  full view; a non-admin org member gets the **limited own-project** view (panel 6) rather than a 404 — they legitimately have a project cost slice to see.
 - **Data flows over the 7.1 core↔AI boundary / the 7.2 metering grain.** Figures
-  are fetched (the loading skeleton, panel 7b); the fetch can fail when the
-  motir-ai boundary is down (the error state, panel 7c). The metering rows
+  are fetched (the loading skeleton, panel 8b); the fetch can fail when the
+  motir-ai boundary is down (the error state, panel 8c). The metering rows
   support **org / workspace / project** grain, which is what the drill-down
-  (panel 2) re-scopes across. (Numbers in the mock are illustrative.)
+  (panel 3) re-scopes across. (Numbers in the mock are illustrative.)
 - **At-scale (finding #57 — NOT load-all).** An org accrues **thousands** of
-  planning runs; the activity log (panel 4) is **paginated** (page-numbered
+  planning runs; the activity log (panel 5) is **paginated** (page-numbered
   offset paging, matching the org-admin roster's pager), never a load-all list.
   The 7.2.11 code subtask MUST fetch a page at a time.
 
@@ -87,7 +87,26 @@ labelled **"credits"** everywhere, **never** a currency (`$`/`€`); a quiet
 
 ## Panels (review EACH — mistake #31)
 
-### Panel 1 — org cost summary (populated, the PRIMARY view)
+### Panel 1 — access path (the entry point)
+
+**FROM WHICH UI the user reaches this page — drawn, not just named.** The shell
+TopNav's **org menu** (the same 6.10 org-admin menu that opens **Settings** and
+**Members** — `app/(authed)/_components/TopNav.tsx`, drawn in
+`design/org-admin/`) carries a new **"Usage & cost"** item; selecting it opens
+this dashboard. The panel draws the TopNav (the `moooon ▾` org button + search +
+user avatar) and the **org menu OPEN**, with **"Usage & cost"** as the active
+row (`--el-tint-lavender`, the coins icon) — the door to the destination page in
+panels 2–8. A separate **"Billing"** row stays **"Coming soon"** (Epic 8); usage
+is the half that ships here. A caption ties the click to the page's breadcrumb
+(`Organization · moooon · Usage & cost`).
+
+This is the **access-path** half of the design-reference rule (MOTIR.md): a
+design shows the _door_, not just the _room_, so the 7.2.11 coding agent wires
+the entry affordance to the right place instead of improvising it. Composes the
+shipped **`Popover` + menu `opt`** grammar (the org-admin switcher), not a new
+control.
+
+### Panel 2 — org cost summary (populated, the PRIMARY view)
 
 A `stack` on the org usage page: a **stat-card row** of three `Card`s + a
 monthly-trend `Card` + the "credits, not a bill" affordance note.
@@ -107,7 +126,7 @@ monthly-trend `Card` + the "credits, not a bill" affordance note.
   tint) stating credits are an internal allotment, not a currency, and that
   buying credits / plan changes arrive with billing later.
 
-### Panel 2 — drill-down org → workspace → project
+### Panel 3 — drill-down org → workspace → project
 
 A **scope control** (`.scope`) that is a clickable **breadcrumb**: each crossed
 segment stays clickable (go back up in one click); the deepest/active segment
@@ -125,7 +144,7 @@ A `.scope-note` states that drilling re-scopes **every** panel (balance share,
 per-model, run log) to the active level. (The 7.2.x metering grain supports
 each level — see _Where it lives_.)
 
-### Panel 3 — per-model usage breakdown
+### Panel 4 — per-model usage breakdown
 
 A `Card` with a **table** (`.tbl`, the at-scale list pattern): per model — a
 **model chip** (a coloured `.dot` + name), **tokens in**, **tokens out**, a
@@ -134,7 +153,7 @@ debited this month (emphasised). Card foot totals tokens + credits. Shown at
 **whichever drill level is active** (here org-wide). Palette-tinted per model
 (not grey-only · finding #54) — see colour roles.
 
-### Panel 4 — recent activity / per-run log (PAGINATED)
+### Panel 5 — recent activity / per-run log (PAGINATED)
 
 A `Card` with a **table** of recent planning **runs**, newest first: **when**,
 the **run** (a job-kind `Pill` — generate / expand / augment — + the project),
@@ -143,7 +162,7 @@ the **model** (chip), **tokens**, and **credits debited**. A card-foot **pager**
 on page 1) — **at-scale, NOT load-all** (finding #57). Scoped to the active drill
 level (a "Scope: moooon (org)" note in the head).
 
-### Panel 5 — limited member view (role gating · 6.10.4)
+### Panel 6 — limited member view (role gating · 6.10.4)
 
 Two mini-surfaces side by side so the gating is visible:
 
@@ -157,7 +176,7 @@ Two mini-surfaces side by side so the gating is visible:
   expresses — but here the member is **not** 404'd, because they legitimately own
   a project cost slice; they're shown a **reduced read-only** view instead.
 
-### Panel 6 — low-balance + out-of-credits states
+### Panel 7 — low-balance + out-of-credits states
 
 - **(a) Low balance (still usable)** — a **`--el-warning` tint BANNER**
   (`.banner-warn`, hue in the banner only — NOT a page-level tinted surface,
@@ -170,7 +189,7 @@ Two mini-surfaces side by side so the gating is visible:
   with billing later. **NO active buy/upgrade control** — the Epic-8 flow
   attaches to this slot.
 
-### Panel 7 — empty / loading / error states
+### Panel 8 — empty / loading / error states
 
 - **(a) Empty** — first-run, no usage yet: an `EmptyState` (`i-coins`) inviting
   the team to run the planner, with an **"Open the planner"** primary CTA (not a
@@ -189,6 +208,11 @@ Every surface composes a shipped `components/ui/*` primitive. If 7.2.11 needs a
 genuinely new primitive, that is a **new `design/` subtask**, not a code
 workaround.
 
+- **`Popover` + menu rows (the access-path entry, panel 1)** — the org-menu
+  `opt` rows in the TopNav (the org-admin switcher grammar): rows at
+  `--spacing-control-*` / `--radius-control`, the active **"Usage & cost"** row
+  tinted `--el-tint-lavender`. The TopNav org button is a `--radius-btn` trigger.
+  Reuses the shipped org switcher — do NOT hand-roll a new menu.
 - **`Card`** — the stat cards, the trend card, the per-model + run-log tables,
   the state panels, the mini member-view wrappers (`--radius-card`,
   `--shadow-card`, `--spacing-card-padding`; head/body/foot split by
@@ -210,8 +234,8 @@ workaround.
 - **Pagination** — the run-log foot pager (count text + Prev/Next + page
   indicator), identical to the org-admin roster pager. The at-scale control —
   NOT load-all.
-- **`EmptyState` / `ErrorState`** family — panels 6b, 7a, 7c.
-- **`Skeleton`** — panel 7b loading dashboard.
+- **`EmptyState` / `ErrorState`** family — panels 7b, 8a, 8c.
+- **`Skeleton`** — panel 8b loading dashboard.
 - **Meter / bar (token-only)** — the allotment meter + the per-model usage bars +
   the monthly-trend sparkline are plain token-styled `div`s (radius + tint), no
   charting lib, no image. If a richer chart is ever wanted, that's a new
@@ -224,7 +248,7 @@ workaround.
 | **Balance hero figure / medium figures**  | `--el-text` (serif) · unit in `--el-text-muted`                                | The primary numbers; the unit is quiet so "credits" reads as a label. |
 | **Tier chip**                             | `--el-tint-lavender` bg + `--el-text-strong`                                   | The org/plan tier — the brand-purple family, matches the org avatar.  |
 | **Allotment meter fill (healthy)**        | `--el-accent`                                                                  | Primary "credits remaining" share.                                    |
-| **Allotment meter fill (low)**            | `--el-warning`                                                                 | Low-balance variant (panel 6a).                                       |
+| **Allotment meter fill (low)**            | `--el-warning`                                                                 | Low-balance variant (panel 7a).                                       |
 | **Monthly-trend bars**                    | current `--el-accent` · prior `--el-tint-lavender`                             | The latest month stands out; history is quieter.                      |
 | **Spend delta — up / down**               | `--el-warning` (up) · `--el-success` (down)                                    | Coloured by direction (more spend = warning hue), not grey.           |
 | **Model: Claude Opus**                    | dot + bar `--el-accent`                                                        | The priciest/heaviest model — the strongest hue, biggest drain.       |
@@ -234,7 +258,7 @@ workaround.
 | **Job-kind: generate / expand / augment** | `--el-tint-lavender` / `--el-tint-sky` / `--el-tint-mint` + `--el-text-strong` | Three planning verbs, three tints — readable at a glance.             |
 | **Low-balance banner**                    | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`                | Warning hue in the BANNER tint, not the page (finding #35).           |
 | **Out-of-credits / blocked icon**         | `--el-tint-yellow` + `--el-warning`                                            | The paused state — warning, not danger (nothing is broken).           |
-| **Error icon tint**                       | `--el-tint-rose` + `--el-danger-text`                                          | Fetch-error state (panel 7c).                                         |
+| **Error icon tint**                       | `--el-tint-rose` + `--el-danger-text`                                          | Fetch-error state (panel 8c).                                         |
 | **Read-only chip / member lock note**     | neutral `Pill` (`--el-surface`) · lock note `i-lock`                           | The limited member view's gating affordance.                          |
 | **Primary CTAs / active scope segment**   | `--el-accent` (+ `--el-accent-text`) · `--el-tint-lavender`                    | Open-planner / Retry / the active drill segment.                      |
 | Count / scope-level / "Credits" chips     | `--el-surface` + `--el-text-secondary` (neutral `Pill`)                        | Genuinely neutral metadata.                                           |
