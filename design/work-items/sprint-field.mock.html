@@ -1,0 +1,1252 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Sprint field on the detail rail + "Add to active sprint" ⋯ action (Story 2.4 ·
+      2.4.15)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for SPRINT ON THE WORK-ITEM DETAIL —
+      Story 2.4, subtask 2.4.15. It gates code subtask 2.4.14 (MOTIR-1003),
+      which carries 2.4.15 in dependsOn (is_blocked_by).
+
+      WHY THIS ASSET EXISTS (the design gate, notes.html mistake #31).
+      Both additions land on ALREADY-DESIGNED surfaces that do NOT include
+      them today, so they are undesigned elements — NOT mere grammar reuse:
+        • detail.pen's core-fields rail draws Status · Type · Work type ·
+          Executor · Priority · Assignee · Reporter · Parent · (Labels ·
+          Components) · Due · Story points · Estimate — there is NO Sprint
+          field. A new built-in rail field is exactly the case custom fields
+          hit (5.3.5 → 5.3.7): they reused FieldCard + Combobox VERBATIM and
+          STILL needed a design asset because placement / value rendering /
+          the picker sentinel were unspecified. Sprint is the same shape.
+        • delete-confirm.mock.html fixes the ⋯ WorkItemActionsMenu item set
+          (Edit details · Copy link · — · Archive · Delete…) with NO sprint
+          action, and pins a hard law: permission-gated rows are HIDDEN,
+          "never shown-disabled". The card asks for a row that is "greyed out
+          + tooltip when there is no active sprint" — which CONTRADICTS that
+          law and must be resolved by design, not improvised.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + shape tokens),
+      and the markup composes ONLY shipped primitives — NO new chrome:
+        • The Sprint card is CoreFieldsPanel.tsx's FieldCard VERBATIM (Card
+          px-3.5 py-2.5 + shadow-card · uppercase 11px --el-text-secondary
+          label · corner chevron <button> rotating 180° in edit mode · value
+          line mt-1.5 14px). The value glyph follows the Due/Estimate grammar
+          (16px muted leading glyph).
+        • The inline editor is the AssigneePicker-shaped Combobox (the shipped
+          components/ui/Combobox) — autoOpen, sentinel first row, Check on the
+          selected option, searchable at ≥8 options.
+        • The ⋯ menu is the shipped Popover WorkItemActionsMenu VERBATIM (232px
+          Popover, role=menu, the .opt row grammar, --el-border-soft separator),
+          plus ONE new sub-pattern: a disabled row wrapped in a Tooltip (the
+          state-gate treatment — see DECISIONS).
+        • Backlog / completed-sprint marks use the rail's muted-italic
+          convention (the Parent card's "None" grammar) — never colour alone.
+
+      Mirror product = Jira (rung 1). Jira's Details panel carries Sprint
+      directly above the Story-point estimate; Jira/Linear DISABLE-and-explain
+      context actions that aren't currently applicable and reserve REMOVAL for
+      permission — the basis for the state-gate decision below.
+
+      DESIGN DECISIONS this asset pins (recorded in design-notes.md):
+        • FIELD PLACEMENT — the Sprint FieldCard inserts between Due date and
+          Story points (cluster: Due · SPRINT · Story points · Estimate). It
+          pairs Sprint with Story points (the agile "which iteration + how
+          big" pair; Jira's Details ordering). Built-ins never reorder — Sprint
+          is NEW, existing relative order is preserved.
+        • FIELD VISIBILITY — shown for sprintable kinds. For EPICS (which span
+          sprints in Jira and are never assigned to one) recommend HIDING the
+          card; 2.4.14 confirms against the data model (whether epic.sprintId
+          is permitted). Drawn here for a story.
+        • VALUE RENDERING — in a sprint: 16px muted Goal glyph + the sprint
+          NAME plain ("Sprint 7"); Backlog (sprintId null): muted-italic
+          "Backlog" (NOT "None" — backlog is the real default home of an
+          unscheduled item). Value line stays clean (no state tag inline).
+        • PICKER SENTINEL — the Combobox's FIRST row is "Backlog" (the
+          clear/move-home path), matching the filter's sprint-select
+          Backlog-first precedent — meaningful, not the generic "None". Then
+          the ACTIVE sprint (an "Active" secondary), then PLANNED/future
+          sprints. COMPLETED sprints are EXCLUDED from the menu (you do not
+          schedule into a closed sprint); a current completed value stays
+          selected in the trigger with a muted "(completed)" mark (the
+          archived-option precedent). Searchable at ≥8 sprints.
+        • MENU ROW — "Add to active sprint" joins the shared
+          WorkItemActionsMenu's top (non-destructive) group, after "Edit
+          details": Edit details · ADD TO ACTIVE SPRINT · Copy link · — ·
+          Archive · Delete. canEdit gates it. Goal glyph. One click assigns to
+          the project's currently-active sprint; success toast.
+        • DISABLED-vs-HIDDEN (the conflict resolution) — the menu's "hidden,
+          never shown-disabled" law governs PERMISSION gates (hiding an action
+          a user can NEVER perform avoids noise + role leak). "No active
+          sprint" / "already in the active sprint" are transient STATE gates:
+          the user HAS the capability, the precondition just is not met now.
+          Hiding would flicker the row in/out as sprints start/complete and
+          hide that the feature exists. So this row is SHOWN DISABLED + a
+          Tooltip naming the precondition ("No active sprint" / "Already in
+          the active sprint") — a JUSTIFIED deviation, scoped to STATE gates
+          only; the permission gate (!canEdit → row absent) is unchanged.
+        • SHARED REACH — the row lives in the shared menu, so it appears
+          wherever the menu mounts (detail header, list rows, board cards),
+          like Archive/Delete — a surface-agnostic per-item action; quick
+          triage into the running sprint from a row/card is the use case.
+        • PAGE-STATE (for 2.4.14) — changing the sprint is an inline edit:
+          keep the optimistic value, NO router.refresh of the cell. The
+          assign goes through backlogService.assignToSprint (the 4.2 /
+          move_to_sprint path), which also ranks the item at the sprint tail.
+
+      Covers (multi-panel — review EACH):
+        (0) FIELD PLACEMENT + value states — the rail cluster (Due · Sprint ·
+            Story points) with Sprint populated, and the Backlog state
+        (1) FIELD EDIT — the Combobox open (Backlog sentinel · Active · Planned
+            · Check), the searchable ≥8 variant, the completed-current mark
+        (2) ⋯ MENU enabled — the detail header with the menu open, the new row
+            live (active sprint exists)
+        (3) ⋯ MENU disabled states — "No active sprint" + "Already in the
+            active sprint", each disabled with a Tooltip (the state-gate
+            treatment), and the !canEdit (row absent) note
+
+      Toggle dark to confirm token parity. Static states are the authority;
+      there is no live JS here beyond the theme toggle.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 80px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 32px auto 10px;
+        max-width: 1100px;
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin: 0 auto 14px;
+        max-width: 760px;
+        line-height: 1.55;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+      }
+      .panel-note strong {
+        color: var(--el-text-strong);
+      }
+      .stage {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 28px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 40px;
+        align-items: flex-start;
+      }
+      .specimen {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .specimen > .cap {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+        max-width: 300px;
+        line-height: 1.5;
+      }
+
+      /* ── The rail column (the detail page's right rail) ─────────────────── */
+      .rail {
+        width: 300px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px; /* the rail's gap-3 between FieldCards */
+      }
+
+      /* ── FieldCard — CoreFieldsPanel.tsx's card VERBATIM ──────────────────── */
+      .fcard {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 10px 14px;
+      }
+      .fcard.is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+      }
+      .fcard .head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .fcard .flabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .fcard .chev {
+        margin-top: -2px;
+        padding: 2px;
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+      }
+      .fcard .chev:hover {
+        color: var(--el-text);
+      }
+      .fcard .chev svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.12s ease;
+      }
+      .fcard.is-editing .chev svg {
+        transform: rotate(180deg);
+      }
+      .fcard .fvalue {
+        margin-top: 6px;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fvalue .vrow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .fvalue .vtext {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fvalue .glyph {
+        color: var(--el-text-secondary);
+        display: inline-flex;
+        flex: none;
+      }
+      .fvalue .glyph svg {
+        width: 16px;
+        height: 16px;
+      }
+      .muted-italic {
+        color: var(--el-text-secondary);
+        font-style: italic;
+      }
+      .completed-mark {
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* ghosted neighbour value (placement panel only — not a design element) */
+      .ghost-bar {
+        height: 20px;
+        margin-top: 6px;
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border-soft);
+      }
+      .ghost-bar.short {
+        width: 60%;
+      }
+
+      /* ── Combobox (components/ui/Combobox) — the inline sprint picker ─────── */
+      .cbx {
+        position: relative;
+        width: 100%;
+      }
+      .cbx-trigger {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .cbx-trigger .tval {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-trigger .tval.placeholder {
+        color: var(--el-text-muted);
+      }
+      .cbx-trigger .updown {
+        margin-left: auto;
+        flex: none;
+        color: var(--el-text-muted);
+        display: inline-flex;
+      }
+      .cbx-trigger .updown svg {
+        width: 16px;
+        height: 16px;
+      }
+      .cbx-trigger.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .cbx-menu {
+        margin-top: 4px;
+        width: 100%;
+        max-width: 18rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .cbx-search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 4px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .cbx-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .cbx-opt.is-active {
+        background: var(--el-surface);
+      }
+      .cbx-opt .oglyph {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .cbx-opt .oglyph svg {
+        width: 16px;
+        height: 16px;
+      }
+      .cbx-opt .olabel {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-opt .olabel.italic {
+        font-style: italic;
+        color: var(--el-text-secondary);
+      }
+      .cbx-opt .sec {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cbx-opt .check {
+        margin-left: 4px;
+        flex: none;
+        display: inline-flex;
+        color: var(--el-accent);
+      }
+      .cbx-opt .check svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── Detail header slice (the access path — where the ⋯ lives) ───────── */
+      .detail-head {
+        width: 420px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px 18px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        position: relative;
+      }
+      .detail-head .dh-type {
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-type-story, #2a9d99);
+        display: inline-flex;
+      }
+      .detail-head .dh-type svg {
+        width: 20px;
+        height: 20px;
+      }
+      .detail-head .dh-main {
+        min-width: 0;
+        flex: 1;
+      }
+      .detail-head .dh-key {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .detail-head .dh-title {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        line-height: 1.3;
+        margin-top: 2px;
+        color: var(--el-text);
+      }
+      .icon-btn {
+        flex: none;
+        width: var(--height-control);
+        height: var(--height-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover,
+      .icon-btn.active {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .icon-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ── ⋯ WorkItemActionsMenu — the shipped Popover (232px) VERBATIM ─────── */
+      .menu {
+        width: 232px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu.anchored {
+        position: absolute;
+        z-index: 25;
+      }
+      .menu .msep {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 4px 0;
+      }
+      .opt {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover {
+        background: var(--el-surface);
+      }
+      .opt .og {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .opt .lbl {
+        flex: 1;
+      }
+      .opt.danger {
+        color: var(--el-danger);
+      }
+      .opt.danger .og {
+        color: var(--el-danger);
+      }
+      .opt.danger:hover {
+        background: var(--el-tint-rose);
+      }
+      .opt.is-new {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: -1px;
+      }
+      /* the STATE-gate treatment: a disabled row (opacity-50, no hover) that
+         still shows + carries a Tooltip — the justified deviation */
+      .opt.is-disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .opt.is-disabled:hover {
+        background: transparent;
+      }
+
+      /* ── Tooltip — the shipped Tooltip primitive (ink bubble) ────────────── */
+      .tip {
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        line-height: 1.3;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-subtle);
+        z-index: 40;
+      }
+      .tip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: var(--el-text);
+      }
+
+      /* ── Toast — the shipped success Toast (assignment confirmation) ─────── */
+      .toast {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 360px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .toast .tg {
+        flex: none;
+        color: var(--el-success);
+        display: inline-flex;
+      }
+      .toast .tg svg {
+        width: 18px;
+        height: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Sprint on the work-item detail — rail field + “Add to active sprint”</h1>
+        <p>
+          Story 2.4 · subtask <strong>2.4.15</strong> (design) · gates code subtask
+          <strong>2.4.14</strong> (MOTIR-1003). Built from the shipped FieldCard / Combobox /
+          WorkItemActionsMenu — review every panel.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- ── icon sprite — lucide path data (viewBox 0 0 24 24) ─────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <!-- Goal — the sprint glyph (flag on a target) -->
+        <g
+          id="i-goal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 13V2l8 4-8 4" />
+          <path d="M20.561 10.222a9 9 0 1 1-12.55-5.29" />
+          <path d="M8.002 9.997a5 5 0 1 0 8.9 2.02" />
+        </g>
+        <!-- Clock — the Estimate field glyph (neighbour, ghosted contexts) -->
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </g>
+        <!-- Story type icon (square-ish) for the header slice -->
+        <g
+          id="i-story"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 8h6" />
+          <path d="M9 12h6" />
+        </g>
+        <!-- ⋯ MoreHorizontal -->
+        <g id="i-ellipsis" fill="currentColor" stroke="none">
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="19" cy="12" r="1.6" />
+          <circle cx="5" cy="12" r="1.6" />
+        </g>
+        <!-- Pencil — Edit details -->
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          <path d="m15 5 4 4" />
+        </g>
+        <!-- Copy — Copy link -->
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <!-- Archive -->
+        <g
+          id="i-archive"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="5" x="2" y="3" rx="1" />
+          <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+          <path d="M10 12h4" />
+        </g>
+        <!-- Trash2 — Delete -->
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path
+            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+          />
+          <path d="M10 11v6" />
+          <path d="M14 11v6" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 0 — Field placement + value states
+    ═════════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      0 · Field placement — the Due · Sprint · Story-points cluster, + the Backlog state
+    </div>
+    <p class="panel-note">
+      The new <strong>Sprint</strong> FieldCard (dashed accent outline) inserts
+      <strong>between Due date and Story points</strong> — pairing Sprint with the agile estimate,
+      Jira’s Details ordering. Built-ins never reorder; Sprint is new. In a sprint the value is a
+      16px muted <code>Goal</code> glyph + the sprint <strong>name</strong> plain; with no sprint it
+      is muted-italic <strong>“Backlog”</strong> (the rail’s <code>None</code> grammar — never
+      colour alone). Neighbour cards are ghosted to show placement only.
+    </p>
+    <div class="stage">
+      <div class="specimen">
+        <div class="cap">Item committed to a sprint</div>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Due date</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Sprint</span>
+              <button class="chev" aria-label="Edit Sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="vrow">
+                <span class="glyph"
+                  ><svg viewBox="0 0 24 24"><use href="#i-goal" /></svg
+                ></span>
+                <span class="vtext">Sprint 7</span>
+              </span>
+            </div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Story points</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">Backlog (no sprint) — muted-italic, not “None”</div>
+        <div class="rail">
+          <div class="fcard">
+            <div class="head"><span class="flabel">Due date</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Sprint</span>
+              <button class="chev" aria-label="Edit Sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="muted-italic">Backlog</span></div>
+          </div>
+          <div class="fcard">
+            <div class="head"><span class="flabel">Story points</span></div>
+            <div class="fvalue"><div class="ghost-bar short"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">
+          Current sprint already completed — stays selected with a muted “(completed)” mark (the
+          archived-option precedent)
+        </div>
+        <div class="rail">
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Sprint</span>
+              <button class="chev" aria-label="Edit Sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <span class="vrow">
+                <span class="glyph"
+                  ><svg viewBox="0 0 24 24"><use href="#i-goal" /></svg
+                ></span>
+                <span class="vtext">Sprint 6 <span class="completed-mark">(completed)</span></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 1 — Edit mode · the sprint Combobox
+    ═════════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">1 · Edit mode — the sprint picker (Combobox, autoOpen)</div>
+    <p class="panel-note">
+      The chevron swaps the value for the <strong>Combobox</strong> (the AssigneePicker grammar).
+      First row is the <strong>Backlog</strong> sentinel (the clear / move-home path — the filter’s
+      <code>sprint-select</code> Backlog-first precedent, not a generic “None”). Then the
+      <strong>Active</strong> sprint (an “Active” secondary), then <strong>Planned</strong> / future
+      sprints; the selected row carries the <code>Check</code>. <strong>Completed</strong> sprints
+      are excluded from the menu. At <strong>≥8</strong> sprints the search row appears (right).
+    </p>
+    <div class="stage">
+      <div class="specimen">
+        <div class="cap">Typical project (&lt;8 sprints) — opens straight to the list</div>
+        <div class="rail">
+          <div class="fcard is-new is-editing">
+            <div class="head">
+              <span class="flabel">Sprint</span>
+              <button class="chev" aria-label="Close Sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <div class="cbx">
+                <div class="cbx-trigger is-focus">
+                  <span class="tval">Sprint 7</span>
+                  <span class="updown"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </div>
+                <div class="cbx-menu">
+                  <div class="cbx-opt"><span class="olabel italic">Backlog</span></div>
+                  <div class="cbx-opt is-active">
+                    <span class="olabel">Sprint 7</span>
+                    <span class="sec">Active</span>
+                    <span class="check"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                  </div>
+                  <div class="cbx-opt">
+                    <span class="olabel">Sprint 8</span>
+                    <span class="sec">Planned</span>
+                  </div>
+                  <div class="cbx-opt">
+                    <span class="olabel">Sprint 9</span>
+                    <span class="sec">Planned</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">
+          ≥8 sprints — the search row switches on (the Combobox searchable rule)
+        </div>
+        <div class="rail">
+          <div class="fcard is-new is-editing">
+            <div class="head">
+              <span class="flabel">Sprint</span>
+              <button class="chev" aria-label="Close Sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue">
+              <div class="cbx">
+                <div class="cbx-trigger is-focus">
+                  <span class="tval placeholder">Backlog</span>
+                  <span class="updown"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                  ></span>
+                </div>
+                <div class="cbx-menu">
+                  <div class="cbx-search">
+                    <span class="oglyph"
+                      ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                    ></span>
+                    Search sprints…
+                  </div>
+                  <div class="cbx-opt"><span class="olabel italic">Backlog</span></div>
+                  <div class="cbx-opt is-active">
+                    <span class="olabel">Sprint 12</span>
+                    <span class="sec">Active</span>
+                  </div>
+                  <div class="cbx-opt">
+                    <span class="olabel">Sprint 13</span>
+                    <span class="sec">Planned</span>
+                  </div>
+                  <div class="cbx-opt">
+                    <span class="olabel">Sprint 14</span>
+                    <span class="sec">Planned</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 2 — ⋯ menu · the new "Add to active sprint" row (enabled)
+    ═════════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      2 · ⋯ menu — “Add to active sprint” (enabled · an active sprint exists)
+    </div>
+    <p class="panel-note">
+      The access path: the shared <strong>⋯ WorkItemActionsMenu</strong> on the detail header. The
+      new row (dashed outline) joins the top non-destructive group, after
+      <strong>Edit details</strong>: <em>Edit details · Add to active sprint · Copy link</em> · — ·
+      Archive · Delete. <code>canEdit</code> gates it; one click assigns to the project’s
+      currently-active sprint and confirms with a success Toast. The same row appears wherever the
+      menu mounts (list rows, board cards) — a surface-agnostic per-item action like Archive/Delete.
+    </p>
+    <div class="stage">
+      <div class="specimen">
+        <div class="cap">Detail header · ⋯ open</div>
+        <div class="detail-head">
+          <span class="dh-type"
+            ><svg viewBox="0 0 24 24"><use href="#i-story" /></svg
+          ></span>
+          <div class="dh-main">
+            <div class="dh-key">MOTIR-142</div>
+            <div class="dh-title">Burndown chart data endpoint</div>
+          </div>
+          <button class="icon-btn active" aria-label="More actions" aria-expanded="true">
+            <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+          </button>
+          <div
+            class="menu anchored"
+            role="menu"
+            aria-label="Actions for MOTIR-142"
+            style="top: 50px; right: 14px"
+          >
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              <span class="lbl">Edit details</span>
+            </div>
+            <div class="opt is-new" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-goal" /></svg>
+              <span class="lbl">Add to active sprint</span>
+            </div>
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+              <span class="lbl">Copy link</span>
+            </div>
+            <div class="msep"></div>
+            <div class="opt" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+              <span class="lbl">Archive</span>
+            </div>
+            <div class="opt danger" role="menuitem">
+              <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+              <span class="lbl">Delete…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">After the click — the success Toast</div>
+        <div class="toast">
+          <span class="tg"
+            ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+          ></span>
+          <span>Added <strong>MOTIR-142</strong> to Sprint 7</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         PANEL 3 — ⋯ menu · the disabled STATE-gate variants
+    ═════════════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">3 · ⋯ menu — disabled state-gates (shown + Tooltip, NOT hidden)</div>
+    <p class="panel-note">
+      The menu’s law is “permission-gated rows are <strong>hidden</strong>, never shown-disabled”.
+      That governs <strong>capability</strong> — so <code>!canEdit</code> still
+      <strong>removes</strong>
+      the row entirely. But “no active sprint” / “already in this sprint” are transient
+      <strong>state</strong> gates: the user HAS the capability, the precondition just is not met
+      now. Hiding would flicker the row as sprints start/complete and hide the feature; so it is
+      shown <strong>disabled (opacity-50) + a Tooltip</strong> naming the reason — a justified
+      deviation scoped to state gates (Jira/Linear disable-and-explain inapplicable actions, remove
+      only on permission).
+    </p>
+    <div class="stage">
+      <div class="specimen">
+        <div class="cap">No active sprint in the project</div>
+        <div class="menu" role="menu" aria-label="Actions for MOTIR-211" style="position: relative">
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            <span class="lbl">Edit details</span>
+          </div>
+          <div class="opt is-new is-disabled" role="menuitem" aria-disabled="true">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-goal" /></svg>
+            <span class="lbl">Add to active sprint</span>
+            <span class="tip">No active sprint</span>
+          </div>
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+            <span class="lbl">Copy link</span>
+          </div>
+          <div class="msep"></div>
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+            <span class="lbl">Archive</span>
+          </div>
+          <div class="opt danger" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+            <span class="lbl">Delete…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">Item already in the active sprint</div>
+        <div class="menu" role="menu" aria-label="Actions for MOTIR-211" style="position: relative">
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            <span class="lbl">Edit details</span>
+          </div>
+          <div class="opt is-new is-disabled" role="menuitem" aria-disabled="true">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-goal" /></svg>
+            <span class="lbl">Add to active sprint</span>
+            <span class="tip">Already in the active sprint</span>
+          </div>
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+            <span class="lbl">Copy link</span>
+          </div>
+          <div class="msep"></div>
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
+            <span class="lbl">Archive</span>
+          </div>
+          <div class="opt danger" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+            <span class="lbl">Delete…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">
+          Viewer (no edit capability) — the row is ABSENT (the permission law, unchanged)
+        </div>
+        <div class="menu" role="menu" aria-label="Actions for MOTIR-211">
+          <div class="opt" role="menuitem">
+            <svg class="og" viewBox="0 0 24 24"><use href="#i-copy" /></svg>
+            <span class="lbl">Copy link</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
