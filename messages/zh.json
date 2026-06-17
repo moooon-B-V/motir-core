@@ -3083,6 +3083,7 @@
     "copyLink": "复制链接",
     "linkCopied": "链接已复制",
     "archive": "归档",
+    "restore": "恢复",
     "delete": "删除…",
     "deleteTitle": "删除此工作项？",
     "deleteCascadeBody": "这将永久删除 <b>{key}“{title}”</b> 及其下的所有内容。<b>此操作无法撤销。</b>",

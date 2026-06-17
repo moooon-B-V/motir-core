@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Archive, Copy, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Archive, Copy, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { useToast } from '@/components/ui/Toast';
 import { DeleteWorkItemDialog } from './DeleteWorkItemDialog';
@@ -18,6 +18,14 @@ import { archiveWorkItem, unarchiveWorkItem, WorkItemActionError } from './workI
 // neither collapses to just `Copy link`. Delete is the only danger-coloured row
 // and opens the 2.8.4 confirm dialog; Archive (reversible) runs inline with an
 // Undo toast (the only restore path until an archived-items view ships).
+//
+// The `archived` prop (Story 2.9 · Subtask 2.9.11, per delete-confirm.mock.html
+// §2.9.7 "On the DETAIL page — panel 8") puts the menu in its ARCHIVED-item
+// mode: the `canEdit` row swaps Archive→Restore (runs the same `runUnarchive`
+// the Undo toast uses, inline), and `Delete…` opens the ARCHIVED variant of the
+// confirm dialog (2.9.10 — no Archive escape-hatch + the live-descendant
+// warning). Defaults to `false`, so the active surfaces are byte-for-byte
+// unchanged. The host surface passes `archived` from its read.
 
 const ITEM_CLASS =
   'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none disabled:opacity-50';
@@ -34,6 +42,7 @@ export function WorkItemActionsMenu({
   title,
   canEdit,
   canManage,
+  archived = false,
   onDeleted,
   onArchived,
   editHref,
@@ -44,10 +53,16 @@ export function WorkItemActionsMenu({
   /** The `PROD-N` key — used for the link, the menu label, and toasts. */
   identifier: string;
   title: string;
-  /** Edit + Archive gate (the project EDIT capability). */
+  /** Edit + Archive/Restore gate (the project EDIT capability). */
   canEdit: boolean;
   /** Delete gate (the project-admin MANAGE capability). */
   canManage: boolean;
+  /**
+   * ARCHIVED-item mode (Story 2.9 · Subtask 2.9.11). When true the `canEdit`
+   * row is **Restore** (not Archive) and `Delete…` opens the archived confirm
+   * variant. Defaults to `false` — the active behaviour is unchanged.
+   */
+  archived?: boolean;
   /** Run after a successful delete — the surface navigates away / refetches. */
   onDeleted: () => void;
   /** Run after a successful archive or restore — the surface refetches. */
@@ -63,6 +78,7 @@ export function WorkItemActionsMenu({
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const href = editHref ?? `/issues/${identifier}/edit`;
   const menuLabel = t('menuLabel', { key: identifier });
@@ -79,6 +95,7 @@ export function WorkItemActionsMenu({
   }
 
   async function runUnarchive() {
+    setRestoring(true);
     try {
       await unarchiveWorkItem(itemId);
       toast({ variant: 'success', title: t('restoredToast', { key: identifier }) });
@@ -87,9 +104,11 @@ export function WorkItemActionsMenu({
       void (err instanceof WorkItemActionError);
       toast({
         variant: 'error',
-        title: t('archiveErrorTitle'),
+        title: t('restoreErrorTitle'),
         description: t('archiveErrorBody'),
       });
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -156,16 +175,32 @@ export function WorkItemActionsMenu({
             ) : null}
 
             {canEdit ? (
-              <button
-                type="button"
-                role="menuitem"
-                className={ITEM_CLASS}
-                disabled={archiving}
-                onClick={() => void runArchive()}
-              >
-                <Archive className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-                {t('archive')}
-              </button>
+              archived ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={ITEM_CLASS}
+                  disabled={restoring}
+                  onClick={() => {
+                    setOpen(false);
+                    void runUnarchive();
+                  }}
+                >
+                  <RotateCcw className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                  {t('restore')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={ITEM_CLASS}
+                  disabled={archiving}
+                  onClick={() => void runArchive()}
+                >
+                  <Archive className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                  {t('archive')}
+                </button>
+              )
             ) : null}
 
             {canManage ? (
@@ -191,15 +226,22 @@ export function WorkItemActionsMenu({
           itemId={itemId}
           identifier={identifier}
           title={title}
+          archived={archived}
           onClose={() => setDialogOpen(false)}
           onDeleted={() => {
             setDialogOpen(false);
             onDeleted();
           }}
-          onArchiveInstead={() => {
-            setDialogOpen(false);
-            void runArchive();
-          }}
+          // The archived variant has no "Archive instead" escape-hatch (the item
+          // is already archived) — omit the handler so the dialog drops the row.
+          onArchiveInstead={
+            archived
+              ? undefined
+              : () => {
+                  setDialogOpen(false);
+                  void runArchive();
+                }
+          }
         />
       ) : null}
     </>
