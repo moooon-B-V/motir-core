@@ -18,6 +18,10 @@ import { deleteWorkItem, fetchDeletePreview, WorkItemActionError } from './workI
 // one-click recoverable alternative. Cancel takes default focus; an atomic
 // failure (the delete either fully cascades or changes nothing) becomes a
 // retryable `role="alert"` error.
+//
+// The `archived` prop adds the ARCHIVED-item variant (Subtask 2.9.10, panels
+// 6–7): no Archive escape-hatch, plus a peach live-descendant warning when the
+// archived parent still owns LIVE (non-archived) children the cascade destroys.
 
 // Leaf-most first, so the breakdown reads "5 subtasks, 1 task, 1 bug" (design).
 const KIND_BREAKDOWN_ORDER: { kind: WorkItemKindDto; key: string }[] = [
@@ -32,6 +36,7 @@ export function DeleteWorkItemDialog({
   itemId,
   identifier,
   title,
+  archived = false,
   onClose,
   onDeleted,
   onArchiveInstead,
@@ -40,11 +45,25 @@ export function DeleteWorkItemDialog({
   /** The `PROD-N` key shown in the body. */
   identifier: string;
   title: string;
+  /**
+   * The ARCHIVED-item variant (Story 2.9 · Subtask 2.9.10), shown when deleting
+   * from the archived surfaces (list 2.9.5, detail 2.9.11). vs the active
+   * variant it (a) omits the "Archive instead" escape-hatch — meaningless once
+   * the item is archived — and (b) when the archived parent still owns LIVE
+   * (non-archived) descendants, surfaces a peach live-descendant warning (those
+   * live items go too, since delete cascades the whole subtree). Defaults to
+   * `false` — the active variant is then byte-for-byte unchanged.
+   */
+  archived?: boolean;
   onClose: () => void;
   /** Called after a successful delete — the surface navigates away / refetches. */
   onDeleted: () => void;
-  /** The "Archive instead" escape hatch — the surface runs the archive flow. */
-  onArchiveInstead: () => void;
+  /**
+   * The "Archive instead" escape hatch — the surface runs the archive flow.
+   * Optional: the archived variant has no such hatch (the item is already
+   * archived), so it's omitted there.
+   */
+  onArchiveInstead?: () => void;
 }) {
   const t = useTranslations('workItemActions');
   const { toast } = useToast();
@@ -100,6 +119,21 @@ export function DeleteWorkItemDialog({
           .join(', ')
       : '';
 
+  // The archived variant's two branches (2.9.10), per delete-confirm.mock.html
+  // panels 6–7. A LIVE descendant is a non-archived item in the cascaded
+  // subtree; deleting an archived parent destroys those too. Live > 0 → the
+  // peach warning replaces the cascade-count row; live === 0 → the calm
+  // all-archived row. Both only apply in the archived cascade case.
+  const liveCount = preview?.liveDescendantCount ?? 0;
+  const liveBreakdown =
+    preview && liveCount > 0
+      ? KIND_BREAKDOWN_ORDER.filter(({ kind }) => (preview.liveByKind[kind] ?? 0) > 0)
+          .map(({ kind, key }) => t(key, { count: preview.liveByKind[kind] ?? 0 }))
+          .join(', ')
+      : '';
+  const showLiveWarning = archived && cascade && liveCount > 0;
+  const showAllArchivedRow = archived && cascade && liveCount === 0;
+
   // Bold spans carry consequences in WORDS (never colour-only) — the AA
   // emphasis token on the secondary body.
   const bold = (chunks: ReactNode) => (
@@ -127,19 +161,57 @@ export function DeleteWorkItemDialog({
             : t.rich('deleteLeafBody', { key: identifier, title, b: bold })}
         </p>
 
+        {/* Live-descendant warning (2.9.10) — peach/amber, a THIRD callout tone
+            distinct from the mint archive callout and the rose error. Motir's
+            archive is single-node, so an archived parent can still own LIVE
+            children that the cascade destroys; the surprise is named in words. */}
+        {preview && showLiveWarning ? (
+          <div
+            role="note"
+            className="flex gap-2 rounded-(--radius-card) border border-(--el-warning) bg-(--el-tint-peach) p-(--spacing-card-padding) text-sm text-(--el-text-strong)"
+          >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden />
+            <span>
+              <span className="block font-semibold">{t('deleteLiveWarningHead')}</span>
+              {t.rich('deleteLiveWarningBody', {
+                count: liveCount,
+                breakdown: liveBreakdown,
+                b: bold,
+              })}
+            </span>
+          </div>
+        ) : null}
+
         <ul className="flex flex-col gap-2 rounded-(--radius-card) bg-(--el-surface-soft) p-(--spacing-card-padding) text-sm text-(--el-text-secondary)">
           {preview && cascade ? (
             <>
-              <li className="flex gap-2">
-                <ListTree className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden />
-                <span>
-                  {t.rich('deleteCascadeCount', {
-                    count: preview.descendantCount,
-                    breakdown,
-                    b: bold,
-                  })}
-                </span>
-              </li>
+              {/* The cascade-count row varies by variant: the active/default
+                  ListTree count; the archived all-archived calm row (Archive
+                  glyph); or — when the peach warning already named the live
+                  count — dropped entirely (the warning replaces it). */}
+              {showLiveWarning ? null : showAllArchivedRow ? (
+                <li className="flex gap-2">
+                  <Archive className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden />
+                  <span>
+                    {t.rich('deleteAllArchivedRow', {
+                      count: preview.descendantCount,
+                      breakdown,
+                      b: bold,
+                    })}
+                  </span>
+                </li>
+              ) : (
+                <li className="flex gap-2">
+                  <ListTree className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden />
+                  <span>
+                    {t.rich('deleteCascadeCount', {
+                      count: preview.descendantCount,
+                      breakdown,
+                      b: bold,
+                    })}
+                  </span>
+                </li>
+              )}
               <li className="flex gap-2">
                 <Clock className="mt-0.5 size-4 shrink-0 text-(--el-warning)" aria-hidden />
                 <span>{t.rich('deleteHistoryRow', { count: preview.totalCount, b: bold })}</span>
@@ -158,22 +230,26 @@ export function DeleteWorkItemDialog({
         </ul>
 
         {/* Archive — the reversible alternative, inside the same dialog (the
-            mint/success cue, a deliberate contrast to the red delete). */}
-        <div className="flex gap-2 rounded-(--radius-card) bg-(--el-tint-mint) p-(--spacing-card-padding) text-sm text-(--el-text-secondary)">
-          <Archive className="mt-0.5 size-4 shrink-0 text-(--el-success)" aria-hidden />
-          <span>
-            {t('archiveAltLead')} {t.rich('archiveAltBody', { b: bold })}{' '}
-            <button
-              type="button"
-              onClick={onArchiveInstead}
-              disabled={deleting}
-              className="inline-flex items-center gap-1 font-medium text-(--el-link) underline-offset-2 hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
-            >
-              <Archive className="size-3.5" aria-hidden />
-              {t('archiveInstead')}
-            </button>
-          </span>
-        </div>
+            mint/success cue, a deliberate contrast to the red delete). Omitted
+            in the archived variant: the item is already archived, so an
+            "Archive instead" escape-hatch is meaningless (2.9.10). */}
+        {!archived && onArchiveInstead ? (
+          <div className="flex gap-2 rounded-(--radius-card) bg-(--el-tint-mint) p-(--spacing-card-padding) text-sm text-(--el-text-secondary)">
+            <Archive className="mt-0.5 size-4 shrink-0 text-(--el-success)" aria-hidden />
+            <span>
+              {t('archiveAltLead')} {t.rich('archiveAltBody', { b: bold })}{' '}
+              <button
+                type="button"
+                onClick={onArchiveInstead}
+                disabled={deleting}
+                className="inline-flex items-center gap-1 font-medium text-(--el-link) underline-offset-2 hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-50"
+              >
+                <Archive className="size-3.5" aria-hidden />
+                {t('archiveInstead')}
+              </button>
+            </span>
+          </div>
+        ) : null}
 
         {failed ? (
           <div
