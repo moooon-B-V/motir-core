@@ -175,6 +175,24 @@ export const organizationsService = {
     return withWorkspaceContext({ userId, workspaceId }, run);
   },
 
+  /**
+   * Resolve `(userId)`'s access to an ORGANIZATION (not a workspace) — the gate
+   * the org-admin-area reads (e.g. the 7.2.11 cost dashboard) reuse instead of
+   * inventing a parallel check. Throws OrganizationNotFoundError (→ 404, the
+   * no-leak rule) when the actor is not a member; otherwise returns their org
+   * role + whether it is admin-equivalent (owner/admin). Read-only, under the
+   * bound org context so the membership RLS policy admits the self-read.
+   */
+  async resolveOrgAccess(
+    userId: string,
+    organizationId: string,
+  ): Promise<{ role: OrganizationRole; isOrgAdmin: boolean }> {
+    return withOrgContext({ userId, organizationId }, async (tx) => {
+      const role = await assertOrgMember(userId, organizationId, tx);
+      return { role, isOrgAdmin: isOrgAdminRole(role) };
+    });
+  },
+
   // ── Org CRUD ────────────────────────────────────────────────────────────
 
   /**

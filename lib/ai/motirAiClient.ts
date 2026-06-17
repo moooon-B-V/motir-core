@@ -23,8 +23,10 @@ import type {
   JobStreamEvent,
   Problem,
   RawJobResponse,
+  RawUsageResponse,
   RequestEnvelope,
   Tenant,
+  UsageQuery,
 } from './types';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
@@ -142,6 +144,34 @@ export async function getJob(jobId: string): Promise<JobView> {
     result: body.result ?? null,
     error: body.error ? errorFromProblem(body.error) : null,
   };
+}
+
+// GET /v1/usage — the org cost rollup for the cost dashboard (Subtask 7.2.11),
+// at a drill level (org / workspace / project). Read-through: the caller is the
+// aiUsageService, which has already gated the actor and narrowed the scope. A
+// transport failure / non-2xx maps to a typed error the dashboard renders as
+// the error/retry state (never a misleading zero balance).
+export async function getOrgUsage(query: UsageQuery): Promise<RawUsageResponse> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreOrganizationId: query.coreOrganizationId,
+    scope: query.scope,
+  });
+  if (query.coreWorkspaceId) params.set('coreWorkspaceId', query.coreWorkspaceId);
+  if (query.coreProjectId) params.set('coreProjectId', query.coreProjectId);
+  if (query.page) params.set('page', String(query.page));
+  if (query.pageSize) params.set('pageSize', String(query.pageSize));
+
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/usage?${params.toString()}`, {
+      headers: authHeaders(serviceToken),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawUsageResponse;
 }
 
 // GET /v1/jobs/:id/stream — yield SSE frames (status / done / error) as they
