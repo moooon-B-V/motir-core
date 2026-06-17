@@ -5,6 +5,7 @@ import {
   DepthLimitExceededError,
   IllegalParentTypeError,
   IllegalTransitionError,
+  ParentCycleError,
   ReporterNotInWorkspaceError,
   TypeNotAllowedOnKindError,
   UnknownStatusError,
@@ -137,6 +138,12 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof IllegalTransitionError ||
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||
+    // Re-parent cycle (move_to_parent, MOTIR-1017): the DB cycle trigger's
+    // backstop for an item moved under one of its own descendants. The
+    // kind-parent matrix rejects most such moves first (it is strictly
+    // hierarchical), but the trigger is the last line of defense, so map it to a
+    // clean self-correctable tool error rather than an opaque internal error.
+    err instanceof ParentCycleError ||
     err instanceof CrossProjectParentError ||
     err instanceof ReporterNotInWorkspaceError ||
     err instanceof AssigneeNotInWorkspaceError ||

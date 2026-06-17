@@ -15,6 +15,7 @@ import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSpr
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
 import { MOVE_TO_SPRINT_TOOL_NAME, registerMoveToSprint } from './tools/moveToSprint';
 import { MOVE_TO_BACKLOG_TOOL_NAME, registerMoveToBacklog } from './tools/moveToBacklog';
+import { MOVE_TO_PARENT_TOOL_NAME, registerMoveToParent } from './tools/moveToParent';
 import { START_SPRINT_TOOL_NAME, registerStartSprint } from './tools/startSprint';
 import { COMPLETE_SPRINT_TOOL_NAME, registerCompleteSprint } from './tools/completeSprint';
 import { MARK_INTEGRATED_TOOL_NAME, registerMarkIntegrated } from './tools/markIntegrated';
@@ -61,6 +62,7 @@ export const MCP_TOOL_NAMES = [
   DELETE_SPRINT_TOOL_NAME,
   MOVE_TO_SPRINT_TOOL_NAME,
   MOVE_TO_BACKLOG_TOOL_NAME,
+  MOVE_TO_PARENT_TOOL_NAME,
   START_SPRINT_TOOL_NAME,
   COMPLETE_SPRINT_TOOL_NAME,
   MARK_INTEGRATED_TOOL_NAME,
@@ -114,6 +116,9 @@ export function registerMcpTools(
   registerDeleteSprint(target, resolveContext);
   registerMoveToSprint(target, resolveContext);
   registerMoveToBacklog(target, resolveContext);
+  // Re-parent (bug MOTIR-1017) — the structural move create/update can't do:
+  // move a work item under a new parent or promote it to a top-level root.
+  registerMoveToParent(target, resolveContext);
   registerStartSprint(target, resolveContext);
   registerCompleteSprint(target, resolveContext);
   // Integration-state tools (7.8.11) — the 7.9 CLI session loop's write surface.
