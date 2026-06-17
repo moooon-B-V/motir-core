@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Bot, Calendar, Clock, GitBranch, Plus, User } from 'lucide-react';
+import { Bot, Calendar, Clock, GitBranch, Goal, Plus, User } from 'lucide-react';
 import type {
   ExecutorDto,
   WorkItemDto,
@@ -16,6 +16,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { SprintDto } from '@/lib/dto/sprints';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { Locale } from '@/lib/i18n/locales';
 import { Input } from '@/components/ui/Input';
@@ -24,6 +25,7 @@ import { Pill, type PillProps } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { SprintPicker } from '@/components/issues/SprintPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { ParentPicker } from '@/components/issues/ParentPicker';
@@ -39,6 +41,7 @@ import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { formatDateTime, formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { changeStatusAction, updateIssueAction, type UpdateIssueInput } from '../edit/actions';
+import { setWorkItemSprint } from '@/components/issues/actions/workItemActionsClient';
 import { Avatar, FieldCard } from './FieldCard';
 import { CustomFieldsSection } from './CustomFieldsSection';
 import { LabelsCard } from './LabelsCard';
@@ -83,6 +86,13 @@ export interface CoreFieldsPanelProps {
     projectComponents: ComponentDto[];
     canManageProject: boolean;
   };
+  /**
+   * The project's sprints (Subtask 2.4.14) — backs the inline Sprint field's
+   * picker + the current sprint's display name. Omitted (older call sites / unit
+   * tests) or for an EPIC, the Sprint card does not render (epics span sprints,
+   * Jira-faithful).
+   */
+  sprints?: SprintDto[];
 }
 
 type EditableKey =
@@ -93,6 +103,7 @@ type EditableKey =
   | 'priority'
   | 'assignee'
   | 'parent'
+  | 'sprint'
   | 'dueDate'
   | 'estimate';
 
@@ -131,6 +142,7 @@ export function CoreFieldsPanel({
   reporterIsSelf,
   customFields = [],
   labelsComponents,
+  sprints = [],
 }: CoreFieldsPanelProps) {
   const router = useRouter();
   const t = useTranslations('issueViews');
@@ -170,6 +182,7 @@ export function CoreFieldsPanel({
   const reporter = members.find((m) => m.userId === eff.reporterId);
   const assignee = members.find((m) => m.userId === eff.assigneeId);
   const statusMeta = workflow.statuses.find((s) => s.key === eff.status);
+  const currentSprint = eff.sprintId ? sprints.find((s) => s.id === eff.sprintId) : undefined;
 
   // Drop the optimistic override for the given field keys (on error / stale).
   function revert(keys: string[]) {
@@ -234,6 +247,27 @@ export function CoreFieldsPanel({
     const next = estimate === '' ? null : Number(estimate);
     if (next !== eff.estimateMinutes) patch({ estimateMinutes: next });
     else setEditing(null);
+  }
+
+  // Sprint commits through the existing assign route (4.1.4) via the client
+  // helper — NOT updateIssueAction (sprint assignment is a ranked move owned by
+  // backlogService, not a field patch). Optimistic like the other inline fields:
+  // the picked value displays immediately and the 200 IS the confirmation (no
+  // router.refresh of the cell — the page-state inline-edit rule); reverted only
+  // on error. `null` = move to the backlog.
+  function commitSprint(next: string | null) {
+    setEditing(null);
+    if (next === (eff.sprintId ?? null)) return;
+    setOverrides((o) => ({ ...o, sprintId: next }));
+    startTransition(async () => {
+      try {
+        const res = await setWorkItemSprint(item.id, next);
+        setUpdatedAt(res.updatedAt);
+      } catch {
+        revert(['sprintId']);
+        toast({ variant: 'error', title: t('sprintChangeFailed') });
+      }
+    });
   }
 
   const muted = (text: string) => <span className="text-(--el-text-secondary) italic">{text}</span>;
@@ -481,6 +515,41 @@ export function CoreFieldsPanel({
           muted(t('noDueDate'))
         )}
       </FieldCard>
+
+      {/* Sprint (Subtask 2.4.14) — between Due date and Story points (the agile
+          cluster; design/work-items/sprint-field.mock.html). Inline-editable via
+          the SprintPicker (Backlog-first sentinel). HIDDEN for epics — they span
+          sprints (Jira-faithful). Backlog (no sprint) is muted-italic "Backlog",
+          not "None". The write goes through backlogService (the 4.1.4 assign
+          route), so this commits optimistically with no router.refresh. */}
+      {eff.kind !== 'epic' ? (
+        <FieldCard
+          label={t('sprint')}
+          editing={editing === 'sprint'}
+          onToggle={() => toggle('sprint')}
+        >
+          {editing === 'sprint' ? (
+            <SprintPicker
+              sprints={sprints}
+              value={eff.sprintId}
+              onChange={commitSprint}
+              onClose={() => setEditing(null)}
+              autoOpen
+              disabled={isPending || readOnly}
+            />
+          ) : currentSprint ? (
+            <span className="flex items-center gap-1.5">
+              <Goal className="h-4 w-4 text-(--el-text-secondary)" aria-hidden />
+              <span className="truncate">{currentSprint.name}</span>
+              {currentSprint.state === 'complete' ? (
+                <span className="text-(--el-text-muted) italic">({t('sprintCompleted')})</span>
+              ) : null}
+            </span>
+          ) : (
+            muted(t('backlog'))
+          )}
+        </FieldCard>
+      ) : null}
 
       {/* Story points (Subtask 4.3.4) — the agile estimate, DISTINCT from the
           TIME Estimate below (design panel 2). The badge owns its own

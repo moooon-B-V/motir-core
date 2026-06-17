@@ -679,7 +679,11 @@
     "advancedClearFilter": "清除筛选",
     "filterEditInAdvanced": "在高级筛选中编辑",
     "filterSupersededAria": "由高级筛选管理",
-    "filterSupersededTooltip": "由高级筛选管理——此筛选包含快速筛选无法展示的条件。请打开高级筛选进行编辑。"
+    "filterSupersededTooltip": "由高级筛选管理——此筛选包含快速筛选无法展示的条件。请打开高级筛选进行编辑。",
+    "sprint": "Sprint",
+    "backlog": "待办列表",
+    "sprintCompleted": "已完成",
+    "sprintChangeFailed": "无法更改 Sprint"
   },
   "comments": {
     "title": "动态",
@@ -866,6 +870,15 @@
       "allResolved": "所有阻塞已解决",
       "blocked": "受阻",
       "waiting": "正在等待 {count, plural, other {# 个工作项}}"
+    },
+    "sprintPicker": {
+      "label": "Sprint",
+      "backlog": "待办列表",
+      "searchPlaceholder": "搜索 Sprint…",
+      "emptyText": "无 Sprint",
+      "active": "进行中",
+      "planned": "未开始",
+      "completed": "已完成"
     }
   },
   "settings": {
@@ -3116,7 +3129,12 @@
     "restoredToast": "已恢复 {key}",
     "archiveErrorTitle": "无法归档",
     "restoreErrorTitle": "无法恢复",
-    "archiveErrorBody": "出了点问题。请检查网络连接后重试。"
+    "archiveErrorBody": "出了点问题。请检查网络连接后重试。",
+    "addToActiveSprint": "加入进行中的 Sprint",
+    "noActiveSprint": "没有进行中的 Sprint",
+    "alreadyInActiveSprint": "已在进行中的 Sprint 中",
+    "addedToSprintToast": "已将 {key} 加入 {sprint}",
+    "addToSprintErrorTitle": "无法加入 Sprint"
   },
   "projectSquare": {
     "navProduct": "产品",

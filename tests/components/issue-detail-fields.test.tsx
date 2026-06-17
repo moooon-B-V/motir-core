@@ -5,19 +5,26 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { SprintDto } from '@/lib/dto/sprints';
 
 // The inline rail commits through the edit Server Actions + refreshes the route;
 // stub those, the parent-candidates fetch, the router, and the toast so the
 // panel drives in isolation.
-const { updateSpy, statusSpy, refreshSpy, toastSpy } = vi.hoisted(() => ({
+const { updateSpy, statusSpy, refreshSpy, toastSpy, setSprintSpy } = vi.hoisted(() => ({
   updateSpy: vi.fn(),
   statusSpy: vi.fn(),
   refreshSpy: vi.fn(),
   toastSpy: vi.fn(),
+  setSprintSpy: vi.fn(),
 }));
 vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
   updateIssueAction: updateSpy,
   changeStatusAction: statusSpy,
+}));
+// The Sprint field commits through the assign route via this client helper
+// (2.4.14) — stub the fetch so the panel drives in isolation.
+vi.mock('@/components/issues/actions/workItemActionsClient', () => ({
+  setWorkItemSprint: setSprintSpy,
 }));
 vi.mock('@/app/(authed)/issues/actions', () => ({
   listCandidateParentsAction: vi.fn().mockResolvedValue({ ok: true, candidates: [] }),
@@ -254,5 +261,90 @@ describe('IssueExplanation', () => {
     // The section header is always present; the body is the empty state.
     expect(screen.getByRole('heading', { name: 'Explanation' })).toBeTruthy();
     expect(screen.getByText('No explanation yet.')).toBeTruthy();
+  });
+});
+
+// ── Sprint field (Subtask 2.4.14) ──────────────────────────────────────────
+const sprintFixture = (over: Partial<SprintDto> = {}): SprintDto => ({
+  id: 'sp',
+  name: 'Sprint',
+  goal: null,
+  state: 'planned',
+  startDate: null,
+  endDate: null,
+  completedAt: null,
+  sequence: 1,
+  issueCount: 0,
+  committedPoints: null,
+  committedIssueCount: null,
+  ...over,
+});
+
+const sprints: SprintDto[] = [
+  sprintFixture({ id: 'sp_active', name: 'Sprint 7', state: 'active', sequence: 7 }),
+  sprintFixture({ id: 'sp_planned', name: 'Sprint 8', state: 'planned', sequence: 8 }),
+  sprintFixture({ id: 'sp_done', name: 'Sprint 6', state: 'complete', sequence: 6 }),
+];
+
+function renderWithSprints(item = makeItem()) {
+  return render(
+    <CoreFieldsPanel
+      item={item}
+      members={members}
+      workflow={workflow}
+      parent={null}
+      reporterIsSelf
+      sprints={sprints}
+    />,
+  );
+}
+
+describe('CoreFieldsPanel — Sprint field (2.4.14)', () => {
+  it('shows muted "Backlog" when the item is in no sprint', () => {
+    renderWithSprints(makeItem({ sprintId: null }));
+    expect(screen.getByText('Backlog')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit Sprint' })).toBeTruthy();
+  });
+
+  it('shows the sprint name when committed to a sprint', () => {
+    renderWithSprints(makeItem({ sprintId: 'sp_active' }));
+    expect(screen.getByText('Sprint 7')).toBeTruthy();
+  });
+
+  it('marks a completed current sprint with "(completed)"', () => {
+    renderWithSprints(makeItem({ sprintId: 'sp_done' }));
+    expect(screen.getByText('Sprint 6')).toBeTruthy();
+    expect(screen.getByText('(completed)')).toBeTruthy();
+  });
+
+  it('is HIDDEN for an epic (epics span sprints)', () => {
+    renderWithSprints(makeItem({ kind: 'epic', sprintId: null }));
+    expect(screen.queryByRole('button', { name: 'Edit Sprint' })).toBeNull();
+  });
+
+  it('commits a sprint pick through setWorkItemSprint (Backlog-first sentinel)', () => {
+    setSprintSpy.mockResolvedValue({
+      updatedAt: '2026-06-17T10:00:00.000Z',
+      sprintId: 'sp_active',
+    });
+    renderWithSprints(makeItem({ sprintId: null }));
+
+    // The picker autoOpens on edit (no second click — that would toggle it shut).
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Sprint' }));
+    // Backlog sentinel is the first option; the active + planned sprints follow.
+    expect(screen.getByRole('option', { name: 'Backlog' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('option', { name: /Sprint 7/ }));
+
+    expect(setSprintSpy).toHaveBeenCalledWith('wi_1', 'sp_active');
+  });
+
+  it('clearing to Backlog commits null', () => {
+    setSprintSpy.mockResolvedValue({ updatedAt: '2026-06-17T10:00:00.000Z', sprintId: null });
+    renderWithSprints(makeItem({ sprintId: 'sp_active' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Sprint' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Backlog' }));
+
+    expect(setSprintSpy).toHaveBeenCalledWith('wi_1', null);
   });
 });

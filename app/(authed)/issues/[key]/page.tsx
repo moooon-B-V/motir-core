@@ -6,6 +6,7 @@ import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { estimationService } from '@/lib/services/estimationService';
@@ -120,6 +121,15 @@ export default async function IssueDetailPage({
     accessLevel: ctx.project.accessLevel,
     ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
   });
+
+  // Sprints (Subtask 2.4.14) back the inline Sprint field's picker + the current
+  // sprint's display name, and the ⋯ menu's "Add to active sprint" quick action.
+  // The active sprint (one per project) is the menu's assign target.
+  const sprints = await sprintsService.listByProject(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
 
   // Comments (Story 5.1 · 5.1.5): the caller's comment capabilities (the Jira
   // permission split on the 6.4 role model — viewer reads only) + the first
@@ -303,6 +313,9 @@ export default async function IssueDetailPage({
                 canEdit={canEdit}
                 canManage={canManageProject}
                 archived={isArchived}
+                activeSprintId={activeSprint?.id ?? null}
+                activeSprintName={activeSprint?.name ?? null}
+                inActiveSprint={activeSprint != null && item.sprintId === activeSprint.id}
               />
             </div>
           </div>
@@ -416,6 +429,7 @@ export default async function IssueDetailPage({
                 projectComponents,
                 canManageProject,
               }}
+              sprints={sprints}
             />
             {/* Epic-level privacy (Story 6.14 · 6.14.7) — the project-admin
               set/unset control, EPIC-kind only. A non-admin member sees it

@@ -50,3 +50,26 @@ export async function unarchiveWorkItem(id: string): Promise<void> {
     await fetch(`/api/work-items/${encodeURIComponent(id)}/archive`, { method: 'DELETE' }),
   );
 }
+
+/**
+ * Set the item's sprint (Subtask 2.4.14) — `sprintId` a sprint to assign into,
+ * or `null` to move it back to the backlog. Wraps the existing
+ * `POST /api/work-items/[id]/sprint` route (4.1.4 — assignToSprint /
+ * moveToBacklog); the response is the updated `WorkItemDto`. Used by the detail
+ * rail's inline Sprint field AND the ⋯ menu's "Add to active sprint" quick
+ * action.
+ */
+export async function setWorkItemSprint(
+  id: string,
+  sprintId: string | null,
+): Promise<{ updatedAt: string; sprintId: string | null }> {
+  const res = await ensureOk(
+    await fetch(`/api/work-items/${encodeURIComponent(id)}/sprint`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sprintId }),
+    }),
+  );
+  const item = (await res.json()) as { updatedAt: string; sprintId: string | null };
+  return { updatedAt: item.updatedAt, sprintId: item.sprintId };
+}
