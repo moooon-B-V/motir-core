@@ -8,11 +8,15 @@ the spirit of cofounder.co: the process is the hero, the chat is a quiet rail.
 > **Idea → Discover · Shape · Validate → Plan → Epic 1 → Epic 2 → Epic 3 → …**
 
 The user describes an idea; it flows through **three stages** and materializes as
-a generated issue tree (a dispatchable backlog). **The canvas is not thrown away
-once planning ends — it becomes the project's persistent ROADMAP**: the same road
-continues through the epics, and each epic expands into its own sub-roadmap (the
-work-item tree in the same node/road language). Onboarding and the roadmap are one
-surface (panels 7–8). This asset is the layout source
+a generated issue tree (a dispatchable backlog). **A "vibe project" is the WHOLE
+venture, not just the code** (Yue, 2026-06-17) — Motir plans the entire project
+(**brand, pricing, legal, marketing, and the code**), tracks **every kind of
+work** in one place, and ships the code for you. So the generated plan and the
+roadmap span all of Motir's work-item types, not just engineering (see "Whole-
+project breadth" below). **The canvas is not thrown away once planning ends — it
+becomes the project's persistent ROADMAP**: the same road continues through the
+epics, and each epic expands into its own sub-roadmap (the work-item tree in the
+same node/road language). Onboarding and the roadmap are one surface (panels 7–8). This asset is the layout source
 of truth for every UI subtask in Story 7.3 — the chat front-door UI (`7.3.5`), the
 stage-output render/edit view (`7.3.6`), the wizard/canvas shell (`7.3.11`) and the
 orchestration it embeds (`7.3.9`). It is built FROM the real design system
@@ -50,6 +54,31 @@ user goes:
 A completed stage renders as **structured direction** (labelled fields + decision
 chips with pinned-vs-delegated markers), inline-editable — NOT a rendered Markdown
 file (panel 5). The plan is generated only after Validate.
+
+---
+
+## ⚠️ Whole-project breadth — every kind of work, not just code
+
+A vibe project spans the whole venture, so the generated plan + the roadmap show
+**all of Motir's shipped work-item types**, each with its `--el-type-*` hue + a
+type chip (a hue tint bg + `--el-text-strong` + a dot **and** a label — AA, never
+colour-alone). The mapping used in the example (grounded in `workItemTypeMeta.ts`
+— there is **no `legal` type**):
+
+| Work                                                  | Type                                                    | Token               |
+| ----------------------------------------------------- | ------------------------------------------------------- | ------------------- |
+| the build                                             | `code`                                                  | `--el-type-code`    |
+| logo / UI / brand                                     | `design`                                                | `--el-type-design`  |
+| pricing / landing / marketing copy                    | `content`                                               | `--el-type-content` |
+| incorporate / ToS / domain / accounts (incl. "legal") | `manual`                                                | `--el-type-manual`  |
+| automated tests                                       | `test`                                                  | `--el-type-test`    |
+| (also available)                                      | `research` · `review` · `deploy` · `decision` · `chore` | `--el-type-*`       |
+
+The example plan (panels 6–8) is **"the whole project"**: epics **Brand & landing**
+· **Build the product** · **Pricing & billing** · **Launch & growth**, with
+work items spanning design / content / manual / code / test. Motir **plans + tracks**
+every type; only `code` is **auto-shipped** by the hosted coding agent — the breadth
+lives in the planner + tracker, the copy never claims the agent does legal/marketing.
 
 ---
 
@@ -131,13 +160,16 @@ Every shell/nav/auth surface is drawn to fit what is actually implemented:
   Product / Resources / Pricing / Docs; "Log in" ghost + "Sign up" primary) —
   cloud-only chrome.
 - Hero: an eyebrow `Pill` ("✦ Vibe project", lavender); a `font-serif` ~44px **"What
-  do you want to build?"**; the vibe-project definition subhead (**never "AI project
+  do you want to build?"**; the **whole-project** vibe-project definition subhead
+  ("…a vibe project is the whole thing — describe your idea and Motir plans the
+  entire project (brand, pricing, legal, marketing, and the code), tracks every kind
+  of work in one place, and ships the code for you" — **never "AI project
   management"**). A compact idea prompt (`Card` + borderless `Textarea` + "Free to
   start · no card" + a primary **"Start planning"**).
 - **The hero visual** — under "HOW IT WORKS · ONE VISUAL PROCESS", the pipeline
-  preview on a dotted-grid canvas: `Your idea → Discover (step 1) · Shape (step 2) ·
-Validate (step 3) → Your plan`, connected stage nodes. This replaces the old
-  generic Plan/Track/Ship strip — it shows the user the whole process up front.
+  preview on a dotted-grid canvas: `Your idea → Discover · Shape · Validate → Your
+plan → · your epics`, connected stage nodes (the road visibly continues past the
+  plan into the roadmap). The caption frames it as a plan **for the whole project**.
 
 ### Panel 2 — login gate
 
@@ -195,9 +227,11 @@ filename, no Markdown-file framing — it is the stage's output on the canvas.
 ### Panel 6 — plan materialized + states
 
 - The tracker shows Discover · Shape · Validate done → **Plan** active. The
-  **generated issue tree forms on the canvas** (mono "PLAN · 1 EPIC · 4 STORIES ·
-  12 SUBTASKS"): an epic → stories → subtasks tree, the last rows ghosted /
-  streaming in, with a primary **"Review & dispatch →"** (the 7.4 hand-off — drawn,
+  **generated issue tree forms on the canvas** (mono "PLAN · THE WHOLE PROJECT ·
+  4 EPICS · 8 STORIES · 21 WORK ITEMS"): venture-spanning epics (Brand & landing ·
+  Build the product · Pricing & billing · Launch & growth) → stories → work items
+  carrying **type chips** (Design / Content / Code / Manual / …), the last rows
+  ghosted / streaming in, with a primary **"Review & dispatch →"** (the 7.4 hand-off — drawn,
   wired later).
 - A row of **canvas states**: **Generating your plan** (progress + "Discover ·
   Shape · Validate — done" + "Drafting the issue tree…"); **Discovery couldn't
@@ -226,7 +260,9 @@ One epic node **opened in place**: the parent road stays visible (compact, the e
 marked OPEN), and below it the epic's **stories → subtasks** render in the SAME
 node/road language — stories as nodes (`--el-type-story` green), their subtasks
 beneath (`--el-type-subtask` teal), each with per-item status (done check /
-in-progress / todo). A "TRACES TO SHAPE · VALIDATE" lineage chip reinforces the
+in-progress / todo) **and a work-item TYPE chip** (Code · Design · Content · Manual ·
+Test — "every kind of work", per the whole-project breadth above). A "TRACES TO
+SHAPE · VALIDATE" lineage chip reinforces the
 self-similar pattern (a roadmap = a planning origin + a tree of work, at every
 level). This is **a new PRESENTATION of the shipped work-item tree** (epics →
 stories → subtasks), not a new data model.

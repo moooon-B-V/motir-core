@@ -175,6 +175,15 @@
         --el-type-task: var(--color-info);
         --el-type-subtask: var(--color-accent-teal);
         --el-type-epic: var(--color-accent);
+        /* work-item TYPE hues (the work-nature palette) — match lib/issues/workItemTypeMeta.ts */
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-manual: var(--color-stone);
         --el-hero-wash-a: var(--color-tint-lavender);
         --el-hero-wash-b: var(--color-tint-sky);
         --el-code-bg: var(--color-muted);
@@ -1656,6 +1665,58 @@
         color: var(--el-text-faint);
       }
 
+      /* work-item TYPE chip — the hue in a tint background + --el-text-strong text (AA),
+         always paired with a TYPE LABEL (never colour-alone). */
+      .tchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: auto;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-strong);
+        background: color-mix(in srgb, var(--tc, var(--el-type-task)) 16%, var(--el-page-bg));
+      }
+      .tchip::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: var(--radius-pill);
+        background: var(--tc, var(--el-type-task));
+      }
+      .tc-code {
+        --tc: var(--el-type-code);
+      }
+      .tc-design {
+        --tc: var(--el-type-design);
+      }
+      .tc-content {
+        --tc: var(--el-type-content);
+      }
+      .tc-manual {
+        --tc: var(--el-type-manual);
+      }
+      .tc-test {
+        --tc: var(--el-type-test);
+      }
+      .tc-deploy {
+        --tc: var(--el-type-deploy);
+      }
+      /* when a row carries both a count and a type chip, the chip owns the right edge */
+      .trow .tchip + .tcount,
+      .trow .tcount + .tchip {
+        margin-left: 8px;
+      }
+      /* inside a subtask row the chip sits by the label; the state keeps the right edge */
+      .stask .tchip {
+        margin-left: 0;
+      }
+
       .states {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -2108,8 +2169,9 @@
           <span class="eyebrow">✦ Vibe project</span>
           <h1>What do you want to build?</h1>
           <p class="sub">
-            You’ve heard of vibe coding. A <b>vibe project</b> takes it to the whole thing —
-            describe your idea and Motir plans the work, tracks it, and ships the code, end to end.
+            You’ve heard of vibe coding. A <b>vibe project</b> is the whole thing — describe your
+            idea and Motir plans the entire project (brand, pricing, legal, marketing, and the
+            code), tracks every kind of work in one place, and ships the code for you.
           </p>
 
           <!-- compact idea prompt (the front door) -->
@@ -2139,7 +2201,8 @@ A tool for freelancers to send invoices and track which clients have paid</texta
             <div class="preview-cap">
               <div class="mono">How it works · one visual process</div>
               <p>
-                Your idea becomes a plan through three stages — you stay in control of every call.
+                Your idea becomes a plan for the whole project through three stages — you stay in
+                control of every call.
               </p>
             </div>
             <div class="pipe">
@@ -2649,6 +2712,26 @@ A tool for freelancers to send invoices and track which clients have paid</texta
                         ></span
                       >
                     </div>
+                    <div class="drow">
+                      <span class="dk">Pricing</span>
+                      <span class="dv"
+                        >$9 / mo flat
+                        <span class="pill pill-pinned"
+                          ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
+                          Pinned</span
+                        ></span
+                      >
+                    </div>
+                    <div class="drow">
+                      <span class="dk">Brand &amp; name</span>
+                      <span class="dv"
+                        >Motir picks a minimal wordmark
+                        <span class="pill pill-delegated"
+                          ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                          decide</span
+                        ></span
+                      >
+                    </div>
                   </div>
                 </div>
 
@@ -2799,7 +2882,9 @@ A tool for freelancers to send invoices and track which clients have paid</texta
         <section class="canvas dotted" style="padding: 26px">
           <div class="plan-card">
             <div class="plan-head">
-              <span class="mono">Plan · 1 epic · 4 stories · 12 subtasks</span>
+              <span class="mono"
+                >Plan · the whole project · 4 epics · 8 stories · 21 work items</span
+              >
               <button class="btn btn-primary btn-sm">
                 Review &amp; dispatch
                 <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
@@ -2808,40 +2893,57 @@ A tool for freelancers to send invoices and track which clients have paid</texta
             <div class="tree">
               <div class="trow epic">
                 <svg class="ic tic t-epic" viewBox="0 0 24 24"><use href="#i-network" /></svg>
-                Invoicing for freelancers
+                Brand &amp; landing
                 <span class="tcount">epic</span>
               </div>
-              <div class="trow story">
-                <svg class="ic-sm tic t-story" viewBox="0 0 24 24">
-                  <use href="#i-circle-dot" />
-                </svg>
-                Create & send an invoice
-                <span class="tcount">3 subtasks</span>
+              <div class="trow sub">
+                <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                Logo &amp; wordmark
+                <span class="tchip tc-design">Design</span>
+              </div>
+              <div class="trow sub">
+                <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                Landing page copy
+                <span class="tchip tc-content">Content</span>
+              </div>
+              <div class="trow sub">
+                <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                Landing page build
+                <span class="tchip tc-code">Code</span>
+              </div>
+              <div class="trow epic">
+                <svg class="ic tic t-epic" viewBox="0 0 24 24"><use href="#i-network" /></svg>
+                Build the product
+                <span class="tcount">epic</span>
               </div>
               <div class="trow sub">
                 <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
                 Invoice data model + form
+                <span class="tchip tc-code">Code</span>
               </div>
               <div class="trow sub">
                 <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
                 PDF render + email delivery
+                <span class="tchip tc-code">Code</span>
               </div>
-              <div class="trow story">
-                <svg class="ic-sm tic t-story" viewBox="0 0 24 24">
-                  <use href="#i-circle-dot" />
-                </svg>
-                Track who has paid
-                <span class="tcount">3 subtasks</span>
+              <div class="trow epic">
+                <svg class="ic tic t-epic" viewBox="0 0 24 24"><use href="#i-network" /></svg>
+                Pricing &amp; billing
+                <span class="tcount">epic</span>
               </div>
-              <div class="trow sub ghost">
+              <div class="trow sub">
                 <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
-                Payment status + outstanding view
+                Pricing page
+                <span class="tchip tc-content">Content</span>
               </div>
-              <div class="trow story ghost">
-                <svg class="ic-sm tic t-story" viewBox="0 0 24 24">
-                  <use href="#i-circle-dot" />
-                </svg>
-                Client list & reminders
+              <div class="trow sub">
+                <svg class="ic-sm tic t-sub" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                Incorporate + Terms of Service
+                <span class="tchip tc-manual">Manual</span>
+              </div>
+              <div class="trow epic ghost">
+                <svg class="ic tic t-epic" viewBox="0 0 24 24"><use href="#i-network" /></svg>
+                Launch &amp; growth
                 <span class="tcount">streaming in…</span>
               </div>
             </div>
@@ -2971,9 +3073,9 @@ A tool for freelancers to send invoices and track which clients have paid</texta
               ></span>
               <span class="mono">Epic 1</span>
             </div>
-            <div class="etitle">Send an invoice</div>
+            <div class="etitle">Brand &amp; landing</div>
             <div class="emeter"><i class="ok" style="width: 100%"></i></div>
-            <div class="emeta"><span>5 / 5 done</span><span>·</span><span>2 stories</span></div>
+            <div class="emeta"><span>4 / 4 done</span><span>·</span><span>2 stories</span></div>
             <div class="est-foot">
               <span class="est-status done"
                 ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Done</span
@@ -2994,7 +3096,7 @@ A tool for freelancers to send invoices and track which clients have paid</texta
               ></span>
               <span class="mono">Epic 2</span>
             </div>
-            <div class="etitle">Get paid on time</div>
+            <div class="etitle">Build the product</div>
             <div class="emeter"><i style="width: 38%"></i></div>
             <div class="emeta"><span>3 / 8 done</span><span>·</span><span>3 stories</span></div>
             <div class="est-foot">
@@ -3013,9 +3115,9 @@ A tool for freelancers to send invoices and track which clients have paid</texta
               ></span>
               <span class="mono">Epic 3</span>
             </div>
-            <div class="etitle">Reminders &amp; client list</div>
+            <div class="etitle">Pricing &amp; billing</div>
             <div class="emeter"><i style="width: 0"></i></div>
-            <div class="emeta"><span>0 / 6 done</span><span>·</span><span>2 stories</span></div>
+            <div class="emeta"><span>0 / 5 done</span><span>·</span><span>2 stories</span></div>
             <div class="est-foot">
               <span class="est-status up"
                 ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Up
@@ -3024,7 +3126,7 @@ A tool for freelancers to send invoices and track which clients have paid</texta
             </div>
           </div>
           <div class="conn"><span class="line"></span></div>
-          <div class="estation more">+ more epics</div>
+          <div class="estation more">+ Launch &amp; growth</div>
         </div>
       </div>
     </div>
@@ -3053,7 +3155,7 @@ A tool for freelancers to send invoices and track which clients have paid</texta
           <div class="conn is-done"><span class="line"></span></div>
           <div class="estation" style="flex: 0 0 138px">
             <div class="est-head"><span class="mono">Epic 1</span></div>
-            <div class="etitle" style="font-size: 13px">Send an invoice</div>
+            <div class="etitle" style="font-size: 13px">Brand &amp; landing</div>
             <div class="est-status done" style="font-size: 11px">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Done
             </div>
@@ -3069,20 +3171,20 @@ A tool for freelancers to send invoices and track which clients have paid</texta
               ></span>
               <span class="mono">Epic 2</span>
             </div>
-            <div class="etitle" style="font-size: 13px">Get paid on time</div>
+            <div class="etitle" style="font-size: 13px">Build the product</div>
             <div class="emeter"><i style="width: 38%"></i></div>
           </div>
           <div class="conn"><span class="line"></span></div>
           <div class="estation is-upcoming" style="flex: 0 0 138px">
             <div class="est-head"><span class="mono">Epic 3</span></div>
-            <div class="etitle" style="font-size: 13px">Reminders &amp; client list</div>
+            <div class="etitle" style="font-size: 13px">Pricing &amp; billing</div>
           </div>
         </div>
 
         <!-- the expanded epic's sub-roadmap = its work-item tree, in the same node language -->
         <div class="subroad-wrap">
           <div class="mono sr-cap">
-            Epic 2 · Get paid on time — stories → subtasks
+            Epic 2 · Build the product — stories → subtasks · every kind of work
             <span class="lineage" style="margin-left: 8px"
               ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> traces to Shape
               · Validate</span
@@ -3095,16 +3197,18 @@ A tool for freelancers to send invoices and track which clients have paid</texta
                 <span class="sg"
                   ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
                 ></span>
-                <div class="snt">Payment status</div>
+                <div class="snt">Create &amp; send an invoice</div>
               </div>
               <div class="subtasks">
                 <div class="stask done">
-                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg> Status
-                  data model <span class="st-state">done</span>
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoice
+                  data model + form <span class="tchip tc-code">Code</span>
+                  <span class="st-state">done</span>
                 </div>
                 <div class="stask done">
-                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  Mark-as-paid action <span class="st-state">done</span>
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg> PDF render
+                  + email delivery <span class="tchip tc-code">Code</span>
+                  <span class="st-state">done</span>
                 </div>
               </div>
             </div>
@@ -3116,20 +3220,23 @@ A tool for freelancers to send invoices and track which clients have paid</texta
                 <span class="sg"
                   ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
                 ></span>
-                <div class="snt">Outstanding view</div>
+                <div class="snt">Track who has paid</div>
               </div>
               <div class="subtasks">
                 <div class="stask done">
                   <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  Outstanding query <span class="st-state">done</span>
+                  Payment status view <span class="tchip tc-code">Code</span>
+                  <span class="st-state">done</span>
                 </div>
                 <div class="stask">
                   <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
-                  Dashboard widget <span class="st-state">in progress</span>
+                  Invoice screen polish <span class="tchip tc-design">Design</span>
+                  <span class="st-state">in progress</span>
                 </div>
                 <div class="stask">
-                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Empty
-                  + loading states <span class="st-state">todo</span>
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  In-app help &amp; empty states <span class="tchip tc-content">Content</span>
+                  <span class="st-state">todo</span>
                 </div>
               </div>
             </div>
@@ -3141,16 +3248,18 @@ A tool for freelancers to send invoices and track which clients have paid</texta
                 <span class="sg"
                   ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
                 ></span>
-                <div class="snt">Overdue flags</div>
+                <div class="snt">Ship it</div>
               </div>
               <div class="subtasks">
                 <div class="stask">
                   <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
-                  Overdue rule <span class="st-state">todo</span>
+                  Hosting &amp; domain setup <span class="tchip tc-manual">Manual</span>
+                  <span class="st-state">todo</span>
                 </div>
                 <div class="stask">
-                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Badge
-                  + filter <span class="st-state">todo</span>
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  End-to-end tests <span class="tchip tc-test">Test</span>
+                  <span class="st-state">todo</span>
                 </div>
               </div>
             </div>
