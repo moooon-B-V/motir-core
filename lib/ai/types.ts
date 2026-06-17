@@ -11,6 +11,10 @@ export const JOB_KINDS = ['noop', 'generate_tree', 'expand_item', 'augment', 're
 export type JobKind = (typeof JOB_KINDS)[number];
 
 export interface Tenant {
+  // The org the job runs within — the billing entity (6.10). motir-core resolves
+  // a project's workspace's org and sends it (Subtask 7.2.16); motir-ai keys its
+  // org-level credit ledger (7.2.6) to it. Required on every submit.
+  organizationId: string;
   workspaceId: string;
   projectId: string;
   projectKey: string;
