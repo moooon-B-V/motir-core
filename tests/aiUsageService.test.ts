@@ -133,4 +133,157 @@ describe('aiUsageService.getUsage', () => {
     ).rejects.toBeInstanceOf(OrganizationNotFoundError);
     expect(getOrgUsageMock).not.toHaveBeenCalled();
   });
+
+  // ── 7.2.12 lock-in: the admin drill-scope resolution branches ──
+  // An admin can drill DOWN to a workspace / project, but the server validates
+  // every requested id against the org (never trusts the query) and narrows up
+  // when an id is unknown or foreign. These are the scope-decision branches the
+  // happy-path org test above doesn't reach.
+
+  it('honours an admin drilling to a workspace scope with a valid workspaceId', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getOrgUsageMock.mockResolvedValue(
+      rawResponse({ scope: 'workspace', coreWorkspaceId: workspace.id }),
+    );
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+      scope: 'workspace',
+      workspaceId: workspace.id,
+    });
+
+    expect(res.scope).toBe('workspace');
+    expect(res.activeWorkspace?.id).toBe(workspace.id);
+    // The active workspace's projects are offered as the drill.
+    expect(res.drill.projects.map((p) => p.id)).toContain(project.id);
+    expect(getOrgUsageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'workspace', coreWorkspaceId: workspace.id }),
+    );
+  });
+
+  it('honours an admin drilling to a project scope with a valid workspace + project', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getOrgUsageMock.mockResolvedValue(
+      rawResponse({ scope: 'project', coreWorkspaceId: workspace.id, coreProjectId: project.id }),
+    );
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+      scope: 'project',
+      workspaceId: workspace.id,
+      projectId: project.id,
+    });
+
+    expect(res.scope).toBe('project');
+    expect(res.activeProject?.id).toBe(project.id);
+    expect(getOrgUsageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'project', coreProjectId: project.id }),
+    );
+  });
+
+  it('narrows an admin project scope UP to workspace when the projectId is unknown', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getOrgUsageMock.mockResolvedValue(
+      rawResponse({ scope: 'workspace', coreWorkspaceId: workspace.id }),
+    );
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+      scope: 'project',
+      workspaceId: workspace.id,
+      projectId: 'does-not-exist',
+    });
+
+    // A project that isn't in the active workspace narrows up, never leaks.
+    expect(res.scope).toBe('workspace');
+    expect(getOrgUsageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'workspace', coreProjectId: null }),
+    );
+  });
+
+  it('falls an admin workspace scope BACK to org when the workspaceId is foreign', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    // A workspace in a DIFFERENT org — not in the actor's org, so unknown here.
+    const { workspace: foreign } = await createTestWorkspace();
+    getOrgUsageMock.mockResolvedValue(rawResponse({ scope: 'org' }));
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+      scope: 'workspace',
+      workspaceId: foreign.id,
+    });
+
+    expect(res.scope).toBe('org');
+    expect(getOrgUsageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'org', coreWorkspaceId: null }),
+    );
+  });
+
+  it('renders the empty/limited state for a member with no accessible project — no motir-ai call', async () => {
+    // A workspace with NO project; the member can reach the workspace but has no
+    // project slice, so there is nothing to fetch.
+    const { workspace } = await createTestWorkspace();
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: member.id,
+    });
+
+    expect(res.access.isAdmin).toBe(false);
+    expect(res.scope).toBe('project');
+    expect(res.hasUsage).toBe(false);
+    expect(res.balance).toBe(0);
+    expect(res.activeProject).toBeNull();
+    // Nothing to fetch → the boundary is never called (no misleading zero-cost
+    // round-trip).
+    expect(getOrgUsageMock).not.toHaveBeenCalled();
+  });
+
+  it('marks hasUsage from run count alone and tolerates an unresolved run project name', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    getOrgUsageMock.mockResolvedValue(
+      rawResponse({
+        // No spend yet, but a run exists → hasUsage is driven by the run count.
+        totalSpend: 0,
+        monthSpend: 0,
+        recentRuns: {
+          runs: [
+            {
+              jobId: 'job_x',
+              jobKind: 'generate_tree',
+              model: 'claude-opus-4-8',
+              // A workspace/project the actor can't resolve (e.g. since deleted)
+              // → the name enrichment must fall back to '', never throw.
+              coreWorkspaceId: 'ws_gone',
+              coreProjectId: 'pj_gone',
+              inputTokens: 10,
+              outputTokens: 2,
+              credits: 1,
+              startedAt: '2026-06-16T00:00:00.000Z',
+            },
+          ],
+          page: 1,
+          pageSize: 10,
+          total: 1,
+        },
+      }),
+    );
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+
+    expect(res.hasUsage).toBe(true); // total > 0 even though spend is 0
+    expect(res.recentRuns.runs[0]?.projectName).toBe(''); // unresolved → '', not a throw
+  });
 });

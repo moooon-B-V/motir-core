@@ -185,6 +185,11 @@ export default defineConfig({
         'lib/mappers/apiTokenMappers.ts',
         'lib/apiTokens/token.ts',
         'lib/apiTokens/errors.ts',
+        // Story 7.2 (AI infrastructure) · Subtask 7.2.11 — the org cost
+        // dashboard read service: the 6.10.4 access gate + the server-side
+        // scope narrowing (an admin's validated drill, a member locked to
+        // their own project slice) are the no-leak contract. Locked by 7.2.12.
+        'lib/services/aiUsageService.ts',
         // Story 7.7 (Motir MCP server) · Subtask 7.7.12 — the story-closing
         // suite extends the gate to the MCP tool surface: the registry and every
         // tool module. (The shared field-schema / summary / normalize helpers
@@ -355,6 +360,8 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story 7.2 · Subtask 7.2.11 (locked by 7.2.12) — org cost read service.
+        'lib/services/aiUsageService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 7.8 · Subtask 7.8.1 — the PAT auth substrate.
         'lib/services/apiTokensService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/apiTokenRepository.ts': { branches: 90, functions: 90, lines: 90 },
