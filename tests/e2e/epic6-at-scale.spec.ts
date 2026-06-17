@@ -120,12 +120,34 @@ test.describe('epic6-at-scale (6.7.3) — search / reporting / automation over t
    * widget read to settle. */
   async function openDashboard(page: Page, census?: ReportCensus): Promise<void> {
     await signIn(page, SEED_REPORTING_OWNER_EMAIL, SEED_REPORTING_PASSWORD);
+    // Arm an AUTHORITATIVE wait for the widgets' reads BEFORE navigating (the
+    // caller arms the census listener BEFORE this runs, too). Each widget body
+    // fetches from a client `useEffect` — i.e. only AFTER hydration — so
+    // `networkidle` alone races the reads: it can resolve in the window between
+    // the load event and the post-hydration fetch (a hydration-failed re-render
+    // that "regenerates the tree on the client" widens that window), draining a
+    // census that is still empty → the `payloads.length > 0` flake (MOTIR-1005).
+    // We wait on the reads themselves + the rendered "no longer loading" state,
+    // never the idle heuristic (the repo's E2E authoritative-wait rule).
+    const firstWidgetRead = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'GET' &&
+        /\/api\/reports\/(created-vs-resolved|distribution|filter-results)/.test(res.url()),
+      { timeout: 30_000 },
+    );
     await page.goto(`/dashboard/${dashboardId}`);
     await expect(page.getByRole('heading', { name: SEED_REPORTING_DASHBOARD_NAME })).toBeVisible({
       timeout: 30_000,
     });
-    // Let the widgets' reads land (the census collects them as they arrive),
-    // then drain the body-parse promises so the census is complete.
+    // A widget read has landed → every widget card has mounted and fired its
+    // fetch. Now wait until NO widget is still loading: each body renders a
+    // `role="status"` ("Loading widget…") skeleton until its read resolves or
+    // errors, and that role appears nowhere else on the dashboard route — so
+    // count 0 is the authoritative "all reads completed + rendered" signal.
+    await firstWidgetRead;
+    await expect(page.getByRole('status')).toHaveCount(0, { timeout: 30_000 });
+    // Belt: settle the network, then drain the in-flight body-parse promises so
+    // the census is complete (no reliance on microtask timing).
     await page.waitForLoadState('networkidle');
     if (census) await census.settle();
   }
