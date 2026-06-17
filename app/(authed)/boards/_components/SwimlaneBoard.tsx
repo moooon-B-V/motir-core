@@ -215,9 +215,12 @@ export function SwimlaneBoard({
 
             {!isCollapsed ? (
               <div
+                // Lane drop-target ring is INSET (not an `outline`): the swimlane
+                // board scrolls, and an outline outside the box gets clipped by the
+                // scroll viewport (bug 7.24, same as BoardColumn).
                 className={`${track} py-2 ${
                   isDropTarget
-                    ? 'rounded-(--radius-card) bg-(--el-tint-lavender) outline outline-2 outline-(--el-accent)'
+                    ? 'rounded-(--radius-card) bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)'
                     : ''
                 }`}
               >
