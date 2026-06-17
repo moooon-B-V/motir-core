@@ -15,21 +15,24 @@ import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
-// `update_work_item` (Story 7.8 · Subtask 7.8.14) — EDIT a work item's fields,
-// the partial-patch counterpart of `create_work_item`. `create_work_item` can
-// only set kind/title/parentKey/descriptionMd/priority; this tool patches the
-// REST of the UI-editable fields (`type`, `executor`, `estimateMinutes`,
-// `assigneeId`, `dueDate`) plus the ones create also sets — so an agent can FIX
-// a card after creating it instead of the old cancel-and-recreate hack.
+// `update_work_item` (Story 7.8 · Subtask 7.8.14; `storyPoints` added 7.8.21) —
+// EDIT a work item's fields, the partial-patch counterpart of `create_work_item`.
+// `create_work_item` can only set kind/title/parentKey/descriptionMd/priority/
+// storyPoints; this tool patches the REST of the UI-editable fields (`type`,
+// `executor`, `estimateMinutes`, `storyPoints`, `assigneeId`, `dueDate`) plus the
+// ones create also sets — so an agent can FIX a card after creating it instead of
+// the old cancel-and-recreate hack.
 //
 // A THIN adapter over `workItemsService.updateWorkItem`: the leaf-only `type`/
 // `executor` rule, the type→executor seed, the assignee-membership check, the
-// 6.4 edit gate, and the revision row all run in the service UNCHANGED. Workflow
-// STATUS is deliberately NOT here — it stays on `transition_status` (the legal-
-// transition validation lives there); `kind`/`parentId` re-parenting also stays
-// out (a structural move, not a field edit). Only fields the service's
-// `UpdateWorkItemInput` actually accepts are exposed — `storyPoints` is not one
-// of them, so it is intentionally absent (set via the UI estimation surface).
+// 6.4 edit gate, the shared story-point validation, and the revision row all run
+// in the service UNCHANGED. Workflow STATUS is deliberately NOT here — it stays
+// on `transition_status` (the legal-transition validation lives there);
+// `kind`/`parentId` re-parenting also stays out (a structural move, not a field
+// edit). `storyPoints` (7.8.21) is now a first-class patch field — set / change /
+// clear — validated with the SAME shared `validateStoryPoints` rule the UI
+// estimation surface uses, so the agent surface is never stricter or looser than
+// the human one (the per-field validation lives in the service, not here).
 
 export const UPDATE_WORK_ITEM_TOOL_NAME = 'update_work_item';
 
@@ -69,6 +72,16 @@ const inputSchema = {
     .nullable()
     .optional()
     .describe('Estimated minutes of work; null clears it.'),
+  storyPoints: z
+    .number()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .describe(
+      'Story-point estimate (the agile sizing number, distinct from the time ' +
+        'estimate above): a non-negative number ≤ 9999.99 with at most two ' +
+        'decimal places. null clears it.',
+    ),
   assigneeId: z
     .string()
     .nullable()
@@ -90,6 +103,7 @@ interface UpdateWorkItemArgs {
   type?: WorkItemType | null;
   executor?: Executor | null;
   estimateMinutes?: number | null;
+  storyPoints?: number | null;
   assigneeId?: string | null;
   dueDate?: string | null;
 }
@@ -104,6 +118,7 @@ function toPatch(args: UpdateWorkItemArgs): UpdateWorkItemInput {
   if (args.type !== undefined) patch.type = args.type as WorkItemTypeDto | null;
   if (args.executor !== undefined) patch.executor = args.executor as ExecutorDto | null;
   if (args.estimateMinutes !== undefined) patch.estimateMinutes = args.estimateMinutes;
+  if (args.storyPoints !== undefined) patch.storyPoints = args.storyPoints;
   if (args.assigneeId !== undefined) patch.assigneeId = args.assigneeId;
   if (args.dueDate !== undefined) patch.dueDate = args.dueDate;
   return patch;
@@ -145,9 +160,9 @@ export function registerUpdateWorkItem(
       title: 'Update work item',
       description:
         'Edit a work item (by identifier, e.g. "PROD-7"): patch any subset of title, ' +
-        'description, explanation, priority, type, executor, estimate, assignee, or due date. ' +
-        'Use transition_status for the workflow status. Honors the same leaf-only type rules, ' +
-        'assignee-membership check, and access checks as the UI.',
+        'description, explanation, priority, type, executor, estimate, story points, assignee, ' +
+        'or due date. Use transition_status for the workflow status. Honors the same leaf-only ' +
+        'type rules, assignee-membership check, and access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runUpdateWorkItem(args, resolveContext(extra)),

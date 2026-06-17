@@ -61,6 +61,7 @@ import {
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
+import { validateStoryPoints } from '@/lib/estimation/validate';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   toWorkItemDto,
@@ -262,6 +263,11 @@ function buildCreatedDiff(row: WorkItem): Record<string, DiffCell> {
   set('reporterId', row.reporterId);
   set('dueDate', row.dueDate ? row.dueDate.toISOString() : null);
   set('estimateMinutes', row.estimateMinutes);
+  // Story points (Story 4.3 · exposed on create in 7.8.21): the `set` helper
+  // skips null (unestimated), so a plain create's diff is unchanged. Recorded
+  // numeric, not as the raw Prisma Decimal — matching `estimationService`'s
+  // own revision shape (`{ from, to }` as Numbers).
+  set('storyPoints', row.storyPoints === null ? null : Number(row.storyPoints));
   // Type + executor (Story 2.7): the `set` helper skips nulls, so an untyped
   // leaf / a container leaves the diff unchanged from pre-2.7; a typed create
   // records the chosen type + (seeded or explicit) executor.
@@ -602,6 +608,13 @@ export const workItemsService = {
     const itemExecutor = resolveExecutor(itemType, input.executor, null);
     assertTypeKindConsistent(input.kind, itemType, itemExecutor);
 
+    // Story points (Story 4.3 · exposed on create in 7.8.21): validated with the
+    // SAME shared rule the UI estimation path uses (finite, non-negative,
+    // ≤ 9999.99, ≤ 2 decimals). Validated BEFORE the key-allocation transaction
+    // so a malformed value never burns a work-item key. Omitted/null → the
+    // column default (unestimated). Throws `InvalidEstimateError` (422).
+    const storyPoints = validateStoryPoints(input.storyPoints ?? null);
+
     // Initial status (Subtask 2.2.4): a new item lands in the project's
     // workflow initial status — there's no "from" status to validate against
     // on a brand-new row, so this bypasses transition validation. The pre-2.2.4
@@ -724,6 +737,10 @@ export const workItemsService = {
           : {}),
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         estimateMinutes: input.estimateMinutes ?? null,
+        // Story points (Story 4.3 · exposed on create in 7.8.21): the validated
+        // value (null when omitted). Prisma accepts a number for the
+        // Decimal(6, 2) column.
+        storyPoints,
         // Work-item type + executor (Story 2.7) — leaf-only validated + executor
         // seeded above; nulls for an untyped leaf or a container kind.
         type: itemType,
@@ -900,6 +917,7 @@ export const workItemsService = {
       'priority',
       'dueDate',
       'estimateMinutes',
+      'storyPoints',
       'type',
       'executor',
     ];
@@ -912,6 +930,14 @@ export const workItemsService = {
       await projectAccessService.assertCanEdit(current.projectId, ctx);
       return toWorkItemDto(current);
     }
+
+    // Story points (Story 4.3 · exposed on this patch in 7.8.21): validate the
+    // supplied value with the SAME shared rule the UI estimation path uses,
+    // BEFORE the transaction so a malformed value fails fast without taking the
+    // row lock. `undefined` → leave untouched; an explicit `null` clears.
+    // Throws `InvalidEstimateError` (422).
+    const nextStoryPoints =
+      patch.storyPoints !== undefined ? validateStoryPoints(patch.storyPoints) : undefined;
 
     // Description mentions (Subtask 5.1.6): when the patch carries a body with
     // mention tokens, resolve the viewable-member set BEFORE the transaction
@@ -992,6 +1018,20 @@ export const workItemsService = {
       ) {
         update.estimateMinutes = patch.estimateMinutes;
         diff.estimateMinutes = { from: current.estimateMinutes, to: patch.estimateMinutes };
+      }
+
+      // Story points (Story 4.3 · exposed on this patch in 7.8.21): compare
+      // NUMERICALLY — `current.storyPoints` is a Prisma Decimal, so coerce both
+      // sides to Number before the change check, mirroring how
+      // `estimationService.setEstimate` records its revision. Validated above
+      // (pre-tx); `null` clears. The cell shares this one 'updated' revision
+      // with every other field in the patch (atomic, single History entry).
+      if (nextStoryPoints !== undefined) {
+        const fromPoints = current.storyPoints === null ? null : Number(current.storyPoints);
+        if (fromPoints !== nextStoryPoints) {
+          update.storyPoints = nextStoryPoints;
+          diff.storyPoints = { from: fromPoints, to: nextStoryPoints };
+        }
       }
 
       // Assignee: validate workspace membership on a change to a non-null

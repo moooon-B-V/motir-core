@@ -240,14 +240,15 @@ parented. The reporter is pinned to the token owner. Use `kind: "bug"` under a
 story/epic to **log a bug** (the bug-logging protocol). Epic is deliberately not
 an offered kind.
 
-| Input           | Type                                      | Required | Notes                                                          |
-| --------------- | ----------------------------------------- | -------- | -------------------------------------------------------------- |
-| `projectKey`    | string                                    | yes      | The project the item is created in, e.g. `"PROD"`.             |
-| `kind`          | `"story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind.                                            |
-| `title`         | string                                    | yes      | The title (one line).                                          |
-| `parentKey`     | string                                    | no       | Parent identifier — must be a kind-legal, same-project parent. |
-| `descriptionMd` | string                                    | no       | Markdown description body.                                     |
-| `priority`      | priority enum                             | no       | Omit for the project default.                                  |
+| Input           | Type                                      | Required | Notes                                                                                    |
+| --------------- | ----------------------------------------- | -------- | ---------------------------------------------------------------------------------------- |
+| `projectKey`    | string                                    | yes      | The project the item is created in, e.g. `"PROD"`.                                       |
+| `kind`          | `"story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind.                                                                      |
+| `title`         | string                                    | yes      | The title (one line).                                                                    |
+| `parentKey`     | string                                    | no       | Parent identifier — must be a kind-legal, same-project parent.                           |
+| `descriptionMd` | string                                    | no       | Markdown description body.                                                               |
+| `priority`      | priority enum                             | no       | Omit for the project default.                                                            |
+| `storyPoints`   | number \| null                            | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated. |
 
 **Output** — `structuredContent`: the created `WorkItemDto`.
 
@@ -324,7 +325,8 @@ is `false` when no such link existed (the idempotent no-op).
 #### `update_work_item`
 
 Edit a work item's fields — the partial-patch counterpart of `create_work_item`,
-which can only set kind/title/parentKey/description/priority on create. Patch any
+which can only set kind/title/parentKey/description/priority/story-points on
+create. Patch any
 subset of the UI-editable fields; an omitted field is left unchanged, and an
 explicit `null` clears a nullable one. The workflow **status** is NOT edited here
 (use `transition_status`), and neither is `kind`/`parent` (a structural move).
@@ -332,21 +334,23 @@ The leaf-only `type`/`executor` rule (setting them on an epic/story is rejected)
 the type→executor seed, and the assignee-membership check all apply exactly as in
 the UI; the same Story-6.4 edit gate gates the call.
 
-| Input             | Type                                | Required | Notes                                                            |
-| ----------------- | ----------------------------------- | -------- | ---------------------------------------------------------------- |
-| `key`             | string                              | yes      | Work item identifier, e.g. `"PROD-7"`.                           |
-| `title`           | string                              | no       | New title.                                                       |
-| `descriptionMd`   | string \| null                      | no       | New description; `null` clears it.                               |
-| `explanationMd`   | string \| null                      | no       | New explanation ("why"); `null` clears it.                       |
-| `priority`        | `lowest…highest`                    | no       | New priority.                                                    |
-| `type`            | work type \| null                   | no       | Leaf items only; `null` clears it. First set seeds the executor. |
-| `executor`        | `"coding_agent" \| "human"` \| null | no       | Leaf items only; `null` clears it.                               |
-| `estimateMinutes` | number \| null                      | no       | Estimated minutes; `null` clears it.                             |
-| `assigneeId`      | string \| null                      | no       | Assignee user id (must be a workspace member); `null` unassigns. |
-| `dueDate`         | string (ISO-8601) \| null           | no       | Due date; `null` clears it.                                      |
+| Input             | Type                                | Required | Notes                                                                                          |
+| ----------------- | ----------------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `key`             | string                              | yes      | Work item identifier, e.g. `"PROD-7"`.                                                         |
+| `title`           | string                              | no       | New title.                                                                                     |
+| `descriptionMd`   | string \| null                      | no       | New description; `null` clears it.                                                             |
+| `explanationMd`   | string \| null                      | no       | New explanation ("why"); `null` clears it.                                                     |
+| `priority`        | `lowest…highest`                    | no       | New priority.                                                                                  |
+| `type`            | work type \| null                   | no       | Leaf items only; `null` clears it. First set seeds the executor.                               |
+| `executor`        | `"coding_agent" \| "human"` \| null | no       | Leaf items only; `null` clears it.                                                             |
+| `estimateMinutes` | number \| null                      | no       | Estimated minutes (time); `null` clears it.                                                    |
+| `storyPoints`     | number \| null                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals); set / change / `null` clears it. |
+| `assigneeId`      | string \| null                      | no       | Assignee user id (must be a workspace member); `null` unassigns.                               |
+| `dueDate`         | string (ISO-8601) \| null           | no       | Due date; `null` clears it.                                                                    |
 
 **Output** — `structuredContent`: the updated `WorkItemDto`. A non-member
-assignee, or a `type`/`executor` on a non-leaf, returns a typed error.
+assignee, a `type`/`executor` on a non-leaf, or an out-of-range `storyPoints`
+value returns a typed error.
 
 #### `archive_work_item`
 

@@ -12,11 +12,8 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntryRepository';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
-import {
-  EstimationConfigForbiddenError,
-  InvalidEstimateError,
-  InvalidScaleConfigError,
-} from '@/lib/estimation/errors';
+import { EstimationConfigForbiddenError, InvalidScaleConfigError } from '@/lib/estimation/errors';
+import { validateStoryPoints } from '@/lib/estimation/validate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type {
@@ -66,7 +63,7 @@ export const estimationService = {
     points: number | null,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const value = validateEstimate(points);
+    const value = validateStoryPoints(points);
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -261,33 +258,6 @@ export const estimationService = {
     return workItemRepository.sumPointsForParent(parentId, ctx.workspaceId, statistic);
   },
 };
-
-/** The largest value `Decimal(6, 2)` can hold (4 integer + 2 fractional digits). */
-const MAX_STORY_POINTS = 9999.99;
-
-/**
- * Validate a story-point estimate value. `null` clears (always valid). A number
- * must be finite, non-negative, within the `Decimal(6, 2)` range, and carry at
- * most two decimal places. Returns the value unchanged on success.
- */
-function validateEstimate(points: number | null): number | null {
-  if (points === null) return null;
-  if (typeof points !== 'number' || !Number.isFinite(points)) {
-    throw new InvalidEstimateError('A story-point estimate must be a finite number.');
-  }
-  if (points < 0) {
-    throw new InvalidEstimateError('A story-point estimate must not be negative.');
-  }
-  if (points > MAX_STORY_POINTS) {
-    throw new InvalidEstimateError(`A story-point estimate must not exceed ${MAX_STORY_POINTS}.`);
-  }
-  // Two-decimal-place cap (the column is Decimal(6, 2)) — reject finer precision
-  // up front rather than letting Postgres silently round it.
-  if (Math.round(points * 100) !== points * 100) {
-    throw new InvalidEstimateError('A story-point estimate allows at most two decimal places.');
-  }
-  return points;
-}
 
 const ESTIMATION_STATISTICS: readonly EstimationStatistic[] = [
   'story_points',

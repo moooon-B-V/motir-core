@@ -488,6 +488,16 @@ export interface CreateWorkItemInput {
   dueDate?: string | null; // ISO 8601
   estimateMinutes?: number | null;
   /**
+   * The story-point estimate (Story 4.3 · exposed on create in 7.8.21). The
+   * single `storyPoints` Decimal(6, 2) column — distinct from the TIME estimate
+   * (`estimateMinutes`). Validated by the shared `validateStoryPoints` (finite,
+   * non-negative, ≤ 9999.99, ≤ 2 decimals) — the SAME rule the UI estimation
+   * surface (`estimationService.setEstimate`) enforces, so the agent surface is
+   * never stricter or looser than the human one. Omitted → null (unestimated,
+   * the column default); `null` is also accepted to be explicit.
+   */
+  storyPoints?: number | null;
+  /**
    * The work-item TYPE (Story 2.7) — leaf-only: supplying it on an epic/story
    * kind is rejected with `TypeNotAllowedOnKindError` (422). When a `type` is
    * supplied WITHOUT an explicit `executor`, the service seeds `executor` from
@@ -601,6 +611,17 @@ export interface UpdateWorkItemInput {
   priority?: WorkItemPriorityDto;
   dueDate?: string | null; // ISO 8601
   estimateMinutes?: number | null;
+  /**
+   * Patch the story-point estimate (Story 4.3 · exposed on this patch in
+   * 7.8.21). Set / change / clear (`null`) the single `storyPoints`
+   * Decimal(6, 2) column — distinct from the TIME estimate (`estimateMinutes`).
+   * Validated by the shared `validateStoryPoints` (finite, non-negative,
+   * ≤ 9999.99, ≤ 2 decimals → `InvalidEstimateError`), the SAME rule the UI
+   * estimation path (`estimationService.setEstimate`) enforces. Recorded in the
+   * revision diff as `{ storyPoints: { from, to } }` (numeric, not Decimal),
+   * sharing the single 'updated' revision with any other field in the patch.
+   */
+  storyPoints?: number | null;
   /**
    * Patch the work-item TYPE (Story 2.7). Leaf-only — set/changing it on an
    * epic/story is rejected (`TypeNotAllowedOnKindError`, 422). An explicit

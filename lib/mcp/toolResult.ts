@@ -27,6 +27,7 @@ import {
 } from '@/lib/comments/errors';
 import { InvalidReadyCursorError } from '@/lib/workItems/readyFilter';
 import { FilterValidationError } from '@/lib/filters/errors';
+import { InvalidEstimateError } from '@/lib/estimation/errors';
 import {
   BulkBatchTooLargeError,
   CannotDeleteActiveSprintError,
@@ -140,6 +141,11 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof ReporterNotInWorkspaceError ||
     err instanceof AssigneeNotInWorkspaceError ||
     err instanceof TypeNotAllowedOnKindError ||
+    // Story-point value validation (7.8.21): a malformed `storyPoints` on
+    // create_work_item / update_work_item — out of the Decimal(6, 2) range,
+    // negative, or > 2 decimals — surfaces as a clean 422-equivalent tool error
+    // the agent can self-correct from, the MCP analogue of the route's 422.
+    err instanceof InvalidEstimateError ||
     err instanceof WorkItemKeyConflictError ||
     err instanceof CommentForbiddenError ||
     err instanceof EmptyCommentBodyError ||

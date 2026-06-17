@@ -130,6 +130,60 @@ describe('update_work_item', () => {
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.content)).toMatch(/WORK_ITEM_NOT_FOUND|PROJECT_NOT_FOUND/);
   });
+
+  // Story points (Subtask 7.8.21) — set / change / clear over the patch, with the
+  // shared validation surfacing as a typed tool error. The field round-trips
+  // through get_work_item (the acceptance criterion).
+  it('sets, changes, and clears storyPoints; the value round-trips through get_work_item', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const item = await makeItem(fx.ctx, fx.projectId, 'task', 'Pointable');
+
+    const points = async (): Promise<number | null> => {
+      const got = await client.callTool({
+        name: 'get_work_item',
+        arguments: { key: item.identifier },
+      });
+      return (got.structuredContent as { item: WorkItemDto }).item.storyPoints;
+    };
+
+    // SET
+    const set = await client.callTool({
+      name: 'update_work_item',
+      arguments: { key: item.identifier, storyPoints: 5 },
+    });
+    expect(set.isError).toBeFalsy();
+    expect((set.structuredContent as unknown as WorkItemDto).storyPoints).toBe(5);
+    expect(await points()).toBe(5);
+
+    // CHANGE (incl. a two-decimal value, the Decimal(6,2) edge)
+    const changed = await client.callTool({
+      name: 'update_work_item',
+      arguments: { key: item.identifier, storyPoints: 3.25 },
+    });
+    expect(changed.isError).toBeFalsy();
+    expect(await points()).toBe(3.25);
+
+    // CLEAR (null)
+    const cleared = await client.callTool({
+      name: 'update_work_item',
+      arguments: { key: item.identifier, storyPoints: null },
+    });
+    expect(cleared.isError).toBeFalsy();
+    expect((cleared.structuredContent as unknown as WorkItemDto).storyPoints).toBeNull();
+    expect(await points()).toBeNull();
+
+    await client.close();
+  });
+
+  it('rejects an out-of-range storyPoints with a typed validation error', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await makeItem(fx.ctx, fx.projectId, 'task', 'T');
+    // > 2 decimal places — the shared validator rejects finer precision.
+    const res = await runUpdateWorkItem({ key: item.identifier, storyPoints: 1.234 }, fx.ctx);
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain('INVALID_ESTIMATE');
+  });
 });
 
 describe('archive_work_item / unarchive_work_item', () => {
