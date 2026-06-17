@@ -22,6 +22,9 @@ export function WorkItemDetailActions({
   canEdit,
   canManage,
   archived = false,
+  activeSprintId = null,
+  activeSprintName = null,
+  inActiveSprint = false,
 }: {
   itemId: string;
   identifier: string;
@@ -30,6 +33,11 @@ export function WorkItemDetailActions({
   canManage: boolean;
   /** The item is archived — put the menu in Restore/archived-delete mode. */
   archived?: boolean;
+  /** The project's active sprint (the "Add to active sprint" target — 2.4.14). */
+  activeSprintId?: string | null;
+  activeSprintName?: string | null;
+  /** Whether this item is already in the active sprint (disables the row). */
+  inActiveSprint?: boolean;
 }) {
   const router = useRouter();
   const leave = () => {
@@ -47,6 +55,12 @@ export function WorkItemDetailActions({
       canEdit={canEdit}
       canManage={canManage}
       archived={archived}
+      activeSprintId={activeSprintId}
+      activeSprintName={activeSprintName}
+      inActiveSprint={inActiveSprint}
+      // The Sprint field is a server-prop surface (CoreFieldsPanel reads `item`),
+      // so a refresh re-reads the new sprintId into the rail — page-state #2.
+      onSprintChanged={() => router.refresh()}
       onDeleted={leave}
       onArchived={archived ? refreshInPlace : leave}
       triggerClassName="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) border border-(--el-border) text-(--el-text) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"

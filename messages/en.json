@@ -679,7 +679,11 @@
     "advancedClearFilter": "Clear filter",
     "filterEditInAdvanced": "Edit in Advanced",
     "filterSupersededAria": "Managed in Advanced",
-    "filterSupersededTooltip": "Managed in Advanced — this filter uses conditions the quick filter can’t show. Open Advanced to edit it."
+    "filterSupersededTooltip": "Managed in Advanced — this filter uses conditions the quick filter can’t show. Open Advanced to edit it.",
+    "sprint": "Sprint",
+    "backlog": "Backlog",
+    "sprintCompleted": "completed",
+    "sprintChangeFailed": "Couldn’t change the sprint"
   },
   "comments": {
     "title": "Activity",
@@ -866,6 +870,15 @@
       "allResolved": "All blockers resolved",
       "blocked": "Blocked",
       "waiting": "Waiting on {count, plural, one {# work item} other {# work items}}"
+    },
+    "sprintPicker": {
+      "label": "Sprint",
+      "backlog": "Backlog",
+      "searchPlaceholder": "Search sprints…",
+      "emptyText": "No sprints",
+      "active": "Active",
+      "planned": "Planned",
+      "completed": "Completed"
     }
   },
   "settings": {
@@ -3116,7 +3129,12 @@
     "restoredToast": "{key} restored",
     "archiveErrorTitle": "Couldn’t archive",
     "restoreErrorTitle": "Couldn’t restore",
-    "archiveErrorBody": "Something went wrong. Check your connection and try again."
+    "archiveErrorBody": "Something went wrong. Check your connection and try again.",
+    "addToActiveSprint": "Add to active sprint",
+    "noActiveSprint": "No active sprint",
+    "alreadyInActiveSprint": "Already in the active sprint",
+    "addedToSprintToast": "Added {key} to {sprint}",
+    "addToSprintErrorTitle": "Couldn’t add to sprint"
   },
   "projectSquare": {
     "navProduct": "Product",

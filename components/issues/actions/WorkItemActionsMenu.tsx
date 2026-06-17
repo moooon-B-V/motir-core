@@ -2,11 +2,17 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Archive, Copy, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { Archive, Copy, Goal, MoreHorizontal, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
 import { DeleteWorkItemDialog } from './DeleteWorkItemDialog';
-import { archiveWorkItem, unarchiveWorkItem, WorkItemActionError } from './workItemActionsClient';
+import {
+  archiveWorkItem,
+  setWorkItemSprint,
+  unarchiveWorkItem,
+  WorkItemActionError,
+} from './workItemActionsClient';
 
 // The shared work-item ⋯ actions menu (Story 2.8 · Subtask 2.8.4), per
 // design/work-items/delete-confirm.mock.html panels 0–1 — IDENTICAL on the
@@ -48,6 +54,10 @@ export function WorkItemActionsMenu({
   archived = false,
   onDeleted,
   onArchived,
+  activeSprintId = null,
+  activeSprintName = null,
+  inActiveSprint = false,
+  onSprintChanged,
   editHref,
   align = 'end',
   triggerClassName,
@@ -70,6 +80,21 @@ export function WorkItemActionsMenu({
   onDeleted: () => void;
   /** Run after a successful archive or restore — the surface refetches. */
   onArchived: () => void;
+  /**
+   * "Add to active sprint" (Subtask 2.4.14) — the project's currently-active
+   * sprint id (the assign target) and name (the toast), plus whether THIS item
+   * is already in it. The row appears ONLY when a host passes `onSprintChanged`
+   * (the detail header); list rows / board cards omit it, so they are
+   * byte-unchanged until a later subtask opts them in. Gated on `canEdit`
+   * (hidden otherwise — the permission law); when shown but `!activeSprintId`
+   * or `inActiveSprint`, the row is DISABLED + a Tooltip (the transient
+   * STATE-gate deviation — design/work-items/sprint-field.mock.html panel 3).
+   */
+  activeSprintId?: string | null;
+  activeSprintName?: string | null;
+  inActiveSprint?: boolean;
+  /** Refetch the surface after the item joins the active sprint. */
+  onSprintChanged?: () => void;
   /** Override the edit destination (defaults to the issue's edit route). */
   editHref?: string;
   align?: 'start' | 'center' | 'end';
@@ -82,6 +107,7 @@ export function WorkItemActionsMenu({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [addingToSprint, setAddingToSprint] = useState(false);
 
   const href = editHref ?? `/issues/${identifier}/edit`;
   const menuLabel = t('menuLabel', { key: identifier });
@@ -138,6 +164,41 @@ export function WorkItemActionsMenu({
     }
   }
 
+  // "Add to active sprint" — one-click assign into the project's active sprint
+  // via the shared assign route (4.1.4). Shown only when the host opts in
+  // (onSprintChanged passed) and the actor canEdit; enabled only when an active
+  // sprint exists and the item isn't already in it (else the row is a disabled
+  // STATE-gate, below).
+  const showSprintRow = canEdit && !archived && onSprintChanged != null;
+  const sprintReason = !activeSprintId
+    ? t('noActiveSprint')
+    : inActiveSprint
+      ? t('alreadyInActiveSprint')
+      : null;
+
+  async function runAddToActiveSprint() {
+    if (!activeSprintId || inActiveSprint) return;
+    setOpen(false);
+    setAddingToSprint(true);
+    try {
+      await setWorkItemSprint(itemId, activeSprintId);
+      toast({
+        variant: 'success',
+        title: t('addedToSprintToast', { key: identifier, sprint: activeSprintName ?? '' }),
+      });
+      onSprintChanged?.();
+    } catch (err) {
+      void (err instanceof WorkItemActionError);
+      toast({
+        variant: 'error',
+        title: t('addToSprintErrorTitle'),
+        description: t('archiveErrorBody'),
+      });
+    } finally {
+      setAddingToSprint(false);
+    }
+  }
+
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
@@ -163,6 +224,38 @@ export function WorkItemActionsMenu({
                 {t('editDetails')}
               </a>
             ) : null}
+
+            {/* Add to active sprint (2.4.14) — after Edit details. Enabled when an
+                active sprint exists and the item isn't in it; otherwise a DISABLED
+                state-gate row (opacity-50, no hover) carrying a Tooltip with the
+                reason. !canEdit hides it (the permission law, above). */}
+            {showSprintRow ? (
+              sprintReason ? (
+                <Tooltip content={sprintReason}>
+                  <div
+                    role="menuitem"
+                    aria-disabled="true"
+                    tabIndex={0}
+                    className="flex h-(--height-control) w-full cursor-default items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) opacity-50 focus-visible:outline-none"
+                  >
+                    <Goal className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                    {t('addToActiveSprint')}
+                  </div>
+                </Tooltip>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={ITEM_CLASS}
+                  disabled={addingToSprint}
+                  onClick={() => void runAddToActiveSprint()}
+                >
+                  <Goal className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                  {t('addToActiveSprint')}
+                </button>
+              )
+            ) : null}
+
             <button
               type="button"
               role="menuitem"

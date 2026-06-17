@@ -176,3 +176,75 @@ describe('DeleteWorkItemDialog — cascade count', () => {
     expect(screen.queryByText(/will also be deleted/)).toBeNull();
   });
 });
+
+describe('WorkItemActionsMenu — Add to active sprint (Subtask 2.4.14)', () => {
+  function openSprintMenu(props: {
+    canEdit?: boolean;
+    activeSprintId?: string | null;
+    inActiveSprint?: boolean;
+    withHost?: boolean;
+  }) {
+    const {
+      canEdit = true,
+      activeSprintId = 'sp_active',
+      inActiveSprint = false,
+      withHost = true,
+    } = props;
+    render(
+      <WorkItemActionsMenu
+        itemId="wi-1"
+        identifier="PROD-1"
+        title="A bug"
+        canEdit={canEdit}
+        canManage={false}
+        onDeleted={vi.fn()}
+        onArchived={vi.fn()}
+        activeSprintId={activeSprintId}
+        activeSprintName="Sprint 7"
+        inActiveSprint={inActiveSprint}
+        onSprintChanged={withHost ? vi.fn() : undefined}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
+  }
+
+  it('shows an ENABLED row when an active sprint exists and the item is not in it', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ updatedAt: 't', sprintId: 'sp_active' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    openSprintMenu({});
+    const row = screen.getByRole('menuitem', { name: 'Add to active sprint' });
+    expect(row.getAttribute('aria-disabled')).not.toBe('true');
+    fireEvent.click(row);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain('/api/work-items/wi-1/sprint');
+  });
+
+  it('shows a DISABLED row + reason when there is no active sprint (state-gate, not hidden)', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    openSprintMenu({ activeSprintId: null });
+    const row = screen.getByRole('menuitem', { name: 'Add to active sprint' });
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(row);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('shows a DISABLED row when the item is already in the active sprint', () => {
+    openSprintMenu({ inActiveSprint: true });
+    const row = screen.getByRole('menuitem', { name: 'Add to active sprint' });
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('HIDES the row for a viewer (no canEdit) — the permission law', () => {
+    openSprintMenu({ canEdit: false });
+    expect(screen.queryByRole('menuitem', { name: 'Add to active sprint' })).toBeNull();
+  });
+
+  it('HIDES the row when the host does not opt in (no onSprintChanged)', () => {
+    openSprintMenu({ withHost: false });
+    expect(screen.queryByRole('menuitem', { name: 'Add to active sprint' })).toBeNull();
+  });
+});

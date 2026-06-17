@@ -3054,17 +3054,24 @@ basis for the state-gate decision below.
   permitted). Drawn here for a story.
 - **Value line** — in a sprint: 16px `--el-text-secondary` **Goal** glyph (lucide
   `goal`, the Due/Estimate glyph grammar) + the sprint **name** plain
-  ("Sprint 7"). Backlog (`sprintId` null): muted-italic **"Backlog"** in
-  `--el-text-secondary` (the Parent card's `None` convention — NOT "None";
-  backlog is the real default home of an unscheduled item). A current value whose
+  ("Sprint 7"). No sprint (`sprintId` null) is **status-dependent** (the backlog
+  excludes `category === 'done'` items — `backlogService.backlogExcludedStatusKeys`):
+  an **active** item (category `todo`/`in_progress`) shows muted-italic
+  **"Backlog"** in `--el-text-secondary` (backlog is its real home — NOT the
+  generic "None"); a **done/cancelled** item shows muted-italic **"None"** (the
+  Parent card's empty convention) — it is excluded from the backlog, so calling it
+  "Backlog" would contradict where it actually sits. A current value whose
   sprint is **completed** stays shown with a muted `(completed)` mark in
   `--el-text-muted` (the archived-option precedent) — never colour alone.
 - **Editor** — the AssigneePicker-shaped **`Combobox`** (`components/ui/Combobox`,
   `autoOpen`): trigger (`--height-control`, `--radius-input`, up/down glyph),
   menu (`--shadow-elevated`, `--radius-card`). Rows:
-  - **First row = "Backlog"** (muted italic) — the clear / move-home path,
-    matching the filter's `sprint-select` **Backlog-first** precedent (a
-    meaningful sentinel, not the generic "None").
+  - **First row = the null sentinel** (muted italic) — the clear / move-home
+    path, matching the filter's `sprint-select` **Backlog-first** precedent (a
+    meaningful sentinel). Its label is **status-aware and mirrors the read-mode
+    value**: "Backlog" for an ACTIVE item, "None" for a DONE/cancelled one (which
+    is excluded from the backlog) — the picker value never disagrees with the
+    displayed value.
   - the **Active** sprint (secondary "Active"), then **Planned**/future sprints
     (secondary "Planned"); the selected row carries the `Check` in `--el-accent`.
   - **Completed** sprints are **excluded** from the menu (you do not schedule into

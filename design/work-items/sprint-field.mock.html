@@ -943,7 +943,7 @@
       </div>
 
       <div class="specimen">
-        <div class="cap">Backlog (no sprint) — muted-italic, not “None”</div>
+        <div class="cap">Backlog — an ACTIVE item with no sprint (muted-italic, not “None”)</div>
         <div class="rail">
           <div class="fcard">
             <div class="head"><span class="flabel">Due date</span></div>
@@ -986,6 +986,24 @@
                 <span class="vtext">Sprint 6 <span class="completed-mark">(completed)</span></span>
               </span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="specimen">
+        <div class="cap">
+          Done / cancelled item, no sprint — muted-italic “None”, NOT “Backlog”: a done item is
+          EXCLUDED from the backlog, so it isn’t in it
+        </div>
+        <div class="rail">
+          <div class="fcard is-new">
+            <div class="head">
+              <span class="flabel">Sprint</span>
+              <button class="chev" aria-label="Edit Sprint">
+                <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+              </button>
+            </div>
+            <div class="fvalue"><span class="muted-italic">None</span></div>
           </div>
         </div>
       </div>
