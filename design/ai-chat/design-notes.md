@@ -325,8 +325,108 @@ connectors are new ARRANGEMENTS of shipped primitives + tokens (the same latitud
 the message bubble takes). A future need a shipped primitive can't cover is a NEW
 `design/` subtask, not a code workaround.
 
+---
+
+# 7.3.26 — Expanded onboarding surfaces + the design wizard (MOTIR-1039)
+
+A SECOND asset set in this area — `onboarding-expanded.mock.html` / `.png` —
+**extends** the 7.3.1 onboarding design above to every NEW surface the 7.3
+re-plan introduced. The 7.3.1 asset stays the source of truth for the landing /
+login / canvas / stage-pipeline language; this set adds the surfaces the consuming
+UI subtasks build against. The design gate fires before any of them: **every one
+is `blocked_by` MOTIR-1039.**
+
+| Consuming subtask                                       | Surface this design provides                                     |
+| ------------------------------------------------------- | ---------------------------------------------------------------- |
+| **7.3.5** (MOTIR-833) authed discovery chat             | E1 — the read→react→revise loop                                  |
+| **7.3.6** (MOTIR-834) direction-artifacts reader        | E2 — the 4-tier + feature-catalog reader                         |
+| **7.3.27** (MOTIR-1040) design wizard                   | E4 + E5 — style gallery × palette + tweaks                       |
+| **7.3.30** (MOTIR-1043) the `/tokens` page              | E6 — the Style × Palette combination page → DESIGN.md            |
+| **7.3.32** (MOTIR-1045) style schema + runtime contract | E8 — the two-axis schema (`data-display-style` × `data-palette`) |
+| **7.3.37** (MOTIR-1050) preview specimen / vignette     | E4 — the live specimen vignette                                  |
+| **7.3.11** (MOTIR-840) wizard shell                     | E4/E5/E7 stepper chrome + E9 the persistent exit                 |
+
+## ⚠️ The design wizard IS the shipped TWO-AXIS system, not a 10-axis one (rung-2)
+
+The frozen `workflow.html` (Step 5) describes a **"Design wizard (10 axes)"**. The
+**shipped** design system (`app/globals.css`) has exactly **two swap axes**, and
+the 7.3.26 card already reframes the wizard to match them — so this design grounds
+the wizard in rung-2 shipped reality, NOT the aspirational 10-axis prose:
+
+| Wizard step | Shipped axis    | Runtime attribute                      | What it controls                                              |
+| ----------- | --------------- | -------------------------------------- | ------------------------------------------------------------- |
+| **Style**   | SHAPE (Tier 2)  | `data-display-style`                   | radius · shadow · spacing/density · sizing · interaction      |
+| **Palette** | COLOUR (Tier 3) | `data-palette` (the `--el-*` override) | accent · text scale · surfaces · tints · semantic + type hues |
+
+The two **registered** styles are `default` (shipped, Notion-sober) and `soft`
+(Figma-pill); a third ("Edge") is drawn as a **"Soon"** placeholder so the gallery
+reads as extensible. Palettes (`notion` shipped + `ocean`/`forest`/`mono` drawn) are
+the colour registry. **The wizard writes both attributes; components reference
+`--el-*` + the semantic shape tokens ONLY, so neither axis touches component code —
+the existing two-tier swap, productised into a chooser.** Panel **E8** documents
+this schema (it IS the registry 7.3.32 reads).
+
+## Surfaces (multi-panel — review EVERY panel, mistake #31)
+
+| #   | Panel                                      | What it specifies                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1  | **Discovery chat · read→react→revise**     | the active stage node carries an **AI-proposed DIFF** (added = `--el-success` tint + `+`; removed = `--el-danger` strikethrough + `−`), Accept / Edit inline / Discard; a **revision history** timeline with per-revision **rollback** ("Restore this version" = a new restoring revision, never destructive). Same canvas, no document, no filename (the 7.3.1 rule).                                    |
+| E2  | **The 4-tier + feature-catalog reader**    | one structured read, tiered **Problem → Product → Business → Validation** (sky / lavender / mint / peach bands), **cross-link** chips that jump to the grounding tier, hover-reveal **inline-edit** pencils (light edit, optimistic), and the **feature catalog** spanning every work-item type (`--el-type-*` chips). The no-document rendering of workflow.html Step 2's four-tier artifacts + catalog. |
+| E3  | **Comparable-product research**            | the competitive scan as scannable cards (logo tint + name + one-liner + a "how you differ" line) + cited **sources**; a `research` type chip. Advisory — feeds Shape, never gates generation.                                                                                                                                                                                                             |
+| E4  | **Design wizard · STYLE gallery**          | the SHAPE axis as a gallery of **live specimen vignettes** — a mini invoice card built from the real primitives, scoped to each style's shape tokens, so the FEEL is legible (= 7.3.37). 2 registered + 1 "Soon". One decision per step; a "Skip the whole design step" escape.                                                                                                                           |
+| E5  | **Design wizard · PALETTE + tweaks**       | the COLOUR axis as a **separate** step (swatch-run cards) + optional in-style **tweaks** (accent override · density · default theme) under a "Skip tweaks" escape, so the step stays one decision by default.                                                                                                                                                                                             |
+| E6  | **The `/tokens` combination page**         | the chosen **Style × Palette** rendered as the real token specimen (colour → type → radius → primitives, mirroring `app/tokens`), then the generated **DESIGN.md** + `globals.css` override block — the artifact the coding agent consumes. **Names `--color-*` directly** (with E8, the sanctioned `/tokens`-specimen exception).                                                                        |
+| E7  | **Platform gate**                          | **Web** (nextjs-prisma-vercel starter) vs **Mobile** (react-native / expo starter) choice cards; the **skip → with-design-starter** path drawn explicitly (a skipper still lands on the real `nextjs-prisma-vercel-starter-with-design` repo, never a bare scaffold).                                                                                                                                     |
+| E8  | **The style schema**                       | what a STYLE controls vs what a PALETTE controls, each dimension mapped to the exact token roles in `globals.css`, the registry of shipped-vs-"Soon", and the `data-display-style` × `data-palette` **runtime contract** (feeds 7.3.32).                                                                                                                                                                  |
+| E9  | **The persistent "Go to plan phase" exit** | the always-present hand-off bar (pinned to the canvas), user-driven, no auto-progression (workflow.html Step 6); carries a readiness **summary** (stages done + design chosen). Disabled with "Finish Validate to continue" until the stages are done.                                                                                                                                                    |
+| E10 | **Degraded "AI planning not configured"**  | the no-AI state replacing the canvas: cause + **Connect Motir AI** primary (consistent with onboarding panel 6) + a first-class **manual fallback** ("Start an empty project" — the PM core stands alone). `--el-tint-yellow` + `plug` glyph; the idea is preserved across connect.                                                                                                                       |
+
+## Access paths (DRAWN, not just named)
+
+- **E1 / E2** are reached FROM the planning canvas (panel 4/5): E1 is its
+  read→react→revise mode; E2 is its "Read full direction" affordance (the flow-note
+  chip names the door). **E4–E7** are reached via the **wizard stepper** drawn
+  across the top of every wizard panel (Direction → Style → Palette → Tweaks →
+  Platform → Review). **E6** is reached from the wizard ("Back to wizard" / the
+  Review step's "see the combined tokens"). **E9** is the persistent bar on the
+  canvas chrome. **E10** replaces the canvas when AI is unconfigured. No surface is
+  drawn in isolation — each shows the affordance that opens it.
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` in every component surface (tier bands, diff
+  add/remove via `color-mix` of `--el-success`/`--el-danger`, type chips via
+  `--el-type-*` tint backgrounds with `--el-text-strong`). **The ONE exception is
+  E6 + E8**, which name `--color-*` / the raw shape tokens DIRECTLY — they are the
+  design-system **reference** surfaces (the CLAUDE.md `/tokens`-specimen exception).
+- **Shape** via element-semantic tokens (`--radius-card`/`-input`/`-btn`/`-badge`/
+  `-control`; `--shadow-*`; `--height-*`). The specimen vignettes (E4/E6) scope
+  their OWN shape vars (`--vr-*`) to demonstrate a different style — that is the
+  POINT of a specimen, the controlled analogue of `[data-display-style]`.
+- **Not colour-alone** (finding #35): the diff pairs a `+`/`−` sign + tint +
+  strike; every type chip pairs a dot + label + tint; wizard selection pairs a
+  filled radio + accent ring; done steps pair a check + tint. AA holds (charcoal
+  on tints).
+- **Empty / loading / error / degraded** covered: E1 empty = revision 1 only / no
+  diff; E3 loading = 3-card skeleton + Spinner; E9 disabled CTA pre-completion;
+  **E10 is the degraded no-AI state** with the manual fallback.
+
+## Primitives composed (no hand-rolling)
+
+Reuses the 7.3.1 vocabulary (`Card`, `Button`, `Pill`, `Textarea`, `Spinner`,
+`ErrorState`, the canvas / stage-node / connector language) and adds NEW
+ARRANGEMENTS of the same primitives + tokens — the diff card, the revision
+timeline, the tier reader, the specimen vignette, the palette swatch card, the
+`/tokens` combination grid, the platform choice cards, the schema table. **No new
+design-system primitive is invented**; a future need a shipped primitive can't
+cover is a new `design/` subtask, not a code workaround.
+
 ## Deliverable
 
-The three-file design-asset set under `design/ai-chat/`: `design-notes.md` (this
-file) · `onboarding.mock.html` (the HTML mockup — source of truth) ·
-`onboarding.png` (the full-page export — the board-visible face).
+Two three-file design-asset sets under `design/ai-chat/`, sharing this
+`design-notes.md`:
+
+1. **7.3.1 onboarding** — `onboarding.mock.html` · `onboarding.png` (the landing /
+   login / canvas / stage-pipeline / roadmap; the source of truth for that language).
+2. **7.3.26 expanded surfaces** — `onboarding-expanded.mock.html` · `onboarding-expanded.png`
+   (the 10 panels E1–E10 above; the design the 7.3.5/6/11/27/30/32/37 builds consume).

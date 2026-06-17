@@ -1,0 +1,3478 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Motir onboarding — EXPANDED surfaces (Story 7.3 · 7.3.26): chat
+      read→react→revise + diffs/revisions, the 4-tier reader, comparable research, the design wizard
+      (style gallery × palette) + /tokens, the platform gate, the exit, and the no-AI state
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the `ai-chat` surface — Motir's EXPANDED
+      START-FRESH ONBOARDING surfaces (Story 7.3, subtask 7.3.26 / MOTIR-1039).
+      EXTENDS the 7.3.1 onboarding design (onboarding.mock.html / MOTIR-827) to
+      the full re-planned flow; the 7.3.1 asset stays the source of truth for the
+      landing / login / canvas / stage-pipeline language, this file adds every
+      NEW surface the re-plan introduced. The design gate fires before any of the
+      consuming UI subtasks build (7.3.5 / 7.3.6 / 7.3.11 / 7.3.27 / 7.3.30 /
+      7.3.32 / 7.3.37 — all `blocked_by` MOTIR-1039).
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*), and the
+      markup composes shipped primitives — Card, Button, Textarea, Pill, Spinner,
+      ErrorState — plus the wizard shell. Component CSS references ONLY --el-*
+      colour + semantic shape tokens (no Tier-0 --color-*, no raw rounded/p/h),
+      EXCEPT the /tokens specimen (panel E6) and the style-schema panel (E8),
+      which name --color-* / shape tokens DIRECTLY by design — they are the
+      design-system reference surfaces, the one sanctioned exception (CLAUDE.md:
+      "Only globals.css and the /tokens specimen route name --color-* directly").
+
+      ⚠️ THE DESIGN WIZARD IS THE SHIPPED TWO-AXIS SYSTEM, not a 10-axis one.
+      The frozen workflow.html describes a "Design wizard (10 axes)"; the SHIPPED
+      design system (app/globals.css) has exactly TWO swap axes:
+        • SHAPE  — data-display-style="default|soft"  (radius/shadow/spacing/density)  → "STYLE"
+        • COLOR  — data-theme + future data-palette (the --el-* override)             → "PALETTE"
+      The 7.3.26 card already reframes the wizard as STYLE gallery × PALETTE — so
+      this design grounds it in rung-2 shipped reality (the two real axes + the
+      two registered styles `default`/`soft`), NOT the aspirational 10-axis prose.
+      Panel E8 documents that schema (it feeds 7.3.32 / MOTIR-1045).
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (E1) DISCOVERY CHAT · read→react→revise — the active stage gets an AI-proposed
+             revision shown as a DIFF (added/removed direction), a REVISION HISTORY
+             timeline with ROLLBACK, the rail driving it (→ 7.3.5 / MOTIR-833)
+        (E2) THE 4-TIER + FEATURE-CATALOG READER — the full direction, color-coded by
+             tier, cross-linked, light inline edit; the feature catalog (→ 7.3.6 / 834)
+        (E3) COMPARABLE-PRODUCT RESEARCH — the planner's competitive scan as cards +
+             a positioning line + sources (Step-3 advisory research)
+        (E4) DESIGN WIZARD · STYLE GALLERY — feel-distinct styles as LIVE SPECIMEN
+             VIGNETTES; the 2 registered styles + "Soon" tiles (→ 7.3.27/1040 · 7.3.37/1050)
+        (E5) DESIGN WIZARD · PALETTE (separate step) + optional in-style TWEAKS (→ 7.3.27)
+        (E6) THE /tokens COMBINATION PAGE — chosen Style × Palette rendered as the live
+             token specimen + the generated DESIGN.md output (→ 7.3.30 / MOTIR-1043)
+        (E7) THE WEB / MOBILE PLATFORM GATE + the skip→with-design-starter path
+        (E8) THE STYLE SCHEMA — what a STYLE controls vs what a PALETTE controls; the
+             data-display-style × data-palette runtime contract (→ 7.3.32 / MOTIR-1045)
+        (E9) THE PERSISTENT "Go to plan phase" EXIT — the always-present hand-off bar
+        (E10) DEGRADED "AI planning not configured" — the no-AI state + manual fallback
+      Toggle dark mode (top-right) to confirm token parity. See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Typography (next/font vars in-app; static fallbacks here) */
+        --font-sans:
+          ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: 'Source Serif 4', Georgia, serif;
+        --font-mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        /* Tier 3 — element tokens (components consume ONLY these) */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-epic: var(--color-accent);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-manual: var(--color-stone);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* Tier 1 — dark overrides (copied from app/globals.css) */
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design) ───────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        padding: 28px 24px 96px;
+        transition:
+          background 150ms ease,
+          color 150ms ease;
+      }
+      .review-head {
+        max-width: 1160px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 880px;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1160px;
+      }
+      .panel {
+        max-width: 1160px;
+        margin: 0 auto;
+      }
+      .surface {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic-sm {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .ic-lg {
+        width: 20px;
+        height: 20px;
+        flex: none;
+      }
+
+      /* ── Button primitive ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-lg {
+        height: var(--height-btn-lg);
+        font-size: 14px;
+        padding: 0 22px;
+      }
+      .btn-block {
+        width: 100%;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+
+      /* ── Pill primitive ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-pinned {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-delegated {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-accent {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .pill-success {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-warning {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      /* work-item TYPE chips — hue tint bg + strong text + dot + label (AA, never colour-alone) */
+      .tchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        color: var(--el-text-strong);
+      }
+      .tchip .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: var(--radius-pill);
+        flex: none;
+      }
+      .tchip.code {
+        background: color-mix(in srgb, var(--el-type-code) 16%, transparent);
+      }
+      .tchip.code .dot {
+        background: var(--el-type-code);
+      }
+      .tchip.design {
+        background: color-mix(in srgb, var(--el-type-design) 18%, transparent);
+      }
+      .tchip.design .dot {
+        background: var(--el-type-design);
+      }
+      .tchip.content {
+        background: color-mix(in srgb, var(--el-type-content) 18%, transparent);
+      }
+      .tchip.content .dot {
+        background: var(--el-type-content);
+      }
+      .tchip.manual {
+        background: color-mix(in srgb, var(--el-type-manual) 22%, transparent);
+      }
+      .tchip.manual .dot {
+        background: var(--el-type-manual);
+      }
+      .tchip.test {
+        background: color-mix(in srgb, var(--el-type-test) 16%, transparent);
+      }
+      .tchip.test .dot {
+        background: var(--el-type-test);
+      }
+
+      /* ── Card primitive ── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+
+      /* ── Avatar ── */
+      .avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-pill);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        flex: none;
+      }
+      .avatar-accent {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .avatar-user {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Brand lockup ── */
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .brand .tile {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* ── Shared canvas / mono / connector language (from onboarding.mock.html) ── */
+      .dotted {
+        background-color: var(--el-surface);
+        background-image: radial-gradient(var(--el-border) 1.1px, transparent 1.1px);
+        background-size: 22px 22px;
+        background-position: -8px -8px;
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .snode {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .snode.is-active {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 1px var(--el-accent),
+          0 10px 30px -10px var(--el-accent);
+      }
+      .stile {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .stile.sky {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
+      .stile.lav {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .stile.mint {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .stile.peach {
+        background: var(--el-tint-peach);
+        color: var(--el-warning);
+      }
+      .stile.accent {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .stile.yellow {
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+
+      /* shared headers inside surfaces */
+      .frame-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .frame-head .sp {
+        flex: 1;
+      }
+
+      /* ══════════ E1 — chat read→react→revise (diff + revision history) ══════════ */
+      .e1-grid {
+        display: grid;
+        grid-template-columns: 1fr 332px;
+        min-height: 520px;
+      }
+      .e1-stage {
+        padding: 20px 22px;
+        background-color: var(--el-surface);
+        background-image: radial-gradient(var(--el-border) 1.1px, transparent 1.1px);
+        background-size: 22px 22px;
+        background-position: -8px -8px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .diff-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        box-shadow: 0 10px 30px -12px var(--el-accent);
+        overflow: hidden;
+      }
+      .diff-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .diff-body {
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .field-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin-top: 8px;
+      }
+      .dline {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        font-size: 13px;
+        line-height: 1.5;
+        padding: 4px 8px;
+        border-radius: var(--radius-control);
+      }
+      .dline .sign {
+        font-family: var(--font-mono);
+        font-weight: 700;
+        flex: none;
+        width: 12px;
+      }
+      .dline.add {
+        background: color-mix(in srgb, var(--el-success) 12%, transparent);
+        color: var(--el-text-strong);
+      }
+      .dline.add .sign {
+        color: var(--el-success);
+      }
+      .dline.del {
+        background: color-mix(in srgb, var(--el-danger) 10%, transparent);
+        color: var(--el-text-secondary);
+        text-decoration: line-through;
+        text-decoration-color: var(--el-danger);
+      }
+      .dline.del .sign {
+        color: var(--el-danger);
+      }
+      .dline.ctx {
+        color: var(--el-text);
+      }
+      .dline.ctx .sign {
+        color: var(--el-text-faint);
+      }
+      .diff-actions {
+        display: flex;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      /* revision history rail */
+      .e1-hist {
+        border-left: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        display: flex;
+        flex-direction: column;
+      }
+      .hist-list {
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+      }
+      .rev {
+        display: flex;
+        gap: 10px;
+        padding: 9px 10px;
+        border-radius: var(--radius-control);
+        position: relative;
+      }
+      .rev .marker {
+        width: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: none;
+      }
+      .rev .knob {
+        width: 10px;
+        height: 10px;
+        border-radius: var(--radius-pill);
+        border: 2px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        margin-top: 3px;
+      }
+      .rev .rail-line {
+        width: 2px;
+        flex: 1;
+        background: var(--el-border);
+        margin-top: 2px;
+      }
+      .rev.is-current {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-accent);
+      }
+      .rev.is-current .knob {
+        border-color: var(--el-accent);
+        background: var(--el-accent);
+      }
+      .rev .rtitle {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .rev .rmeta {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-top: 1px;
+      }
+      .rev .restore {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-link);
+        margin-top: 5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+      }
+      /* chat rail (compact) */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        background: var(--el-surface-soft);
+        border-left: 1px solid var(--el-border);
+      }
+      .rail-head {
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--el-border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rail-body {
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1;
+      }
+      .bubble {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .bubble .msg {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 9px 11px;
+      }
+      .bubble.me {
+        flex-direction: row-reverse;
+      }
+      .bubble.me .msg {
+        background: var(--el-tint-sky);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .composer {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 12px 14px;
+        border-top: 1px solid var(--el-border);
+      }
+      .composer .field {
+        flex: 1;
+        height: var(--height-input);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-input-x);
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .send {
+        width: var(--height-input);
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+
+      /* ══════════ E2 — the 4-tier + feature-catalog reader ══════════ */
+      .e2-grid {
+        display: grid;
+        grid-template-columns: 218px 1fr;
+        min-height: 560px;
+      }
+      .tier-rail {
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .tier-link {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .tier-link .tdot {
+        width: 9px;
+        height: 9px;
+        border-radius: var(--radius-sm);
+        flex: none;
+      }
+      .tier-link.active {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .tier-link .num {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+        margin-left: auto;
+      }
+      .reader {
+        padding: 20px 26px;
+        overflow: hidden;
+      }
+      .tier-band {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        border-radius: var(--radius-badge);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-strong);
+      }
+      .band-sky {
+        background: var(--el-tint-sky);
+      }
+      .band-lav {
+        background: var(--el-tint-lavender);
+      }
+      .band-mint {
+        background: var(--el-tint-mint);
+      }
+      .band-peach {
+        background: var(--el-tint-peach);
+      }
+      .field-row {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .field-row:last-child {
+        border-bottom: 0;
+      }
+      .field-row .flabel {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+      }
+      .field-row .fval {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      .pencil {
+        color: var(--el-text-faint);
+        cursor: pointer;
+      }
+      .xlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-link);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 2px 9px;
+        cursor: pointer;
+      }
+      .catalog-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        margin-bottom: 8px;
+        background: var(--el-page-bg);
+      }
+      .catalog-row .cname {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .catalog-row .cdesc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+
+      /* ══════════ E3 — comparable-product research ══════════ */
+      .research-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .comp {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 16px;
+        background: var(--el-page-bg);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .comp .clogo {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--el-text-strong);
+      }
+      .comp .cname {
+        font-size: 14.5px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .comp .cdesc {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .comp .diff {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-strong);
+        background: var(--el-surface);
+        border-radius: var(--radius-control);
+        padding: 8px 10px;
+        margin-top: auto;
+      }
+      .source-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: center;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--el-border);
+      }
+      .src {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        color: var(--el-link);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 3px 10px;
+      }
+
+      /* ══════════ Wizard shell (E4 / E5 / E7) ══════════ */
+      .wiz-steps {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--el-border);
+        flex-wrap: wrap;
+      }
+      .wstep {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        padding: 5px 11px;
+        border-radius: var(--radius-badge);
+      }
+      .wstep .wn {
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-pill);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      .wstep.done {
+        color: var(--el-text-secondary);
+      }
+      .wstep.done .wn {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .wstep.active {
+        color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+      }
+      .wstep.active .wn {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .wiz-sep {
+        color: var(--el-border-strong);
+      }
+      .wiz-body {
+        padding: 22px 24px;
+      }
+      .wiz-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .wiz-foot .sp {
+        flex: 1;
+      }
+
+      /* style gallery — specimen vignettes */
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      .style-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        cursor: pointer;
+      }
+      .style-card.selected {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 2px var(--el-accent),
+          var(--shadow-card);
+      }
+      .style-card.soon {
+        opacity: 0.66;
+      }
+      /* the vignette renders a tiny composed UI in THAT style; each card scopes its own shape tokens */
+      .vignette {
+        padding: 18px 16px 20px;
+        background: var(--el-surface);
+        background-image: radial-gradient(var(--el-border) 1px, transparent 1px);
+        background-size: 16px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 168px;
+      }
+      .v-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--vr-card, var(--radius-card));
+        box-shadow: var(--vr-shadow, var(--shadow-card));
+        padding: var(--vr-pad, 14px);
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .v-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .v-title {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .v-badge {
+        font-size: 9.5px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: var(--vr-badge, var(--radius-badge));
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .v-input {
+        height: 28px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--vr-input, var(--radius-input));
+        background: var(--el-page-bg);
+        font-size: 11px;
+        color: var(--el-text-faint);
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+      }
+      .v-btns {
+        display: flex;
+        gap: 7px;
+      }
+      .v-btn {
+        font-size: 11px;
+        font-weight: 600;
+        height: 28px;
+        padding: 0 13px;
+        border-radius: var(--vr-btn, var(--radius-btn));
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid transparent;
+      }
+      .v-btn.pri {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .v-btn.sec {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      /* per-style shape overrides applied to the vignette ONLY (these mirror data-display-style) */
+      .sty-default {
+        --vr-card: 12px;
+        --vr-input: 8px;
+        --vr-btn: 8px;
+        --vr-badge: 9999px;
+        --vr-pad: 14px;
+        --vr-shadow: 0 4px 12px rgba(15, 15, 15, 0.08);
+      }
+      .sty-soft {
+        --vr-card: 24px;
+        --vr-input: 22px;
+        --vr-btn: 9999px;
+        --vr-badge: 9999px;
+        --vr-pad: 18px;
+        --vr-shadow: 0 2px 10px rgba(15, 15, 15, 0.06);
+      }
+      .sty-edge {
+        --vr-card: 0px;
+        --vr-input: 0px;
+        --vr-btn: 0px;
+        --vr-badge: 3px;
+        --vr-pad: 13px;
+        --vr-shadow: none;
+      }
+      .style-meta {
+        padding: 13px 15px;
+        border-top: 1px solid var(--el-border);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .style-meta .sm-name {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .style-meta .sm-desc {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+        line-height: 1.45;
+      }
+      .radio {
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-pill);
+        border: 2px solid var(--el-border-strong);
+        flex: none;
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .radio.on {
+        border-color: var(--el-accent);
+      }
+      .radio.on::after {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-radius: var(--radius-pill);
+        background: var(--el-accent);
+      }
+
+      /* palette step */
+      .pal-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+      .pal-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px;
+        background: var(--el-page-bg);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pal-card.selected {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 2px var(--el-accent),
+          var(--shadow-card);
+      }
+      .swatches {
+        display: flex;
+        gap: 0;
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        height: 38px;
+      }
+      .swatches span {
+        flex: 1;
+      }
+      .pal-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .pal-sub {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .tweaks {
+        margin-top: 18px;
+        border-top: 1px solid var(--el-border);
+        padding-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .tweak {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 12px 13px;
+      }
+      .tweak .tw-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin-bottom: 9px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+      }
+      .seg span {
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 6px 11px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .seg span.on {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .dots {
+        display: flex;
+        gap: 7px;
+      }
+      .cdot {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-pill);
+        border: 2px solid transparent;
+        cursor: pointer;
+      }
+      .cdot.on {
+        border-color: var(--el-text);
+        box-shadow: 0 0 0 2px var(--el-page-bg) inset;
+      }
+
+      /* ══════════ E6 — /tokens combination page ══════════ */
+      .tok-grid {
+        display: grid;
+        grid-template-columns: 1.35fr 1fr;
+        gap: 0;
+      }
+      .tok-spec {
+        padding: 20px 22px;
+        border-right: 1px solid var(--el-border);
+      }
+      .tok-sec-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin: 16px 0 8px;
+      }
+      .tok-sec-label:first-child {
+        margin-top: 0;
+      }
+      .sw-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .sw {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 78px;
+      }
+      .sw .chip {
+        height: 40px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+      }
+      .sw .nm {
+        font-family: var(--font-mono);
+        font-size: 8.5px;
+        color: var(--el-text-muted);
+        word-break: break-all;
+      }
+      .type-spec {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .radius-row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+      }
+      .radius-demo {
+        width: 54px;
+        height: 40px;
+        background: var(--el-tint-lavender);
+        border: 1px solid var(--el-accent);
+      }
+      .radius-demo.b {
+        border-radius: var(--radius-btn);
+      }
+      .radius-demo.c {
+        border-radius: var(--radius-card);
+      }
+      .radius-demo.i {
+        border-radius: var(--radius-input);
+      }
+      /* DESIGN.md output side */
+      .tok-out {
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        background: var(--el-surface-soft);
+      }
+      .codeblock {
+        background: var(--el-code-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 13px 14px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--el-code-text);
+        overflow: hidden;
+      }
+      .codeblock .k {
+        color: var(--el-accent-on-surface);
+      }
+      .codeblock .c {
+        color: var(--el-text-faint);
+      }
+      .codeblock .s {
+        color: var(--el-success);
+      }
+      .file-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 5px 11px;
+        align-self: flex-start;
+      }
+
+      /* ══════════ E7 — platform gate ══════════ */
+      .plat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .plat {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 22px 20px;
+        background: var(--el-page-bg);
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .plat.selected {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 2px var(--el-accent),
+          var(--shadow-card);
+      }
+      .plat .picon {
+        width: 46px;
+        height: 46px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .plat .pname {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+      }
+      .plat .pdesc {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .plat .pstack {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+      }
+      .skip-row {
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+      }
+
+      /* ══════════ E8 — style schema (what STYLE vs PALETTE controls) ══════════ */
+      .schema-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .axis {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .axis-head {
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .axis-head .ah-name {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .axis-head .ah-contract {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-accent-on-surface);
+        margin-left: auto;
+      }
+      .dim {
+        display: grid;
+        grid-template-columns: 130px 1fr;
+        gap: 10px;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+        align-items: baseline;
+      }
+      .dim:last-child {
+        border-bottom: 0;
+      }
+      .dim .dname {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .dim .dtokens {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+        line-height: 1.7;
+      }
+      .contract-note {
+        margin-top: 16px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .contract-note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: 1px 6px;
+        border-radius: var(--radius-kbd);
+      }
+
+      /* ══════════ E9 — persistent exit bar ══════════ */
+      .exit-demo {
+        background-color: var(--el-surface);
+        background-image: radial-gradient(var(--el-border) 1.1px, transparent 1.1px);
+        background-size: 22px 22px;
+        background-position: -8px -8px;
+        padding: 26px;
+        position: relative;
+        min-height: 230px;
+      }
+      .exit-bar {
+        position: absolute;
+        left: 26px;
+        right: 26px;
+        bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 16px;
+      }
+      .exit-bar .summary {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .exit-bar .sp {
+        flex: 1;
+      }
+      .ck {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .ck .cmk {
+        color: var(--el-success);
+      }
+
+      /* ══════════ E10 — degraded no-AI state ══════════ */
+      .degraded {
+        background-color: var(--el-surface);
+        background-image: radial-gradient(var(--el-border) 1.1px, transparent 1.1px);
+        background-size: 22px 22px;
+        background-position: -8px -8px;
+        padding: 40px 26px;
+        display: flex;
+        justify-content: center;
+      }
+      .degraded-card {
+        max-width: 560px;
+        width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 28px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      .degraded-card .plug {
+        width: 54px;
+        height: 54px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .degraded-card h3 {
+        font-family: var(--font-serif);
+        font-size: 21px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .degraded-card p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 440px;
+      }
+      .fallback {
+        margin-top: 6px;
+        width: 100%;
+        background: var(--el-surface);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 13px 15px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      h2.sec {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        margin: 0 0 3px;
+        color: var(--el-text);
+      }
+      .sec-sub {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+      .caption {
+        max-width: 1160px;
+        margin: 10px auto 0;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .caption b {
+        color: var(--el-text-secondary);
+      }
+      .flow-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 3px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Motir onboarding — the expanded surfaces (Story 7.3 · 7.3.26)</h1>
+        <p>
+          Extends the 7.3.1 onboarding design to the full re-planned flow. The design gate fires
+          before any consuming UI builds (7.3.5 chat · 7.3.6 reader · 7.3.27 wizard · 7.3.30 /tokens
+          · 7.3.32 schema · 7.3.37 specimen). The design wizard is grounded in the SHIPPED two-axis
+          system — <b>Style</b> = the shape axis (<code>data-display-style</code>), <b>Palette</b> =
+          the colour axis (<code>data-palette</code>) — not the frozen 10-axis prose.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════════ E1 — DISCOVERY CHAT · read → react → revise (diff + revisions + rollback) ════════════ -->
+    <div class="panel-label">
+      E1 · Discovery chat — read → react → revise · per-stage DIFF + revision history + rollback (→
+      7.3.5 / MOTIR-833)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="frame-head">
+          <a class="brand"
+            ><span class="tile"
+              ><svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                /></svg></span
+            >Motir</a
+          >
+          <span class="mono">New project · Stage 2 of 3 · Shape</span>
+          <div class="sp"></div>
+          <span class="pill pill-accent"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0" />
+              <path d="M12 7v5l3 2" /></svg
+            >Autosaved</span
+          >
+          <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
+        </div>
+        <div class="e1-grid">
+          <!-- left: the active stage node with an AI-proposed revision DIFF -->
+          <div class="e1-stage">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <span class="stile lav"
+                ><svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" /></svg
+              ></span>
+              <div>
+                <div style="font-size: 15px; font-weight: 700">Shape — the product direction</div>
+                <div class="mono" style="margin-top: 2px">Stage 2 · in progress · revision 3</div>
+              </div>
+            </div>
+            <div class="diff-card">
+              <div class="diff-head">
+                <span class="pill pill-accent"
+                  ><svg
+                    class="ic-sm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                    /></svg
+                  >Proposed update</span
+                >
+                <span style="font-size: 12.5px; color: var(--el-text-secondary)"
+                  >Motir revised <b>Shape</b> from your reply — review the change</span
+                >
+              </div>
+              <div class="diff-body">
+                <div class="field-label">In scope</div>
+                <div class="dline ctx">
+                  <span class="sign">&nbsp;</span
+                  ><span>Invoicing &amp; payment-tracking for solo freelancers</span>
+                </div>
+                <div class="dline add">
+                  <span class="sign">+</span
+                  ><span
+                    >Recurring invoices &amp; auto-reminders (you asked for "set-and-forget")</span
+                  >
+                </div>
+                <div class="field-label">Out of scope (v1)</div>
+                <div class="dline del">
+                  <span class="sign">−</span><span>Multi-currency support</span>
+                </div>
+                <div class="dline add">
+                  <span class="sign">+</span
+                  ><span>Multi-currency — moved to v1 (you sell to EU clients)</span>
+                </div>
+              </div>
+              <div class="diff-actions">
+                <button class="btn btn-primary btn-sm">
+                  <svg
+                    class="ic-sm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  >Accept change
+                </button>
+                <button class="btn btn-secondary btn-sm">Edit inline</button>
+                <button class="btn btn-ghost btn-sm">Discard</button>
+              </div>
+            </div>
+            <div class="flow-note">
+              <svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" /></svg
+              >The loop: the rail asks → you react → Motir proposes a diff → you accept / edit /
+              discard. Every accept writes a new revision.
+            </div>
+          </div>
+          <!-- middle/right combined: revision history rail with rollback -->
+          <div class="e1-hist">
+            <div class="rail-head">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="color: var(--el-text-muted)"
+              >
+                <path d="M3 3v5h5" />
+                <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+                <path d="M12 7v5l4 2" />
+              </svg>
+              <span style="font-size: 12.5px; font-weight: 600">Revision history · Shape</span>
+            </div>
+            <div class="hist-list">
+              <div class="rev is-current">
+                <div class="marker">
+                  <div class="knob"></div>
+                  <div class="rail-line"></div>
+                </div>
+                <div>
+                  <div class="rtitle">Revision 3 · current</div>
+                  <div class="rmeta">just now · +recurring invoices, multi-currency → v1</div>
+                </div>
+              </div>
+              <div class="rev">
+                <div class="marker">
+                  <div class="knob"></div>
+                  <div class="rail-line"></div>
+                </div>
+                <div>
+                  <div class="rtitle">Revision 2</div>
+                  <div class="rmeta">2 min ago · narrowed audience to solo freelancers</div>
+                  <span class="restore"
+                    ><svg
+                      class="ic-sm"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 7v6h6" />
+                      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg
+                    >Restore this version</span
+                  >
+                </div>
+              </div>
+              <div class="rev">
+                <div class="marker"><div class="knob"></div></div>
+                <div>
+                  <div class="rtitle">Revision 1 · initial</div>
+                  <div class="rmeta">5 min ago · first Shape draft from Discover</div>
+                  <span class="restore"
+                    ><svg
+                      class="ic-sm"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 7v6h6" />
+                      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" /></svg
+                    >Restore this version</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="composer">
+              <div class="field">Tell Motir what to change…</div>
+              <span class="send"
+                ><svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" /></svg
+              ></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <b>Access path</b> — this IS the planning canvas of panel 4/5 (onboarding.mock.html), in its
+        <b>read→react→revise</b> mode: the active stage node carries the AI-proposed <b>diff</b>;
+        the chat rail is replaced here by the <b>revision history</b> with per-revision
+        <b>rollback</b>
+        ("Restore this version" = a new revision that restores an old state, never a destructive
+        undo). Empty state: revision 1 only, no diff card. Loading: a streaming caret on the
+        proposed diff. The diff lives on the SAME stage node — no document, no filename (the 7.3.1
+        rule).
+      </div>
+    </div>
+
+    <!-- ════════════ E2 — THE 4-TIER + FEATURE-CATALOG READER ════════════ -->
+    <div class="panel-label">
+      E2 · The 4-tier + feature-catalog reader — colour-coded, cross-linked, light inline edit (→
+      7.3.6 / MOTIR-834)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="frame-head">
+          <a class="brand"
+            ><span class="tile"
+              ><svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                /></svg></span
+            >Motir</a
+          >
+          <span style="font-size: 13px; font-weight: 600">Your direction</span>
+          <span class="flow-note"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" /></svg
+            >Opened from the canvas — "Read full direction"</span
+          >
+          <div class="sp"></div>
+          <button class="btn btn-ghost btn-sm">
+            <svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" /></svg
+            >Search
+          </button>
+          <button class="btn btn-secondary btn-sm">Back to canvas</button>
+        </div>
+        <div class="e2-grid">
+          <!-- tier rail -->
+          <div class="tier-rail">
+            <div class="mono" style="padding: 4px 10px 6px">4 tiers · 1 catalog</div>
+            <div class="tier-link">
+              <span class="tdot" style="background: var(--el-info)"></span>Problem &amp; people<span
+                class="num"
+                >T1</span
+              >
+            </div>
+            <div class="tier-link active">
+              <span class="tdot" style="background: var(--el-accent-on-surface)"></span>Product
+              direction<span class="num">T2</span>
+            </div>
+            <div class="tier-link">
+              <span class="tdot" style="background: var(--el-success)"></span>Business &amp;
+              feasibility<span class="num">T3</span>
+            </div>
+            <div class="tier-link">
+              <span class="tdot" style="background: var(--el-warning)"></span>Validation plan<span
+                class="num"
+                >T4</span
+              >
+            </div>
+            <div style="height: 1px; background: var(--el-border); margin: 8px 6px"></div>
+            <div class="tier-link">
+              <svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                style="color: var(--el-text-faint)"
+              >
+                <path d="M3 7h18M3 12h18M3 17h18" /></svg
+              >Feature catalog<span class="num">12</span>
+            </div>
+          </div>
+          <!-- reader -->
+          <div class="reader">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px">
+              <span class="tier-band band-lav">Tier 2 · Product direction</span>
+              <span class="flow-note" style="margin-left: auto"
+                >Traces to · <span style="color: var(--el-info)">Problem</span> →
+                <span style="color: var(--el-success)">Feasibility</span></span
+              >
+            </div>
+            <p class="sec-sub" style="margin-bottom: 6px">
+              The product shape — the core decisions, the scope line, the principles. Hover a field
+              to edit; cross-links jump to the tier that grounds it.
+            </p>
+
+            <div class="field-row">
+              <div class="flabel">
+                In scope (v1)<svg
+                  class="ic-sm pencil"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </div>
+              <div class="fval">
+                Recurring invoicing, payment tracking, and auto-reminders for solo freelancers —
+                multi-currency included.
+                <span class="xlink"
+                  ><svg
+                    class="ic-sm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+                    <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg
+                  >why · Problem T1</span
+                >
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="flabel">
+                Out of scope (v1)<svg
+                  class="ic-sm pencil"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </div>
+              <div class="fval">
+                Teams &amp; seats · accounting-suite parity · mobile app (deferred to the platform
+                step).
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="flabel">Core decisions</div>
+              <div class="fval" style="display: flex; flex-direction: column; gap: 7px">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span class="pill pill-pinned"
+                    ><svg
+                      class="ic-sm"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M12 17v5" />
+                      <path
+                        d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1Z"
+                      /></svg
+                    >Pinned</span
+                  >Stripe-only billing for v1
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span class="pill pill-delegated"
+                    ><svg
+                      class="ic-sm"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                      /></svg
+                    >You decide</span
+                  >Free tier vs. trial — Motir recommends a 14-day trial
+                  <span class="xlink">resolve →</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tok-sec-label" style="margin-top: 20px">
+              Feature catalog · 12 items · every kind of work
+            </div>
+            <div class="catalog-row">
+              <span class="tchip design"><span class="dot"></span>Design</span>
+              <div style="flex: 1">
+                <div class="cname">Brand &amp; invoice template</div>
+                <div class="cdesc">Logo, colour, the PDF invoice layout</div>
+              </div>
+              <span class="flow-note">Epic · Brand</span>
+            </div>
+            <div class="catalog-row">
+              <span class="tchip code"><span class="dot"></span>Code</span>
+              <div style="flex: 1">
+                <div class="cname">Recurring-invoice engine</div>
+                <div class="cdesc">Schedules, reminders, Stripe sync</div>
+              </div>
+              <span class="flow-note">Epic · Build</span>
+            </div>
+            <div class="catalog-row">
+              <span class="tchip content"><span class="dot"></span>Content</span>
+              <div style="flex: 1">
+                <div class="cname">Pricing &amp; landing copy</div>
+                <div class="cdesc">The plan table + the marketing page</div>
+              </div>
+              <span class="flow-note">Epic · Launch</span>
+            </div>
+            <div class="catalog-row" style="opacity: 0.62">
+              <span class="tchip manual"><span class="dot"></span>Manual</span>
+              <div style="flex: 1">
+                <div class="cname">Incorporate + ToS + domain</div>
+                <div class="cdesc">Human provisioning — Motir tracks, you do</div>
+              </div>
+              <span class="flow-note">+ 8 more</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <b>4 tiers, not 4 documents</b> — the direction is one structured read, tiered Problem →
+        Product → Business → Validation, each with its own hue (sky / lavender / mint / peach).
+        <b>Cross-links</b> (the chain chips) jump to the grounding tier; <b>light edit</b> is the
+        hover-reveal pencil on any field (inline, optimistic — no document open). The
+        <b>feature catalog</b> spans every work-item type (Design · Code · Content · Manual …) with
+        its <code>--el-type-*</code> chip. Maps to workflow.html Step 2's four-tier artifacts +
+        catalog, in the no-document language.
+      </div>
+    </div>
+
+    <!-- ════════════ E3 — COMPARABLE-PRODUCT RESEARCH ════════════ -->
+    <div class="panel-label">
+      E3 · Comparable-product research — the competitive scan, presented (Step-3 advisory research)
+    </div>
+    <div class="panel">
+      <div class="card">
+        <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px">
+          <span class="stile lav"
+            ><svg
+              class="ic"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" /></svg
+          ></span>
+          <div style="flex: 1">
+            <h2 class="sec">Comparable products</h2>
+            <p class="sec-sub" style="margin: 0">
+              Motir scanned the freelance-invoicing space so your direction is grounded in what
+              already exists — and where you differ.
+            </p>
+          </div>
+          <span
+            class="tchip"
+            style="background: color-mix(in srgb, var(--el-type-research) 16%, transparent)"
+            ><span class="dot" style="background: var(--el-type-research)"></span>Research</span
+          >
+        </div>
+        <div class="research-grid">
+          <div class="comp">
+            <span class="clogo" style="background: var(--el-tint-sky)">W</span>
+            <div class="cname">Wave</div>
+            <div class="cdesc">
+              Free accounting + invoicing for small businesses; broad scope, ad-supported.
+            </div>
+            <div class="diff">
+              <b>You differ:</b> set-and-forget recurring billing, not a full ledger.
+            </div>
+          </div>
+          <div class="comp">
+            <span class="clogo" style="background: var(--el-tint-mint)">B</span>
+            <div class="cname">Bonsai</div>
+            <div class="cdesc">
+              All-in-one freelancer suite — contracts, proposals, invoicing; premium price.
+            </div>
+            <div class="diff"><b>You differ:</b> one job done well, a lower entry price.</div>
+          </div>
+          <div class="comp">
+            <span class="clogo" style="background: var(--el-tint-peach)">S</span>
+            <div class="cname">Stripe Invoicing</div>
+            <div class="cdesc">
+              Developer-grade invoicing on Stripe; powerful but not freelancer-shaped.
+            </div>
+            <div class="diff"><b>You differ:</b> a freelancer UX on top of the same rails.</div>
+          </div>
+        </div>
+        <div class="source-strip">
+          <span class="mono" style="color: var(--el-text-muted)">Sources</span>
+          <span class="src"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+              <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg
+            >waveapps.com</span
+          >
+          <span class="src"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+              <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg
+            >hellobonsai.com</span
+          >
+          <span class="src"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+              <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg
+            >stripe.com/invoicing</span
+          >
+          <span style="flex: 1"></span>
+          <span class="flow-note"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" /></svg
+            >Advisory — informs Shape; never blocks the plan</span
+          >
+        </div>
+      </div>
+      <div class="caption">
+        <b>Research, not a verdict</b> — presented as a scannable card set with a clear "how you
+        differ" line per competitor and cited <b>sources</b>, so the user can trust and trace it. It
+        feeds the Shape stage (a positioning input) but is advisory and never gates generation.
+        Empty / loading: a 3-card skeleton with the <code>Spinner</code> and "Scanning comparable
+        products…".
+      </div>
+    </div>
+
+    <!-- ════════════ E4 — DESIGN WIZARD · STYLE GALLERY ════════════ -->
+    <div class="panel-label">
+      E4 · Design wizard — STYLE gallery (the SHAPE axis) · live specimen vignettes · one decision
+      per step (→ 7.3.27 / 1040 · 7.3.37 / 1050)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wiz-steps">
+          <span class="wstep done"
+            ><span class="wn"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" /></svg></span
+            >Direction</span
+          >
+          <span class="wiz-sep">·</span>
+          <span class="wstep active"><span class="wn">1</span>Style</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">2</span>Palette</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">3</span>Tweaks</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">4</span>Platform</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">5</span>Review</span>
+        </div>
+        <div class="wiz-body">
+          <h2 class="sec">Pick a style</h2>
+          <p class="sec-sub">
+            The <b>style</b> sets the shape of everything — corners, density, depth. Each tile is a
+            <b>live specimen</b> in that style, so you can feel the difference before you choose.
+            Colour comes next.
+          </p>
+          <div class="gallery">
+            <div class="style-card selected">
+              <div class="vignette sty-default">
+                <div class="v-card">
+                  <div class="v-row">
+                    <span class="v-title">Invoice #024</span><span class="v-badge">Paid</span>
+                  </div>
+                  <div class="v-input">Client name</div>
+                  <div class="v-btns">
+                    <span class="v-btn pri">Send</span><span class="v-btn sec">Draft</span>
+                  </div>
+                </div>
+              </div>
+              <div class="style-meta">
+                <div>
+                  <div class="sm-name">Default</div>
+                  <div class="sm-desc">
+                    Notion-sober — 8px corners, crisp shadows, calm. The shipped default.
+                  </div>
+                </div>
+                <span class="radio on"></span>
+              </div>
+            </div>
+            <div class="style-card">
+              <div class="vignette sty-soft">
+                <div class="v-card">
+                  <div class="v-row">
+                    <span class="v-title">Invoice #024</span><span class="v-badge">Paid</span>
+                  </div>
+                  <div class="v-input">Client name</div>
+                  <div class="v-btns">
+                    <span class="v-btn pri">Send</span><span class="v-btn sec">Draft</span>
+                  </div>
+                </div>
+              </div>
+              <div class="style-meta">
+                <div>
+                  <div class="sm-name">Soft</div>
+                  <div class="sm-desc">
+                    Figma-pill — 24px corners, pill buttons, roomy &amp; friendly.
+                  </div>
+                </div>
+                <span class="radio"></span>
+              </div>
+            </div>
+            <div class="style-card soon">
+              <div class="vignette sty-edge">
+                <div class="v-card">
+                  <div class="v-row">
+                    <span class="v-title">Invoice #024</span><span class="v-badge">Paid</span>
+                  </div>
+                  <div class="v-input">Client name</div>
+                  <div class="v-btns">
+                    <span class="v-btn pri">Send</span><span class="v-btn sec">Draft</span>
+                  </div>
+                </div>
+              </div>
+              <div class="style-meta">
+                <div>
+                  <div class="sm-name">
+                    Edge <span class="pill pill-neutral" style="margin-left: 4px">Soon</span>
+                  </div>
+                  <div class="sm-desc">Sharp, flat, high-contrast — square corners, no shadow.</div>
+                </div>
+                <span class="radio"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-ghost btn-sm">Skip the whole design step</button>
+          <div class="sp"></div>
+          <button class="btn btn-secondary">Back</button>
+          <button class="btn btn-primary">
+            Next — Palette
+            <svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="caption">
+        <b>Style = the SHAPE axis</b> (<code>data-display-style</code>). The 2
+        <b>registered</b> styles are Default (shipped) + Soft; "Edge" is a drawn "Soon" placeholder
+        so the gallery reads as extensible (registry = 7.3.32). The <b>specimen vignette</b> (a mini
+        invoice card built from the real primitives, scoped to that style's shape tokens) is what
+        makes the feel legible — exactly 7.3.37 / MOTIR-1050. <b>Skip</b> (foot) → no design Story;
+        the platform step then offers the with-design starter. Access path: the wizard stepper,
+        drawn across the top.
+      </div>
+    </div>
+
+    <!-- ════════════ E5 — DESIGN WIZARD · PALETTE + TWEAKS ════════════ -->
+    <div class="panel-label">
+      E5 · Design wizard — PALETTE (the COLOUR axis, a SEPARATE step) + optional in-style tweaks (→
+      7.3.27 / MOTIR-1040)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wiz-steps">
+          <span class="wstep done"
+            ><span class="wn"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" /></svg></span
+            >Direction</span
+          >
+          <span class="wiz-sep">·</span>
+          <span class="wstep done"
+            ><span class="wn"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" /></svg></span
+            >Style</span
+          >
+          <span class="wiz-sep">·</span>
+          <span class="wstep active"><span class="wn">2</span>Palette</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">3</span>Tweaks</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">4</span>Platform</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">5</span>Review</span>
+        </div>
+        <div class="wiz-body">
+          <h2 class="sec">Pick a palette</h2>
+          <p class="sec-sub">
+            One decision per step — now the colour. The palette swaps the
+            <code>--el-*</code> tokens; your chosen <b>Soft</b> shape stays fixed.
+          </p>
+          <div class="pal-grid">
+            <div class="pal-card selected">
+              <div class="swatches">
+                <span style="background: #5645d4"></span><span style="background: #ff64c8"></span
+                ><span style="background: #e6e0f5"></span><span style="background: #dcecfa"></span
+                ><span style="background: #d9f3e1"></span>
+              </div>
+              <div class="pal-name">
+                <span class="radio on" style="width: 16px; height: 16px; margin-left: 0"></span
+                >Notion
+              </div>
+              <div class="pal-sub">Purple + pink · the shipped default</div>
+            </div>
+            <div class="pal-card">
+              <div class="swatches">
+                <span style="background: #0d6e6a"></span><span style="background: #13a8a2"></span
+                ><span style="background: #cfeae8"></span><span style="background: #dbeef7"></span
+                ><span style="background: #fde8cf"></span>
+              </div>
+              <div class="pal-name">
+                <span class="radio" style="width: 16px; height: 16px; margin-left: 0"></span>Ocean
+              </div>
+              <div class="pal-sub">Teal + slate · cool, calm</div>
+            </div>
+            <div class="pal-card">
+              <div class="swatches">
+                <span style="background: #2f7d32"></span><span style="background: #f0a500"></span
+                ><span style="background: #dcecd6"></span><span style="background: #fdf0cf"></span
+                ><span style="background: #e9e3d4"></span>
+              </div>
+              <div class="pal-name">
+                <span class="radio" style="width: 16px; height: 16px; margin-left: 0"></span>Forest
+              </div>
+              <div class="pal-sub">Green + amber · warm, organic</div>
+            </div>
+            <div class="pal-card">
+              <div class="swatches">
+                <span style="background: #1a1a1a"></span><span style="background: #5d5b54"></span
+                ><span style="background: #e5e3df"></span><span style="background: #f3f4f6"></span
+                ><span style="background: #c8c4be"></span>
+              </div>
+              <div class="pal-name">
+                <span class="radio" style="width: 16px; height: 16px; margin-left: 0"></span>Mono
+              </div>
+              <div class="pal-sub">Greyscale + one accent</div>
+            </div>
+          </div>
+          <div class="tweaks">
+            <div class="tweak">
+              <div class="tw-label">
+                <svg
+                  class="ic-sm"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+                  <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+                  <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+                  <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                  <path
+                    d="M12 2a10 10 0 0 0 0 20 2.5 2.5 0 0 0 2-4 2.5 2.5 0 0 1 2-4h2a4 4 0 0 0 4-4 10 10 0 0 0-10-8Z"
+                  /></svg
+                >Accent (optional tweak)
+              </div>
+              <div class="dots">
+                <span class="cdot on" style="background: #5645d4"></span>
+                <span class="cdot" style="background: #0075de"></span>
+                <span class="cdot" style="background: #1aae39"></span>
+                <span class="cdot" style="background: #dd5b00"></span>
+                <span class="cdot" style="background: #e03131"></span>
+              </div>
+            </div>
+            <div class="tweak">
+              <div class="tw-label">
+                <svg
+                  class="ic-sm"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M3 9h18M9 21V9" /></svg
+                >Density
+              </div>
+              <div class="seg"><span class="on">Comfortable</span><span>Compact</span></div>
+            </div>
+            <div class="tweak">
+              <div class="tw-label">
+                <svg
+                  class="ic-sm"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="4" />
+                  <path
+                    d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"
+                  /></svg
+                >Default theme
+              </div>
+              <div class="seg">
+                <span class="on">Light</span><span>Dark</span><span>System</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-ghost btn-sm">Skip tweaks — use palette defaults</button>
+          <div class="sp"></div>
+          <button class="btn btn-secondary">Back</button>
+          <button class="btn btn-primary">
+            Next — Platform
+            <svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="caption">
+        <b>Palette = the COLOUR axis</b> (<code>data-palette</code>), a <b>separate</b> step from
+        Style (the card's "one decision per step"). Each palette is a swatch run of its
+        <code>--el-*</code> accent + tints. <b>Optional in-style tweaks</b> (accent override,
+        density = the shape axis' spacing sub-knob, default theme) sit under a "Skip tweaks" escape
+        so the step stays one decision by default. Style (E4) × Palette (E5) compose on the /tokens
+        page next.
+      </div>
+    </div>
+
+    <!-- ════════════ E6 — THE /tokens COMBINATION PAGE (DESIGN.md output) ════════════ -->
+    <div class="panel-label">
+      E6 · The /tokens combination page — chosen Style × Palette rendered live + the generated
+      DESIGN.md (→ 7.3.30 / MOTIR-1043)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="frame-head">
+          <span class="mono">/tokens · the combined design system</span>
+          <span class="pill pill-success"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M20 6 9 17l-5-5" /></svg
+            >Soft × Notion</span
+          >
+          <div class="sp"></div>
+          <button class="btn btn-ghost btn-sm">Back to wizard</button>
+          <button class="btn btn-primary btn-sm">
+            <svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="M7 10l5 5 5-5" />
+              <path d="M12 15V3" /></svg
+            >Use this design
+          </button>
+        </div>
+        <div class="tok-grid">
+          <!-- live specimen (mirrors app/tokens) -->
+          <div class="tok-spec">
+            <p class="sec-sub" style="margin-bottom: 14px">
+              Your Style × Palette, rendered as the real token specimen. This page is the one place
+              that names <code>--color-*</code> directly (the sanctioned exception).
+            </p>
+            <div class="tok-sec-label">Colour · --color-*</div>
+            <div class="sw-row">
+              <div class="sw">
+                <div class="chip" style="background: #5645d4"></div>
+                <div class="nm">--color-primary</div>
+              </div>
+              <div class="sw">
+                <div class="chip" style="background: #ff64c8"></div>
+                <div class="nm">--color-accent</div>
+              </div>
+              <div class="sw">
+                <div class="chip" style="background: #e6e0f5"></div>
+                <div class="nm">--color-tint-lavender</div>
+              </div>
+              <div class="sw">
+                <div class="chip" style="background: #dcecfa"></div>
+                <div class="nm">--color-tint-sky</div>
+              </div>
+              <div class="sw">
+                <div class="chip" style="background: #d9f3e1"></div>
+                <div class="nm">--color-tint-mint</div>
+              </div>
+            </div>
+            <div class="tok-sec-label">Typography</div>
+            <div class="type-spec">
+              <div style="font-family: var(--font-serif); font-size: 22px; font-weight: 700">
+                Source Serif 4 — headline
+              </div>
+              <div style="font-size: 14px">Inter — body · the workhorse text</div>
+              <div
+                style="font-family: var(--font-mono); font-size: 12px; color: var(--el-text-muted)"
+              >
+                JetBrains Mono — micro-label
+              </div>
+            </div>
+            <div class="tok-sec-label">Radius · soft style</div>
+            <div
+              class="radius-row"
+              style="--radius-btn: 9999px; --radius-card: 24px; --radius-input: 22px"
+            >
+              <div style="text-align: center">
+                <div class="radius-demo b"></div>
+                <div
+                  class="nm"
+                  style="font-family: var(--font-mono); font-size: 9px; margin-top: 4px"
+                >
+                  --radius-btn
+                </div>
+              </div>
+              <div style="text-align: center">
+                <div class="radius-demo c"></div>
+                <div
+                  class="nm"
+                  style="font-family: var(--font-mono); font-size: 9px; margin-top: 4px"
+                >
+                  --radius-card
+                </div>
+              </div>
+              <div style="text-align: center">
+                <div class="radius-demo i"></div>
+                <div
+                  class="nm"
+                  style="font-family: var(--font-mono); font-size: 9px; margin-top: 4px"
+                >
+                  --radius-input
+                </div>
+              </div>
+            </div>
+            <div class="tok-sec-label">Primitives · live</div>
+            <div class="v-card sty-soft" style="gap: 10px">
+              <div class="v-row">
+                <span class="v-title" style="font-size: 13px"
+                  >Button &amp; input, in your style</span
+                ><span class="v-badge">Pill</span>
+              </div>
+              <div class="v-input">Type here…</div>
+              <div class="v-btns">
+                <span class="v-btn pri">Primary</span><span class="v-btn sec">Secondary</span>
+              </div>
+            </div>
+          </div>
+          <!-- DESIGN.md output -->
+          <div class="tok-out">
+            <span class="file-tab"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                <path d="M14 2v6h6" /></svg
+              >DESIGN.md</span
+            >
+            <div class="codeblock">
+              <span class="c"># Design system</span><br /><span class="k">Style:</span> soft
+              <span class="c">(data-display-style)</span><br /><span class="k">Palette:</span>
+              notion <span class="c">(data-palette)</span><br /><span class="k">Accent:</span>
+              <span class="s">#5645d4</span><br /><span class="k">Density:</span>
+              comfortable<br /><span class="k">Theme:</span> light + dark<br /><span class="k"
+                >Platform:</span
+              >
+              web
+            </div>
+            <span class="file-tab"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                <path d="M14 2v6h6" /></svg
+              >app/globals.css</span
+            >
+            <div class="codeblock">
+              <span class="c">/* generated from your choices */</span><br />:root[<span class="k"
+                >data-palette</span
+              >=<span class="s">"notion"</span>] {<br />&nbsp;&nbsp;--el-accent:
+              <span class="s">#5645d4</span>;<br />&nbsp;&nbsp;--el-tint-lavender:
+              <span class="s">#e6e0f5</span>;<br />}<br />[<span class="k">data-display-style</span
+              >=<span class="s">"soft"</span>] {<br />&nbsp;&nbsp;--radius-card:
+              <span class="s">24px</span>;<br />}
+            </div>
+            <div class="flow-note">
+              <svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" /></svg
+              >"Use this design" bakes DESIGN.md into the design Story (1.0.5) the planner
+              generates.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <b>The combination page</b> renders the chosen <b>Style × Palette</b> as the real token
+        specimen (the app/tokens section order: colour → type → radius → primitives), then emits the
+        machine-readable <b>DESIGN.md</b> + the <code>globals.css</code> override block — the
+        artifact the coding agent consumes. This is the ONE surface (with E8) that names
+        <code>--color-*</code>
+        directly, per the CLAUDE.md exception.
+      </div>
+    </div>
+
+    <!-- ════════════ E7 — PLATFORM GATE ════════════ -->
+    <div class="panel-label">
+      E7 · Web / mobile platform gate + the skip → with-design-starter path
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wiz-steps">
+          <span class="wstep done"
+            ><span class="wn"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" /></svg></span
+            >Style</span
+          >
+          <span class="wiz-sep">·</span>
+          <span class="wstep done"
+            ><span class="wn"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" /></svg></span
+            >Palette</span
+          >
+          <span class="wiz-sep">·</span>
+          <span class="wstep done"
+            ><span class="wn"
+              ><svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" /></svg></span
+            >Tweaks</span
+          >
+          <span class="wiz-sep">·</span>
+          <span class="wstep active"><span class="wn">4</span>Platform</span>
+          <span class="wiz-sep">·</span>
+          <span class="wstep"><span class="wn">5</span>Review</span>
+        </div>
+        <div class="wiz-body">
+          <h2 class="sec">What are you building?</h2>
+          <p class="sec-sub">
+            This picks the starter the coding agent dispatches against — and whether your design
+            system ships as web or native tokens.
+          </p>
+          <div class="plat-grid">
+            <div class="plat selected">
+              <span class="picon" style="background: var(--el-tint-sky); color: var(--el-info)"
+                ><svg
+                  class="ic-lg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="20" height="14" x="2" y="3" rx="2" />
+                  <path d="M8 21h8M12 17v4" /></svg
+              ></span>
+              <div class="pname">
+                Web app<span class="radio on" style="margin-left: auto"></span>
+              </div>
+              <div class="pdesc">A responsive web app — the default for a SaaS like yours.</div>
+              <div class="pstack">next.js · prisma · vercel starter</div>
+            </div>
+            <div class="plat">
+              <span class="picon" style="background: var(--el-tint-mint); color: var(--el-success)"
+                ><svg
+                  class="ic-lg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="14" height="20" x="5" y="2" rx="2" />
+                  <path d="M12 18h.01" /></svg
+              ></span>
+              <div class="pname">
+                Mobile app<span class="radio" style="margin-left: auto"></span>
+              </div>
+              <div class="pdesc">A native iOS / Android app from one codebase.</div>
+              <div class="pstack">react native · expo starter</div>
+            </div>
+          </div>
+          <div class="skip-row">
+            <span
+              class="stile sky"
+              style="background: var(--el-page-bg); color: var(--el-accent-on-surface)"
+              ><svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                /></svg
+            ></span>
+            <div style="flex: 1">
+              <div style="font-size: 13px; font-weight: 700; color: var(--el-text)">
+                Skipped the design step?
+              </div>
+              <div
+                style="
+                  font-size: 12px;
+                  color: var(--el-text-secondary);
+                  line-height: 1.5;
+                  margin-top: 2px;
+                "
+              >
+                No problem — your project still ships from the <b>with-design starter</b>: the same
+                web/native scaffold, pre-wired with Motir's default Style × Palette so it looks
+                finished out of the box.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <div class="sp"></div>
+          <button class="btn btn-secondary">Back</button>
+          <button class="btn btn-primary">
+            Review &amp; finish
+            <svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="caption">
+        <b>Platform gate</b> — Web (nextjs-prisma-vercel starter) vs. Mobile (react-native / expo
+        starter); the choice selects the dispatch scaffold AND whether the design tokens ship web or
+        native. The <b>skip → with-design-starter</b> path is drawn explicitly: a user who skipped
+        the Style/Palette steps still lands on the design-equipped starter (the real
+        <code>nextjs-prisma-vercel-starter-with-design</code> repo), never a bare scaffold.
+      </div>
+    </div>
+
+    <!-- ════════════ E8 — THE STYLE SCHEMA (what STYLE vs PALETTE controls) ════════════ -->
+    <div class="panel-label">
+      E8 · The style schema — what a STYLE controls vs what a PALETTE controls · the
+      data-display-style × data-palette contract (→ 7.3.32 / MOTIR-1045)
+    </div>
+    <div class="panel">
+      <div class="card">
+        <h2 class="sec">The two swap axes — the schema behind the wizard</h2>
+        <p class="sec-sub">
+          A <b>style</b> owns SHAPE; a <b>palette</b> owns COLOUR. They are orthogonal — any style
+          composes with any palette. This is the registry the wizard reads (7.3.32) and the runtime
+          contract the app honours.
+        </p>
+        <div class="schema-grid">
+          <div class="axis">
+            <div class="axis-head">
+              <span class="stile lav"
+                ><svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"
+                  />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <circle cx="17.5" cy="17.5" r="3.5" /></svg
+              ></span>
+              <span class="ah-name">Style · the SHAPE axis</span>
+              <span class="ah-contract">data-display-style</span>
+            </div>
+            <div class="dim">
+              <div class="dname">Radius</div>
+              <div class="dtokens">
+                --radius-btn · -card · -input · -modal · -badge · -control · -kbd
+              </div>
+            </div>
+            <div class="dim">
+              <div class="dname">Elevation</div>
+              <div class="dtokens">--shadow-subtle · -card · -elevated · -modal</div>
+            </div>
+            <div class="dim">
+              <div class="dname">Density</div>
+              <div class="dtokens">
+                --spacing-card-padding · -btn-x/y · -control-x/y · -chip-x/y
+              </div>
+            </div>
+            <div class="dim">
+              <div class="dname">Sizing</div>
+              <div class="dtokens">--height-btn-{sm,md,lg} · --height-input · --height-control</div>
+            </div>
+            <div class="dim">
+              <div class="dname">Interaction</div>
+              <div class="dtokens">--transition-duration · --active-scale</div>
+            </div>
+            <div class="dim">
+              <div class="dname">Registered</div>
+              <div class="dtokens" style="display: flex; gap: 6px">
+                <span class="pill pill-success">default</span
+                ><span class="pill pill-success">soft</span
+                ><span class="pill pill-neutral">edge · soon</span>
+              </div>
+            </div>
+          </div>
+          <div class="axis">
+            <div class="axis-head">
+              <span class="stile mint"
+                ><svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+                  <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+                  <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+                  <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+                  <path
+                    d="M12 2a10 10 0 0 0 0 20 2.5 2.5 0 0 0 2-4 2.5 2.5 0 0 1 2-4h2a4 4 0 0 0 4-4 10 10 0 0 0-10-8Z"
+                  /></svg
+              ></span>
+              <span class="ah-name">Palette · the COLOUR axis</span>
+              <span class="ah-contract">data-palette</span>
+            </div>
+            <div class="dim">
+              <div class="dname">Accent</div>
+              <div class="dtokens">
+                --el-accent · -accent-text · -accent-on-surface · -accent-pressed
+              </div>
+            </div>
+            <div class="dim">
+              <div class="dname">Text scale</div>
+              <div class="dtokens">
+                --el-text · -strong · -secondary · -muted · -faint · -inverted
+              </div>
+            </div>
+            <div class="dim">
+              <div class="dname">Surfaces</div>
+              <div class="dtokens">
+                --el-surface · -surface-soft · -muted · -border{,-soft,-strong}
+              </div>
+            </div>
+            <div class="dim">
+              <div class="dname">Tints</div>
+              <div class="dtokens">--el-tint-{peach,rose,mint,lavender,sky,yellow}</div>
+            </div>
+            <div class="dim">
+              <div class="dname">Semantic + types</div>
+              <div class="dtokens">--el-{danger,success,warning,info} · --el-type-*</div>
+            </div>
+            <div class="dim">
+              <div class="dname">Registered</div>
+              <div class="dtokens" style="display: flex; gap: 6px; flex-wrap: wrap">
+                <span class="pill pill-success">notion</span
+                ><span class="pill pill-neutral">ocean</span
+                ><span class="pill pill-neutral">forest</span
+                ><span class="pill pill-neutral">mono</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="contract-note">
+          <b>Runtime contract</b> — both axes resolve on <code>&lt;html&gt;</code>:
+          <code>data-display-style</code> flips the shape tokens (Tier-2),
+          <code>data-palette</code> flips the <code>--el-*</code> element tokens (Tier-3).
+          Components reference <code>--el-*</code>
+          and the semantic shape tokens ONLY, so neither axis touches component code — exactly the
+          existing two-tier swap. The wizard writes both attributes; the registry (7.3.32) lists the
+          styles + palettes the gallery / palette steps render.
+        </div>
+      </div>
+      <div class="caption">
+        <b>Feeds 7.3.32</b> — this panel IS the style schema: the dimensions a style controls (left)
+        and a palette controls (right), each mapped to the exact token roles in
+        <code>app/globals.css</code>, plus the registry of what's shipped vs. "Soon". Grounded in
+        the SHIPPED two-axis architecture, not the frozen 10-axis prose (the rung-2 reconciliation).
+      </div>
+    </div>
+
+    <!-- ════════════ E9 — PERSISTENT "Go to plan phase" EXIT ════════════ -->
+    <div class="panel-label">
+      E9 · The persistent "Go to plan phase" exit — always present once the direction is settled
+      (workflow.html Step 6)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="frame-head">
+          <a class="brand"
+            ><span class="tile"
+              ><svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                /></svg></span
+            >Motir</a
+          >
+          <span class="mono">New project · pre-plan</span>
+          <div class="sp"></div>
+          <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
+        </div>
+        <div class="exit-demo">
+          <div style="display: flex; gap: 14px; align-items: center">
+            <div class="snode" style="flex: 1; max-width: 200px">
+              <div style="display: flex; gap: 9px; align-items: center">
+                <span class="stile sky" style="width: 26px; height: 26px"
+                  ><svg
+                    class="ic-sm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                ></span>
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 700">Discover</div>
+                  <div class="mono" style="font-size: 9px">Done</div>
+                </div>
+              </div>
+            </div>
+            <div class="snode" style="flex: 1; max-width: 200px">
+              <div style="display: flex; gap: 9px; align-items: center">
+                <span class="stile lav" style="width: 26px; height: 26px"
+                  ><svg
+                    class="ic-sm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                ></span>
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 700">Shape</div>
+                  <div class="mono" style="font-size: 9px">Done</div>
+                </div>
+              </div>
+            </div>
+            <div class="snode" style="flex: 1; max-width: 200px">
+              <div style="display: flex; gap: 9px; align-items: center">
+                <span class="stile mint" style="width: 26px; height: 26px"
+                  ><svg
+                    class="ic-sm"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                ></span>
+                <div>
+                  <div style="font-size: 12.5px; font-weight: 700">Validate</div>
+                  <div class="mono" style="font-size: 9px">Done</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- the persistent exit bar -->
+          <div class="exit-bar">
+            <div class="summary">
+              <span class="ck"
+                ><svg
+                  class="ic-sm cmk"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Discover · Shape · Validate</span
+              >
+              <span style="color: var(--el-border-strong)">·</span>
+              <span class="ck"
+                ><svg
+                  class="ic-sm cmk"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Design set — Soft × Notion · Web</span
+              >
+            </div>
+            <div class="sp"></div>
+            <span style="font-size: 11.5px; color: var(--el-text-muted)"
+              >You can keep refining, or…</span
+            >
+            <button class="btn btn-primary">
+              Go to plan phase
+              <svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <b>Persistent &amp; user-driven</b> — once the direction is settled the "Go to plan phase"
+        bar is always present (pinned to the canvas), so the user exits when THEY decide — no
+        criteria, no auto-progression (workflow.html Step 6). It carries a readiness
+        <b>summary</b> (stages done + design chosen) so the hand-off is informed. Before the stages
+        are done the bar is present but the CTA is disabled with "Finish Validate to continue".
+      </div>
+    </div>
+
+    <!-- ════════════ E10 — DEGRADED "AI planning not configured" ════════════ -->
+    <div class="panel-label">
+      E10 · Degraded state — "AI planning not configured" + the manual fallback (self-host /
+      no-provider)
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="frame-head">
+          <a class="brand"
+            ><span class="tile"
+              ><svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+                /></svg></span
+            >Motir</a
+          >
+          <span class="mono">New project</span>
+          <div class="sp"></div>
+          <span class="pill pill-warning"
+            ><svg
+              class="ic-sm"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 9v4M12 17h.01" />
+              <path
+                d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+              /></svg
+            >AI offline</span
+          >
+        </div>
+        <div class="degraded">
+          <div class="degraded-card">
+            <span class="plug"
+              ><svg
+                class="ic-lg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22v-5M9 8V2M15 8V2M18 8v3a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" /></svg
+            ></span>
+            <h3>AI planning isn't configured</h3>
+            <p>
+              The planner runs on Motir Cloud. This install hasn't connected a Motir AI token yet,
+              so idea-to-plan generation is unavailable. Connect to turn it on — your idea is saved.
+            </p>
+            <div style="display: flex; gap: 9px; margin-top: 4px">
+              <button class="btn btn-primary">
+                <svg
+                  class="ic-sm"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 22v-5M9 8V2M15 8V2M18 8v3a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" /></svg
+                >Connect Motir AI
+              </button>
+              <button class="btn btn-secondary">Self-hosted? Learn more</button>
+            </div>
+            <div class="fallback">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="color: var(--el-text-faint); flex: none"
+              >
+                <path d="M3 3v18h18" />
+                <path d="M7 16h8M7 12h5M7 8h8" />
+              </svg>
+              <div>
+                <b>No AI? You can still build by hand.</b> Start an empty project and create epics,
+                stories, and work items yourself — the whole PM tool works without the planner.
+                <span class="xlink" style="margin-left: 2px">Start an empty project →</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">
+        <b>Degraded, never dead</b> — when AI planning isn't configured (self-host without a Motir
+        Cloud token, or a provider outage) the canvas is replaced by this state: the cause, the
+        <b>Connect Motir AI</b> primary (consistent with onboarding panel 6's connect-gate), and a
+        first-class <b>manual fallback</b> — the PM core stands alone without any AI (the open-core
+        promise), so "Start an empty project" is always offered. Yellow
+        <code>--el-tint-yellow</code> + plug glyph; the idea is preserved across connect.
+      </div>
+    </div>
+  </body>
+</html>
