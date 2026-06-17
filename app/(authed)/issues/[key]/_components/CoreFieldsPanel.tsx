@@ -519,9 +519,11 @@ export function CoreFieldsPanel({
       {/* Sprint (Subtask 2.4.14) — between Due date and Story points (the agile
           cluster; design/work-items/sprint-field.mock.html). Inline-editable via
           the SprintPicker (Backlog-first sentinel). HIDDEN for epics — they span
-          sprints (Jira-faithful). Backlog (no sprint) is muted-italic "Backlog",
-          not "None". The write goes through backlogService (the 4.1.4 assign
-          route), so this commits optimistically with no router.refresh. */}
+          sprints (Jira-faithful). No sprint → muted-italic "Backlog" for an
+          ACTIVE item, but "None" for a DONE/cancelled one (the backlog excludes
+          category 'done', so such an item is not "in the Backlog"). The write
+          goes through backlogService (the 4.1.4 assign route), so this commits
+          optimistically with no router.refresh. */}
       {eff.kind !== 'epic' ? (
         <FieldCard
           label={t('sprint')}
@@ -545,6 +547,12 @@ export function CoreFieldsPanel({
                 <span className="text-(--el-text-muted) italic">({t('sprintCompleted')})</span>
               ) : null}
             </span>
+          ) : statusMeta?.category === 'done' ? (
+            // A done / cancelled item is EXCLUDED from the backlog
+            // (backlogService.backlogExcludedStatusKeys → every category 'done'
+            // status), so it is not "in the Backlog" even with no sprint — show
+            // the neutral empty value, not a contradictory "Backlog".
+            muted(t('none'))
           ) : (
             muted(t('backlog'))
           )}

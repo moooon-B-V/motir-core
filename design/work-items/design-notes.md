@@ -3054,9 +3054,13 @@ basis for the state-gate decision below.
   permitted). Drawn here for a story.
 - **Value line** — in a sprint: 16px `--el-text-secondary` **Goal** glyph (lucide
   `goal`, the Due/Estimate glyph grammar) + the sprint **name** plain
-  ("Sprint 7"). Backlog (`sprintId` null): muted-italic **"Backlog"** in
-  `--el-text-secondary` (the Parent card's `None` convention — NOT "None";
-  backlog is the real default home of an unscheduled item). A current value whose
+  ("Sprint 7"). No sprint (`sprintId` null) is **status-dependent** (the backlog
+  excludes `category === 'done'` items — `backlogService.backlogExcludedStatusKeys`):
+  an **active** item (category `todo`/`in_progress`) shows muted-italic
+  **"Backlog"** in `--el-text-secondary` (backlog is its real home — NOT the
+  generic "None"); a **done/cancelled** item shows muted-italic **"None"** (the
+  Parent card's empty convention) — it is excluded from the backlog, so calling it
+  "Backlog" would contradict where it actually sits. A current value whose
   sprint is **completed** stays shown with a muted `(completed)` mark in
   `--el-text-muted` (the archived-option precedent) — never colour alone.
 - **Editor** — the AssigneePicker-shaped **`Combobox`** (`components/ui/Combobox`,

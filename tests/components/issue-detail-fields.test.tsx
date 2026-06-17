@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -300,10 +300,20 @@ function renderWithSprints(item = makeItem()) {
 }
 
 describe('CoreFieldsPanel — Sprint field (2.4.14)', () => {
-  it('shows muted "Backlog" when the item is in no sprint', () => {
-    renderWithSprints(makeItem({ sprintId: null }));
+  it('shows muted "Backlog" when an ACTIVE item is in no sprint', () => {
+    renderWithSprints(makeItem({ sprintId: null, status: 'todo' }));
     expect(screen.getByText('Backlog')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit Sprint' })).toBeTruthy();
+  });
+
+  it('shows "None" (not "Backlog") for a DONE item with no sprint — done is excluded from the backlog', () => {
+    renderWithSprints(makeItem({ sprintId: null, status: 'done' }));
+    // The Parent card also renders "None", so scope to the Sprint field card
+    // (its "Edit Sprint" toggle → header row → Card content wrapper).
+    const sprintCard = screen.getByRole('button', { name: 'Edit Sprint' }).parentElement!
+      .parentElement!;
+    expect(within(sprintCard).getByText('None')).toBeTruthy();
+    expect(within(sprintCard).queryByText('Backlog')).toBeNull();
   });
 
   it('shows the sprint name when committed to a sprint', () => {
