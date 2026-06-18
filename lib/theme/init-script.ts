@@ -1,13 +1,14 @@
-import { STYLE_IDS } from './styles';
+import { STYLE_IDS, STYLE_DEFAULT_TYPE } from './styles';
 import { PALETTE_IDS } from './palettes';
+import { TYPE_IDS } from './typography';
 import { THEME_DEFAULTS, THEME_STORAGE_KEYS } from './types';
 
 /**
  * Inline `<script>` content that runs BEFORE React hydrates.
  *
  * Reads theme preferences from localStorage (or system preference for
- * pattern='system') and sets `data-theme` + `data-style` + `data-palette` on
- * `document.documentElement`. Without this, the user briefly sees the
+ * pattern='system') and sets `data-theme` + `data-style` + `data-palette` +
+ * `data-type` on `document.documentElement`. Without this, the user briefly sees the
  * server-rendered fallback theme before the client applies the real one
  * — a classic FOUC (Flash of Unstyled Content).
  *
@@ -32,6 +33,10 @@ export const themeInitScript = `(function(){try{
   var paletteIds=${JSON.stringify(PALETTE_IDS)};
   var palette=ls.getItem(${JSON.stringify(THEME_STORAGE_KEYS.palette)});
   if(paletteIds.indexOf(palette)===-1){palette=${JSON.stringify(THEME_DEFAULTS.palette)};}
+  var typeIds=${JSON.stringify(TYPE_IDS)};
+  var styleDefaultType=${JSON.stringify(STYLE_DEFAULT_TYPE)};
+  var type=ls.getItem(${JSON.stringify(THEME_STORAGE_KEYS.type)});
+  if(typeIds.indexOf(type)===-1){type=styleDefaultType[style]||${JSON.stringify(THEME_DEFAULTS.type)};}
   var resolved=pattern;
   if(pattern==='system'){
     resolved=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
@@ -39,4 +44,5 @@ export const themeInitScript = `(function(){try{
   d.setAttribute('data-theme',resolved);
   d.setAttribute('data-style',style);
   d.setAttribute('data-palette',palette);
+  d.setAttribute('data-type',type);
 }catch(e){}})();`;

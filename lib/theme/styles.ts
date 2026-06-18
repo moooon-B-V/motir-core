@@ -49,6 +49,8 @@
  * DESIGN.md.
  */
 
+import { DEFAULT_TYPE_ID, type TypeId } from './typography';
+
 /**
  * The feel-bearing axes a named style controls. A token-only swap reaches the
  * first few; the rest (surface treatment, motion, typography, component
@@ -92,7 +94,8 @@ export const STYLE_DIMENSIONS = [
   {
     key: 'typography',
     label: 'Typography',
-    description: 'Type pairing and treatment — editorial serif, geometric sans, mono accents.',
+    description:
+      "The style's DEFAULT type pairing — type is the independent `data-type` axis now (see ./typography.ts + `defaultTypeId`); this describes the pairing the style ships with: editorial serif, all-sans, or mono headlines.",
   },
   {
     key: 'components',
@@ -122,6 +125,14 @@ export interface StyleDefinition {
    * maps to exactly one.
    */
   designDoc: string;
+  /**
+   * The type pairing (`data-type`, see ./typography.ts) this style applies when
+   * the user has NOT pinned an explicit type — the style's curated default,
+   * overridable. Type is its own axis now; this is how a style keeps its
+   * out-of-the-box typographic feel (e.g. swiss → `motir-sans`, neo-brutalism /
+   * cybercore-y2k → `motir-mono`) without owning `--font-*` in its own block.
+   */
+  defaultTypeId: TypeId;
 }
 
 /**
@@ -136,6 +147,7 @@ export const STYLE_REGISTRY = {
     tagline: 'Thoughtful, warm, technical-but-not-cold, slightly editorial.',
     inspiration: "Notion's warm palette + Source Serif headlines over Inter body.",
     designDoc: 'docs/styles/warm-editorial.md',
+    defaultTypeId: 'motir',
     dimensions: {
       silhouette: 'Sober rectangles — 8px buttons, 12px cards. Restrained, document-like.',
       stroke: 'Hairline borders (1px warm-grey); structure drawn quietly, never heavy.',
@@ -154,6 +166,7 @@ export const STYLE_REGISTRY = {
     tagline: 'More energy — rounded, generous, gently animated.',
     inspiration: "Figma's pill-shape language (50px pills, roomy spacing).",
     designDoc: 'docs/styles/soft-playful.md',
+    defaultTypeId: 'motir',
     dimensions: {
       silhouette: 'Pill buttons (fully rounded) and large 24px card/input radii. Friendly, bubbly.',
       stroke: 'Same hairline borders as the base; identity comes from radius, not stroke weight.',
@@ -171,6 +184,7 @@ export const STYLE_REGISTRY = {
     tagline: 'International-typographic, structural, calm — flat, sharp, gridded.',
     inspiration: 'Swiss International Typographic Style — Müller-Brockmann grids, flat surfaces.',
     designDoc: 'docs/styles/swiss-minimal-flat.md',
+    defaultTypeId: 'motir-sans',
     dimensions: {
       silhouette:
         'Sharp near-square corners (2px) on every surface — hard right angles, structural.',
@@ -197,6 +211,7 @@ export const STYLE_REGISTRY = {
     inspiration:
       'Neo-brutalist web design — Gumroad / Figma-community brutalism: blocky, unpolished, loud.',
     designDoc: 'docs/styles/neo-brutalism.md',
+    defaultTypeId: 'motir-mono',
     dimensions: {
       silhouette:
         'Zero radius — hard 0px corners on EVERY surface (buttons, cards, inputs, modals, status chips). Blocky and uncompromising.',
@@ -223,6 +238,7 @@ export const STYLE_REGISTRY = {
     inspiration:
       "Apple's visionOS / macOS Big Sur 'frosted glass' material — backdrop-blur over depth.",
     designDoc: 'docs/styles/glassmorphism.md',
+    defaultTypeId: 'motir',
     dimensions: {
       silhouette:
         'Soft, rounded glass tiles — 12px buttons/inputs, 18px cards, 22px modals. Friendly, never sharp.',
@@ -249,6 +265,7 @@ export const STYLE_REGISTRY = {
     inspiration:
       'Y2K / cyberpunk HUDs — neon-on-dark terminals, Tron grids, glowing edges, monospace displays.',
     designDoc: 'docs/styles/cybercore-y2k.md',
+    defaultTypeId: 'motir-mono',
     dimensions: {
       silhouette:
         'Hard terminal-frame corners (sharp 2–4px) — chiseled HUD panels, not soft cards.',
@@ -289,4 +306,20 @@ export function isStyleId(value: unknown): value is StyleId {
 /** Resolve a (possibly stale / unknown) value to a valid style definition. */
 export function resolveStyle(value: unknown): StyleDefinition {
   return STYLE_REGISTRY[isStyleId(value) ? value : DEFAULT_STYLE_ID];
+}
+
+/**
+ * styleId → its `defaultTypeId` — the type pairing applied when the user has
+ * not pinned an explicit `data-type`. Baked into the FOUC init script (so the
+ * pre-hydration pass can resolve the right type for the active style) and used
+ * by the theme context's effective-type derivation. `resolveType` (the
+ * registry) supplies the ultimate fallback, so every value here is a real id.
+ */
+export const STYLE_DEFAULT_TYPE: Record<StyleId, TypeId> = Object.fromEntries(
+  STYLE_IDS.map((id) => [id, STYLE_REGISTRY[id].defaultTypeId]),
+) as Record<StyleId, TypeId>;
+
+/** The default type for a (possibly unknown) style value — the fallback chain. */
+export function defaultTypeForStyle(styleValue: unknown): TypeId {
+  return isStyleId(styleValue) ? STYLE_REGISTRY[styleValue].defaultTypeId : DEFAULT_TYPE_ID;
 }
