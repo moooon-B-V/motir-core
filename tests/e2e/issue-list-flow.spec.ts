@@ -158,6 +158,47 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
   await expect(page.getByRole('heading', { name: bug.title, level: 1 })).toBeVisible();
 });
 
+// ─────────────────────────── quick-view peek (8.8.2) ───────────────────────────
+
+// Bug 8.8.2 — the quick-view (peek) modal opens its frame INSTANTLY (a client
+// island driven by `?peek`, no server round-trip) and closing is a pure shallow
+// URL clear that stays on /issues with the list intact (no underlying-list
+// refetch / navigation away). Frame-before-content is pinned deterministically
+// at the unit level (issue-quick-view-controller.test.tsx — a pending fetch);
+// this is the real-stack open→stream→close round-trip on the primary surface.
+test('@smoke quick-view peek opens over the list and closes back to it (bug 8.8.2)', async ({
+  page,
+}) => {
+  const seed = await seedProject(page, 'e2e-issue-list-peek@example.com', 'PEK');
+  const epic = await mk(seed, 'epic', 'Peekable epic');
+
+  await page.goto('/issues');
+  const row = page.getByTestId(`issue-row-${epic.identifier}`);
+  await expect(row).toBeVisible();
+
+  // Open the peek: the modal frame appears, "Open full page" is live, and the
+  // item's fields stream in (client fetch of /api/issues/peek). The URL gains
+  // ?peek WITHOUT leaving /issues.
+  await row.getByRole('button', { name: `Quick view ${epic.identifier}: ${epic.title}` }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId('quick-view-open-full')).toHaveAttribute(
+    'href',
+    `/issues/${epic.identifier}`,
+  );
+  await expect(dialog.getByRole('heading', { name: epic.title })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`[?&]peek=${epic.identifier}`));
+  expect(new URL(page.url()).pathname).toBe('/issues');
+
+  // Close (Esc): dismisses immediately, clears ?peek, stays on /issues with the
+  // list still rendered (the close is a shallow URL change — no nav, no refetch).
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]peek=/);
+  expect(new URL(page.url()).pathname).toBe('/issues');
+  await expect(row).toBeVisible();
+});
+
 // ───────────────────────────── empty state ────────────────────────────────────
 
 test('@smoke a project with no work items renders the empty state', async ({ page }) => {

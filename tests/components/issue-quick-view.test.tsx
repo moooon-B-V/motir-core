@@ -25,8 +25,15 @@ import { QuickViewTrigger } from '@/app/(authed)/issues/_components/QuickViewTri
 import { QuickViewCloseButton } from '@/app/(authed)/issues/_components/QuickViewCloseButton';
 import { IssueQuickViewPanel } from '@/app/(authed)/issues/_components/IssueQuickViewPanel';
 
+// Opening / closing the peek updates the URL via SHALLOW routing (bug 8.8.2) —
+// `window.history.pushState`, NOT `router.push` — so it's a pure URL change that
+// never re-renders the host server page (no underlying-list refetch). So the
+// trigger/close assert against a pushState spy, not the router mock.
+const historyPush = vi.spyOn(window.history, 'pushState').mockImplementation(() => {});
+
 afterEach(() => {
   push.mockReset();
+  historyPush.mockClear();
   searchParamsString = '';
   cleanup();
 });
@@ -52,15 +59,17 @@ describe('QuickViewTrigger — opens the peek via ?peek', () => {
     searchParamsString = 'view=list&sort=key:asc';
     render(<QuickViewTrigger identifier="PROD-7" title="Email + password sign-in" />);
     fireEvent.click(screen.getByRole('button', { name: /Quick view PROD-7/ }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=key%3Aasc&peek=PROD-7', {
-      scroll: false,
-    });
+    expect(historyPush).toHaveBeenCalledWith(
+      null,
+      '',
+      '/issues?view=list&sort=key%3Aasc&peek=PROD-7',
+    );
   });
 
   it('adds ?peek to a bare /issues URL', () => {
     render(<QuickViewTrigger identifier="PROD-7" title="X" />);
     fireEvent.click(screen.getByRole('button', { name: /Quick view PROD-7/ }));
-    expect(push).toHaveBeenCalledWith('/issues?peek=PROD-7', { scroll: false });
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/issues?peek=PROD-7');
   });
 });
 
@@ -155,13 +164,13 @@ describe('QuickViewCloseButton — clears ?peek', () => {
     searchParamsString = 'view=list&peek=PROD-7';
     render(<QuickViewCloseButton variant="icon" />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list', { scroll: false });
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/issues?view=list');
   });
 
   it('navigates to the clean /issues when peek was the only param', () => {
     searchParamsString = 'peek=PROD-7';
     render(<QuickViewCloseButton variant="button" />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(push).toHaveBeenCalledWith('/issues', { scroll: false });
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/issues');
   });
 });

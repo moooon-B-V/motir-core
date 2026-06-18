@@ -25,9 +25,7 @@ import { InvalidFilterCallout } from './_components/InvalidFilterCallout';
 import { IssueListToolbar } from './_components/IssueListToolbar';
 import { IssueTreeSection } from './_components/IssueTreeSection';
 import { IssueTreeSkeleton } from './_components/IssueTreeSkeleton';
-import { IssueQuickView } from './_components/IssueQuickView';
-import { IssueQuickViewContent } from './_components/IssueQuickViewContent';
-import { IssueQuickViewPanel } from './_components/IssueQuickViewPanel';
+import { IssueQuickViewController } from './_components/IssueQuickViewController';
 
 // The project issue index (Story 2.5 · Subtask 2.5.3; view switcher in 2.5.8) —
 // the surface the sidebar "Issues" link opens. Server Component: resolves the
@@ -106,10 +104,6 @@ export default async function IssuesPage({
   if (advanced.state !== 'active') filter = { ...filter, advanced: null };
   const ast = advanced.state === 'active' ? advanced.ast : null;
   const page = parsePage(sp.page);
-  // The quick-view peek (Subtask 2.5.19) — `?peek=<key>` opens the work item in
-  // a modal over the list without leaving it. URL-driven so it's shareable /
-  // reload-safe; closing clears the param.
-  const peek = sp.peek?.trim() || null;
 
   // The filter facets (workflow statuses + workspace members) are needed by the
   // toolbar's filter bar up front, so they're read here (cheap) and passed to
@@ -230,23 +224,12 @@ export default async function IssuesPage({
             />
           </Suspense>
 
-          {/* Quick-view peek (Subtask 2.5.19) — the modal frame mounts immediately
-          when `?peek` is present (so it opens instantly); the item's fields
-          stream behind a <Suspense> whose fallback is the loading skeleton. The
-          read reuses getIssueDetail (its workspace gate + not-found path), so a
-          stale / cross-workspace key renders the not-found state, never a crash. */}
-          {peek ? (
-            <IssueQuickView peekKey={peek}>
-              <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
-                <IssueQuickViewContent
-                  projectId={ctx.projectId}
-                  ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
-                  peekKey={peek}
-                  members={members}
-                />
-              </Suspense>
-            </IssueQuickView>
-          ) : null}
+          {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
+          watches `?peek` and renders the modal frame + skeleton instantly, then
+          client-fetches the item from /api/issues/peek. Decoupled from this
+          page's server render, so opening/closing is a pure shallow URL change
+          with no underlying-list refetch. */}
+          <IssueQuickViewController />
         </div>
       </SavedFilterSessionProvider>
     </AdvancedFilterProvider>
