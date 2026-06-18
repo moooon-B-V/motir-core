@@ -34,7 +34,7 @@
       Component CSS references ONLY --el-* colour + element-semantic shape tokens.
 
       Screens: B landing · C hub (canvas roadmap + chat rail) · D/E/F full-screen
-      doc reviews (Understanding your idea / What we'll build / Checking the market —
+      doc reviews (Understanding your idea / What we'll build / Will people want it? —
       skippable + validate-early) · G full-page design showcase · H the canvas as
       the post-plan roadmap (epics, you-are-here) · I an epic expanded to its
       stories → subtasks · J plan states. Toggle dark to confirm parity.
@@ -5106,6 +5106,22 @@
       .jp { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-sans); font-size: 12.5px; font-weight: 600; color: var(--el-text); white-space: nowrap; }
       .jp-i { width: 30px; height: 30px; border-radius: var(--radius-control); display: inline-flex; align-items: center; justify-content: center; color: var(--el-text-strong); }
       .jp-sep { width: 20px; height: 2px; background: var(--el-border-strong); margin: 0 9px; border-radius: 2px; flex: none; }
+
+      /* landing workflow — descriptive blocks (a card per step) */
+      .stepblocks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+      .sblock { border: 1px solid var(--el-border); border-radius: var(--radius-card); background: var(--el-page-bg); padding: 15px; text-align: left; position: relative; }
+      .sblock .si { width: 34px; height: 34px; border-radius: var(--radius-control); display: inline-flex; align-items: center; justify-content: center; color: var(--el-text-strong); margin-bottom: 10px; }
+      .sblock .st { font-family: var(--font-sans); font-size: 13.5px; font-weight: 700; color: var(--el-text); display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+      .sblock .sd { font-family: var(--font-sans); font-size: 12px; color: var(--el-text-muted); margin-top: 5px; line-height: 1.45; }
+      .sblock .snum { font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--el-text-faint); position: absolute; top: 13px; right: 14px; }
+      .sopt { font-family: var(--font-mono); font-size: 8px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--el-text-faint); border: 1px dashed var(--el-border-strong); border-radius: var(--radius-badge); padding: 1px 6px; }
+
+
+      /* AI-driven chat: typing dots + the skip (cancel-and-advance) control */
+      .tdots { display: inline-flex; gap: 3px; align-items: center; }
+      .tdots i { width: 5px; height: 5px; border-radius: var(--radius-pill); background: var(--el-accent); display: inline-block; }
+      .skiprow { font-family: var(--font-sans); font-size: 11px; color: var(--el-text-muted); margin: 7px 0 0 2px; display: flex; align-items: center; gap: 6px; }
+      .skipbtn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--el-text); border: 1px solid var(--el-border-strong); border-radius: var(--radius-btn); background: var(--el-page-bg); padding: 3px 9px; cursor: pointer; }
     </style>
   </head>
 
@@ -5116,11 +5132,13 @@
         <p>
           The <b>canvas</b> (left) is one continuous <b>roadmap</b> — a view of the
           <b>pre-plan phase</b> + the <b>work-item tree</b>:
-          <b>Idea → Discovery → Vision → Feasibility → Validation → Plan → Epic 1 → Epic 2 → …</b>,
-          each epic expandable to its stories. It shows where you are; the <b>chat</b> is a compact
-          <b>right rail</b> that drives the active step. Skipping an optional step happens in the
-          <b>chat</b> (the generated docs are just shown). The <b>design</b> step renders the whole
-          page in the chosen style. Toggle dark for parity. →
+          <b
+            >your idea → understand it → decide what to build → check it's worth building → check
+            the market → plan → Epic 1 → Epic 2 → …</b
+          >, each epic expandable to its stories. It shows where you are; the <b>chat</b> is a
+          compact <b>right rail</b> that drives the active step. Skipping an optional step happens
+          in the <b>chat</b> (the generated docs are just shown). The <b>design</b> step renders the
+          whole page in the chosen style. Toggle dark for parity. →
         </p>
       </div>
       <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
@@ -5204,57 +5222,73 @@
             class="mono"
             style="text-align: center; color: var(--el-text-faint); margin-bottom: 16px"
           >
-            How it works · one continuous roadmap
+            Here's what happens next
           </div>
-          <div class="jpreview">
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-yellow)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
+          <div class="stepblocks">
+            <div class="sblock">
+              <span class="snum">01</span>
+              <span class="si" style="background: var(--el-tint-sky)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg
               ></span>
-              Your idea</span
-            >
-            <span class="jp-sep"></span>
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-sky)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg
+              <div class="st">Understanding your idea</div>
+              <div class="sd">
+                We chat to figure out what you're building and who it's for — and find the closest
+                existing products.
+              </div>
+            </div>
+            <div class="sblock">
+              <span class="snum">02</span>
+              <span class="si" style="background: var(--el-tint-lavender)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
               ></span>
-              Discovery</span
-            >
-            <span class="jp-sep"></span>
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-lavender)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
+              <div class="st">What we'll build</div>
+              <div class="sd">
+                We agree on what's in and out for the first version, and the key decisions behind
+                it.
+              </div>
+            </div>
+            <div class="sblock">
+              <span class="snum">03</span>
+              <span class="si" style="background: var(--el-tint-mint)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg
               ></span>
-              Vision</span
-            >
-            <span class="jp-sep"></span>
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-mint)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg
+              <div class="st">Is it worth building? <span class="sopt">optional</span></div>
+              <div class="sd">
+                A quick reality check — how big the market is and how hard it'll be to build.
+              </div>
+            </div>
+            <div class="sblock">
+              <span class="snum">04</span>
+              <span class="si" style="background: var(--el-tint-mint)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
               ></span>
-              Feasibility</span
-            >
-            <span class="jp-sep"></span>
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-mint)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+              <div class="st">Will people want it? <span class="sopt">optional</span></div>
+              <div class="sd">
+                We check real demand and the closest competitors — and can help you validate before
+                building.
+              </div>
+            </div>
+            <div class="sblock">
+              <span class="snum">05</span>
+              <span class="si" style="background: var(--el-tint-peach)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg
               ></span>
-              Validation</span
-            >
-            <span class="jp-sep"></span>
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-peach)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-palette" /></svg
+              <div class="st">Design your look <span class="sopt">web only</span></div>
+              <div class="sd">
+                Pick how your product looks and feels — or skip it and use Motir's default.
+              </div>
+            </div>
+            <div class="sblock">
+              <span class="snum">06</span>
+              <span class="si" style="background: var(--el-tint-rose)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
               ></span>
-              Design</span
-            >
-            <span class="jp-sep"></span>
-            <span class="jp"
-              ><span class="jp-i" style="background: var(--el-tint-rose)"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-network" /></svg
-              ></span>
-              Plan → epics</span
-            >
+              <div class="st">Your plan, then the build</div>
+              <div class="sd">
+                A complete to-do list Motir builds from — and tracks as a roadmap through every
+                epic.
+              </div>
+            </div>
           </div>
           <div
             style="
@@ -5262,11 +5296,11 @@
               font-family: var(--font-sans);
               font-size: 12px;
               color: var(--el-text-muted);
-              margin-top: 12px;
+              margin-top: 14px;
             "
           >
-            Chat through each step; review &amp; edit each doc; then a dispatchable backlog you ship
-            from. Feasibility &amp; Validation are optional.
+            Motir walks you through each step and writes up what it finds — you review and edit
+            before moving on.
           </div>
         </div>
       </div>
@@ -5353,7 +5387,7 @@
                   ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
                 ><span class="mono">Doc 3 · optional</span>
               </div>
-              <div class="etitle">Checking feasibility</div>
+              <div class="etitle">Is it worth building?</div>
               <div class="emeta"><span>market size · build risk</span></div>
               <div class="est-foot"><span class="jskip">can skip</span></div>
             </div>
@@ -5364,7 +5398,7 @@
                   ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg></span
                 ><span class="mono">Doc 4 · optional</span>
               </div>
-              <div class="etitle">Checking the market</div>
+              <div class="etitle">Will people want it?</div>
               <div class="emeta"><span>comparables · demand</span></div>
               <div class="est-foot"><span class="jskip">can skip</span></div>
             </div>
@@ -5412,27 +5446,33 @@
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  Discovery and Vision are ready — open either on the left to review.
+                  Got it — invoicing for freelancers. I've understood your idea and worked out what
+                  we'll build. Both are written up on the left — open either to review or edit.
                 </div>
               </div>
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  Next I can <b>check feasibility</b> (market size + build risk) and
-                  <b>check your idea against the market</b> (demand + competitors). Both are
-                  <b>optional</b> — want me to do them, or skip to design?
+                  Now I'm <b>checking whether it's worth building</b> — sizing the market and the
+                  build risk. I'll write it up and move on by myself.
                 </div>
               </div>
-              <div class="msg me">
-                <span class="av user" aria-hidden="true">YZ</span>
-                <div class="bubble">Do feasibility, skip the market one.</div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div>
+                  <div class="bubble" style="display: inline-flex; align-items: center; gap: 8px">
+                    <span class="tdots" aria-label="working"><i></i><i></i><i></i></span>
+                    working…
+                  </div>
+                  <div class="skiprow">
+                    This step is optional —
+                    <button class="skipbtn">
+                      Skip it
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div style="display: flex; gap: 8px; margin: 0 12px 8px">
-              <button class="btn btn-secondary btn-sm" style="flex: 1">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg> Skip to
-                design</button
-              ><button class="btn btn-primary btn-sm" style="flex: 1">Do both</button>
             </div>
             <div class="composer">
               <span
@@ -5461,9 +5501,10 @@
           </aside>
         </div>
         <div class="wz-note" style="margin: 0 18px 16px">
-          The roadmap on the left shows where you are (and later, your epics &amp; stories). The
-          chat drives — and is where you <b>skip</b> an optional step. Each ready doc opens full
-          screen to review.
+          The roadmap on the left shows where you are (and later, your epics &amp; stories).
+          <b>Motir drives the workflow</b> — it works through each step on its own and writes up
+          what it finds; nothing waits on a reply. You review each doc full screen, and can
+          <b>Skip</b> an optional step (it cancels that step and Motir moves on).
         </div>
       </div>
     </div>
@@ -5495,7 +5536,7 @@
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Discovery
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> About your idea
           </div>
           <h2 class="doc-title">Understanding your idea</h2>
           <p class="doc-sub">
@@ -5598,7 +5639,7 @@
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> Vision
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> The plan for v1
           </div>
           <h2 class="doc-title">What we’ll build</h2>
           <p class="doc-sub">
@@ -5706,7 +5747,7 @@
                   margin-top: 6px;
                 "
               >
-                You: “add payment reminders” → also updated <b>Feasibility</b>.
+                You: “add payment reminders” → also updated the <b>reality check</b>.
                 <span style="color: var(--el-link); font-weight: 600">View history · restore</span>
               </div>
             </div>
@@ -5724,9 +5765,9 @@
       </div>
     </div>
 
-    <!-- ════════════ F · DOC 3: Checking feasibility (optional — generated report, no skip here) ════════════ -->
+    <!-- ════════════ F · DOC 3: Is it worth building? (optional — generated report, no skip here) ════════════ -->
     <div class="panel-label">
-      F · Full-screen doc 3 of 4 — “Checking feasibility” (optional; the report is generated — no
+      F · Full-screen doc 3 of 4 — “Is it worth building?” (optional; the report is generated — no
       skip button on the doc)
     </div>
     <div class="panel">
@@ -5752,10 +5793,10 @@
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg> Feasibility ·
-            optional
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg> Optional · a quick
+            reality check
           </div>
-          <h2 class="doc-title">Checking feasibility</h2>
+          <h2 class="doc-title">Is it worth building?</h2>
           <p class="doc-sub">
             Whether it’s buildable and worth building — market size and the build risk — before any
             work is generated. You chose to run this from the chat.
@@ -5797,10 +5838,10 @@
       </div>
     </div>
 
-    <!-- ════════════ G · DOC 4: Checking the market (validation) — generated; validate-early offer; skip is in chat ════════════ -->
+    <!-- ════════════ G · DOC 4: Will people want it? (validation) — generated; validate-early offer; skip is in chat ════════════ -->
     <div class="panel-label">
-      G · Full-screen doc 4 of 4 — “Checking your idea against the market” (validation; generated
-      report + validate-demand-first)
+      G · Full-screen doc 4 of 4 — “Will people want it?” (validation; generated report +
+      validate-demand-first)
     </div>
     <div class="panel">
       <div class="surface">
@@ -5825,13 +5866,13 @@
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Validation ·
-            optional
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Optional ·
+            real demand
           </div>
-          <h2 class="doc-title">Checking your idea against the market</h2>
+          <h2 class="doc-title">Will people want it?</h2>
           <p class="doc-sub">
-            Demand and the closest competitors. (You can skip Validation from the chat before it
-            runs — here it’s already generated, so review it and decide your next move.)
+            Demand and the closest competitors. (You can skip this step from the chat before it runs
+            — here it’s already generated, so review it and decide your next move.)
           </p>
           <div
             class="notice is-info"
@@ -6145,17 +6186,16 @@
               ><span class="osep">·</span>
               <span class="ostep"
                 ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                Discovery</span
+                Understood</span
               ><span class="osep">·</span>
               <span class="ostep"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Vision</span
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Scoped</span
               ><span class="osep">·</span>
               <span class="ostep"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                Validation</span
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Checked</span
               ><span class="osep">·</span>
               <span class="ostep"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Plan</span
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Planned</span
               >
             </div>
           </div>
@@ -6280,8 +6320,8 @@
           <div class="mono sr-cap">
             Epic 2 · Build the product — stories → subtasks · every kind of work
             <span class="lineage" style="margin-left: 8px"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> traces to
-              Vision · Validation</span
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> from what we'll
+              build</span
             >
           </div>
           <div class="subroad">
@@ -6390,7 +6430,7 @@
             <div>
               <div class="notice-t">Generating your plan…</div>
               <div class="notice-d">
-                Discovery · Vision · Validation · Design — done. Drafting the work-item tree…
+                Understood your idea, scoped it, checked it, designed it — done. Drafting your plan…
               </div>
             </div>
           </div>

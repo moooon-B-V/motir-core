@@ -26,12 +26,14 @@ The whole flow is **one frame with two modes**:
    header (`Pre-plan · doc 1 of 4`, not a row of meaningless short words; the
    journey lives on the canvas).
 
-**There are FOUR pre-plan docs** — **Discovery · Vision · Feasibility ·
-Validation** — each **shown and editable** before you continue. **Feasibility and
-Validation are optional**, and **you skip them in the CHAT** (before they
-generate), never on the doc itself — a generated report has nothing to "skip".
-Validation can be **front-loaded** (validate demand first). The design step
-**styles its whole self** (below).
+**Labels are PLAIN LANGUAGE, never jargon** — a founder won't know "Feasibility"
+or "Validation". The four pre-plan docs read: **"Understanding your idea"** ·
+**"What we'll build"** · **"Is it worth building?"** (optional) · **"Will people
+want it?"** (optional). Each is **shown and editable** before you continue. The two
+optional ones are **skipped in the CHAT** (before they generate), never on the doc.
+Validation can be **front-loaded** (validate demand first). The agent **drives the
+flow** (proceeds on its own; Skip cancels). The design step **styles its whole
+self**. (All detailed below.)
 
 This is the fix for the prior drafts: the canvas-left + chat-right layout is kept
 (the chat never dominates), the progress is **on the canvas** (visual +
@@ -43,18 +45,18 @@ design step is the example **at full page scale**.
 
 ## The screens (in journey order)
 
-| #     | Screen                                    | What it is                                                                                                                                                  |
-| ----- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B** | **Public landing**                        | the idea prompt **+ the workflow preview** (Idea → Discovery → Vision → Feasibility → Validation → Design → Plan → epics).                                  |
-| **C** | **The hub**                               | the **canvas roadmap on the LEFT** (4 doc stations, where-you-are) + the **chat as a compact RIGHT rail**; the chat is where you **skip** an optional step. |
-| **D** | **Doc 1 · "Understanding your idea"**     | the **discovery** output full-screen + editable: what / who, the **mirror scan** (real comparables), inferred class + platform.                             |
-| **E** | **Doc 2 · "What we'll build"**            | the **vision** output: in / out of scope (v1) + core decisions (pinned vs delegated) + the **read → react → revise** diff/history inline.                   |
-| **F** | **Doc 3 · "Checking feasibility"** (opt.) | the **feasibility** output: market size + build risk + constraints. A generated report — view & continue (skipped earlier, in the chat).                    |
-| **G** | **Doc 4 · "Checking the market"** (opt.)  | the **validation** output: comparables + demand + the **validate-demand-first** offer. Generated report — no skip button on the doc.                        |
-| **H** | **Design step** (whole page styled)       | the **ENTIRE page** — header, pickers, buttons, list, footer — rendered live in the chosen **style × palette × type**. Change a pick → it all restyles.     |
-| **I** | **The canvas as the roadmap** (post-plan) | the road continues past Plan: **Epic 1 (done) → Epic 2 (you are here, progress meter) → Epic 3 → + more**.                                                  |
-| **J** | **An epic expanded**                      | the epic opens to its **stories → subtasks** (the work-item tree, same road language) with per-item status + work-type chips (Code / Design / Content / …). |
-| **K** | **Plan states**                           | the degraded **"AI planning not configured"** gate + loading / resume / error.                                                                              |
+| #     | Screen                                     | What it is                                                                                                                                                  |
+| ----- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B** | **Public landing**                         | the idea prompt **+ the workflow preview as descriptive BLOCKS** (a card per step — plain title + one-line description; optional / web-only tagged).        |
+| **C** | **The hub**                                | the **canvas roadmap on the LEFT** (4 doc stations, where-you-are) + the **chat as a compact RIGHT rail**; the chat is where you **skip** an optional step. |
+| **D** | **Doc 1 · "Understanding your idea"**      | the **discovery** output full-screen + editable: what / who, the **mirror scan** (real comparables), inferred class + platform.                             |
+| **E** | **Doc 2 · "What we'll build"**             | the **vision** output: in / out of scope (v1) + core decisions (pinned vs delegated) + the **read → react → revise** diff/history inline.                   |
+| **F** | **Doc 3 · "Is it worth building?"** (opt.) | the **feasibility** output: market size + build risk + constraints. A generated report — view & continue (skipped earlier, in the chat).                    |
+| **G** | **Doc 4 · "Will people want it?"** (opt.)  | the **validation** output: comparables + demand + the **validate-demand-first** offer. Generated report — no skip button on the doc.                        |
+| **H** | **Design step** (whole page styled)        | the **ENTIRE page** — header, pickers, buttons, list, footer — rendered live in the chosen **style × palette × type**. Change a pick → it all restyles.     |
+| **I** | **The canvas as the roadmap** (post-plan)  | the road continues past Plan: **Epic 1 (done) → Epic 2 (you are here, progress meter) → Epic 3 → + more**.                                                  |
+| **J** | **An epic expanded**                       | the epic opens to its **stories → subtasks** (the work-item tree, same road language) with per-item status + work-type chips (Code / Design / Content / …). |
+| **K** | **Plan states**                            | the degraded **"AI planning not configured"** gate + loading / resume / error.                                                                              |
 
 ---
 
@@ -112,15 +114,21 @@ running app does. The result composes into a `DESIGN.md` starter. The **v1 set**
 
 ---
 
-## ⚠️ Skipping an optional step is a CHAT decision (not a doc button)
+## ⚠️ Motir DRIVES the workflow; Skip CANCELS a step (it's an agent, not a form)
 
-**Feasibility and Validation are optional**, but you **skip them in the chat,
-before they generate** — the hub chat says e.g. _"Next I can check feasibility and
-check your idea against the market — both optional; do them, or skip to design?"_
-with **Skip / Do** buttons (screen C). A **generated report has nothing to
-"skip"**, so the Feasibility / Validation **docs carry NO skip button** — once
-shown, you review and continue. (The earlier draft wrongly put a skip on the
-generated doc.)
+**The AI agent runs the workflow on its own.** It does **not** ask _"shall I do the
+next step?"_ and wait — if the user never replied, nothing would happen. When it
+has what it needs, it **proceeds to the next step automatically** and **writes up
+what it finds**; the chat narrates progress (_"Now I'm checking whether it's worth
+building… I'll write it up and move on by myself"_) with a typing indicator, not a
+blocking question.
+
+For the two **optional** steps (the worth-building check and the market check),
+the chat shows a **Skip** control — pressing it **cancels that step and the agent
+advances directly** to the next. A **generated report has nothing to "skip"**, so
+the docs themselves carry **NO skip button** — once shown, you review and continue.
+(Earlier drafts wrongly put a skip on the generated doc, and wrongly made the agent
+wait for a yes/no.)
 
 The Validation doc (screen G) surfaces the **validate-demand-first** strategy
 (Yue, 2026-06-17): when demand is unproven and commercial, Motir offers to validate
