@@ -2,7 +2,7 @@
 
 > A new-face pairing registered in
 > [`lib/theme/typography.ts`](../../lib/theme/typography.ts); its
-> `html[data-type='editorial']` block lives in
+> `[data-type='editorial']` block lives in
 > [`app/globals.css`](../../app/globals.css). Unlike the base-face pairings
 > (`motir` / `motir-sans` / `motir-mono`), it **adds one new face — Fraunces** —
 > loaded via next/font in [`app/layout.tsx`](../../app/layout.tsx).
@@ -44,22 +44,19 @@ and only pays its weight once a user actually selects Editorial.
 ## Token mapping (the override block)
 
 ```css
-html[data-type='editorial'] {
-  --font-serif: var(--font-editorial-serif), 'Fraunces', Georgia, serif;
+[data-type='editorial'] {
+  --font-serif: var(--font-editorial-source), 'Fraunces', Georgia, serif;
 }
 ```
 
-Two deliberate choices in that one rule:
-
-- **`--font-editorial-serif`** is the variable `app/layout.tsx` binds to the
-  Fraunces next/font load — a _defined_ variable, so the headline genuinely
-  renders Fraunces (with `'Fraunces', Georgia, serif` as the graceful fallback
-  chain before the webfont swaps in).
-- **`html[data-type='editorial']`** (not a bare `[data-type='editorial']`) is a
-  specificity choice. next/font sets the base `--font-serif` via a generated
-  _class_ on `<html>` (specificity 0,1,0); a bare attribute block is also 0,1,0
-  and would tie on source order. The `html` element qualifier (0,1,1) guarantees
-  the re-point wins regardless of stylesheet order.
+The headline (serif) role re-points to **`--font-editorial-source`** — the
+variable `app/layout.tsx` binds to the Fraunces next/font load. This follows the
+type axis's `-source` indirection (7.3.53): next/font exposes each face as a
+`--font-*-source` variable, the `@theme` base composes its role token off it
+(`--font-serif: var(--font-serif-source, …)`), and a `[data-type]` block swaps
+which `-source` face a role wears. `'Fraunces', Georgia, serif` is the graceful
+fallback chain before the webfont swaps in. The pairing only ships Fraunces as a
+new face — body (Inter) and meta (JetBrains) keep the base roles.
 
 The block sets **only** `--font-*` role tokens — never a colour `--el-*`/
 `--color-*` or shape `--radius-*`/`--spacing-*`/`--shadow-*` token. That
