@@ -1510,6 +1510,17 @@
   --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
 }
 
+[data-type='editorial'] {
+  /* Editorial (7.3.55) — a characterful display serif over the humanist sans
+     body. Adds one new face: Fraunces, loaded in app/layout.tsx as
+     --font-editorial-source. Re-point the headline (serif) role at it; body
+     (Inter, --font-sans) and meta (JetBrains, --font-mono) keep the base roles,
+     so the change is a real, visible FACE swap — magazine, considered — not a
+     size tweak. ONLY --font-* role tokens here (the disjointness guard): no
+     colour (--el/--color) or shape (--radius/--spacing/--shadow) token. */
+  --font-serif: var(--font-editorial-source), 'Fraunces', Georgia, serif;
+}
+
 [data-type='mono-technical'] {
   /* Mono-Technical (7.3.56) — a precise, developer-grade pairing. IBM Plex Mono
      dresses BOTH the headline role (--font-serif) AND the meta/code role

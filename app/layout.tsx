@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import {
+  Fraunces,
   IBM_Plex_Mono,
   Inter,
   JetBrains_Mono,
@@ -71,6 +72,18 @@ const spaceGrotesk = Space_Grotesk({
   display: 'swap',
 });
 
+// The Editorial type pairing's display serif (Subtask 7.3.55) — Fraunces. Not a
+// base role: it feeds ONLY the `[data-type='editorial']` headline override in
+// globals.css via `--font-editorial-source`, re-pointing the `--font-serif` role
+// while body (Inter) and meta (JetBrains) keep the base roles. Loaded as the
+// variable font (optical sizing for display) so it only pays its weight when a
+// user picks Editorial.
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-editorial-source',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Motir',
   description: 'AI-native project management — open-source PM substrate.',
@@ -92,7 +105,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={localeDir[locale]}
-      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${ibmPlexMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${ibmPlexMono.variable} ${spaceGrotesk.variable} ${fraunces.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

@@ -21,14 +21,23 @@ import { themeInitScript } from '@/lib/theme/init-script';
 // colour + shape axes in globals.css.
 
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+const LAYOUT_TSX = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf8');
 
 describe('typography registry', () => {
-  it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Mono-Technical 7.3.56)', () => {
-    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono', 'grotesk', 'mono-technical']);
+  it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Editorial 7.3.55, Mono-Technical 7.3.56)', () => {
+    expect(TYPE_IDS).toEqual([
+      'motir',
+      'motir-sans',
+      'motir-mono',
+      'grotesk',
+      'editorial',
+      'mono-technical',
+    ]);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
     expect(TYPE_REGISTRY['motir-mono'].name).toBe('Motir Mono');
     expect(TYPE_REGISTRY['grotesk'].name).toBe('Grotesk');
+    expect(TYPE_REGISTRY['editorial'].name).toBe('Editorial');
     expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
   });
 
@@ -67,7 +76,8 @@ describe('isTypeId / resolveType', () => {
     expect(isTypeId('motir')).toBe(true);
     expect(isTypeId('motir-sans')).toBe(true);
     expect(isTypeId('grotesk')).toBe(true); // registered in 7.3.54
-    expect(isTypeId('editorial')).toBe(false); // a future pairing (7.3.55), not yet registered
+    expect(isTypeId('editorial')).toBe(true); // registered in 7.3.55
+    expect(isTypeId('serif-tech')).toBe(false); // not a registered pairing
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
     expect(isTypeId(undefined)).toBe(false);
@@ -113,6 +123,18 @@ describe('runtime contract in globals.css', () => {
       if (id === DEFAULT_TYPE_ID) continue; // the base needs no override block
       expect(GLOBALS_CSS).toContain(`[data-type='${id}']`);
     }
+  });
+
+  it('re-points the Editorial serif role at the LOADED Fraunces -source face', () => {
+    // The editorial block must drive --font-serif off `--font-editorial-source`,
+    // the variable next/font binds to Fraunces in app/layout.tsx — so the
+    // headline actually renders Fraunces (the -source indirection the type axis
+    // requires; a role pointed at an unbacked -source falls back to a system face).
+    expect(GLOBALS_CSS).toMatch(
+      /\[data-type='editorial'\][^{}]*\{[^}]*--font-serif:[^}]*--font-editorial-source/,
+    );
+    expect(LAYOUT_TSX).toContain("variable: '--font-editorial-source'");
+    expect(LAYOUT_TSX).toContain('Fraunces');
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

@@ -44,6 +44,8 @@
  * Each adds a real type-design decision and loads its own next/font face(s),
  * re-pointing a role in its own `[data-type]` block:
  *   - `grotesk` (7.3.54)        — Space Grotesk headlines over the Inter body.
+ *   - `editorial` (7.3.55)      — Fraunces display-serif headlines over the Inter
+ *     body; a magazine, considered pairing (one new face — Inter + JetBrains reused).
  *   - `mono-technical` (7.3.56) — IBM Plex Mono headlines + meta over an Inter
  *     body; a precise, developer-grade pairing (one new face — Inter reused).
  * Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block (its
@@ -102,6 +104,13 @@ export const TYPE_REGISTRY = {
       'Geometric neo-grotesque headlines over a clean sans body — tight, confident, product-y.',
     faces: 'Space Grotesk headlines · Inter body · JetBrains Mono meta.',
     designDoc: 'docs/typography/grotesk.md',
+  },
+  editorial: {
+    id: 'editorial',
+    name: 'Editorial',
+    tagline: 'A characterful display serif over a humanist sans — magazine, considered.',
+    faces: 'Fraunces display headlines · Inter body · JetBrains Mono meta.',
+    designDoc: 'docs/typography/editorial.md',
   },
   'mono-technical': {
     id: 'mono-technical',
