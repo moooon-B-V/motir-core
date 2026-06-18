@@ -29,7 +29,7 @@
  * So out-of-the-box looks are UNCHANGED; the new freedom is that type is now
  * independently overridable (e.g. Swiss shape + a serif pairing).
  *
- * ── v1 — the base faces (no new payload) ────────────────────────────────
+ * ── v1 — the base faces only (no new payload) ───────────────────────────
  * v1 registered three pairings built from the THREE already-loaded next/font
  * faces (Inter · Source Serif 4 · JetBrains Mono) — so they add ZERO font
  * payload and carry NO new-typeface design decision:
@@ -41,7 +41,9 @@
  * it.
  *
  * ── New-typeface pairings (Grotesk / Editorial / Mono-Technical, 7.3.54–56) ──
- * Each adds a real type-design decision and loads its own next/font face(s):
+ * Each adds a real type-design decision and loads its own next/font face(s),
+ * re-pointing a role in its own `[data-type]` block:
+ *   - `grotesk` (7.3.54)        — Space Grotesk headlines over the Inter body.
  *   - `mono-technical` (7.3.56) — IBM Plex Mono headlines + meta over an Inter
  *     body; a precise, developer-grade pairing (one new face — Inter reused).
  * Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block (its
@@ -92,6 +94,14 @@ export const TYPE_REGISTRY = {
     tagline: 'Monospace headlines over a sans body — technical, code-native.',
     faces: 'JetBrains Mono headlines · Inter body.',
     designDoc: 'docs/typography/motir-mono.md',
+  },
+  grotesk: {
+    id: 'grotesk',
+    name: 'Grotesk',
+    tagline:
+      'Geometric neo-grotesque headlines over a clean sans body — tight, confident, product-y.',
+    faces: 'Space Grotesk headlines · Inter body · JetBrains Mono meta.',
+    designDoc: 'docs/typography/grotesk.md',
   },
   'mono-technical': {
     id: 'mono-technical',

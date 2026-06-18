@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { WorkItemPriority } from '@prisma/client';
+import { Executor, WorkItemPriority, WorkItemType } from '@prisma/client';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { CreateWorkItemInput, WorkItemDto, WorkItemKindDto } from '@/lib/dto/workItems';
+import type {
+  CreateWorkItemInput,
+  ExecutorDto,
+  WorkItemDto,
+  WorkItemKindDto,
+  WorkItemTypeDto,
+} from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { normalizeIdentifier } from './workItemRef';
@@ -23,6 +29,17 @@ import { normalizeIdentifier } from './workItemRef';
 // THIS tool. (Epic is deliberately NOT an offered kind: epics are structural
 // plan scaffolding created by the planner/seed; the agent surface creates the
 // executable tree — stories, tasks, subtasks — and bugs.)
+//
+// Leaf-authoring fields (MOTIR-1081): besides `storyPoints`, this tool also
+// accepts `estimateMinutes`, `type`, and `executor` — the same leaf fields
+// `update_work_item` patches — so a subtask can be created FULLY-SPECIFIED in
+// one call (the MOTIR.md estimation gate satisfiable at create time, no
+// mandatory create-then-update round-trip). They map straight onto the
+// `CreateWorkItemInput` fields the service already validates: the leaf-only
+// `type`/`executor` rule (`TypeNotAllowedOnKindError` on an epic/story kind),
+// the type→executor seed (a `type` set without an explicit `executor` seeds it
+// from `defaultExecutorForType`), and the shared estimate validation all run in
+// the service UNCHANGED — this tool only widens the input surface.
 
 export const CREATE_WORK_ITEM_TOOL_NAME = 'create_work_item';
 
@@ -55,6 +72,35 @@ const inputSchema = {
         'time estimate). A non-negative number ≤ 9999.99 with at most two decimal ' +
         'places; omit (or null) to leave it unestimated.',
     ),
+  estimateMinutes: z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .optional()
+    .describe(
+      'Optional estimated minutes of work (the TIME estimate, distinct from ' +
+        'story points); omit (or null) to leave it unestimated.',
+    ),
+  type: z
+    .nativeEnum(WorkItemType)
+    .nullable()
+    .optional()
+    .describe(
+      'Optional work type (code, design, test, …) — leaf items (task / bug / ' +
+        'subtask) only; rejected on a story. Setting a type seeds the executor ' +
+        'from the type default unless an explicit executor is also given. ' +
+        'Omit (or null) to leave it untyped.',
+    ),
+  executor: z
+    .nativeEnum(Executor)
+    .nullable()
+    .optional()
+    .describe(
+      'Optional executor ("coding_agent" or "human") — leaf items only; ' +
+        'overrides the type default when supplied. Omit (or null) to take the ' +
+        'type default (or leave it unset when no type is given).',
+    ),
 };
 
 interface CreateWorkItemArgs {
@@ -65,6 +111,9 @@ interface CreateWorkItemArgs {
   descriptionMd?: string;
   priority?: WorkItemPriority;
   storyPoints?: number | null;
+  estimateMinutes?: number | null;
+  type?: WorkItemType | null;
+  executor?: Executor | null;
 }
 
 /** Compact human-readable summary of a freshly-created work item. */
@@ -109,6 +158,13 @@ export async function runCreateWorkItem(
       // explicit null pass through (the service validates + treats null as
       // unestimated); omitted leaves the column default.
       ...(args.storyPoints !== undefined ? { storyPoints: args.storyPoints } : {}),
+      // Leaf-authoring fields (MOTIR-1081): forward only when supplied so an
+      // omitted field still leaves the column default. The service owns the
+      // leaf-only `type`/`executor` rule + the type→executor seed + the
+      // estimate validation — this is a thin pass-through.
+      ...(args.estimateMinutes !== undefined ? { estimateMinutes: args.estimateMinutes } : {}),
+      ...(args.type !== undefined ? { type: args.type as WorkItemTypeDto | null } : {}),
+      ...(args.executor !== undefined ? { executor: args.executor as ExecutorDto | null } : {}),
     };
     const dto = await workItemsService.createWorkItem(input, ctx);
     return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);
@@ -128,8 +184,10 @@ export function registerCreateWorkItem(
       description:
         'Create a work item (story, task, bug, or subtask) in a project, optionally under a ' +
         'parent. The reporter is the token owner. Use kind "bug" under a story/epic to LOG A ' +
-        'BUG. Optionally set a story-point estimate. Honors the same kind-parent rules and ' +
-        'access checks as the UI.',
+        'BUG. Optionally set the leaf-authoring fields up front — story points, estimate ' +
+        '(minutes), work type, and executor — so a subtask can be created fully-specified in ' +
+        'one call. Honors the same kind-parent rules, leaf-only type/executor rule, and access ' +
+        'checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runCreateWorkItem(args, resolveContext(extra)),

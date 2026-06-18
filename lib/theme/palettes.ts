@@ -67,6 +67,15 @@ export const PALETTE_REGISTRY = {
     inspiration: "Notion's warm marketing palette — the product's house colours.",
     designDoc: 'docs/palettes/motir.md',
   },
+  cobalt: {
+    id: 'cobalt',
+    name: 'Cobalt',
+    tagline:
+      'Cool and institutional — slate-cool surfaces, a confident cobalt primary, cooled tints.',
+    inspiration:
+      "Coinbase's clean institutional blue + IBM's structured blue, on Radix Blue/Indigo/Slate scales.",
+    designDoc: 'docs/palettes/cobalt.md',
+  },
   graphite: {
     id: 'graphite',
     name: 'Graphite',
@@ -84,6 +93,15 @@ export const PALETTE_REGISTRY = {
     inspiration:
       'getdesign.md — Supabase (dark emerald) / Spotify (vibrant green) / MongoDB (spring green), on Radix green/jade ramps.',
     designDoc: 'docs/palettes/evergreen.md',
+  },
+  spectrum: {
+    id: 'spectrum',
+    name: 'Spectrum',
+    tagline:
+      'Vibrant and playful — crisp cool surfaces, a bright violet primary, a candy-bright multi-hue accent & tint set.',
+    inspiration:
+      "Figma's vibrant multi-colour brand + Airtable's colourful, friendly palette, on Radix Violet/Iris/Pink/Blue scales.",
+    designDoc: 'docs/palettes/spectrum.md',
   },
 } satisfies Record<string, PaletteDefinition>;
 

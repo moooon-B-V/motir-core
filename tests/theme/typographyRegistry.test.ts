@@ -23,13 +23,12 @@ import { themeInitScript } from '@/lib/theme/init-script';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('typography registry', () => {
-  it('registers the base-face pairings + the Mono-Technical new-face pairing', () => {
-    // v1 base-face pairings (zero new payload) plus the new-typeface pairings
-    // each later "Type: …" subtask adds: 7.3.56 → mono-technical.
-    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono', 'mono-technical']);
+  it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Mono-Technical 7.3.56)', () => {
+    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono', 'grotesk', 'mono-technical']);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
     expect(TYPE_REGISTRY['motir-mono'].name).toBe('Motir Mono');
+    expect(TYPE_REGISTRY['grotesk'].name).toBe('Grotesk');
     expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
   });
 
@@ -67,7 +66,8 @@ describe('isTypeId / resolveType', () => {
   it('accepts registered ids and rejects unknown values', () => {
     expect(isTypeId('motir')).toBe(true);
     expect(isTypeId('motir-sans')).toBe(true);
-    expect(isTypeId('grotesk')).toBe(false); // a future pairing, not yet registered
+    expect(isTypeId('grotesk')).toBe(true); // registered in 7.3.54
+    expect(isTypeId('editorial')).toBe(false); // a future pairing (7.3.55), not yet registered
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
     expect(isTypeId(undefined)).toBe(false);

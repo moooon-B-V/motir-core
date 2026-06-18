@@ -160,6 +160,12 @@ model User {
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
   // on both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   publicRequestVotes        PublicRequestVote[]
+  // Cross-device appearance preference (Story 7.3 · Subtask 7.3.59) — the 1:1
+  // row backing the 3-axis design system's per-user sync. Cascade: it's
+  // personal appearance substrate, it dies with the user (the
+  // notificationPreferences / apiTokens pattern). Modelled on both sides per
+  // the FK-`@relation` rule so `migrate dev` reports no drift.
+  appearancePreference      UserAppearancePreference? @relation("UserAppearancePreference")
 
   @@map("user")
 }
@@ -2113,6 +2119,33 @@ model NotificationPreference {
   // The resolver's per-user read (the settings-page matrix + the gate lookups).
   @@index([userId])
   @@map("notification_preference")
+}
+
+/// Cross-device appearance sync — the per-user persistence row for the 3-axis
+/// design system (Story 7.3 · Subtask 7.3.59). A cookie (how the language pref
+/// works) is per-device and won't sync; this DB-backed 1:1-with-User row does.
+/// Modelled on `NotificationPreference`'s absence-semantics: every column is
+/// NULLABLE and **NULL/absent = the documented DEFAULT** — an untouched user
+/// has no row at all and the resolver supplies the defaults. A single typed row
+/// (not a generic key-value `UserPreference`): the pref set is fixed + small,
+/// so typed columns are clearer and type-safe.
+model UserAppearancePreference {
+  // The user this preference belongs to — 1:1 (`@unique`), so a user has at
+  // most one row.
+  userId    String   @unique @map("user_id")
+  // The four appearance axes (the theme context's `pattern` / `styleId` /
+  // `paletteId` / `typeId`). All NULLABLE: a null column means "use the
+  // documented default for that axis" (resolved in the service — 7.3.60).
+  pattern   String?
+  styleId   String?  @map("style_id")
+  paletteId String?  @map("palette_id")
+  typeId    String?  @map("type_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation("UserAppearancePreference", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_appearance_preference")
 }
 
 /// The notification delivery channels (Story 5.7 · Subtask 5.7.6). A CLOSED set
