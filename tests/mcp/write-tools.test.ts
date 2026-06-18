@@ -168,6 +168,64 @@ describe('create_work_item', () => {
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.content)).toContain('INVALID_ESTIMATE');
   });
+
+  // Leaf-authoring fields on create (MOTIR-1081) — a subtask is born
+  // fully-specified (estimate + type + executor) in one call, no follow-up
+  // update_work_item patch.
+  it('creates a subtask fully-specified with estimate, type, and executor in one call', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent story' },
+      fx.ctx,
+    );
+    const res = await runCreateWorkItem(
+      {
+        projectKey: 'PROD',
+        kind: 'subtask',
+        title: 'Fully specified',
+        parentKey: story.identifier,
+        estimateMinutes: 90,
+        type: 'code',
+        executor: 'coding_agent',
+        storyPoints: 3,
+      },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    const dto = res.structuredContent as {
+      estimateMinutes: number | null;
+      type: string | null;
+      executor: string | null;
+      storyPoints: number | null;
+    };
+    expect(dto.estimateMinutes).toBe(90);
+    expect(dto.type).toBe('code');
+    expect(dto.executor).toBe('coding_agent');
+    expect(dto.storyPoints).toBe(3);
+  });
+
+  it('seeds the executor from the type default when type is set without an executor', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'task', title: 'Typed only', type: 'code' },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    const dto = res.structuredContent as { type: string | null; executor: string | null };
+    expect(dto.type).toBe('code');
+    // `code` defaults to a coding-agent executor (defaultExecutorForType).
+    expect(dto.executor).toBe('coding_agent');
+  });
+
+  it('rejects a type on a non-leaf kind (story) with the typed leaf-only error', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'story', title: 'No type on a story', type: 'code' },
+      fx.ctx,
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain('TYPE_NOT_ALLOWED_ON_KIND');
+  });
 });
 
 describe('transition_status', () => {
