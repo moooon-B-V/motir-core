@@ -314,6 +314,68 @@
   --active-scale: 0.97;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Swiss / Minimal-Flat — the International-Typographic style (7.3.33).
+   Structural, calm, gridded: hard right angles (sharp 2px corners), every
+   shadow removed (truly flat — depth is carried by hairline rules +
+   whitespace), a restrained neo-grotesque sans for headlines too (the serif
+   is swapped to the sans stack — a type token, not colour), tight/crisp
+   control density against generous card whitespace, and minimal motion (fast,
+   no press-scale). Overrides ONLY shape/feel tokens — never a colour token
+   (that is the data-palette axis; this style wears whatever palette is active).
+   The differentiator vs the planned Neo-Brutalism style: Swiss is REFINED and
+   calm (hairline borders, no shadow), not harsh (thick borders, hard offset
+   shadows). See docs/styles/swiss-minimal-flat.md. ───────────────────────── */
+[data-style='swiss-minimal-flat'] {
+  /* Silhouette — hard right angles. Sharp 2px on every surface; --radius-pill
+     is left untouched so genuinely-circular affordances (avatars, dots) stay
+     round. */
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 3px;
+  --radius-btn: 2px;
+  --radius-input: 2px;
+  --radius-card: 2px;
+  --radius-modal: 2px;
+  --radius-badge: 2px; /* rectangular status chips — NOT pills (the Swiss silhouette) */
+  --radius-control: 2px;
+  --radius-kbd: 2px;
+
+  /* Elevation — flat. Every surface drops its shadow; structure is drawn with
+     hairline borders + whitespace, never lift. */
+  --shadow-subtle: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
+  --shadow-modal: none;
+  --shadow-hero-mockup: none;
+
+  /* Typography — restrained neo-grotesque sans everywhere. Swap the serif
+     headline face to the sans stack so headings render in Inter, tight and
+     strong (a type token — the colour axis is untouched). */
+  --font-serif:
+    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Density — tight, gridded controls; generous card whitespace. */
+  --spacing-btn-x: 16px;
+  --spacing-btn-y: 9px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 11px;
+  --spacing-card-padding: 28px;
+  --spacing-control-x: 10px;
+  --spacing-control-y: 6px;
+  --height-control: 34px;
+  --height-input: 42px;
+
+  /* Motion — minimal and calm. Fast transitions, NO press-scale bounce. */
+  --transition-duration: 100ms;
+  --transition-fast: 80ms;
+  --transition-slow: 160ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 3 — Element tokens (--el-*)
    Components reference these, NEVER --color-* directly. This is the
