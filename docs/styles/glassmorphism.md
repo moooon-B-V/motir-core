@@ -78,9 +78,12 @@ The style-scoped rules below the token block are where the glass actually
 happens. Every colour is derived from the active palette — never a raw hue:
 
 - **The canvas** (`[data-style='glassmorphism'] body`): the palette's page bg
-  plus three soft corner washes built from `color-mix(in srgb, var(--color-…)
-var(--glass-wash), transparent)` (primary, accent, accent-teal). This gradient
-  is what the frosted panels blur — without it, the blur would be invisible.
+  plus three soft corner washes built from `color-mix(in srgb, var(--el-…)
+var(--glass-wash), transparent)` over the `--el-accent` / `--el-highlight` /
+  `--el-link` accent roles. Those are `--el-*` (the layer the `data-palette` axis
+  overrides), **not** Tier-0 `--color-*`, so the washes re-tint with the active
+  palette — orthogonality, not a hardcoded brand gradient. This gradient is what
+  the frosted panels blur — without it, the blur would be invisible.
 - **Frosted cards & popovers** (`[data-surface='card' | 'popover']`):
   `background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha),
 transparent)` + `backdrop-filter: blur(var(--glass-blur)) saturate(150%)` + a
