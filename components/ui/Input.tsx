@@ -54,6 +54,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       htmlFor={inputId}
     >
       <div
+        // `data-surface` lets a surface-material style (glassmorphism) give the
+        // control a translucent fill — see globals.css's material layer.
+        data-surface="input"
         className={cn(
           'flex h-(--height-input) w-full items-center gap-2 rounded-(--radius-input) border bg-(--el-page-bg)',
           'px-(--spacing-input-x)',
