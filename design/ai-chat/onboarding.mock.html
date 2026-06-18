@@ -5652,6 +5652,51 @@
       .vpipe .conn.v {
         align-self: flex-start;
       }
+
+      /* landing: 3 mandatory steps + a click-to-expand for the optional ones */
+      .step-exp {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 13px 16px;
+        margin-top: 13px;
+        cursor: pointer;
+        text-align: left;
+        font-family: var(--font-sans);
+      }
+      .step-exp .ex-chev {
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .step-exp b {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .step-exp .ex-sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .step-exp .ex-names {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        white-space: nowrap;
+      }
+      .opt-group {
+        margin-top: 12px;
+      }
+      .sblock.opt {
+        background: var(--el-surface);
+        border-style: dashed;
+      }
     </style>
   </head>
 
@@ -5756,7 +5801,7 @@
           </div>
           <div class="stepblocks">
             <div class="sblock">
-              <span class="snum">01</span>
+              <span class="snum">1</span>
               <span class="si" style="background: var(--el-tint-sky)"
                 ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg
               ></span>
@@ -5767,7 +5812,7 @@
               </div>
             </div>
             <div class="sblock">
-              <span class="snum">02</span>
+              <span class="snum">2</span>
               <span class="si" style="background: var(--el-tint-lavender)"
                 ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
               ></span>
@@ -5778,7 +5823,28 @@
               </div>
             </div>
             <div class="sblock">
-              <span class="snum">03</span>
+              <span class="snum">3</span>
+              <span class="si" style="background: var(--el-tint-rose)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <div class="st">Your plan, then the build</div>
+              <div class="sd">
+                A complete to-do list Motir builds from — and tracks as a roadmap through every
+                epic.
+              </div>
+            </div>
+          </div>
+          <button class="step-exp" aria-expanded="true">
+            <svg class="ic ex-chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+            <span
+              ><b>Optional steps along the way</b> &nbsp;<span class="ex-sub"
+                >— Motir adds these only when they fit your project</span
+              ></span
+            >
+            <span class="ex-names">reality check · market check · design</span>
+          </button>
+          <div class="stepblocks opt-group">
+            <div class="sblock opt">
               <span class="si" style="background: var(--el-tint-mint)"
                 ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg
               ></span>
@@ -5787,36 +5853,23 @@
                 A quick reality check — how big the market is and how hard it'll be to build.
               </div>
             </div>
-            <div class="sblock">
-              <span class="snum">04</span>
+            <div class="sblock opt">
               <span class="si" style="background: var(--el-tint-mint)"
                 ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
               ></span>
               <div class="st">Will people want it? <span class="sopt">optional</span></div>
               <div class="sd">
-                We check real demand and the closest competitors — and can help you validate before
-                building.
+                We check real demand and competitors — and can prove demand first with a marketing
+                site before you build.
               </div>
             </div>
-            <div class="sblock">
-              <span class="snum">05</span>
+            <div class="sblock opt">
               <span class="si" style="background: var(--el-tint-peach)"
                 ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg
               ></span>
               <div class="st">Design your look <span class="sopt">web only</span></div>
               <div class="sd">
                 Pick how your product looks and feels — or skip it and use Motir's default.
-              </div>
-            </div>
-            <div class="sblock">
-              <span class="snum">06</span>
-              <span class="si" style="background: var(--el-tint-rose)"
-                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
-              ></span>
-              <div class="st">Your plan, then the build</div>
-              <div class="sd">
-                A complete to-do list Motir builds from — and tracks as a roadmap through every
-                epic.
               </div>
             </div>
           </div>
