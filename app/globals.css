@@ -3,9 +3,13 @@
 /*
  * Motir design system — two-axis theme architecture.
  *
- * Axis 1 — COLOR (the palette axis)
+ * Axis 1 — COLOR (the palette axis — registry in lib/theme/palettes.ts)
  *   data-theme="light|dark"     — light/dark base
- *   (future) data-palette="..." — full --el-* token override (a named palette)
+ *   data-palette="<palette-id>" — a named palette: a per-palette --el-* token
+ *                                 override (Tier 3 below). v1 ships `motir`
+ *                                 (the Tier-3 default — no override block, like
+ *                                 the warm-editorial base style). More palettes
+ *                                 each add a `[data-palette='<id>']` block.
  *
  * Axis 2 — STYLE (the named-aesthetic axis — registry in lib/theme/styles.ts)
  *   data-style="<style-id>"
@@ -26,7 +30,10 @@
  *   Tier 1 — [data-theme="dark"] overrides color tokens
  *   Tier 2 — [data-style="..."] overrides shape/feel tokens (NOT colour)
  *   Tier 3 — :root --el-* element tokens reference Tier 0/1 vars;
- *            components reference --el-*, never --color-* directly
+ *            components reference --el-*, never --color-* directly.
+ *            A `[data-palette='<id>']` block overrides this --el-* layer to
+ *            re-skin the whole app (the palette axis) — ONLY colour, never a
+ *            shape/feel token (that is the data-style axis).
  *
  * Inspiration:
  *   - Notion's marketing palette (purple primary, pastel feature tints,
@@ -652,6 +659,27 @@
 [data-theme='dark'] {
   --el-sidebar-item-bg-hover: #222222;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AXIS 1 (COLOUR) — data-palette overrides (Subtask 7.3.48)
+   Registry: lib/theme/palettes.ts. A named palette re-skins the app by
+   OVERRIDING the Tier-3 --el-* layer above — and ONLY colour (--el-* /
+   --color-*), NEVER a shape/feel token (radius / spacing / shadow / sizing /
+   motion / type). That is the data-style axis's job; keeping the two disjoint
+   is what makes "style × palette" a product of two independent choices.
+
+   v1 ships exactly one palette — `motir` (Yue, 2026-06-17: "use Motir's colour
+   palette for the v1"). It IS the Tier-3 base, so — exactly like the
+   `warm-editorial` base style — it needs NO override block: setting
+   data-palette="motir" simply leaves the base --el-* tokens in force. Each
+   later "Palette: …" subtask ADDS its `[data-palette='<id>']` block here,
+   overriding --el-* (light + dark via [data-palette='<id>'][data-theme='dark']
+   where the palette diverges from the base flip), and authors its
+   docs/palettes/<id>.md — mirroring how the per-style subtasks add a
+   [data-style] block on the other axis.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (no [data-palette] override blocks yet — `motir` is the Tier-3 base) */
 
 /* ═══════════════════════════════════════════════════════════════════════
    Base body styles — references --el-* tokens (not --color-* directly).

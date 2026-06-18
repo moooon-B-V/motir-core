@@ -312,8 +312,9 @@ shadow depth.
   — these resolve to the right CSS variable across themes and display
   styles automatically.
 - Reference `--el-*` tokens in components rather than `--color-*`
-  directly. The `--el-*` layer is the abstraction that future palettes
-  override.
+  directly. The `--el-*` layer is the abstraction a named palette
+  (`data-palette`) overrides — see the palette registry in
+  [`lib/theme/palettes.ts`](../lib/theme/palettes.ts).
 - Use `font-serif` for headlines (h1, h2, h3 above 24px). Use
   `font-sans` for body. Use `font-mono` only for code, IDs, and
   intentional microtype.
@@ -426,8 +427,9 @@ When generating UI for Motir:
 - **For new component primitives**, define a small set of `--el-*`
   element tokens at the top of the component (or in `globals.css`'s
   Tier 3 block) and reference those rather than `--color-*` directly.
-  Future palettes will override `--el-*` to reskin without touching
-  components.
+  A named palette (`data-palette`) overrides `--el-*` to reskin without
+  touching components — so a new token automatically participates in every
+  palette (registry: `lib/theme/palettes.ts`; v1 ships `motir`).
 - **Test across every registered style** (`data-style="warm-editorial"`,
   `"soft-playful"`, `"swiss-minimal-flat"`, `"cybercore-y2k"`, …). If a
   component only looks right in one, it's hardcoding shape and should be
