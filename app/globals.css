@@ -910,6 +910,139 @@
 /* `motir` needs no block — it is the Tier-3 base above. Each later palette
    ADDS its [data-palette='<id>'] override here (light + dark companion). */
 
+/* ── Palette: Cobalt (data-palette="cobalt") — Subtask 7.3.49 ───────────────
+   A cool, calm, trustworthy INSTITUTIONAL-BLUE re-skin: slate-cool surfaces, a
+   confident cobalt primary/accent, a cool cyan highlight, cooled pastel tints.
+   Mood anchored in getdesign.md's Coinbase (clean institutional blue) / IBM
+   (structured blue) analysis; the actual light/dark ramps + UI-state steps are
+   built from Radix Colors (Blue / Indigo / Slate / Red / Jade / Amber) — the
+   accessibility-first 12-step scales designed for UI states.
+
+   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+   --el-* layer references (exactly how the [data-theme='dark'] block works), so
+   every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+   work-item type hues — re-skins coherently with no per-token churn. It sets
+   ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+   spacing / shadow / sizing / motion / type) — that is the independent
+   data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+   Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+   pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light and dark —
+   verified numerically + by rendered specimen, never eyeballed. See
+   docs/palettes/cobalt.md for the colour-role reference. */
+[data-palette='cobalt'] {
+  /* brand & primary — confident cobalt (Radix Indigo family) */
+  --color-primary: #3a57cf; /* cobalt AS text/icon on a surface (AA on white/surface) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #2b44ad;
+  --color-primary-fill: #3650c2; /* fill behind white labels (white-on AA) */
+
+  /* surfaces — white canvas over cool slate sections */
+  --color-background: #ffffff;
+  --color-foreground: #0f1b2e; /* cool navy ink */
+  --color-surface: #eef2f8; /* cool slate section background */
+  --color-surface-soft: #f7f9fc; /* quieter cool division */
+
+  /* text scale — cool slate hierarchy */
+  --color-ink: #0f1b2e;
+  --color-charcoal: #1e2c40; /* body emphasis / AA-safe text on tints */
+  --color-slate: #46556b; /* secondary text */
+  --color-steel: #586a82; /* tertiary / footer */
+  --color-stone: #8493a6; /* faint labels */
+  --color-muted: #eef2f8;
+  --color-muted-foreground: #5b6a7e; /* captions — AA on white + surfaces */
+
+  /* borders — cool slate hairlines */
+  --color-hairline: #d8e0ea;
+  --color-hairline-soft: #e6ebf2;
+  --color-hairline-strong: #bcc7d6;
+  --color-border: #d8e0ea;
+
+  /* accent secondary — a cool cyan highlight (replaces the warm brand pink) */
+  --color-accent: #0e93a8; /* cool cyan — decorative / epic & design type hue */
+  --color-accent-orange: #c2410c;
+  --color-accent-teal: #0e8f86;
+  --color-accent-green: #18874c; /* cooled green */
+
+  /* card tints — cooled pastel washes (6 distinct feature hues) */
+  --color-tint-peach: #fde7d4;
+  --color-tint-rose: #fbe0ea;
+  --color-tint-mint: #d6f0e2;
+  --color-tint-lavender: #e4e8fb; /* cool indigo tint */
+  --color-tint-sky: #dbeafb; /* cool blue tint — the most-used wash */
+  --color-tint-yellow: #fbf2d2;
+
+  /* semantic */
+  --color-success: #18874c;
+  --color-warning: #c2410c;
+  --color-destructive: #d3322f; /* white-on AA */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d63b8;
+
+  /* links — a cleaner sky-blue, distinct from the cobalt primary (AA on the
+     soft surface a hovered row paints, too) */
+  --color-link: #0d63b8;
+  --color-link-pressed: #0a4f95;
+
+  /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+     palette overrides it directly — one shade darker than the cool surface. */
+  --el-sidebar-item-bg-hover: #e4e9f1;
+}
+
+/* Cobalt — dark companion. A cool navy canvas (not the base near-black);
+   brightened cobalt/link hues so they read AS text on the dark surface, and a
+   darker accent fill so white labels still clear AA. */
+[data-palette='cobalt'][data-theme='dark'] {
+  --color-background: #0b111d; /* deep cool navy canvas */
+  --color-foreground: #e7edf6;
+  --color-surface: #131d2c;
+  --color-surface-soft: #0f1825;
+
+  --color-ink: #e7edf6;
+  --color-charcoal: #d3deec;
+  --color-slate: #a0b1c6;
+  --color-steel: #7e90a6;
+  --color-stone: #5f6f84;
+  --color-muted: #131d2c;
+  --color-muted-foreground: #94a4ba;
+
+  --color-hairline: #243245;
+  --color-hairline-soft: #1a2433;
+  --color-hairline-strong: #324258;
+  --color-border: #243245;
+
+  /* cobalt — brightened as text on navy; fill darkened for white-label AA */
+  --color-primary: #7e98f2;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #3a51b8;
+  --color-primary-fill: #4a63cf;
+
+  /* cooled tints, dimmed for the navy canvas */
+  --color-tint-peach: #2f2317;
+  --color-tint-rose: #301a25;
+  --color-tint-mint: #15281f;
+  --color-tint-lavender: #1c2238;
+  --color-tint-sky: #13243a;
+  --color-tint-yellow: #2b2814;
+
+  --color-accent: #2ec3d6; /* bright cool cyan highlight on dark */
+  --color-accent-orange: #f08a4b;
+  --color-accent-teal: #2db6a8;
+  --color-accent-green: #34c578;
+
+  --color-success: #34c578;
+  --color-warning: #f08a4b;
+  --color-destructive: #d83847; /* white-on AA on the navy canvas */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #6fb3ff;
+
+  --color-link: #6fb3ff;
+  --color-link-pressed: #93c5ff;
+
+  /* sidebar hover — one shade lighter than the dark cool surface */
+  --el-sidebar-item-bg-hover: #1c2840;
+}
+
 /* ── Palette: Graphite (data-palette="graphite") — Subtask 7.3.51 ───────────
    A stark, editorial, COOL-NEUTRAL MONOCHROME re-skin — the cool foil to
    Motir's warmth: true greyscale surfaces + ink on a clean Radix Slate scale,
