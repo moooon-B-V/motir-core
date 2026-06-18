@@ -377,6 +377,88 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Neo-Brutalism — the raw, punchy, utilitarian style (7.3.34).
+   The LOUD end of the angular family — where Swiss is refined and calm, this is
+   harsh on purpose: hard 0px corners on every surface, heavy 2px solid borders
+   doing the structural work, and HARD-OFFSET drop shadows with ZERO blur (a
+   solid block of shadow, not a soft lift). Tight utilitarian density, raw
+   monospace headlines, and snappy mechanical motion (near-instant, no
+   press-scale). Overrides ONLY shape/feel tokens — never a colour token (that is
+   the data-palette axis; this style wears whatever palette is active, so the
+   active palette's AA contrast is preserved by construction). The heavy-border
+   axis has no Tier-0 token (components draw a 1px Tailwind `border`), so it is
+   carried by the style-scoped component-variant block that FOLLOWS this token
+   block. See docs/styles/neo-brutalism.md. ─────────────────────────────────── */
+[data-style='neo-brutalism'] {
+  /* Silhouette — zero radius. Hard 0px corners on every surface; --radius-pill
+     is left untouched so genuinely-circular affordances (avatars, status dots,
+     the spinner) stay round. */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-btn: 0;
+  --radius-input: 0;
+  --radius-card: 0;
+  --radius-modal: 0;
+  --radius-badge: 0; /* rectangular (non-pill) status chips — the brutalist block */
+  --radius-control: 0;
+  --radius-kbd: 0;
+
+  /* Elevation — HARD-OFFSET shadows, zero blur. A solid offset block of shadow
+     (Xpx Ypx 0 0) instead of a soft diffuse lift; the chunky frame is the whole
+     point. The shadow colour is a literal near-ink (matching how the base
+     shadows already hard-code their rgba) — NOT a palette token, so the colour
+     axis stays untouched. */
+  --shadow-subtle: 2px 2px 0 0 rgba(15, 15, 15, 1);
+  --shadow-card: 4px 4px 0 0 rgba(15, 15, 15, 1);
+  --shadow-elevated: 6px 6px 0 0 rgba(15, 15, 15, 1);
+  --shadow-modal: 8px 8px 0 0 rgba(15, 15, 15, 1);
+  --shadow-hero-mockup: 12px 12px 0 0 rgba(15, 15, 15, 1);
+
+  /* Typography — raw monospace headlines. Re-point the editorial serif at the
+     MONO stack so every font-serif headline (page h1/h2, card & modal titles)
+     renders in JetBrains Mono — utilitarian and strong — over the Inter grotesk
+     body. A type token; the colour axis is untouched. */
+  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+  /* Density — tight, utilitarian. Chunky controls, compact card padding, no
+     wasted space. */
+  --spacing-btn-x: 16px;
+  --spacing-btn-y: 10px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 11px;
+  --spacing-card-padding: 20px;
+  --spacing-control-x: 10px;
+  --spacing-control-y: 6px;
+  --height-control: 36px;
+  --height-input: 44px;
+
+  /* Motion — snappy, mechanical. Near-instant transitions and NO press-scale;
+     the UI reacts, it does not ease. */
+  --transition-duration: 60ms;
+  --transition-fast: 40ms;
+  --transition-slow: 100ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+}
+
+/* Neo-Brutalism — component-variant override: HEAVY borders (the deliverable's
+   "component-variant overrides" axis). There is no Tier-0 border-WIDTH token —
+   every primitive (Button outline, Card, Input, Modal, Pill, Popover, …) draws
+   a 1px Tailwind `.border`. This style-scoped rule thickens that full box border
+   to a loud 2px on every framed surface WITHOUT touching a colour token or any
+   component file, so the heaviness is real but stays entirely inside the
+   neo-brutalism scope (no other style is affected). It is intentionally a
+   descendant rule, not a bare token block, so the disjoint-axis test (which
+   inspects token blocks) does not treat it as one — and it sets no colour
+   anyway, so the two axes stay disjoint regardless. */
+[data-style='neo-brutalism'] .border {
+  border-width: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Cybercore / Y2K — the neon-on-dark retro-tech style (7.3.36). Dark-first.
    The identity is GLOW + GRID + MONO: surfaces are lit by an outward halo
    (neon glow elevation) instead of a drop shadow, a faint tech grid textures

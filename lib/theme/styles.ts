@@ -179,6 +179,32 @@ export const STYLE_REGISTRY = {
         'Square buttons/inputs/cards/modals, rectangular (non-pill) status chips, flat hairline-ruled surfaces.',
     },
   },
+  'neo-brutalism': {
+    id: 'neo-brutalism',
+    name: 'Neo-Brutalism',
+    tagline: 'Raw, punchy, utilitarian — 0px corners, thick borders, hard-offset shadows.',
+    inspiration:
+      'Neo-brutalist web design — Gumroad / Figma-community brutalism: blocky, unpolished, loud.',
+    designDoc: 'docs/styles/neo-brutalism.md',
+    dimensions: {
+      silhouette:
+        'Zero radius — hard 0px corners on EVERY surface (buttons, cards, inputs, modals, status chips). Blocky and uncompromising.',
+      stroke:
+        'Heavy solid 2px outlines do the structural work — borders are LOUD, not hairline (the defining neo-brutalist move, applied via a style-scoped component-variant block).',
+      elevation:
+        'Hard-offset drop shadows with ZERO blur (e.g. 4px 4px 0 0) — a solid block of shadow, never a soft lift; the chunky frame, not diffusion.',
+      surface:
+        'Opaque, flat, untinted panels framed by the thick border + the hard shadow; no glass, no wash, no gradient.',
+      density:
+        'Tight, utilitarian controls (16×10 buttons, 36px control height) with compact 20px card padding — no wasted space.',
+      motion:
+        'Snappy and mechanical — near-instant 60ms transitions and NO press-scale; the UI reacts, it does not animate.',
+      typography:
+        'Raw monospace headlines — the editorial serif is re-pointed at the JetBrains Mono stack, against the Inter grotesk body.',
+      components:
+        'Square buttons/inputs/cards/modals, rectangular (non-pill) status chips, thick-bordered surfaces with hard-offset shadows.',
+    },
+  },
   'cybercore-y2k': {
     id: 'cybercore-y2k',
     name: 'Cybercore / Y2K',
