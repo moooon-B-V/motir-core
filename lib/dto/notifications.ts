@@ -91,16 +91,28 @@ export interface NotificationDTO {
 }
 
 /**
+ * Per-drawer-tab unread counts (bug 8.8.1). The bell badge reads the GLOBAL
+ * `unreadCount`; each Segmented tab (Direct · Watching) reads its OWN
+ * category-scoped count from here, so the Watching tab shows the watching
+ * unread total, not the global one. `unreadCount === unreadByCategory.direct +
+ * unreadByCategory.watching` (the enum is exactly these two categories).
+ */
+export type UnreadByCategoryDTO = Record<NotificationCategory, number>;
+
+/**
  * One cursor-paged window of a recipient's feed (finding #57 — never a
  * load-all). `unreadCount` is the cheap partial-index aggregate the bell badge
- * reads; `totalCount` is every notification matching the current filter (the
- * drawer's "N notifications"); `nextCursor` is the id to resume AFTER for the
- * next (older) page, or null on the last page.
+ * reads (the GLOBAL total across both tabs); `unreadByCategory` is the per-tab
+ * breakdown each Segmented tab's badge reads (bug 8.8.1); `totalCount` is every
+ * notification matching the current filter (the drawer's "N notifications");
+ * `nextCursor` is the id to resume AFTER for the next (older) page, or null on
+ * the last page.
  */
 export interface NotificationsPageDTO {
   notifications: NotificationDTO[];
   totalCount: number;
   unreadCount: number;
+  unreadByCategory: UnreadByCategoryDTO;
   nextCursor: string | null;
 }
 
@@ -111,15 +123,22 @@ export interface UnreadCountDTO {
 
 /**
  * The mark-read mutation result. Carries the freshly-updated row AND the new
- * `unreadCount` so the caller updates the badge + row from the RESPONSE, never
- * a tree re-fetch (the inline-edit-no-whole-tree-refresh contract).
+ * counts (the global `unreadCount` for the bell + the per-tab
+ * `unreadByCategory` for the drawer tabs) so the caller updates the badge +
+ * row from the RESPONSE, never a tree re-fetch (the
+ * inline-edit-no-whole-tree-refresh contract).
  */
 export interface MarkReadResultDTO {
   notification: NotificationDTO;
   unreadCount: number;
+  unreadByCategory: UnreadByCategoryDTO;
 }
 
-/** The mark-all-read result — the new `unreadCount` (zero) for the same reason. */
+/**
+ * The mark-all-read result — the new global `unreadCount` (zero) + the per-tab
+ * `unreadByCategory` breakdown (both zero) for the same reason.
+ */
 export interface MarkAllReadResultDTO {
   unreadCount: number;
+  unreadByCategory: UnreadByCategoryDTO;
 }

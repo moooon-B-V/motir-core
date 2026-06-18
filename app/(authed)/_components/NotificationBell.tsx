@@ -17,8 +17,10 @@ import { NotificationDrawer } from './NotificationDrawer';
 //
 // Two distinct numbers (the design's load-bearing seen-vs-read split):
 //   * `unreadCount` — the server's per-row unread aggregate (readAt IS NULL),
-//     polled cheaply (5.7.4 getUnreadCount). It drives the drawer's Direct-tab
-//     count and the accessible name ("Notifications, 3 unread").
+//     the GLOBAL total across both drawer tabs, polled cheaply (5.7.4
+//     getUnreadCount). It drives the badge + the accessible name
+//     ("Notifications, 3 unread") and seeds the drawer (which then shows its OWN
+//     per-tab counts from the feed read — bug 8.8.1).
 //   * the BADGE — "NEW since the drawer was last opened" (the Jira seen-count).
 //     Opening the drawer marks the current unread set seen (`seenBaseline =
 //     unreadCount`), so the badge clears; a later arrival re-shows it. The

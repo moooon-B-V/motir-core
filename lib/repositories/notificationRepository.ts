@@ -90,18 +90,26 @@ export const notificationRepository = {
   },
 
   /**
-   * How many UNREAD notifications a recipient holds — the bell-badge aggregate.
-   * Backed by the PARTIAL index `notification_unread_idx`
-   * (`WHERE read_at IS NULL`, raw SQL in the migration), so this is an
-   * index-only count over the small hot set, never a seq scan as the table
-   * grows unbounded per active user (finding #57). Read-only → `db` singleton.
+   * How many UNREAD notifications a recipient holds — omit `category` for the
+   * GLOBAL total (the bell-badge aggregate), or pass `category: 'direct' |
+   * 'watching'` for ONE drawer tab's unread count (the per-tab badge). Bug
+   * 8.8.1: the Watching tab's count must be category-scoped, not the global
+   * total — so this mirrors `countByRecipient`'s optional-`category` shape.
+   * Backed by the PARTIAL index `notification_unread_idx` (`WHERE read_at IS
+   * NULL`, raw SQL in the migration), so this is an index-only count over the
+   * small hot set, never a seq scan as the table grows unbounded per active
+   * user (finding #57). Read-only → `db` singleton.
    */
   async countUnreadByRecipient(
     recipientUserId: string,
+    options: { category?: Prisma.NotificationWhereInput['category'] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? db;
-    return client.notification.count({ where: { recipientUserId, readAt: null } });
+    const { category } = options;
+    return client.notification.count({
+      where: { recipientUserId, readAt: null, ...(category ? { category } : {}) },
+    });
   },
 
   /**

@@ -22,6 +22,7 @@ import type {
   MarkReadResultDTO,
   NotificationDTO,
   NotificationsPageDTO,
+  UnreadByCategoryDTO,
 } from '@/lib/dto/notifications';
 import { NotificationRow } from './NotificationRow';
 
@@ -29,9 +30,11 @@ import { NotificationRow } from './NotificationRow';
 // design/notifications/drawer.mock.html: a header-anchored panel rendered as the
 // bell's Popover content. Header = the "Notifications" title + the overflow
 // (three-dots) carrying "Mark all as read" + "Notification settings"; a
-// Direct / Watching Segmented (Watching DISABLED — the documented Story 5.4
-// seam); the cursor-paged feed (newest 20 + "Show more", finding #57) over the
-// 5.7.4 read/mark API; loading / empty / error states.
+// Direct / Watching Segmented (both tabs LIVE since bug 8.8.1 — Story 5.4
+// issue-watching shipped and 5.7.10 wired the `watching` fan-in, so the seam is
+// open); each tab carries its OWN category-scoped unread count; the cursor-paged
+// feed (newest 20 + "Show more", finding #57) over the 5.7.4 read/mark API;
+// loading / empty / error states.
 //
 // Inline-edit contract (the inline-edit-no-whole-tree-refresh memory): mark-read
 // and mark-all-read update the badge + rows from the mutation's OWN returned
@@ -62,6 +65,15 @@ export function NotificationDrawer({
   const { toast } = useToast();
 
   const [category, setCategory] = useState<NotificationCategory>('direct');
+  // Per-tab unread counts (bug 8.8.1) — each Segmented tab shows its OWN
+  // category-scoped count. Seeded from the bell's global count on the Direct tab
+  // (the no-flash initial, since the bell's count is direct-dominant until
+  // watching rows exist) and corrected by the first feed fetch (fires on mount).
+  // The bell still owns the GLOBAL total via onCountChange.
+  const [unreadByCat, setUnreadByCat] = useState<UnreadByCategoryDTO>(() => ({
+    direct: unreadCount,
+    watching: 0,
+  }));
   const [rows, setRows] = useState<NotificationDTO[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
@@ -107,7 +119,10 @@ export function NotificationDrawer({
         setNextCursor(page.nextCursor);
         setTotalCount(page.totalCount);
         setListError(false);
-        if (seq === countSeq.current) onCountChange(page.unreadCount);
+        if (seq === countSeq.current) {
+          setUnreadByCat(page.unreadByCategory);
+          onCountChange(page.unreadCount);
+        }
       } catch {
         if (mounted.current && !cursor) setListError(true);
       } finally {
@@ -132,7 +147,10 @@ export function NotificationDrawer({
         setNextCursor(page.nextCursor);
         setTotalCount(page.totalCount);
         setListError(false);
-        if (seq === countSeq.current) onCountChange(page.unreadCount);
+        if (seq === countSeq.current) {
+          setUnreadByCat(page.unreadByCategory);
+          onCountChange(page.unreadCount);
+        }
       })
       .catch(() => {
         if (!cancelled && mounted.current) setListError(true);
@@ -171,7 +189,10 @@ export function NotificationDrawer({
         });
         if (!res.ok) throw new Error(String(res.status));
         const result = (await res.json()) as MarkReadResultDTO;
-        if (seq === countSeq.current) onCountChange(result.unreadCount);
+        if (seq === countSeq.current) {
+          setUnreadByCat(result.unreadByCategory);
+          onCountChange(result.unreadCount);
+        }
       } catch {
         if (!mounted.current) return;
         setRows((cur) => cur?.map((r) => (r.id === n.id ? { ...r, readAt: null } : r)) ?? cur);
@@ -204,7 +225,10 @@ export function NotificationDrawer({
       const res = await fetch('/api/notifications/mark-all-read', { method: 'POST' });
       if (!res.ok) throw new Error(String(res.status));
       const result = (await res.json()) as MarkAllReadResultDTO;
-      if (seq === countSeq.current) onCountChange(result.unreadCount);
+      if (seq === countSeq.current) {
+        setUnreadByCat(result.unreadByCategory);
+        onCountChange(result.unreadCount);
+      }
     } catch {
       if (!mounted.current) return;
       toast({ variant: 'error', title: t('error.title') });
@@ -267,26 +291,18 @@ export function NotificationDrawer({
         </div>
       </div>
 
-      {/* Direct / Watching tabs — Watching is the disabled 5.4 seam */}
+      {/* Direct / Watching tabs — both live (bug 8.8.1); each carries its own
+          category-scoped unread count. */}
       <div className="border-b border-(--el-border-soft) px-3.5 py-2.5">
         <Segmented<NotificationCategory>
           label={t('filterLabel')}
           value={category}
           onChange={setCategory}
-          options={PAGE_TABS.map((tab) =>
-            tab === 'direct'
-              ? {
-                  value: tab,
-                  label: t('tabs.direct'),
-                  trailing: unreadCount > 0 ? capCount(unreadCount) : undefined,
-                }
-              : {
-                  value: tab,
-                  label: t('tabs.watching'),
-                  disabled: true,
-                  title: t('watchingDisabledTooltip'),
-                },
-          )}
+          options={PAGE_TABS.map((tab) => ({
+            value: tab,
+            label: tab === 'direct' ? t('tabs.direct') : t('tabs.watching'),
+            trailing: unreadByCat[tab] > 0 ? capCount(unreadByCat[tab]) : undefined,
+          }))}
         />
       </div>
 

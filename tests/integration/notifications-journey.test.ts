@@ -671,3 +671,84 @@ describe('a real `work-item/transitioned` event fans into the Watching feed (5.7
     expect(page.totalCount).toBe(1);
   });
 });
+
+// ── PER-TAB UNREAD COUNT (bug 8.8.1: the Watching tab's count is category-scoped)
+//
+// The drawer's Watching tab must show the WATCHING unread count, not the global
+// unread total. The bug was `notificationsService` computing the unread metric
+// with NO `{ category }` filter, so every tab showed the global total. The fix:
+// the repo's `countUnreadByRecipient` honours `{ category }`, and the read +
+// mutation DTOs carry an `unreadByCategory` breakdown (the bell still owns the
+// GLOBAL `unreadCount` = the sum). This drives the real watch → transition →
+// Watching-tab loop the card asks for, end to end.
+
+describe('the per-tab unread count is category-scoped (bug 8.8.1)', () => {
+  it('a watching event by another actor surfaces in the Watching tab with its OWN unread count, distinct from the global total', async () => {
+    const j = await makeJourney();
+    // Bo watches the issue; the owner (another actor) transitions it → one
+    // watching-category unread for Bo. The owner also mentions Bo in a comment →
+    // one direct-category unread. Two tabs, two distinct counts.
+    await watchersService.watch(j.issueId, j.boCtx);
+    const transition = await fanInTransition(j);
+    expect(transition.writtenUserIds).toEqual([j.bo.id]);
+    const comment = await mentionComment(j, j.bo);
+    const mention = await fanInComment(j, comment.id, [j.bo.id]);
+    expect(mention.writtenUserIds).toEqual([j.bo.id]);
+
+    // The feed read carries the per-tab breakdown; the global `unreadCount` is
+    // the SUM (the bell badge). The breakdown is independent of the page filter.
+    const all = await notificationsService.listNotifications({}, j.boCtx);
+    expect(all.unreadByCategory).toEqual({ direct: 1, watching: 1 });
+    expect(all.unreadCount).toBe(2);
+
+    const watching = await notificationsService.listNotifications(
+      { category: 'watching' },
+      j.boCtx,
+    );
+    expect(watching.totalCount).toBe(1);
+    expect(watching.notifications[0]!.category).toBe('watching');
+    // The Watching tab's badge reads `unreadByCategory.watching` (1) — NOT the
+    // global total (2). This is the regression the bug logged.
+    expect(watching.unreadByCategory).toEqual({ direct: 1, watching: 1 });
+    expect(watching.unreadByCategory.watching).toBe(1);
+  });
+
+  it('mark-read decrements only its own tab; mark-all zeroes both — both returned in the breakdown', async () => {
+    const j = await makeJourney();
+    await watchersService.watch(j.issueId, j.boCtx);
+    await fanInTransition(j);
+    const comment = await mentionComment(j, j.bo);
+    await fanInComment(j, comment.id, [j.bo.id]);
+
+    // Mark the single watching row read → watching drops to 0, direct untouched.
+    const watchingRow = (
+      await notificationsService.listNotifications({ category: 'watching' }, j.boCtx)
+    ).notifications[0]!;
+    const afterMark = await notificationsService.markRead(watchingRow.id, j.boCtx);
+    expect(afterMark.unreadByCategory).toEqual({ direct: 1, watching: 0 });
+    expect(afterMark.unreadCount).toBe(1);
+
+    // Mark all read → both tabs zero.
+    const afterAll = await notificationsService.markAllRead(j.boCtx);
+    expect(afterAll.unreadByCategory).toEqual({ direct: 0, watching: 0 });
+    expect(afterAll.unreadCount).toBe(0);
+  });
+
+  it('the repository `countUnreadByRecipient` honours the `{ category }` filter', async () => {
+    const j = await makeJourney();
+    await seedRow(j, j.bo.id, { dedupeKey: 'd1', category: 'direct' });
+    await seedRow(j, j.bo.id, { dedupeKey: 'd2', category: 'direct' });
+    await seedRow(j, j.bo.id, { dedupeKey: 'w1', category: 'watching' });
+    await seedRow(j, j.bo.id, { dedupeKey: 'wr', category: 'watching', readAt: new Date() });
+
+    expect(await notificationRepository.countUnreadByRecipient(j.bo.id)).toBe(3); // global
+    expect(
+      await notificationRepository.countUnreadByRecipient(j.bo.id, { category: 'direct' }),
+    ).toBe(2);
+    // Only the UNREAD watching row counts (the read one is excluded by the
+    // partial index), proving the filter composes with `readAt IS NULL`.
+    expect(
+      await notificationRepository.countUnreadByRecipient(j.bo.id, { category: 'watching' }),
+    ).toBe(1);
+  });
+});

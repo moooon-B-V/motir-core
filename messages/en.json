@@ -2685,7 +2685,6 @@
       "direct": "Direct",
       "watching": "Watching"
     },
-    "watchingDisabledTooltip": "Watching — available once issue-watching ships",
     "options": "Notification options",
     "markAllRead": "Mark all as read",
     "settings": "Notification settings",
