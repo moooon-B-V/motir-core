@@ -67,6 +67,15 @@ export const PALETTE_REGISTRY = {
     inspiration: "Notion's warm marketing palette — the product's house colours.",
     designDoc: 'docs/palettes/motir.md',
   },
+  spectrum: {
+    id: 'spectrum',
+    name: 'Spectrum',
+    tagline:
+      'Vibrant and playful — crisp cool surfaces, a bright violet primary, a candy-bright multi-hue accent & tint set.',
+    inspiration:
+      "Figma's vibrant multi-colour brand + Airtable's colourful, friendly palette, on Radix Violet/Iris/Pink/Blue scales.",
+    designDoc: 'docs/palettes/spectrum.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
