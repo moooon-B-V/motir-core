@@ -23,12 +23,13 @@ import { themeInitScript } from '@/lib/theme/init-script';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('typography registry', () => {
-  it('registers the v1 base trio + the Grotesk new-typeface pairing (7.3.54)', () => {
-    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono', 'grotesk']);
+  it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Mono-Technical 7.3.56)', () => {
+    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono', 'grotesk', 'mono-technical']);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
     expect(TYPE_REGISTRY['motir-mono'].name).toBe('Motir Mono');
     expect(TYPE_REGISTRY['grotesk'].name).toBe('Grotesk');
+    expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {

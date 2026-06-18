@@ -32,17 +32,22 @@
  * ── v1 — the base faces only (no new payload) ───────────────────────────
  * v1 registered three pairings built from the THREE already-loaded next/font
  * faces (Inter · Source Serif 4 · JetBrains Mono) — so they add ZERO font
- * payload and carry NO new-typeface design decision. The new-typeface pairings
- * (Grotesk 7.3.54 — added · Editorial 7.3.55 · Mono-Technical 7.3.56) ADD their
- * own face via next/font and re-point the headline role in a `[data-type]` block.
- * The base-face v1 trio:
+ * payload and carry NO new-typeface design decision:
  *   - `motir`      — the base: editorial serif headlines over a sans body.
  *   - `motir-sans` — all-sans (Inter headlines); reproduces the Swiss look.
  *   - `motir-mono` — mono headlines; reproduces the Neo-Brutalism / Cybercore look.
  * `motir` is the base — like the `motir` palette / `warm-editorial` style it
  * needs NO `[data-type]` override block; the base `--font-*` tokens already are
- * it. Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block
- * + its `docs/typography/<id>.md`.
+ * it.
+ *
+ * ── New-typeface pairings (Grotesk / Editorial / Mono-Technical, 7.3.54–56) ──
+ * Each adds a real type-design decision and loads its own next/font face(s),
+ * re-pointing a role in its own `[data-type]` block:
+ *   - `grotesk` (7.3.54)        — Space Grotesk headlines over the Inter body.
+ *   - `mono-technical` (7.3.56) — IBM Plex Mono headlines + meta over an Inter
+ *     body; a precise, developer-grade pairing (one new face — Inter reused).
+ * Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block (its
+ * face loaded in `app/layout.tsx`) + its `docs/typography/<id>.md`.
  */
 
 /** A registered, runtime-selectable type pairing. */
@@ -97,6 +102,14 @@ export const TYPE_REGISTRY = {
       'Geometric neo-grotesque headlines over a clean sans body — tight, confident, product-y.',
     faces: 'Space Grotesk headlines · Inter body · JetBrains Mono meta.',
     designDoc: 'docs/typography/grotesk.md',
+  },
+  'mono-technical': {
+    id: 'mono-technical',
+    name: 'Mono-Technical',
+    tagline:
+      'IBM Plex Mono headlines and meta over a neutral sans body — precise, developer-grade.',
+    faces: 'IBM Plex Mono headlines + meta/code · Inter body. (one new face — Inter is reused)',
+    designDoc: 'docs/typography/mono-technical.md',
   },
 } satisfies Record<string, TypographyDefinition>;
 
