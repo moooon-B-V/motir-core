@@ -5122,6 +5122,521 @@
       .tdots i { width: 5px; height: 5px; border-radius: var(--radius-pill); background: var(--el-accent); display: inline-block; }
       .skiprow { font-family: var(--font-sans); font-size: 11px; color: var(--el-text-muted); margin: 7px 0 0 2px; display: flex; align-items: center; gap: 6px; }
       .skipbtn { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--el-text); border: 1px solid var(--el-border-strong); border-radius: var(--radius-btn); background: var(--el-page-bg); padding: 3px 9px; cursor: pointer; }
+
+      /* ════════════════════════════════════════════════════════════════════
+         POLISHED DOC TEMPLATE (D/E/F/G) — a clean "report" look: a tinted hero
+         per doc, an at-a-glance summary, and structured fact cards / stats /
+         competitor cards. Plus richer canvas stations that SHOW captured content.
+         ════════════════════════════════════════════════════════════════════ */
+      .docpage {
+        max-width: 940px;
+      }
+      .doc-hero {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        padding: 22px 24px;
+        border-radius: var(--radius-card);
+        margin-bottom: 22px;
+      }
+      .dh-ico {
+        width: 46px;
+        height: 46px;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        box-shadow: var(--shadow-subtle);
+      }
+      .dh-eyebrow {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dh-opttag {
+        font-family: var(--font-mono);
+        font-size: 8px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+      }
+      .dh-title {
+        font-family: var(--font-serif);
+        font-size: 27px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 4px 0 5px;
+        line-height: 1.1;
+      }
+      .dh-sub {
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        max-width: 64ch;
+      }
+      .doc-summary {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        line-height: 1.45;
+        color: var(--el-text);
+        margin-bottom: 22px;
+      }
+      .doc-summary b {
+        color: var(--el-text-strong);
+      }
+      .factgrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .factgrid.one {
+        grid-template-columns: 1fr;
+      }
+      .factcard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 16px 18px;
+        background: var(--el-page-bg);
+        position: relative;
+      }
+      .fc-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin-bottom: 9px;
+      }
+      .fc-value {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .fc-pencil {
+        position: absolute;
+        top: 15px;
+        right: 16px;
+        color: var(--el-text-faint);
+        opacity: 0.65;
+      }
+      .fc-stat {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--el-text);
+        line-height: 1.1;
+      }
+      .fc-statsub {
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+      .doc-sec {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 24px 0 11px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .doc-sec .hint {
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+      }
+      .comprow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .compcard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 14px 15px;
+        background: var(--el-surface);
+      }
+      .cc-name {
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .cc-diff {
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+        line-height: 1.45;
+      }
+      .scope2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .scopecard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 16px 18px;
+      }
+      .scopecard h5 {
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0 0 11px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--el-text-faint);
+      }
+      .scopecard .row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        color: var(--el-text);
+        padding: 5px 0;
+        line-height: 1.4;
+      }
+      .scopecard .row svg {
+        flex: none;
+        margin-top: 2px;
+      }
+      .scopecard.out .row {
+        color: var(--el-text-secondary);
+      }
+      .decrow {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 11px 0;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .decrow + .decrow {
+        border-top: 1px solid var(--el-border);
+      }
+      .reco {
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+        background: var(--el-tint-lavender);
+        border-radius: var(--radius-card);
+        padding: 16px 18px;
+        margin-top: 8px;
+      }
+      .reco .ri {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .reco-t {
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .reco-d {
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        margin-top: 3px;
+        line-height: 1.45;
+      }
+
+      /* richer canvas stations — show captured content (screen C) */
+      .ecap {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 2px;
+      }
+      .ecap-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        line-height: 1.35;
+      }
+      .ecap-item svg {
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .ecap-item.pending {
+        color: var(--el-text-muted);
+      }
+      .ecap-item.pending svg {
+        color: var(--el-accent);
+      }
+      .ecap-item b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+
+      /* ════════════════════════════════════════════════════════════════════
+         READABLE DOCUMENT layout (D/E/F/G) — the docs are real documents the
+         user reads in detail. Clean editorial typography, not dashboard cards.
+         ════════════════════════════════════════════════════════════════════ */
+      .docpage {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .doc-meta {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin-bottom: 13px;
+      }
+      .doc-meta .mdot {
+        width: 9px;
+        height: 9px;
+        border-radius: var(--radius-pill);
+        flex: none;
+      }
+      .doc-meta .mopt {
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+        font-size: 8.5px;
+      }
+      .doc-h1 {
+        font-family: var(--font-serif);
+        font-size: 31px;
+        font-weight: 700;
+        color: var(--el-text);
+        line-height: 1.1;
+        margin: 0 0 12px;
+      }
+      .doc-lead {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .doc-lead b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .doc-edithint {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        padding: 11px 0 4px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 8px;
+      }
+      .prose h3 {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 28px 0 9px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .prose h3 .pen {
+        color: var(--el-text-faint);
+        opacity: 0;
+      }
+      .prose h3:hover .pen {
+        opacity: 0.7;
+      }
+      .prose p {
+        font-family: var(--font-sans);
+        font-size: 14.5px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+      }
+      .prose p strong,
+      .prose strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .prose ul {
+        margin: 0 0 12px;
+        padding: 0;
+        list-style: none;
+      }
+      .prose li {
+        font-family: var(--font-sans);
+        font-size: 14.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        padding: 4px 0 4px 24px;
+        position: relative;
+      }
+      .prose li::before {
+        content: "";
+        position: absolute;
+        left: 6px;
+        top: 13px;
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--el-accent-on-surface);
+      }
+      .prose li.no {
+        color: var(--el-text-muted);
+      }
+      .prose li.no::before {
+        background: none;
+        content: "×";
+        font-weight: 700;
+        color: var(--el-text-faint);
+        top: 4px;
+        left: 4px;
+        width: auto;
+        height: auto;
+      }
+      .prose li b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      /* competitor scan — a clean bordered list */
+      .scan {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        margin: 6px 0 12px;
+      }
+      .scan-row {
+        display: flex;
+        gap: 16px;
+        padding: 13px 16px;
+        align-items: baseline;
+      }
+      .scan-row + .scan-row {
+        border-top: 1px solid var(--el-border);
+      }
+      .scan-name {
+        font-family: var(--font-sans);
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--el-text);
+        width: 110px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .scan-diff {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      /* inline stat emphasis */
+      .prose .stat {
+        font-family: var(--font-serif);
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      /* recommendation callout (validation doc narrates validate-early) */
+      .callout {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        background: var(--el-tint-lavender);
+        border-radius: var(--radius-card);
+        padding: 18px 20px;
+        margin: 6px 0 12px;
+      }
+      .callout .ci {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .callout .ct {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin-bottom: 5px;
+      }
+      .callout .cd {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .callout .cd b {
+        color: var(--el-text);
+      }
+      .chiprow {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 4px 0 12px;
+      }
+      .doc-foot2 {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 32px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+      }
+      .doc-foot2 .grow {
+        flex: 1;
+      }
     </style>
   </head>
 
@@ -5306,10 +5821,10 @@
       </div>
     </div>
 
-    <!-- ════════════ C · THE HUB — canvas roadmap (left) + chat rail (right); skip is in the chat ════════════ -->
+    <!-- ════════════ C · THE HUB — captured content on the canvas + the validate-early BLOCKING ask in chat ════════════ -->
     <div class="panel-label">
-      C · The hub — canvas roadmap (left) + chat right rail. Optional steps are skipped from the
-      CHAT, not the doc.
+      C · The hub — the canvas SHOWS what's been captured; after the market check the agent asks the
+      validate-early question in the chat (with context) and BLOCKS until you choose (MOTIR-1064)
     </div>
     <div class="panel">
       <div class="surface">
@@ -5336,7 +5851,12 @@
                 ><span class="mono">Start</span>
               </div>
               <div class="etitle">Your idea</div>
-              <div class="emeta"><span>Invoicing for freelancers</span></div>
+              <div class="ecap">
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoicing for
+                  freelancers
+                </div>
+              </div>
               <div class="est-foot">
                 <span class="est-status done"
                   ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
@@ -5352,12 +5872,22 @@
                 ><span class="mono">Doc 1</span>
               </div>
               <div class="etitle">Understanding your idea</div>
-              <div class="emeta"><span>what · who · the mirror scan</span></div>
+              <div class="ecap">
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  <b>What:</b> send &amp; track invoices
+                </div>
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  <b>Who:</b> solo freelancers
+                </div>
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> 3 close
+                  competitors found
+                </div>
+              </div>
               <div class="est-foot">
-                <span class="est-status done"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  Reviewed</span
-                >
+                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
               </div>
             </div>
             <div class="conn is-done"><span class="line"></span></div>
@@ -5367,40 +5897,71 @@
                   ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg></span
                 ><span class="mono">Doc 2</span>
               </div>
-              <div class="etitle">What we’ll build</div>
-              <div class="emeta"><span>scope · core decisions</span></div>
+              <div class="etitle">What we'll build</div>
+              <div class="ecap">
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoices,
+                  reminders, clients
+                </div>
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Stripe
+                  payments
+                </div>
+                <div class="ecap-item pending">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> No teams
+                  / accounting (v1)
+                </div>
+              </div>
               <div class="est-foot">
-                <span class="est-status done"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  Reviewed</span
-                >
+                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
               </div>
             </div>
-            <div class="conn is-active"><span class="line"></span></div>
-            <div class="estation is-active">
-              <span class="yah"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Deciding
-                now</span
-              >
+            <div class="conn is-done"><span class="line"></span></div>
+            <div class="estation is-done">
               <div class="est-head">
                 <span class="etile" style="background: var(--el-tint-mint)"
                   ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
                 ><span class="mono">Doc 3 · optional</span>
               </div>
               <div class="etitle">Is it worth building?</div>
-              <div class="emeta"><span>market size · build risk</span></div>
-              <div class="est-foot"><span class="jskip">can skip</span></div>
+              <div class="ecap">
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> ~59M market ·
+                  proven
+                </div>
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Low build
+                  risk
+                </div>
+              </div>
+              <div class="est-foot">
+                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
+              </div>
             </div>
-            <div class="conn"><span class="line"></span></div>
-            <div class="estation">
+            <div class="conn is-active"><span class="line"></span></div>
+            <div class="estation is-active">
+              <span class="yah"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                Deciding</span
+              >
               <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-mint)"
+                <span class="etile" style="background: var(--el-tint-peach)"
                   ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg></span
                 ><span class="mono">Doc 4 · optional</span>
               </div>
               <div class="etitle">Will people want it?</div>
-              <div class="emeta"><span>comparables · demand</span></div>
-              <div class="est-foot"><span class="jskip">can skip</span></div>
+              <div class="ecap">
+                <div class="ecap-item">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Real demand
+                </div>
+                <div class="ecap-item pending">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-alert" /></svg> Unproven →
+                  validate first?
+                </div>
+              </div>
+              <div class="est-foot">
+                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
+              </div>
             </div>
             <div class="conn"><span class="line"></span></div>
             <div class="estation">
@@ -5410,11 +5971,10 @@
                 ><span class="mono">Then · web only</span>
               </div>
               <div class="etitle">Design the look</div>
-              <div class="emeta"><span>style · palette · type</span></div>
               <div class="est-foot">
                 <span class="est-status"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Up
-                  next</span
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock" /></svg> Waiting on
+                  you</span
                 >
               </div>
             </div>
@@ -5429,7 +5989,6 @@
                 ><span class="mono">Then</span>
               </div>
               <div class="etitle">Plan → your epics</div>
-              <div class="emeta"><span>the roadmap continues into Epic 1, Epic 2 …</span></div>
               <div class="est-foot">
                 <span class="est-status"
                   ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock" /></svg> After the
@@ -5446,33 +6005,47 @@
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  Got it — invoicing for freelancers. I've understood your idea and worked out what
-                  we'll build. Both are written up on the left — open either to review or edit.
+                  All four checks are written up on the left — open any to read in full.
                 </div>
               </div>
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  Now I'm <b>checking whether it's worth building</b> — sizing the market and the
-                  build risk. I'll write it up and move on by myself.
+                  Before we plan, one call to make. The market check (doc 4) found
+                  <b>real demand, but unproven</b> for your exact take.
                 </div>
               </div>
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
-                <div>
-                  <div class="bubble" style="display: inline-flex; align-items: center; gap: 8px">
-                    <span class="tdots" aria-label="working"><i></i><i></i><i></i></span>
-                    working…
-                  </div>
-                  <div class="skiprow">
-                    This step is optional —
-                    <button class="skipbtn">
-                      Skip it
-                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-                    </button>
-                  </div>
+                <div class="bubble">
+                  I'd <b>validate it first</b>: put up a landing page with a “notify me” waitlist
+                  <b>before</b> we build, so you collect real interest. The signups become your
+                  green light. Do that, or build straight away?
                 </div>
               </div>
+            </div>
+            <div style="margin: 0 12px 6px; display: flex; flex-direction: column; gap: 7px">
+              <button class="btn btn-primary btn-sm btn-block">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Validate
+                demand first
+              </button>
+              <button class="btn btn-secondary btn-sm btn-block">No — build it all</button>
+            </div>
+            <div
+              style="
+                margin: 0 12px 8px;
+                font-family: var(--font-sans);
+                font-size: 10.5px;
+                color: var(--el-text-muted);
+                display: flex;
+                align-items: center;
+                gap: 5px;
+              "
+            >
+              <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-text-faint)">
+                <use href="#i-lock" />
+              </svg>
+              This decides the build order — Motir waits here until you choose.
             </div>
             <div class="composer">
               <span
@@ -5482,7 +6055,7 @@
                   font-size: 12.5px;
                   color: var(--el-text-muted);
                 "
-                >Reply, or tell Motir what to change…</span
+                >Reply, or ask a question…</span
               ><span
                 class="send"
                 style="
@@ -5501,17 +6074,19 @@
           </aside>
         </div>
         <div class="wz-note" style="margin: 0 18px 16px">
-          The roadmap on the left shows where you are (and later, your epics &amp; stories).
-          <b>Motir drives the workflow</b> — it works through each step on its own and writes up
-          what it finds; nothing waits on a reply. You review each doc full screen, and can
-          <b>Skip</b> an optional step (it cancels that step and Motir moves on).
+          The roadmap on the left <b>shows what's been captured</b> (and later, your epics &amp;
+          stories). <b>Motir drives the workflow</b> — it works through each step on its own and
+          writes up what it finds. Most steps just flow; the <b>validate-first</b> question is a
+          real strategic call, so the agent <b>asks and waits</b> here (and on the validation page)
+          before planning. Optional steps (docs 3 &amp; 4) can be skipped from the chat before they
+          run.
         </div>
       </div>
     </div>
 
-    <!-- ════════════ D · DOC 1: Understanding your idea (discovery) ════════════ -->
+    <!-- ════════════ D · DOC 1 — Understanding your idea (readable document) ════════════ -->
     <div class="panel-label">
-      D · Full-screen doc 1 of 4 — “Understanding your idea” (discovery, shown &amp; editable)
+      D · Full-screen doc 1 of 4 — “Understanding your idea” (a readable document; edit inline)
     </div>
     <div class="panel">
       <div class="surface">
@@ -5534,72 +6109,101 @@
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
-        <div class="step-body">
-          <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> About your idea
+        <div class="step-body docpage">
+          <div class="doc-meta">
+            <span class="mdot" style="background: var(--color-info)"></span> Doc 1 of 4
           </div>
-          <h2 class="doc-title">Understanding your idea</h2>
-          <p class="doc-sub">
-            Here’s what Motir understands so far — edit anything inline, or go back to the chat to
-            talk it through.
+          <h1 class="doc-h1">Understanding your idea</h1>
+          <p class="doc-lead">
+            You're building a tool for <b>solo freelancers</b> to send invoices and see who has
+            actually paid — with automatic reminders for the clients who haven't.
           </p>
-          <div class="doc-sections">
-            <div class="field">
-              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg
-              ><span class="field-label">What you’re building</span
-              ><span class="field-val"
-                >A tool for freelancers to <b>send invoices</b> and
-                <b>track which clients have paid</b> — with reminders for overdue payments.</span
+          <div class="doc-edithint">
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> Everything here is
+            editable — change it inline, or tell the chat what's off.
+          </div>
+          <div class="prose">
+            <h3>
+              What you're building
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <p>
+              A focused invoicing tool. Freelancers create and send invoices, mark them paid or
+              overdue, and let Motir automatically chase late payers with reminders. The core
+              question it answers is the one freelancers actually ask out loud:
+              <strong>“who still owes me money?”</strong>
+            </p>
+            <h3>
+              Who it's for <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <p>
+              Solo freelancers running their own books — designers, writers, developers,
+              consultants. Not agencies, not finance teams. Keeping the audience narrow is what lets
+              the product stay simple.
+            </p>
+            <div class="chiprow">
+              <span class="pill pill-pinned"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned by
+                you</span
               >
             </div>
-            <div class="field">
-              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg
-              ><span class="field-label">Who it’s for</span
-              ><span class="field-val"
-                >Solo freelancers managing their own invoicing.<span class="chip-row"
-                  ><span class="pill pill-pinned"
-                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned by
-                    you</span
-                  ></span
-                ></span
-              >
+            <h3>
+              The problem we're solving
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <p>
+              Late payment is the number-one cash-flow pain for freelancers. Existing tools either
+              do too much (full accounting suites) or too little (free invoicing with no follow-up),
+              so chasing money still lands back on the freelancer. The opportunity is a focused tool
+              that makes “who's paid, who hasn't, and nudging the rest” effortless.
+            </p>
+            <h3>
+              Closest existing products
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <p>Motir researched the space — here are the three closest, and where you'd differ:</p>
+            <div class="scan">
+              <div class="scan-row">
+                <span class="scan-name">FreshBooks</span
+                ><span class="scan-diff"
+                  >Full accounting platform — powerful, but heavier and pricier than a solo
+                  freelancer needs.</span
+                >
+              </div>
+              <div class="scan-row">
+                <span class="scan-name">Wave</span
+                ><span class="scan-diff"
+                  >Free invoicing, but weak at chasing overdue payments — exactly your wedge.</span
+                >
+              </div>
+              <div class="scan-row">
+                <span class="scan-name">Bonsai</span
+                ><span class="scan-diff"
+                  >A broad freelancer suite; “who's paid me?” isn't its focus.</span
+                >
+              </div>
             </div>
-            <div class="field">
-              <span class="field-label">Closest existing products</span
-              ><span class="field-val"
-                >Motir researched the space — the closest, and where you’d differ:
-                <div class="mirror-grid">
-                  <div class="mirror-card">
-                    <div class="mc-n">FreshBooks</div>
-                    <div class="mc-d">Full accounting — heavier than a solo freelancer needs.</div>
-                  </div>
-                  <div class="mirror-card">
-                    <div class="mc-n">Wave</div>
-                    <div class="mc-d">Free invoicing, but payment-chasing is weak.</div>
-                  </div>
-                  <div class="mirror-card">
-                    <div class="mc-n">Bonsai</div>
-                    <div class="mc-d">Broad suite, not focused on “who paid”.</div>
-                  </div>
-                </div></span
+            <h3>
+              How we've read your project
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <p>
+              From the conversation, we're treating this as a small commercial product aimed at a
+              real market, delivered as a web app. Correct any of this in the chat and the rest of
+              the plan adjusts.
+            </p>
+            <div class="chiprow">
+              <span class="pill pill-accent"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Startup ·
+                for a market</span
               >
-            </div>
-            <div class="field">
-              <span class="field-label">How we’ve read it</span
-              ><span class="field-val"
-                ><span class="chip-row"
-                  ><span class="pill pill-accent"
-                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Startup
-                    · for a market</span
-                  ><span class="pill pill-neutral"
-                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-monitor" /></svg> Web ·
-                    inferred</span
-                  ></span
-                ></span
+              <span class="pill pill-neutral"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-monitor" /></svg> Web
+                app</span
               >
             </div>
           </div>
-          <div class="doc-foot">
+          <div class="doc-foot2">
             <button class="btn btn-secondary">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
             ><span class="grow"></span
@@ -5612,9 +6216,9 @@
       </div>
     </div>
 
-    <!-- ════════════ E · DOC 2: What we'll build (vision) + read→react→revise ════════════ -->
+    <!-- ════════════ E · DOC 2 — What we'll build (readable document) ════════════ -->
     <div class="panel-label">
-      E · Full-screen doc 2 of 4 — “What we’ll build” (vision) with the read→react→revise loop
+      E · Full-screen doc 2 of 4 — “What we'll build” (a readable document; read→react→revise)
     </div>
     <div class="panel">
       <div class="surface">
@@ -5637,122 +6241,100 @@
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
-        <div class="step-body">
-          <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> The plan for v1
+        <div class="step-body docpage">
+          <div class="doc-meta">
+            <span class="mdot" style="background: var(--color-primary)"></span> Doc 2 of 4
           </div>
-          <h2 class="doc-title">What we’ll build</h2>
-          <p class="doc-sub">
-            What’s in, what’s out for v1, and the decisions that define it. React in the chat and
-            Motir revises this — and anything it affects — together.
+          <h1 class="doc-h1">What we'll build</h1>
+          <p class="doc-lead">
+            A focused first version: <b>send invoices, track who's paid, and chase the rest</b> —
+            and nothing that gets in the way of that.
           </p>
-          <div class="scope-cols" style="margin-top: 24px">
-            <div class="scope-box">
-              <h5 style="color: var(--el-text)">
-                <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-success)">
-                  <use href="#i-check" />
-                </svg>
-                In scope (v1)
-              </h5>
-              <ul style="margin: 0; padding: 0">
-                <li>Send &amp; track invoices</li>
-                <li>Mark paid / overdue</li>
-                <li>
-                  <b style="color: var(--el-text)">Recurring invoices + payment reminders</b>
-                  <span class="pill pill-pinned" style="font-size: 9px; padding: 1px 6px">new</span>
-                </li>
-                <li>Client list</li>
-              </ul>
-            </div>
-            <div class="scope-box">
-              <h5 style="color: var(--el-text-muted)">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Out of
-                scope (v1)
-              </h5>
-              <ul style="margin: 0; padding: 0">
-                <li>Full accounting / tax</li>
-                <li>Multi-user / teams</li>
-                <li>Mobile app</li>
-              </ul>
-            </div>
+          <div class="doc-edithint">
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> React in the chat
+            and Motir revises this — and anything it affects — together.
           </div>
-          <div class="doc-sections" style="margin-top: 20px">
-            <div class="field">
-              <span class="field-label">Core decisions</span
-              ><span class="field-val"
-                ><div style="display: flex; flex-direction: column; gap: 9px">
-                  <span style="display: flex; align-items: center; gap: 9px"
-                    ><span class="pill pill-delegated"
-                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg>
-                      Delegated</span
-                    >
-                    Payments via Stripe (Motir’s pick)</span
-                  ><span style="display: flex; align-items: center; gap: 9px"
-                    ><span class="pill pill-pinned"
-                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
-                      Pinned</span
-                    >
-                    Solo-freelancer focus — no teams in v1</span
-                  >
-                </div></span
+          <div class="prose">
+            <h3>
+              In scope for v1
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <ul>
+              <li><b>Create &amp; send invoices</b> — a clean form, PDF, emailed to the client.</li>
+              <li><b>Track paid / overdue</b> — at a glance, who has paid and who hasn't.</li>
+              <li>
+                <b>Recurring invoices + automatic reminders</b> — Motir chases late payers for you.
+              </li>
+              <li><b>A simple client list</b> — the people you bill, in one place.</li>
+            </ul>
+            <h3>
+              Out of scope — for now
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <ul>
+              <li class="no">Full accounting &amp; tax</li>
+              <li class="no">Multiple users or teams</li>
+              <li class="no">A native mobile app</li>
+            </ul>
+            <p>
+              Leaving these out keeps v1 small enough to ship and focused on the one job that
+              matters.
+            </p>
+            <h3>
+              Key decisions
+              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+            </h3>
+            <p>
+              A few choices shape the build — the ones you've pinned, and the ones you've left to
+              Motir:
+            </p>
+            <div class="decrow">
+              <span class="pill pill-pinned"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned</span
               >
+              Solo-freelancer focus — no teams in the first version.
             </div>
-          </div>
-          <div
-            class="doc-chat-hint"
-            style="
-              background: var(--el-tint-mint);
-              border-color: transparent;
-              align-items: flex-start;
-            "
-          >
-            <svg
-              class="ic-sm"
-              viewBox="0 0 24 24"
-              style="color: var(--el-success); margin-top: 2px"
-            >
-              <use href="#i-git-compare" />
-            </svg>
-            <div style="flex: 1">
-              <div
-                style="
-                  font-family: var(--font-sans);
-                  font-size: 12.5px;
-                  font-weight: 700;
-                  color: var(--el-text);
-                "
+            <div class="decrow">
+              <span class="pill pill-delegated"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> Delegated</span
               >
-                Just revised from your chat
-              </div>
-              <div
-                style="
-                  font-family: var(--font-mono);
-                  font-size: 11.5px;
-                  line-height: 1.6;
-                  margin-top: 6px;
-                  color: var(--el-text-secondary);
-                "
+              Payments through Stripe — the standard, trusted choice.
+            </div>
+            <div class="decrow">
+              <span class="pill pill-delegated"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> Delegated</span
               >
-                <span style="text-decoration: line-through; color: #9b1c1c"
-                  >− Recurring invoices</span
-                ><br /><span style="color: #15724a"
-                  >+ Recurring invoices + automated payment reminders</span
+              Tech stack &amp; hosting — Motir decides at plan time.
+            </div>
+            <h3>
+              One thing we just changed
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-git-compare" /></svg>
+            </h3>
+            <div class="callout" style="background: var(--el-tint-mint)">
+              <span class="ci" style="background: var(--el-success)"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-git-compare" /></svg
+              ></span>
+              <div>
+                <div class="ct">Revised from your chat</div>
+                <div
+                  class="cd"
+                  style="font-family: var(--font-mono); font-size: 11.5px; margin: 4px 0"
                 >
-              </div>
-              <div
-                style="
-                  font-family: var(--font-sans);
-                  font-size: 11.5px;
-                  color: var(--el-text-secondary);
-                  margin-top: 6px;
-                "
-              >
-                You: “add payment reminders” → also updated the <b>reality check</b>.
-                <span style="color: var(--el-link); font-weight: 600">View history · restore</span>
+                  <span style="text-decoration: line-through; color: #9b1c1c"
+                    >− Recurring invoices</span
+                  ><br /><span style="color: #15724a"
+                    >+ Recurring invoices + automatic payment reminders</span
+                  >
+                </div>
+                <div class="cd">
+                  You said <b>“add payment reminders”</b> — so we updated this, and the reality
+                  check picked up a small new build dependency.
+                  <span style="color: var(--el-link); font-weight: 600">See history · undo</span>
+                </div>
               </div>
             </div>
           </div>
-          <div class="doc-foot">
+          <div class="doc-foot2">
             <button class="btn btn-secondary">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
             ><span class="grow"></span
@@ -5765,10 +6347,9 @@
       </div>
     </div>
 
-    <!-- ════════════ F · DOC 3: Is it worth building? (optional — generated report, no skip here) ════════════ -->
+    <!-- ════════════ F · DOC 3 — Is it worth building? (readable document) ════════════ -->
     <div class="panel-label">
-      F · Full-screen doc 3 of 4 — “Is it worth building?” (optional; the report is generated — no
-      skip button on the doc)
+      F · Full-screen doc 3 of 4 — “Is it worth building?” (a readable document; optional)
     </div>
     <div class="panel">
       <div class="surface">
@@ -5791,41 +6372,48 @@
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
-        <div class="step-body">
-          <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg> Optional · a quick
-            reality check
+        <div class="step-body docpage">
+          <div class="doc-meta">
+            <span class="mdot" style="background: var(--color-accent-green)"></span> Doc 3 of 4
+            <span class="mopt">optional</span>
           </div>
-          <h2 class="doc-title">Is it worth building?</h2>
-          <p class="doc-sub">
-            Whether it’s buildable and worth building — market size and the build risk — before any
-            work is generated. You chose to run this from the chat.
+          <h1 class="doc-h1">Is it worth building?</h1>
+          <p class="doc-lead">
+            Short answer: <b>yes</b> — a large, proven market, and nothing here is hard to build.
           </p>
-          <div class="doc-sections">
-            <div class="field">
-              <span class="field-label">Market size</span
-              ><span class="field-val"
-                >~59M US freelancers; the “invoicing &amp; getting paid” tool category is large and
-                proven, with room for a focused, solo-first wedge.</span
-              >
-            </div>
-            <div class="field">
-              <span class="field-label">Build risk</span
-              ><span class="field-val"
-                ><span class="pill pill-pinned" style="background: var(--el-tint-mint)">Low</span>
-                &nbsp; Stripe + scheduled reminders is well-trodden; nothing here needs novel tech.
-                Payment reminders add a background-job dependency (small).</span
-              >
-            </div>
-            <div class="field">
-              <span class="field-label">Constraints surfaced</span
-              ><span class="field-val"
-                >Stripe availability by country gates launch markets; tax/invoice-format rules vary
-                by region (out of v1 scope, flagged for later).</span
-              >
-            </div>
+          <div class="doc-edithint">
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> A quick reality
+            check before any work is generated. You asked Motir to run this from the chat.
           </div>
-          <div class="doc-foot">
+          <div class="prose">
+            <h3>The market</h3>
+            <p>
+              There are <span class="stat">~59 million</span> freelancers in the US alone, and
+              “invoicing and getting paid” is a large, established software category. Your angle — a
+              focused, solo-first “who's paid me, and chase the rest” tool — sits in an underserved
+              gap between free-but-basic invoicing and heavy accounting suites. That's a real
+              opening, not a crowded-out niche.
+            </p>
+            <h3>How hard it is to build</h3>
+            <p>
+              <strong>Low risk.</strong> Creating invoices, taking payment through Stripe, and
+              scheduling reminders are all well-trodden paths with mature tooling. The one genuinely
+              new moving part is the reminder scheduler — a background job — which is small and
+              well-understood. Nothing here needs novel technology or research.
+            </p>
+            <h3>Things to watch</h3>
+            <ul>
+              <li>
+                <b>Stripe availability</b> varies by country — it gates which markets you can launch
+                in first.
+              </li>
+              <li>
+                <b>Invoice &amp; tax formats</b> differ by region — fine to leave out of v1, flagged
+                for later.
+              </li>
+            </ul>
+          </div>
+          <div class="doc-foot2">
             <button class="btn btn-secondary">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
             ><span class="grow"></span
@@ -5838,10 +6426,10 @@
       </div>
     </div>
 
-    <!-- ════════════ G · DOC 4: Will people want it? (validation) — generated; validate-early offer; skip is in chat ════════════ -->
+    <!-- ════════════ G · DOC 4 — Will people want it? (readable document; narrates validate-early — decision is in the chat) ════════════ -->
     <div class="panel-label">
-      G · Full-screen doc 4 of 4 — “Will people want it?” (validation; generated report +
-      validate-demand-first)
+      G · Full-screen doc 4 of 4 — “Will people want it?” (a readable document; narrates the
+      validate-early recommendation — decision happens in the chat, MOTIR-1064)
     </div>
     <div class="panel">
       <div class="surface">
@@ -5864,91 +6452,119 @@
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
-        <div class="step-body">
-          <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Optional ·
-            real demand
+        <div class="step-body docpage">
+          <div class="doc-meta">
+            <span class="mdot" style="background: var(--color-warning)"></span> Doc 4 of 4
+            <span class="mopt">optional</span>
           </div>
-          <h2 class="doc-title">Will people want it?</h2>
-          <p class="doc-sub">
-            Demand and the closest competitors. (You can skip this step from the chat before it runs
-            — here it’s already generated, so review it and decide your next move.)
+          <h1 class="doc-h1">Will people want it?</h1>
+          <p class="doc-lead">
+            There's <b>real, loudly-voiced demand</b> — but it's unproven for your specific take, so
+            it's worth a quick check before committing.
           </p>
+          <div class="doc-edithint">
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> What the market
+            looks like, and what Motir recommends doing about it.
+          </div>
+          <div class="prose">
+            <h3>The demand</h3>
+            <p>
+              “Late-paying clients” is one of the most-voiced frustrations in every freelancer
+              community. The pain is real, recurring, and expensive — people lose sleep over it. The
+              open question isn't whether the problem exists; it's whether freelancers will adopt a
+              new, focused tool for it instead of muddling through with what they have.
+            </p>
+            <h3>The competition</h3>
+            <p>The closest tools, and the opening they leave you:</p>
+            <div class="scan">
+              <div class="scan-row">
+                <span class="scan-name">FreshBooks</span
+                ><span class="scan-diff"
+                  >Strong brand, but overbuilt and over-priced for a solo freelancer.</span
+                >
+              </div>
+              <div class="scan-row">
+                <span class="scan-name">Wave</span
+                ><span class="scan-diff"
+                  >Free and popular, but doesn't actively chase overdue payments — your wedge.</span
+                >
+              </div>
+              <div class="scan-row">
+                <span class="scan-name">Bonsai</span
+                ><span class="scan-diff"
+                  >Broad suite; “who's paid me?” is buried, not the headline.</span
+                >
+              </div>
+            </div>
+            <h3>Our recommendation</h3>
+            <p>
+              Because demand is real but <strong>unproven for your specific take</strong>, Motir
+              recommends validating it <strong>before</strong> you commit to the full build:
+            </p>
+            <div class="callout">
+              <span class="ci"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+              ></span>
+              <div>
+                <div class="ct">Validate demand first — a front-loaded launch slice</div>
+                <div class="cd">
+                  Motir can put a small launch slice <b>ahead of the main build</b>:
+                  <b>register a domain</b>, ship a simple
+                  <b>landing page with a “notify me” waitlist</b>, and <b>deploy it</b> — so you
+                  collect real interest before writing the product. The signups become your green
+                  light.
+                </div>
+              </div>
+            </div>
+            <p>
+              This is your call — it changes the <em>order</em> of work, not the plan itself. Choose
+              below (or answer in the chat).
+              <strong>You need to decide this before we can plan</strong>; doing nothing keeps the
+              standard order.
+            </p>
+          </div>
           <div
-            class="notice is-info"
+            class="doc-foot2"
             style="
-              margin-top: 22px;
-              border-color: color-mix(in srgb, var(--el-accent) 40%, var(--el-border));
+              flex-wrap: wrap;
+              gap: 14px;
+              align-items: center;
               background: var(--el-tint-lavender);
+              border-radius: var(--radius-card);
+              border-top: none;
+              padding: 16px 18px;
+              margin-top: 22px;
             "
           >
-            <span class="ni" style="background: var(--el-accent); color: var(--el-accent-text)"
-              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
-            ></span>
-            <div style="flex: 1">
-              <div class="notice-t">Validate demand before you build?</div>
-              <div class="notice-d">
-                Demand looks real but unproven. Motir can <b>front-load a launch slice</b> —
-                register a domain, ship a landing page with a “notify me” waitlist, sequenced
-                <b>ahead of the build</b> — so you collect real interest first.
-              </div>
-              <div style="display: flex; gap: 9px; margin-top: 12px">
-                <button class="btn btn-primary btn-sm">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg>
-                  Validate demand first</button
-                ><button class="btn btn-ghost btn-sm">No — plan the full build</button>
-              </div>
-            </div>
-          </div>
-          <div class="doc-sections" style="margin-top: 8px">
-            <div class="field">
-              <span class="field-label">Closest competitors</span
-              ><span class="field-val"
-                ><div class="mirror-grid">
-                  <div class="mirror-card">
-                    <div class="mc-n">
-                      FreshBooks
-                      <span class="pill pill-neutral" style="font-size: 8.5px; padding: 1px 6px"
-                        >$$</span
-                      >
-                    </div>
-                    <div class="mc-d">Strong brand, overbuilt for a solo freelancer.</div>
-                  </div>
-                  <div class="mirror-card">
-                    <div class="mc-n">
-                      Wave
-                      <span class="pill pill-neutral" style="font-size: 8.5px; padding: 1px 6px"
-                        >free</span
-                      >
-                    </div>
-                    <div class="mc-d">Free, but weak at chasing payments — your edge.</div>
-                  </div>
-                  <div class="mirror-card">
-                    <div class="mc-n">
-                      Bonsai
-                      <span class="pill pill-neutral" style="font-size: 8.5px; padding: 1px 6px"
-                        >$$</span
-                      >
-                    </div>
-                    <div class="mc-d">Broad; “who’s paid me?” isn’t the focus.</div>
-                  </div>
-                </div></span
+            <div style="flex: 1; min-width: 200px">
+              <div
+                style="
+                  font-family: var(--font-sans);
+                  font-size: 13px;
+                  font-weight: 700;
+                  color: var(--el-text);
+                "
               >
-            </div>
-            <div class="field">
-              <span class="field-label">Demand signals</span
-              ><span class="field-val"
-                >“Late-paying clients” is a top, loudly-voiced freelancer pain — underserved between
-                free-but-basic and full-accounting.</span
+                Validate demand first?
+              </div>
+              <div
+                style="
+                  font-family: var(--font-sans);
+                  font-size: 12px;
+                  color: var(--el-text-secondary);
+                  margin-top: 2px;
+                "
               >
+                Pick one to continue — this sets the build order.
+              </div>
             </div>
-          </div>
-          <div class="doc-foot">
             <button class="btn btn-secondary">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
-            ><span class="grow"></span
-            ><button class="btn btn-primary btn-lg">
-              Looks good — continue to design
+              No — build it all
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+            </button>
+            <button class="btn btn-primary btn-lg">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Validate
+              demand first
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
           </div>

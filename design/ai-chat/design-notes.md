@@ -45,18 +45,18 @@ design step is the example **at full page scale**.
 
 ## The screens (in journey order)
 
-| #     | Screen                                     | What it is                                                                                                                                                  |
-| ----- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B** | **Public landing**                         | the idea prompt **+ the workflow preview as descriptive BLOCKS** (a card per step — plain title + one-line description; optional / web-only tagged).        |
-| **C** | **The hub**                                | the **canvas roadmap on the LEFT** (4 doc stations, where-you-are) + the **chat as a compact RIGHT rail**; the chat is where you **skip** an optional step. |
-| **D** | **Doc 1 · "Understanding your idea"**      | the **discovery** output full-screen + editable: what / who, the **mirror scan** (real comparables), inferred class + platform.                             |
-| **E** | **Doc 2 · "What we'll build"**             | the **vision** output: in / out of scope (v1) + core decisions (pinned vs delegated) + the **read → react → revise** diff/history inline.                   |
-| **F** | **Doc 3 · "Is it worth building?"** (opt.) | the **feasibility** output: market size + build risk + constraints. A generated report — view & continue (skipped earlier, in the chat).                    |
-| **G** | **Doc 4 · "Will people want it?"** (opt.)  | the **validation** output: comparables + demand + the **validate-demand-first** offer. Generated report — no skip button on the doc.                        |
-| **H** | **Design step** (whole page styled)        | the **ENTIRE page** — header, pickers, buttons, list, footer — rendered live in the chosen **style × palette × type**. Change a pick → it all restyles.     |
-| **I** | **The canvas as the roadmap** (post-plan)  | the road continues past Plan: **Epic 1 (done) → Epic 2 (you are here, progress meter) → Epic 3 → + more**.                                                  |
-| **J** | **An epic expanded**                       | the epic opens to its **stories → subtasks** (the work-item tree, same road language) with per-item status + work-type chips (Code / Design / Content / …). |
-| **K** | **Plan states**                            | the degraded **"AI planning not configured"** gate + loading / resume / error.                                                                              |
+| #     | Screen                                     | What it is                                                                                                                                                                                                           |
+| ----- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B** | **Public landing**                         | the idea prompt **+ the workflow preview as descriptive BLOCKS** (a card per step — plain title + one-line description; optional / web-only tagged).                                                                 |
+| **C** | **The hub**                                | the **canvas roadmap on the LEFT** — each done station **shows its captured findings** — + the **chat right rail**; here the agent raises the **validate-first ask** (with context) and **blocks** until you choose. |
+| **D** | **Doc 1 · "Understanding your idea"**      | a **readable document** (editorial prose): what / who, the **mirror scan** (real comparables), inferred class + platform — inline-editable.                                                                          |
+| **E** | **Doc 2 · "What we'll build"**             | a **readable document**: in / out of scope (v1) + key decisions (pinned vs delegated) + the **read → react → revise** revision inline.                                                                               |
+| **F** | **Doc 3 · "Is it worth building?"** (opt.) | a **readable document**: the market, how hard it is to build, things to watch. Skipped (if at all) earlier, in the chat.                                                                                             |
+| **G** | **Doc 4 · "Will people want it?"** (opt.)  | a **readable document**: demand + competition + the **validate-demand-first recommendation**, with the accept/decline **decision on the page** (also asked in the chat) — it **blocks** continuing.                  |
+| **H** | **Design step** (whole page styled)        | the **ENTIRE page** — header, pickers, buttons, list, footer — rendered live in the chosen **style × palette × type**. Change a pick → it all restyles.                                                              |
+| **I** | **The canvas as the roadmap** (post-plan)  | the road continues past Plan: **Epic 1 (done) → Epic 2 (you are here, progress meter) → Epic 3 → + more**.                                                                                                           |
+| **J** | **An epic expanded**                       | the epic opens to its **stories → subtasks** (the work-item tree, same road language) with per-item status + work-type chips (Code / Design / Content / …).                                                          |
+| **K** | **Plan states**                            | the degraded **"AI planning not configured"** gate + loading / resume / error.                                                                                                                                       |
 
 ---
 
@@ -125,16 +125,37 @@ blocking question.
 
 For the two **optional** steps (the worth-building check and the market check),
 the chat shows a **Skip** control — pressing it **cancels that step and the agent
-advances directly** to the next. A **generated report has nothing to "skip"**, so
-the docs themselves carry **NO skip button** — once shown, you review and continue.
-(Earlier drafts wrongly put a skip on the generated doc, and wrongly made the agent
-wait for a yes/no.)
+advances directly** to the next. Skip is offered **before** a doc generates; a
+generated report has nothing to "skip".
 
-The Validation doc (screen G) surfaces the **validate-demand-first** strategy
-(Yue, 2026-06-17): when demand is unproven and commercial, Motir offers to validate
-EARLY — **"Validate demand first"** front-loads a launch slice (a domain + a
-landing page with a "notify me" waitlist, sequenced **ahead of the build**);
-**"No — plan the full build"** keeps standard timing.
+## ⚠️ Validate-demand-first — the one BLOCKING ask (MOTIR-1064 / 7.3.47)
+
+Most steps just flow, but **validate-demand-first is a genuine strategic decision**
+(it can't be inferred — it's the user's call), so it is the **one place the agent
+asks and waits**. The sequence (per `MOTIR-1064`): the agent **generates the
+Validation doc** (screen G — the demand + competition report) → then **asks in the
+chat, with context** from that report (_"the market check found real demand, but
+unproven — validate it first, or build straight away?"_) → and **this BLOCKS the
+next step** (Design / Plan stay locked until you choose). The default if the ask is
+never reached is standard timing.
+
+The question appears in **both** places — **in the chat** (screen C, the agent's
+ask + accept/decline) **and on the Validation page** (screen G, a decision block
+gating "continue"). **On acceptance**, the generated plan **front-loads a launch
+slice** — a `manual` domain-registration task, a marketing landing page with a
+"notify me" waitlist, and the deploy tasks — sequenced **ahead of the main build**,
+so real interest is collected first; the waitlist signups become the green light.
+**"No — build it all"** keeps the standard order.
+
+## ⚠️ The docs are READABLE DOCUMENTS; the canvas shows captured content
+
+The four pre-plan outputs are **documents the user reads in detail** (Yue), so
+screens D/E/F/G use a clean **editorial document** layout — a kicker + serif title +
+lead, then prose sections (serif headings, readable body, lists, an inline
+competitor "scan"), all inline-editable — **not** a dashboard of fragmented cards.
+And the **canvas stations SHOW what was captured** (screen C): each done station
+lists its key findings (what/who/competitors · scope · market + risk), so the
+roadmap is informative, not a row of empty boxes.
 
 ---
 
