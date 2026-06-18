@@ -5637,6 +5637,21 @@
       .doc-foot2 .grow {
         flex: 1;
       }
+
+      /* vertical canvas: done variant of the captured-content block + decision pill */
+      .active-node.is-done {
+        border-color: var(--el-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .active-node.is-done .an-t span {
+        color: var(--el-success);
+      }
+      .active-node .an-t {
+        min-width: 0;
+      }
+      .vpipe .conn.v {
+        align-self: flex-start;
+      }
     </style>
   </head>
 
@@ -5652,8 +5667,8 @@
             the market → plan → Epic 1 → Epic 2 → …</b
           >, each epic expandable to its stories. It shows where you are; the <b>chat</b> is a
           compact <b>right rail</b> that drives the active step. Skipping an optional step happens
-          in the <b>chat</b> (the generated docs are just shown). The <b>design</b> step renders the
-          whole page in the chosen style. Toggle dark for parity. →
+          in the <b>chat</b> (the generated summaries are just shown). The <b>design</b> step
+          renders the whole page in the chosen style. Toggle dark for parity. →
         </p>
       </div>
       <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
@@ -5821,10 +5836,10 @@
       </div>
     </div>
 
-    <!-- ════════════ C · THE HUB — captured content on the canvas + the validate-early BLOCKING ask in chat ════════════ -->
+    <!-- ════════════ C · THE HUB — VERTICAL canvas (down), blocks show captured content + chat validate-early blocking ask ════════════ -->
     <div class="panel-label">
-      C · The hub — the canvas SHOWS what's been captured; after the market check the agent asks the
-      validate-early question in the chat (with context) and BLOCKS until you choose (MOTIR-1064)
+      C · The hub — the canvas is a VERTICAL pipeline (the workflow goes down); each block shows
+      what was captured. The chat raises the validate-first ask and BLOCKS until you choose.
     </div>
     <div class="panel">
       <div class="surface">
@@ -5843,157 +5858,158 @@
           >
         </div>
         <div class="wz-body">
-          <section class="road dotted" aria-label="Project roadmap">
-            <div class="estation is-done">
-              <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-yellow)"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg></span
-                ><span class="mono">Start</span>
-              </div>
-              <div class="etitle">Your idea</div>
-              <div class="ecap">
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoicing for
-                  freelancers
-                </div>
-              </div>
-              <div class="est-foot">
-                <span class="est-status done"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  Captured</span
-                >
-              </div>
+          <section class="canvas dotted">
+            <div class="canvas-head">
+              <h3>Your project</h3>
+              <span class="mono">idea → 4 checks → design → plan</span>
             </div>
-            <div class="conn is-done"><span class="line"></span></div>
-            <div class="estation is-done">
-              <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-sky)"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg></span
-                ><span class="mono">Doc 1</span>
-              </div>
-              <div class="etitle">Understanding your idea</div>
-              <div class="ecap">
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  <b>What:</b> send &amp; track invoices
-                </div>
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                  <b>Who:</b> solo freelancers
-                </div>
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> 3 close
-                  competitors found
+            <div class="vpipe">
+              <div class="idea-node">
+                <span class="stile accent" style="width: 32px; height: 32px"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
+                ></span>
+                <div>
+                  <div class="mono">Your idea</div>
+                  <div class="q">
+                    “A tool for freelancers to send invoices and track which clients have paid”
+                  </div>
                 </div>
               </div>
-              <div class="est-foot">
-                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
-              </div>
-            </div>
-            <div class="conn is-done"><span class="line"></span></div>
-            <div class="estation is-done">
-              <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-lavender)"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg></span
-                ><span class="mono">Doc 2</span>
-              </div>
-              <div class="etitle">What we'll build</div>
-              <div class="ecap">
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoices,
-                  reminders, clients
+              <div class="conn v is-done"><span class="vline"></span></div>
+
+              <div class="active-node is-done">
+                <div class="an-head">
+                  <span class="stile sky"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-search" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Understanding your idea</b><span>what · who · competitors</span>
+                  </div>
+                  <span class="pill pill-pinned" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    Reviewed</span
+                  >
                 </div>
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Stripe
-                  payments
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>What</b> — send &amp; track invoices, chase late payers</span>
                 </div>
-                <div class="ecap-item pending">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> No teams
-                  / accounting (v1)
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>Who</b> — solo freelancers (pinned)</span>
                 </div>
-              </div>
-              <div class="est-foot">
-                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
-              </div>
-            </div>
-            <div class="conn is-done"><span class="line"></span></div>
-            <div class="estation is-done">
-              <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-mint)"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
-                ><span class="mono">Doc 3 · optional</span>
-              </div>
-              <div class="etitle">Is it worth building?</div>
-              <div class="ecap">
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> ~59M market ·
-                  proven
-                </div>
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Low build
-                  risk
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>Closest products</b> — FreshBooks · Wave · Bonsai</span>
                 </div>
               </div>
-              <div class="est-foot">
-                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
+              <div class="conn v is-done"><span class="vline"></span></div>
+
+              <div class="active-node is-done">
+                <div class="an-head">
+                  <span
+                    class="stile"
+                    style="background: var(--el-tint-lavender); color: var(--el-accent-on-surface)"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
+                  ></span>
+                  <div class="an-t"><b>What we'll build</b><span>scope · key decisions</span></div>
+                  <span class="pill pill-pinned" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    Reviewed</span
+                  >
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>In v1</b> — invoices, reminders, client list · Stripe</span>
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                  ><span><b>Out</b> — teams, full accounting, mobile app</span>
+                </div>
               </div>
-            </div>
-            <div class="conn is-active"><span class="line"></span></div>
-            <div class="estation is-active">
-              <span class="yah"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-                Deciding</span
+              <div class="conn v is-done"><span class="vline"></span></div>
+
+              <div class="active-node is-done">
+                <div class="an-head">
+                  <span class="stile mint"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Is it worth building?</b><span>market · build risk · optional</span>
+                  </div>
+                  <span class="pill pill-pinned" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    Reviewed</span
+                  >
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>Market</b> — ~59M freelancers, proven category</span>
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>Build risk</b> — low; nothing novel</span>
+                </div>
+              </div>
+              <div class="conn v is-active"><span class="vline"></span></div>
+
+              <div class="active-node">
+                <div class="an-head">
+                  <span
+                    class="stile"
+                    style="background: var(--el-tint-peach); color: var(--el-warning)"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Will people want it?</b><span>demand · competition · optional</span>
+                  </div>
+                  <span class="pill pill-accent" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                    Deciding</span
+                  >
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span><b>Demand</b> — real &amp; loud; “late-paying clients” pain</span>
+                </div>
+                <div class="capt pending">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                  ><span>Unproven for your take — <b>validate first?</b> (chat →)</span>
+                </div>
+              </div>
+              <div class="conn v"><span class="vline"></span></div>
+
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
               >
-              <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-peach)"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg></span
-                ><span class="mono">Doc 4 · optional</span>
-              </div>
-              <div class="etitle">Will people want it?</div>
-              <div class="ecap">
-                <div class="ecap-item">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Real demand
-                </div>
-                <div class="ecap-item pending">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-alert" /></svg> Unproven →
-                  validate first?
+                <span class="stile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Design the look</div>
+                  <span class="mono">Up next · web only</span>
                 </div>
               </div>
-              <div class="est-foot">
-                <button class="btn btn-ghost btn-sm" style="padding: 0 8px">Open</button>
-              </div>
-            </div>
-            <div class="conn"><span class="line"></span></div>
-            <div class="estation">
-              <div class="est-head">
-                <span class="etile" style="background: var(--el-tint-peach)"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
-                ><span class="mono">Then · web only</span>
-              </div>
-              <div class="etitle">Design the look</div>
-              <div class="est-foot">
-                <span class="est-status"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock" /></svg> Waiting on
-                  you</span
-                >
-              </div>
-            </div>
-            <div class="conn"><span class="line"></span></div>
-            <div
-              class="estation"
-              style="border-style: dashed; background: var(--el-surface); opacity: 0.85"
-            >
-              <div class="est-head">
-                <span class="etile"
-                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg></span
-                ><span class="mono">Then</span>
-              </div>
-              <div class="etitle">Plan → your epics</div>
-              <div class="est-foot">
-                <span class="est-status"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock" /></svg> After the
-                  docs</span
-                >
+              <div class="conn v"><span class="vline"></span></div>
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
+              >
+                <span class="stile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Plan → your epics</div>
+                  <span class="mono">The roadmap continues here</span>
+                </div>
               </div>
             </div>
           </section>
@@ -6005,28 +6021,28 @@
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  All four checks are written up on the left — open any to read in full.
+                  All four step summaries are on the left — open any to read in full.
                 </div>
               </div>
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  Before we plan, one call to make. The market check (doc 4) found
+                  One call before we plan. The market check found
                   <b>real demand, but unproven</b> for your exact take.
                 </div>
               </div>
               <div class="msg">
                 <span class="av bot" aria-hidden="true">M</span>
                 <div class="bubble">
-                  I'd <b>validate it first</b>: put up a landing page with a “notify me” waitlist
-                  <b>before</b> we build, so you collect real interest. The signups become your
-                  green light. Do that, or build straight away?
+                  I'd <b>prove demand first</b>: build a small <b>marketing site</b> with a “notify
+                  me” waitlist and a go-to-market plan — and launch it <b>before</b> the product.
+                  Real sign-ups tell us it's worth building. Do that, or build straight away?
                 </div>
               </div>
             </div>
             <div style="margin: 0 12px 6px; display: flex; flex-direction: column; gap: 7px">
               <button class="btn btn-primary btn-sm btn-block">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Validate
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Prove
                 demand first
               </button>
               <button class="btn btn-secondary btn-sm btn-block">No — build it all</button>
@@ -6038,14 +6054,18 @@
                 font-size: 10.5px;
                 color: var(--el-text-muted);
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 5px;
               "
             >
-              <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-text-faint)">
+              <svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                style="color: var(--el-text-faint); flex: none; margin-top: 1px"
+              >
                 <use href="#i-lock" />
               </svg>
-              This decides the build order — Motir waits here until you choose.
+              This sets the build order — Motir waits here until you choose.
             </div>
             <div class="composer">
               <span
@@ -6074,11 +6094,10 @@
           </aside>
         </div>
         <div class="wz-note" style="margin: 0 18px 16px">
-          The roadmap on the left <b>shows what's been captured</b> (and later, your epics &amp;
-          stories). <b>Motir drives the workflow</b> — it works through each step on its own and
-          writes up what it finds. Most steps just flow; the <b>validate-first</b> question is a
-          real strategic call, so the agent <b>asks and waits</b> here (and on the validation page)
-          before planning. Optional steps (docs 3 &amp; 4) can be skipped from the chat before they
+          The canvas runs <b>top to bottom</b> — your idea, the four checks (each block shows what
+          was captured), then design and plan. <b>Motir drives it</b> on its own; only the
+          <b>validate-first</b> question is a real strategic call, so it asks and <b>waits</b> here
+          (and on the validation page). Optional checks can be skipped from the chat before they
           run.
         </div>
       </div>
@@ -6086,7 +6105,7 @@
 
     <!-- ════════════ D · DOC 1 — Understanding your idea (readable document) ════════════ -->
     <div class="panel-label">
-      D · Full-screen doc 1 of 4 — “Understanding your idea” (a readable document; edit inline)
+      D · Full-screen step SUMMARY — “Understanding your idea” (a readable write-up; edit inline)
     </div>
     <div class="panel">
       <div class="surface">
@@ -6104,14 +6123,15 @@
               text-transform: uppercase;
               color: var(--el-text-faint);
             "
-            >Pre-plan · doc 1 of 4</span
+            >Pre-plan · building your direction</span
           >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
         <div class="step-body docpage">
           <div class="doc-meta">
-            <span class="mdot" style="background: var(--color-info)"></span> Doc 1 of 4
+            <span class="mdot" style="background: var(--color-info)"></span> What you’re building
+            &amp; who for
           </div>
           <h1 class="doc-h1">Understanding your idea</h1>
           <p class="doc-lead">
@@ -6218,7 +6238,7 @@
 
     <!-- ════════════ E · DOC 2 — What we'll build (readable document) ════════════ -->
     <div class="panel-label">
-      E · Full-screen doc 2 of 4 — “What we'll build” (a readable document; read→react→revise)
+      E · Full-screen step SUMMARY — “What we'll build” (a readable write-up)
     </div>
     <div class="panel">
       <div class="surface">
@@ -6236,14 +6256,14 @@
               text-transform: uppercase;
               color: var(--el-text-faint);
             "
-            >Pre-plan · doc 2 of 4</span
+            >Pre-plan · building your direction</span
           >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
         <div class="step-body docpage">
           <div class="doc-meta">
-            <span class="mdot" style="background: var(--color-primary)"></span> Doc 2 of 4
+            <span class="mdot" style="background: var(--color-primary)"></span> The shape of v1
           </div>
           <h1 class="doc-h1">What we'll build</h1>
           <p class="doc-lead">
@@ -6306,33 +6326,6 @@
               >
               Tech stack &amp; hosting — Motir decides at plan time.
             </div>
-            <h3>
-              One thing we just changed
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-git-compare" /></svg>
-            </h3>
-            <div class="callout" style="background: var(--el-tint-mint)">
-              <span class="ci" style="background: var(--el-success)"
-                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-git-compare" /></svg
-              ></span>
-              <div>
-                <div class="ct">Revised from your chat</div>
-                <div
-                  class="cd"
-                  style="font-family: var(--font-mono); font-size: 11.5px; margin: 4px 0"
-                >
-                  <span style="text-decoration: line-through; color: #9b1c1c"
-                    >− Recurring invoices</span
-                  ><br /><span style="color: #15724a"
-                    >+ Recurring invoices + automatic payment reminders</span
-                  >
-                </div>
-                <div class="cd">
-                  You said <b>“add payment reminders”</b> — so we updated this, and the reality
-                  check picked up a small new build dependency.
-                  <span style="color: var(--el-link); font-weight: 600">See history · undo</span>
-                </div>
-              </div>
-            </div>
           </div>
           <div class="doc-foot2">
             <button class="btn btn-secondary">
@@ -6348,9 +6341,7 @@
     </div>
 
     <!-- ════════════ F · DOC 3 — Is it worth building? (readable document) ════════════ -->
-    <div class="panel-label">
-      F · Full-screen doc 3 of 4 — “Is it worth building?” (a readable document; optional)
-    </div>
+    <div class="panel-label">F · Full-screen step SUMMARY — “Is it worth building?” (optional)</div>
     <div class="panel">
       <div class="surface">
         <div class="step-top">
@@ -6367,14 +6358,14 @@
               text-transform: uppercase;
               color: var(--el-text-faint);
             "
-            >Pre-plan · doc 3 of 4 · optional</span
+            >Pre-plan · optional step</span
           >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
         <div class="step-body docpage">
           <div class="doc-meta">
-            <span class="mdot" style="background: var(--color-accent-green)"></span> Doc 3 of 4
+            <span class="mdot" style="background: var(--color-accent-green)"></span> A reality check
             <span class="mopt">optional</span>
           </div>
           <h1 class="doc-h1">Is it worth building?</h1>
@@ -6428,8 +6419,9 @@
 
     <!-- ════════════ G · DOC 4 — Will people want it? (readable document; narrates validate-early — decision is in the chat) ════════════ -->
     <div class="panel-label">
-      G · Full-screen doc 4 of 4 — “Will people want it?” (a readable document; narrates the
-      validate-early recommendation — decision happens in the chat, MOTIR-1064)
+      G · Full-screen step SUMMARY — “Will people want it?” — spells out what proving demand means
+      (a marketing site + waitlist + go-to-market, launched before the build); the decision is on
+      the page AND in the chat, and blocks the next step (MOTIR-1064)
     </div>
     <div class="panel">
       <div class="surface">
@@ -6447,20 +6439,20 @@
               text-transform: uppercase;
               color: var(--el-text-faint);
             "
-            >Pre-plan · doc 4 of 4 · optional</span
+            >Pre-plan · optional step</span
           >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
         <div class="step-body docpage">
           <div class="doc-meta">
-            <span class="mdot" style="background: var(--color-warning)"></span> Doc 4 of 4
+            <span class="mdot" style="background: var(--color-warning)"></span> The market
             <span class="mopt">optional</span>
           </div>
           <h1 class="doc-h1">Will people want it?</h1>
           <p class="doc-lead">
-            There's <b>real, loudly-voiced demand</b> — but it's unproven for your specific take, so
-            it's worth a quick check before committing.
+            There's <b>real, loudly-voiced demand</b> — but it's unproven for your idea
+            specifically, so it's worth proving before you commit to building.
           </p>
           <div class="doc-edithint">
             <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> What the market
@@ -6496,31 +6488,33 @@
                 >
               </div>
             </div>
-            <h3>Our recommendation</h3>
+            <h3>Our recommendation: prove demand first</h3>
             <p>
               Because demand is real but <strong>unproven for your specific take</strong>, Motir
-              recommends validating it <strong>before</strong> you commit to the full build:
+              recommends <strong>proving it before you build the product</strong>. Concretely, that
+              means:
             </p>
             <div class="callout">
               <span class="ci"
                 ><svg class="ic" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
               ></span>
               <div>
-                <div class="ct">Validate demand first — a front-loaded launch slice</div>
+                <div class="ct">Launch a marketing site first — before the product</div>
                 <div class="cd">
-                  Motir can put a small launch slice <b>ahead of the main build</b>:
-                  <b>register a domain</b>, ship a simple
-                  <b>landing page with a “notify me” waitlist</b>, and <b>deploy it</b> — so you
-                  collect real interest before writing the product. The signups become your green
-                  light.
+                  Motir builds and launches a small <b>marketing site</b> — a landing page that
+                  pitches the idea, with a <b>“notify me” waitlist</b> — and plans
+                  <b>how to get the word out</b> (the go-to-market). It goes live
+                  <b>ahead of</b> the product build. The people who sign up are real, measurable
+                  interest — their numbers tell you whether it's worth building. In the plan this
+                  becomes a few tasks sequenced <b>first</b>: register a domain, build &amp; launch
+                  the marketing site, and drive sign-ups — all <b>before</b> the main build starts.
                 </div>
               </div>
             </div>
             <p>
-              This is your call — it changes the <em>order</em> of work, not the plan itself. Choose
-              below (or answer in the chat).
-              <strong>You need to decide this before we can plan</strong>; doing nothing keeps the
-              standard order.
+              It changes the <em>order</em> of the work, not the plan itself.
+              <strong>You need to choose before we can plan</strong> — pick below (or answer Motir
+              in the chat); doing nothing keeps the normal order (build first).
             </p>
           </div>
           <div
@@ -6545,7 +6539,7 @@
                   color: var(--el-text);
                 "
               >
-                Validate demand first?
+                Prove demand first?
               </div>
               <div
                 style="
@@ -6563,7 +6557,7 @@
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
             <button class="btn btn-primary btn-lg">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Validate
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg> Prove
               demand first
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>

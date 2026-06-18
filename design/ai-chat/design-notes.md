@@ -133,29 +133,35 @@ generated report has nothing to "skip".
 Most steps just flow, but **validate-demand-first is a genuine strategic decision**
 (it can't be inferred — it's the user's call), so it is the **one place the agent
 asks and waits**. The sequence (per `MOTIR-1064`): the agent **generates the
-Validation doc** (screen G — the demand + competition report) → then **asks in the
-chat, with context** from that report (_"the market check found real demand, but
-unproven — validate it first, or build straight away?"_) → and **this BLOCKS the
-next step** (Design / Plan stay locked until you choose). The default if the ask is
-never reached is standard timing.
+validation step summary** (screen G — the demand + competition write-up) → then
+**asks in the chat, with context** from it → and **this BLOCKS the next step**
+(Design / Plan stay locked until you choose). The default if the ask is never
+reached is standard timing.
 
-The question appears in **both** places — **in the chat** (screen C, the agent's
-ask + accept/decline) **and on the Validation page** (screen G, a decision block
-gating "continue"). **On acceptance**, the generated plan **front-loads a launch
-slice** — a `manual` domain-registration task, a marketing landing page with a
-"notify me" waitlist, and the deploy tasks — sequenced **ahead of the main build**,
-so real interest is collected first; the waitlist signups become the green light.
-**"No — build it all"** keeps the standard order.
+The decision appears in **both** places — **in the chat** (screen C) **and on the
+validation page** (screen G, a decision block gating "continue"). **What "prove
+demand first" means must be CONCRETE on the page** (Yue): it is not vague
+"validation" — it means Motir **builds and launches a small marketing site first**
+(a landing page that pitches the idea + a "notify me" waitlist) and **plans the
+go-to-market**, **ahead of** the product build, so real sign-ups measure interest
+before you commit. **On acceptance**, the plan **front-loads that launch slice** —
+a `manual` domain-registration task, the marketing landing page + waitlist, and the
+deploy tasks — sequenced **first**; the signups become the green light. **"No —
+build it all"** keeps the standard order.
 
-## ⚠️ The docs are READABLE DOCUMENTS; the canvas shows captured content
+## ⚠️ Vertical canvas; step SUMMARIES, not "docs"
 
-The four pre-plan outputs are **documents the user reads in detail** (Yue), so
-screens D/E/F/G use a clean **editorial document** layout — a kicker + serif title +
-lead, then prose sections (serif headings, readable body, lists, an inline
-competitor "scan"), all inline-editable — **not** a dashboard of fragmented cards.
-And the **canvas stations SHOW what was captured** (screen C): each done station
-lists its key findings (what/who/competitors · scope · market + risk), so the
-roadmap is informative, not a row of empty boxes.
+The canvas is a **vertical pipeline** (screen C) — the workflow runs **top to
+bottom** (idea → the four checks → design → plan), and **each block shows what was
+captured** (what/who/competitors · scope · market + risk), so the canvas is
+informative, not empty boxes. The active step is ringed; done steps carry their
+findings; upcoming steps are ghosted rows.
+
+The four full-screen pages (D/E/F/G) are **step summaries** the user reads — a
+clean **editorial write-up** (kicker + serif title + lead, then prose sections,
+lists, a competitor "scan"), inline-editable. **Don't call them "docs" or number
+them "doc N of 4"** (Yue) — "doc" is an internal word and there's nothing to
+download; each page is just the write-up of that step.
 
 ---
 
