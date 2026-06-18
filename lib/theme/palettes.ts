@@ -67,6 +67,15 @@ export const PALETTE_REGISTRY = {
     inspiration: "Notion's warm marketing palette — the product's house colours.",
     designDoc: 'docs/palettes/motir.md',
   },
+  evergreen: {
+    id: 'evergreen',
+    name: 'Evergreen',
+    tagline:
+      'Fresh and technical — an emerald primary over cooled forest neutrals, a green-leaning UI.',
+    inspiration:
+      'getdesign.md — Supabase (dark emerald) / Spotify (vibrant green) / MongoDB (spring green), on Radix green/jade ramps.',
+    designDoc: 'docs/palettes/evergreen.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
