@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils/cn';
 // `IssueTypeIcon`-adjacent glyph — a NEW recipe because `Pill`'s tones are a
 // fixed closed set that can't express a per-type custom hue. Shape via the
 // element-semantic tokens (`--radius-badge`, `--spacing-chip-*`) like `Pill`,
-// so it reshapes under `data-display-style`. The label is the i18n type gloss
+// so it reshapes under `data-style`. The label is the i18n type gloss
 // (the same `labels.workItemType.*` the picker uses).
 
 export interface WorkItemTypeChipProps {

@@ -75,14 +75,17 @@ Three families, defined in [`app/layout.tsx`](../app/layout.tsx) via
 
 Eight spacing tokens (`--spacing-xxs`/4px through `--spacing-3xl`/40px, plus
 `--spacing-section`/64px). Five semantic radius tokens
-(`--radius-btn | input | card | modal | badge`) that flip with display style
-— `default` is Notion-sober (8-12px), `soft` is Figma-pill (24-32px,
-`--radius-btn` becomes a full pill). Five shadow tiers
-(`--shadow-flat | subtle | card | elevated | modal`) that soften further in
-`soft`. Full table in [`DESIGN.md` §5–6](./DESIGN.md#5-layout-principles).
+(`--radius-btn | input | card | modal | badge`) that flip with the active
+**style** (`data-style`, Axis 2) — `warm-editorial` is Notion-sober (8-12px),
+`soft-playful` is Figma-pill (24-32px, `--radius-btn` becomes a full pill).
+Five shadow tiers (`--shadow-flat | subtle | card | elevated | modal`) that
+soften further in `soft-playful`. The style library is documented in
+[`DESIGN.md` §9](./DESIGN.md#9-style-library-axis-2) +
+[`docs/styles/`](./styles/); full shape table in
+[`DESIGN.md` §5–6](./DESIGN.md#5-layout-principles).
 
 **Rule**: components reference the semantic shape tokens, not the raw
-`--radius-md` / `--shadow-card`. That's what lets display-style flips
+`--radius-md` / `--shadow-card`. That's what lets `data-style` flips
 cascade cleanly without component changes.
 
 ### App shell element tokens
@@ -243,7 +246,7 @@ Two variant axes (one or the other, never both):
 - `status: planned | in-progress | done` — Motir's Subtask lifecycle.
 - `severity: info | success | warning | danger` — generic UI states.
 
-Always full-pill regardless of display style. **When to use**: short status
+Always full-pill regardless of the active style. **When to use**: short status
 or severity labels. Not for navigation (use ghost `Button`) or free-form
 tags.
 
@@ -520,9 +523,9 @@ isolation; each propagates drift.
    zero shadow for content surfaces (Notion pattern). Reserve `--shadow-*`
    tiers for surfaces that are physically raised (popovers, toasts, modals).
 
-7. **Don't pill-shape buttons in the default display style.** Default is
-   8px rectangles; pills are `soft`. Hardcoding `rounded-full` on Button
-   bypasses the shape system and breaks display-style switching.
+7. **Don't pill-shape buttons in the Warm Editorial style.** Default is
+   8px rectangles; pills are `soft-playful`. Hardcoding `rounded-full` on
+   Button bypasses the shape system and breaks `data-style` switching.
 
 8. **Don't reinvent atoms inside patterns.** If a pattern needs a special
    card or button shape, that's a primitives gap — extend the primitive,

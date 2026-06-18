@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -41,13 +41,14 @@ import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { Spinner } from '@/components/ui/Spinner';
 import { Textarea } from '@/components/ui/Textarea';
 import { Tooltip } from '@/components/ui/Tooltip';
-import type { DisplayStyle, ThemePattern } from '@/lib/theme/types';
+import type { ThemePattern } from '@/lib/theme/types';
+import { STYLE_DIMENSIONS, STYLE_REGISTRY, STYLE_IDS } from '@/lib/theme/styles';
 
 /**
  * /tokens — the design system reference route.
  *
  * Renders every token category (colors, typography, radius, shadow,
- * spacing) as visual swatches/specimens. Interactive theme + display-style
+ * spacing) as visual swatches/specimens. Interactive theme + style
  * toggles at the top so reviewers can flip and verify the system responds
  * correctly via CSS variables only — no React re-render on toggle.
  *
@@ -142,10 +143,12 @@ const PATTERN_OPTIONS: { value: ThemePattern; label: string }[] = [
   { value: 'dark', label: 'Dark' },
 ];
 
-const DISPLAY_STYLE_OPTIONS: { value: DisplayStyle; label: string }[] = [
-  { value: 'default', label: 'Default (Notion-sober)' },
-  { value: 'soft', label: 'Soft (Figma-pill)' },
-];
+// Style options are derived from the named-style registry (lib/theme/styles.ts)
+// so a newly-registered style appears here automatically.
+const STYLE_OPTIONS = STYLE_IDS.map((id) => ({
+  value: id,
+  label: STYLE_REGISTRY[id].name,
+}));
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   // Slug id so each specimen section is directly addressable (deep links, and a
@@ -210,7 +213,8 @@ function Swatch({ name, label }: { name: string; label: string }) {
 }
 
 function ThemeControls() {
-  const { pattern, displayStyle, setPattern, setDisplayStyle } = useTheme();
+  const { pattern, styleId, setPattern, setStyleId } = useTheme();
+  const activeStyle = STYLE_REGISTRY[styleId];
   return (
     <div
       style={{
@@ -272,26 +276,23 @@ function ThemeControls() {
             letterSpacing: '0.06em',
           }}
         >
-          Display style
+          Style
         </div>
         <div style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
-          {DISPLAY_STYLE_OPTIONS.map((opt) => (
+          {STYLE_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
-              onClick={() => setDisplayStyle(opt.value)}
-              aria-pressed={displayStyle === opt.value}
+              onClick={() => setStyleId(opt.value)}
+              aria-pressed={styleId === opt.value}
               style={{
                 paddingInline: 'var(--spacing-md)',
                 paddingBlock: 'var(--spacing-xs)',
                 borderRadius: 'var(--radius-pill)',
-                border: `1px solid ${displayStyle === opt.value ? 'var(--color-primary)' : 'var(--el-border)'}`,
-                backgroundColor:
-                  displayStyle === opt.value ? 'var(--color-primary)' : 'transparent',
+                border: `1px solid ${styleId === opt.value ? 'var(--color-primary)' : 'var(--el-border)'}`,
+                backgroundColor: styleId === opt.value ? 'var(--color-primary)' : 'transparent',
                 color:
-                  displayStyle === opt.value
-                    ? 'var(--color-primary-foreground)'
-                    : 'var(--el-page-text)',
+                  styleId === opt.value ? 'var(--color-primary-foreground)' : 'var(--el-page-text)',
                 fontFamily: 'var(--font-sans)',
                 fontSize: 'var(--font-size-sm)',
                 fontWeight: 500,
@@ -302,6 +303,54 @@ function ThemeControls() {
             </button>
           ))}
         </div>
+      </div>
+      {/* The active style's identity: tagline, its DESIGN.md mapping, and the
+          feel-bearing dimensions a token-only swap would miss (7.3.32). The
+          /tokens composer (7.3.30) builds on this mapping. */}
+      <div style={{ flexBasis: '100%' }}>
+        <div
+          className="font-mono text-xs"
+          style={{
+            color: 'var(--el-page-text-muted)',
+            marginBottom: 'var(--spacing-xs)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Active style → DESIGN.md
+        </div>
+        <p
+          className="text-sm"
+          style={{ color: 'var(--el-page-text)', marginBottom: 'var(--spacing-xs)' }}
+        >
+          <strong>{activeStyle.name}</strong> — {activeStyle.tagline}
+        </p>
+        <p className="font-mono text-xs" style={{ color: 'var(--el-page-text-muted)' }}>
+          {activeStyle.designDoc}
+        </p>
+        <dl
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            columnGap: 'var(--spacing-md)',
+            rowGap: 'var(--spacing-xxs)',
+            marginTop: 'var(--spacing-sm)',
+          }}
+        >
+          {STYLE_DIMENSIONS.map((dim) => (
+            <Fragment key={dim.key}>
+              <dt
+                className="font-mono text-xs"
+                style={{ color: 'var(--el-page-text-muted)', whiteSpace: 'nowrap' }}
+              >
+                {dim.label}
+              </dt>
+              <dd className="text-xs" style={{ color: 'var(--el-page-text)', margin: 0 }}>
+                {activeStyle.dimensions[dim.key]}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
       </div>
     </div>
   );
@@ -338,8 +387,8 @@ export default function TokensPage() {
             lineHeight: 1.5,
           }}
         >
-          Live reference for every design token. Toggle the theme + display-style below and watch
-          the system respond via CSS variables only — no React re-renders on toggle.
+          Live reference for every design token. Toggle the theme + style below and watch the system
+          respond via CSS variables only — no React re-renders on toggle.
         </p>
       </header>
 
@@ -554,8 +603,8 @@ export default function TokensPage() {
           className="text-sm"
           style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-md)' }}
         >
-          Variant × size grid. Toggle <code className="font-mono text-xs">display-style</code> to
-          see shapes flip — CSS only.
+          Variant × size grid. Toggle <code className="font-mono text-xs">data-style</code> to see
+          shapes flip — CSS only.
         </p>
         <div
           style={{

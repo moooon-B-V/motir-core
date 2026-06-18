@@ -104,7 +104,7 @@ export function ProjectAvatar({
   const hasPreset =
     icon !== null && color !== null && isValidAvatarIcon(icon) && isValidAvatarColor(color);
   // ≥44px is the large details-card chip → card radius; smaller chips use the
-  // small-affordance control radius (both flip with `data-display-style`).
+  // small-affordance control radius (both flip with `data-style`).
   const radius = size >= 44 ? 'rounded-(--radius-card)' : 'rounded-(--radius-control)';
   const boxStyle: CSSProperties = { width: size, height: size };
 

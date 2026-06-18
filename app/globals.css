@@ -3,19 +3,28 @@
 /*
  * Motir design system — two-axis theme architecture.
  *
- * Axis 1 — COLOR
- *   data-theme="light|dark"   — light/dark base
- *   (future) data-color="..." — accent color override
- *   (future) data-palette="..." — full --el-* token override
+ * Axis 1 — COLOR (the palette axis)
+ *   data-theme="light|dark"     — light/dark base
+ *   (future) data-palette="..." — full --el-* token override (a named palette)
  *
- * Axis 2 — SHAPE
- *   data-display-style="default|soft"
- *     overrides radius / shadow / spacing / interaction tokens
+ * Axis 2 — STYLE (the named-aesthetic axis — registry in lib/theme/styles.ts)
+ *   data-style="<style-id>"
+ *     a named aesthetic that layers per-style SHAPE/FEEL tokens (radius /
+ *     shadow / spacing / sizing / motion / type) — and, for richer styles,
+ *     component-variant overrides — over the Tier-0 base scale. The two
+ *     existing styles are `warm-editorial` (the Tier-0 default) and
+ *     `soft-playful` (the Tier-2 block below). More styles (Swiss,
+ *     Neo-Brutalism, Glassmorphism, …) each add a `[data-style='<id>']` block.
+ *
+ *   The axes are INDEPENDENT: a `[data-style]` block overrides ONLY
+ *   shape/feel tokens, NEVER a colour token (`--color-*` / `--el-*`) — colour
+ *   is the palette axis's job. Keeping them disjoint is what makes
+ *   "style × palette" a true product of two free choices.
  *
  * Tier structure (top to bottom):
- *   Tier 0 — @theme base tokens (light mode defaults)
+ *   Tier 0 — @theme base tokens (light mode defaults = the warm-editorial style)
  *   Tier 1 — [data-theme="dark"] overrides color tokens
- *   Tier 2 — [data-display-style="..."] overrides shape tokens
+ *   Tier 2 — [data-style="..."] overrides shape/feel tokens (NOT colour)
  *   Tier 3 — :root --el-* element tokens reference Tier 0/1 vars;
  *            components reference --el-*, never --color-* directly
  *
@@ -126,10 +135,10 @@
   --font-size-3xl: 3rem; /* 48px — h1 */
   --font-size-display: 5rem; /* 80px — hero display */
 
-  /* ── Shape (default display style) ──────────────────────────────── */
+  /* ── Shape (the warm-editorial base style) ─────────────────────── */
   /* Notion uses sober rectangles (8px buttons); Figma uses pills (50px).
-     We start with Notion's rectangles as default, ship `soft` as an
-     alternate display style that adopts Figma's pills. */
+     The base scale IS the `warm-editorial` style (sober rectangles); the
+     `soft-playful` style adopts Figma's pills in its [data-style] block. */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -138,7 +147,7 @@
   --radius-pill: 9999px;
 
   /* Semantic shape tokens — components reference these, not --radius-md
-     directly. Lets `soft` override these without renaming. */
+     directly. Lets a [data-style] block override these without renaming. */
   --radius-btn: 8px; /* Notion-style sober button */
   --radius-card: 12px;
   --radius-input: 8px;
@@ -177,7 +186,7 @@
   --spacing-input-y: 12px;
   --spacing-card-padding: 24px;
 
-  /* Control-level spacing — small affordances. Flip with display-style so a
+  /* Control-level spacing — small affordances. Flip with the active style so a
      getdesign swap can redefine control DENSITY, not just radius. */
   --spacing-control-x: 10px; /* menu/list rows, combobox trigger & search, sidebar rows */
   --spacing-control-y: 6px;
@@ -258,13 +267,17 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   TIER 2 — Display-style overrides
-   `default` is the base (Notion-sober rectangles).
-   `soft` adopts Figma's pill buttons + larger radius + softer shadows
-   + roomier spacing. More display styles arrive in later Subtasks.
+   TIER 2 — Named-style overrides ([data-style], Axis 2)
+   `warm-editorial` is the base (the Tier-0 defaults above — Notion-sober
+   rectangles), so it needs no override block.
+   `soft-playful` adopts Figma's pill buttons + larger radius + softer shadows
+   + roomier spacing + a gentler motion feel. Each later style (Swiss,
+   Neo-Brutalism, Glassmorphism, …) adds its own `[data-style='<id>']` block
+   here, overriding ONLY shape/feel tokens (radius / shadow / spacing / sizing /
+   motion / type) — NEVER a colour token (that is the data-palette axis).
    ═══════════════════════════════════════════════════════════════════════ */
 
-[data-display-style='soft'] {
+[data-style='soft-playful'] {
   /* Figma's pill geometry */
   --radius-btn: 9999px; /* pill */
   --radius-input: 24px;

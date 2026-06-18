@@ -12,10 +12,14 @@ Warm minimalism with playful shape energy. Type is editorial — Source Serif 4
 serif headlines paired with Inter sans body, plus JetBrains Mono for code,
 IDs, and meta labels. The palette is Notion-warm (cream surfaces, charcoal
 ink, purple primary, pastel feature tints), avoiding the cold-terminal
-aesthetic common to AI tools. The default display style is Notion-sober
-(8px button rectangles, modest shadows); an alternate `soft` display style
-adopts Figma's pill-shape personality (50px pill buttons, more diffused
-shadows, roomier spacing) for projects that want more energy.
+aesthetic common to AI tools. This is the **Warm Editorial** style — the house
+default (8px button rectangles, modest shadows). It is one of a registered
+**style library**: an alternate **Soft / Playful** style adopts Figma's
+pill-shape personality (50px pill buttons, more diffused shadows, roomier
+spacing) for projects that want more energy, and more styles arrive as the
+library grows. See [§9 Style library](#9-style-library-axis-2) for the two-axis
+(`data-style` × `data-palette`) contract and the per-style docs under
+[`docs/styles/`](./styles/).
 
 **Mood**: thoughtful, warm, technical-but-not-cold, slightly editorial.
 **Wrong moods**: terminal, dashboard, cyber.
@@ -140,9 +144,9 @@ exclusively — no hardcoded hex or px values. Live demos render at
 Primary interactive primitive. Variants `primary | secondary | ghost | danger`
 × sizes `sm | md | lg`. `loading` prop shows inline `Spinner` and disables
 interaction; `leftIcon` / `rightIcon` slots accept ReactNode. Shape responds
-to `data-display-style` via `--radius-btn` — Notion-sober rectangles in
-`default`, Figma-pill in `soft`. Use `primary` only for the single dominant
-CTA per view.
+to `data-style` via `--radius-btn` — Notion-sober rectangles in
+`warm-editorial`, Figma-pill in `soft-playful`. Use `primary` only for the
+single dominant CTA per view.
 
 ### Input — [`components/ui/Input.tsx`](../components/ui/Input.tsx)
 
@@ -180,7 +184,7 @@ Compact status or severity label. Two variant axes (use one or the other):
 - `status`: `planned | in-progress | done` — Motir's Subtask lifecycle.
 - `severity`: `info | success | warning | danger` — generic UI states.
 
-Always renders with `--radius-badge` (full pill) regardless of display style
+Always renders with `--radius-badge` (full pill) regardless of the active style
 — badges look uniform across the system on purpose.
 
 ### Tooltip — [`components/ui/Tooltip.tsx`](../components/ui/Tooltip.tsx)
@@ -318,7 +322,7 @@ shadow depth.
 - Use pastel feature tints (`--color-tint-*`) for tinted card variants —
   emphasize visual hierarchy via background, not via primary purple
   surfaces.
-- Test new components in both display styles (`default` and `soft`).
+- Test new components in both styles (`warm-editorial` and `soft-playful`).
   If a component looks correct in only one, it's tied too tightly to
   one shape language.
 
@@ -326,8 +330,8 @@ shadow depth.
 
 - **Don't use `--color-primary` for body text or large background
   surfaces.** Purple is the CTA color, not the brand background.
-- **Don't use pill-shaped buttons in the default display style.** The
-  default is Notion-sober rectangles. Pills are the `soft` display
+- **Don't use pill-shaped buttons in the Warm Editorial style.** The
+  default is Notion-sober rectangles. Pills are the `soft-playful`
   style.
 - **Don't mix `--color-link` and `--color-primary`** — they have
   distinct roles. Links are blue (informational); primary is purple
@@ -362,7 +366,41 @@ Tailwind v4's default breakpoints apply: `sm` (640px), `md` (768px),
 Detailed responsive component behavior will land alongside each primitive
 in Story 1.0.5.2+.
 
-## 9. Agent Prompt Guide
+## 9. Style library (Axis 2)
+
+Motir's look is the **product of two independent axes**, both swappable at
+runtime via a `<html>` data-attribute:
+
+| Axis      | Attribute      | What it controls                                                                                                | Registry / docs                                                               |
+| --------- | -------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Color** | `data-palette` | The `--el-*` palette (hues). `data-theme="light\|dark"` is the base within a palette.                           | (the colour system, §2 above)                                                 |
+| **Style** | `data-style`   | A named **aesthetic** — shape / silhouette / elevation / surface / density / motion / typography / silhouettes. | [`lib/theme/styles.ts`](../lib/theme/styles.ts) + [`docs/styles/`](./styles/) |
+
+The axes are **orthogonal**: picking a style never changes a hue, and picking a
+palette never changes a radius. A `[data-style='<id>']` block in
+[`globals.css`](../app/globals.css) overrides **only** shape/feel tokens (radius
+/ spacing / shadow / sizing / motion / type) — never a `--color-*` / `--el-*`
+colour token. That disjointness is what makes "style × palette" a true product
+of two free choices rather than N hand-tuned combinations.
+
+A **style is more than a token swap.** The feel-bearing **dimensions** — shape /
+silhouette, border / stroke, elevation philosophy, surface / background
+treatment, density rhythm, motion, typography, component silhouettes — are the
+axes a pure token swap ignores; each registered style is authored against this
+rubric (see its `docs/styles/<id>.md`).
+
+### Registered styles
+
+| Style          | `data-style`     | Doc                                                                                |
+| -------------- | ---------------- | ---------------------------------------------------------------------------------- |
+| Warm Editorial | `warm-editorial` | [`docs/styles/warm-editorial.md`](./styles/warm-editorial.md) — the Tier-0 default |
+| Soft / Playful | `soft-playful`   | [`docs/styles/soft-playful.md`](./styles/soft-playful.md) — the pill alternate     |
+
+Each registry entry maps to exactly one `DESIGN.md`; the `/tokens` page composes
+the active style's mapping (the toggle + dimension breakdown). Adding a style =
+a registry entry + a `[data-style='<id>']` block + a `docs/styles/<id>.md`.
+
+## 10. Agent Prompt Guide
 
 **For Motir's planner (Epic 4) — inject this section into every
 design-type Subtask prompt:**
@@ -372,7 +410,7 @@ When generating UI for Motir:
 - **Use semantic Tailwind classes** for color and shape: `bg-background`,
   `text-foreground`, `bg-primary`, `text-muted-foreground`,
   `rounded-card`, `shadow-card`, `font-serif`, etc. These resolve
-  through the active theme and display style.
+  through the active theme and style.
 - **Never write hex values** in component code. Every color comes from
   a CSS variable. If a hex appears, surface a token gap to fix.
 - **Headlines use `font-serif`** (Source Serif 4); body uses
@@ -388,8 +426,8 @@ When generating UI for Motir:
   Tier 3 block) and reference those rather than `--color-*` directly.
   Future palettes will override `--el-*` to reskin without touching
   components.
-- **Test in both display styles** (`data-display-style="default"` and
-  `data-display-style="soft"`). If a component only looks right in one,
+- **Test in both styles** (`data-style="warm-editorial"` and
+  `data-style="soft-playful"`). If a component only looks right in one,
   it's hardcoding shape and should be refactored to use semantic shape
   tokens.
 
