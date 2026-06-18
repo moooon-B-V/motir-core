@@ -67,3 +67,22 @@ export const THEME_DEFAULTS = {
   palette: DEFAULT_PALETTE_ID as PaletteId,
   type: DEFAULT_TYPE_ID as TypeId,
 } as const;
+
+/**
+ * Narrowing guard — is an arbitrary value a valid `pattern` axis id? The
+ * colour / style / type axes each ship `isXId` in their registry file; the
+ * pattern axis is a fixed three-value union, so its guard lives here next to
+ * the type. Mirrors `isStyleId` / `isPaletteId` / `isTypeId`.
+ */
+export function isThemePattern(value: unknown): value is ThemePattern {
+  return value === 'system' || value === 'light' || value === 'dark';
+}
+
+/**
+ * Resolve a (possibly stale / unknown / null) value to a valid `pattern`,
+ * falling back to `THEME_DEFAULTS.pattern`. The pattern-axis analogue of
+ * `resolveStyle` / `resolvePalette` / `resolveType`.
+ */
+export function resolvePattern(value: unknown): ThemePattern {
+  return isThemePattern(value) ? value : THEME_DEFAULTS.pattern;
+}
