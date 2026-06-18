@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Source_Serif_4 } from 'next/font/google';
+import { IBM_Plex_Mono, Inter, JetBrains_Mono, Source_Serif_4 } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
@@ -9,11 +9,18 @@ import { localeDir, type Locale } from '@/lib/i18n/locales';
 import './globals.css';
 
 /**
- * Three variable fonts loaded via Next.js's self-hosting font loader.
+ * Variable fonts loaded via Next.js's self-hosting font loader.
  *
- * Each font gets a CSS variable that the @theme block in globals.css picks
- * up and exposes as Tailwind utility classes (font-sans, font-serif,
- * font-mono).
+ * Each font is exposed as a `--font-*-SOURCE` CSS variable — the RAW face. The
+ * @theme block in globals.css composes the role token off it
+ * (`--font-sans: var(--font-sans-source, <system fallbacks>)`) and the
+ * `[data-type]` axis blocks re-point a role at a different `-source` var. This
+ * indirection is what the type axis (7.3.53) requires: a pairing's
+ * `[data-type='…']` block swaps which `-source` face a role wears, so the role
+ * token must read `var(--font-*-source, …)`, never the loader variable directly.
+ * (The loader variable name MUST therefore be the `-source` one — naming it the
+ * bare role token leaves every `var(--font-*-source)` reference unresolved and
+ * the whole UI silently falls back to system faces.)
  *
  * `display: 'swap'` shows fallback fonts immediately and swaps to the real
  * font when loaded. The visible reflow on swap is small because next/font
@@ -21,19 +28,30 @@ import './globals.css';
  */
 const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-sans',
+  variable: '--font-sans-source',
   display: 'swap',
 });
 
 const sourceSerif = Source_Serif_4({
   subsets: ['latin'],
-  variable: '--font-serif',
+  variable: '--font-serif-source',
   display: 'swap',
 });
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
-  variable: '--font-mono',
+  variable: '--font-mono-source',
+  display: 'swap',
+});
+
+// Mono-Technical type pairing (7.3.56) — IBM Plex Mono dresses the headline +
+// meta/code roles; the Inter body is reused (one new face). Loaded here as its
+// own `-source` var so the `[data-type='mono-technical']` block can point the
+// `--font-serif` / `--font-mono` roles at it.
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-mono-technical-source',
   display: 'swap',
 });
 
@@ -58,7 +76,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={localeDir[locale]}
-      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${ibmPlexMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

@@ -1211,7 +1211,9 @@
    A STYLE declares a `defaultTypeId` (lib/theme/styles.ts) — the pairing applied
    when the user hasn't pinned a `data-type` — so the out-of-the-box look is
    UNCHANGED (swiss → motir-sans, neo/cybercore → motir-mono). Each later
-   "Type: …" subtask (7.3.54+) ADDS its `[data-type='<id>']` block + faces here.
+   "Type: …" subtask (7.3.54+) ADDS its `[data-type='<id>']` block + faces here:
+     - `mono-technical` (7.3.56) — IBM Plex Mono on the headline + meta/code
+                      roles over the Inter body; loads one new face (in layout.tsx).
    ═══════════════════════════════════════════════════════════════════════ */
 
 [data-type='motir-sans'] {
@@ -1223,6 +1225,18 @@
 [data-type='motir-mono'] {
   /* Mono headlines — re-point the editorial serif role at the mono stack. */
   --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+}
+
+[data-type='mono-technical'] {
+  /* Mono-Technical (7.3.56) — a precise, developer-grade pairing. IBM Plex Mono
+     dresses BOTH the headline role (--font-serif) AND the meta/code role
+     (--font-mono); the body (--font-sans) stays the neutral Inter base. The
+     headline + meta sharing one technical mono voice is what distinguishes this
+     from motir-mono (JetBrains-Mono headlines only). Only --font-* role tokens
+     are touched — colour (--el/--color) and shape (--radius/--spacing) are the
+     other two, independent axes (the disjointness guard). */
+  --font-serif: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-mono: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
