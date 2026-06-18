@@ -17,6 +17,7 @@ import {
   type ThemePattern,
 } from '@/lib/theme/types';
 import { DEFAULT_STYLE_ID, isStyleId, type StyleId } from '@/lib/theme/styles';
+import { DEFAULT_PALETTE_ID, isPaletteId, type PaletteId } from '@/lib/theme/palettes';
 
 /**
  * Theme context for Motir's two-axis design system.
@@ -42,8 +43,11 @@ interface ThemeContextValue {
   resolvedPattern: ResolvedThemePattern;
   /** The active named style (`data-style`) — Axis 2, independent of palette. */
   styleId: StyleId;
+  /** The active named palette (`data-palette`) — Axis 1 (colour), independent of style. */
+  palette: PaletteId;
   setPattern: (pattern: ThemePattern) => void;
   setStyleId: (styleId: StyleId) => void;
+  setPalette: (palette: PaletteId) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -93,6 +97,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const stored = readStorage<string>(THEME_STORAGE_KEYS.style, THEME_DEFAULTS.style);
     return isStyleId(stored) ? stored : DEFAULT_STYLE_ID;
   });
+  const [palette, setPaletteState] = useState<PaletteId>(() => {
+    // A stale / unknown stored value resolves to the default, never a dead id.
+    const stored = readStorage<string>(THEME_STORAGE_KEYS.palette, THEME_DEFAULTS.palette);
+    return isPaletteId(stored) ? stored : DEFAULT_PALETTE_ID;
+  });
 
   // Subscribe to OS color-scheme changes. Only consulted when pattern='system'.
   const osColorScheme = useSyncExternalStore(
@@ -114,6 +123,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.setAttribute('data-style', styleId);
   }, [styleId]);
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-palette', palette);
+  }, [palette]);
+
   const setPattern = useCallback((next: ThemePattern) => {
     setPatternState(next);
     try {
@@ -132,9 +145,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const setPalette = useCallback((next: PaletteId) => {
+    setPaletteState(next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEYS.palette, next);
+    } catch {
+      // localStorage unavailable — accept that the choice won't persist.
+    }
+  }, []);
+
   const value = useMemo<ThemeContextValue>(
-    () => ({ pattern, resolvedPattern, styleId, setPattern, setStyleId }),
-    [pattern, resolvedPattern, styleId, setPattern, setStyleId],
+    () => ({ pattern, resolvedPattern, styleId, palette, setPattern, setStyleId, setPalette }),
+    [pattern, resolvedPattern, styleId, palette, setPattern, setStyleId, setPalette],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
