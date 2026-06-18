@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Source_Serif_4 } from 'next/font/google';
+import { Fraunces, Inter, JetBrains_Mono, Source_Serif_4 } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
@@ -9,11 +9,12 @@ import { localeDir, type Locale } from '@/lib/i18n/locales';
 import './globals.css';
 
 /**
- * Three variable fonts loaded via Next.js's self-hosting font loader.
+ * The base variable fonts loaded via Next.js's self-hosting font loader.
  *
  * Each font gets a CSS variable that the @theme block in globals.css picks
  * up and exposes as Tailwind utility classes (font-sans, font-serif,
- * font-mono).
+ * font-mono). A fourth face (Fraunces) is loaded below for the `editorial`
+ * type pairing.
  *
  * `display: 'swap'` shows fallback fonts immediately and swaps to the real
  * font when loaded. The visible reflow on swap is small because next/font
@@ -34,6 +35,20 @@ const sourceSerif = Source_Serif_4({
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
+  display: 'swap',
+});
+
+/**
+ * Fraunces — the display serif for the `editorial` type pairing (Subtask
+ * 7.3.55). It is the only NEW face beyond the three base loads above; the
+ * `editorial` pairing re-points the `--font-serif` headline role at it in the
+ * `html[data-type='editorial']` block in globals.css, while body (Inter) and
+ * mono (JetBrains) keep the base roles. Loaded as the variable font (optical
+ * sizing for display) so it only pays its weight when a user picks Editorial.
+ */
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-editorial-serif',
   display: 'swap',
 });
 
@@ -58,7 +73,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={localeDir[locale]}
-      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

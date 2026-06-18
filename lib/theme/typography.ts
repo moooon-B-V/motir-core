@@ -88,6 +88,13 @@ export const TYPE_REGISTRY = {
     faces: 'JetBrains Mono headlines · Inter body.',
     designDoc: 'docs/typography/motir-mono.md',
   },
+  editorial: {
+    id: 'editorial',
+    name: 'Editorial',
+    tagline: 'A characterful display serif over a humanist sans — magazine, considered.',
+    faces: 'Fraunces display headlines · Inter body · JetBrains Mono meta.',
+    designDoc: 'docs/typography/editorial.md',
+  },
 } satisfies Record<string, TypographyDefinition>;
 
 /** The id of every registered pairing — `data-type` value space. */

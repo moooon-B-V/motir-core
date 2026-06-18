@@ -21,13 +21,15 @@ import { themeInitScript } from '@/lib/theme/init-script';
 // colour + shape axes in globals.css.
 
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+const LAYOUT_TSX = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf8');
 
 describe('typography registry', () => {
-  it('registers the v1 pairings (Motir base + Motir Sans + Motir Mono)', () => {
-    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono']);
+  it('registers the base-face pairings + the Editorial new-face pairing', () => {
+    expect(TYPE_IDS).toEqual(['motir', 'motir-sans', 'motir-mono', 'editorial']);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
     expect(TYPE_REGISTRY['motir-mono'].name).toBe('Motir Mono');
+    expect(TYPE_REGISTRY['editorial'].name).toBe('Editorial');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {
@@ -110,6 +112,18 @@ describe('runtime contract in globals.css', () => {
       if (id === DEFAULT_TYPE_ID) continue; // the base needs no override block
       expect(GLOBALS_CSS).toContain(`[data-type='${id}']`);
     }
+  });
+
+  it('re-points the Editorial pairing at the LOADED Fraunces face (a defined var, not an undefined -source)', () => {
+    // The editorial block must drive --font-serif off `--font-editorial-serif`,
+    // the variable next/font defines for Fraunces in app/layout.tsx — so the
+    // headline actually renders Fraunces. (A bare `var(--font-…-source)` with no
+    // backing next/font load would silently fall through to a system fallback.)
+    expect(GLOBALS_CSS).toMatch(
+      /\[data-type='editorial'\][^{}]*\{[^}]*--font-serif:[^}]*--font-editorial-serif/,
+    );
+    expect(LAYOUT_TSX).toContain("variable: '--font-editorial-serif'");
+    expect(LAYOUT_TSX).toContain('Fraunces');
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

@@ -1225,6 +1225,21 @@
   --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
+/* Editorial (7.3.55) — a characterful display serif over the humanist sans body.
+   Unlike the v1 base-face pairings, this one ADDS a new face: Fraunces, loaded
+   via next/font in app/layout.tsx as `--font-editorial-serif`. The headline
+   (serif) role re-points to Fraunces; body (Inter) and mono (JetBrains) keep the
+   base roles — so the change is a real, visible FACE swap, not a size tweak.
+   Selector is `html[data-type=…]` (specificity 0,1,1) on purpose: next/font sets
+   the base `--font-serif` via a generated CLASS (0,1,0) on <html>, which a bare
+   `[data-type]` block (also 0,1,0) ties on source order and can lose; the element
+   qualifier guarantees the re-point wins. Still font-tokens-only — no colour
+   (--el/--color) or shape (--radius/--spacing/--shadow) token (the disjointness
+   guard in tests/theme/typographyRegistry.test.ts). */
+html[data-type='editorial'] {
+  --font-serif: var(--font-editorial-serif), 'Fraunces', Georgia, serif;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Base body styles — references --el-* tokens (not --color-* directly).
    ═══════════════════════════════════════════════════════════════════════ */
