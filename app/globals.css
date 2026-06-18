@@ -1497,6 +1497,16 @@
   --el-sidebar-item-bg-hover: #261f3d;
 }
 
+[data-type='grotesk'] {
+  /* Grotesk (7.3.54) — geometric / neo-grotesque sans headlines. Re-point the
+     editorial-serif headline role at Space Grotesk (loaded in app/layout.tsx as
+     --font-grotesk-source). Body stays Inter (--font-sans) and meta stays
+     JetBrains Mono (--font-mono) — the pairing changes the headline FACE, the
+     defining move. ONLY font tokens here (the disjointness guard): no colour
+     (--el / --color) or shape (--radius / --spacing / --shadow / --height). */
+  --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Base body styles — references --el-* tokens (not --color-* directly).
    ═══════════════════════════════════════════════════════════════════════ */
