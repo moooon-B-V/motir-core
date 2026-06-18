@@ -4,29 +4,51 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · Work-item quick view (peek) — Story 2.5 · 2.5.18 → 2.5.19 · readiness 2.5.20
+      Design mock · Work-item quick view (peek) — Story 2.5 + 8.8 · EXPANDED field set (8.8.4 →
+      8.8.8)
     </title>
     <!--
-      DESIGN ASSET (HTML mockup) for the /issues QUICK VIEW (peek) — Subtask
-      2.5.18, the design that blocks code Subtask 2.5.19. Neither tree.png nor
-      the 2.4 detail design draws this surface, so the planning-time design gate
-      (notes.html mistake #31) requires it — the same gap 2.5.7 / 2.5.9 closed
-      for the List view + filter popover.
+      DESIGN ASSET (HTML mockup) for the /issues QUICK VIEW (peek). Originally
+      Subtask 2.5.18 (blocking 2.5.19); UPDATED by Subtask 8.8.4 (blocking 8.8.8)
+      to the EXPANDED FIELD SET. Neither tree.png nor the 2.4 detail design draws
+      this surface, so the planning-time design gate (notes.html mistake #31)
+      required it — the same gap 2.5.7 / 2.5.9 closed for the List view + filter.
+
+      ── 8.8.4 — what changed (OVERTURNS the curated-subset decision) ──
+      The 2.5 peek rail showed a deliberately CURATED subset (Status · Assignee ·
+      Reporter · Priority · Due · Estimate · Parent). 8.8.4 overturns that: the
+      peek now shows the FULL CORE-FIELD SET — the same fields the detail rail
+      (detail.png) carries — so a scanner sees everything without opening the
+      page. ADDED to the rail: Type (work type) · Executor · Labels · Components ·
+      Sprint · Story points · the valued Custom fields (+ "Show more fields (N)"
+      for empty ones, mirroring the detail rail) · the Created / Updated audit
+      line. The peek STAYS read-only (the one write path is Open full page →) and
+      skeleton-first; only the RAIL grows. The heavy detail sections still live
+      full-page only (see below). See design-notes.md § Quick-view — expanded
+      field set (8.8.4).
 
       WHAT THE PEEK IS: a LARGE modal overlay that previews a work item without
       leaving the /issues list, with a prominent path to the full detail page.
       It composes the SAME primitives the detail + row designs already use — the
-      shipped components/ui/Modal, IssueTypeIcon (type hue), Pill (status/priority
-      tones), the initial-letter Avatar — so 2.5.19 invents NO new visual
-      primitive. Tokens copied 1:1 from app/globals.css; colour only via Tier-3
-      --el-*; shape via the element-semantic radius/size tokens.
+      shipped components/ui/Modal, IssueTypeIcon (kind hue), Pill (status/priority
+      tones + label/component chips), the initial-letter Avatar — so 8.8.8 invents
+      NO new visual primitive (every new field reuses an existing one). Tokens
+      copied 1:1 from app/globals.css; colour only via Tier-3 --el-*; shape via
+      the element-semantic radius/size tokens.
 
       SIZING (per Yue, 2026-06-06): the peek is GENEROUS — it takes a large part
       of the screen (wide + tall) and shows the FULL description (scrollable), not
       a 3-line teaser. Two-column body: scrollable main (title + full description)
-      + a core-fields rail (the detail page's right rail, condensed). It is still
-      a PEEK (read-only, "Open full page →" prominent, no inline edit / no comments
-      feed) — just a big one, the Linear/Jira peek shape.
+      + a core-fields rail (now the detail page's FULL right rail, condensed +
+      read-only, independently scrollable). It is still a PEEK (read-only, "Open
+      full page →" prominent, no inline edit / no comments feed) — just a big one,
+      the Linear/Jira peek shape.
+
+      WHAT STAYS DETAIL-ONLY (reached via Open full page →): the Explanation, the
+      child list, the FULL relationships/links panel (Blocked-by / Blocks /
+      Relates-to / Duplicates / Clones + link add/remove), Attachments, and the
+      Activity / comments feed. Only the readiness SIGNAL (not the link panel) is
+      promoted into the peek.
 
       ── The row-trigger problem this design RESOLVES ──
       The Tree (2.5.3) and List (2.5.8) rows are ALREADY a whole-row link to
@@ -41,14 +63,15 @@
 
       Panels:
         1 · Row trigger — the real List row + a trailing actions cell / eye button
-            (rest vs. hover); the stretched-link resolution.
+            (rest vs. hover); the stretched-link resolution. (The access path —
+            already shipped; unchanged by 8.8.4.)
         2 · Peek modal — LARGE, populated, BLOCKED (two-column: readiness banner
-            + full description + rail). The readiness banner is the in-context spot.
+            + full description + the EXPANDED full-field rail). The in-context spot.
         3 · Readiness states — the banner's READY variant + the NO-BLOCKERS case
             (no banner at all), isolated side-by-side (Subtask 2.5.20).
-        4 · Peek modal — LOADING (fields fetch when the modal opens).
+        4 · Peek modal — LOADING (the EXPANDED rail's skeleton, at the new height).
         5 · Peek modal — NOT FOUND / NO ACCESS (stale or forbidden key).
-        6 · Mobile — full-height bottom SHEET on narrow widths.
+        6 · Mobile — full-height bottom SHEET on narrow widths (expanded meta).
 
       READINESS (Subtask 2.5.20): the peek now surfaces an item's ready/blocked
       signal so a user can tell AT A GLANCE — while scanning the list — whether an
@@ -827,6 +850,65 @@
       .rail-parent .lr-id {
         color: var(--el-link);
       }
+      /* a small leading value glyph (Type / Executor / Sprint / Story points) —
+         the Estimate/Due glyph grammar reused for the new scalar fields. */
+      .rail-field .vg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      /* Labels / Components — chip stacks in the rail (wrap onto multiple rows). */
+      .rail-field dd.chips {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .pill--label {
+        background: var(--el-tint-lavender);
+      }
+      /* "Show more fields (N)" — a read-only disclosure for EMPTY custom fields,
+         mirroring the detail rail (5.3.7). In the peek it reveals their muted
+         "None" value lines; it never edits. */
+      .rail-more {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        align-self: flex-start;
+        padding: 4px 2px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        border-radius: var(--radius-control);
+      }
+      .rail-more:hover {
+        color: var(--el-text);
+      }
+      .rail-more svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+      }
+      /* A faint divider that separates field clusters (built-ins | custom | audit). */
+      .rail-div {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 2px 0;
+      }
+      /* Created / Updated audit — quiet metadata at the foot of the rail. */
+      .rail-audit {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .rail-audit time {
+        color: var(--el-text-secondary);
+      }
 
       /* ── Button (components/ui/Button.tsx) ──────────────────────────────── */
       .btn {
@@ -1014,14 +1096,17 @@
   <body>
     <div class="review-head">
       <div>
-        <h1>Work-item quick view (peek)</h1>
+        <h1>Work-item quick view (peek) — expanded field set</h1>
         <p>
-          Story 2.5 · design for 2.5.18 → 2.5.19. A <strong>large</strong> modal that previews a
+          Story 2.5 + <strong>8.8.4 → 8.8.8</strong>. A <strong>large</strong> modal that previews a
           work item without leaving <code>/issues</code> — full scrollable description on the left,
-          a core-fields rail on the right, and a prominent <em>Open full page →</em>. Composes the
-          shipped Modal · IssueTypeIcon · Pill · Avatar — no new primitive. The row gains a trailing
-          actions cell + a stretched link so the quick-view <em>button</em> never nests inside the
-          row <em>link</em>. Built from the real <code>--el-*</code> tokens.
+          a core-fields rail on the right, a prominent <em>Open full page →</em>.
+          <strong>8.8.4 overturns the curated subset:</strong> the rail now shows the
+          <strong>full core-field set</strong> the detail page carries (adds Type · Executor ·
+          Labels · Components · Sprint · Story points · valued Custom fields + “Show more” · Created
+          / Updated), still <strong>read-only</strong> (one write path = the full page) and
+          skeleton-first. Composes the shipped Modal · IssueTypeIcon · Pill · Avatar — no new
+          primitive. Built from the real <code>--el-*</code> + shape tokens.
         </p>
       </div>
       <button
@@ -1204,13 +1289,94 @@
           <path d="M21.801 10A10 10 0 1 1 17 3.335" />
           <path d="m9 11 3 3L22 4" />
         </g>
+        <!-- code (lucide) — the work-type (type) glyph -->
+        <g
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6" />
+          <path d="m8 6-6 6 6 6" />
+        </g>
+        <!-- bot (lucide) — the Executor = coding-agent glyph -->
+        <g
+          id="i-bot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </g>
+        <!-- goal (lucide) — the Sprint field glyph (matches sprint-field.mock.html) -->
+        <g
+          id="i-goal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 13V2l8 4-8 4" />
+          <path d="M20.561 10.222a9 9 0 1 1-12.55-5.29" />
+          <path d="M8.002 9.997a5 5 0 1 0 8.9 2.02" />
+        </g>
+        <!-- gauge (lucide) — the Story-points glyph -->
+        <g
+          id="i-gauge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </g>
+        <!-- calendar (lucide) — a date custom-field value glyph -->
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <!-- chevron-right (lucide) — the "Show more fields" disclosure caret -->
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
       </defs>
     </svg>
 
     <div class="stack">
       <!-- ═══════════ PANEL 1 — Row trigger (the resolution) ═══════════ -->
       <div class="panel">
-        <div class="panel-label">1 · Row trigger — trailing actions cell + stretched row link</div>
+        <div class="panel-label">
+          1 · Access path (row trigger) — trailing actions cell + stretched row link · already
+          shipped, unchanged by 8.8.4
+        </div>
         <div class="list-table" role="table" aria-label="Issues">
           <div class="lt-grid lt-head" role="row">
             <div class="th" role="columnheader">Title</div>
@@ -1341,7 +1507,7 @@
       <!-- ═══════════ PANEL 2 — Large peek, populated ═══════════ -->
       <div class="panel">
         <div class="panel-label">
-          2 · Quick view — populated · blocked (readiness banner + full description + rail)
+          2 · Quick view — populated · blocked (readiness banner + full description + EXPANDED rail)
         </div>
         <div class="stage">
           <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qv-title">
@@ -1418,22 +1584,31 @@
                   >
                     <use href="#i-arrow-right" />
                   </svg>
-                  Explanation, relationships, attachments, and the activity feed live on the
-                  <a href="#/issues/PROD-23">full page</a>.
+                  Explanation, child items, the full relationships / links panel, attachments, and
+                  the activity feed live on the <a href="#/issues/PROD-23">full page</a>.
                 </div>
               </div>
+              <!-- EXPANDED rail (8.8.4): the FULL core-field set the detail rail
+                   carries, condensed + READ-ONLY (no edit chevrons; the one write
+                   path is Open full page →). Order mirrors detail.png. -->
               <dl class="qv-rail">
                 <div class="rail-field">
                   <dt>Status</dt>
                   <dd><span class="pill pill--inprogress">in-progress</span></dd>
                 </div>
                 <div class="rail-field">
-                  <dt>Assignee</dt>
-                  <dd><span class="avatar">M</span><span class="nm">Marco Ortiz</span></dd>
+                  <dt>Type</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                    Code
+                  </dd>
                 </div>
                 <div class="rail-field">
-                  <dt>Reporter</dt>
-                  <dd><span class="avatar">A</span><span class="nm">Alice Chen</span></dd>
+                  <dt>Executor</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-bot" /></svg>
+                    Coding agent
+                  </dd>
                 </div>
                 <div class="rail-field">
                   <dt>Priority</dt>
@@ -1445,39 +1620,87 @@
                   </dd>
                 </div>
                 <div class="rail-field">
-                  <dt>Due date</dt>
-                  <dd>Jun 12, 2026</dd>
+                  <dt>Assignee</dt>
+                  <dd><span class="avatar">M</span><span class="nm">Marco Ortiz</span></dd>
                 </div>
                 <div class="rail-field">
-                  <dt>Estimate</dt>
-                  <dd>
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      style="color: var(--el-text-faint); flex: none"
-                    >
-                      <use href="#i-clock" />
-                    </svg>
-                    8h
-                  </dd>
+                  <dt>Reporter</dt>
+                  <dd><span class="avatar">A</span><span class="nm">Alice Chen</span></dd>
                 </div>
                 <div class="rail-field">
                   <dt>Parent</dt>
                   <dd>
                     <a class="rail-parent" href="#/issues/PROD-12">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        style="color: var(--el-text-faint); flex: none"
-                      >
-                        <use href="#i-parent" />
-                      </svg>
+                      <svg class="vg" viewBox="0 0 24 24"><use href="#i-parent" /></svg>
                       <span class="lr-id">PROD-12</span>
                       <span class="nm">Q3 launch — Auth</span>
                     </a>
                   </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Labels</dt>
+                  <dd class="chips">
+                    <span class="pill pill--label">auth</span>
+                    <span class="pill pill--label">security</span>
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Components</dt>
+                  <dd class="chips">
+                    <span class="pill pill--neutral">API</span>
+                    <span class="pill pill--neutral">Web</span>
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Due date</dt>
+                  <dd>Jun 12, 2026</dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Sprint</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-goal" /></svg>
+                    Sprint 7
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Story points</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
+                    5
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Estimate</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+                    8h
+                  </dd>
+                </div>
+
+                <!-- Custom fields — valued ones show; empty ones hide behind
+                     "Show more fields (N)" (mirrors the detail rail, 5.3.7). -->
+                <div class="rail-div"></div>
+                <div class="rail-field">
+                  <dt>Team</dt>
+                  <dd>Platform</dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Target release</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>
+                    Jul 1, 2026
+                  </dd>
+                </div>
+                <button class="rail-more" aria-expanded="false">
+                  <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+                  Show more fields (2)
+                </button>
+
+                <!-- Audit timestamps — quiet metadata at the foot. -->
+                <div class="rail-div"></div>
+                <div class="rail-audit">
+                  <span>Created <time>Jun 2, 2026</time></span>
+                  <span>Updated <time>Jun 10, 2026</time></span>
                 </div>
               </dl>
             </div>
@@ -1489,18 +1712,23 @@
           <strong>Left:</strong> title, then the <strong>readiness banner</strong> (the shipped
           <code>ReadinessBadge</code>, 2.4.5 — shown here BLOCKED, naming its open blockers;
           clicking one <strong>swaps the peek</strong> via <code>?peek=&lt;key&gt;</code>), then the
-          complete Markdown description. <strong>Right rail:</strong> the detail page's core-fields,
-          condensed — Status · Assignee · Reporter · Priority · Due · Estimate · Parent (the exact
-          field vocabulary of <code>detail.png</code>). <strong>Detail-only</strong> (reached via
-          <em>Open full page →</em>, top-right, and the header identifier): the explanation, the
-          full relationships/links panel (2.4.5) —
+          complete Markdown description. <strong>Right rail (8.8.4 — the change):</strong> the
+          detail page's <strong>FULL core-field set</strong>, condensed + read-only, in
+          <code>detail.png</code> order — Status · Type · Executor · Priority · Assignee · Reporter
+          · Parent · Labels · Components · Due · Sprint · Story points · Estimate, then the valued
+          <strong>custom fields</strong> with a <strong>Show more fields (N)</strong> disclosure for
+          empty ones (mirroring the detail rail, 5.3.7), then the
+          <strong>Created / Updated</strong> audit line. Every field is
+          <strong>display-only</strong> — there are no edit chevrons; the rail scrolls independently
+          when it overflows. <strong>Detail-only</strong> (reached via <em>Open full page →</em>,
+          top-right, and the header identifier): the explanation, child items, the full
+          relationships/links panel (2.4.5) —
           <em
             >only the readiness SIGNAL is promoted into the peek; the link groups stay full-page</em
           >
-          — attachments, and the activity / comments feed. The peek stays
-          <strong>read-only</strong> — editing happens on the full page. Backdrop click,
-          <code>×</code>, and <kbd>Esc</kbd> close; the Modal primitive handles focus-trap +
-          return-focus to the triggering row button.
+          — attachments, and the activity / comments feed. The peek's one write path is the full
+          page. Backdrop click, <code>×</code>, and <kbd>Esc</kbd> close; the Modal primitive
+          handles focus-trap + return-focus to the triggering row button.
         </p>
       </div>
 
@@ -1561,7 +1789,7 @@
               aria-modal="true"
               aria-busy="true"
               aria-label="Loading issue"
-              style="height: 460px"
+              style="height: 600px"
             >
               <div class="qv-head">
                 <span class="sk" style="width: 18px; height: 18px; border-radius: 4px"></span>
@@ -1587,6 +1815,8 @@
                   <span class="sk" style="width: 100%; height: 13px; margin-bottom: 10px"></span>
                   <span class="sk" style="width: 80%; height: 13px"></span>
                 </div>
+                <!-- The skeleton holds the EXPANDED rail (8.8.4) — more rows, at
+                     the new height — so the modal doesn't resize when data lands. -->
                 <dl class="qv-rail">
                   <div class="rail-field">
                     <span class="sk" style="width: 50px; height: 9px; margin-bottom: 6px"></span>
@@ -1596,11 +1826,12 @@
                     ></span>
                   </div>
                   <div class="rail-field">
-                    <span class="sk" style="width: 56px; height: 9px; margin-bottom: 6px"></span>
-                    <span
-                      class="sk"
-                      style="width: 130px; height: 22px; border-radius: 9999px"
-                    ></span>
+                    <span class="sk" style="width: 40px; height: 9px; margin-bottom: 6px"></span>
+                    <span class="sk" style="width: 84px; height: 13px"></span>
+                  </div>
+                  <div class="rail-field">
+                    <span class="sk" style="width: 64px; height: 9px; margin-bottom: 6px"></span>
+                    <span class="sk" style="width: 100px; height: 13px"></span>
                   </div>
                   <div class="rail-field">
                     <span class="sk" style="width: 56px; height: 9px; margin-bottom: 6px"></span>
@@ -1610,8 +1841,31 @@
                     ></span>
                   </div>
                   <div class="rail-field">
+                    <span class="sk" style="width: 60px; height: 9px; margin-bottom: 6px"></span>
+                    <span class="sk" style="width: 130px; height: 13px"></span>
+                  </div>
+                  <div class="rail-field">
+                    <span class="sk" style="width: 56px; height: 9px; margin-bottom: 6px"></span>
+                    <span class="sk" style="width: 118px; height: 13px"></span>
+                  </div>
+                  <div class="rail-field">
+                    <span class="sk" style="width: 44px; height: 9px; margin-bottom: 6px"></span>
+                    <span class="sk" style="width: 140px; height: 13px"></span>
+                  </div>
+                  <div class="rail-field">
                     <span class="sk" style="width: 48px; height: 9px; margin-bottom: 6px"></span>
+                    <span
+                      class="sk"
+                      style="width: 96px; height: 20px; border-radius: 9999px"
+                    ></span>
+                  </div>
+                  <div class="rail-field">
+                    <span class="sk" style="width: 52px; height: 9px; margin-bottom: 6px"></span>
                     <span class="sk" style="width: 90px; height: 13px"></span>
+                  </div>
+                  <div class="rail-field">
+                    <span class="sk" style="width: 46px; height: 9px; margin-bottom: 6px"></span>
+                    <span class="sk" style="width: 80px; height: 13px"></span>
                   </div>
                 </dl>
               </div>
@@ -1620,8 +1874,9 @@
           <p class="panel-note">
             The modal opens immediately (URL-driven, <code>?peek=PROD-23</code>); fields fetch in
             the background. Skeleton bars (<code>--el-muted</code>, gentle pulse) hold the header /
-            main / rail layout so the modal doesn't resize when data lands.
-            <em>Open full page</em> is live throughout.
+            main / <strong>expanded rail</strong> layout <strong>at the new height</strong>, so the
+            modal doesn't resize when the full field set lands. <em>Open full page</em> is live
+            throughout.
           </p>
         </div>
 
@@ -1695,10 +1950,24 @@
                   >
                 </div>
               </div>
+              <!-- The rail collapses into a meta strip; 8.8.4 carries the FULL
+                   field set here too (it wraps + the sheet body scrolls). -->
               <dl class="sheet-meta">
                 <div class="m">
-                  <dt>Assignee</dt>
-                  <dd><span class="avatar">M</span>Marco Ortiz</dd>
+                  <dt>Status</dt>
+                  <dd><span class="pill pill--inprogress">in-progress</span></dd>
+                </div>
+                <div class="m">
+                  <dt>Type</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-code" /></svg>Code
+                  </dd>
+                </div>
+                <div class="m">
+                  <dt>Executor</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-bot" /></svg>Coding agent
+                  </dd>
                 </div>
                 <div class="m">
                   <dt>Priority</dt>
@@ -1710,8 +1979,48 @@
                   </dd>
                 </div>
                 <div class="m">
+                  <dt>Assignee</dt>
+                  <dd><span class="avatar">M</span>Marco Ortiz</dd>
+                </div>
+                <div class="m">
+                  <dt>Reporter</dt>
+                  <dd><span class="avatar">A</span>Alice Chen</dd>
+                </div>
+                <div class="m">
+                  <dt>Sprint</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-goal" /></svg>Sprint 7
+                  </dd>
+                </div>
+                <div class="m">
+                  <dt>Story points</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>5
+                  </dd>
+                </div>
+                <div class="m">
                   <dt>Due</dt>
                   <dd>Jun 12, 2026</dd>
+                </div>
+                <div class="m">
+                  <dt>Estimate</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-clock" /></svg>8h
+                  </dd>
+                </div>
+                <div class="m">
+                  <dt>Labels</dt>
+                  <dd>
+                    <span class="pill pill--label">auth</span>
+                    <span class="pill pill--label">security</span>
+                  </dd>
+                </div>
+                <div class="m">
+                  <dt>Components</dt>
+                  <dd>
+                    <span class="pill pill--neutral">API</span>
+                    <span class="pill pill--neutral">Web</span>
+                  </dd>
                 </div>
               </dl>
               <span class="qv-section-label">Description</span>
@@ -1736,11 +2045,12 @@
           </div>
         </div>
         <p class="panel-note">
-          On narrow viewports the same Modal renders as a full-height bottom <strong>sheet</strong>
-          (rounded top corners, grab handle, scrollable body, ~90% height) rather than a centered
-          dialog. The rail collapses into a compact meta strip above the description; the
-          <em>Open full page</em> button is pinned full-width at the bottom as the primary action.
-          Close is backdrop / swipe-down / <kbd>Esc</kbd>.
+          On narrow viewports the same Modal renders as a full-height bottom
+          <strong>sheet</strong> (rounded top corners, grab handle, scrollable body, ~90% height)
+          rather than a centered dialog. The expanded rail collapses into a wrapping meta strip
+          above the description that carries the <strong>same full field set</strong> (the body
+          scrolls); the <em>Open full page</em> button is pinned full-width at the bottom as the
+          primary action. Close is backdrop / swipe-down / <kbd>Esc</kbd>.
         </p>
       </div>
     </div>

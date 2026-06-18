@@ -3,20 +3,20 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                          | Asset                                       | Notes                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`        | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                               |
-| Create issue modal                               | `create.pen` + `create.png`                 | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                         |
-| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                     | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                             |
-| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)    | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                            |
-| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)          | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                             |
-| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)        | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                                    |
-| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup) | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                            |
-| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)         | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                               |
-| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)    | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                          |
-| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)        | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                              |
-| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** (HTML mockup)    | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. See below.      |
-| **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)      | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below. |
+| Surface                                          | Asset                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`          | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                                                                                                                              |
+| Create issue modal                               | `create.pen` + `create.png`                   | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                                                                                                                        |
+| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                       | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                                                                                                                            |
+| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)      | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                                                                                                                           |
+| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)            | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                                                                                                                            |
+| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)          | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                                                                                                                                   |
+| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup)   | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                                                                                                                           |
+| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)           | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                                                                                                                              |
+| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)      | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                                                                                                                         |
+| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)          | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                                                                                                                             |
+| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** + `quick-view.png` | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. **8.8.4 EXPANDS the rail to the full core-field set (gates 8.8.8) — overturns the curated subset.** See below. |
+| **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)        | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below.                                                                                                |
 
 ---
 
@@ -908,6 +908,96 @@ the detail page to edit). Prev/next navigation _between_ peeked issues, comments
 and the hovercard-on-hover variant stay out; the modal-on-click peek is the
 scope. Keyboard-shortcut opening (e.g. a row's `Space`/`O`) is a nice-to-have for
 2.5.19, not required by this design.
+
+### Expanded field set — the peek shows ALL core fields (Story 8.8 · 8.8.4 → 8.8.8)
+
+**8.8.4 overturns the curated-subset decision above.** The 2.5 peek deliberately
+showed only a curated rail (Status · Assignee · Reporter · Priority · Due ·
+Estimate · Parent) — "a big, read-only preview, the heavier stuff on the full
+page." The launch-readiness ask (8.8) is the opposite: **show ALL the work-item
+fields in the peek**, so a scanner sees the complete picture without opening the
+page. This is a deliberate reversal of the earlier call, recorded here so the next
+reader knows it was a decision, not drift — `quick-view.png` is the rendered face,
+`quick-view.mock.html` the source. It gates code subtask **8.8.8**.
+
+**Mirror (rung 1) = the detail page.** "All the fields" means the **full
+core-field set the detail rail (`detail.png`) carries**, rendered in the **same
+order**, just condensed and read-only. The peek rail now is:
+
+| #   | Field                 | Treatment in the peek (read-only)                                                                                                                          | New in 8.8.4? |
+| --- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | **Status**            | `Pill` (lifecycle tone)                                                                                                                                    | —             |
+| 2   | **Type**              | work-type value + leading `code`-family glyph (`--el-text-faint`) — the type/executor pair of `type-executor-picker.mock.html`                             | **yes**       |
+| 3   | **Executor**          | `bot` / person glyph + `Coding agent` / `Human`                                                                                                            | **yes**       |
+| 4   | **Priority**          | `PRIORITY_META` chip                                                                                                                                       | —             |
+| 5   | **Assignee**          | Avatar + name                                                                                                                                              | —             |
+| 6   | **Reporter**          | Avatar + name                                                                                                                                              | —             |
+| 7   | **Parent**            | breadcrumb link (`corner-up-left` glyph + key + title)                                                                                                     | —             |
+| 8   | **Labels**            | tinted chips (`--el-tint-lavender`), wrap                                                                                                                  | **yes**       |
+| 9   | **Components**        | neutral chips (`Pill` neutral tone), wrap                                                                                                                  | **yes**       |
+| 10  | **Due date**          | `formatDate`                                                                                                                                               | —             |
+| 11  | **Sprint**            | `goal` glyph + sprint name (`sprint-field.mock.html`); muted **Backlog** when unset (status-dependent, per 2.4.15)                                         | **yes**       |
+| 12  | **Story points**      | `gauge` glyph + the number                                                                                                                                 | **yes**       |
+| 13  | **Estimate**          | `clock` glyph + duration                                                                                                                                   | —             |
+| 14  | **Custom fields**     | the **valued** ones (per-type value lines, the `custom-fields.mock.html` grammar), then a read-only **Show more fields (N)** disclosure for the empty ones | **yes**       |
+| 15  | **Created / Updated** | quiet `--el-text-muted` audit line at the foot of the rail                                                                                                 | **yes**       |
+
+- **Why Story points is included even though the card's parenthetical didn't list
+  it.** The ask is "show ALL the work-item fields," and the card's "(add type,
+  executor, sprint, labels, components, custom fields, audit timestamps)" is
+  illustrative, not exhaustive. Story points is a core scalar the detail rail
+  carries, so omitting it would leave the peek NOT showing all fields. Included,
+  mirroring detail (rung 1).
+- **The kind is NOT a duplicate rail row.** The header already carries the
+  **kind** via `IssueTypeIcon` (the same glyph every row/header uses), so the rail
+  adds only the **work Type** (code/design/…) — a justified deviation from the
+  detail rail (which lists kind as a row) to avoid duplicating what the peek header
+  already shows.
+
+**Read-only treatment (unchanged in spirit, reaffirmed).** Every field is
+**display-only** — the rail keeps the condensed `<dl>`/`rail-field` grammar with
+**no edit chevrons** (the detail rail's `FieldCard` chevrons are the EDIT
+affordance and are deliberately absent here). The peek has **one write path: Open
+full page →**. Built-in fields always render (muted **None** when empty, the
+Parent-card convention); empty **custom** fields hide behind **Show more fields
+(N)** exactly as the detail rail does (5.3.7) so the peek isn't a wall of "None".
+
+**What stays detail-only (reached via Open full page → / the header identifier).**
+The expansion is RAIL-only; the heavier sections are unchanged from 2.5: the
+**Explanation**, the **child list**, the **full relationships / links panel** (the
+Blocked-by / Blocks / Relates-to / Duplicates / Clones groups + link add/remove —
+only the readiness **signal** is promoted, not the panel), **Attachments**, and
+the **Activity / comments feed**. The peek's main column footer names them.
+
+**Layout + scroll.** The two-column shell, header bar, readiness banner, and full
+description are all unchanged. The rail simply grows longer; it keeps
+`overflow-y: auto`, so it **scrolls independently** inside the `max-h-[82vh]`
+modal — the modal does not get taller. The **loading skeleton** (panel 4) holds
+the **expanded** rail's rows **at the new height**, so the modal doesn't resize
+when the full field set lands (the AC's skeleton-first requirement). On **narrow
+widths** the rail still collapses into the bottom-sheet meta strip, which now
+carries the **same full field set** (it wraps; the sheet body scrolls).
+
+**Access path (unchanged — shown, not just named).** The peek is still opened from
+the **shared row-actions cell** (the `eye` icon button + stretched-link
+resolution, panel 1) — already shipped in 2.5.19; 8.8.4 changes nothing about how
+the peek is reached, only what it shows once open. Panel 1 keeps drawing it so the
+asset stays self-contained.
+
+**Composing primitives — still no new primitive (AC).** Every added field reuses a
+shipped primitive: `Pill` (label/component chips, status, priority), Avatar
+(assignee/reporter), the `FieldCard` value-line grammar for type/executor/sprint/
+story-points/custom (condensed to `rail-field` rows), and the existing glyph
+vocabulary. 8.8.8 invents nothing visual — it widens the data the peek already
+reads (the detail aggregate read returns the full field set; the peek previously
+rendered a subset of it).
+
+**Colour + shape.** New tints route through `--el-*` (`--el-tint-lavender` for
+label chips; chip text stays `--el-text-strong` for AA, finding #35); value glyphs
+are `--el-text-faint`; the audit line is `--el-text-muted` / `--el-text-secondary`.
+Shape via tokens — chips `--radius-badge`, the Show-more button `--radius-control`,
+the rail dividers a `--el-border-soft` hairline. No Tier-0 utilities, no raw
+`rounded-*`.
 
 ## Comments + @mentions — the Activity section (Story 5.1 · 5.1.3 → 5.1.4 / 5.1.5)
 
