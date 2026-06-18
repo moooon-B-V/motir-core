@@ -154,6 +154,31 @@ export const STYLE_REGISTRY = {
       components: 'Pill buttons, heavily-rounded inputs/cards/modals, rounder small affordances.',
     },
   },
+  'swiss-minimal-flat': {
+    id: 'swiss-minimal-flat',
+    name: 'Swiss / Minimal-Flat',
+    tagline: 'International-typographic, structural, calm — flat, sharp, gridded.',
+    inspiration: 'Swiss International Typographic Style — Müller-Brockmann grids, flat surfaces.',
+    designDoc: 'docs/styles/swiss-minimal-flat.md',
+    dimensions: {
+      silhouette:
+        'Sharp near-square corners (2px) on every surface — hard right angles, structural.',
+      stroke:
+        'Hairline borders do ALL the structural work; with elevation removed, the 1px rule is the only divider.',
+      elevation:
+        'Flat — every shadow is removed (none). Depth comes from borders + whitespace, not lift.',
+      surface:
+        'Opaque, untinted panels delineated by hairline rules; no floating, no glass, no wash.',
+      density:
+        'Tight, gridded controls (crisp 16×9 buttons, 34px control height) with generous 28px card whitespace.',
+      motion:
+        'Minimal — fast 100ms transitions and NO press-scale (calm, mechanical, never springy).',
+      typography:
+        'Restrained neo-grotesque sans throughout — headlines drop the editorial serif for Inter, tight and strong.',
+      components:
+        'Square buttons/inputs/cards/modals, rectangular (non-pill) status chips, flat hairline-ruled surfaces.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */
