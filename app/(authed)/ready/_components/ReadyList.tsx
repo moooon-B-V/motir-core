@@ -138,7 +138,12 @@ function ReadyRow({ item }: { item: ReadyItemDto }) {
   const t = useTranslations('ready');
   const openPeek = usePeekOpen();
   const { toast } = useToast();
-  const command = `motir run ${item.key}`;
+  // Container kinds (epic / story) are *planned/deepened*, not executed — they
+  // only enter the ready set while childless (the `NOT EXISTS (children)` ready
+  // predicate), and the action a user takes on one is `motir plan <key>`.
+  // Executable leaves (task / subtask / bug) dispatch with `motir run <key>`.
+  const verb = item.kind === 'epic' || item.kind === 'story' ? 'plan' : 'run';
+  const command = `motir ${verb} ${item.key}`;
 
   const copy = useCallback(
     async (e: React.MouseEvent) => {
