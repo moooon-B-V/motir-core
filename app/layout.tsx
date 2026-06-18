@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Source_Serif_4 } from 'next/font/google';
+import { Inter, JetBrains_Mono, Source_Serif_4, Space_Grotesk } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
@@ -37,6 +37,16 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+// The Grotesk type pairing's display face (Subtask 7.3.54). Not a base role —
+// it feeds ONLY the `[data-type='grotesk']` headline override in globals.css
+// via `--font-grotesk-source`; the base roles stay Inter / Source Serif / mono
+// when the pairing is not selected, so this adds payload only for that pairing.
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-grotesk-source',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'Motir',
   description: 'AI-native project management — open-source PM substrate.',
@@ -58,7 +68,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={localeDir[locale]}
-      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

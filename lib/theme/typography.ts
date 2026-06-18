@@ -30,10 +30,12 @@
  * independently overridable (e.g. Swiss shape + a serif pairing).
  *
  * ── v1 — the base faces only (no new payload) ───────────────────────────
- * v1 registers three pairings built from the THREE already-loaded next/font
+ * v1 registered three pairings built from the THREE already-loaded next/font
  * faces (Inter · Source Serif 4 · JetBrains Mono) — so they add ZERO font
- * payload and carry NO new-typeface design decision (the new-typeface pairings
- * Grotesk / Editorial / Mono-Technical are their own subtasks, 7.3.54–7.3.56):
+ * payload and carry NO new-typeface design decision. The new-typeface pairings
+ * (Grotesk 7.3.54 — added · Editorial 7.3.55 · Mono-Technical 7.3.56) ADD their
+ * own face via next/font and re-point the headline role in a `[data-type]` block.
+ * The base-face v1 trio:
  *   - `motir`      — the base: editorial serif headlines over a sans body.
  *   - `motir-sans` — all-sans (Inter headlines); reproduces the Swiss look.
  *   - `motir-mono` — mono headlines; reproduces the Neo-Brutalism / Cybercore look.
@@ -87,6 +89,14 @@ export const TYPE_REGISTRY = {
     tagline: 'Monospace headlines over a sans body — technical, code-native.',
     faces: 'JetBrains Mono headlines · Inter body.',
     designDoc: 'docs/typography/motir-mono.md',
+  },
+  grotesk: {
+    id: 'grotesk',
+    name: 'Grotesk',
+    tagline:
+      'Geometric neo-grotesque headlines over a clean sans body — tight, confident, product-y.',
+    faces: 'Space Grotesk headlines · Inter body · JetBrains Mono meta.',
+    designDoc: 'docs/typography/grotesk.md',
   },
 } satisfies Record<string, TypographyDefinition>;
 
