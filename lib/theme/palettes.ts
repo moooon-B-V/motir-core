@@ -67,6 +67,15 @@ export const PALETTE_REGISTRY = {
     inspiration: "Notion's warm marketing palette — the product's house colours.",
     designDoc: 'docs/palettes/motir.md',
   },
+  graphite: {
+    id: 'graphite',
+    name: 'Graphite',
+    tagline:
+      'Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a single restrained cool-blue accent.',
+    inspiration:
+      "Vercel's black-and-white precision + Linear's ultra-minimal, on Radix Slate/Blue scales.",
+    designDoc: 'docs/palettes/graphite.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
