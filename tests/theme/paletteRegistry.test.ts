@@ -22,9 +22,10 @@ import { themeInitScript } from '@/lib/theme/init-script';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('palette registry', () => {
-  it('registers the v1 palette set (Motir — the house palette)', () => {
-    expect(PALETTE_IDS).toEqual(['motir']);
+  it('registers the v1 palette set (Motir — the house palette — plus Cobalt)', () => {
+    expect(PALETTE_IDS).toEqual(['motir', 'cobalt']);
     expect(PALETTE_REGISTRY['motir'].name).toBe('Motir');
+    expect(PALETTE_REGISTRY['cobalt'].name).toBe('Cobalt');
   });
 
   it('keeps every entry self-consistent (key === id) and PALETTE_IDS in sync', () => {

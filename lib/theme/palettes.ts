@@ -67,6 +67,15 @@ export const PALETTE_REGISTRY = {
     inspiration: "Notion's warm marketing palette — the product's house colours.",
     designDoc: 'docs/palettes/motir.md',
   },
+  cobalt: {
+    id: 'cobalt',
+    name: 'Cobalt',
+    tagline:
+      'Cool and institutional — slate-cool surfaces, a confident cobalt primary, cooled tints.',
+    inspiration:
+      "Coinbase's clean institutional blue + IBM's structured blue, on Radix Blue/Indigo/Slate scales.",
+    designDoc: 'docs/palettes/cobalt.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
