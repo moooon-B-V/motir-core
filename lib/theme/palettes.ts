@@ -76,6 +76,15 @@ export const PALETTE_REGISTRY = {
       "Vercel's black-and-white precision + Linear's ultra-minimal, on Radix Slate/Blue scales.",
     designDoc: 'docs/palettes/graphite.md',
   },
+  evergreen: {
+    id: 'evergreen',
+    name: 'Evergreen',
+    tagline:
+      'Fresh and technical — an emerald primary over cooled forest neutrals, a green-leaning UI.',
+    inspiration:
+      'getdesign.md — Supabase (dark emerald) / Spotify (vibrant green) / MongoDB (spring green), on Radix green/jade ramps.',
+    designDoc: 'docs/palettes/evergreen.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */

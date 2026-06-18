@@ -1059,6 +1059,139 @@
   --el-sidebar-item-bg-hover: #202226;
 }
 
+/* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
+   A fresh, technical emerald scheme — Supabase (dark emerald) / Spotify
+   (vibrant green) / MongoDB (spring green), built on Radix green/jade ramps.
+   See docs/palettes/evergreen.md.
+
+   Like every palette block, this re-skins by overriding the Tier-0 --color-*
+   layer (COLOUR only — never a shape/feel token, which is the data-style axis):
+   because the Tier-3 --el-* element tokens reference --color-*, this cascades a
+   COORDINATED re-skin through every surface, ink step, accent/CTA, link,
+   semantic, tint, work-item-type hue, and chart colour at once — no per-`--el-*`
+   enumeration, no drift from the element layer. The work-item type / chart hues
+   stay a distinguishable rainbow (a `code` chip must still read distinct from a
+   `test` chip); only the palette's MOOD shifts emerald. Every text-on-surface,
+   CTA, link, and chip pairing passes WCAG AA in light AND dark (verified by
+   render specimen; see the doc).
+
+   Concrete-hex --el-* tokens that do NOT resolve through --color-*
+   (--el-sidebar-item-bg-hover) are re-skinned explicitly below. */
+[data-palette='evergreen'] {
+  /* Brand / primary — emerald CTA (white label text clears AA on the fill) */
+  --color-primary: #0c7a52;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #095f40;
+  --color-primary-fill: #0c7a52;
+
+  /* Surfaces — lightly cooled (green-leaning) neutrals over a white canvas */
+  --color-background: #ffffff;
+  --color-foreground: #14201b;
+  --color-surface: #eef3f0;
+  --color-surface-soft: #f6faf8;
+
+  /* Text scale — cooled forest-charcoal ink hierarchy */
+  --color-ink: #14201b;
+  --color-charcoal: #1d2c25;
+  --color-slate: #42534a;
+  --color-steel: #5e6f66;
+  --color-stone: #8f9f96;
+  --color-muted: #eef2f0;
+  --color-muted-foreground: #5e6f66;
+
+  /* Borders / hairlines — cool green-grey */
+  --color-hairline: #d9e2dc;
+  --color-hairline-soft: #e6ece9;
+  --color-hairline-strong: #c2d0c8;
+  --color-border: #d9e2dc;
+
+  /* Secondary accents — a harmonized-but-distinct rainbow for type/chart hues.
+     Violet replaces the house pink as the complementary accent (epic/design),
+     so those chips stay distinct from the emerald greens. */
+  --color-accent: #8257e6; /* violet — epic / design / highlight */
+  --color-accent-orange: #c2410c; /* review */
+  --color-accent-teal: #0d8a86; /* subtask / content */
+  --color-accent-green: #157f3a; /* story — fresh grass green */
+
+  /* Card tints — cool/green-leaning washes (lavender shifts toward the violet
+     accent; carry charcoal text at AA) */
+  --color-tint-peach: #ffe9d6;
+  --color-tint-rose: #f6dced;
+  --color-tint-mint: #d5f1e1;
+  --color-tint-lavender: #e7e0fa;
+  --color-tint-sky: #d8ecf6;
+  --color-tint-yellow: #fbf3d2;
+
+  /* Semantic — green-leaning success; the rest kept distinct for legibility */
+  --color-success: #127c3e; /* grassier than the emerald primary, so they read apart */
+  --color-warning: #b45309;
+  --color-destructive: #d63d3d;
+  --color-destructive-foreground: #ffffff;
+  --color-info: #1366c4; /* a clear blue — keeps task/code apart from teal subtask/content */
+
+  /* Links — blue affordance (distinct from the emerald accent), AA on both the
+     page and the soft hovered-row surface */
+  --color-link: #0a6ebd;
+  --color-link-pressed: #08537f;
+
+  /* Concrete-hex --el token (does not resolve through --color-*) — cool hover
+     lift one shade darker than the cooled light surface */
+  --el-sidebar-item-bg-hover: #e4ebe7;
+}
+
+/* Evergreen — dark companion. Bright emerald on a deep-forest canvas
+   (Supabase-style: the bright accent FILL carries DARK label text). Mirrors the
+   Tier-1 dark flip for the cooled neutrals. */
+[data-palette='evergreen'][data-theme='dark'] {
+  --color-primary: #3ddc97;
+  --color-primary-foreground: #06140d; /* dark ink on the bright emerald fill */
+  --color-primary-pressed: #2bbd7f;
+  --color-primary-fill: #3ddc97;
+
+  --color-background: #0c130f;
+  --color-foreground: #e8efe9;
+  --color-surface: #141d18;
+  --color-surface-soft: #101713;
+
+  --color-ink: #e8efe9;
+  --color-charcoal: #d6e0d9;
+  --color-slate: #9aaaa1;
+  --color-steel: #6f8077;
+  --color-stone: #5a6b62;
+  --color-muted: #141d18;
+  --color-muted-foreground: #9aaaa1;
+
+  --color-hairline: #25322b;
+  --color-hairline-soft: #1b251f;
+  --color-hairline-strong: #35453c;
+  --color-border: #25322b;
+
+  --color-accent: #a78bfa; /* violet */
+  --color-accent-orange: #fb923c;
+  --color-accent-teal: #2dd4bf;
+  --color-accent-green: #34d27a;
+
+  /* Pastel tints dimmed for the dark canvas */
+  --color-tint-peach: #2f2114;
+  --color-tint-rose: #2e1822;
+  --color-tint-mint: #11271c;
+  --color-tint-lavender: #211b33;
+  --color-tint-sky: #122430;
+  --color-tint-yellow: #2b2712;
+
+  --color-success: #34d27a;
+  --color-warning: #fb923c;
+  --color-destructive: #f87171;
+  --color-destructive-foreground: #06140d; /* dark ink on the bright red */
+  --color-info: #5aa8f5;
+
+  --color-link: #56b6f5;
+  --color-link-pressed: #7cc7f8;
+
+  /* hover lift one shade *lighter* than the dark surface (mirrors base recipe) */
+  --el-sidebar-item-bg-hover: #1e2a23;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    AXIS 3 (TYPE) — data-type overrides (Subtask 7.3.53)
    Registry: lib/theme/typography.ts. A named type pairing re-points the
