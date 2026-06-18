@@ -59,6 +59,11 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       ref={ref}
       className={cn(cardVariants({ tint, clickable }), className)}
+      // `data-surface` is the hook a surface-MATERIAL style (e.g. glassmorphism)
+      // uses to frost this panel — see globals.css's material layer. Only the
+      // default (untinted) card opts in; a pastel-tint feature card keeps its
+      // opaque tint, never a frosted overlay that would wash the hue out.
+      {...(tint && tint !== 'none' ? {} : { 'data-surface': 'card' })}
       {...(clickable ? { tabIndex: 0, role: 'button' } : {})}
       {...rest}
     >

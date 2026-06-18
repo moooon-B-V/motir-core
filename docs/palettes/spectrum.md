@@ -6,6 +6,8 @@
 > [`app/globals.css`](../../app/globals.css) as the `[data-palette='spectrum']`
 > block (light) + a `[data-palette='spectrum'][data-theme='dark']` companion.
 
+![Spectrum palette specimen — light and dark](./spectrum.png)
+
 **Tagline:** Vibrant and playful — crisp cool surfaces, a bright violet primary,
 a candy-bright multi-hue accent & tint set.
 **Inspiration:** Figma's vibrant multi-colour brand and Airtable's colourful,

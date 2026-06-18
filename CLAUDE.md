@@ -450,9 +450,26 @@ those bypass the swap layer: flipping the style leaves them unshaped.**
 
 This is the exact analogue of the colour rule above. The generic Tier-0 scales
 are inert (like Tier-0 `--color-*`); the element-semantic tokens are the swap
-layer (like `--el-*`). Only `[data-style]` tokens flip. A `[data-style]` block
-overrides ONLY shape/feel tokens, never a colour token — colour is the
+layer (like `--el-*`). Only `[data-style]` tokens flip. A `[data-style]` TOKEN
+block overrides ONLY shape/feel tokens, never a colour token — colour is the
 independent `data-palette` axis.
+
+**Surface-MATERIAL styles — the one sanctioned exception (glassmorphism, 7.3.35;
+later cybercore / aurora / neumorphism).** Some styles own the SURFACE itself —
+translucency, a gradient canvas, frosted backdrop-blur, light borders — which
+the shape-only token block cannot express. They add a **palette-DERIVED material
+layer**: style-scoped component rules
+`[data-style='id'] [data-surface='…'] { … }` (NOT the bare token block) whose
+colour comes ONLY from `color-mix()` / `var(--color-*|--el-*)` over the ACTIVE
+palette — **never a raw hex hue**. That keeps the axes disjoint (a palette swap
+re-tints the material; a style swap leaves hues untouched). Surfaces opt in via a
+`data-surface` attribute on the shared primitive (`Card`/`Modal`/`Popover`/
+`Sidebar`/`Input` emit it). Two invariants hold and are enforced by
+`tests/theme/styleRegistry.test.ts`: (1) the bare `[data-style] { … }` token
+block still carries NO `--color-*`/`--el-*`; (2) a material rule must be
+palette-derived (a `var(--color|--el-…)` reference, no hex literal). Do NOT
+"fix" a `data-surface` material rule by deleting its `color-mix` — it is the
+blessed mechanism, not a colour-rule violation. See `docs/styles/glassmorphism.md`.
 
 ### Radius — by surface
 

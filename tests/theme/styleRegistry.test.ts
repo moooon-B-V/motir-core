@@ -9,6 +9,7 @@ import {
   isStyleId,
   resolveStyle,
 } from '@/lib/theme/styles';
+import { isTypeId } from '@/lib/theme/typography';
 
 // Subtask 7.3.32 — the named-style registry is the single source of truth for
 // the `data-style` axis: the runtime contract, the `/tokens` toggle, the init
@@ -21,18 +22,20 @@ import {
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Cybercore / Y2K)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
       'swiss-minimal-flat',
       'neo-brutalism',
+      'glassmorphism',
       'cybercore-y2k',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
     expect(STYLE_REGISTRY['swiss-minimal-flat'].name).toBe('Swiss / Minimal-Flat');
     expect(STYLE_REGISTRY['neo-brutalism'].name).toBe('Neo-Brutalism');
+    expect(STYLE_REGISTRY['glassmorphism'].name).toBe('Glassmorphism');
     expect(STYLE_REGISTRY['cybercore-y2k'].name).toBe('Cybercore / Y2K');
   });
 
@@ -95,19 +98,86 @@ describe('runtime contract in globals.css', () => {
     }
   });
 
-  it('keeps the style axis disjoint from colour — no colour token in a [data-style] block', () => {
-    // Extract each `[data-style='…'] { … }` block and assert it sets only
-    // shape/feel tokens, never a `--color-*` / `--el-*` colour token (that is
-    // the independent data-palette axis's job — the acceptance criterion).
+  it('keeps the style axis disjoint from colour AND type — no colour or font token in a [data-style] token block', () => {
+    // Extract each bare `[data-style='…'] { … }` TOKEN block and assert it sets
+    // only shape/feel tokens, never a `--color-*` / `--el-*` colour token (the
+    // independent data-palette axis) NOR a `--font-*` role token (the
+    // independent data-type axis, 7.3.53 — type used to live here and moved out).
+    // Descendant-scoped material rules (`[data-style='id'] [data-surface] { … }`)
+    // are NOT token blocks and are checked separately below.
+    // Strip CSS comments first so a comment that merely MENTIONS a token (e.g.
+    // "sets no --font-* token") can't be mistaken for a real declaration.
+    const css = GLOBALS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
     const blockRe = /\[data-style='[^']+'\]\s*\{([^}]*)\}/g;
     let match: RegExpExecArray | null;
     let blocksChecked = 0;
-    while ((match = blockRe.exec(GLOBALS_CSS)) !== null) {
+    while ((match = blockRe.exec(css)) !== null) {
       const body = match[1];
       blocksChecked += 1;
       expect(body).not.toMatch(/--color-/);
       expect(body).not.toMatch(/--el-/);
+      expect(body).not.toMatch(/--font-/);
     }
     expect(blocksChecked).toBeGreaterThanOrEqual(STYLE_IDS.length - 1);
+  });
+});
+
+describe('style → type axis integration (7.3.53)', () => {
+  it('every style declares a valid defaultTypeId (a registered type pairing)', () => {
+    for (const id of STYLE_IDS) {
+      expect(isTypeId(STYLE_REGISTRY[id].defaultTypeId)).toBe(true);
+    }
+  });
+
+  it('preserves the migrated styles’ out-of-the-box type feel', () => {
+    // The per-style `--font-serif` overrides moved to the data-type axis; the
+    // styles keep their look via defaultTypeId (zero visual regression).
+    expect(STYLE_REGISTRY['swiss-minimal-flat'].defaultTypeId).toBe('motir-sans');
+    expect(STYLE_REGISTRY['neo-brutalism'].defaultTypeId).toBe('motir-mono');
+    expect(STYLE_REGISTRY['cybercore-y2k'].defaultTypeId).toBe('motir-mono');
+    // Styles that never overrode type stay on the base pairing.
+    expect(STYLE_REGISTRY['warm-editorial'].defaultTypeId).toBe('motir');
+    expect(STYLE_REGISTRY['glassmorphism'].defaultTypeId).toBe('motir');
+  });
+});
+
+describe('surface-material layer in globals.css (the 7.3.35 contract extension)', () => {
+  // A SURFACE-MATERIAL style (glassmorphism, and later cybercore / aurora / …)
+  // may own its surface — translucency, a gradient canvas, frosted
+  // backdrop-blur, light borders — that the shape-only token block cannot
+  // express. It does so via STYLE-SCOPED component rules
+  // `[data-style='id'] <selector> { … }` (distinct from the bare token block,
+  // which stays colour-free above). To keep the style axis disjoint from the
+  // palette axis, that material MUST be PALETTE-DERIVED: every colour comes from
+  // `color-mix()` / `var(--color-*|--el-*)` over the ACTIVE palette — NEVER a
+  // raw hue. So a palette swap re-tints the glass; a style swap leaves hues be.
+
+  // Descendant-scoped style rules: `[data-style='id'] <selector> { … }` — the
+  // `[^{};]+` after the attribute is the descendant selector, which excludes
+  // the bare token block (`[data-style='id'] {` has nothing before its brace).
+  const materialRe = /\[data-style='[^']+'\]\s+[^{};]+\{([^}]*)\}/g;
+
+  it('derives every material colour from the active palette — color-mix/var, never a raw hue', () => {
+    let match: RegExpExecArray | null;
+    let materialRulesChecked = 0;
+    while ((match = materialRe.exec(GLOBALS_CSS)) !== null) {
+      const body = match[1] ?? '';
+      // Only assert on rules that actually paint a colour-bearing surface.
+      if (!/(?:background|background-color|background-image|border-color|color)\s*:/.test(body)) {
+        continue;
+      }
+      materialRulesChecked += 1;
+      // Palette-derived: the rule must take its colour from the active palette —
+      // either a palette token (`var(--color-*|--el-*)`, e.g. glassmorphism's
+      // frosted surfaces + washes) or `currentColor` (the inherited palette hue,
+      // e.g. cybercore-y2k's glow grid). Both pin NO hue of their own.
+      expect(body).toMatch(/var\(--(?:color|el)-|currentColor/i);
+      // …and must NOT hardcode a raw hue (a hex colour literal). Shadow ink
+      // (rgba(15,15,15,…)) lives in the token block, not in a material rule.
+      expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    }
+    // Glassmorphism ships the canvas + frosted card/popover/modal/sidebar/input
+    // material rules; guard that the matcher actually found them.
+    expect(materialRulesChecked).toBeGreaterThanOrEqual(4);
   });
 });
