@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -6,15 +5,12 @@ import { CircleDot } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import { ReadyList } from './_components/ReadyList';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
-import { IssueQuickView } from '../issues/_components/IssueQuickView';
-import { IssueQuickViewContent } from '../issues/_components/IssueQuickViewContent';
-import { IssueQuickViewPanel } from '../issues/_components/IssueQuickViewPanel';
+import { IssueQuickViewController } from '../issues/_components/IssueQuickViewController';
 
 // The Ready set — the AI dispatch surface (Story 7.0 · Subtask 7.0.6). A Server
 // Component that resolves the active project (the established getActiveProject
@@ -29,11 +25,7 @@ import { IssueQuickViewPanel } from '../issues/_components/IssueQuickViewPanel';
 // EmptyState (panel 3) when nothing is ready. The `?peek=<key>` quick-view peek
 // reuses the SAME IssueQuickView surface /issues + the board use (notes.html #7).
 
-export default async function ReadyPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ peek?: string }>;
-}) {
+export default async function ReadyPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -52,22 +44,11 @@ export default async function ReadyPage({
   }
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const sp = await searchParams;
-  const peek = sp.peek?.trim() || null;
 
   const [ready, count] = await Promise.all([
     workItemsService.listReady(ctx.projectId, {}, svcCtx),
     workItemsService.countReady(ctx.projectId, {}, svcCtx),
   ]);
-  // Members resolve assignee/reporter ids → names inside the peek; only the peek
-  // needs them, so skip the read unless a row is being peeked.
-  const members = peek
-    ? await assignableMembersService.list({
-        projectId: ctx.projectId,
-        accessLevel: ctx.project.accessLevel,
-        ctx: svcCtx,
-      })
-    : [];
 
   const isEmpty = ready.items.length === 0;
   const countLabel = count.hasMore
@@ -104,22 +85,12 @@ export default async function ReadyPage({
         <ReadyList initialItems={ready.items} initialCursor={ready.nextCursor} />
       )}
 
-      {/* Quick-view peek (notes.html #7) — the modal frame mounts immediately when
-          `?peek` is present; the item streams behind a <Suspense>. The read reuses
-          getIssueDetail's workspace gate, so a stale / cross-workspace key renders
-          the not-found state, never a crash. */}
-      {peek ? (
-        <IssueQuickView peekKey={peek}>
-          <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
-            <IssueQuickViewContent
-              projectId={ctx.projectId}
-              ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
-              peekKey={peek}
-              members={members}
-            />
-          </Suspense>
-        </IssueQuickView>
-      ) : null}
+      {/* Quick-view peek (notes.html #7; bug 8.8.2) — a client island that
+          watches `?peek` and renders the modal frame + skeleton instantly, then
+          client-fetches the item from /api/issues/peek. Decoupled from this
+          page's server render, so opening/closing is a pure shallow URL change
+          with no underlying-list refetch. */}
+      <IssueQuickViewController />
     </div>
   );
 }

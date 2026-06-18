@@ -26,6 +26,10 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// Opening the peek is a SHALLOW URL update (bug 8.8.2) — window.history.pushState,
+// not router.push — so the card click asserts against a pushState spy.
+const historyPush = vi.spyOn(window.history, 'pushState').mockImplementation(() => {});
+
 // The board's empty-state CTA reuses NewIssueButton → useCreateIssue (Subtask
 // 3.2.6); stub the create context so importing BoardContainer doesn't pull the
 // real CreateIssueModal + its server action (→ db) into this DB-free unit test.
@@ -155,7 +159,7 @@ describe('BoardContainer', () => {
 
     const cardEl = await screen.findByTestId('board-card-PROD-1');
     fireEvent.click(cardEl);
-    expect(push).toHaveBeenCalledWith('/boards?peek=PROD-1', { scroll: false });
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/boards?peek=PROD-1');
   });
 
   it('shows the error state with a working retry on a failed fetch', async () => {

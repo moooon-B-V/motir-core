@@ -309,3 +309,62 @@ describe('workItemsService.listLinkCandidates (2.4.9; server-search since 6.9.2)
     ).rejects.toThrow(WorkItemNotFoundError);
   });
 });
+
+describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
+  it('shapes the condensed peek slice (names + status + readiness) and 404s a missing key', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Launch epic' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Auth story', parentId: epic.id },
+      fx.ctx,
+    );
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Blocker story', parentId: epic.id },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: story.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const peek = await workItemsService.getQuickView(
+      fx.projectId,
+      story.identifier,
+      fx.project.accessLevel,
+      fx.ctx,
+      'en',
+    );
+    expect(peek.identifier).toBe(story.identifier);
+    expect(peek.title).toBe('Auth story');
+    expect(peek.kind).toBe('story');
+    // Default-workflow initial status, resolved to its label/category server-side.
+    expect(peek.statusLabel).toBe('To Do');
+    expect(peek.statusCategory).toBe('todo');
+    expect(peek.parent).toEqual({
+      identifier: epic.identifier,
+      title: 'Launch epic',
+      kind: 'epic',
+    });
+    // The reporter id resolves to the seeded member's display name (resolved
+    // server-side so the client panel stays purely presentational).
+    expect(peek.reporterName).toBe('Owner');
+    // Readiness passes through: a todo story with an open (non-terminal) blocker
+    // → blocked, the open blocker NAMED for the panel's ?peek= swap-link.
+    expect(peek.readiness).toEqual({ ready: false, blockers: [blocker.identifier] });
+
+    // A missing / cross-workspace key throws WorkItemNotFoundError — which the
+    // route maps to the no-leak 404 → the controller's not-found panel.
+    await expect(
+      workItemsService.getQuickView(
+        fx.projectId,
+        'PROD-9999',
+        fx.project.accessLevel,
+        fx.ctx,
+        'en',
+      ),
+    ).rejects.toThrow(WorkItemNotFoundError);
+  });
+});

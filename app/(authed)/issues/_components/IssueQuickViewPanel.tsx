@@ -8,53 +8,28 @@ import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
-import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
+import type { QuickViewData } from '@/lib/dto/quickView';
 
 // The presentational quick-view PANEL (Subtask 2.5.19) — the modal body the
 // IssueQuickView frame wraps, per design/work-items/quick-view.mock.html. Pure
-// view: it takes already-shaped, serializable data (resolved by the async
-// IssueQuickViewContent) and renders one of three states — `loading` (the
-// Suspense fallback while the item fetches, panel 3), `notfound` (a stale /
-// cross-workspace / deleted key, panel 4), or `ready` (the populated peek,
-// panel 2). A large two-column body: scrollable main (title + FULL description)
-// + a condensed core-fields rail. Read-only — editing lives on the full page.
+// view: it takes already-shaped, serializable data (the QuickViewData the
+// /api/issues/peek route returns and IssueQuickViewController fetches) and
+// renders one of three states — `loading` (the skeleton shown while the item
+// fetches, panel 3), `notfound` (a stale / cross-workspace / deleted key, panel
+// 4), or `ready` (the populated peek, panel 2). A large two-column body:
+// scrollable main (title + FULL description) + a condensed core-fields rail.
+// Read-only — editing lives on the full page.
 //
 // Composes ONLY shipped primitives — Modal (the frame), IssueTypeIcon (type
 // hue), Pill via StatusValue / PriorityValue, the row Avatar, MarkdownView — so
 // no new visual primitive is invented (AC). Colour via --el-* only; shape via
 // the element-semantic tokens.
 
-/** The serializable payload the peek renders (a condensed slice of the detail read). */
-export interface QuickViewData {
-  identifier: string;
-  title: string;
-  kind: WorkItemKindDto;
-  statusLabel: string;
-  statusCategory: StatusCategoryDto | null;
-  descriptionMd: string | null;
-  assigneeName: string | null;
-  reporterName: string;
-  priority: WorkItemPriorityDto;
-  dueLabel: string | null;
-  estimateLabel: string | null;
-  parent: { identifier: string; title: string; kind: WorkItemKindDto } | null;
-  /**
-   * The ready/blocked readiness signal (Subtask 2.5.21), shaped for the shipped
-   * ReadinessBadge. `ready` is the service verdict (true when the item has no
-   * blockers OR every blocker is terminal — bug-ready-banner-no-deps) and
-   * `blockers` names the OPEN (non-terminal) blockers; the panel maps each to a
-   * `?peek=` swap-peek href (so a blocker link swaps the peeked item in-list,
-   * never leaving `/issues` — the 2.5.20 design's justified deviation from the
-   * detail-page badge, which links to `/issues/[key]`). The panel suppresses the
-   * banner once the item leaves the `todo` category (see `statusCategory`):
-   * "can I start this?" is moot for an item already in progress or done. `null`
-   * only when the read carried no readiness verdict at all.
-   */
-  readiness: { ready: boolean; blockers: string[] } | null;
-}
+// Re-exported for existing consumers (the component test) that import the peek
+// payload type from the panel; the canonical definition lives in the DTO.
+export type { QuickViewData };
 
 type IssueQuickViewPanelProps =
   | { state: 'loading'; peekKey: string }

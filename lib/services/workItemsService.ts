@@ -73,6 +73,9 @@ import {
   toArchivedWorkItemDto,
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
+import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
+import type { QuickViewData } from '@/lib/dto/quickView';
+import type { Locale } from '@/lib/i18n/locales';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
 import { toComponentDto } from '@/lib/mappers/componentMappers';
 import { toCustomFieldWithValueDto } from '@/lib/mappers/customFieldValueMappers';
@@ -2481,6 +2484,31 @@ export const workItemsService = {
       viewerIsWatching,
       archivedBy: archivedActor,
     };
+  },
+
+  /**
+   * The condensed QUICK-VIEW (peek) payload for `?peek=<identifier>` (Subtask
+   * 2.5.19; bug 8.8.2 made the peek a client-fetched island). Reuses the SAME
+   * aggregate read the full detail page uses (`getIssueDetail` — inheriting its
+   * workspace gate + `assertCanBrowse` + not-found path, so a stale / deleted /
+   * cross-workspace / forbidden key throws `WorkItemNotFoundError` /
+   * `ProjectAccessDeniedError`, which the route renders as the not-found panel —
+   * never an existence leak), then resolves assignee/reporter names + status /
+   * due / estimate labels server-side so the client panel stays presentational.
+   * No new query — just a shaped slice of data already read for the detail page.
+   */
+  async getQuickView(
+    projectId: string,
+    identifier: string,
+    accessLevel: 'open' | 'limited' | 'private' | 'public',
+    ctx: ServiceContext,
+    locale: Locale,
+  ): Promise<QuickViewData> {
+    const [detail, members] = await Promise.all([
+      this.getIssueDetail(projectId, identifier, ctx),
+      assignableMembersService.list({ projectId, accessLevel, ctx }),
+    ]);
+    return toQuickViewData(detail, members, locale);
   },
 
   /**

@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
@@ -26,9 +25,7 @@ import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AdvancedFilterProvider } from '../issues/_components/AdvancedFilterContext';
 import { SavedFilterSessionProvider } from '../issues/_components/SavedFilterContext';
 import { NewIssueButton } from '../issues/_components/NewIssueButton';
-import { IssueQuickView } from '../issues/_components/IssueQuickView';
-import { IssueQuickViewContent } from '../issues/_components/IssueQuickViewContent';
-import { IssueQuickViewPanel } from '../issues/_components/IssueQuickViewPanel';
+import { IssueQuickViewController } from '../issues/_components/IssueQuickViewController';
 import { BoardContainer } from './_components/BoardContainer';
 import { BoardSwitcher } from './_components/BoardSwitcher';
 import { BoardFilterControls } from './_components/BoardFilterControls';
@@ -113,11 +110,6 @@ export default async function BoardsPage({
   }
 
   const sp = await searchParams;
-  // The quick-view peek (Subtask 2.5.19) — `?peek=<identifier>` opens the work
-  // item in a modal over the board. URL-driven so it's shareable / reload-safe;
-  // closing clears the param.
-  const peek = sp.peek?.trim() || null;
-
   // The selected board (Subtask 3.7.5) — `?board=<id>` picks which of the
   // project's boards to show; absent → the project's default board. URL-driven
   // (mirrors `?peek`) so it's shareable / reload-safe; the 3.7.4 switcher writes
@@ -262,23 +254,12 @@ export default async function BoardsPage({
               filterActive={filterActive}
             />
 
-            {/* Quick-view peek — the modal frame mounts when `?peek` is present;
-                the item's fields stream behind a <Suspense> whose fallback is the
-                loading skeleton. Reuses getIssueDetail's workspace gate +
-                not-found path, so a stale / cross-workspace key renders
-                not-found, never a crash. */}
-            {peek ? (
-              <IssueQuickView peekKey={peek}>
-                <Suspense fallback={<IssueQuickViewPanel state="loading" peekKey={peek} />}>
-                  <IssueQuickViewContent
-                    projectId={ctx.projectId}
-                    ctx={{ userId: ctx.userId, workspaceId: ctx.workspaceId }}
-                    peekKey={peek}
-                    members={members}
-                  />
-                </Suspense>
-              </IssueQuickView>
-            ) : null}
+            {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
+                watches `?peek` and renders the modal frame + skeleton instantly,
+                then client-fetches the item from /api/issues/peek. Decoupled from
+                this page's server render, so opening/closing is a pure shallow URL
+                change with no board refetch. */}
+            <IssueQuickViewController />
           </div>
         </BoardFilterUiProvider>
       </SavedFilterSessionProvider>
