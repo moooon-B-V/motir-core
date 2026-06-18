@@ -21,11 +21,17 @@ import {
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat)', () => {
-    expect(STYLE_IDS).toEqual(['warm-editorial', 'soft-playful', 'swiss-minimal-flat']);
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism)', () => {
+    expect(STYLE_IDS).toEqual([
+      'warm-editorial',
+      'soft-playful',
+      'swiss-minimal-flat',
+      'neo-brutalism',
+    ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
     expect(STYLE_REGISTRY['swiss-minimal-flat'].name).toBe('Swiss / Minimal-Flat');
+    expect(STYLE_REGISTRY['neo-brutalism'].name).toBe('Neo-Brutalism');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {
