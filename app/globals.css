@@ -16,10 +16,21 @@
  *     `soft-playful` (the Tier-2 block below). More styles (Swiss,
  *     Neo-Brutalism, Glassmorphism, …) each add a `[data-style='<id>']` block.
  *
- *   The axes are INDEPENDENT: a `[data-style]` block overrides ONLY
+ *   The axes are INDEPENDENT: a `[data-style]` TOKEN block overrides ONLY
  *   shape/feel tokens, NEVER a colour token (`--color-*` / `--el-*`) — colour
  *   is the palette axis's job. Keeping them disjoint is what makes
  *   "style × palette" a true product of two free choices.
+ *
+ *   SURFACE-MATERIAL styles (glassmorphism, 7.3.35; later cybercore, aurora,
+ *   neumorphism …) own a richer surface — translucency, a gradient canvas,
+ *   frosted backdrop-blur, light borders — that the token block cannot express.
+ *   They add a palette-DERIVED MATERIAL LAYER: STYLE-SCOPED component rules
+ *   (`[data-style='id'] [data-surface='…'] { … }`) whose colour comes ONLY from
+ *   `color-mix()`/`var(--color-*|--el-*)` over the ACTIVE palette — never a raw
+ *   hue. That keeps the two axes disjoint (a palette swap re-tints the glass; a
+ *   style swap leaves hues untouched) while letting a style own its material.
+ *   The token-block rule above is unchanged; the material layer is the addition.
+ *   Both are enforced by tests/theme/styleRegistry.test.ts.
  *
  * Tier structure (top to bottom):
  *   Tier 0 — @theme base tokens (light mode defaults = the warm-editorial style)
@@ -374,6 +385,142 @@
   --transition-slow: 160ms;
   --hover-scale: 1;
   --active-scale: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Glassmorphism — translucent frosted glass over a vibrant gradient (7.3.35).
+   The FIRST surface-MATERIAL style: where Swiss / Soft-Playful only re-shape
+   the silhouette, glass re-shapes the SURFACE itself — frosted backdrop-blur
+   panels, a soft palette-derived gradient canvas, light 1px borders, layered
+   diffuse depth, a rounded silhouette, and gentle motion.
+
+   It ships in TWO parts (the style contract was extended for this — see
+   docs/styles/glassmorphism.md + DESIGN.md):
+     1. This [data-style] TOKEN BLOCK — shape/feel tokens ONLY (radius / shadow /
+        motion / density) PLUS palette-AGNOSTIC material SCALARS (blur radius,
+        surface/border ALPHAs, wash strength). No hue lives here, so it stays
+        disjoint from the palette axis — still enforced by styleRegistry.test.ts.
+     2. A palette-DERIVED MATERIAL LAYER (the [data-surface] rules just below)
+        that turns those scalars into frosted translucency + the gradient canvas
+        via color-mix()/alpha OVER the active palette tokens, introducing NO new
+        hue — so "style x palette" stays orthogonal (swap the palette and the
+        glass re-tints; swap the style and the hues are untouched). This is the
+        surface-MATERIAL axis Swiss / Soft-Playful never needed.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-style='glassmorphism'] {
+  /* Silhouette — rounded, soft (not pill). Generous radii read as "glass tile". */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+  --radius-card: 18px;
+  --radius-modal: 22px;
+  --radius-badge: 9999px; /* chips stay pills — soft is the glass register */
+  --radius-control: 10px;
+  --radius-kbd: 6px;
+
+  /* Elevation — layered, diffuse, soft. Glass FLOATS: bigger, softer, lower-
+     opacity shadows than the base, so panels read as hovering sheets. (rgba
+     literals are neutral shadow ink, not a palette hue.) */
+  --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
+  --shadow-card: 0 8px 32px -8px rgba(15, 15, 15, 0.18);
+  --shadow-elevated: 0 16px 48px -12px rgba(15, 15, 15, 0.24);
+  --shadow-modal: 0 28px 70px -16px rgba(15, 15, 15, 0.34);
+  --shadow-hero-mockup: 0 32px 80px -16px rgba(15, 15, 15, 0.38);
+
+  /* Density — comfortable, a touch roomy (glass wants air around its tiles). */
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 11px;
+  --spacing-card-padding: 26px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+
+  /* Motion — gentle, smooth (glass slides; never snaps). */
+  --transition-duration: 220ms;
+  --transition-slow: 320ms;
+  --active-scale: 0.98;
+
+  /* ── Material SCALARS — palette-AGNOSTIC (no hue, so no colour token here).
+     Consumed only by the [data-surface] material layer below; they are the
+     "glass recipe": how far to blur, and how much of the palette surface to
+     keep opaque (the rest lets the blurred gradient show through). ── */
+  --glass-blur: 16px; /* frosted-panel backdrop blur */
+  --glass-blur-strong: 26px; /* modal / overlay blur — more separation */
+  --glass-surface-alpha: 64%; /* opacity of a frosted card / popover */
+  --glass-modal-alpha: 82%; /* modals stay more opaque for body-text AA */
+  --glass-chrome-alpha: 62%; /* sidebar / chrome translucency */
+  --glass-input-alpha: 58%; /* form-control fill translucency */
+  --glass-border-alpha: 58%; /* light 1px hairline over the blur */
+  --glass-wash: 15%; /* gradient-canvas tint strength over the page bg */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Glassmorphism MATERIAL LAYER — palette-DERIVED surface treatment (7.3.35).
+   The style-contract EXTENSION: a style may own its surface MATERIAL in these
+   STYLE-SCOPED component rules as long as every colour is DERIVED from the
+   active palette via color-mix()/var() (never a raw hue) — so the style axis
+   stays disjoint from the palette axis. Surfaces are tagged with the
+   `data-surface` hook the shared primitives now emit (Card / Modal / Popover /
+   Sidebar / Input). Enforced by the "surface-material layer" test in
+   tests/theme/styleRegistry.test.ts. These are descendant-scoped selectors, so
+   they are NOT the bare [data-style] token block and never carry a hue token
+   there — the disjoint-axis token-block test still passes. ───────────────── */
+
+/* The canvas: the palette's page bg + three soft palette-derived corner washes.
+   The gradient is what the frosted panels blur — without it, blur is invisible. */
+[data-style='glassmorphism'] body {
+  background-image:
+    radial-gradient(
+      62% 70% at 12% -5%,
+      color-mix(in srgb, var(--color-primary) var(--glass-wash), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      58% 65% at 105% 6%,
+      color-mix(in srgb, var(--color-accent) var(--glass-wash), transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      72% 78% at 50% 112%,
+      color-mix(in srgb, var(--color-accent-teal) var(--glass-wash), transparent),
+      transparent 72%
+    );
+  background-attachment: fixed;
+}
+
+/* Frosted container surfaces — cards & popovers float as translucent sheets. */
+[data-style='glassmorphism'] [data-surface='card'],
+[data-style='glassmorphism'] [data-surface='popover'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
+  border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+}
+
+/* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
+[data-style='glassmorphism'] [data-surface='modal'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
+  border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+}
+
+/* The sidebar rail — frosted chrome over the canvas. */
+[data-style='glassmorphism'] [data-surface='sidebar'] {
+  background-color: color-mix(in srgb, var(--el-sidebar-bg) var(--glass-chrome-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+}
+
+/* Form controls — a translucent fill so inputs read as glass too. */
+[data-style='glassmorphism'] [data-surface='input'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

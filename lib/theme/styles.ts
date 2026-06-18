@@ -18,11 +18,22 @@
  *                                  `--el-*` layer). Orthogonal to data-style.
  *   data-theme="light|dark"      — the light/dark base within a palette.
  *
- * A `[data-style='…']` block in globals.css MUST override ONLY shape/feel
+ * A `[data-style='…']` TOKEN block in globals.css MUST override ONLY shape/feel
  * tokens (radius / spacing / shadow / sizing / transition / type) — NEVER a
  * `--color-*` or `--el-*` colour token. That is the palette axis's job, and
  * keeping the two disjoint is what makes "style × palette" a true product of
  * two independent choices rather than 2×N hand-tuned combinations.
+ *
+ * A SURFACE-MATERIAL style (glassmorphism, 7.3.35; later cybercore, aurora,
+ * neumorphism …) owns a richer surface — translucency, a gradient canvas,
+ * frosted backdrop-blur — that the token block cannot express. It adds a
+ * palette-DERIVED MATERIAL LAYER: style-scoped component rules
+ * (`[data-style='id'] [data-surface='…'] { … }`) whose colour comes ONLY from
+ * `color-mix()`/`var(--color-*|--el-*)` over the ACTIVE palette, never a raw
+ * hue — so the two axes stay disjoint (a palette swap re-tints the material; a
+ * style swap leaves hues untouched). Surfaces opt in via the `data-surface`
+ * hook the shared primitives emit. Both rules are enforced by
+ * tests/theme/styleRegistry.test.ts.
  *
  * ── Why a style is MORE than a token swap ───────────────────────────────
  * The feel-bearing DIMENSIONS below are the axes a pure token swap ignores:
@@ -31,11 +42,11 @@
  * silhouettes diverge. The registry names those dimensions so each style (and
  * its DESIGN.md) is authored against the same rubric.
  *
- * This module is the schema + the registration of the first two styles
- * (Warm Editorial, the current default; Soft / Playful, the existing pill
- * alternate). Each later "Style: …" subtask (7.3.33–7.3.42) ADDS its entry
- * here, ships a `[data-style='<id>']` block in globals.css, and authors its
- * `docs/styles/<id>.md` DESIGN.md.
+ * This module is the schema + the registration of the styles. Each "Style: …"
+ * subtask (7.3.33–7.3.42) ADDS its entry here, ships a `[data-style='<id>']`
+ * token block in globals.css (plus, for a surface-material style, the
+ * palette-derived material layer above), and authors its `docs/styles/<id>.md`
+ * DESIGN.md.
  */
 
 /**
@@ -177,6 +188,32 @@ export const STYLE_REGISTRY = {
         'Restrained neo-grotesque sans throughout — headlines drop the editorial serif for Inter, tight and strong.',
       components:
         'Square buttons/inputs/cards/modals, rectangular (non-pill) status chips, flat hairline-ruled surfaces.',
+    },
+  },
+  glassmorphism: {
+    id: 'glassmorphism',
+    name: 'Glassmorphism',
+    tagline: 'Translucent frosted glass floating over a soft, vibrant gradient.',
+    inspiration:
+      "Apple's visionOS / macOS Big Sur 'frosted glass' material — backdrop-blur over depth.",
+    designDoc: 'docs/styles/glassmorphism.md',
+    dimensions: {
+      silhouette:
+        'Soft, rounded glass tiles — 12px buttons/inputs, 18px cards, 22px modals. Friendly, never sharp.',
+      stroke:
+        'Light 1px hairlines at reduced opacity — a glass edge catching light, not a structural rule.',
+      elevation:
+        'Layered, diffuse, low-opacity shadows — panels float as hovering frosted sheets above the canvas.',
+      surface:
+        'The identity axis: translucent frosted panels (backdrop-blur) over a soft palette-derived gradient canvas — material, not opaque.',
+      density:
+        'Comfortable, a touch roomy — 20×11 buttons, 26px card padding, 38px controls; glass tiles want air.',
+      motion:
+        'Gentle, smooth — 220ms ease and a light press-scale; glass slides into place, it never snaps.',
+      typography:
+        'Inherits the base editorial type pairing; the personality is in the material, not the type.',
+      components:
+        'Rounded frosted cards / popovers / modals / sidebar / inputs (the data-surface material layer), pill status chips.',
     },
   },
 } satisfies Record<string, StyleDefinition>;

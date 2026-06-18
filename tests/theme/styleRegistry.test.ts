@@ -21,11 +21,17 @@ import {
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat)', () => {
-    expect(STYLE_IDS).toEqual(['warm-editorial', 'soft-playful', 'swiss-minimal-flat']);
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Glassmorphism)', () => {
+    expect(STYLE_IDS).toEqual([
+      'warm-editorial',
+      'soft-playful',
+      'swiss-minimal-flat',
+      'glassmorphism',
+    ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
     expect(STYLE_REGISTRY['swiss-minimal-flat'].name).toBe('Swiss / Minimal-Flat');
+    expect(STYLE_REGISTRY['glassmorphism'].name).toBe('Glassmorphism');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {
@@ -87,10 +93,12 @@ describe('runtime contract in globals.css', () => {
     }
   });
 
-  it('keeps the style axis disjoint from colour — no colour token in a [data-style] block', () => {
-    // Extract each `[data-style='…'] { … }` block and assert it sets only
-    // shape/feel tokens, never a `--color-*` / `--el-*` colour token (that is
-    // the independent data-palette axis's job — the acceptance criterion).
+  it('keeps the style axis disjoint from colour — no colour token in a [data-style] token block', () => {
+    // Extract each bare `[data-style='…'] { … }` TOKEN block and assert it sets
+    // only shape/feel tokens, never a `--color-*` / `--el-*` colour token (that
+    // is the independent data-palette axis's job — the acceptance criterion).
+    // Descendant-scoped material rules (`[data-style='id'] [data-surface] { … }`)
+    // are NOT token blocks and are checked separately below.
     const blockRe = /\[data-style='[^']+'\]\s*\{([^}]*)\}/g;
     let match: RegExpExecArray | null;
     let blocksChecked = 0;
@@ -101,5 +109,43 @@ describe('runtime contract in globals.css', () => {
       expect(body).not.toMatch(/--el-/);
     }
     expect(blocksChecked).toBeGreaterThanOrEqual(STYLE_IDS.length - 1);
+  });
+});
+
+describe('surface-material layer in globals.css (the 7.3.35 contract extension)', () => {
+  // A SURFACE-MATERIAL style (glassmorphism, and later cybercore / aurora / …)
+  // may own its surface — translucency, a gradient canvas, frosted
+  // backdrop-blur, light borders — that the shape-only token block cannot
+  // express. It does so via STYLE-SCOPED component rules
+  // `[data-style='id'] <selector> { … }` (distinct from the bare token block,
+  // which stays colour-free above). To keep the style axis disjoint from the
+  // palette axis, that material MUST be PALETTE-DERIVED: every colour comes from
+  // `color-mix()` / `var(--color-*|--el-*)` over the ACTIVE palette — NEVER a
+  // raw hue. So a palette swap re-tints the glass; a style swap leaves hues be.
+
+  // Descendant-scoped style rules: `[data-style='id'] <selector> { … }` — the
+  // `[^{};]+` after the attribute is the descendant selector, which excludes
+  // the bare token block (`[data-style='id'] {` has nothing before its brace).
+  const materialRe = /\[data-style='[^']+'\]\s+[^{};]+\{([^}]*)\}/g;
+
+  it('derives every material colour from the active palette — color-mix/var, never a raw hue', () => {
+    let match: RegExpExecArray | null;
+    let materialRulesChecked = 0;
+    while ((match = materialRe.exec(GLOBALS_CSS)) !== null) {
+      const body = match[1] ?? '';
+      // Only assert on rules that actually paint a colour-bearing surface.
+      if (!/(?:background|background-color|background-image|border-color|color)\s*:/.test(body)) {
+        continue;
+      }
+      materialRulesChecked += 1;
+      // Palette-derived: the rule must reference a palette token…
+      expect(body).toMatch(/var\(--(?:color|el)-/);
+      // …and must NOT hardcode a raw hue (a hex colour literal). Shadow ink
+      // (rgba(15,15,15,…)) lives in the token block, not in a material rule.
+      expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    }
+    // Glassmorphism ships the canvas + frosted card/popover/modal/sidebar/input
+    // material rules; guard that the matcher actually found them.
+    expect(materialRulesChecked).toBeGreaterThanOrEqual(4);
   });
 });
