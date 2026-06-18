@@ -1,480 +1,171 @@
 # AI chat / onboarding — design notes
 
 Design reference for the `ai-chat` UI area — **Motir's start-fresh onboarding
-journey** (Story 7.3, `MOTIR-804`), designed as a **visual planning canvas** in
-the spirit of cofounder.co: the process is the hero, the chat is a quiet rail.
+journey** (Story 7.3, `MOTIR-804`; this asset is subtask **7.3.44 /
+`MOTIR-1061`**). It is the single, comprehensive **screen-by-screen** design of
+the flow, so it can be reviewed before any UI is built.
 
-> **The spine of the whole design — one continuous road:**
-> **Idea → Discover · Shape · Validate → Plan → Epic 1 → Epic 2 → Epic 3 → …**
-
-The user describes an idea; it flows through **three stages** and materializes as
-a generated issue tree (a dispatchable backlog). **A "vibe project" is the WHOLE
-venture, not just the code** (Yue, 2026-06-17) — Motir plans the entire project
-(**brand, pricing, legal, marketing, and the code**), tracks **every kind of
-work** in one place, and ships the code for you. So the generated plan and the
-roadmap span all of Motir's work-item types, not just engineering (see "Whole-
-project breadth" below). **The canvas is not thrown away once planning ends — it
-becomes the project's persistent ROADMAP**: the same road continues through the
-epics, and each epic expands into its own sub-roadmap (the work-item tree in the
-same node/road language). Onboarding and the roadmap are one surface (panels 13–14). This asset is the layout source
-of truth for every UI subtask in Story 7.3 — the chat front-door UI (`7.3.5`), the
-stage-output render/edit view (`7.3.6`), the wizard/canvas shell (`7.3.11`) and the
-orchestration it embeds (`7.3.9`). It is built FROM the real design system
-(`app/globals.css` `--el-*` colour + `[data-display-style]` shape tokens, the
-shipped `components/ui/*` primitives, the real app shell + nav), so the code
-subtasks compose the same primitives — no Pencil→code gap, no Tier-0 `--color-*`,
-no raw `rounded-*` / `p-*` / `h-*`.
-
-> **Supersedes** the old `7.2.1` chat design (`MOTIR-489`, PR #1216 — never merged)
-> and the old `7.15.1` wizard design. The `7.3` re-plan consolidated the chat front
-> door and the onboarding wizard into ONE flow. **This revision (Yue, 2026-06-17)
-> further pivots the visual language**: the earlier draft was a chat-dominated
-> wizard with the three artifacts framed as **documents** (tabs, `discovery.md`
-> filenames). Per feedback — modelled on cofounder.co — the redesign makes the
-> **idea → stages → plan process the visual hero on a spatial canvas**, **demotes
-> the chat to a compact side rail**, and reframes the three artifacts as **stages
-> of one process, never documents**.
-
-> ## ⭐ 7.3.44 — the COMPREHENSIVE screen-by-screen design (this revision, 2026-06-18)
->
-> This asset is now the **single, comprehensive design of the whole start-fresh
-> onboarding flow** (`7.3.44` / `MOTIR-1061`), every screen in journey order, so
-> Yue can review it **before any UI is built**. It **supersedes** the cancelled
-> wizard design `7.3.26` / `MOTIR-1039` (which drew the gallery with an _empty_
-> style library) and **subsumes** the `7.3.43` populated-gallery pass. The net-new
-> content — the reason this card was `blocked_by` the shipped style / palette / type
-> libraries — is the **design phase** (panels 7–10): the Style × Palette × Type
-> wizard rendered with the **ACTUAL v1 styles, palettes and types as LIVE specimen
-> vignettes** (real `data-style` / `data-palette` / `data-type`, never
-> shipped-defaults-plus-"Soon"), the `/tokens` composer output (a `DESIGN.md`), and
-> the hand-off + degraded / empty / loading / error states. Panel 6 adds the
-> **4-tier + catalog direction set** and the **read → react → revise loop** the
-> re-plan locked in.
->
-> **The design system is now THREE independent runtime axes** (the meta concept,
-> Yue 2026-06-18) — Colour `data-palette` · Type `data-type` · Shape/feel
-> `data-style` (+ light/dark `data-theme`). The wizard lets a user design THEIR
-> product's design system, and Motir proves the ability by wearing it. The v1 set
-> these panels render is the shipped reality:
->
-> | Axis                 | v1 entries (real, shipped)                                                                                   |
-> | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-> | **Style** (shape)    | Warm Editorial (default) · Soft/Playful · Swiss/Minimal-Flat · Neo-Brutalism · Glassmorphism · Cybercore/Y2K |
-> | **Palette** (colour) | Motir (default) · Cobalt · Graphite · Evergreen · Spectrum                                                   |
-> | **Type** (faces)     | Motir (default) · Motir Sans · Motir Mono · Grotesk · Editorial · Mono-Technical                             |
->
-> **How the specimens stay faithful (the mock's mechanism).** The `[data-style]`,
-> `[data-palette]` and `[data-type]` axis blocks are **copied 1:1 from
-> `app/globals.css` (origin/main)** into the mock's `<style>`, and the six real
-> next/font faces (Inter · Source Serif 4 · JetBrains Mono · Space Grotesk ·
-> Fraunces · IBM Plex Mono) are loaded via `<link>`, so every specimen re-shapes /
-> re-skins / re-types exactly as the running app does. One mock-only adaptation: in
-> the app `data-palette` sits on `<html>`, so the `:root` `--el-*` layer recomputes
-> against the palette's overridden Tier-0 `--color-*`; because a specimen wraps a
-> NESTED element, the mock re-emits the derived `--el-*` layer scoped to
-> `[data-palette]` so it recomputes locally (otherwise the already-resolved `--el-*`
-> would just be inherited and the palette swap would be invisible). The style axis
-> needs no such fix — components read its shape tokens directly.
+> **Rebuilt from scratch (Yue feedback, 2026-06-18).** The earlier multi-panel
+> "spatial canvas" draft was not legible as a workflow and never showed the user
+> each stage's output. This is a **complete redo**, not a patch. It supersedes the
+> cancelled wizard designs `7.3.26`/`MOTIR-1039` + `7.3.43`/`MOTIR-1060`.
 
 ---
 
-## ⚠️ The three artifacts are STAGES, not documents
+## ⭐ The interaction model (one model, made legible)
 
-The backend persists three direction artifacts (vision / discovery / feasibility
-`DirectionDoc`s in motir-ai). **The UI never presents them as documents** — no
-tabs-of-files, no `*.md` filenames, no "open the doc" framing. They are the three
-**stages of the visual process**, each a node on the canvas that fills in as the
-user goes:
+The whole flow is **one frame with two modes**:
 
-| Stage (UI)   | Backend artifact | What the stage captures                                  |
-| ------------ | ---------------- | -------------------------------------------------------- |
-| **Discover** | discovery doc    | the interview — what you're building & for whom          |
-| **Shape**    | vision doc       | the product direction — scope, the core decisions        |
-| **Validate** | feasibility doc  | a scope & feasibility check before any work is generated |
+1. **The hub = a visual canvas + a chat.** The **canvas** is a horizontal
+   journey road (`Your idea → Understand → Shape → Validate → Design → Plan`)
+   that shows **where you are**. The **chat** is how you **move forward** — it
+   drives the conversation that produces each stage. This is home.
+2. **A step takes the FULL SCREEN.** Opening a stage's **doc to review**, or the
+   **design wizard**, replaces the hub with a focused full-screen view. The chat
+   is hidden; a **"← Back to chat"** button returns you, and a slim **progress
+   map** (the canvas distilled to 5 steps) keeps you oriented.
 
-A completed stage renders as **structured direction** (labelled fields + decision
-chips with pinned-vs-delegated markers), inline-editable — NOT a rendered Markdown
-file (panel 5). The plan is generated only after Validate.
+**Every stage's output is SHOWN and editable before you continue** — you never
+"continue" past a doc you haven't seen. Stage names are **descriptive**, never
+one-word jargon: _Understanding your idea_ · _What we'll build_ · _Checking your
+idea against the market_.
 
-> **⚠️ 3 spatial stages ↔ 4 tiers + catalog (the model reconciliation).** The
-> spatial-canvas panels (1, 4, 5) keep the **3-stage summary** Yue approved on
-> 2026-06-17 (Discover · Shape · Validate) — the high-level narrative on the road.
-> The **2026-06-17 re-plan** then locked the FULL artifact set to **four tiers +
-> a feature catalog**: Discovery (T1) · Vision (T2) · Feasibility (T3) ·
-> Validation (T4) · Feature catalog — classification-gated (a side-project /
-> hobby project gets only the floor, Discovery + Vision; startup / enterprise get
-> the full set), generated one at a time, each reviewable. **Panel 6 draws this
-> full tier set explicitly** (colour-coded + cross-linked + light-edit) alongside
-> the read → react → revise loop, so the comprehensive design shows BOTH the
-> approved 3-stage spatial summary AND the locked 4-tier artifact model. The
-> canvas's "Shape" maps to **Vision**, "Validate" folds **Feasibility +
-> Validation**. **Open decision for Yue (flagged, not silently resolved):** whether
-> the spatial-canvas stage NODES should be rebuilt from 3 stages to the literal 4
-> tiers + catalog everywhere, or keep the approved 3-stage summary with Panel 6 as
-> the full-tier detail (this asset takes the latter to avoid silently overturning
-> the 2026-06-17 canvas approval).
+This directly fixes the four problems with the prior draft: the workflow is
+legible (flow map + descriptive names + one consistent navigation), the docs are
+shown, the canvas is visual (not a slide of bullet text), and a focused step uses
+the whole screen with a clear way back.
 
 ---
 
-## ⚠️ Whole-project breadth — every kind of work, not just code
+## The screens (in journey order)
 
-A vibe project spans the whole venture, so the generated plan + the roadmap show
-**all of Motir's shipped work-item types**, each with its `--el-type-*` hue + a
-type chip (a hue tint bg + `--el-text-strong` + a dot **and** a label — AA, never
-colour-alone). The mapping used in the example (grounded in `workItemTypeMeta.ts`
-— there is **no `legal` type**):
-
-| Work                                                  | Type                                                    | Token               |
-| ----------------------------------------------------- | ------------------------------------------------------- | ------------------- |
-| the build                                             | `code`                                                  | `--el-type-code`    |
-| logo / UI / brand                                     | `design`                                                | `--el-type-design`  |
-| pricing / landing / marketing copy                    | `content`                                               | `--el-type-content` |
-| incorporate / ToS / domain / accounts (incl. "legal") | `manual`                                                | `--el-type-manual`  |
-| automated tests                                       | `test`                                                  | `--el-type-test`    |
-| (also available)                                      | `research` · `review` · `deploy` · `decision` · `chore` | `--el-type-*`       |
-
-The example plan (panels 6–8) is **"the whole project"**: epics **Brand & landing**
-· **Build the product** · **Pricing & billing** · **Launch & growth**, with
-work items spanning design / content / manual / code / test. Motir **plans + tracks**
-every type; only `code` is **auto-shipped** by the hosted coding agent — the breadth
-lives in the planner + tracker, the copy never claims the agent does legal/marketing.
+| #     | Screen                                   | What it is                                                                                                                                                       |
+| ----- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A** | **Flow map**                             | the whole workflow at a glance — the hub (canvas + chat) ⇄ the full-screen steps (each with a back-arrow) → "Go to plan phase". Legible in one look.             |
+| **B** | **Public landing**                       | the idea prompt + the one-line "how it works" progress preview; replaces `app/page.tsx`.                                                                         |
+| **C** | **The hub**                              | the **visual journey road** (where you are) + the **chat** (move forward) + the affordance that opens a ready doc full-screen.                                   |
+| **D** | **Doc · "Understanding your idea"**      | the **discovery** output, full-screen + editable: what / who / how-used, the **mirror scan** (real comparable products), the inferred class + platform chips.    |
+| **E** | **Doc · "What we'll build"**             | the **vision** output: in-scope / out-of-scope (v1) + core decisions (pinned vs delegated) + the **read → react → revise** loop shown inline (a diff + history). |
+| **F** | **Doc · "Checking against the market"**  | the **validation** output — **SKIPPABLE** — comparables + demand + risk, AND the **validate-demand-first** offer (front-load a landing page + waitlist).         |
+| **G** | **Wizard · Style** (full screen)         | pick from the 6 real styles; a **big live specimen** (the shared 7.3.37 vignette) makes the FEEL legible — silhouette / stroke / elevation / density.            |
+| **H** | **Wizard · Palette** (full screen)       | pick from the 5 real palettes; the big specimen mirrors the shipped `docs/palettes/*.png` — every colour role, re-skinned live.                                  |
+| **I** | **Wizard · Type + Review** (full screen) | pick from the 6 real type pairings; the specimen mirrors `docs/typography/*.png` (headline / body / meta roles); then the optional Fine-tune + the `DESIGN.md`.  |
+| **J** | **Go to plan phase**                     | the generated dispatchable backlog (every kind of work) + the degraded **"AI planning not configured"** + loading / resume / error states.                       |
 
 ---
 
-## ⚠️ Grounded in SHIPPED REALITY (the design rule)
+## ⚠️ The design phase uses the specimens the 7.3 subtasks shipped (Yue, 2026-06-18)
 
-Every shell/nav/auth surface is drawn to fit what is actually implemented:
+The design wizard is **web-only** (a mobile project skips it; skip → the default
+style, no `DESIGN.md`); it is the third axis of Motir's own design system —
+**Colour `data-palette` · Type `data-type` · Shape/feel `data-style`** — and it
+lets a user design THEIR product's system. Every specimen is **live**: a real
+mini-UI wrapped in the axis attributes, with the `[data-style]`/`[data-palette]`/
+`[data-type]` blocks **copied 1:1 from `app/globals.css`** and the six real
+next/font faces loaded, so it re-shapes / re-skins / re-types exactly as the app
+does.
 
-- **The real primary nav** (`app/(authed)/_components/SidebarNav.tsx`, labels from
-  `messages/en.json`): **Dashboard · Work Items · Ready · Boards · Backlog ·
-  Triage · Reports**, then **Settings · Job runs · Docs**. The `/issues` label
-  renders **"Work Items"** (never "Issues"). **There is NO `Plan` nav entry** — the
-  onboarding canvas is NOT a nav destination; it is a focused flow reached via the
-  access path below.
-- **The real app shell** (`app/(authed)/layout.tsx`, `Sidebar.tsx`): a sticky 56px
-  top bar (sidebar toggle + `ShellTierNav` org→workspace→project; right: Create-issue,
-  ⌘K search, Report, theme, bell, user) over a 240px sidebar rail.
-- **The real auth** (`app/(auth)/`, `AuthShell.tsx`): a centered `max-w-[28rem]`
-  Card on `--el-surface`, serif headline, no wordmark — the login gate (panel 2)
-  reuses this grammar (rendered as a `Modal`; a full-page `/sign-up?intent=plan`
-  redirect is equally valid — the load-bearing requirement is **prompt
-  preservation**).
-- **The root** (`app/page.tsx`) is a placeholder; panel 1 (the landing) replaces it.
-- **AI is cloud-gated** (`design/ai-usage/`): the planner is a closed cloud service;
-  a self-host install must connect a Motir Cloud token first — the **"Connect Motir
-  AI"** gate (panel 6) is FIRST specified here (no prior shipped design).
+Crucially, the wizard's specimens **match the specimen designs those subtasks
+already shipped**, not a generic card:
 
----
+- **Palette (`H`)** mirrors `docs/palettes/*.png` (the 7.3.49–52 specimens):
+  canvas / surface / surface-soft / muted swatches · the ink hierarchy · Ink CTA
+  / Secondary / accent-on-surface · semantic chips · the six tints · the
+  work-item type hues — all re-skinned live by `data-palette`.
+- **Type (`I`)** mirrors `docs/typography/*.png` (the 7.3.54–56 specimens): the
+  headline / body / meta roles with real content + the role-mapping table, live
+  by `data-type`.
+- **Style (`G`)** is the **shared specimen vignette of subtask 7.3.37 /
+  `MOTIR-1050`** — and because 7.3.37 is `blocked_by` THIS design, defining that
+  specimen well is the job of this card. It is a composed mini-UI (a toolbar +
+  work-item list + a side form) that exercises silhouette / stroke / elevation /
+  surface / density, so each style's feel is visibly distinct (the 7.3.33–36
+  acceptance bar: "re-shapes silhouette/elevation/surface, not just type+color").
 
-## ⚠️ Access path — the canvas is reached from TWO doors (both DRAWN)
+The **v1 set** the panels render (the shipped reality):
 
-1. **Logged-out → the public hero** (panel 1): typing an idea + "Start planning" →
-   the login gate (panel 2), idea preserved across auth.
-2. **Authed → the ProjectSwitcher "Plan a new project"** (panel 3,
-   `ProjectSwitcher.tsx`): the switcher Popover is drawn OPEN with that row
-   highlighted — the affordance that opens the planning canvas. (Build note:
-   consolidates with the existing `CreateProjectModal`; replace-vs-augment is a 7.3
-   build decision, flagged not silently decided.)
+| Axis        | v1 entries                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------ |
+| **Style**   | Warm Editorial (default) · Soft/Playful · Swiss/Minimal-Flat · Neo-Brutalism · Glassmorphism · Cybercore/Y2K |
+| **Palette** | Motir (default) · Cobalt · Graphite · Evergreen · Spectrum                                                   |
+| **Type**    | Motir (default) · Motir Sans · Motir Mono · Grotesk · Editorial · Mono-Technical                             |
 
----
-
-## The design language (futuristic, within our tokens)
-
-- **The planning canvas** — a warm `--el-surface` field with a low-contrast
-  **dotted grid** (a `radial-gradient` dot pattern), the cofounder canvas feel.
-- **Stage nodes** (`.snode`) — soft `Card`s (`--el-page-bg`, `--el-border`,
-  `--radius-card`, `--shadow-card`) with a tinted glyph tile per stage, a **mono
-  micro-label** ("STAGE 1 · DISCOVER"), a title, and a state line.
-- **Connectors** (`.conn` / `.tconn`) — dashed grey for done/upcoming; the **active
-  path is a solid `--el-accent` line with a soft glow**.
-- **State encoding (never colour-alone)** — done = `check` + `--el-success`; active
-  = `--el-accent` ring + glow + label; upcoming = ghosted/dashed + `--el-text-faint`.
-- **Mono micro-labels** for all stage meta (`STAGE 2 OF 3`, `IDEA`, `PLAN ·
-1 EPIC · 4 STORIES · 12 SUBTASKS`).
-- Lavender / sky / mint tints for the three stages; accent for the active path +
-  primary CTAs. A soft `--el-hero-wash-a` wash behind the landing hero.
+> **One mock-only adaptation.** In the app `data-palette` sits on `<html>`, so the
+> `:root` `--el-*` layer recomputes against the palette's overridden `--color-*`.
+> Because a specimen wraps a NESTED element, the mock re-emits the derived `--el-*`
+> layer (incl. the tint + work-item-type hues) scoped to `[data-palette]` so it
+> recomputes locally. The style + type axes need no such fix — components read
+> their tokens directly.
 
 ---
 
-## Surfaces (multi-panel — review EVERY panel, mistake #31)
+## ⚠️ Validation is skippable, and can be front-loaded (screen F)
 
-| #   | Panel                            | What it covers                                                                                                                                                                        |
-| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Public landing**               | the idea prompt + the **visual pipeline preview** — "what's going to happen", made visual; replaces `app/page.tsx`                                                                    |
-| 2   | **Login gate**                   | the `Modal` on a logged-out submit; the **preserved-idea** callout; OAuth + email                                                                                                     |
-| 3   | **Authed access path**           | the REAL shell + nav; the ProjectSwitcher open on "Plan a new project"                                                                                                                |
-| 4   | **The planning canvas**          | the spatial stage pipeline as the MAIN STAGE; the chat as a **compact right rail** driving the active stage (pin-vs-delegate)                                                         |
-| 5   | **Stage review + transition**    | the SAME shell — a stage collapsed to done, the next **expanded in place** into review/edit, the rail re-pointed, and the drawn stage→stage transition                                |
-| 6   | **Direction tiers + R-R-R loop** | the **4 tiers + feature catalog** (colour-coded, cross-linked, classification-gated, light-edit) + the **read → react → revise loop**: a coordinated DIFF, the revision log, rollback |
-| 7   | **Design — Style gallery**       | the wizard's STYLE step — **6 LIVE specimen vignettes** (the real `data-style` set), one selected; web-only + skip→default access notes                                               |
-| 8   | **Design — Palette step**        | the PALETTE step — the **same Swiss specimen re-skinned by 5 real palettes** (orthogonality proof) + role swatches                                                                    |
-| 9   | **Design — Type step**           | the TYPE step — **6 real type pairings** as Aa / headline / body / mono specimens; plus the demoted optional **Fine-tune** (radius / density / shadow) sliders                        |
-| 10  | **`/tokens` output**             | Style × Palette × Type composed — a **live preview** of the chosen combo + the generated **`DESIGN.md`**; the "with design" starter framing; "Go to plan phase"                       |
-| 11  | **Hand-off + states**            | the persistent **"Go to plan phase"** + the degraded **"AI planning not configured"** gate + **web-only skip**, **loading**, and **error** states                                     |
-| 12  | **Plan + states**                | the **issue tree materializing on the canvas** + "Review & dispatch"; the canvas states (generating / failed / resume / Connect Motir AI)                                             |
-| 13  | **The project roadmap**          | the road CONTINUES past planning: a collapsed planning origin → **Epic 1 → Epic 2 (you-are-here) → Epic 3 → +more** — the persistent roadmap                                          |
-| 14  | **Epic expanded**                | one epic opened into its **sub-roadmap** — its stories → subtasks tree in the same road/node language (kind hues + status)                                                            |
+The **Validate** step is **optional** — the journey road tags it "can skip", the
+step header carries a **"Skip validation"** action, and the footer offers **"Skip
+this step"**. A side-project / already-validated user moves straight to Design.
+
+Screen F also surfaces the **validate-demand-first** strategy (Yue, 2026-06-17):
+when demand is unproven and commercial, Motir **proactively offers** to validate
+EARLY — **"Validate demand first"** front-loads a launch slice (register a domain,
+ship a landing page with a "notify me" waitlist, sequenced **ahead of the build**)
+so real interest is collected before committing; **"No — plan the full build"**
+keeps standard timing. The choice is asked here, at the validation step, with a
+default of standard timing.
 
 ---
 
-## Panel notes
+## The read → react → revise loop (screen E, inline)
 
-### Panel 1 — public landing (idea capture + the visual process)
-
-- A marketing top-nav (brand lockup `--el-accent` tile + `sparkles` + serif "Motir";
-  Product / Resources / Pricing / Docs; "Log in" ghost + "Sign up" primary) —
-  cloud-only chrome.
-- Hero: an eyebrow `Pill` ("✦ Vibe project", lavender); a `font-serif` ~44px **"What
-  do you want to build?"**; the **whole-project** vibe-project definition subhead
-  ("…a vibe project is the whole thing — describe your idea and Motir plans the
-  entire project (brand, pricing, legal, marketing, and the code), tracks every kind
-  of work in one place, and ships the code for you" — **never "AI project
-  management"**). A compact idea prompt (`Card` + borderless `Textarea` + "Free to
-  start · no card" + a primary **"Start planning"**).
-- **The hero visual** — under "HOW IT WORKS · ONE VISUAL PROCESS", the pipeline
-  preview on a dotted-grid canvas: `Your idea → Discover · Shape · Validate → Your
-plan → · your epics`, connected stage nodes (the road visibly continues past the
-  plan into the roadmap). The caption frames it as a plan **for the whole project**.
-
-### Panel 2 — login gate
-
-A `Modal` (`role="dialog"`) over the dimmed landing; brand tile + serif **"Sign in
-to start planning"**; a **"Your idea — saved"** callout (`--el-surface-soft`,
-`--el-accent` left rule) with the verbatim prompt; **Continue with Google** (4-colour
-G) / **GitHub** / email + a **"Log in"** foot link. Reuses the `(auth)` flow.
-
-### Panel 3 — authed access path
-
-The REAL app shell (56px top bar + `ShellTierNav` + the 240px sidebar with the real
-7-item nav, Dashboard active) with the **`ProjectSwitcher` Popover OPEN** on a
-highlighted **"Plan a new project"** row — the authed door into the canvas. A
-caption names both doors.
-
-### Panel 4 — the planning canvas (the hero)
-
-- The **main stage** is the spatial pipeline on the dotted grid: **Your idea**
-  (pinned, the preserved prompt) → **Discover** (ACTIVE — `--el-accent` ring +
-  glow, "STAGE 1 · IN PROGRESS", captured items ticking in, pinned markers) →
-  **Shape** (UP NEXT, ghosted) → **Validate** (UP NEXT) → **Plan — your backlog**
-  (GENERATED LAST), joined by glowing-active / dashed connectors. Wizard chrome:
-  brand + "New project" + "STAGE 1 OF 3 · DISCOVER" + a **"Save & exit"** (ghost —
-  resumability).
-- The **chat is a compact right rail** (~348px, `--el-surface-soft`, a "DISCOVER ·
-  CHAT" mono header): the discovery Q&A driving the active stage — small bubbles
-  (22px avatars, ~12.5px text), the **pin-vs-delegate** interaction (Pinned mint
-  pill / "You decide" lavender pill / option chips + dashed "You decide"), a
-  streaming caret + typing dots (`aria-label`), a small composer with a send
-  icon-button. The rail is clearly **secondary** — the glowing active stage node on
-  the canvas is the focal point.
-
-### Panel 5 — stage review + the drawn 4→5 transition (SAME shell)
-
-Panel 5 is **the same screen as panel 4** — the persistent `canvas + chat rail`,
-not a separate layout. The flow within a stage: the rail asks → the active stage
-node **expands in place** and fills with structured direction → when it has enough,
-the node flips to a **review/edit** state with **"Continue to [next] →"** (that
-button is the drawn transition). Here:
-
-- **Discover** has collapsed to a **done** node ("Done · invoicing +
-  payment-tracking · solo freelancers").
-- **Shape** is the active node, **expanded in place** into "The shape of it"
-  (`In scope` / `Out of scope (v1)` fields with hover-reveal inline-edit `pencil`
-  - a **Core decisions** table whose rows carry the Pinned (mint, `pin`) /
-    Delegated (lavender, `wand-sparkles`) chips), ending in a primary **"Continue to
-    Validate →"**.
-- The **chat rail re-points** from "Discover · chat" (panel 4) to **"Shape · chat"**
-  with a Shape-specific Q&A — it stays present but quiet.
-
-**De-duplicated per stage** (no field repeats): Discover = what / who · Shape =
-in-scope / out-of-scope-v1 + core decisions · Validate = feasibility flags. No
-filename, no Markdown-file framing — it is the stage's output on the canvas.
-
-### Panel 6 — direction tiers + the read → react → revise loop (screens 3–4)
-
-The full direction set the re-plan locked: **four tiers + a feature catalog**,
-each a colour-coded card (Discovery sky · Vision lavender · Feasibility mint ·
-Validation peach · Catalog rose), **cross-linked** ("→ traces to Discovery /
-Vision"), each with a hover-reveal `pencil` for **light-edit**. A
-classification chip (`Startup · full set`) + a note that side-project / hobby
-projects see only the **floor** (Discovery + Vision). Below, the **read → react
-→ revise loop**: a coordinated **DIFF** (a `Vision · In scope` line revised —
-rose strike-through `−` / mint `+` — with the **knock-on Feasibility** change),
-the **chat reaction** that triggered it, and the **revision log** (v3/v2/v1 with
-per-version **Restore** = rollback). The persistent **"Go to plan phase"** sits
-beside **"Continue to design →"**. Tiers are **stages of one process, never
-files** (no `.md` names, no tabs).
-
-### Panels 7–10 — the DESIGN PHASE (Step 5; web-only)
-
-The Style × Palette × Type wizard, one decision per step, drawn with the SAME
-wizard chrome (`wz-bar`: brand + project + `Step 5 of 6 · Design · …` + `Save &
-exit`) and a `dwz-steps` sub-rail. **Every specimen is LIVE** — a composed
-mini-UI (a Sprint-board card + input + buttons + status chip), wrapped in the
-real `data-style` / `data-palette` / `data-type` axis attributes, so it shows the
-user's actual UI in that choice (never a swatch, the re-plan rule).
-
-- **Panel 7 — Style gallery.** The 6 v1 styles as a 3×2 grid of vignettes
-  (Warm Editorial `Default` · Soft/Playful · Swiss `selected` · Neo-Brutalism ·
-  Glassmorphism · Cybercore `Dark-first`, rendered `data-theme="dark"`). Each
-  style's specimen wears its `defaultTypeId` (Swiss → sans, Neo/Cybercore →
-  mono). Selected = `--el-accent` ring + check. Footer: **Skip — use Motir's
-  default** (ghost) · Back · **Continue to colour →**. A note: web-only;
-  skip → "with design" starter on the default style; pick → bare starter + a
-  `DESIGN.md`.
-- **Panel 8 — Palette step.** The **same Swiss specimen re-skinned by all 5
-  palettes** (Motir `Default` · Cobalt `selected` · Graphite · Evergreen ·
-  Spectrum) + a 5-role swatch strip per tile — the orthogonality proof (shape
-  fixed, colour varies).
-- **Panel 9 — Type step + Fine-tune.** The 6 pairings as `Aa` + headline + body +
-  mono specimens (real faces: Source Serif / Inter / Space Grotesk / Fraunces /
-  IBM Plex Mono / JetBrains Mono), Grotesk selected. Below: the **demoted
-  optional `Fine-tune`** block (a dashed callout, `Most teams skip this`) with
-  radius / density / shadow sliders — per-axis tuning is the advanced step.
-- **Panel 10 — `/tokens` output.** The chosen **Swiss × Cobalt × Grotesk**
-  composed: a `combo-pill`, a richer **live preview** of the real UI in that
-  combo, and the generated **`DESIGN.md`** (style / palette / type + the resolved
-  token deltas) in a code panel. The "with design" starter framing + **"Looks
-  good — go to plan phase →"**.
-
-### Panel 11 — hand-off + degraded / empty / loading / error (screen 7)
-
-The persistent **"Go to plan phase"** hand-off bar, then a 2×2 of states:
-**"AI planning isn't configured"** (the degraded gate — `--el-tint-yellow`,
-`plug` glyph, **Connect Motir AI** + self-hosting link; planning is cloud-gated);
-**"Design wizard — web projects only"** (`smartphone`, the mobile-skips-design
-state); **"Rendering your style previews…"** (a `Spinner` — the loading state);
-and **"Couldn't load the style library"** (`--el-danger` `alert`, **Retry** +
-"Use the default style" — the error/empty state). Covers the AC's degraded +
-empty / loading / error requirement.
-
-### Panel 12 — plan materialized + states
-
-- The tracker shows Discover · Shape · Validate done → **Plan** active. The
-  **generated issue tree forms on the canvas** (mono "PLAN · THE WHOLE PROJECT ·
-  4 EPICS · 8 STORIES · 21 WORK ITEMS"): venture-spanning epics (Brand & landing ·
-  Build the product · Pricing & billing · Launch & growth) → stories → work items
-  carrying **type chips** (Design / Content / Code / Manual / …), the last rows
-  ghosted / streaming in, with a primary **"Review & dispatch →"** (the 7.4 hand-off — drawn,
-  wired later).
-- A row of **canvas states**: **Generating your plan** (progress + "Discover ·
-  Shape · Validate — done" + "Drafting the issue tree…"); **Discovery couldn't
-  finish** (`ErrorState`: saved-answers + "Try again"); **Pick up where you left
-  off** (resume: "Resume" + "Start over"); **Connect Motir AI** (`--el-tint-yellow`,
-  `plug` glyph — the self-host connect-gate: "Planning runs on Motir Cloud…" +
-  "Connect Motir AI" primary + "Self-hosted? Learn more").
-- **Bridge:** once dispatched, this same canvas becomes the persistent roadmap
-  (panel 7) — the road continues into the epics.
-
-### Panel 13 — the project roadmap (the canvas, persistent)
-
-The canvas is not thrown away after planning. The **road continues** on the same
-dotted-grid surface: a collapsed **"planning origin"** cluster ("PLANNING · DONE":
-✓ Idea · ✓ Discover · ✓ Shape · ✓ Validate · ✓ Plan) → **Epic 1** (done) → **Epic
-2** (active, a `map-pin` **"You are here"** marker + an **"Open roadmap"** affordance
-→ panel 8) → **Epic 3** (up next, ghosted) → **+ more epics**. Each epic node: an
-`--el-type-epic` glyph, the epic title, a progress meter (e.g. "3 / 8 done"), a
-story count, and a status. Connectors: green (done) → glowing accent (active) →
-dashed (upcoming). A mono section label "ROADMAP · <project>" and a "Board view"
-toggle (the roadmap is one VIEW of the work-item tree, alongside boards/backlog).
-
-### Panel 14 — an epic expanded into its sub-roadmap (work-item tree as a road)
-
-One epic node **opened in place**: the parent road stays visible (compact, the epic
-marked OPEN), and below it the epic's **stories → subtasks** render in the SAME
-node/road language — stories as nodes (`--el-type-story` green), their subtasks
-beneath (`--el-type-subtask` teal), each with per-item status (done check /
-in-progress / todo) **and a work-item TYPE chip** (Code · Design · Content · Manual ·
-Test — "every kind of work", per the whole-project breadth above). A "TRACES TO
-SHAPE · VALIDATE" lineage chip reinforces the
-self-similar pattern (a roadmap = a planning origin + a tree of work, at every
-level). This is **a new PRESENTATION of the shipped work-item tree** (epics →
-stories → subtasks), not a new data model.
-
-> **⚠️ Scope flag — panels 13–14 are beyond Story 7.3 (Yue, 2026-06-17).** The
-> persistent **roadmap canvas** (the road continuing through epics + epic→sub-roadmap
-> expansion) is a new project VIEW — a first-class surface in the mirror products
-> (Jira Timeline/Roadmaps, Linear Roadmaps), and a recognised PM-tool view. Story
-> 7.3 is _start-fresh onboarding_; the roadmap is drawn here because it is the same
-> visual system and the continuity is the point, but its **BUILD needs its own
-> owning story** (proposed: an Epic-7 story "Planning canvas → persistent project
-> roadmap", `dependsOn` the 7.3 canvas shell + the work-item tree read). Tracked so
-> the plan stays honest — not silently folded into 7.3's build scope.
+The loop is not a separate slide — it lives **inside the doc** the user is
+reading. On "What we'll build", a recently-revised line shows a **diff** (rose
+`−` strike-through / mint `+` add), a one-line note of the chat reaction that
+triggered it and which **other tier it also updated** (coordinated revision), and
+a **View history · restore** affordance (rollback). The loop stays live through
+the build phase.
 
 ---
 
-## Token / a11y rules honoured
+## Token / a11y discipline (honoured throughout)
 
-- **Colour** strictly via `--el-*` (finding #54), palette-not-grey-plus-accent: the
-  three stage tints (lavender/sky/mint), the accent active path + glow, the success
-  done-check, the rose error glyph + `--el-danger`, the yellow connect gate. The
-  hero wash uses `--el-hero-wash-a`. No Tier-0 `--color-*`, no Tier-0 utilities.
-  Tints carry the hue in the BACKGROUND with `--el-text-strong` text (finding #35,
-  AA); the canvas dotted grid sits on `--el-surface` with low-contrast dots (no
-  page-level tint).
-- **Shape** via element-semantic tokens only (`--radius-card` / `-input` / `-btn` /
-  `-modal` / `-control` / `-badge` / `-pill`; `--shadow-subtle` / `-card` /
-  `-elevated` / `-modal`; `--spacing-*`; `--height-*`). `rounded-full` only on
-  avatar / spinner / typing dots / pill / status dot.
-- **Not colour-alone** (finding #35): every stage and state pairs an icon + a label
-  - a tint; pin vs delegate pairs `pin` vs `wand-sparkles` + a label; the active
-    path pairs the glow with the "IN PROGRESS" label + ring.
-- **A11y**: the gate is `role="dialog"` with an accessible name; any tab strip is
-  `role="tablist"` / `role="tab"` + `aria-selected`; the typing indicator carries
-  `aria-label`; the send button has an `aria-label`; decorative icons are
-  `aria-hidden`. AA holds on all tints (charcoal-on-tint).
+- **Colour** strictly via `--el-*` — specimens carry the palette in the `--el-*`
+  layer (re-emitted for nesting); chips put the hue in the tint BACKGROUND with
+  `--el-text-strong` text (finding #35, AA); the degraded gate uses
+  `--el-tint-yellow`. The only `--color-*` is inside the axis blocks copied 1:1
+  from `globals.css` (where it is sanctioned).
+- **Shape** strictly via element-semantic tokens (`--radius-*` / `--shadow-*` /
+  `--spacing-*` / `--height-*`) so the `[data-style]` swap actually re-shapes the
+  specimens (that IS the demo). `rounded-full` only on dots / avatars / swatches.
+- **Not colour-alone** — every step pairs an icon + label + tint; the progress
+  map pairs a check / number with the label; pinned vs delegated keeps its
+  `pin` / `wand` markers.
+- **AA holds** — each style × palette pair is AA by construction (the registries
+  enforce it); chrome text is charcoal on cream; Cybercore renders its native
+  dark register.
+- **A11y** — the chat is a labelled region; the progress map / journey road are
+  decorative orientation (the step labels carry the meaning); decorative icons are
+  `aria-hidden`; buttons carry accessible labels.
 
 ## Primitives composed (no hand-rolling)
 
-| Element                                               | Shipped primitive                                                                                                                                                                                           |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| marketing top-nav                                     | a `PublicTopBar`-style nav + `Button.tsx`                                                                                                                                                                   |
-| stage node / state / direction card                   | `components/ui/Card.tsx` (tints) — `.snode` is a NEW ARRANGEMENT of Card, no new primitive                                                                                                                  |
-| canvas + dotted grid + connectors                     | NEW ARRANGEMENT (CSS `radial-gradient` grid + token-styled connector lines) — no new design-system vocabulary                                                                                               |
-| roadmap epic / story / subtask nodes (panels 13–14)   | NEW ARRANGEMENT of `Card` + the `--el-type-{epic,story,subtask}` kind hues + the connector language — a new presentation of the shipped work-item tree                                                      |
-| prompt box + composer + email                         | `Textarea.tsx` · `Input.tsx`                                                                                                                                                                                |
-| login gate                                            | `Modal.tsx` + the `(auth)` flow                                                                                                                                                                             |
-| eyebrow / pin / delegate / decision chip / stage meta | `Pill.tsx` (tint tones)                                                                                                                                                                                     |
-| primary / ghost / secondary                           | `Button.tsx`                                                                                                                                                                                                |
-| app shell + sidebar (panel 3)                         | `app/(authed)/layout.tsx` · `Sidebar.tsx` · `SidebarNav.tsx` · `ShellTierNav.tsx`                                                                                                                           |
-| authed access path                                    | `ProjectSwitcher.tsx` (Popover + "Plan a new project")                                                                                                                                                      |
-| running job / writing step                            | `Spinner.tsx`                                                                                                                                                                                               |
-| discovery-failed state                                | `ErrorState.tsx`                                                                                                                                                                                            |
-| message bubble                                        | NEW ARRANGEMENT = `Card` + `Avatar` + `MarkdownView` (no new primitive)                                                                                                                                     |
-| **specimen vignette** (panels 7–10)                   | NEW ARRANGEMENT of `Card` + `Input` + `Button` + status `Pill`, wrapped in the real `data-style`/`data-palette`/`data-type` axes — the `/tokens` specimen pattern (`app/tokens/page.tsx`), no new primitive |
-| **style / palette / type gallery tile**               | NEW ARRANGEMENT = the vignette + a selectable `Card` frame (accent ring + check) + a meta caption; the palette tile adds a 5-role swatch strip                                                              |
-| **tier card + diff + revision log** (panel 6)         | NEW ARRANGEMENT of `Card` + tint glyph + `Pill` (tiers); a diff is tinted `--el-tint-rose`/`-mint` lines; the revision log is a `Card` timeline + a `link` Restore                                          |
-| **Fine-tune sliders** (panel 9)                       | a demoted dashed `Card` with token-driven track/knob rows — the optional advanced step                                                                                                                      |
-| avatar                                                | the initial-letter disc (`issueCellPrimitives`)                                                                                                                                                             |
-| icons                                                 | lucide-react + the Google / GitHub brand marks (12 design-phase glyphs added: palette/type/sliders/layout/file-code/git-compare/undo/monitor/smartphone/arrow-left/eye/check-check)                         |
+Every surface is a shipped primitive or a new ARRANGEMENT of them + tokens — no
+new design-system vocabulary:
 
-No new design-system primitive is invented — the canvas, stage nodes, and
-connectors are new ARRANGEMENTS of shipped primitives + tokens (the same latitude
-the message bubble takes). A future need a shipped primitive can't cover is a NEW
-`design/` subtask, not a code workaround.
-
-## Token / a11y rules honoured by the design phase (panels 6–11)
-
-- **Colour** strictly via `--el-*` — the specimens carry the palette in the
-  `--el-*` layer (re-emitted for nesting), the tier cards put each hue in the
-  tint BACKGROUND with `--el-text-strong` text (finding #35, AA), the diff uses
-  `--el-tint-rose`/`-mint` with dark ink, the degraded gate uses `--el-tint-yellow`.
-  No Tier-0 `--color-*` in the authored markup; the axis blocks are the only place
-  `--color-*` appears (copied 1:1 from `globals.css`, where it is sanctioned).
-- **Shape** strictly via element-semantic tokens — the vignettes read
-  `--radius-{card,btn,input,badge}` / `--shadow-card` / `--spacing-*` /
-  `--height-*` so the `[data-style]` swap actually re-shapes them (that IS the
-  demo). `rounded-full` only on dots / avatars / swatches.
-- **Not colour-alone** — every selection pairs a check icon + ring; every state
-  pairs an icon + label + tint; pinned vs delegated keeps its `pin` / `wand`
-  markers.
-- **AA holds** on every specimen because each style/palette pair is AA by
-  construction (the registries enforce it), and the chrome text is charcoal on
-  cream. Cybercore renders `data-theme="dark"` (its native register).
+| Element                                 | Built from                                                                                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| journey road / progress map             | NEW ARRANGEMENT of token-styled nodes + connector lines (orientation only)                                                                     |
+| full-screen step frame                  | a `step-top` bar (`Button` back + the progress map) over a centred doc body                                                                    |
+| doc fields / scope boxes / mirror cards | `Card` + labelled fields + hover-reveal `pencil` (inline edit)                                                                                 |
+| chat (hub) + bubbles + composer         | `Card` + `Avatar` + `Input` (no new primitive)                                                                                                 |
+| style / palette / type specimens        | NEW ARRANGEMENT of `Card`/`Input`/`Button`/`Pill` wrapped in the real axis attributes — the `/tokens` specimen pattern (`app/tokens/page.tsx`) |
+| option chips (wizard)                   | a selectable `Card`/`Button` with a tiny live preview (mini card / swatch / Aa)                                                                |
+| validate-early / state callouts         | `Card` tints + `Button`; the spinner is `Spinner`                                                                                              |
+| icons                                   | lucide-react + Google / GitHub marks                                                                                                           |
 
 ## Deliverable
 
 The three-file design-asset set under `design/ai-chat/`: `design-notes.md` (this
-file) · `onboarding.mock.html` (the HTML mockup — source of truth, 14 panels) ·
+file) · `onboarding.mock.html` (the HTML mockup — source of truth, screens A–J) ·
 `onboarding.png` (the full-page export — the board-visible face). Rendered with
 Playwright chromium (full-page, light theme, `deviceScaleFactor: 2`, 1200px wide);
 `prettier --check` clean.
