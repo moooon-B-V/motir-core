@@ -4,51 +4,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · Motir start-fresh onboarding (Story 7.3 · 7.3.1) — the planning canvas: idea →
-      Discover · Shape · Validate → Plan
+      Design mock · Motir start-fresh onboarding (Story 7.3 · 7.3.44 / MOTIR-1061) — the canvas IS
+      the roadmap: Idea → Discovery → Vision → Validation → Plan → Epic 1 → Epic 2 → …
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the `ai-chat` surface — Motir's START-FRESH
-      ONBOARDING flow (Story 7.3, subtask 7.3.1 / MOTIR-827). SUPERSEDES the old
-      7.2.1 chat design (MOTIR-489) + the old 7.15.1 wizard design.
+      ONBOARDING flow (Story 7.3, subtask 7.3.44 / MOTIR-1061). The comprehensive
+      screen-by-screen design.
 
-      ⚠️ REDESIGN (Yue, futuristic / cofounder.co): the onboarding is a SPATIAL
-      PLANNING CANVAS, not a chat screen. The HERO is a VISUAL PROCESS —
-        idea → Discover · Shape · Validate → Plan
-      drawn as connected stage nodes on a dotted-grid canvas with a glowing active
-      path. The CHAT is demoted to a COMPACT RIGHT RAIL that drives the active
-      stage; it never dominates. The three middle stages ARE the three planning
-      artifacts (persisted as vision/discovery/feasibility direction docs in the
-      backend) but the UI presents them as STEPS OF ONE PROCESS — never as
-      "documents" and never with a filename.
+      THE MODEL (one frame, two modes):
+        · HUB = a visual CANVAS (left) + a CHAT (compact right rail). The canvas is
+          one continuous ROADMAP — another form of display of the work-item tree +
+          the pre-plan phase: Idea → Discovery → Vision → Validation → Plan →
+          Epic 1 → Epic 2 → … (each epic expandable to its stories → subtasks). It
+          shows WHERE YOU ARE the whole way; the chat DRIVES the active step.
+        · A STEP takes the FULL SCREEN — a stage's doc to review, or the design
+          wizard — with a "Back to canvas" button + a descriptive header (not
+          cramped short words; the journey lives on the canvas).
+        · Every stage's OUTPUT (its doc) is SHOWN and editable before continuing.
+          Validation is SKIPPABLE and can be front-loaded (validate demand first).
+        · The DESIGN wizard is a FULL-PAGE showcase: a whole product page (its own
+          nav + hero + cards + footer) rendered live in the chosen
+          data-style × data-palette × data-type, so the chrome is part of the demo.
 
-      Built FROM the real design system: the token block below is copied 1:1 from
-      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*), and the
-      markup composes shipped primitives — Card, Button, Textarea, Modal, Pill,
-      Spinner, ErrorState — plus the real app shell (Sidebar + ShellTierNav) and
-      the real (auth) card grammar. Component CSS references ONLY --el-* colour +
-      semantic shape tokens (no Tier-0 --color-*, no raw rounded/p/h). The stage
-      node / connector / canvas / chat-bubble are NEW ARRANGEMENTS of tokens +
-      primitives — no new design-system vocabulary.
+      Built FROM the real design system: the token block + the [data-style] /
+      [data-palette] / [data-type] axis blocks are copied 1:1 from app/globals.css,
+      and the six real next/font faces are loaded, so every specimen + the full-page
+      showcase re-shape / re-skin / re-type exactly as the running app does.
+      Component CSS references ONLY --el-* colour + element-semantic shape tokens.
 
-      ⚠️ Grounded in SHIPPED REALITY (the MOTIR.md design rule): the real primary
-      nav is Dashboard · Work Items · Ready · Boards · Backlog · Triage · Reports
-      (app/(authed)/_components/SidebarNav.tsx; label "Work Items", never "Issues";
-      NO `Plan` entry). The authed door into the wizard is the real ProjectSwitcher
-      "Create project" affordance.
-
-      Covers (multi-panel — review EACH, mistake #31):
-        (1) PUBLIC LANDING = idea capture + the VISUAL pipeline preview of what
-            happens (idea → Discover · Shape · Validate → Plan)
-        (2) LOGIN GATE — raised on submit; the typed idea is PRESERVED
-        (3) AUTHED ENTRY / ACCESS PATH — the real shell + ProjectSwitcher open
-        (4) THE PLANNING CANVAS — the stage pipeline as the main stage (Discover
-            active, glowing); the chat is a COMPACT right rail driving it
-        (5) A STAGE AS A STEP — the Shape stage's captured direction as structured
-            fields/chips on the canvas (NOT a document); pin-vs-delegate inline
-        (6) PLAN materialized — the issue tree forming on the canvas + Review &
-            dispatch; plus canvas STATES (running / failed / resume / Connect Motir AI)
-      Toggle dark mode (top-right) to confirm token parity. See design-notes.md.
+      Screens: B landing · C hub (canvas roadmap + chat rail) · D/E/F full-screen
+      doc reviews (Understanding your idea / What we'll build / Checking the market —
+      skippable + validate-early) · G full-page design showcase · H the canvas as
+      the post-plan roadmap (epics, you-are-here) · I an epic expanded to its
+      stories → subtasks · J plan states. Toggle dark to confirm parity.
     -->
     <!-- Real faces (match next/font in-app) so the data-type axis specimens render their true voice:
          Inter · Source Serif 4 · JetBrains Mono (base) + Space Grotesk · Fraunces · IBM Plex Mono (new pairings). -->
@@ -4931,133 +4920,209 @@
         border-radius: var(--radius-pill);
         flex: none;
       }
+
+      /* ── full-page DESIGN showcase: a whole product page in the chosen design
+         (its own nav + hero + footer are part of the showcase) + the pickers ── */
+      .picker-bar {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 14px 0 4px;
+      }
+      .picker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .picker > .pl {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .pick {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        padding: 5px 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .pick.is-on {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .pick .sw {
+        width: 11px;
+        height: 11px;
+        border-radius: var(--radius-pill);
+      }
+
+      .showcase {
+        margin-top: 16px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-elevated);
+        background: var(--el-page-bg);
+      }
+      .sc-chrome {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 13px;
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .sc-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: var(--radius-pill);
+        background: var(--el-border-strong);
+      }
+      .sc-url {
+        margin-left: 10px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+      }
+      /* the product page itself — every surface token-driven so data-style/-palette/-type apply */
+      .sc-page {
+        background: var(--el-page-bg);
+      }
+      .sc-nav {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 16px 26px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .sc-logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-serif);
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .sc-logo .lt {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .sc-links {
+        display: flex;
+        gap: 18px;
+      }
+      .sc-links a {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .sc-navbtn {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+      }
+      .sc-hero {
+        padding: 40px 26px 30px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        align-items: center;
+      }
+      .sc-h1 {
+        font-family: var(--font-serif);
+        font-size: 34px;
+        line-height: 1.08;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .sc-sub {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        margin: 12px 0 18px;
+      }
+      .sc-cta {
+        display: flex;
+        gap: 11px;
+      }
+      .sc-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+      }
+      .sc-foot {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 18px 26px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface);
+      }
+      .sc-foot .ft {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .sc-tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
     </style>
   </head>
 
   <body>
     <div class="review-head">
       <div>
-        <h1>Motir · start-fresh onboarding (7.3.44 — full redo)</h1>
+        <h1>Motir · start-fresh onboarding (7.3.44 — redo)</h1>
         <p>
-          <b>One model, made legible.</b> The <b>hub</b> is a visual canvas (where you are in the
-          journey) plus a chat (how you move forward). Opening a step — a stage’s
-          <b>doc to review</b>, or the <b>design wizard</b> — takes the <b>full screen</b>, with a
-          “← Back to chat” button and a slim progress map. Every stage’s output is
-          <b>shown to you</b> and editable before you continue. Validation is <b>skippable</b> and
-          can be <b>front-loaded</b> (validate demand first). Built from the real
+          The <b>canvas</b> (left) is one continuous <b>roadmap</b> — a visual view of the
+          <b>pre-plan phase</b> + the <b>work-item tree</b>:
+          <b>Idea → Discovery → Vision → Validation → Plan → Epic 1 → Epic 2 → …</b>, each epic
+          expandable to its stories. It shows <b>where you are</b> the whole way through. The
+          <b>chat</b> is a compact <b>right rail</b> that drives the active step. Opening a doc, the
+          design wizard, or the plan takes the full screen. Built from the real
           <code>--el-*</code> / shape tokens + the shipped style / palette / type libraries. Toggle
-          dark to check parity. →
+          dark for parity. →
         </p>
       </div>
       <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
     </div>
 
-    <!-- ════════════ A · FLOW MAP — the whole workflow at a glance ════════════ -->
-    <div class="panel-label">
-      A · The workflow at a glance — hub (canvas + chat) ⇄ full-screen steps → plan
-    </div>
-    <div class="panel">
-      <div class="surface">
-        <div class="flowmap">
-          <div class="fm-hub">
-            <div class="fm-hub-t">The hub</div>
-            <div class="fm-mini">
-              <span
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
-              ></span>
-              <span
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg
-              ></span>
-              <span
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
-              ></span>
-              <span
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg
-              ></span>
-              <span
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-palette" /></svg
-              ></span>
-            </div>
-            <div
-              style="
-                font-family: var(--font-sans);
-                font-size: 12px;
-                color: var(--el-text-secondary);
-                line-height: 1.5;
-              "
-            >
-              A <b>visual canvas</b> shows where you are; the <b>chat</b> moves you forward. This is
-              home.
-            </div>
-          </div>
-          <div class="fm-steps">
-            <div class="fm-step">
-              <span class="fm-ico" style="background: var(--el-tint-sky)"
-                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg
-              ></span>
-              <div>
-                <div class="fm-t">Understanding your idea</div>
-                <div class="fm-d">discovery doc — what &amp; who, the mirror scan</div>
-              </div>
-              <span class="fm-back"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> back to
-                chat</span
-              >
-            </div>
-            <div class="fm-step">
-              <span class="fm-ico" style="background: var(--el-tint-lavender)"
-                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
-              ></span>
-              <div>
-                <div class="fm-t">What we’ll build</div>
-                <div class="fm-d">vision doc — scope + core decisions, read→react→revise</div>
-              </div>
-              <span class="fm-back"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> back to
-                chat</span
-              >
-            </div>
-            <div class="fm-step">
-              <span class="fm-ico" style="background: var(--el-tint-mint)"
-                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg
-              ></span>
-              <div>
-                <div class="fm-t">
-                  Checking your idea against the market <span class="jskip">can skip</span>
-                </div>
-                <div class="fm-d">
-                  validation doc — comparables + demand; or validate demand FIRST
-                </div>
-              </div>
-              <span class="fm-back"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> back to
-                chat</span
-              >
-            </div>
-            <div class="fm-step">
-              <span class="fm-ico" style="background: var(--el-tint-peach)"
-                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg
-              ></span>
-              <div>
-                <div class="fm-t">Design your product’s look</div>
-                <div class="fm-d">the Style × Palette × Type wizard (web only)</div>
-              </div>
-              <span class="fm-back"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> back to
-                chat</span
-              >
-            </div>
-            <div class="fm-out">
-              <svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg>
-              Go to plan phase → Motir generates your dispatchable backlog
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- ════════════ B · PUBLIC LANDING ════════════ -->
-    <div class="panel-label">B · Public landing — capture the idea, preview what happens</div>
+    <div class="panel-label">B · Public landing — capture the idea</div>
     <div class="panel">
       <div class="surface">
         <div class="topnav">
@@ -5075,7 +5140,7 @@
             ><button class="btn btn-primary btn-sm">Sign up</button></span
           >
         </div>
-        <div style="padding: 48px 40px 44px; text-align: center; max-width: 760px; margin: 0 auto">
+        <div style="padding: 46px 40px 42px; text-align: center; max-width: 720px; margin: 0 auto">
           <span class="pill pill-accent" style="margin-bottom: 16px"
             ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Vibe
             project</span
@@ -5099,11 +5164,11 @@
               color: var(--el-text-secondary);
               line-height: 1.55;
               margin: 0 auto 26px;
-              max-width: 60ch;
+              max-width: 58ch;
             "
           >
             Describe your idea. Motir plans the whole project — brand, pricing, marketing and the
-            code — tracks every kind of work in one place, and ships the code for you.
+            code — tracks every kind of work, and ships the code for you.
           </p>
           <div class="card" style="text-align: left; padding: 16px; box-shadow: var(--shadow-card)">
             <div
@@ -5111,7 +5176,7 @@
                 font-family: var(--font-sans);
                 font-size: 14px;
                 color: var(--el-text-secondary);
-                min-height: 46px;
+                min-height: 44px;
               "
             >
               A tool for freelancers to send invoices and track which clients have paid…
@@ -5120,216 +5185,265 @@
               <span
                 style="font-family: var(--font-sans); font-size: 12px; color: var(--el-text-muted)"
                 >Free to start · no card</span
-              >
-              <span style="flex: 1"></span>
-              <button class="btn btn-primary">
+              ><span style="flex: 1"></span
+              ><button class="btn btn-primary">
                 Start planning
                 <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
               </button>
-            </div>
-          </div>
-          <div style="margin-top: 30px">
-            <div class="mono" style="color: var(--el-text-faint); margin-bottom: 12px">
-              How it works · one visual process
-            </div>
-            <div class="pmap" style="justify-content: center">
-              <span class="pmap-step is-current"
-                ><span class="pm-dot"
-                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
-                ></span>
-                Idea</span
-              >
-              <span class="pmap-seg"></span>
-              <span class="pmap-step"><span class="pm-dot"></span> Understand</span>
-              <span class="pmap-seg"></span>
-              <span class="pmap-step"><span class="pm-dot"></span> Shape</span>
-              <span class="pmap-seg"></span>
-              <span class="pmap-step"><span class="pm-dot"></span> Validate</span>
-              <span class="pmap-seg"></span>
-              <span class="pmap-step"><span class="pm-dot"></span> Design</span>
-              <span class="pmap-seg"></span>
-              <span class="pmap-step"><span class="pm-dot"></span> Plan</span>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ════════════ C · THE HUB — visual canvas + chat ════════════ -->
+    <!-- ════════════ C · THE HUB — canvas roadmap (left) + chat rail (right), pre-plan ════════════ -->
     <div class="panel-label">
-      C · The hub — the canvas shows where you are; the chat moves you forward
+      C · The hub — the canvas is the roadmap (where you are, start→finish); the chat is a compact
+      right rail
     </div>
     <div class="panel">
       <div class="surface">
-        <div class="step-top">
-          <span class="brand"
-            ><span class="tile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg></span
-          ></span>
-          <b style="font-family: var(--font-sans); font-size: 13px; color: var(--el-text)"
-            >PayFlow · new project</b
+        <div class="wz-bar">
+          <span class="l"
+            ><span class="brand"
+              ><span class="tile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg></span></span
+            ><span class="wz-proj">PayFlow · new project</span></span
           >
-          <span class="grow"></span>
-          <button class="btn btn-ghost btn-sm">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-history" /></svg> Save &amp; exit
-          </button>
+          <span class="r"
+            ><span class="wz-step">Pre-plan · building your direction</span
+            ><button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-history" /></svg> Save &amp; exit
+            </button></span
+          >
         </div>
-        <!-- the visual journey road (the canvas) -->
-        <div class="jroad">
-          <div class="jnode is-done">
-            <span class="jtile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg></span
-            ><span class="jt">Your idea</span><span class="js">captured</span>
-          </div>
-          <span class="jseg is-current"></span>
-          <div class="jnode is-current">
-            <span class="jtile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg></span
-            ><span class="jt">Understand</span><span class="js">in progress</span>
-          </div>
-          <span class="jseg"></span>
-          <div class="jnode is-upnext">
-            <span class="jtile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg></span
-            ><span class="jt">Shape</span><span class="js">up next</span>
-          </div>
-          <span class="jseg"></span>
-          <div class="jnode is-upnext">
-            <span class="jtile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
-            ><span class="jt">Validate</span><span class="jskip">can skip</span>
-          </div>
-          <span class="jseg"></span>
-          <div class="jnode is-upnext">
-            <span class="jtile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
-            ><span class="jt">Design</span><span class="js">web only</span>
-          </div>
-          <span class="jseg"></span>
-          <div class="jnode is-upnext">
-            <span class="jtile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg></span
-            ><span class="jt">Plan</span><span class="js">the backlog</span>
-          </div>
-        </div>
-        <!-- the chat (drives the process) -->
-        <div class="hub-chat">
-          <div class="chat-q"><span class="dot"></span> Understand · the conversation</div>
-          <div class="msg2">
-            <span class="av bot">M</span>
-            <div class="bub">
-              Got it — invoicing + payment tracking for freelancers. Will you collect payments
-              in‑app (e.g. Stripe), or just record them?
+        <div class="wz-body">
+          <!-- CANVAS (left, main): the roadmap, pre-plan state -->
+          <section class="road dotted" aria-label="Project roadmap">
+            <div class="estation is-done">
+              <div class="est-head">
+                <span class="etile" style="background: var(--el-tint-yellow)"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg></span
+                ><span class="mono">Start</span>
+              </div>
+              <div class="etitle">Your idea</div>
+              <div class="emeta"><span>Invoicing for freelancers</span></div>
+              <div class="est-foot">
+                <span class="est-status done"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  Captured</span
+                >
+              </div>
             </div>
-          </div>
-          <div class="msg2 me">
-            <span class="av user">YZ</span>
-            <div class="bub">Not sure — you choose what’s standard.</div>
-          </div>
-          <div class="msg2">
-            <span class="av bot">M</span>
-            <div class="bub">
-              Will do — I’ll delegate that. I’ve drafted what I understand so far. Take a look:
+            <div class="conn is-active"><span class="line"></span></div>
+            <div class="estation is-active">
+              <span class="yah"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Chatting
+                now</span
+              >
+              <div class="est-head">
+                <span class="etile" style="background: var(--el-tint-sky)"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg></span
+                ><span class="mono">Step 1 · pre-plan</span>
+              </div>
+              <div class="etitle">Understanding your idea</div>
+              <div class="emeta"><span>what · who · the mirror scan</span></div>
+              <div class="est-foot">
+                <button class="btn btn-primary btn-sm">
+                  Open doc
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
             </div>
-          </div>
-          <button class="opendoc">
-            <span class="od-ico" style="background: var(--el-tint-sky)"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-search" /></svg
-            ></span>
-            <span
-              ><span class="od-t">Understanding your idea — ready to review</span
-              ><span class="od-d">Opens full screen · read &amp; edit, then continue</span></span
+            <div class="conn"><span class="line"></span></div>
+            <div class="estation">
+              <div class="est-head">
+                <span class="etile" style="background: var(--el-tint-lavender)"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shapes" /></svg></span
+                ><span class="mono">Step 2 · pre-plan</span>
+              </div>
+              <div class="etitle">What we’ll build</div>
+              <div class="emeta"><span>scope · core decisions</span></div>
+              <div class="est-foot">
+                <span class="est-status"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Up
+                  next</span
+                >
+              </div>
+            </div>
+            <div class="conn"><span class="line"></span></div>
+            <div class="estation">
+              <div class="est-head">
+                <span class="etile" style="background: var(--el-tint-mint)"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg></span
+                ><span class="mono">Step 3 · optional</span>
+              </div>
+              <div class="etitle">Checking the market</div>
+              <div class="emeta"><span>comparables · demand</span></div>
+              <div class="est-foot"><span class="jskip">can skip</span></div>
+            </div>
+            <div class="conn"><span class="line"></span></div>
+            <div class="estation">
+              <div class="est-head">
+                <span class="etile" style="background: var(--el-tint-peach)"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                ><span class="mono">Step 4 · web only</span>
+              </div>
+              <div class="etitle">Design the look</div>
+              <div class="emeta"><span>style · palette · type</span></div>
+              <div class="est-foot">
+                <span class="est-status"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Up
+                  next</span
+                >
+              </div>
+            </div>
+            <div class="conn"><span class="line"></span></div>
+            <div
+              class="estation"
+              style="border-style: dashed; background: var(--el-surface); opacity: 0.85"
             >
-            <svg class="ic od-go" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-          </button>
-          <div class="composer2">
-            <span class="ph">Reply, or tell Motir what to change…</span
-            ><span class="send"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-send" /></svg
-            ></span>
-          </div>
-          <div class="wz-note" style="margin-top: 16px">
-            The canvas above is your map — click any open step to revisit it. The chat is how you
-            move forward. When a stage is ready, its doc opens <b>full screen</b> (next).
-          </div>
+              <div class="est-head">
+                <span class="etile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg></span
+                ><span class="mono">Then</span>
+              </div>
+              <div class="etitle">Plan → your epics</div>
+              <div class="emeta"><span>the roadmap continues into Epic 1, Epic 2 …</span></div>
+              <div class="est-foot">
+                <span class="est-status"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock" /></svg> After the
+                  docs</span
+                >
+              </div>
+            </div>
+          </section>
+          <!-- CHAT (right, compact rail) -->
+          <aside class="rail" aria-label="Discovery chat">
+            <div class="rail-head">
+              <span class="dot" aria-hidden="true"></span><span class="mono">Discovery · chat</span>
+            </div>
+            <div class="rail-body">
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  Got it — invoicing + payment tracking for freelancers. Collect payments in-app
+                  (Stripe), or just record them?
+                </div>
+              </div>
+              <div class="msg me">
+                <span class="av user" aria-hidden="true">YZ</span>
+                <div>
+                  <div class="bubble">Not sure — you choose what’s standard.</div>
+                  <span class="pill pill-delegated" style="margin-top: 5px"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg> You
+                    decide</span
+                  >
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  Will do. I’ve drafted what I understand — open the
+                  <b>Understanding your idea</b> step on the canvas to review it.
+                </div>
+              </div>
+            </div>
+            <div class="composer">
+              <span
+                style="
+                  flex: 1;
+                  font-family: var(--font-sans);
+                  font-size: 12.5px;
+                  color: var(--el-text-muted);
+                "
+                >Reply, or tell Motir what to change…</span
+              ><span
+                class="send"
+                style="
+                  width: 30px;
+                  height: 30px;
+                  border-radius: var(--radius-btn);
+                  background: var(--el-accent);
+                  color: var(--el-accent-text);
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                "
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-send" /></svg
+              ></span>
+            </div>
+          </aside>
+        </div>
+        <div class="wz-note" style="margin: 0 18px 16px">
+          The <b>canvas = the roadmap</b> (this is the same surface that later shows your epics
+          &amp; stories). The <b>chat drives</b> the active step. Each ready step opens
+          <b>full screen</b> (next).
         </div>
       </div>
     </div>
 
     <!-- ════════════ D · DOC: Understanding your idea (discovery) ════════════ -->
     <div class="panel-label">
-      D · Full-screen doc — “Understanding your idea” (the discovery output, shown &amp; editable)
+      D · Full-screen doc — “Understanding your idea” (discovery, shown &amp; editable). Header is
+      descriptive, not short words.
     </div>
     <div class="panel">
       <div class="surface">
         <div class="step-top">
           <span class="backchat"
-            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat</span
+            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to
+            canvas</span
           >
           <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-current"><span class="pm-dot">1</span> Understand</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">2</span> Shape</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">3</span> Validate</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">4</span> Design</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">5</span> Plan</span>
-          </div>
+          <span
+            style="
+              font-family: var(--font-mono);
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+              color: var(--el-text-faint);
+            "
+            >Pre-plan · step 1 of 4</span
+          >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Step 1 ·
-            Understand
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Discovery
           </div>
           <h2 class="doc-title">Understanding your idea</h2>
           <p class="doc-sub">
-            Here’s what Motir understands so far. Edit anything inline, or go back to the chat to
-            talk it through. Nothing is locked — this is just our shared starting point.
+            Here’s what Motir understands so far — edit anything inline, or go back to the chat to
+            talk it through.
           </p>
           <div class="doc-sections">
             <div class="field">
-              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              <span class="field-label">What you’re building</span>
-              <span class="field-val"
+              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg
+              ><span class="field-label">What you’re building</span
+              ><span class="field-val"
                 >A tool for freelancers to <b>send invoices</b> and
                 <b>track which clients have paid</b> — with reminders for overdue payments.</span
               >
             </div>
             <div class="field">
-              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              <span class="field-label">Who it’s for</span>
-              <span class="field-val"
-                >Solo freelancers managing their own invoicing — not agencies or finance teams.
-                <span class="chip-row"
+              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg
+              ><span class="field-label">Who it’s for</span
+              ><span class="field-val"
+                >Solo freelancers managing their own invoicing.<span class="chip-row"
                   ><span class="pill pill-pinned"
                     ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg> Pinned by
                     you</span
-                  ></span
-                >
-              </span>
-            </div>
-            <div class="field">
-              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              <span class="field-label">How they’ll use it</span>
-              <span class="field-val"
-                >At a computer, between client work — a web app.
-                <span class="chip-row"
-                  ><span class="pill pill-neutral"
-                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-monitor" /></svg> Web ·
-                    inferred</span
                   ></span
                 ></span
               >
             </div>
             <div class="field">
-              <span class="field-label">Closest existing products</span>
-              <span class="field-val">
-                Motir researched the space — these are the closest, and where you’d differ:
+              <span class="field-label">Closest existing products</span
+              ><span class="field-val"
+                >Motir researched the space — the closest, and where you’d differ:
                 <div class="mirror-grid">
                   <div class="mirror-card">
                     <div class="mc-n">FreshBooks</div>
@@ -5341,50 +5455,32 @@
                   </div>
                   <div class="mirror-card">
                     <div class="mc-n">Bonsai</div>
-                    <div class="mc-d">
-                      Freelancer suite — broad, pricey, not focused on “who paid”.
-                    </div>
+                    <div class="mc-d">Broad suite, not focused on “who paid”.</div>
                   </div>
-                </div>
-              </span>
+                </div></span
+              >
             </div>
             <div class="field">
-              <svg class="ic-sm field-pencil" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              <span class="field-label">How we’ve read it</span>
-              <span class="field-val"
-                ><span class="chip-row">
-                  <span class="pill pill-accent"
+              <span class="field-label">How we’ve read it</span
+              ><span class="field-val"
+                ><span class="chip-row"
+                  ><span class="pill pill-accent"
                     ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Startup
                     · for a market</span
-                  >
-                  <span class="pill pill-neutral"
-                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-monitor" /></svg>
-                    Web</span
-                  >
-                </span></span
+                  ><span class="pill pill-neutral"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-monitor" /></svg> Web ·
+                    inferred</span
+                  ></span
+                ></span
               >
             </div>
           </div>
-          <div class="doc-chat-hint">
-            <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-text-muted)">
-              <use href="#i-sparkles" /></svg
-            ><span
-              style="
-                font-family: var(--font-sans);
-                font-size: 12.5px;
-                color: var(--el-text-secondary);
-              "
-              >Want to change something? <b style="color: var(--el-link)">Back to chat</b> and tell
-              Motir — it’ll revise this doc.</span
-            >
-          </div>
           <div class="doc-foot">
             <button class="btn btn-secondary">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat
-            </button>
-            <span class="grow"></span>
-            <button class="btn btn-primary btn-lg">
-              Looks good — continue to Shape
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to canvas</button
+            ><span class="grow"></span
+            ><button class="btn btn-primary btn-lg">
+              Looks good — continue
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
           </div>
@@ -5392,46 +5488,41 @@
       </div>
     </div>
 
-    <!-- ════════════ E · DOC: What we'll build (vision/shape) + read→react→revise ════════════ -->
+    <!-- ════════════ E · DOC: What we'll build (vision) + read→react→revise ════════════ -->
     <div class="panel-label">
-      E · Full-screen doc — “What we’ll build” (the vision output) with the read→react→revise loop
+      E · Full-screen doc — “What we’ll build” (vision) with the read→react→revise loop inline
     </div>
     <div class="panel">
       <div class="surface">
         <div class="step-top">
           <span class="backchat"
-            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat</span
+            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to
+            canvas</span
           >
           <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Understand</span
-            >
-            <span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-current"><span class="pm-dot">2</span> Shape</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">3</span> Validate</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">4</span> Design</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">5</span> Plan</span>
-          </div>
+          <span
+            style="
+              font-family: var(--font-mono);
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+              color: var(--el-text-faint);
+            "
+            >Pre-plan · step 2 of 4</span
+          >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> Step 2 · Shape
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> Vision
           </div>
           <h2 class="doc-title">What we’ll build</h2>
           <p class="doc-sub">
-            The shape of the product — what’s in, what’s out for v1, and the decisions that define
-            it. React in the chat and Motir revises this (and anything it affects) together.
+            What’s in, what’s out for v1, and the decisions that define it. React in the chat and
+            Motir revises this — and anything it affects — together.
           </p>
-
           <div class="scope-cols" style="margin-top: 24px">
             <div class="scope-box">
               <h5 style="color: var(--el-text)">
@@ -5444,9 +5535,7 @@
                 <li>Send &amp; track invoices</li>
                 <li>Mark paid / overdue</li>
                 <li>
-                  <b style="color: var(--el-text)"
-                    >Recurring invoices + automated payment reminders</b
-                  >
+                  <b style="color: var(--el-text)">Recurring invoices + payment reminders</b>
                   <span class="pill pill-pinned" style="font-size: 9px; padding: 1px 6px">new</span>
                 </li>
                 <li>Client list</li>
@@ -5464,39 +5553,28 @@
               </ul>
             </div>
           </div>
-
           <div class="doc-sections" style="margin-top: 20px">
-            <div class="field" style="grid-template-columns: 200px 1fr">
-              <span class="field-label">Core decisions</span>
-              <span class="field-val">
-                <div style="display: flex; flex-direction: column; gap: 9px">
+            <div class="field">
+              <span class="field-label">Core decisions</span
+              ><span class="field-val"
+                ><div style="display: flex; flex-direction: column; gap: 9px">
                   <span style="display: flex; align-items: center; gap: 9px"
                     ><span class="pill pill-delegated"
                       ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg>
                       Delegated</span
                     >
-                    Payments via Stripe (Motir’s pick — standard &amp; trusted)</span
-                  >
-                  <span style="display: flex; align-items: center; gap: 9px"
+                    Payments via Stripe (Motir’s pick)</span
+                  ><span style="display: flex; align-items: center; gap: 9px"
                     ><span class="pill pill-pinned"
                       ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pin" /></svg>
                       Pinned</span
                     >
                     Solo-freelancer focus — no teams in v1</span
                   >
-                  <span style="display: flex; align-items: center; gap: 9px"
-                    ><span class="pill pill-delegated"
-                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-wand" /></svg>
-                      Delegated</span
-                    >
-                    Stack &amp; hosting — Motir decides at plan time</span
-                  >
-                </div>
-              </span>
+                </div></span
+              >
             </div>
           </div>
-
-          <!-- read → react → revise, INLINE in the doc -->
           <div
             class="doc-chat-hint"
             style="
@@ -5534,8 +5612,7 @@
               >
                 <span style="text-decoration: line-through; color: #9b1c1c"
                   >− Recurring invoices</span
-                ><br />
-                <span style="color: #15724a"
+                ><br /><span style="color: #15724a"
                   >+ Recurring invoices + automated payment reminders</span
                 >
               </div>
@@ -5547,20 +5624,17 @@
                   margin-top: 6px;
                 "
               >
-                You: “add automated payment reminders” → also updated <b>Validation</b> (a new build
-                dependency).
+                You: “add payment reminders” → also updated <b>Validation</b>.
                 <span style="color: var(--el-link); font-weight: 600">View history · restore</span>
               </div>
             </div>
           </div>
-
           <div class="doc-foot">
             <button class="btn btn-secondary">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat
-            </button>
-            <span class="grow"></span>
-            <button class="btn btn-primary btn-lg">
-              Looks good — continue to Validate
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to canvas</button
+            ><span class="grow"></span
+            ><button class="btn btn-primary btn-lg">
+              Looks good — continue
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
           </div>
@@ -5568,41 +5642,30 @@
       </div>
     </div>
 
-    <!-- ════════════ F · DOC: Checking your idea against the market (validation — SKIPPABLE + validate-early) ════════════ -->
+    <!-- ════════════ F · DOC: Checking against the market (validation — skippable + validate-early) ════════════ -->
     <div class="panel-label">
-      F · Full-screen doc — “Checking your idea against the market” (validation) — SKIPPABLE + the
-      validate-demand-first option
+      F · Full-screen doc — “Checking your idea against the market” (validation) — SKIPPABLE +
+      validate-demand-first
     </div>
     <div class="panel">
       <div class="surface">
         <div class="step-top">
           <span class="backchat"
-            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat</span
+            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to
+            canvas</span
           >
           <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Understand</span
-            >
-            <span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Shape</span
-            >
-            <span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-current"
-              ><span class="pm-dot">3</span> Validate <span class="jskip">optional</span></span
-            >
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">4</span> Design</span>
-            <span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">5</span> Plan</span>
-          </div>
+          <span
+            style="
+              font-family: var(--font-mono);
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+              color: var(--el-text-faint);
+            "
+            >Pre-plan · step 3 of 4 · optional</span
+          >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">
             <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg> Skip
@@ -5611,16 +5674,14 @@
         </div>
         <div class="step-body">
           <div class="doc-eyebrow">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg> Step 3 · Validate
-            · optional
+            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shield" /></svg> Validation ·
+            optional
           </div>
           <h2 class="doc-title">Checking your idea against the market</h2>
           <p class="doc-sub">
-            A look at demand and the closest competitors before you commit to building. This step is
+            Demand and the closest competitors before you commit to building. This step is
             <b>optional</b> — skip it if you’re building for yourself or have already validated.
           </p>
-
-          <!-- VALIDATE-EARLY — the proactive front-load offer -->
           <div
             class="notice is-info"
             style="
@@ -5637,24 +5698,21 @@
               <div class="notice-d">
                 Your idea is unproven and commercial. Motir can <b>front-load a launch slice</b> —
                 register a domain, ship a landing page with a “notify me” waitlist, and sequence it
-                <b>ahead of the build</b> — so you collect real interest first. Waitlist signups
-                become your green light.
+                <b>ahead of the build</b> — so you collect real interest first.
               </div>
               <div style="display: flex; gap: 9px; margin-top: 12px">
                 <button class="btn btn-primary btn-sm">
                   <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg>
-                  Validate demand first
-                </button>
-                <button class="btn btn-ghost btn-sm">No — plan the full build</button>
+                  Validate demand first</button
+                ><button class="btn btn-ghost btn-sm">No — plan the full build</button>
               </div>
             </div>
           </div>
-
           <div class="doc-sections" style="margin-top: 8px">
             <div class="field">
-              <span class="field-label">Closest competitors</span>
-              <span class="field-val">
-                <div class="mirror-grid">
+              <span class="field-label">Closest competitors</span
+              ><span class="field-val"
+                ><div class="mirror-grid">
                   <div class="mirror-card">
                     <div class="mc-n">
                       FreshBooks
@@ -5662,7 +5720,7 @@
                         >$$</span
                       >
                     </div>
-                    <div class="mc-d">Strong brand, but overbuilt for a solo freelancer.</div>
+                    <div class="mc-d">Strong brand, overbuilt for a solo freelancer.</div>
                   </div>
                   <div class="mirror-card">
                     <div class="mc-n">
@@ -5671,7 +5729,7 @@
                         >free</span
                       >
                     </div>
-                    <div class="mc-d">Free, but weak at chasing overdue payments — your edge.</div>
+                    <div class="mc-d">Free, but weak at chasing payments — your edge.</div>
                   </div>
                   <div class="mirror-card">
                     <div class="mc-n">
@@ -5680,41 +5738,30 @@
                         >$$</span
                       >
                     </div>
-                    <div class="mc-d">Broad suite; “who’s paid me?” isn’t the focus.</div>
+                    <div class="mc-d">Broad; “who’s paid me?” isn’t the focus.</div>
                   </div>
-                </div>
-              </span>
-            </div>
-            <div class="field">
-              <span class="field-label">Demand signals</span>
-              <span class="field-val"
-                >~59M US freelancers; “late-paying clients” is a top, loudly-voiced pain. A focused
-                “who’s paid me + auto-chase” niche is underserved between free-but-basic and
-                full-accounting.</span
+                </div></span
               >
             </div>
             <div class="field">
-              <span class="field-label">Risk</span>
-              <span class="field-val"
-                ><span class="pill pill-pinned" style="background: var(--el-tint-mint)"
+              <span class="field-label">Demand &amp; risk</span
+              ><span class="field-val"
+                >~59M US freelancers; “late-paying clients” is a top, loudly-voiced pain.
+                <span class="pill pill-pinned" style="background: var(--el-tint-mint)"
                   >Low build risk</span
-                >
-                &nbsp; Stripe + reminders is well-trodden; the wedge is focus, not novel tech.</span
+                ></span
               >
             </div>
           </div>
-
           <div class="doc-foot">
             <button class="btn btn-secondary">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat
-            </button>
-            <span class="grow"></span>
-            <button class="btn btn-ghost">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to canvas</button
+            ><span class="grow"></span
+            ><button class="btn btn-ghost">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg> Skip this
-              step
-            </button>
-            <button class="btn btn-primary btn-lg">
-              Looks good — continue to Design
+              step</button
+            ><button class="btn btn-primary btn-lg">
+              Looks good — continue
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
           </div>
@@ -5722,761 +5769,472 @@
       </div>
     </div>
 
-    <!-- ════════════ G · DESIGN WIZARD (full screen) — Style ════════════ -->
-    <!-- ════════════ G · DESIGN WIZARD — Style (option row + big composed specimen) ════════════ -->
+    <!-- ════════════ G · DESIGN WIZARD — full-page showcase (the whole page IS the demo) ════════════ -->
     <div class="panel-label">
-      G · Full-screen wizard — Style · pick from 6, judge the FEEL in the big live specimen (the
-      shared 7.3.37 specimen)
+      G · Full-screen design wizard — a WHOLE product page in the chosen design (its nav + hero +
+      footer are the showcase); pickers above
     </div>
     <div class="panel">
       <div class="surface">
         <div class="step-top">
           <span class="backchat"
-            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat</span
+            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to
+            canvas</span
           >
           <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Understand</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Shape</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Validate</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-current"><span class="pm-dot">4</span> Design</span
-            ><span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">5</span> Plan</span>
-          </div>
+          <span
+            style="
+              font-family: var(--font-mono);
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: 0.05em;
+              text-transform: uppercase;
+              color: var(--el-text-faint);
+            "
+            >Pre-plan · step 4 of 4 · design · web only</span
+          >
           <span class="grow"></span>
           <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
         </div>
-        <div class="step-body" style="max-width: 1040px">
-          <div class="dwz-steps" style="margin-bottom: 2px">
-            <span class="dwz-step is-active"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-layout" /></svg> Style</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-palette" /></svg> Palette</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-type" /></svg> Type</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-eye" /></svg> Review</span
-            >
-          </div>
+        <div class="step-body" style="max-width: 1100px">
           <div class="dwz-head">
-            <h3>Pick a style — how your product feels</h3>
+            <h3>Design your product’s look</h3>
             <p>
-              Silhouette, borders, elevation, surface, density, motion. Pick from the six; the big
-              specimen below is your <b>real UI</b> in the selected style. <b>Web only</b>; skip for
-              the default.
+              Pick a <b>style</b>, <b>palette</b> and <b>type</b> — three independent axes. The
+              whole page below is your real product rendered in that design, at full scale. Skip to
+              use Motir’s default.
             </p>
           </div>
-          <div class="opt-row">
-            <div class="opt-chip" data-style="warm-editorial">
-              <span class="oc-mini"></span><span class="oc-n">Warm Editorial</span
-              ><span class="oc-def">Default</span>
-            </div>
-            <div class="opt-chip" data-style="soft-playful">
-              <span class="oc-mini" style="border-radius: 12px"></span
-              ><span class="oc-n">Soft / Playful</span>
-            </div>
-            <div class="opt-chip is-selected" data-style="swiss-minimal-flat">
-              <span class="oc-mini" style="border-radius: 2px; box-shadow: none"></span
-              ><span class="oc-n">Swiss</span>
-            </div>
-            <div class="opt-chip" data-style="neo-brutalism">
-              <span
-                class="oc-mini"
-                style="border-radius: 0; border-width: 2px; box-shadow: 2px 2px 0 0 var(--el-text)"
-              ></span
-              ><span class="oc-n">Neo-Brutalism</span>
-            </div>
-            <div class="opt-chip" data-style="glassmorphism">
-              <span class="oc-mini"></span><span class="oc-n">Glassmorphism</span>
-            </div>
-            <div class="opt-chip" data-style="cybercore-y2k">
-              <span class="oc-mini"></span><span class="oc-n">Cybercore</span
-              ><span class="oc-def">Dark</span>
+          <!-- the pickers (the wizard's own controls) -->
+          <div class="picker-bar">
+            <div class="picker">
+              <span class="pl">Style</span> <span class="pick">Warm Editorial</span
+              ><span class="pick is-on"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-layout" /></svg> Swiss</span
+              ><span class="pick">Neo-Brutalism</span><span class="pick">Glassmorphism</span
+              ><span class="pick">Cybercore</span>
             </div>
           </div>
-          <div class="bigspec">
-            <div class="bigspec-cap">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-eye" /></svg> Live specimen ·
-              Swiss / Minimal-Flat — silhouette · stroke · elevation · density
+          <div class="picker-bar" style="padding-top: 4px">
+            <div class="picker">
+              <span class="pl">Palette</span> <span class="pick">Motir</span
+              ><span class="pick is-on"
+                ><span class="sw" style="background: #3650c2"></span> Cobalt</span
+              ><span class="pick">Graphite</span><span class="pick">Evergreen</span
+              ><span class="pick">Spectrum</span>
             </div>
-            <div class="bigspec-body" style="background: var(--el-surface)">
-              <div
-                class="stylespec"
-                data-style="swiss-minimal-flat"
-                data-palette="motir"
-                data-type="motir-sans"
-              >
-                <div class="ss-main">
-                  <div class="ss-toolbar">
-                    <span
-                      class="vg-btn vg-btn-primary"
-                      style="height: var(--height-btn-sm); padding: 0 14px"
-                      >Create</span
-                    >
-                    <span
-                      class="vg-btn vg-btn-ghost"
-                      style="height: var(--height-btn-sm); padding: 0 14px"
-                      >Filter</span
-                    >
-                    <span
-                      class="vg-input"
-                      data-surface="input"
-                      style="flex: 1; height: var(--height-btn-sm)"
-                      >Search work items…</span
-                    >
+            <div class="picker">
+              <span class="pl">Type</span> <span class="pick">Motir</span
+              ><span class="pick is-on"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-type" /></svg> Grotesk</span
+              ><span class="pick">Editorial</span><span class="pick">Mono</span>
+            </div>
+            <span class="grow" style="flex: 1"></span>
+            <button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sliders" /></svg> Fine-tune
+            </button>
+          </div>
+
+          <!-- THE SHOWCASE: a full product page in Swiss × Cobalt × Grotesk -->
+          <div
+            class="showcase"
+            data-style="swiss-minimal-flat"
+            data-palette="cobalt"
+            data-type="grotesk"
+          >
+            <div class="sc-chrome">
+              <span class="sc-dot"></span><span class="sc-dot"></span><span class="sc-dot"></span
+              ><span class="sc-url">payflow.app</span>
+            </div>
+            <div class="sc-page">
+              <div class="sc-nav" data-surface="card">
+                <span class="sc-logo"
+                  ><span class="lt"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                  ></span>
+                  PayFlow</span
+                >
+                <span class="sc-links"><a>Features</a><a>Pricing</a><a>Docs</a></span>
+                <span style="flex: 1"></span>
+                <span class="sc-navbtn">Start free</span>
+              </div>
+              <div class="sc-hero">
+                <div>
+                  <div class="sc-h1">Get paid on time, every time.</div>
+                  <div class="sc-sub">
+                    Send invoices, track who’s paid, and chase the rest automatically — built for
+                    solo freelancers.
                   </div>
-                  <div class="ss-list" data-surface="card">
-                    <div class="ss-li">
-                      <span class="dot" style="background: var(--el-type-code)"></span> Backend auth
-                      endpoints <span class="vg-chip" style="margin-left: auto">In progress</span>
-                    </div>
-                    <div class="ss-li">
-                      <span class="dot" style="background: var(--el-type-design)"></span> Sign-up /
-                      sign-in screens
-                      <span class="pill pill-neutral" style="margin-left: auto; font-size: 9px"
-                        >To do</span
-                      >
-                    </div>
-                    <div class="ss-li">
-                      <span class="dot" style="background: var(--el-type-test)"></span> E2E auth
-                      test
-                      <span class="pill pill-neutral" style="margin-left: auto; font-size: 9px"
-                        >To do</span
-                      >
-                    </div>
+                  <div class="sc-cta">
+                    <span
+                      class="sc-navbtn"
+                      style="height: var(--height-btn-md); padding: 0 var(--spacing-btn-x)"
+                      >Start free</span
+                    ><span class="ps-sec" style="height: var(--height-btn-md)">See a demo</span>
                   </div>
                 </div>
-                <div class="ss-side">
-                  <div class="vg-card" data-surface="card">
-                    <div class="vg-top">
-                      <span class="vg-dot"></span><span class="vg-title">New invoice</span>
+                <div class="sc-card" data-surface="card">
+                  <div class="vg-top">
+                    <span class="vg-dot"></span><span class="vg-title">Invoices</span
+                    ><span class="vg-chip">3 overdue</span>
+                  </div>
+                  <div class="ss-list" data-surface="card" style="box-shadow: none">
+                    <div class="ss-li">
+                      <span class="dot" style="background: var(--el-success)"></span> Acme Co ·
+                      $1,200
+                      <span class="pill pill-neutral" style="margin-left: auto; font-size: 9px"
+                        >Paid</span
+                      >
                     </div>
-                    <div class="vg-input" data-surface="input">Client name</div>
-                    <div class="vg-input" data-surface="input">Amount</div>
-                    <div class="vg-acts">
-                      <span class="vg-btn vg-btn-primary">Send</span
-                      ><span class="vg-btn vg-btn-ghost">Draft</span>
+                    <div class="ss-li">
+                      <span class="dot" style="background: var(--el-warning)"></span> Beta LLC ·
+                      $800
+                      <span class="pill pill-neutral" style="margin-left: auto; font-size: 9px"
+                        >Overdue</span
+                      >
                     </div>
+                    <div class="ss-li">
+                      <span class="dot" style="background: var(--el-info)"></span> Carl Studio ·
+                      $450
+                      <span class="pill pill-neutral" style="margin-left: auto; font-size: 9px"
+                        >Sent</span
+                      >
+                    </div>
+                  </div>
+                  <div class="vg-acts">
+                    <span class="vg-btn vg-btn-primary">New invoice</span
+                    ><span class="vg-btn vg-btn-ghost">Remind all</span>
                   </div>
                 </div>
               </div>
+              <div class="sc-foot" data-surface="card">
+                <span class="sc-logo" style="font-size: 13px"
+                  ><span class="lt" style="width: 20px; height: 20px"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                  ></span>
+                  PayFlow</span
+                >
+                <span class="sc-links"><a>Privacy</a><a>Terms</a><a>Contact</a></span>
+                <span style="flex: 1"></span>
+                <span class="ft">© 2026 PayFlow</span>
+              </div>
             </div>
+          </div>
+          <div class="wz-note">
+            <b>The header and footer are part of the showcase</b> — every surface (nav, hero, cards,
+            buttons, list, footer) is rendered in Swiss × Cobalt × Grotesk, so you see the full
+            design at page scale before committing. The result is composed into a
+            <code>DESIGN.md</code> starter.
           </div>
           <div class="doc-foot">
             <button class="btn btn-ghost">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg> Skip — use
-              Motir’s default
-            </button>
-            <span class="grow"></span>
-            <button class="btn btn-primary btn-lg">
-              Continue to colour
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════════ H · DESIGN WIZARD — Palette (option row + the built palette specimen) ════════════ -->
-    <div class="panel-label">
-      H · Full-screen wizard — Palette · the big specimen mirrors the shipped docs/palettes/*.png
-      (every colour role)
-    </div>
-    <div class="panel">
-      <div class="surface">
-        <div class="step-top">
-          <span class="backchat"
-            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat</span
-          >
-          <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Understand</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Shape</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Validate</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-current"><span class="pm-dot">4</span> Design</span
-            ><span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">5</span> Plan</span>
-          </div>
-          <span class="grow"></span>
-          <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
-        </div>
-        <div class="step-body" style="max-width: 1040px">
-          <div class="dwz-steps" style="margin-bottom: 2px">
-            <span class="dwz-step is-done"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Style ·
-              Swiss</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step is-active"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-palette" /></svg> Palette</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-type" /></svg> Type</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-eye" /></svg> Review</span
-            >
-          </div>
-          <div class="dwz-head">
-            <h3>Pick a palette — the colours it wears</h3>
-            <p>
-              Independent of style. The specimen shows every colour role — surfaces, ink hierarchy,
-              CTAs, semantic, tints, work-item hues — re-skinned live.
-            </p>
-          </div>
-          <div class="opt-row">
-            <div class="opt-chip" data-palette="motir">
-              <span class="oc-sw"
-                ><span style="background: var(--el-surface)"></span
-                ><span style="background: var(--el-accent)"></span
-                ><span style="background: var(--el-success)"></span></span
-              ><span class="oc-n">Motir</span><span class="oc-def">Default</span>
-            </div>
-            <div class="opt-chip is-selected" data-palette="cobalt">
-              <span class="oc-sw"
-                ><span style="background: var(--el-surface)"></span
-                ><span style="background: var(--el-accent)"></span
-                ><span style="background: var(--el-success)"></span></span
-              ><span class="oc-n">Cobalt</span>
-            </div>
-            <div class="opt-chip" data-palette="graphite">
-              <span class="oc-sw"
-                ><span style="background: var(--el-surface)"></span
-                ><span style="background: var(--el-accent)"></span
-                ><span style="background: var(--el-success)"></span></span
-              ><span class="oc-n">Graphite</span>
-            </div>
-            <div class="opt-chip" data-palette="evergreen">
-              <span class="oc-sw"
-                ><span style="background: var(--el-surface)"></span
-                ><span style="background: var(--el-accent)"></span
-                ><span style="background: var(--el-success)"></span></span
-              ><span class="oc-n">Evergreen</span>
-            </div>
-            <div class="opt-chip" data-palette="spectrum">
-              <span class="oc-sw"
-                ><span style="background: var(--el-surface)"></span
-                ><span style="background: var(--el-accent)"></span
-                ><span style="background: var(--el-success)"></span></span
-              ><span class="oc-n">Spectrum</span>
-            </div>
-          </div>
-          <div class="bigspec">
-            <div class="bigspec-cap">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-palette" /></svg> Live specimen ·
-              Cobalt — every colour role (data-palette="cobalt")
-            </div>
-            <div class="bigspec-body">
-              <div class="palspec" data-palette="cobalt">
-                <div class="ps-swrow">
-                  <span class="ps-sw" style="background: var(--el-page-bg)">canvas</span>
-                  <span class="ps-sw" style="background: var(--el-surface)">surface</span>
-                  <span class="ps-sw" style="background: var(--el-surface-soft)">surface-soft</span>
-                  <span class="ps-sw" style="background: var(--el-muted)">muted</span>
-                </div>
-                <div class="ps-text">
-                  <div class="l1">
-                    <b>Strong emphasis text.</b> Primary ink — body copy on a surface.
-                  </div>
-                  <div class="l2">Secondary copy carries supporting detail.</div>
-                  <div class="l3">Muted caption / metadata.</div>
-                  <div class="l4">
-                    Tertiary footer · faint label · <span class="lnk">a link</span>
-                  </div>
-                </div>
-                <div class="ps-ctas">
-                  <span class="ps-ink">Ink CTA</span>
-                  <span class="ps-sec">Secondary</span>
-                  <span class="ps-aos"><span class="d"></span> accent-on-surface</span>
-                </div>
-                <div class="ps-chips">
-                  <span
-                    class="sem"
-                    style="background: color-mix(in srgb, var(--el-danger) 16%, transparent)"
-                    ><span class="d" style="background: var(--el-danger)"></span> Danger</span
-                  >
-                  <span
-                    class="sem"
-                    style="background: color-mix(in srgb, var(--el-success) 16%, transparent)"
-                    ><span class="d" style="background: var(--el-success)"></span> Success</span
-                  >
-                  <span
-                    class="sem"
-                    style="background: color-mix(in srgb, var(--el-warning) 18%, transparent)"
-                    ><span class="d" style="background: var(--el-warning)"></span> Warning</span
-                  >
-                  <span
-                    class="sem"
-                    style="background: color-mix(in srgb, var(--el-info) 16%, transparent)"
-                    ><span class="d" style="background: var(--el-info)"></span> Info</span
-                  >
-                </div>
-                <div class="ps-chips">
-                  <span class="sem" style="background: var(--el-tint-peach)">peach</span>
-                  <span class="sem" style="background: var(--el-tint-rose)">rose</span>
-                  <span class="sem" style="background: var(--el-tint-mint)">mint</span>
-                  <span class="sem" style="background: var(--el-tint-lavender)">lavender</span>
-                  <span class="sem" style="background: var(--el-tint-sky)">sky</span>
-                  <span class="sem" style="background: var(--el-tint-yellow)">yellow</span>
-                </div>
-                <div class="ps-chips">
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-epic)"></span> epic</span
-                  >
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-story)"></span> story</span
-                  >
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-task)"></span> task</span
-                  >
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-bug)"></span> bug</span
-                  >
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-code)"></span> code</span
-                  >
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-design)"></span> design</span
-                  >
-                  <span class="kchip"
-                    ><span class="d" style="background: var(--el-type-content)"></span>
-                    content</span
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="doc-foot">
-            <button class="btn btn-secondary">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg> Back to
-              style</button
+              Motir’s default</button
             ><span class="grow"></span
             ><button class="btn btn-primary btn-lg">
-              Continue to type
+              Use this design — go to plan phase
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- ════════════ I · DESIGN WIZARD — Type (built type specimen) + Fine-tune + Review (/tokens) ════════════ -->
     <div class="panel-label">
-      I · Full-screen wizard — Type · specimen mirrors docs/typography/*.png (headline/body/meta
-      roles) · then Review → DESIGN.md
+      H · The canvas IS the roadmap — past planning into Epic 1 → Epic 2 (you are here) → …
+      (work-item tree) epics (a new presentation of the shipped work-item tree)
     </div>
     <div class="panel">
-      <div class="surface">
-        <div class="step-top">
-          <span class="backchat"
-            ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back to chat</span
-          >
-          <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Understand</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Shape</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Validate</span
-            ><span class="pmap-seg is-done"></span>
-            <span class="pmap-step is-current"><span class="pm-dot">4</span> Design</span
-            ><span class="pmap-seg"></span>
-            <span class="pmap-step"><span class="pm-dot">5</span> Plan</span>
-          </div>
-          <span class="grow"></span>
-          <button class="btn btn-ghost btn-sm">Save &amp; exit</button>
-        </div>
-        <div class="step-body" style="max-width: 1040px">
-          <div class="dwz-steps" style="margin-bottom: 2px">
-            <span class="dwz-step is-done"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Style ·
-              Swiss</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step is-done"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Palette ·
-              Cobalt</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step is-active"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-type" /></svg> Type</span
-            ><svg class="ic-sm dwz-arrow" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
-            <span class="dwz-step"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-eye" /></svg> Review</span
-            >
-          </div>
-          <div class="dwz-head">
-            <h3>Pick a type pairing — the typographic voice</h3>
-            <p>
-              The third independent axis — headline / body / meta faces. The specimen shows each
-              role with real content (the same layout the type subtasks shipped).
-            </p>
-          </div>
-          <div class="opt-row">
-            <div class="opt-chip" data-type="motir">
-              <span class="oc-aa" style="font-family: var(--font-serif)">Aa</span
-              ><span class="oc-n">Motir</span><span class="oc-def">Default</span>
-            </div>
-            <div class="opt-chip" data-type="motir-sans">
-              <span class="oc-aa" style="font-family: var(--font-sans)">Aa</span
-              ><span class="oc-n">Sans</span>
-            </div>
-            <div class="opt-chip is-selected" data-type="grotesk">
-              <span class="oc-aa" style="font-family: var(--font-serif)">Aa</span
-              ><span class="oc-n">Grotesk</span>
-            </div>
-            <div class="opt-chip" data-type="editorial">
-              <span class="oc-aa" style="font-family: var(--font-serif)">Aa</span
-              ><span class="oc-n">Editorial</span>
-            </div>
-            <div class="opt-chip" data-type="mono-technical">
-              <span class="oc-aa" style="font-family: var(--font-serif)">Aa</span
-              ><span class="oc-n">Mono-Technical</span>
-            </div>
-            <div class="opt-chip" data-type="motir-mono">
-              <span class="oc-aa" style="font-family: var(--font-serif)">Aa</span
-              ><span class="oc-n">Motir Mono</span>
-            </div>
-          </div>
-          <div class="bigspec">
-            <div class="bigspec-cap">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-type" /></svg> Live specimen ·
-              Grotesk — headline / body / meta (data-type="grotesk")
-            </div>
-            <div class="bigspec-body">
-              <div class="typ-big" data-type="grotesk">
-                <div>
-                  <div class="typ-h">Plan it, ship it.</div>
-                  <div class="typ-h2">From one idea to a reviewed backlog</div>
-                  <div class="typ-body">
-                    The Grotesk pairing wears a geometric display face for headlines while keeping
-                    Inter for running copy, so reading text stays calm and legible. It is the
-                    technical counterpart to Motir’s editorial serif house pairing — same type
-                    scale, a different voice.
-                  </div>
-                  <div class="typ-meta">PAYFLOW-128 · 5 pts · sprint 6 · status in_review</div>
-                </div>
-                <div class="typ-roles">
-                  <div class="typ-role">
-                    <span class="rl">Headline → serif</span><span class="rv">Space Grotesk</span>
-                  </div>
-                  <div class="typ-role">
-                    <span class="rl">Body → sans</span
-                    ><span class="rv" style="font-family: var(--font-sans); font-size: 14px"
-                      >Inter</span
-                    >
-                  </div>
-                  <div class="typ-role">
-                    <span class="rl">Meta → mono</span
-                    ><span class="rv" style="font-family: var(--font-mono); font-size: 13px"
-                      >JetBrains Mono</span
-                    >
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="adv" style="margin-top: 18px">
-            <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 4px">
-              <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-text-muted)">
-                <use href="#i-sliders" /></svg
-              ><b style="font-family: var(--font-sans); font-size: 13.5px; color: var(--el-text)"
-                >Fine-tune (optional)</b
-              ><span class="pill pill-neutral" style="font-size: 9.5px; padding: 2px 7px"
-                >Most teams skip this</span
-              >
-            </div>
-            <div class="adv-row">
-              <span class="adv-label">Corner radius</span
-              ><span class="adv-track"><span class="adv-knob" style="left: 18%"></span></span
-              ><span class="adv-val">2px</span>
-            </div>
-            <div class="adv-row">
-              <span class="adv-label">Density</span
-              ><span class="adv-track"><span class="adv-knob" style="left: 42%"></span></span
-              ><span class="adv-val">Compact</span>
-            </div>
-          </div>
-          <div
-            class="dwz-head"
-            style="margin-top: 26px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap"
-          >
-            <div style="flex: 1; min-width: 260px">
-              <h3 style="font-size: 18px">Review · your design system</h3>
-              <p>
-                Composed into a <code>DESIGN.md</code> + <code>globals.css</code> — your starter.
-              </p>
-            </div>
-            <span class="combo-pill"
-              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-layout" /></svg> Swiss
-              <span class="combo-x">×</span>
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-palette" /></svg> Cobalt
-              <span class="combo-x">×</span>
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-type" /></svg> Grotesk</span
-            >
-          </div>
-          <div class="tok-grid">
-            <div>
-              <div class="tok-fname">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-eye" /></svg> Live preview ·
-                your real UI
-              </div>
-              <div
-                class="vignette"
-                data-style="swiss-minimal-flat"
-                data-palette="cobalt"
-                data-type="grotesk"
-                style="
-                  border: 1px solid var(--el-border);
-                  border-radius: var(--radius-card);
-                  padding: 20px;
-                "
-              >
-                <div class="vg-card" data-surface="card">
-                  <div class="vg-top">
-                    <span class="vg-dot"></span><span class="vg-title">Sprint 6</span
-                    ><span class="vg-chip">In progress</span>
-                  </div>
-                  <div class="vg-sub">Pay invoices · 3 of 8 done</div>
-                  <div class="vg-bars">
-                    <span class="vg-bar accent" style="width: 72%"></span
-                    ><span class="vg-bar" style="width: 48%"></span>
-                  </div>
-                  <div class="vg-input" data-surface="input">Search work items…</div>
-                  <div class="vg-acts">
-                    <span class="vg-btn vg-btn-primary">Create</span
-                    ><span class="vg-btn vg-btn-ghost">Filter</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <div class="tok-fname">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-file-code" /></svg> DESIGN.md ·
-                generated
-              </div>
-              <div class="tok-code">
-                <pre><span class="c-cmt"># PayFlow — design system</span>
-
-<span class="c-key">style</span>:   <span class="c-val">swiss-minimal-flat</span>
-<span class="c-key">palette</span>: <span class="c-val">cobalt</span>
-<span class="c-key">type</span>:    <span class="c-val">grotesk</span>
-
-<span class="c-cmt">## globals.css</span>
-<span class="c-key">--radius-card</span>: <span class="c-val">2px</span>
-<span class="c-key">--shadow-card</span>: <span class="c-val">none</span>
-<span class="c-key">--el-accent</span>:   <span class="c-val">#0b5fff</span>
-<span class="c-key">--font-serif</span>:  <span class="c-val">Space Grotesk</span></pre>
-              </div>
-            </div>
-          </div>
-          <div class="doc-foot">
-            <button class="btn btn-secondary">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg> Back to
-              palette</button
-            ><span class="grow"></span
-            ><button class="btn btn-primary btn-lg">
-              Looks good — go to plan phase
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+      <div class="surface" style="padding: 0">
+        <div class="rmap-bar">
+          <span class="mono">Roadmap · Invoicing for freelancers</span>
+          <span style="display: inline-flex; gap: 8px; align-items: center">
+            <button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Find
             </button>
-          </div>
+            <button class="btn btn-secondary btn-sm">Board view</button>
+          </span>
         </div>
-      </div>
-    </div>
+        <div class="road dotted">
+          <!-- the planning origin — done, collapsed: the same 3 stages, now the road's start -->
+          <div class="origin">
+            <div class="mono">Planning · done</div>
+            <div class="orow">
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Idea</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                Discovery</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Vision</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                Validation</span
+              ><span class="osep">·</span>
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Plan</span
+              >
+            </div>
+          </div>
+          <div class="conn is-done"><span class="line"></span></div>
 
-    <div class="panel-label">
-      J · “Go to plan phase” → the dispatchable backlog + the degraded / empty / loading / error
-      states
-    </div>
-    <div class="panel">
-      <div class="surface">
-        <div class="step-top">
-          <span class="brand"
-            ><span class="tile"
-              ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg></span
-          ></span>
-          <b style="font-family: var(--font-sans); font-size: 13px; color: var(--el-text)"
-            >PayFlow · plan</b
-          >
-          <span class="grow"></span>
-          <div class="pmap">
-            <span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
+          <!-- Epic 1 — done -->
+          <div class="estation">
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
               ></span>
-              Understand</span
-            >
-            <span class="pmap-seg is-done"></span
-            ><span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Shape</span
-            >
-            <span class="pmap-seg is-done"></span
-            ><span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Validate</span
-            >
-            <span class="pmap-seg is-done"></span
-            ><span class="pmap-step is-done"
-              ><span class="pm-dot"
-                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg
-              ></span>
-              Design</span
-            >
-            <span class="pmap-seg is-done"></span
-            ><span class="pmap-step is-current"><span class="pm-dot">5</span> Plan</span>
-          </div>
-          <span class="grow"></span>
-        </div>
-        <div class="step-body" style="max-width: 1080px">
-          <div class="dwz-head">
-            <h3>Your plan — the whole project</h3>
-            <p>
-              Motir generated a dispatchable backlog spanning every kind of work, not just code.
-              Review &amp; dispatch when ready.
-            </p>
-          </div>
-          <div class="card" style="padding: 18px 20px; margin-top: 8px">
-            <div class="mono" style="color: var(--el-text-faint); margin-bottom: 12px">
-              Plan · 4 epics · 8 stories · 21 work items
+              <span class="mono">Epic 1</span>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 9px">
-              <div style="display: flex; align-items: center; gap: 9px">
-                <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-type-design)">
-                  <use href="#i-shapes" /></svg
-                ><b style="font-family: var(--font-sans); font-size: 13px; color: var(--el-text)"
-                  >Brand &amp; landing</b
-                ><span class="pill pill-neutral" style="font-size: 9px">Design · Content</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 9px">
-                <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-type-code)">
-                  <use href="#i-network" /></svg
-                ><b style="font-family: var(--font-sans); font-size: 13px; color: var(--el-text)"
-                  >Build the product</b
-                ><span class="pill pill-neutral" style="font-size: 9px">Code · Test</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 9px">
-                <svg class="ic-sm" viewBox="0 0 24 24" style="color: var(--el-type-content)">
-                  <use href="#i-list" /></svg
-                ><b style="font-family: var(--font-sans); font-size: 13px; color: var(--el-text)"
-                  >Pricing &amp; billing</b
-                ><span class="pill pill-neutral" style="font-size: 9px">Manual · Code</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 9px; opacity: 0.6">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list" /></svg
-                ><span
-                  style="
-                    font-family: var(--font-sans);
-                    font-size: 13px;
-                    color: var(--el-text-secondary);
-                  "
-                  >Launch &amp; growth</span
-                >
-              </div>
+            <div class="etitle">Brand &amp; landing</div>
+            <div class="emeter"><i class="ok" style="width: 100%"></i></div>
+            <div class="emeta"><span>4 / 4 done</span><span>·</span><span>2 stories</span></div>
+            <div class="est-foot">
+              <span class="est-status done"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Done</span
+              >
             </div>
-            <div style="margin-top: 14px">
-              <button class="btn btn-primary">
-                Review &amp; dispatch
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+          </div>
+          <div class="conn is-active"><span class="line"></span></div>
+
+          <!-- Epic 2 — active (you are here) -->
+          <div class="estation is-active">
+            <span class="yah"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-map-pin" /></svg> You are
+              here</span
+            >
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <span class="mono">Epic 2</span>
+            </div>
+            <div class="etitle">Build the product</div>
+            <div class="emeter"><i style="width: 38%"></i></div>
+            <div class="emeta"><span>3 / 8 done</span><span>·</span><span>3 stories</span></div>
+            <div class="est-foot">
+              <button class="btn btn-ghost btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-network" /></svg> Open roadmap
               </button>
             </div>
           </div>
+          <div class="conn"><span class="line"></span></div>
 
-          <div class="states-grid" style="margin-top: 18px">
-            <div class="notice is-warn">
-              <span class="ni"
-                ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-plug" /></svg
+          <!-- Epic 3 — up next -->
+          <div class="estation is-upcoming">
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
               ></span>
-              <div>
-                <div class="notice-t">AI planning isn’t configured</div>
-                <div class="notice-d">
-                  Planning runs on Motir Cloud; this self-hosted workspace has no connection yet.
+              <span class="mono">Epic 3</span>
+            </div>
+            <div class="etitle">Pricing &amp; billing</div>
+            <div class="emeter"><i style="width: 0"></i></div>
+            <div class="emeta"><span>0 / 5 done</span><span>·</span><span>2 stories</span></div>
+            <div class="est-foot">
+              <span class="est-status up"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg> Up
+                next</span
+              >
+            </div>
+          </div>
+          <div class="conn"><span class="line"></span></div>
+          <div class="estation more">+ Launch &amp; growth</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      I · An epic opens into its stories → subtasks (the work-item tree, same road language)
+      (self-similar: a roadmap = a planning origin + a tree)
+    </div>
+    <div class="panel">
+      <div class="surface" style="padding: 0">
+        <div class="rmap-bar">
+          <span class="mono">Roadmap · Invoicing for freelancers · Epic 2</span>
+          <button class="btn btn-ghost btn-sm">← Back to roadmap</button>
+        </div>
+
+        <!-- the parent road stays visible; Epic 2 is the one opened -->
+        <div class="road compact dotted">
+          <div class="origin" style="min-width: 0; padding: 9px 12px">
+            <div class="orow">
+              <span class="ostep"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning</span
+              >
+            </div>
+          </div>
+          <div class="conn is-done"><span class="line"></span></div>
+          <div class="estation" style="flex: 0 0 138px">
+            <div class="est-head"><span class="mono">Epic 1</span></div>
+            <div class="etitle" style="font-size: 13px">Brand &amp; landing</div>
+            <div class="est-status done" style="font-size: 11px">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg> Done
+            </div>
+          </div>
+          <div class="conn is-active"><span class="line"></span></div>
+          <div class="estation is-active" style="flex: 0 0 156px">
+            <span class="yah"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-map-pin" /></svg> Open</span
+            >
+            <div class="est-head">
+              <span class="etile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-network" /></svg
+              ></span>
+              <span class="mono">Epic 2</span>
+            </div>
+            <div class="etitle" style="font-size: 13px">Build the product</div>
+            <div class="emeter"><i style="width: 38%"></i></div>
+          </div>
+          <div class="conn"><span class="line"></span></div>
+          <div class="estation is-upcoming" style="flex: 0 0 138px">
+            <div class="est-head"><span class="mono">Epic 3</span></div>
+            <div class="etitle" style="font-size: 13px">Pricing &amp; billing</div>
+          </div>
+        </div>
+
+        <!-- the expanded epic's sub-roadmap = its work-item tree, in the same node language -->
+        <div class="subroad-wrap">
+          <div class="mono sr-cap">
+            Epic 2 · Build the product — stories → subtasks · every kind of work
+            <span class="lineage" style="margin-left: 8px"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-shapes" /></svg> traces to
+              Vision · Validation</span
+            >
+          </div>
+          <div class="subroad">
+            <!-- Story 1 — done -->
+            <div class="storynode">
+              <div class="sn-head">
+                <span class="sg"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                ></span>
+                <div class="snt">Create &amp; send an invoice</div>
+              </div>
+              <div class="subtasks">
+                <div class="stask done">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoice
+                  data model + form <span class="tchip tc-code">Code</span>
+                  <span class="st-state">done</span>
                 </div>
-                <div style="margin-top: 9px">
-                  <button class="btn btn-primary btn-sm">Connect Motir AI</button>
+                <div class="stask done">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg> PDF render
+                  + email delivery <span class="tchip tc-code">Code</span>
+                  <span class="st-state">done</span>
                 </div>
               </div>
             </div>
-            <div class="notice">
-              <span class="ni" style="background: var(--el-surface); color: var(--el-text-muted)"
-                ><svg class="ic-lg spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg
-              ></span>
-              <div>
-                <div class="notice-t">Generating your plan…</div>
-                <div class="notice-d">
-                  Understand · Shape · Validate · Design — done. Drafting the issue tree…
+            <div class="conn"><span class="line"></span></div>
+
+            <!-- Story 2 — active -->
+            <div class="storynode is-active">
+              <div class="sn-head">
+                <span class="sg"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                ></span>
+                <div class="snt">Track who has paid</div>
+              </div>
+              <div class="subtasks">
+                <div class="stask done">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                  Payment status view <span class="tchip tc-code">Code</span>
+                  <span class="st-state">done</span>
+                </div>
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  Invoice screen polish <span class="tchip tc-design">Design</span>
+                  <span class="st-state">in progress</span>
+                </div>
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  In-app help &amp; empty states <span class="tchip tc-content">Content</span>
+                  <span class="st-state">todo</span>
                 </div>
               </div>
             </div>
-            <div class="notice is-info">
-              <span class="ni"
-                ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-history" /></svg
-              ></span>
-              <div>
-                <div class="notice-t">Pick up where you left off</div>
-                <div class="notice-d">
-                  Your progress is saved. Resume the conversation, or start over.
+            <div class="conn"><span class="line"></span></div>
+
+            <!-- Story 3 — up next -->
+            <div class="storynode is-upcoming">
+              <div class="sn-head">
+                <span class="sg"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                ></span>
+                <div class="snt">Ship it</div>
+              </div>
+              <div class="subtasks">
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  Hosting &amp; domain setup <span class="tchip tc-manual">Manual</span>
+                  <span class="st-state">todo</span>
+                </div>
+                <div class="stask">
+                  <svg class="ic-sm sd" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+                  End-to-end tests <span class="tchip tc-test">Test</span>
+                  <span class="st-state">todo</span>
                 </div>
               </div>
             </div>
-            <div class="notice is-err">
-              <span class="ni"
-                ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-alert" /></svg
-              ></span>
-              <div>
-                <div class="notice-t">Planning couldn’t finish</div>
-                <div class="notice-d">Your answers are saved. Retry — nothing was lost.</div>
-                <div style="margin-top: 9px">
-                  <button class="btn btn-secondary btn-sm">
-                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Try again
-                  </button>
-                </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ J · PLAN states ════════════ -->
+    <div class="panel-label">
+      J · Plan-phase states — degraded “AI planning not configured” + loading / resume / error
+    </div>
+    <div class="panel">
+      <div class="surface" style="padding: 26px">
+        <div class="states-grid">
+          <div class="notice is-warn">
+            <span class="ni"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-plug" /></svg
+            ></span>
+            <div>
+              <div class="notice-t">AI planning isn’t configured</div>
+              <div class="notice-d">
+                Planning runs on Motir Cloud; this self-hosted workspace has no connection yet.
+              </div>
+              <div style="margin-top: 9px">
+                <button class="btn btn-primary btn-sm">Connect Motir AI</button>
+              </div>
+            </div>
+          </div>
+          <div class="notice">
+            <span class="ni" style="background: var(--el-surface); color: var(--el-text-muted)"
+              ><svg class="ic-lg spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg
+            ></span>
+            <div>
+              <div class="notice-t">Generating your plan…</div>
+              <div class="notice-d">
+                Discovery · Vision · Validation · Design — done. Drafting the work-item tree…
+              </div>
+            </div>
+          </div>
+          <div class="notice is-info">
+            <span class="ni"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-history" /></svg
+            ></span>
+            <div>
+              <div class="notice-t">Pick up where you left off</div>
+              <div class="notice-d">
+                Your progress is saved. Resume the conversation, or start over.
+              </div>
+            </div>
+          </div>
+          <div class="notice is-err">
+            <span class="ni"
+              ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ></span>
+            <div>
+              <div class="notice-t">Planning couldn’t finish</div>
+              <div class="notice-d">Your answers are saved. Retry — nothing was lost.</div>
+              <div style="margin-top: 9px">
+                <button class="btn btn-secondary btn-sm">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Try again
+                </button>
               </div>
             </div>
           </div>
