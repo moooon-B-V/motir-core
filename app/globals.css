@@ -1225,6 +1225,145 @@
   --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
+/* ── Palette: Spectrum (data-palette="spectrum") — Subtask 7.3.52 ───────────
+   A vibrant, playful, energetic MULTI-ACCENT re-skin: crisp cool-white
+   surfaces, a bright violet primary, a candy-magenta highlight, and a
+   saturated, well-separated rainbow tint/accent set — friendly, never garish.
+   Visibly distinct from Motir (warm cream → crisp cool surfaces; muted pastels
+   → candy-bright tints), not just an accent-hue swap. Mood anchored in
+   getdesign.md's Figma (vibrant multi-colour) / Airtable (colourful, friendly)
+   analysis; the actual light/dark ramps + UI-state steps are built from Radix
+   Colors (Violet / Iris / Pink / Blue / Jade / Amber / Red) — the
+   accessibility-first 12-step scales designed for UI states.
+
+   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+   --el-* layer references (exactly how the [data-theme='dark'] block works), so
+   every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+   work-item type hues — re-skins coherently with no per-token churn. It sets
+   ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+   spacing / shadow / sizing / motion / type) — that is the independent
+   data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+   Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+   pairing clears WCAG AA (≥4.5 text; ≥3.0 icon/UI hue) in BOTH light and dark —
+   verified numerically + by rendered specimen, never eyeballed. See
+   docs/palettes/spectrum.md for the colour-role reference. */
+[data-palette='spectrum'] {
+  /* brand & primary — bright violet (Radix Violet/Iris family) */
+  --color-primary: #6440d6; /* violet AS text/icon on a surface (AA ~6.5:1 on white) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #5331b8;
+  --color-primary-fill: #5a37c9; /* fill behind white labels (white-on AA ~7.4:1) */
+
+  /* surfaces — crisp cool white over faintly violet-tinted sections */
+  --color-background: #ffffff;
+  --color-foreground: #1a1626; /* cool near-black ink with a faint violet cast */
+  --color-surface: #f4f2fb; /* cool violet-tinted section background */
+  --color-surface-soft: #faf9fe; /* quieter cool division */
+
+  /* text scale — cool violet-neutral hierarchy */
+  --color-ink: #1a1626;
+  --color-charcoal: #2a2440; /* body emphasis / AA-safe text on tints */
+  --color-slate: #524d66; /* secondary text */
+  --color-steel: #6b6680; /* tertiary / footer */
+  --color-stone: #938da6; /* faint labels */
+  --color-muted: #f4f2fb;
+  --color-muted-foreground: #5e5975; /* captions — AA ~6.6:1 on white + surfaces */
+
+  /* borders — cool violet hairlines */
+  --color-hairline: #e6e2f3;
+  --color-hairline-soft: #efecf8;
+  --color-hairline-strong: #cfc8e6;
+  --color-border: #e6e2f3;
+
+  /* accent secondary — a candy magenta-pink highlight (the playful brand spark;
+     also the epic & design type hue) + a vivid, well-separated accent trio */
+  --color-accent: #e23d97; /* vivid magenta-pink — decorative / epic & design hue */
+  --color-accent-orange: #ea580c;
+  --color-accent-teal: #0d9488;
+  --color-accent-green: #16a34a;
+
+  /* card tints — candy-bright washes (6 distinct, saturated feature hues; each
+     light enough that --el-text-strong charcoal clears AA ≥10:1 on it) */
+  --color-tint-peach: #ffe1c2;
+  --color-tint-rose: #ffd9e8;
+  --color-tint-mint: #c7f5d9;
+  --color-tint-lavender: #e6ddff;
+  --color-tint-sky: #d2e7ff;
+  --color-tint-yellow: #fff0b8;
+
+  /* semantic */
+  --color-success: #16a34a;
+  --color-warning: #ea580c;
+  --color-destructive: #d92e2b; /* white-on AA */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #2563eb;
+
+  /* links — a clean vivid blue, distinct from the violet primary (AA on the
+     soft surface a hovered row paints, too) */
+  --color-link: #2563eb;
+  --color-link-pressed: #1d4ed8;
+
+  /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+     palette overrides it directly — one shade darker than the cool surface. */
+  --el-sidebar-item-bg-hover: #ece8f8;
+}
+
+/* Spectrum — dark companion. A deep cool-violet canvas (not the base
+   near-black); brightened violet/pink/link hues so they read AS text on the
+   dark surface, and a darker accent fill so white labels still clear AA. */
+[data-palette='spectrum'][data-theme='dark'] {
+  --color-background: #14111f; /* deep cool-violet canvas */
+  --color-foreground: #ece9f6;
+  --color-surface: #1d1830;
+  --color-surface-soft: #181426;
+
+  --color-ink: #ece9f6;
+  --color-charcoal: #ddd8ee;
+  --color-slate: #aaa3c2;
+  --color-steel: #8a82a3;
+  --color-stone: #6b6485;
+  --color-muted: #1d1830;
+  --color-muted-foreground: #a39bbd;
+
+  --color-hairline: #2b2440;
+  --color-hairline-soft: #211b33;
+  --color-hairline-strong: #3a3257;
+  --color-border: #2b2440;
+
+  /* violet — brightened as text on the violet canvas; fill darkened for
+     white-label AA */
+  --color-primary: #a78bfa;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #5331b8;
+  --color-primary-fill: #6d4fd6;
+
+  /* candy tints, dimmed for the dark canvas (light --el-text-strong on them) */
+  --color-tint-peach: #34261a;
+  --color-tint-rose: #351c28;
+  --color-tint-mint: #16301f;
+  --color-tint-lavender: #251f3c;
+  --color-tint-sky: #16263f;
+  --color-tint-yellow: #322c16;
+
+  --color-accent: #ff5fb0; /* bright candy magenta-pink on dark */
+  --color-accent-orange: #fb8b4c;
+  --color-accent-teal: #2dc4b8;
+  --color-accent-green: #36c977;
+
+  --color-success: #36c977;
+  --color-warning: #fb8b4c;
+  --color-destructive: #f0555f; /* reads AS text on the dark canvas (AA ~5.5:1) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #6fa8ff;
+
+  --color-link: #8fb8ff;
+  --color-link-pressed: #b3d0ff;
+
+  /* sidebar hover — one shade lighter than the dark cool surface */
+  --el-sidebar-item-bg-hover: #261f3d;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Base body styles — references --el-* tokens (not --color-* directly).
    ═══════════════════════════════════════════════════════════════════════ */
