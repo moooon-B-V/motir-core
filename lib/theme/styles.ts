@@ -205,6 +205,31 @@ export const STYLE_REGISTRY = {
         'Square buttons/inputs/cards/modals, rectangular (non-pill) status chips, thick-bordered surfaces with hard-offset shadows.',
     },
   },
+  'cybercore-y2k': {
+    id: 'cybercore-y2k',
+    name: 'Cybercore / Y2K',
+    tagline: 'Neon-on-dark retro-tech — glowing HUD panels, a tech grid, mono headlines.',
+    inspiration:
+      'Y2K / cyberpunk HUDs — neon-on-dark terminals, Tron grids, glowing edges, monospace displays.',
+    designDoc: 'docs/styles/cybercore-y2k.md',
+    dimensions: {
+      silhouette:
+        'Hard terminal-frame corners (sharp 2–4px) — chiseled HUD panels, not soft cards.',
+      stroke:
+        'Structure drawn by a lit edge — a 1px glow-ring (currentColor halo) on every surface, not a heavier border.',
+      elevation:
+        'Neon GLOW instead of drop-shadow — surfaces emit an outward currentColor halo, lit rather than lifted.',
+      surface:
+        'A faint tech grid (scanline/grid texture) washes the canvas behind opaque HUD panels.',
+      density:
+        'Tight, technical HUD rhythm — compact controls (18×9 buttons, 34px control height) over snug 20px card padding.',
+      motion: 'Snappy and electric — very fast 90ms transitions with a crisp press-scale.',
+      typography:
+        'Mono/display headlines — the serif headline face is swapped to JetBrains Mono for a terminal read; body stays sans.',
+      components:
+        'Sharp glow-ringed panels, mono headings, rectangular chips; the lit edge replaces the drop shadow everywhere.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

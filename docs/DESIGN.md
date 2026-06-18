@@ -323,8 +323,9 @@ shadow depth.
   emphasize visual hierarchy via background, not via primary purple
   surfaces.
 - Test new components across every registered style (`warm-editorial`,
-  `soft-playful`, `swiss-minimal-flat`, `neo-brutalism`, …). If a component
-  looks correct in only one, it's tied too tightly to one shape language.
+  `soft-playful`, `swiss-minimal-flat`, `neo-brutalism`, `cybercore-y2k`, …).
+  If a component looks correct in only one, it's tied too tightly to one shape
+  language.
 
 ### Don't
 
@@ -397,6 +398,7 @@ rubric (see its `docs/styles/<id>.md`).
 | Soft / Playful       | `soft-playful`       | [`docs/styles/soft-playful.md`](./styles/soft-playful.md) — the pill alternate                 |
 | Swiss / Minimal-Flat | `swiss-minimal-flat` | [`docs/styles/swiss-minimal-flat.md`](./styles/swiss-minimal-flat.md) — flat, sharp, gridded   |
 | Neo-Brutalism        | `neo-brutalism`      | [`docs/styles/neo-brutalism.md`](./styles/neo-brutalism.md) — raw, thick borders, hard shadows |
+| Cybercore / Y2K      | `cybercore-y2k`      | [`docs/styles/cybercore-y2k.md`](./styles/cybercore-y2k.md) — neon-on-dark, glow, grid, mono   |
 
 Each registry entry maps to exactly one `DESIGN.md`; the `/tokens` page composes
 the active style's mapping (the toggle + dimension breakdown). Adding a style =
@@ -429,8 +431,8 @@ When generating UI for Motir:
   Future palettes will override `--el-*` to reskin without touching
   components.
 - **Test across every registered style** (`data-style="warm-editorial"`,
-  `"soft-playful"`, `"swiss-minimal-flat"`, `"neo-brutalism"`, …). If a
-  component only looks right in one, it's hardcoding shape and should be
+  `"soft-playful"`, `"swiss-minimal-flat"`, `"neo-brutalism"`, `"cybercore-y2k"`,
+  …). If a component only looks right in one, it's hardcoding shape and should be
   refactored to use semantic shape tokens.
 
 ### File references

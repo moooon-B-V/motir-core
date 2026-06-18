@@ -458,6 +458,95 @@
   border-width: 2px;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Cybercore / Y2K — the neon-on-dark retro-tech style (7.3.36). Dark-first.
+   The identity is GLOW + GRID + MONO: surfaces are lit by an outward halo
+   (neon glow elevation) instead of a drop shadow, a faint tech grid textures
+   the canvas (see the body rule below), headlines render in mono for a
+   terminal read, corners are hard HUD frames, and motion is fast/electric.
+   Overrides ONLY shape/feel tokens — never a colour token (that is the
+   data-palette axis; the neon hue comes from the active palette / dark theme,
+   and this style amplifies it into a halo). The glow + grid are built from
+   `currentColor`, so they pick up whatever hue the palette provides and never
+   pin one — keeping the style/palette axes disjoint AND preserving the
+   palette's AA by construction (no text/background pair is touched). The
+   differentiator vs Swiss / Minimal-Flat: Swiss is flat + calm, Cybercore is
+   LIT + electric (glow rings, grid texture, mono headlines, snappy press).
+   See docs/styles/cybercore-y2k.md. ────────────────────────────────────── */
+[data-style='cybercore-y2k'] {
+  /* Silhouette — hard HUD/terminal frames. Sharp small corners on every
+     surface; --radius-pill stays untouched so circular affordances (avatars,
+     status dots, the spinner) stay round. */
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-btn: 3px;
+  --radius-input: 3px;
+  --radius-card: 4px;
+  --radius-modal: 4px;
+  --radius-badge: 2px; /* rectangular HUD chips — not pills */
+  --radius-control: 2px;
+  --radius-kbd: 2px;
+
+  /* Elevation — NEON GLOW, not drop-shadow. Every surface emits an outward
+     halo built from currentColor (the active hue), so it reads as lit rather
+     than lifted; the 1px ring carries the "stroke" (lit edge) too. No colour
+     token is referenced — only currentColor, so the palette stays in charge of
+     the hue and AA is untouched. */
+  --shadow-subtle: 0 0 0 1px color-mix(in srgb, currentColor 9%, transparent);
+  --shadow-card:
+    0 0 0 1px color-mix(in srgb, currentColor 12%, transparent),
+    0 0 14px -3px color-mix(in srgb, currentColor 24%, transparent);
+  --shadow-elevated:
+    0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
+    0 0 22px -4px color-mix(in srgb, currentColor 32%, transparent);
+  --shadow-modal:
+    0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+    0 0 40px -6px color-mix(in srgb, currentColor 40%, transparent);
+  --shadow-hero-mockup:
+    0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
+    0 0 56px -8px color-mix(in srgb, currentColor 45%, transparent);
+
+  /* Typography — mono/display. Swap the serif headline face to the mono stack
+     so headings render in JetBrains Mono (terminal/retro-tech); body stays
+     sans. A type token — the colour axis is untouched. */
+  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+  /* Density — tight, technical HUD rhythm: compact controls, snug card pad. */
+  --spacing-btn-x: 18px;
+  --spacing-btn-y: 9px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 11px;
+  --spacing-card-padding: 20px;
+  --spacing-control-x: 10px;
+  --spacing-control-y: 6px;
+  --height-control: 34px;
+  --height-input: 42px;
+
+  /* Motion — snappy and electric. Very fast transitions, crisp press-scale. */
+  --transition-duration: 90ms;
+  --transition-fast: 60ms;
+  --transition-slow: 140ms;
+  --hover-scale: 1;
+  --active-scale: 0.97;
+}
+
+/* Cybercore surface texture — the tech grid (the "surface treatment" feel
+   axis). A component-variant override, NOT a [data-style] token block, so it
+   can carry the faint grid lines: built from currentColor at a very low alpha
+   so it adapts to the active palette and sits BEHIND content (text never
+   renders on it), keeping AA intact. Dark-first — on the dark theme this reads
+   as a Tron grid over the near-black canvas. */
+[data-style='cybercore-y2k'] body {
+  background-image:
+    linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center top;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 3 — Element tokens (--el-*)
    Components reference these, NEVER --color-* directly. This is the
