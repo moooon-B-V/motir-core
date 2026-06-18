@@ -369,11 +369,9 @@
   --shadow-modal: none;
   --shadow-hero-mockup: none;
 
-  /* Typography — restrained neo-grotesque sans everywhere. Swap the serif
-     headline face to the sans stack so headings render in Inter, tight and
-     strong (a type token — the colour axis is untouched). */
-  --font-serif:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Typography is the data-type axis now — Swiss ships `defaultTypeId:
+     'motir-sans'` (sans headlines), applied via the [data-type='motir-sans']
+     block below. A [data-style] block sets NO --font-* token (disjointness). */
 
   /* Density — tight, gridded controls; generous card whitespace. */
   --spacing-btn-x: 16px;
@@ -575,11 +573,9 @@
   --shadow-modal: 8px 8px 0 0 rgba(15, 15, 15, 1);
   --shadow-hero-mockup: 12px 12px 0 0 rgba(15, 15, 15, 1);
 
-  /* Typography — raw monospace headlines. Re-point the editorial serif at the
-     MONO stack so every font-serif headline (page h1/h2, card & modal titles)
-     renders in JetBrains Mono — utilitarian and strong — over the Inter grotesk
-     body. A type token; the colour axis is untouched. */
-  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  /* Typography is the data-type axis now — Neo-Brutalism ships `defaultTypeId:
+     'motir-mono'` (mono headlines), applied via the [data-type='motir-mono']
+     block below. A [data-style] block sets NO --font-* token (disjointness). */
 
   /* Density — tight, utilitarian. Chunky controls, compact card padding, no
      wasted space. */
@@ -667,10 +663,9 @@
     0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
     0 0 56px -8px color-mix(in srgb, currentColor 45%, transparent);
 
-  /* Typography — mono/display. Swap the serif headline face to the mono stack
-     so headings render in JetBrains Mono (terminal/retro-tech); body stays
-     sans. A type token — the colour axis is untouched. */
-  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  /* Typography is the data-type axis now — Cybercore ships `defaultTypeId:
+     'motir-mono'` (mono headlines), applied via the [data-type='motir-mono']
+     block below. A [data-style] block sets NO --font-* token (disjointness). */
 
   /* Density — tight, technical HUD rhythm: compact controls, snug card pad. */
   --spacing-btn-x: 18px;
@@ -913,6 +908,39 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* (no [data-palette] override blocks yet — `motir` is the Tier-3 base) */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AXIS 3 (TYPE) — data-type overrides (Subtask 7.3.53)
+   Registry: lib/theme/typography.ts. A named type pairing re-points the
+   `--font-*` ROLE tokens (sans / serif / mono) — and ONLY font tokens, NEVER a
+   colour (--el / --color) or shape (--radius / --spacing / --shadow) token. The
+   shared --font-size scale stays common (sizes are layout, not brand).
+
+   v1 ships three pairings built from the THREE already-loaded next/font faces
+   (Inter · Source Serif 4 · JetBrains Mono) — ZERO new payload:
+     - `motir`      — the BASE (editorial serif headlines); it IS the Tier-0
+                      --font-* defaults, so — like the `motir` palette — it needs
+                      NO override block.
+     - `motir-sans` — all-sans: the serif headline face re-points to the sans
+                      stack (reproduces the old Swiss `--font-serif` override).
+     - `motir-mono` — mono headlines: re-points to the mono stack (reproduces
+                      the old Neo-Brutalism / Cybercore override).
+   A STYLE declares a `defaultTypeId` (lib/theme/styles.ts) — the pairing applied
+   when the user hasn't pinned a `data-type` — so the out-of-the-box look is
+   UNCHANGED (swiss → motir-sans, neo/cybercore → motir-mono). Each later
+   "Type: …" subtask (7.3.54+) ADDS its `[data-type='<id>']` block + faces here.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+[data-type='motir-sans'] {
+  /* Sans headlines — re-point the editorial serif role at the sans stack. */
+  --font-serif:
+    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+[data-type='motir-mono'] {
+  /* Mono headlines — re-point the editorial serif role at the mono stack. */
+  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    Base body styles — references --el-* tokens (not --color-* directly).
