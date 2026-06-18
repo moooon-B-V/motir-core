@@ -1,20 +1,24 @@
 /**
- * Theme types for Motir's two-axis design system.
+ * Theme types for Motir's THREE-axis design system.
  *
  * Axis 1 — COLOR  (`data-theme` light/dark base · `data-palette` full
  *                  `--el-*` palette swap — the colour axis)
  * Axis 2 — STYLE  (`data-style` — a named aesthetic controlling shape /
  *                  silhouette / elevation / surface / density / motion /
- *                  typography / component silhouettes)
+ *                  component silhouettes)
+ * Axis 3 — TYPE   (`data-type` — a named pairing controlling the `--font-*`
+ *                  role mapping; a style declares a default pairing, overridable)
  *
- * The two axes are INDEPENDENT: a style never touches a hue, a palette never
- * touches a radius. The named-style registry lives in `./styles.ts`.
+ * The three axes are INDEPENDENT: a style never touches a hue or a face, a
+ * palette never touches a radius, a type pairing never touches colour or shape.
+ * The registries live in `./styles.ts`, `./palettes.ts`, `./typography.ts`.
  *
  * Architecture mirrors dooooWeb. See docs/DESIGN.md for the rationale.
  */
 
 import { DEFAULT_STYLE_ID, type StyleId } from './styles';
 import { DEFAULT_PALETTE_ID, type PaletteId } from './palettes';
+import { DEFAULT_TYPE_ID, type TypeId } from './typography';
 
 /** Tier 1 — light/dark base. `system` follows OS preference at runtime. */
 export type ThemePattern = 'system' | 'light' | 'dark';
@@ -36,16 +40,30 @@ export type { StyleId } from './styles';
  */
 export type { PaletteId } from './palettes';
 
+/**
+ * Axis 3 — the active named type pairing (`data-type`). The value space + the
+ * registry live in `./typography.ts`; re-exported here so `lib/theme/*` stays
+ * the single import surface for theme consumers.
+ */
+export type { TypeId } from './typography';
+
 /** Storage keys for persisting user preferences. */
 export const THEME_STORAGE_KEYS = {
   pattern: 'motir.theme.pattern',
   style: 'motir.theme.style',
   palette: 'motir.theme.palette',
+  type: 'motir.theme.type',
 } as const;
 
-/** Sensible defaults if localStorage is empty. */
+/**
+ * Sensible defaults if localStorage is empty. Note `type` is the GLOBAL fallback
+ * only — when no explicit type is pinned, the active STYLE's `defaultTypeId`
+ * wins (see `STYLE_DEFAULT_TYPE` / the theme context); this is the floor under
+ * an unknown style.
+ */
 export const THEME_DEFAULTS = {
   pattern: 'system' as ThemePattern,
   style: DEFAULT_STYLE_ID as StyleId,
   palette: DEFAULT_PALETTE_ID as PaletteId,
+  type: DEFAULT_TYPE_ID as TypeId,
 } as const;

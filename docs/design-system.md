@@ -88,6 +88,17 @@ soften further in `soft-playful`. The style library is documented in
 `--radius-md` / `--shadow-card`. That's what lets `data-style` flips
 cascade cleanly without component changes.
 
+**Surface-material styles** (`glassmorphism`; later cybercore / aurora /
+neumorphism) go one step further than a token swap: they own the SURFACE
+itself — translucency, a gradient canvas, frosted backdrop-blur, light borders.
+Those can't live in the shape-only token block, so a material style adds a
+**palette-derived material layer** — style-scoped rules
+`[data-style='id'] [data-surface='…'] { … }` whose colour comes only from
+`color-mix()`/`var(--color-*|--el-*)` over the active palette (never a raw hue),
+so style stays disjoint from palette. Surfaces opt in via a `data-surface`
+attribute the shared primitives emit (`Card`/`Modal`/`Popover`/`Sidebar`/
+`Input`). See [`docs/styles/glassmorphism.md`](./styles/glassmorphism.md).
+
 ### App shell element tokens
 
 The navigation rail owns four tier-3 `--el-*` element tokens (Subtask

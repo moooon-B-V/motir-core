@@ -135,6 +135,9 @@ function ModalRoot({
         */}
         <Dialog.Content
           className={cn(contentVariants({ size }), className)}
+          // `data-surface` lets a surface-material style (glassmorphism) frost
+          // the dialog panel — see globals.css's material layer.
+          data-surface="modal"
           // A destructive confirm opts into `alertdialog` (2.8.4); otherwise
           // Radix's default `dialog` role applies.
           {...(role ? { role } : {})}

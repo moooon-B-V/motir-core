@@ -16,11 +16,13 @@ import {
   type ResolvedThemePattern,
   type ThemePattern,
 } from '@/lib/theme/types';
-import { DEFAULT_STYLE_ID, isStyleId, type StyleId } from '@/lib/theme/styles';
+import { DEFAULT_STYLE_ID, isStyleId, resolveStyle, type StyleId } from '@/lib/theme/styles';
 import { DEFAULT_PALETTE_ID, isPaletteId, type PaletteId } from '@/lib/theme/palettes';
+import { isTypeId, type TypeId } from '@/lib/theme/typography';
 
 /**
- * Theme context for Motir's two-axis design system.
+ * Theme context for Motir's three-axis design system (style · palette · type),
+ * plus the light/dark pattern.
  *
  * `pattern` is what the user picked (system | light | dark).
  * `resolvedPattern` is what's currently applied (light | dark) — these
@@ -45,9 +47,17 @@ interface ThemeContextValue {
   styleId: StyleId;
   /** The active named palette (`data-palette`) — Axis 1 (colour), independent of style. */
   palette: PaletteId;
+  /**
+   * The EFFECTIVE type pairing (`data-type`) — Axis 3. Either the user's pinned
+   * choice, or (when unpinned) the active style's `defaultTypeId`. Independent
+   * of palette + style.
+   */
+  type: TypeId;
   setPattern: (pattern: ThemePattern) => void;
   setStyleId: (styleId: StyleId) => void;
   setPalette: (palette: PaletteId) => void;
+  /** Pin an explicit type pairing (overrides the style's default until cleared). */
+  setType: (type: TypeId) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -102,6 +112,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const stored = readStorage<string>(THEME_STORAGE_KEYS.palette, THEME_DEFAULTS.palette);
     return isPaletteId(stored) ? stored : DEFAULT_PALETTE_ID;
   });
+  // The user's PINNED type choice, or `null` = "follow the active style's
+  // default pairing". Only a valid stored id pins; anything else (unset/stale)
+  // falls through to the style default below.
+  const [typeChoice, setTypeChoiceState] = useState<TypeId | null>(() => {
+    const stored = readStorage<string>(THEME_STORAGE_KEYS.type, '');
+    return isTypeId(stored) ? stored : null;
+  });
 
   // Subscribe to OS color-scheme changes. Only consulted when pattern='system'.
   const osColorScheme = useSyncExternalStore(
@@ -111,6 +128,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 
   const resolvedPattern: ResolvedThemePattern = pattern === 'system' ? osColorScheme : pattern;
+
+  // Effective type (Axis 3): a pinned choice wins; otherwise FOLLOW the active
+  // style's default pairing — so switching style (while unpinned) re-points type
+  // to that style's curated default, and an explicit pick sticks across styles.
+  const type: TypeId = typeChoice ?? resolveStyle(styleId).defaultTypeId;
 
   // Sync data-theme to <html>. This IS an effect (synchronizing with an
   // external system — the DOM), but the effect body only writes to the DOM,
@@ -126,6 +148,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-palette', palette);
   }, [palette]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-type', type);
+  }, [type]);
 
   const setPattern = useCallback((next: ThemePattern) => {
     setPatternState(next);
@@ -154,9 +180,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const setType = useCallback((next: TypeId) => {
+    setTypeChoiceState(next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEYS.type, next);
+    } catch {
+      // localStorage unavailable — accept that the choice won't persist.
+    }
+  }, []);
+
   const value = useMemo<ThemeContextValue>(
-    () => ({ pattern, resolvedPattern, styleId, palette, setPattern, setStyleId, setPalette }),
-    [pattern, resolvedPattern, styleId, palette, setPattern, setStyleId, setPalette],
+    () => ({
+      pattern,
+      resolvedPattern,
+      styleId,
+      palette,
+      type,
+      setPattern,
+      setStyleId,
+      setPalette,
+      setType,
+    }),
+    [pattern, resolvedPattern, styleId, palette, type, setPattern, setStyleId, setPalette, setType],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
