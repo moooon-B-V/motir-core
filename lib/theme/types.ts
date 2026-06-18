@@ -14,6 +14,7 @@
  */
 
 import { DEFAULT_STYLE_ID, type StyleId } from './styles';
+import { DEFAULT_PALETTE_ID, type PaletteId } from './palettes';
 
 /** Tier 1 — light/dark base. `system` follows OS preference at runtime. */
 export type ThemePattern = 'system' | 'light' | 'dark';
@@ -28,14 +29,23 @@ export type ResolvedThemePattern = 'light' | 'dark';
  */
 export type { StyleId } from './styles';
 
+/**
+ * Axis 1 (colour) — the active named palette (`data-palette`). The value space
+ * + the registry of every palette live in `./palettes.ts`; re-exported here so
+ * `lib/theme/*` stays the single import surface for theme consumers.
+ */
+export type { PaletteId } from './palettes';
+
 /** Storage keys for persisting user preferences. */
 export const THEME_STORAGE_KEYS = {
   pattern: 'motir.theme.pattern',
   style: 'motir.theme.style',
+  palette: 'motir.theme.palette',
 } as const;
 
 /** Sensible defaults if localStorage is empty. */
 export const THEME_DEFAULTS = {
   pattern: 'system' as ThemePattern,
   style: DEFAULT_STYLE_ID as StyleId,
+  palette: DEFAULT_PALETTE_ID as PaletteId,
 } as const;

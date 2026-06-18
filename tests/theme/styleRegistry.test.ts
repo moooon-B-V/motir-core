@@ -21,17 +21,21 @@ import {
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Glassmorphism)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
       'swiss-minimal-flat',
+      'neo-brutalism',
       'glassmorphism',
+      'cybercore-y2k',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
     expect(STYLE_REGISTRY['swiss-minimal-flat'].name).toBe('Swiss / Minimal-Flat');
+    expect(STYLE_REGISTRY['neo-brutalism'].name).toBe('Neo-Brutalism');
     expect(STYLE_REGISTRY['glassmorphism'].name).toBe('Glassmorphism');
+    expect(STYLE_REGISTRY['cybercore-y2k'].name).toBe('Cybercore / Y2K');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {
@@ -138,8 +142,11 @@ describe('surface-material layer in globals.css (the 7.3.35 contract extension)'
         continue;
       }
       materialRulesChecked += 1;
-      // Palette-derived: the rule must reference a palette token…
-      expect(body).toMatch(/var\(--(?:color|el)-/);
+      // Palette-derived: the rule must take its colour from the active palette —
+      // either a palette token (`var(--color-*|--el-*)`, e.g. glassmorphism's
+      // frosted surfaces + washes) or `currentColor` (the inherited palette hue,
+      // e.g. cybercore-y2k's glow grid). Both pin NO hue of their own.
+      expect(body).toMatch(/var\(--(?:color|el)-|currentColor/i);
       // …and must NOT hardcode a raw hue (a hex colour literal). Shadow ink
       // (rgba(15,15,15,…)) lives in the token block, not in a material rule.
       expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);

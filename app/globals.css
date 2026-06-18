@@ -3,9 +3,13 @@
 /*
  * Motir design system — two-axis theme architecture.
  *
- * Axis 1 — COLOR (the palette axis)
+ * Axis 1 — COLOR (the palette axis — registry in lib/theme/palettes.ts)
  *   data-theme="light|dark"     — light/dark base
- *   (future) data-palette="..." — full --el-* token override (a named palette)
+ *   data-palette="<palette-id>" — a named palette: a per-palette --el-* token
+ *                                 override (Tier 3 below). v1 ships `motir`
+ *                                 (the Tier-3 default — no override block, like
+ *                                 the warm-editorial base style). More palettes
+ *                                 each add a `[data-palette='<id>']` block.
  *
  * Axis 2 — STYLE (the named-aesthetic axis — registry in lib/theme/styles.ts)
  *   data-style="<style-id>"
@@ -37,7 +41,10 @@
  *   Tier 1 — [data-theme="dark"] overrides color tokens
  *   Tier 2 — [data-style="..."] overrides shape/feel tokens (NOT colour)
  *   Tier 3 — :root --el-* element tokens reference Tier 0/1 vars;
- *            components reference --el-*, never --color-* directly
+ *            components reference --el-*, never --color-* directly.
+ *            A `[data-palette='<id>']` block overrides this --el-* layer to
+ *            re-skin the whole app (the palette axis) — ONLY colour, never a
+ *            shape/feel token (that is the data-style axis).
  *
  * Inspiration:
  *   - Notion's marketing palette (purple primary, pastel feature tints,
@@ -527,6 +534,177 @@
   backdrop-filter: blur(var(--glass-blur));
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Neo-Brutalism — the raw, punchy, utilitarian style (7.3.34).
+   The LOUD end of the angular family — where Swiss is refined and calm, this is
+   harsh on purpose: hard 0px corners on every surface, heavy 2px solid borders
+   doing the structural work, and HARD-OFFSET drop shadows with ZERO blur (a
+   solid block of shadow, not a soft lift). Tight utilitarian density, raw
+   monospace headlines, and snappy mechanical motion (near-instant, no
+   press-scale). Overrides ONLY shape/feel tokens — never a colour token (that is
+   the data-palette axis; this style wears whatever palette is active, so the
+   active palette's AA contrast is preserved by construction). The heavy-border
+   axis has no Tier-0 token (components draw a 1px Tailwind `border`), so it is
+   carried by the style-scoped component-variant block that FOLLOWS this token
+   block. See docs/styles/neo-brutalism.md. ─────────────────────────────────── */
+[data-style='neo-brutalism'] {
+  /* Silhouette — zero radius. Hard 0px corners on every surface; --radius-pill
+     is left untouched so genuinely-circular affordances (avatars, status dots,
+     the spinner) stay round. */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-btn: 0;
+  --radius-input: 0;
+  --radius-card: 0;
+  --radius-modal: 0;
+  --radius-badge: 0; /* rectangular (non-pill) status chips — the brutalist block */
+  --radius-control: 0;
+  --radius-kbd: 0;
+
+  /* Elevation — HARD-OFFSET shadows, zero blur. A solid offset block of shadow
+     (Xpx Ypx 0 0) instead of a soft diffuse lift; the chunky frame is the whole
+     point. The shadow colour is a literal near-ink (matching how the base
+     shadows already hard-code their rgba) — NOT a palette token, so the colour
+     axis stays untouched. */
+  --shadow-subtle: 2px 2px 0 0 rgba(15, 15, 15, 1);
+  --shadow-card: 4px 4px 0 0 rgba(15, 15, 15, 1);
+  --shadow-elevated: 6px 6px 0 0 rgba(15, 15, 15, 1);
+  --shadow-modal: 8px 8px 0 0 rgba(15, 15, 15, 1);
+  --shadow-hero-mockup: 12px 12px 0 0 rgba(15, 15, 15, 1);
+
+  /* Typography — raw monospace headlines. Re-point the editorial serif at the
+     MONO stack so every font-serif headline (page h1/h2, card & modal titles)
+     renders in JetBrains Mono — utilitarian and strong — over the Inter grotesk
+     body. A type token; the colour axis is untouched. */
+  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+  /* Density — tight, utilitarian. Chunky controls, compact card padding, no
+     wasted space. */
+  --spacing-btn-x: 16px;
+  --spacing-btn-y: 10px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 11px;
+  --spacing-card-padding: 20px;
+  --spacing-control-x: 10px;
+  --spacing-control-y: 6px;
+  --height-control: 36px;
+  --height-input: 44px;
+
+  /* Motion — snappy, mechanical. Near-instant transitions and NO press-scale;
+     the UI reacts, it does not ease. */
+  --transition-duration: 60ms;
+  --transition-fast: 40ms;
+  --transition-slow: 100ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+}
+
+/* Neo-Brutalism — component-variant override: HEAVY borders (the deliverable's
+   "component-variant overrides" axis). There is no Tier-0 border-WIDTH token —
+   every primitive (Button outline, Card, Input, Modal, Pill, Popover, …) draws
+   a 1px Tailwind `.border`. This style-scoped rule thickens that full box border
+   to a loud 2px on every framed surface WITHOUT touching a colour token or any
+   component file, so the heaviness is real but stays entirely inside the
+   neo-brutalism scope (no other style is affected). It is intentionally a
+   descendant rule, not a bare token block, so the disjoint-axis test (which
+   inspects token blocks) does not treat it as one — and it sets no colour
+   anyway, so the two axes stay disjoint regardless. */
+[data-style='neo-brutalism'] .border {
+  border-width: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Cybercore / Y2K — the neon-on-dark retro-tech style (7.3.36). Dark-first.
+   The identity is GLOW + GRID + MONO: surfaces are lit by an outward halo
+   (neon glow elevation) instead of a drop shadow, a faint tech grid textures
+   the canvas (see the body rule below), headlines render in mono for a
+   terminal read, corners are hard HUD frames, and motion is fast/electric.
+   Overrides ONLY shape/feel tokens — never a colour token (that is the
+   data-palette axis; the neon hue comes from the active palette / dark theme,
+   and this style amplifies it into a halo). The glow + grid are built from
+   `currentColor`, so they pick up whatever hue the palette provides and never
+   pin one — keeping the style/palette axes disjoint AND preserving the
+   palette's AA by construction (no text/background pair is touched). The
+   differentiator vs Swiss / Minimal-Flat: Swiss is flat + calm, Cybercore is
+   LIT + electric (glow rings, grid texture, mono headlines, snappy press).
+   See docs/styles/cybercore-y2k.md. ────────────────────────────────────── */
+[data-style='cybercore-y2k'] {
+  /* Silhouette — hard HUD/terminal frames. Sharp small corners on every
+     surface; --radius-pill stays untouched so circular affordances (avatars,
+     status dots, the spinner) stay round. */
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  --radius-btn: 3px;
+  --radius-input: 3px;
+  --radius-card: 4px;
+  --radius-modal: 4px;
+  --radius-badge: 2px; /* rectangular HUD chips — not pills */
+  --radius-control: 2px;
+  --radius-kbd: 2px;
+
+  /* Elevation — NEON GLOW, not drop-shadow. Every surface emits an outward
+     halo built from currentColor (the active hue), so it reads as lit rather
+     than lifted; the 1px ring carries the "stroke" (lit edge) too. No colour
+     token is referenced — only currentColor, so the palette stays in charge of
+     the hue and AA is untouched. */
+  --shadow-subtle: 0 0 0 1px color-mix(in srgb, currentColor 9%, transparent);
+  --shadow-card:
+    0 0 0 1px color-mix(in srgb, currentColor 12%, transparent),
+    0 0 14px -3px color-mix(in srgb, currentColor 24%, transparent);
+  --shadow-elevated:
+    0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
+    0 0 22px -4px color-mix(in srgb, currentColor 32%, transparent);
+  --shadow-modal:
+    0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+    0 0 40px -6px color-mix(in srgb, currentColor 40%, transparent);
+  --shadow-hero-mockup:
+    0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
+    0 0 56px -8px color-mix(in srgb, currentColor 45%, transparent);
+
+  /* Typography — mono/display. Swap the serif headline face to the mono stack
+     so headings render in JetBrains Mono (terminal/retro-tech); body stays
+     sans. A type token — the colour axis is untouched. */
+  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+  /* Density — tight, technical HUD rhythm: compact controls, snug card pad. */
+  --spacing-btn-x: 18px;
+  --spacing-btn-y: 9px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 11px;
+  --spacing-card-padding: 20px;
+  --spacing-control-x: 10px;
+  --spacing-control-y: 6px;
+  --height-control: 34px;
+  --height-input: 42px;
+
+  /* Motion — snappy and electric. Very fast transitions, crisp press-scale. */
+  --transition-duration: 90ms;
+  --transition-fast: 60ms;
+  --transition-slow: 140ms;
+  --hover-scale: 1;
+  --active-scale: 0.97;
+}
+
+/* Cybercore surface texture — the tech grid (the "surface treatment" feel
+   axis). A component-variant override, NOT a [data-style] token block, so it
+   can carry the faint grid lines: built from currentColor at a very low alpha
+   so it adapts to the active palette and sits BEHIND content (text never
+   renders on it), keeping AA intact. Dark-first — on the dark theme this reads
+   as a Tron grid over the near-black canvas. */
+[data-style='cybercore-y2k'] body {
+  background-image:
+    linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center top;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 3 — Element tokens (--el-*)
    Components reference these, NEVER --color-* directly. This is the
@@ -714,6 +892,27 @@
 [data-theme='dark'] {
   --el-sidebar-item-bg-hover: #222222;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AXIS 1 (COLOUR) — data-palette overrides (Subtask 7.3.48)
+   Registry: lib/theme/palettes.ts. A named palette re-skins the app by
+   OVERRIDING the Tier-3 --el-* layer above — and ONLY colour (--el-* /
+   --color-*), NEVER a shape/feel token (radius / spacing / shadow / sizing /
+   motion / type). That is the data-style axis's job; keeping the two disjoint
+   is what makes "style × palette" a product of two independent choices.
+
+   v1 ships exactly one palette — `motir` (Yue, 2026-06-17: "use Motir's colour
+   palette for the v1"). It IS the Tier-3 base, so — exactly like the
+   `warm-editorial` base style — it needs NO override block: setting
+   data-palette="motir" simply leaves the base --el-* tokens in force. Each
+   later "Palette: …" subtask ADDS its `[data-palette='<id>']` block here,
+   overriding --el-* (light + dark via [data-palette='<id>'][data-theme='dark']
+   where the palette diverges from the base flip), and authors its
+   docs/palettes/<id>.md — mirroring how the per-style subtasks add a
+   [data-style] block on the other axis.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (no [data-palette] override blocks yet — `motir` is the Tier-3 base) */
 
 /* ═══════════════════════════════════════════════════════════════════════
    Base body styles — references --el-* tokens (not --color-* directly).

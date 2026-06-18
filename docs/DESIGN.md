@@ -312,8 +312,9 @@ shadow depth.
   — these resolve to the right CSS variable across themes and display
   styles automatically.
 - Reference `--el-*` tokens in components rather than `--color-*`
-  directly. The `--el-*` layer is the abstraction that future palettes
-  override.
+  directly. The `--el-*` layer is the abstraction a named palette
+  (`data-palette`) overrides — see the palette registry in
+  [`lib/theme/palettes.ts`](../lib/theme/palettes.ts).
 - Use `font-serif` for headlines (h1, h2, h3 above 24px). Use
   `font-sans` for body. Use `font-mono` only for code, IDs, and
   intentional microtype.
@@ -323,8 +324,9 @@ shadow depth.
   emphasize visual hierarchy via background, not via primary purple
   surfaces.
 - Test new components across every registered style (`warm-editorial`,
-  `soft-playful`, `swiss-minimal-flat`, …). If a component looks correct in
-  only one, it's tied too tightly to one shape language.
+  `soft-playful`, `swiss-minimal-flat`, `neo-brutalism`, `cybercore-y2k`, …).
+  If a component looks correct in only one, it's tied too tightly to one shape
+  language.
 
 ### Don't
 
@@ -391,11 +393,13 @@ rubric (see its `docs/styles/<id>.md`).
 
 ### Registered styles
 
-| Style                | `data-style`         | Doc                                                                                          |
-| -------------------- | -------------------- | -------------------------------------------------------------------------------------------- |
-| Warm Editorial       | `warm-editorial`     | [`docs/styles/warm-editorial.md`](./styles/warm-editorial.md) — the Tier-0 default           |
-| Soft / Playful       | `soft-playful`       | [`docs/styles/soft-playful.md`](./styles/soft-playful.md) — the pill alternate               |
-| Swiss / Minimal-Flat | `swiss-minimal-flat` | [`docs/styles/swiss-minimal-flat.md`](./styles/swiss-minimal-flat.md) — flat, sharp, gridded |
+| Style                | `data-style`         | Doc                                                                                            |
+| -------------------- | -------------------- | ---------------------------------------------------------------------------------------------- |
+| Warm Editorial       | `warm-editorial`     | [`docs/styles/warm-editorial.md`](./styles/warm-editorial.md) — the Tier-0 default             |
+| Soft / Playful       | `soft-playful`       | [`docs/styles/soft-playful.md`](./styles/soft-playful.md) — the pill alternate                 |
+| Swiss / Minimal-Flat | `swiss-minimal-flat` | [`docs/styles/swiss-minimal-flat.md`](./styles/swiss-minimal-flat.md) — flat, sharp, gridded   |
+| Neo-Brutalism        | `neo-brutalism`      | [`docs/styles/neo-brutalism.md`](./styles/neo-brutalism.md) — raw, thick borders, hard shadows |
+| Cybercore / Y2K      | `cybercore-y2k`      | [`docs/styles/cybercore-y2k.md`](./styles/cybercore-y2k.md) — neon-on-dark, glow, grid, mono   |
 
 Each registry entry maps to exactly one `DESIGN.md`; the `/tokens` page composes
 the active style's mapping (the toggle + dimension breakdown). Adding a style =
@@ -425,12 +429,13 @@ When generating UI for Motir:
 - **For new component primitives**, define a small set of `--el-*`
   element tokens at the top of the component (or in `globals.css`'s
   Tier 3 block) and reference those rather than `--color-*` directly.
-  Future palettes will override `--el-*` to reskin without touching
-  components.
+  A named palette (`data-palette`) overrides `--el-*` to reskin without
+  touching components — so a new token automatically participates in every
+  palette (registry: `lib/theme/palettes.ts`; v1 ships `motir`).
 - **Test across every registered style** (`data-style="warm-editorial"`,
-  `"soft-playful"`, `"swiss-minimal-flat"`, …). If a component only looks
-  right in one, it's hardcoding shape and should be refactored to use
-  semantic shape tokens.
+  `"soft-playful"`, `"swiss-minimal-flat"`, `"neo-brutalism"`, `"cybercore-y2k"`,
+  …). If a component only looks right in one, it's hardcoding shape and should be
+  refactored to use semantic shape tokens.
 
 ### File references
 
