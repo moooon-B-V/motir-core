@@ -87,6 +87,9 @@ const PopoverContent = forwardRef<
         ref={ref}
         align={align}
         sideOffset={sideOffset}
+        // `data-surface` lets a surface-material style (glassmorphism) frost
+        // the floating panel — see globals.css's material layer.
+        data-surface="popover"
         className={cn(
           'z-50 rounded-(--radius-card) bg-(--el-page-bg)',
           overflowVisible ? 'overflow-visible' : 'overflow-hidden',

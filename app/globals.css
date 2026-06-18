@@ -20,10 +20,21 @@
  *     `soft-playful` (the Tier-2 block below). More styles (Swiss,
  *     Neo-Brutalism, Glassmorphism, …) each add a `[data-style='<id>']` block.
  *
- *   The axes are INDEPENDENT: a `[data-style]` block overrides ONLY
+ *   The axes are INDEPENDENT: a `[data-style]` TOKEN block overrides ONLY
  *   shape/feel tokens, NEVER a colour token (`--color-*` / `--el-*`) — colour
  *   is the palette axis's job. Keeping them disjoint is what makes
  *   "style × palette" a true product of two free choices.
+ *
+ *   SURFACE-MATERIAL styles (glassmorphism, 7.3.35; later cybercore, aurora,
+ *   neumorphism …) own a richer surface — translucency, a gradient canvas,
+ *   frosted backdrop-blur, light borders — that the token block cannot express.
+ *   They add a palette-DERIVED MATERIAL LAYER: STYLE-SCOPED component rules
+ *   (`[data-style='id'] [data-surface='…'] { … }`) whose colour comes ONLY from
+ *   `color-mix()`/`var(--color-*|--el-*)` over the ACTIVE palette — never a raw
+ *   hue. That keeps the two axes disjoint (a palette swap re-tints the glass; a
+ *   style swap leaves hues untouched) while letting a style own its material.
+ *   The token-block rule above is unchanged; the material layer is the addition.
+ *   Both are enforced by tests/theme/styleRegistry.test.ts.
  *
  * Tier structure (top to bottom):
  *   Tier 0 — @theme base tokens (light mode defaults = the warm-editorial style)
@@ -358,11 +369,9 @@
   --shadow-modal: none;
   --shadow-hero-mockup: none;
 
-  /* Typography — restrained neo-grotesque sans everywhere. Swap the serif
-     headline face to the sans stack so headings render in Inter, tight and
-     strong (a type token — the colour axis is untouched). */
-  --font-serif:
-    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Typography is the data-type axis now — Swiss ships `defaultTypeId:
+     'motir-sans'` (sans headlines), applied via the [data-type='motir-sans']
+     block below. A [data-style] block sets NO --font-* token (disjointness). */
 
   /* Density — tight, gridded controls; generous card whitespace. */
   --spacing-btn-x: 16px;
@@ -381,6 +390,146 @@
   --transition-slow: 160ms;
   --hover-scale: 1;
   --active-scale: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Glassmorphism — translucent frosted glass over a vibrant gradient (7.3.35).
+   The FIRST surface-MATERIAL style: where Swiss / Soft-Playful only re-shape
+   the silhouette, glass re-shapes the SURFACE itself — frosted backdrop-blur
+   panels, a soft palette-derived gradient canvas, light 1px borders, layered
+   diffuse depth, a rounded silhouette, and gentle motion.
+
+   It ships in TWO parts (the style contract was extended for this — see
+   docs/styles/glassmorphism.md + DESIGN.md):
+     1. This [data-style] TOKEN BLOCK — shape/feel tokens ONLY (radius / shadow /
+        motion / density) PLUS palette-AGNOSTIC material SCALARS (blur radius,
+        surface/border ALPHAs, wash strength). No hue lives here, so it stays
+        disjoint from the palette axis — still enforced by styleRegistry.test.ts.
+     2. A palette-DERIVED MATERIAL LAYER (the [data-surface] rules just below)
+        that turns those scalars into frosted translucency + the gradient canvas
+        via color-mix()/alpha OVER the active palette tokens, introducing NO new
+        hue — so "style x palette" stays orthogonal (swap the palette and the
+        glass re-tints; swap the style and the hues are untouched). This is the
+        surface-MATERIAL axis Swiss / Soft-Playful never needed.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-style='glassmorphism'] {
+  /* Silhouette — rounded, soft (not pill). Generous radii read as "glass tile". */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+  --radius-card: 18px;
+  --radius-modal: 22px;
+  --radius-badge: 9999px; /* chips stay pills — soft is the glass register */
+  --radius-control: 10px;
+  --radius-kbd: 6px;
+
+  /* Elevation — layered, diffuse, soft. Glass FLOATS: bigger, softer, lower-
+     opacity shadows than the base, so panels read as hovering sheets. (rgba
+     literals are neutral shadow ink, not a palette hue.) */
+  --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
+  --shadow-card: 0 8px 32px -8px rgba(15, 15, 15, 0.18);
+  --shadow-elevated: 0 16px 48px -12px rgba(15, 15, 15, 0.24);
+  --shadow-modal: 0 28px 70px -16px rgba(15, 15, 15, 0.34);
+  --shadow-hero-mockup: 0 32px 80px -16px rgba(15, 15, 15, 0.38);
+
+  /* Density — comfortable, a touch roomy (glass wants air around its tiles). */
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 11px;
+  --spacing-card-padding: 26px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+
+  /* Motion — gentle, smooth (glass slides; never snaps). */
+  --transition-duration: 220ms;
+  --transition-slow: 320ms;
+  --active-scale: 0.98;
+
+  /* ── Material SCALARS — palette-AGNOSTIC (no hue, so no colour token here).
+     Consumed only by the [data-surface] material layer below; they are the
+     "glass recipe": how far to blur, and how much of the palette surface to
+     keep opaque (the rest lets the blurred gradient show through). ── */
+  --glass-blur: 16px; /* frosted-panel backdrop blur */
+  --glass-blur-strong: 26px; /* modal / overlay blur — more separation */
+  --glass-surface-alpha: 64%; /* opacity of a frosted card / popover */
+  --glass-modal-alpha: 82%; /* modals stay more opaque for body-text AA */
+  --glass-chrome-alpha: 62%; /* sidebar / chrome translucency */
+  --glass-input-alpha: 58%; /* form-control fill translucency */
+  --glass-border-alpha: 58%; /* light 1px hairline over the blur */
+  --glass-wash: 15%; /* gradient-canvas tint strength over the page bg */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Glassmorphism MATERIAL LAYER — palette-DERIVED surface treatment (7.3.35).
+   The style-contract EXTENSION: a style may own its surface MATERIAL in these
+   STYLE-SCOPED component rules as long as every colour is DERIVED from the
+   active palette via color-mix()/var() (never a raw hue) — so the style axis
+   stays disjoint from the palette axis. Surfaces are tagged with the
+   `data-surface` hook the shared primitives now emit (Card / Modal / Popover /
+   Sidebar / Input). Enforced by the "surface-material layer" test in
+   tests/theme/styleRegistry.test.ts. These are descendant-scoped selectors, so
+   they are NOT the bare [data-style] token block and never carry a hue token
+   there — the disjoint-axis token-block test still passes. ───────────────── */
+
+/* The canvas: the palette's page bg + three soft corner washes. The hue sources
+   are the `--el-*` accent roles (NOT Tier-0 `--color-*`), so the washes re-tint
+   with the active palette — the `data-palette` axis (7.3.48 / MOTIR-1065)
+   overrides `--el-*`, never `--color-*`, so reading `--el-*` here is what keeps
+   the glass orthogonal to the palette. The gradient is what the frosted panels
+   blur — without it, the blur is invisible. */
+[data-style='glassmorphism'] body {
+  background-image:
+    radial-gradient(
+      62% 70% at 12% -5%,
+      color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      58% 65% at 105% 6%,
+      color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      72% 78% at 50% 112%,
+      color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
+      transparent 72%
+    );
+  background-attachment: fixed;
+}
+
+/* Frosted container surfaces — cards & popovers float as translucent sheets. */
+[data-style='glassmorphism'] [data-surface='card'],
+[data-style='glassmorphism'] [data-surface='popover'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
+  border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+}
+
+/* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
+[data-style='glassmorphism'] [data-surface='modal'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
+  border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+}
+
+/* The sidebar rail — frosted chrome over the canvas. */
+[data-style='glassmorphism'] [data-surface='sidebar'] {
+  background-color: color-mix(in srgb, var(--el-sidebar-bg) var(--glass-chrome-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+}
+
+/* Form controls — a translucent fill so inputs read as glass too. */
+[data-style='glassmorphism'] [data-surface='input'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -424,11 +573,9 @@
   --shadow-modal: 8px 8px 0 0 rgba(15, 15, 15, 1);
   --shadow-hero-mockup: 12px 12px 0 0 rgba(15, 15, 15, 1);
 
-  /* Typography — raw monospace headlines. Re-point the editorial serif at the
-     MONO stack so every font-serif headline (page h1/h2, card & modal titles)
-     renders in JetBrains Mono — utilitarian and strong — over the Inter grotesk
-     body. A type token; the colour axis is untouched. */
-  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  /* Typography is the data-type axis now — Neo-Brutalism ships `defaultTypeId:
+     'motir-mono'` (mono headlines), applied via the [data-type='motir-mono']
+     block below. A [data-style] block sets NO --font-* token (disjointness). */
 
   /* Density — tight, utilitarian. Chunky controls, compact card padding, no
      wasted space. */
@@ -516,10 +663,9 @@
     0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
     0 0 56px -8px color-mix(in srgb, currentColor 45%, transparent);
 
-  /* Typography — mono/display. Swap the serif headline face to the mono stack
-     so headings render in JetBrains Mono (terminal/retro-tech); body stays
-     sans. A type token — the colour axis is untouched. */
-  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  /* Typography is the data-type axis now — Cybercore ships `defaultTypeId:
+     'motir-mono'` (mono headlines), applied via the [data-type='motir-mono']
+     block below. A [data-style] block sets NO --font-* token (disjointness). */
 
   /* Density — tight, technical HUD rhythm: compact controls, snug card pad. */
   --spacing-btn-x: 18px;
@@ -895,6 +1041,460 @@
 
   /* sidebar hover — one shade lighter than the dark cool surface */
   --el-sidebar-item-bg-hover: #1c2840;
+}
+
+/* ── Palette: Graphite (data-palette="graphite") — Subtask 7.3.51 ───────────
+   A stark, editorial, COOL-NEUTRAL MONOCHROME re-skin — the cool foil to
+   Motir's warmth: true greyscale surfaces + ink on a clean Radix Slate scale,
+   a single restrained accent. The accent is expressed two ways, exactly as
+   Vercel / Linear do it: the primary CTA is a high-contrast INK fill (near-black
+   on light, near-white on dark — the monochrome statement), while the one
+   chromatic accent — a restrained cool blue — carries links, active/selected
+   states, focus, and the decorative highlight. Surfaces, ink, and borders are
+   pure cool greyscale; semantic (danger/success/warning/info) and work-item
+   type hues stay chromatic-but-cooled so status & kind remain legible (the
+   finding-#54 guard — never collapse the UI to grey + one colour).
+
+   Mood + accent hue anchored in getdesign.md's Vercel (black-and-white
+   precision) / Linear (ultra-minimal) analysis; the actual light/dark ramps +
+   UI-state steps are built from Radix Colors (Slate / Blue / Red / Grass /
+   Amber / Teal) — the accessibility-first 12-step scales designed for UI
+   states. Slate is the cool neutral closest to the brand anchor.
+
+   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+   --el-* layer references (exactly how the [data-theme='dark'] block works), so
+   every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+   work-item type hues — re-skins coherently with no per-token churn. It sets
+   ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+   spacing / shadow / sizing / motion / type) — that is the independent
+   data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+   Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+   pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light and dark —
+   verified numerically + by rendered specimen, never eyeballed. See
+   docs/palettes/graphite.md for the colour-role reference. */
+[data-palette='graphite'] {
+  /* brand & primary — the high-contrast INK CTA + the single cool-blue accent.
+     --color-primary is the accent AS text/icon/focus on a surface (the cool
+     blue, AA on white & the slate surface); --color-primary-fill is the CTA
+     FILL behind white labels — near-black ink, the monochrome statement. */
+  --color-primary: #155bc4; /* cool-blue accent — links / active / focus / icon */
+  --color-primary-foreground: #ffffff; /* white labels on the ink fill */
+  --color-primary-pressed: #2b2f35; /* pressed ink CTA (one step off the fill) */
+  --color-primary-fill: #1a1d21; /* near-black graphite CTA fill (white-on AA) */
+
+  /* surfaces — pure white canvas over cool slate sections (Radix Slate) */
+  --color-background: #ffffff; /* stark white canvas */
+  --color-foreground: #16191d; /* cool near-black ink */
+  --color-surface: #eef0f3; /* cool slate section background */
+  --color-surface-soft: #f8f9fa; /* quieter cool division */
+
+  /* text scale — cool slate hierarchy (Radix Slate 11→9 below body) */
+  --color-ink: #16191d;
+  --color-charcoal: #20242a; /* body emphasis / AA-safe text on tints */
+  --color-slate: #565c64; /* secondary text — AA on white + surfaces */
+  --color-steel: #6b7079; /* tertiary / footer */
+  --color-stone: #8a8f98; /* faint labels (decorative, sub-AA — as the base) */
+  --color-muted: #eef0f3;
+  --color-muted-foreground: #5d636b; /* captions — AA on white + surfaces */
+
+  /* borders — cool slate hairlines */
+  --color-hairline: #e2e4e9;
+  --color-hairline-soft: #ebedf0;
+  --color-hairline-strong: #c8ccd3;
+  --color-border: #e2e4e9;
+
+  /* accent secondary — the cool-blue highlight replaces the warm brand pink */
+  --color-accent: #2563c9; /* cool-blue decorative highlight / epic & design hue */
+  --color-accent-orange: #c2410c; /* review hue / warning — cooled */
+  --color-accent-teal: #0e8f86; /* subtask / content hue */
+  --color-accent-green: #18804a; /* story hue / success — cooled */
+
+  /* card tints — cooled pastel washes (6 distinct feature hues; charcoal text
+     on them clears AA in both themes) */
+  --color-tint-peach: #f7e6d6;
+  --color-tint-rose: #f6dfe8;
+  --color-tint-mint: #d9efe1;
+  --color-tint-lavender: #e4e6f3; /* cool indigo wash */
+  --color-tint-sky: #dde9f6; /* cool blue wash — the accent tint */
+  --color-tint-yellow: #f6f1d6;
+
+  /* semantic */
+  --color-success: #18804a;
+  --color-warning: #c2410c;
+  --color-destructive: #c92a2a; /* white-on AA */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #155bc4; /* shares the accent blue (coherent in mono) */
+
+  /* links — the accent blue (AA on white AND the soft surface a hovered row
+     paints behind it) */
+  --color-link: #155bc4;
+  --color-link-pressed: #114a9e;
+
+  /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+     palette overrides it directly — one shade darker than the cool surface. */
+  --el-sidebar-item-bg-hover: #e6e8ec;
+}
+
+/* Graphite — dark companion. A cool near-black slate canvas; the CTA fill
+   inverts to near-WHITE ink (Vercel's dark white-button), the accent blue
+   brightens so it reads AS text on the dark canvas, and semantic/type hues
+   brighten to clear AA on near-black. */
+[data-palette='graphite'][data-theme='dark'] {
+  --color-background: #0c0d0f; /* stark cool near-black canvas */
+  --color-foreground: #edeef0;
+  --color-surface: #18191c; /* cool slate section */
+  --color-surface-soft: #141517; /* quieter cool division */
+
+  --color-ink: #edeef0;
+  --color-charcoal: #d7d9dd; /* emphasis / AA-safe on tints */
+  --color-slate: #a9adb5; /* secondary — AA on the dark canvas */
+  --color-steel: #888d96; /* tertiary / footer */
+  --color-stone: #696e77; /* faint labels */
+  --color-muted: #18191c;
+  --color-muted-foreground: #a0a4ac; /* captions — AA on dark */
+
+  --color-hairline: #282a2e;
+  --color-hairline-soft: #1d1f22;
+  --color-hairline-strong: #3a3d42;
+  --color-border: #282a2e;
+
+  /* accent — blue brightened AS text on near-black; CTA fill inverts to
+     near-white ink with near-black labels (the dark monochrome statement) */
+  --color-primary: #7db1ff; /* bright cool-blue accent — links / active / focus */
+  --color-primary-foreground: #0c0d0f; /* near-black labels on the white fill */
+  --color-primary-pressed: #d3d5d9; /* pressed white-ink CTA */
+  --color-primary-fill: #edeef0; /* near-white ink CTA fill (black-on AA) */
+
+  /* cooled tints, dimmed for the near-black canvas */
+  --color-tint-peach: #2e2418;
+  --color-tint-rose: #2f1c26;
+  --color-tint-mint: #15271e;
+  --color-tint-lavender: #1f2236;
+  --color-tint-sky: #15233a;
+  --color-tint-yellow: #2a2716;
+
+  --color-accent: #5b9dff; /* bright cool-blue highlight on dark */
+  --color-accent-orange: #f08a4b;
+  --color-accent-teal: #2db6a8;
+  --color-accent-green: #34b86e;
+
+  --color-success: #34b86e;
+  --color-warning: #f08a4b;
+  --color-destructive: #d83847; /* white-on AA on the dark canvas */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #7db1ff;
+
+  --color-link: #7db1ff;
+  --color-link-pressed: #a3c8ff;
+
+  /* sidebar hover — one shade lighter than the dark cool surface */
+  --el-sidebar-item-bg-hover: #202226;
+}
+
+/* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
+   A fresh, technical emerald scheme — Supabase (dark emerald) / Spotify
+   (vibrant green) / MongoDB (spring green), built on Radix green/jade ramps.
+   See docs/palettes/evergreen.md.
+
+   Like every palette block, this re-skins by overriding the Tier-0 --color-*
+   layer (COLOUR only — never a shape/feel token, which is the data-style axis):
+   because the Tier-3 --el-* element tokens reference --color-*, this cascades a
+   COORDINATED re-skin through every surface, ink step, accent/CTA, link,
+   semantic, tint, work-item-type hue, and chart colour at once — no per-`--el-*`
+   enumeration, no drift from the element layer. The work-item type / chart hues
+   stay a distinguishable rainbow (a `code` chip must still read distinct from a
+   `test` chip); only the palette's MOOD shifts emerald. Every text-on-surface,
+   CTA, link, and chip pairing passes WCAG AA in light AND dark (verified by
+   render specimen; see the doc).
+
+   Concrete-hex --el-* tokens that do NOT resolve through --color-*
+   (--el-sidebar-item-bg-hover) are re-skinned explicitly below. */
+[data-palette='evergreen'] {
+  /* Brand / primary — emerald CTA (white label text clears AA on the fill) */
+  --color-primary: #0c7a52;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #095f40;
+  --color-primary-fill: #0c7a52;
+
+  /* Surfaces — lightly cooled (green-leaning) neutrals over a white canvas */
+  --color-background: #ffffff;
+  --color-foreground: #14201b;
+  --color-surface: #eef3f0;
+  --color-surface-soft: #f6faf8;
+
+  /* Text scale — cooled forest-charcoal ink hierarchy */
+  --color-ink: #14201b;
+  --color-charcoal: #1d2c25;
+  --color-slate: #42534a;
+  --color-steel: #5e6f66;
+  --color-stone: #8f9f96;
+  --color-muted: #eef2f0;
+  --color-muted-foreground: #5e6f66;
+
+  /* Borders / hairlines — cool green-grey */
+  --color-hairline: #d9e2dc;
+  --color-hairline-soft: #e6ece9;
+  --color-hairline-strong: #c2d0c8;
+  --color-border: #d9e2dc;
+
+  /* Secondary accents — a harmonized-but-distinct rainbow for type/chart hues.
+     Violet replaces the house pink as the complementary accent (epic/design),
+     so those chips stay distinct from the emerald greens. */
+  --color-accent: #8257e6; /* violet — epic / design / highlight */
+  --color-accent-orange: #c2410c; /* review */
+  --color-accent-teal: #0d8a86; /* subtask / content */
+  --color-accent-green: #157f3a; /* story — fresh grass green */
+
+  /* Card tints — cool/green-leaning washes (lavender shifts toward the violet
+     accent; carry charcoal text at AA) */
+  --color-tint-peach: #ffe9d6;
+  --color-tint-rose: #f6dced;
+  --color-tint-mint: #d5f1e1;
+  --color-tint-lavender: #e7e0fa;
+  --color-tint-sky: #d8ecf6;
+  --color-tint-yellow: #fbf3d2;
+
+  /* Semantic — green-leaning success; the rest kept distinct for legibility */
+  --color-success: #127c3e; /* grassier than the emerald primary, so they read apart */
+  --color-warning: #b45309;
+  --color-destructive: #d63d3d;
+  --color-destructive-foreground: #ffffff;
+  --color-info: #1366c4; /* a clear blue — keeps task/code apart from teal subtask/content */
+
+  /* Links — blue affordance (distinct from the emerald accent), AA on both the
+     page and the soft hovered-row surface */
+  --color-link: #0a6ebd;
+  --color-link-pressed: #08537f;
+
+  /* Concrete-hex --el token (does not resolve through --color-*) — cool hover
+     lift one shade darker than the cooled light surface */
+  --el-sidebar-item-bg-hover: #e4ebe7;
+}
+
+/* Evergreen — dark companion. Bright emerald on a deep-forest canvas
+   (Supabase-style: the bright accent FILL carries DARK label text). Mirrors the
+   Tier-1 dark flip for the cooled neutrals. */
+[data-palette='evergreen'][data-theme='dark'] {
+  --color-primary: #3ddc97;
+  --color-primary-foreground: #06140d; /* dark ink on the bright emerald fill */
+  --color-primary-pressed: #2bbd7f;
+  --color-primary-fill: #3ddc97;
+
+  --color-background: #0c130f;
+  --color-foreground: #e8efe9;
+  --color-surface: #141d18;
+  --color-surface-soft: #101713;
+
+  --color-ink: #e8efe9;
+  --color-charcoal: #d6e0d9;
+  --color-slate: #9aaaa1;
+  --color-steel: #6f8077;
+  --color-stone: #5a6b62;
+  --color-muted: #141d18;
+  --color-muted-foreground: #9aaaa1;
+
+  --color-hairline: #25322b;
+  --color-hairline-soft: #1b251f;
+  --color-hairline-strong: #35453c;
+  --color-border: #25322b;
+
+  --color-accent: #a78bfa; /* violet */
+  --color-accent-orange: #fb923c;
+  --color-accent-teal: #2dd4bf;
+  --color-accent-green: #34d27a;
+
+  /* Pastel tints dimmed for the dark canvas */
+  --color-tint-peach: #2f2114;
+  --color-tint-rose: #2e1822;
+  --color-tint-mint: #11271c;
+  --color-tint-lavender: #211b33;
+  --color-tint-sky: #122430;
+  --color-tint-yellow: #2b2712;
+
+  --color-success: #34d27a;
+  --color-warning: #fb923c;
+  --color-destructive: #f87171;
+  --color-destructive-foreground: #06140d; /* dark ink on the bright red */
+  --color-info: #5aa8f5;
+
+  --color-link: #56b6f5;
+  --color-link-pressed: #7cc7f8;
+
+  /* hover lift one shade *lighter* than the dark surface (mirrors base recipe) */
+  --el-sidebar-item-bg-hover: #1e2a23;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AXIS 3 (TYPE) — data-type overrides (Subtask 7.3.53)
+   Registry: lib/theme/typography.ts. A named type pairing re-points the
+   `--font-*` ROLE tokens (sans / serif / mono) — and ONLY font tokens, NEVER a
+   colour (--el / --color) or shape (--radius / --spacing / --shadow) token. The
+   shared --font-size scale stays common (sizes are layout, not brand).
+
+   v1 ships three pairings built from the THREE already-loaded next/font faces
+   (Inter · Source Serif 4 · JetBrains Mono) — ZERO new payload:
+     - `motir`      — the BASE (editorial serif headlines); it IS the Tier-0
+                      --font-* defaults, so — like the `motir` palette — it needs
+                      NO override block.
+     - `motir-sans` — all-sans: the serif headline face re-points to the sans
+                      stack (reproduces the old Swiss `--font-serif` override).
+     - `motir-mono` — mono headlines: re-points to the mono stack (reproduces
+                      the old Neo-Brutalism / Cybercore override).
+   A STYLE declares a `defaultTypeId` (lib/theme/styles.ts) — the pairing applied
+   when the user hasn't pinned a `data-type` — so the out-of-the-box look is
+   UNCHANGED (swiss → motir-sans, neo/cybercore → motir-mono). Each later
+   "Type: …" subtask (7.3.54+) ADDS its `[data-type='<id>']` block + faces here.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+[data-type='motir-sans'] {
+  /* Sans headlines — re-point the editorial serif role at the sans stack. */
+  --font-serif:
+    var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+[data-type='motir-mono'] {
+  /* Mono headlines — re-point the editorial serif role at the mono stack. */
+  --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+}
+
+/* ── Palette: Spectrum (data-palette="spectrum") — Subtask 7.3.52 ───────────
+   A vibrant, playful, energetic MULTI-ACCENT re-skin: crisp cool-white
+   surfaces, a bright violet primary, a candy-magenta highlight, and a
+   saturated, well-separated rainbow tint/accent set — friendly, never garish.
+   Visibly distinct from Motir (warm cream → crisp cool surfaces; muted pastels
+   → candy-bright tints), not just an accent-hue swap. Mood anchored in
+   getdesign.md's Figma (vibrant multi-colour) / Airtable (colourful, friendly)
+   analysis; the actual light/dark ramps + UI-state steps are built from Radix
+   Colors (Violet / Iris / Pink / Blue / Jade / Amber / Red) — the
+   accessibility-first 12-step scales designed for UI states.
+
+   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+   --el-* layer references (exactly how the [data-theme='dark'] block works), so
+   every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+   work-item type hues — re-skins coherently with no per-token churn. It sets
+   ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+   spacing / shadow / sizing / motion / type) — that is the independent
+   data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+   Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+   pairing clears WCAG AA (≥4.5 text; ≥3.0 icon/UI hue) in BOTH light and dark —
+   verified numerically + by rendered specimen, never eyeballed. See
+   docs/palettes/spectrum.md for the colour-role reference. */
+[data-palette='spectrum'] {
+  /* brand & primary — bright violet (Radix Violet/Iris family) */
+  --color-primary: #6440d6; /* violet AS text/icon on a surface (AA ~6.5:1 on white) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #5331b8;
+  --color-primary-fill: #5a37c9; /* fill behind white labels (white-on AA ~7.4:1) */
+
+  /* surfaces — crisp cool white over faintly violet-tinted sections */
+  --color-background: #ffffff;
+  --color-foreground: #1a1626; /* cool near-black ink with a faint violet cast */
+  --color-surface: #f4f2fb; /* cool violet-tinted section background */
+  --color-surface-soft: #faf9fe; /* quieter cool division */
+
+  /* text scale — cool violet-neutral hierarchy */
+  --color-ink: #1a1626;
+  --color-charcoal: #2a2440; /* body emphasis / AA-safe text on tints */
+  --color-slate: #524d66; /* secondary text */
+  --color-steel: #6b6680; /* tertiary / footer */
+  --color-stone: #938da6; /* faint labels */
+  --color-muted: #f4f2fb;
+  --color-muted-foreground: #5e5975; /* captions — AA ~6.6:1 on white + surfaces */
+
+  /* borders — cool violet hairlines */
+  --color-hairline: #e6e2f3;
+  --color-hairline-soft: #efecf8;
+  --color-hairline-strong: #cfc8e6;
+  --color-border: #e6e2f3;
+
+  /* accent secondary — a candy magenta-pink highlight (the playful brand spark;
+     also the epic & design type hue) + a vivid, well-separated accent trio */
+  --color-accent: #e23d97; /* vivid magenta-pink — decorative / epic & design hue */
+  --color-accent-orange: #ea580c;
+  --color-accent-teal: #0d9488;
+  --color-accent-green: #16a34a;
+
+  /* card tints — candy-bright washes (6 distinct, saturated feature hues; each
+     light enough that --el-text-strong charcoal clears AA ≥10:1 on it) */
+  --color-tint-peach: #ffe1c2;
+  --color-tint-rose: #ffd9e8;
+  --color-tint-mint: #c7f5d9;
+  --color-tint-lavender: #e6ddff;
+  --color-tint-sky: #d2e7ff;
+  --color-tint-yellow: #fff0b8;
+
+  /* semantic */
+  --color-success: #16a34a;
+  --color-warning: #ea580c;
+  --color-destructive: #d92e2b; /* white-on AA */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #2563eb;
+
+  /* links — a clean vivid blue, distinct from the violet primary (AA on the
+     soft surface a hovered row paints, too) */
+  --color-link: #2563eb;
+  --color-link-pressed: #1d4ed8;
+
+  /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+     palette overrides it directly — one shade darker than the cool surface. */
+  --el-sidebar-item-bg-hover: #ece8f8;
+}
+
+/* Spectrum — dark companion. A deep cool-violet canvas (not the base
+   near-black); brightened violet/pink/link hues so they read AS text on the
+   dark surface, and a darker accent fill so white labels still clear AA. */
+[data-palette='spectrum'][data-theme='dark'] {
+  --color-background: #14111f; /* deep cool-violet canvas */
+  --color-foreground: #ece9f6;
+  --color-surface: #1d1830;
+  --color-surface-soft: #181426;
+
+  --color-ink: #ece9f6;
+  --color-charcoal: #ddd8ee;
+  --color-slate: #aaa3c2;
+  --color-steel: #8a82a3;
+  --color-stone: #6b6485;
+  --color-muted: #1d1830;
+  --color-muted-foreground: #a39bbd;
+
+  --color-hairline: #2b2440;
+  --color-hairline-soft: #211b33;
+  --color-hairline-strong: #3a3257;
+  --color-border: #2b2440;
+
+  /* violet — brightened as text on the violet canvas; fill darkened for
+     white-label AA */
+  --color-primary: #a78bfa;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #5331b8;
+  --color-primary-fill: #6d4fd6;
+
+  /* candy tints, dimmed for the dark canvas (light --el-text-strong on them) */
+  --color-tint-peach: #34261a;
+  --color-tint-rose: #351c28;
+  --color-tint-mint: #16301f;
+  --color-tint-lavender: #251f3c;
+  --color-tint-sky: #16263f;
+  --color-tint-yellow: #322c16;
+
+  --color-accent: #ff5fb0; /* bright candy magenta-pink on dark */
+  --color-accent-orange: #fb8b4c;
+  --color-accent-teal: #2dc4b8;
+  --color-accent-green: #36c977;
+
+  --color-success: #36c977;
+  --color-warning: #fb8b4c;
+  --color-destructive: #f0555f; /* reads AS text on the dark canvas (AA ~5.5:1) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #6fa8ff;
+
+  --color-link: #8fb8ff;
+  --color-link-pressed: #b3d0ff;
+
+  /* sidebar hover — one shade lighter than the dark cool surface */
+  --el-sidebar-item-bg-hover: #261f3d;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

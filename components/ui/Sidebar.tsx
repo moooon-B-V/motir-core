@@ -272,6 +272,9 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
       ref={ref}
       aria-label={ariaLabel}
       data-collapsed={collapsed || undefined}
+      // `data-surface` lets a surface-material style (glassmorphism) frost the
+      // sidebar rail — see globals.css's material layer.
+      data-surface="sidebar"
       className={cn(
         'flex h-full flex-col bg-(--el-sidebar-bg)',
         'border-r border-(--el-sidebar-border)',

@@ -76,6 +76,33 @@ export const PALETTE_REGISTRY = {
       "Coinbase's clean institutional blue + IBM's structured blue, on Radix Blue/Indigo/Slate scales.",
     designDoc: 'docs/palettes/cobalt.md',
   },
+  graphite: {
+    id: 'graphite',
+    name: 'Graphite',
+    tagline:
+      'Stark and editorial — cool greyscale surfaces + ink, an ink CTA, a single restrained cool-blue accent.',
+    inspiration:
+      "Vercel's black-and-white precision + Linear's ultra-minimal, on Radix Slate/Blue scales.",
+    designDoc: 'docs/palettes/graphite.md',
+  },
+  evergreen: {
+    id: 'evergreen',
+    name: 'Evergreen',
+    tagline:
+      'Fresh and technical — an emerald primary over cooled forest neutrals, a green-leaning UI.',
+    inspiration:
+      'getdesign.md — Supabase (dark emerald) / Spotify (vibrant green) / MongoDB (spring green), on Radix green/jade ramps.',
+    designDoc: 'docs/palettes/evergreen.md',
+  },
+  spectrum: {
+    id: 'spectrum',
+    name: 'Spectrum',
+    tagline:
+      'Vibrant and playful — crisp cool surfaces, a bright violet primary, a candy-bright multi-hue accent & tint set.',
+    inspiration:
+      "Figma's vibrant multi-colour brand + Airtable's colourful, friendly palette, on Radix Violet/Iris/Pink/Blue scales.",
+    designDoc: 'docs/palettes/spectrum.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
