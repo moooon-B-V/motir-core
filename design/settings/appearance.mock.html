@@ -5,34 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
       Design mock · Motir Appearance settings pane (Story 7.3 · 7.3.57 / MOTIR-1074) — Theme × Style
-      × Palette × Type, live preview
+      × Palette × Type
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the account-settings `Appearance` pane —
       Story 7.3, subtask 7.3.57 / MOTIR-1074. THE META CONCEPT MADE CONCRETE:
       Motir dogfoods its own three-axis design system (Colour `data-palette` ·
-      Type `data-type` · Shape/feel `data-style`, plus light/dark) by letting the
-      signed-in user theme the MOTIR APP ITSELF — and SHOWCASES it with a live
-      specimen preview.
+      Type `data-type` · Shape/feel `data-style`, + light/dark) by letting the
+      signed-in user theme the MOTIR APP ITSELF.
 
-      Built FROM the real design system: the :root token block, the
-      [data-theme=dark] block, the [data-style] / [data-palette] / [data-type]
-      axis blocks + the nested-palette specimen fix, the live-vignette CSS and the
-      axis-picker chip CSS are copied 1:1 from app/globals.css via the shipped
-      onboarding mock (design/ai-chat/onboarding.mock.html, 7.3.44/MOTIR-1061), and
-      the six real next/font faces are loaded — so every Theme × Style × Palette ×
-      Type choice re-skins / re-shapes / re-types EXACTLY as the running app does.
-      The account-settings area shell (rail + content + cards) mirrors
-      design/settings/account-settings.mock.html (7.8.2). Component CSS references
-      ONLY --el-* colour + element-semantic shape tokens.
+      KEY DESIGN DECISION (v2): the axes apply to Motir itself, instant-apply (like
+      every theme toggle — Linear/GitHub/Notion), so the WHOLE PAGE re-skins on
+      selection. The page IS the preview — there is NO separate "live preview"
+      widget. Instead the page is deliberately DESIGN-RICH (controls + a showcase
+      band of real Motir UI: a work-item card, status pills in varied tints,
+      buttons, a search input, a type specimen, palette swatches) so that picking
+      ANY axis visibly transforms the entire page.
 
-      Reuses the onboarding wizard's axis-picker LANGUAGE (the .pick chips +
-      live specimen vignette, 7.3.27 / 7.3.44) adapted to a settings-pane layout.
+      Built FROM the real design system: the :root tokens, the [data-theme=dark]
+      block, every [data-style]/[data-palette]/[data-type] axis block + the
+      nested-palette fix are copied 1:1 from app/globals.css via the onboarding mock
+      (7.3.44/MOTIR-1061), and the six real next/font faces are loaded — so each
+      panel re-skins / re-shapes / re-types EXACTLY as the running app does.
+      Component CSS references ONLY --el-* colour + element-semantic shape tokens.
+      The area shell (rail + content + cards) mirrors account-settings.mock.html
+      (7.8.2); the axis chips + showcase card/type/swatch language reuse the
+      onboarding design wizard (7.3.27 / 7.3.44 / 7.3.37).
 
-      Panels: 1 default (factory) · 2 a changed state, light (whole pane re-skins
-      — the dogfooding moment) · 3 dark + a changed state (dark parity). Each panel
-      draws the ACCESS PATH (the rail with Appearance active) + the four controls +
-      the live preview.
+      Panels: 1 default (factory) · 2 a changed state, light (whole page re-skins —
+      the dogfooding moment) · 3 dark + a changed state (dark parity). Each draws
+      the ACCESS PATH (the rail with Appearance active) + the four controls + the
+      showcase.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -42,7 +45,7 @@
     />
     <style>
       /* ════════════════════════════════════════════════════════════════════
-         Tier 0 + shape tokens + Tier 3 --el-* + the next/font role vars —
+         Tier 0 + shape tokens + Tier 3 --el-* + next/font role vars —
          copied 1:1 from app/globals.css (light) via the onboarding mock.
          ════════════════════════════════════════════════════════════════════ */
       :root {
@@ -230,27 +233,21 @@
       /* ── Mock chrome (NOT part of the design — the review page only) ─────── */
       * { box-sizing: border-box; }
       body {
-        margin: 0;
-        background: var(--el-surface);
-        color: var(--el-text);
-        font-family: var(--font-sans);
-        -webkit-font-smoothing: antialiased;
-        padding: 32px 24px 96px;
+        margin: 0; background: var(--el-surface); color: var(--el-text);
+        font-family: var(--font-sans); -webkit-font-smoothing: antialiased; padding: 32px 24px 96px;
       }
-      .review-head { max-width: 1120px; margin: 0 auto 8px; }
+      .review-head { max-width: 1080px; margin: 0 auto 8px; }
       .review-head h1 { font-family: var(--font-serif); font-size: 22px; margin: 0; }
-      .review-head p { margin: 6px 0 0; color: var(--el-text-secondary); font-size: 13px; max-width: 90ch; line-height: 1.5; }
+      .review-head p { margin: 6px 0 0; color: var(--el-text-secondary); font-size: 13px; max-width: 92ch; line-height: 1.5; }
       .panel-label {
-        font-family: var(--font-mono); font-size: 11px; font-weight: 600; text-transform: uppercase;
-        letter-spacing: 0.05em; color: var(--el-text-faint); margin: 44px auto 10px;
-        max-width: 1120px; line-height: 1.5;
+        font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+        color: var(--el-text-faint); margin: 44px auto 10px; max-width: 1080px; line-height: 1.5;
       }
-      .panel-label { text-transform: none; }
-      .panel { max-width: 1120px; margin: 0 auto; }
+      .panel { max-width: 1080px; margin: 0 auto; }
 
-      /* ── App shell (the account-settings AREA chrome) — mirrors account-settings.mock.html ── */
+      /* ── account-settings AREA shell ─────────────────────────────────────── */
       .stage { border: 1px solid var(--el-border); border-radius: var(--radius-card); overflow: hidden; box-shadow: var(--shadow-card); }
-      .shell { display: flex; min-height: 640px; background: var(--el-page-bg); }
+      .shell { display: flex; min-height: 680px; background: var(--el-page-bg); }
       .rail {
         flex: none; width: 252px; background: var(--el-sidebar-bg); border-right: 1px solid var(--el-sidebar-border);
         padding: 14px 12px; display: flex; flex-direction: column; gap: 14px;
@@ -284,8 +281,7 @@
       }
       .nav-row {
         display: flex; align-items: center; gap: 12px; height: var(--height-control); padding: 0 var(--spacing-control-x);
-        border-radius: var(--radius-control); font-size: 13.5px; color: var(--el-text-secondary); cursor: pointer;
-        border: 1px solid transparent;
+        border-radius: var(--radius-control); font-size: 13.5px; color: var(--el-text-secondary); cursor: pointer; border: 1px solid transparent;
       }
       .nav-row:hover { background: var(--el-sidebar-item-bg-hover); color: var(--el-text); }
       .nav-row .ni { flex: none; display: inline-flex; color: var(--el-text-muted); }
@@ -301,15 +297,14 @@
       .nav-row.soon .ni { color: var(--el-text-faint); }
       .soon-chip {
         margin-left: auto; font-family: var(--font-sans); font-size: 10px; font-weight: 600; text-transform: uppercase;
-        letter-spacing: 0.04em; color: var(--el-text-strong); background: var(--el-tint-yellow);
-        padding: 1px 7px; border-radius: var(--radius-badge);
+        letter-spacing: 0.04em; color: var(--el-text-strong); background: var(--el-tint-yellow); padding: 1px 7px; border-radius: var(--radius-badge);
       }
 
-      /* content + cards (account-settings grammar) */
+      /* content + cards */
       .content { flex: 1; min-width: 0; background: var(--el-page-bg); padding: 30px 32px 36px; overflow: hidden; }
-      .page-head { margin-bottom: 22px; }
+      .page-head { margin-bottom: 20px; }
       .page-head h2 { font-family: var(--font-serif); font-size: 26px; font-weight: 600; color: var(--el-text); margin: 0; }
-      .page-head .sub { font-size: 13px; color: var(--el-text-muted); margin-top: 6px; max-width: 78ch; line-height: 1.55; }
+      .page-head .sub { font-size: 13px; color: var(--el-text-muted); margin-top: 6px; max-width: 82ch; line-height: 1.55; }
       .card {
         background: var(--el-page-bg); border: 1px solid var(--el-border); border-radius: var(--radius-card);
         box-shadow: var(--shadow-subtle); overflow: hidden;
@@ -319,60 +314,94 @@
         padding: 15px var(--spacing-card-padding); border-bottom: 1px solid var(--el-border-soft);
       }
       .card-head h3 { font-size: 15px; font-weight: 600; color: var(--el-text); margin: 0; }
-      .card-head .hsub { font-size: 12px; color: var(--el-text-muted); margin-top: 3px; max-width: 60ch; line-height: 1.5; }
-      .card-body { padding: 4px var(--spacing-card-padding) 8px; }
-      .axis-body { padding: 16px var(--spacing-card-padding) 18px; }
-
+      .card-head .hsub { font-size: 12px; color: var(--el-text-muted); margin-top: 3px; max-width: 64ch; line-height: 1.5; }
+      .card-body { padding: 2px var(--spacing-card-padding) 6px; }
       .ic { width: 16px; height: 16px; flex: none; }
       .ic-sm { width: 14px; height: 14px; flex: none; }
 
-      /* ── Appearance pane (authored for 7.3.57) ─────────────────────────────
-           The pane is wider than the 680px settings default BY DESIGN: the live
-           preview is core to the feature (the user must FEEL the choice), so a
-           justified deviation from the single-column settings width. */
-      .appearance { display: grid; grid-template-columns: minmax(0, 1fr) 304px; gap: 24px; align-items: start; }
-      .controls { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-
-      /* segmented Theme control (Light / Dark / System) */
-      .segmented {
-        display: inline-flex; padding: 3px; gap: 3px; background: var(--el-muted);
-        border: 1px solid var(--el-border); border-radius: var(--radius-btn);
-      }
+      /* ── Appearance: the controls card (axis fields) ─────────────────────── */
+      .controls { margin-bottom: 22px; }
+      .axis-field { padding: 16px 0; border-bottom: 1px solid var(--el-border-soft); }
+      .axis-field:last-child { border-bottom: 0; }
+      .af-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 11px; flex-wrap: wrap; }
+      .af-name { font-size: 14px; font-weight: 600; color: var(--el-text); }
+      .af-help { font-size: 12.5px; color: var(--el-text-muted); }
+      .segmented { display: inline-flex; padding: 3px; gap: 3px; background: var(--el-muted); border: 1px solid var(--el-border); border-radius: var(--radius-btn); }
       .seg {
         display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
-        border-radius: calc(var(--radius-btn) - 2px); font-size: 13px; font-weight: 500;
-        color: var(--el-text-secondary); cursor: pointer; border: 1px solid transparent; white-space: nowrap;
+        border-radius: calc(var(--radius-btn) - 2px); font-size: 13px; font-weight: 500; color: var(--el-text-secondary);
+        cursor: pointer; border: 1px solid transparent; white-space: nowrap;
       }
       .seg svg { width: 15px; height: 15px; }
       .seg.on { background: var(--el-page-bg); color: var(--el-text); box-shadow: var(--shadow-subtle); border-color: var(--el-border); }
       .seg.on svg { color: var(--el-accent); }
-
-      /* axis chip rows — the onboarding picker chips (.pick), settings-pane layout */
       .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-      .axis-note { margin: 13px 0 0; font-size: 12.5px; color: var(--el-text-muted); line-height: 1.45; }
+      .axis-note { margin: 11px 0 0; font-size: 12.5px; color: var(--el-text-muted); line-height: 1.45; }
       .axis-note b { color: var(--el-text-secondary); font-weight: 600; }
-      .apply-note {
-        display: flex; align-items: center; gap: 7px; margin: 4px 0 0; font-size: 12.5px;
-        color: var(--el-text-muted);
-      }
-      .apply-note svg { color: var(--el-success); }
 
-      /* preview rail */
-      .preview-rail { position: sticky; top: 16px; align-self: start; border: 1px solid var(--el-border); border-radius: var(--radius-card); background: var(--el-surface-soft); padding: 14px; box-shadow: var(--shadow-subtle); }
-      .preview-eyebrow {
-        display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10.5px;
-        font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--el-text-faint);
-        margin: 2px 2px 12px;
+      /* ── Appearance: the showcase band (the page IS the preview) ─────────── */
+      .showcase {
+        border: 1px solid var(--el-border); border-radius: var(--radius-card); background: var(--el-surface-soft);
+        padding: 16px; box-shadow: var(--shadow-subtle);
       }
-      .preview-eyebrow svg { color: var(--el-accent); }
-      .preview-cap { margin: 12px 2px 2px; font-size: 11.5px; color: var(--el-text-muted); line-height: 1.45; }
-      .vignette { border-radius: var(--radius-card); overflow: hidden; background: transparent; padding: 0; gap: 14px; }
+      .sc-eyebrow {
+        display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.06em; color: var(--el-text-faint); margin: 2px 2px 14px;
+      }
+      .sc-eyebrow svg { color: var(--el-accent); }
+      .sc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 248px; gap: 16px; align-items: start; }
 
-      /* compact type specimen inside the preview (reskins via --font-* / --el-*) */
-      .pv-type { padding: 2px 2px 0; }
-      .pv-type .pt-hd { font-family: var(--font-serif); font-size: 21px; font-weight: 700; color: var(--el-text); line-height: 1.15; }
-      .pv-type .pt-bd { font-family: var(--font-sans); font-size: 12px; color: var(--el-text-secondary); margin-top: 4px; line-height: 1.45; }
-      .pv-type .pt-mn { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--el-text-muted); margin-top: 8px; }
+      .sc-item { padding: var(--spacing-card-padding); display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-card); }
+      .sc-top { display: flex; align-items: center; gap: 10px; }
+      .sc-top .kind { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--el-text-secondary); }
+      .sc-top .kind svg { color: var(--el-accent); }
+      .sc-title { font-family: var(--font-serif); font-size: 20px; font-weight: 700; color: var(--el-text); margin: 0; line-height: 1.2; }
+      .sc-body { font-family: var(--font-sans); font-size: 13px; color: var(--el-text-secondary); margin: 0; line-height: 1.5; }
+      .sc-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+      .sc-meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.05em; color: var(--el-text-muted); }
+      .sc-acts { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+
+      /* Pill (Pill.tsx) — tinted backgrounds + AA --el-text-strong (finding #35) */
+      .pill {
+        display: inline-flex; align-items: center; border-radius: var(--radius-badge); padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; margin-left: auto;
+      }
+      .sc-labels .pill, .sc-top .pill { margin-left: 0; }
+      .sc-top .pill { margin-left: auto; }
+      .pill-accent { background: var(--el-accent); color: var(--el-accent-text); }
+      .pill-sky { background: var(--el-tint-sky); color: var(--el-text-strong); }
+      .pill-peach { background: var(--el-tint-peach); color: var(--el-text-strong); }
+      .pill-rose { background: var(--el-tint-rose); color: var(--el-text-strong); }
+      .pill-mint { background: var(--el-tint-mint); color: var(--el-text-strong); }
+
+      /* Button (Button.tsx) */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-sans);
+        font-size: 14px; font-weight: 500; line-height: 1; border-radius: var(--radius-btn); height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x); border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+      }
+      .btn-sm { height: var(--height-btn-sm); padding: 0 14px; font-size: 12.5px; }
+      .btn-primary { background: var(--el-accent); color: var(--el-accent-text); }
+      .btn-secondary { background: transparent; color: var(--el-text); border-color: var(--el-border-strong); }
+      .icon-btn {
+        display: inline-flex; align-items: center; justify-content: center; width: var(--height-btn-sm); height: var(--height-btn-sm);
+        padding: var(--spacing-icon-btn); border-radius: var(--radius-control); border: 1px solid transparent; background: transparent; color: var(--el-text-muted); cursor: pointer;
+      }
+      .icon-btn:hover { background: var(--el-surface); }
+
+      .sc-side { display: flex; flex-direction: column; gap: 12px; }
+      .sc-side .card { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+      .sc-search {
+        display: flex; align-items: center; gap: 8px; height: var(--height-input); padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong); border-radius: var(--radius-input); font-size: 12.5px; color: var(--el-text-muted);
+      }
+      .sc-search svg { color: var(--el-text-muted); }
+      .sc-list { display: flex; flex-direction: column; gap: 10px; }
+      .sc-row { display: flex; align-items: center; gap: 9px; }
+      .sc-row .dot { width: 9px; height: 9px; border-radius: 9999px; background: var(--el-accent); flex: none; }
+      .sc-row .dot.alt { background: var(--el-tint-rose); }
+      .sc-row .bar { height: 7px; border-radius: var(--radius-badge); background: var(--el-muted); flex: 1; }
+      .sc-row .bar.short { max-width: 60%; }
 
       /* ── axis-picker chips (.pick) — from the onboarding mock ─────────────── */
       .picker-bar {
@@ -419,7 +448,7 @@
         height: 11px;
         border-radius: var(--radius-pill);
       }
-      /* ── live specimen vignette (.vignette / .vg-*) — from the onboarding mock ── */
+      /* ── showcase specimens (.pal-swatches / .type-spec) — from the onboarding mock ── */
       .vignette {
         position: relative;
         padding: 16px;
@@ -628,9 +657,8 @@
 
       /* ════════════════════════════════════════════════════════════════════
          AXIS BLOCKS — copied 1:1 from app/globals.css via the onboarding mock:
-         · [data-style]  shape/feel overrides   · [data-palette] --el-* colour
-         · [data-type]   --font-* role overrides · [data-palette] nested-specimen fix
-         These drive every live re-skin / re-shape / re-type. ── do not edit; mirror the app.
+         [data-style] shape · [data-palette] --el-* colour · [data-type] --font-* ·
+         [data-palette] nested-specimen fix. ── do not edit; mirror the app.
          ════════════════════════════════════════════════════════════════════ */
       [data-style='soft-playful'] {
         /* Figma's pill geometry */
@@ -1729,9 +1757,10 @@
       <h1>Appearance settings — Theme × Style × Palette × Type</h1>
       <p>
         Story 7.3 · 7.3.57 / MOTIR-1074. Motir dogfoods its own three-axis design system: the user
-        themes the Motir app itself, and feels the choice through a live specimen preview. Three
-        panels: default, a changed state (the whole pane re-skins), and dark. Built from the real
-        tokens + axis blocks, so every choice renders for real.
+        themes the Motir app itself. Because the look applies instantly to Motir, the whole page
+        re-skins — so the page is designed rich enough to BE the showcase (controls + a real Motir
+        slice), no separate preview. Three panels: default, a changed state (whole page transforms),
+        and dark.
       </p>
     </div>
 
@@ -1867,15 +1896,38 @@
           <path d="M20 6 9 17l-5-5" />
         </g>
         <g
-          id="i-check-circle"
+          id="i-square-check"
           fill="none"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <path d="M21.801 10A10 10 0 1 1 17 3.335" />
-          <path d="m9 11 3 3L22 4" />
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
         </g>
         <g
           id="i-sparkles"
@@ -1893,10 +1945,11 @@
     </svg>
 
     <div class="panel-label">
-      1 · Default state — factory defaults (Theme: System · Style: Warm Editorial · Palette: Motir ·
-      Type: Motir). The account-settings rail with <b>Appearance ACTIVE</b> (the reserved "Soon"
-      placeholder flipped to a real, navigable entry — the access path). The four axis controls on
-      the left, the live preview on the right.
+      1 · Default — factory defaults (Theme: System · Warm Editorial · Motir · Motir). The
+      account-settings rail with <b>Appearance ACTIVE</b> (the reserved "Soon" slot flipped to a
+      real entry — the access path), the four axis controls, and the showcase band: a real Motir
+      slice (work-item card, status pills, buttons, search, type specimen, palette swatches) that
+      re-skins with every pick.
     </div>
     <div class="panel">
       <div class="stage" data-theme="light">
@@ -1956,166 +2009,166 @@
             <div class="page-head">
               <h2>Appearance</h2>
               <p class="sub">
-                Theme Motir itself — the colour, type and shape the whole interface wears for you.
-                Motir is built on a three-axis design system (style × palette × type), and this is
-                that system turned on itself: pick below and the entire app — this page included —
-                re-skins live. Personal to your account; applied on every device you sign in on.
+                Theme Motir itself. Motir is built on a three-axis design system — style × palette ×
+                type, plus light/dark — and this is that system turned on itself: pick below and the
+                <b>whole app re-skins live</b>, this page included. The look is personal to your
+                account and applied on every device you sign in on; there's nothing to save.
               </p>
             </div>
-            <div class="appearance">
-              <div class="controls">
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Theme</h3>
-                      <p class="hsub">Light, dark, or follow your device.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="segmented" role="group" aria-label="Theme">
-                      <span class="seg"
-                        ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
-                      >
-                      <span class="seg"
-                        ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
-                      >
-                      <span class="seg on"
-                        ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
-                      >
-                    </div>
-                  </div>
-                </div>
 
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Style</h3>
-                      <p class="hsub">
-                        The shape and feel — silhouette, elevation, density and motion.
-                      </p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Style">
-                      <span class="pick is-on"
-                        ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Warm
-                        Editorial</span
-                      >
-                      <span class="pick">Soft / Playful</span>
-                      <span class="pick">Swiss / Minimal-Flat</span>
-                      <span class="pick">Neo-Brutalism</span>
-                      <span class="pick">Glassmorphism</span>
-                      <span class="pick">Cybercore / Y2K</span>
-                    </div>
-                    <p class="axis-note">
-                      <b>Warm Editorial.</b> Thoughtful, warm, technical-but-not-cold, slightly
-                      editorial.
-                    </p>
-                  </div>
+            <div class="card controls">
+              <div class="card-head">
+                <div>
+                  <h3>Theme &amp; design</h3>
+                  <p class="hsub">
+                    Four independent axes. Everything on this page updates the instant you choose.
+                  </p>
                 </div>
-
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Palette</h3>
-                      <p class="hsub">The colours it wears — surfaces, ink, accent and tints.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Palette">
-                      <span class="pick is-on"
-                        ><span class="sw" style="background: #5645d4"></span>Motir</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #37352f"></span>Graphite</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #6440d6"></span>Spectrum</span
-                      >
-                    </div>
-                    <p class="axis-note">
-                      <b>Motir.</b> Warm and editorial — cream surfaces, charcoal ink, a purple
-                      primary, pastel tints.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Type</h3>
-                      <p class="hsub">The typeface pairing — headline, body and mono roles.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Type">
-                      <span class="pick is-on" style="font-family: 'Source Serif 4', Georgia, serif"
-                        >Motir</span
-                      >
-                      <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
-                      <span class="pick" style="font-family: 'JetBrains Mono', monospace"
-                        >Motir Mono</span
-                      >
-                      <span class="pick" style="font-family: 'Space Grotesk', sans-serif"
-                        >Grotesk</span
-                      >
-                      <span class="pick" style="font-family: 'Fraunces', serif">Editorial</span>
-                      <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
-                        >Mono-Technical</span
-                      >
-                    </div>
-                    <p class="axis-note">
-                      <b>Motir.</b> Source Serif 4 headlines · Inter body · JetBrains Mono meta.
-                    </p>
-                  </div>
-                </div>
-
-                <p class="apply-note">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
-                  Changes apply instantly across Motir — there's nothing to save.
-                </p>
               </div>
-
-              <div class="preview-rail">
-                <div class="preview-eyebrow">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Live
-                  preview
+              <div class="card-body">
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Theme</span
+                    ><span class="af-help">Light, dark, or follow your device.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Theme">
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
+                    >
+                    <span class="seg on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
+                    >
+                  </div>
                 </div>
-                <div class="vignette" data-surface="card">
-                  <div class="vg-card" data-surface="card">
-                    <div class="vg-top">
-                      <span class="vg-dot"></span><span class="vg-title">Billing rebuild</span
-                      ><span class="vg-chip">On track</span>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Style</span
+                    ><span class="af-help"
+                      >Shape &amp; feel — silhouette, elevation, density, motion.</span
+                    >
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Style">
+                    <span class="pick is-on"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Warm
+                      Editorial</span
+                    >
+                    <span class="pick">Soft / Playful</span>
+                    <span class="pick">Swiss / Minimal-Flat</span>
+                    <span class="pick">Neo-Brutalism</span>
+                    <span class="pick">Glassmorphism</span>
+                    <span class="pick">Cybercore / Y2K</span>
+                  </div>
+                  <p class="axis-note">
+                    <b>Warm Editorial.</b> Thoughtful, warm, technical-but-not-cold, slightly
+                    editorial.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Palette</span
+                    ><span class="af-help">Colour — surfaces, ink, accent and tints.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Palette">
+                    <span class="pick is-on"
+                      ><span class="sw" style="background: #5645d4"></span>Motir</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #37352f"></span>Graphite</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #6440d6"></span>Spectrum</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Motir.</b> Warm and editorial — cream surfaces, charcoal ink, a purple
+                    primary, pastel tints.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Type</span
+                    ><span class="af-help">Typeface pairing — headline, body and mono roles.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Type">
+                    <span class="pick is-on" style="font-family: 'Source Serif 4', Georgia, serif"
+                      >Motir</span
+                    >
+                    <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
+                    <span class="pick" style="font-family: 'JetBrains Mono', monospace"
+                      >Motir Mono</span
+                    >
+                    <span class="pick" style="font-family: 'Space Grotesk', sans-serif"
+                      >Grotesk</span
+                    >
+                    <span class="pick" style="font-family: 'Fraunces', serif">Editorial</span>
+                    <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
+                      >Mono-Technical</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Motir.</b> Source Serif 4 headlines · Inter body · JetBrains Mono meta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="showcase" aria-label="Live look">
+              <div class="sc-eyebrow">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your look —
+                live across Motir
+              </div>
+              <div class="sc-grid">
+                <div class="card sc-item" data-surface="card">
+                  <div class="sc-top">
+                    <span class="kind"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-square-check" /></svg>
+                      PROD-128</span
+                    >
+                    <span class="pill pill-accent">In review</span>
+                  </div>
+                  <h3 class="sc-title">Rebuild the billing flow</h3>
+                  <p class="sc-body">
+                    Move invoicing onto the new ledger so teams get paid on time — headlines, body
+                    and labels all wear the type, colour and shape you pick.
+                  </p>
+                  <div class="sc-labels">
+                    <span class="pill pill-sky">Frontend</span>
+                    <span class="pill pill-peach">Billing</span>
+                    <span class="pill pill-rose">P1</span>
+                  </div>
+                  <div class="sc-meta">5 PTS · DUE JUN 30 · ZHU YUE</div>
+                  <div class="sc-acts">
+                    <span class="btn btn-primary btn-sm">Comment</span>
+                    <span class="btn btn-secondary btn-sm">Assign</span>
+                    <span class="icon-btn"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-more" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="sc-side">
+                  <div class="card" data-surface="card">
+                    <div class="sc-search" data-surface="input">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                      work items…
                     </div>
-                    <div class="vg-sub">
-                      This is Motir wearing your selections — every surface, button and word updates
-                      live.
-                    </div>
-                    <div class="vg-bars">
-                      <div class="vg-bar"></div>
-                      <div class="vg-bar accent"></div>
-                      <div class="vg-bar"></div>
-                    </div>
-                    <div class="vg-input" data-surface="input">Search work items…</div>
-                    <div class="vg-acts">
-                      <span class="vg-btn vg-btn-primary">Create</span
-                      ><span class="vg-btn vg-btn-ghost">Cancel</span>
+                    <div class="sc-list">
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                      <div class="sc-row">
+                        <span class="dot alt"></span><span class="bar short"></span>
+                      </div>
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
                     </div>
                   </div>
-                  <div class="pv-type">
-                    <div class="pt-hd">Ship the roadmap</div>
-                    <div class="pt-bd">
-                      Headlines, body copy and labels all wear the chosen pairing.
-                    </div>
-                    <div class="pt-mn">PROD-128 · IN REVIEW · 5 PTS</div>
-                  </div>
-                  <div class="pal-swatches" title="Motir palette roles">
+                  <div class="pal-swatches" title="palette roles">
                     <span style="background: var(--el-accent)"></span>
                     <span style="background: var(--el-tint-rose)"></span>
                     <span style="background: var(--el-tint-mint)"></span>
@@ -2123,21 +2176,24 @@
                     <span style="background: var(--el-tint-peach)"></span>
                     <span style="background: var(--el-text)"></span>
                   </div>
+                  <div class="type-spec" data-surface="card">
+                    <div class="ts-aa">Ag</div>
+                    <div class="ts-h">Ship the roadmap</div>
+                    <div class="ts-b">Body copy renders in the pairing's body face.</div>
+                    <div class="ts-m">PROD-128 · IN REVIEW · 5 PTS</div>
+                  </div>
                 </div>
-                <p class="preview-cap">
-                  A real Motir surface, rendered in Warm Editorial · Motir · Motir.
-                </p>
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      2 · A changed state — Theme: Light · Style: <b>Swiss / Minimal-Flat</b> · Palette:
-      <b>Cobalt</b> · Type: <b>Grotesk</b>. The dogfooding moment: the choice applies to Motir
-      ITSELF, so the WHOLE pane — rail, cards, chips, buttons and the preview — re-skins, re-shapes
-      and re-types live (0px-flatter Swiss shape, cool Cobalt colour, Space Grotesk headings).
+      2 · A changed state — Light · <b>Swiss / Minimal-Flat</b> · <b>Cobalt</b> · <b>Grotesk</b>.
+      The dogfooding moment: because the look applies to Motir ITSELF, the WHOLE page transforms —
+      rail, cards, chips, buttons, pills AND the showcase: flatter 0-radius Swiss shape, cool Cobalt
+      colour, Space Grotesk headlines. The page is the preview.
     </div>
     <div class="panel">
       <div
@@ -2203,166 +2259,166 @@
             <div class="page-head">
               <h2>Appearance</h2>
               <p class="sub">
-                Theme Motir itself — the colour, type and shape the whole interface wears for you.
-                Motir is built on a three-axis design system (style × palette × type), and this is
-                that system turned on itself: pick below and the entire app — this page included —
-                re-skins live. Personal to your account; applied on every device you sign in on.
+                Theme Motir itself. Motir is built on a three-axis design system — style × palette ×
+                type, plus light/dark — and this is that system turned on itself: pick below and the
+                <b>whole app re-skins live</b>, this page included. The look is personal to your
+                account and applied on every device you sign in on; there's nothing to save.
               </p>
             </div>
-            <div class="appearance">
-              <div class="controls">
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Theme</h3>
-                      <p class="hsub">Light, dark, or follow your device.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="segmented" role="group" aria-label="Theme">
-                      <span class="seg on"
-                        ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
-                      >
-                      <span class="seg"
-                        ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
-                      >
-                      <span class="seg"
-                        ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
-                      >
-                    </div>
-                  </div>
-                </div>
 
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Style</h3>
-                      <p class="hsub">
-                        The shape and feel — silhouette, elevation, density and motion.
-                      </p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Style">
-                      <span class="pick">Warm Editorial</span>
-                      <span class="pick">Soft / Playful</span>
-                      <span class="pick is-on"
-                        ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Swiss /
-                        Minimal-Flat</span
-                      >
-                      <span class="pick">Neo-Brutalism</span>
-                      <span class="pick">Glassmorphism</span>
-                      <span class="pick">Cybercore / Y2K</span>
-                    </div>
-                    <p class="axis-note">
-                      <b>Swiss / Minimal-Flat.</b> International-typographic, structural, calm —
-                      flat, sharp, gridded.
-                    </p>
-                  </div>
+            <div class="card controls">
+              <div class="card-head">
+                <div>
+                  <h3>Theme &amp; design</h3>
+                  <p class="hsub">
+                    Four independent axes. Everything on this page updates the instant you choose.
+                  </p>
                 </div>
-
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Palette</h3>
-                      <p class="hsub">The colours it wears — surfaces, ink, accent and tints.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Palette">
-                      <span class="pick"
-                        ><span class="sw" style="background: #5645d4"></span>Motir</span
-                      >
-                      <span class="pick is-on"
-                        ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #37352f"></span>Graphite</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #6440d6"></span>Spectrum</span
-                      >
-                    </div>
-                    <p class="axis-note">
-                      <b>Cobalt.</b> Cool and institutional — slate-cool surfaces, a confident
-                      cobalt primary.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Type</h3>
-                      <p class="hsub">The typeface pairing — headline, body and mono roles.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Type">
-                      <span class="pick" style="font-family: 'Source Serif 4', Georgia, serif"
-                        >Motir</span
-                      >
-                      <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
-                      <span class="pick" style="font-family: 'JetBrains Mono', monospace"
-                        >Motir Mono</span
-                      >
-                      <span class="pick is-on" style="font-family: 'Space Grotesk', sans-serif"
-                        >Grotesk</span
-                      >
-                      <span class="pick" style="font-family: 'Fraunces', serif">Editorial</span>
-                      <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
-                        >Mono-Technical</span
-                      >
-                    </div>
-                    <p class="axis-note">
-                      <b>Grotesk.</b> Space Grotesk headlines · Inter body · JetBrains Mono meta.
-                    </p>
-                  </div>
-                </div>
-
-                <p class="apply-note">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
-                  Changes apply instantly across Motir — there's nothing to save.
-                </p>
               </div>
-
-              <div class="preview-rail">
-                <div class="preview-eyebrow">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Live
-                  preview
+              <div class="card-body">
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Theme</span
+                    ><span class="af-help">Light, dark, or follow your device.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Theme">
+                    <span class="seg on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
+                    >
+                  </div>
                 </div>
-                <div class="vignette" data-surface="card">
-                  <div class="vg-card" data-surface="card">
-                    <div class="vg-top">
-                      <span class="vg-dot"></span><span class="vg-title">Billing rebuild</span
-                      ><span class="vg-chip">On track</span>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Style</span
+                    ><span class="af-help"
+                      >Shape &amp; feel — silhouette, elevation, density, motion.</span
+                    >
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Style">
+                    <span class="pick">Warm Editorial</span>
+                    <span class="pick">Soft / Playful</span>
+                    <span class="pick is-on"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Swiss /
+                      Minimal-Flat</span
+                    >
+                    <span class="pick">Neo-Brutalism</span>
+                    <span class="pick">Glassmorphism</span>
+                    <span class="pick">Cybercore / Y2K</span>
+                  </div>
+                  <p class="axis-note">
+                    <b>Swiss / Minimal-Flat.</b> International-typographic, structural, calm — flat,
+                    sharp, gridded.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Palette</span
+                    ><span class="af-help">Colour — surfaces, ink, accent and tints.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Palette">
+                    <span class="pick"
+                      ><span class="sw" style="background: #5645d4"></span>Motir</span
+                    >
+                    <span class="pick is-on"
+                      ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #37352f"></span>Graphite</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #6440d6"></span>Spectrum</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Cobalt.</b> Cool and institutional — slate-cool surfaces, a confident cobalt
+                    primary.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Type</span
+                    ><span class="af-help">Typeface pairing — headline, body and mono roles.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Type">
+                    <span class="pick" style="font-family: 'Source Serif 4', Georgia, serif"
+                      >Motir</span
+                    >
+                    <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
+                    <span class="pick" style="font-family: 'JetBrains Mono', monospace"
+                      >Motir Mono</span
+                    >
+                    <span class="pick is-on" style="font-family: 'Space Grotesk', sans-serif"
+                      >Grotesk</span
+                    >
+                    <span class="pick" style="font-family: 'Fraunces', serif">Editorial</span>
+                    <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
+                      >Mono-Technical</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Grotesk.</b> Space Grotesk headlines · Inter body · JetBrains Mono meta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="showcase" aria-label="Live look">
+              <div class="sc-eyebrow">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your look —
+                live across Motir
+              </div>
+              <div class="sc-grid">
+                <div class="card sc-item" data-surface="card">
+                  <div class="sc-top">
+                    <span class="kind"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-square-check" /></svg>
+                      PROD-128</span
+                    >
+                    <span class="pill pill-accent">In review</span>
+                  </div>
+                  <h3 class="sc-title">Rebuild the billing flow</h3>
+                  <p class="sc-body">
+                    Move invoicing onto the new ledger so teams get paid on time — headlines, body
+                    and labels all wear the type, colour and shape you pick.
+                  </p>
+                  <div class="sc-labels">
+                    <span class="pill pill-sky">Frontend</span>
+                    <span class="pill pill-peach">Billing</span>
+                    <span class="pill pill-rose">P1</span>
+                  </div>
+                  <div class="sc-meta">5 PTS · DUE JUN 30 · ZHU YUE</div>
+                  <div class="sc-acts">
+                    <span class="btn btn-primary btn-sm">Comment</span>
+                    <span class="btn btn-secondary btn-sm">Assign</span>
+                    <span class="icon-btn"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-more" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="sc-side">
+                  <div class="card" data-surface="card">
+                    <div class="sc-search" data-surface="input">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                      work items…
                     </div>
-                    <div class="vg-sub">
-                      This is Motir wearing your selections — every surface, button and word updates
-                      live.
-                    </div>
-                    <div class="vg-bars">
-                      <div class="vg-bar"></div>
-                      <div class="vg-bar accent"></div>
-                      <div class="vg-bar"></div>
-                    </div>
-                    <div class="vg-input" data-surface="input">Search work items…</div>
-                    <div class="vg-acts">
-                      <span class="vg-btn vg-btn-primary">Create</span
-                      ><span class="vg-btn vg-btn-ghost">Cancel</span>
+                    <div class="sc-list">
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                      <div class="sc-row">
+                        <span class="dot alt"></span><span class="bar short"></span>
+                      </div>
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
                     </div>
                   </div>
-                  <div class="pv-type">
-                    <div class="pt-hd">Ship the roadmap</div>
-                    <div class="pt-bd">
-                      Headlines, body copy and labels all wear the chosen pairing.
-                    </div>
-                    <div class="pt-mn">PROD-128 · IN REVIEW · 5 PTS</div>
-                  </div>
-                  <div class="pal-swatches" title="Cobalt palette roles">
+                  <div class="pal-swatches" title="palette roles">
                     <span style="background: var(--el-accent)"></span>
                     <span style="background: var(--el-tint-rose)"></span>
                     <span style="background: var(--el-tint-mint)"></span>
@@ -2370,20 +2426,24 @@
                     <span style="background: var(--el-tint-peach)"></span>
                     <span style="background: var(--el-text)"></span>
                   </div>
+                  <div class="type-spec" data-surface="card">
+                    <div class="ts-aa">Ag</div>
+                    <div class="ts-h">Ship the roadmap</div>
+                    <div class="ts-b">Body copy renders in the pairing's body face.</div>
+                    <div class="ts-m">PROD-128 · IN REVIEW · 5 PTS</div>
+                  </div>
                 </div>
-                <p class="preview-cap">
-                  A real Motir surface, rendered in Swiss / Minimal-Flat · Cobalt · Grotesk.
-                </p>
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>
     </div>
     <div class="panel-label">
-      3 · Dark + a changed state — Theme: <b>Dark</b> · Style: <b>Soft / Playful</b> · Palette:
-      <b>Evergreen</b> · Type: <b>Editorial</b>. Dark-mode parity across the whole area; rounded
-      Soft/Playful geometry, an emerald Evergreen palette and Fraunces display headlines.
+      3 · Dark + a changed state — <b>Dark</b> · <b>Soft / Playful</b> · <b>Evergreen</b> ·
+      <b>Editorial</b>. Dark-mode parity across the whole area; rounded Soft/Playful geometry, an
+      emerald Evergreen palette, Fraunces display headlines. Every tint, accent and face flips
+      through the token layer and stays AA.
     </div>
     <div class="panel">
       <div
@@ -2449,168 +2509,165 @@
             <div class="page-head">
               <h2>Appearance</h2>
               <p class="sub">
-                Theme Motir itself — the colour, type and shape the whole interface wears for you.
-                Motir is built on a three-axis design system (style × palette × type), and this is
-                that system turned on itself: pick below and the entire app — this page included —
-                re-skins live. Personal to your account; applied on every device you sign in on.
+                Theme Motir itself. Motir is built on a three-axis design system — style × palette ×
+                type, plus light/dark — and this is that system turned on itself: pick below and the
+                <b>whole app re-skins live</b>, this page included. The look is personal to your
+                account and applied on every device you sign in on; there's nothing to save.
               </p>
             </div>
-            <div class="appearance">
-              <div class="controls">
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Theme</h3>
-                      <p class="hsub">Light, dark, or follow your device.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="segmented" role="group" aria-label="Theme">
-                      <span class="seg"
-                        ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
-                      >
-                      <span class="seg on"
-                        ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
-                      >
-                      <span class="seg"
-                        ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
-                      >
-                    </div>
-                  </div>
-                </div>
 
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Style</h3>
-                      <p class="hsub">
-                        The shape and feel — silhouette, elevation, density and motion.
-                      </p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Style">
-                      <span class="pick">Warm Editorial</span>
-                      <span class="pick is-on"
-                        ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Soft /
-                        Playful</span
-                      >
-                      <span class="pick">Swiss / Minimal-Flat</span>
-                      <span class="pick">Neo-Brutalism</span>
-                      <span class="pick">Glassmorphism</span>
-                      <span class="pick">Cybercore / Y2K</span>
-                    </div>
-                    <p class="axis-note">
-                      <b>Soft / Playful.</b> More energy — rounded, generous, gently animated.
-                    </p>
-                  </div>
+            <div class="card controls">
+              <div class="card-head">
+                <div>
+                  <h3>Theme &amp; design</h3>
+                  <p class="hsub">
+                    Four independent axes. Everything on this page updates the instant you choose.
+                  </p>
                 </div>
-
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Palette</h3>
-                      <p class="hsub">The colours it wears — surfaces, ink, accent and tints.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Palette">
-                      <span class="pick"
-                        ><span class="sw" style="background: #5645d4"></span>Motir</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #37352f"></span>Graphite</span
-                      >
-                      <span class="pick is-on"
-                        ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
-                      >
-                      <span class="pick"
-                        ><span class="sw" style="background: #6440d6"></span>Spectrum</span
-                      >
-                    </div>
-                    <p class="axis-note">
-                      <b>Evergreen.</b> Fresh and technical — an emerald primary over cooled forest
-                      neutrals.
-                    </p>
-                  </div>
-                </div>
-
-                <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Type</h3>
-                      <p class="hsub">The typeface pairing — headline, body and mono roles.</p>
-                    </div>
-                  </div>
-                  <div class="card-body axis-body">
-                    <div class="chips" role="radiogroup" aria-label="Type">
-                      <span class="pick" style="font-family: 'Source Serif 4', Georgia, serif"
-                        >Motir</span
-                      >
-                      <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
-                      <span class="pick" style="font-family: 'JetBrains Mono', monospace"
-                        >Motir Mono</span
-                      >
-                      <span class="pick" style="font-family: 'Space Grotesk', sans-serif"
-                        >Grotesk</span
-                      >
-                      <span class="pick is-on" style="font-family: 'Fraunces', serif"
-                        >Editorial</span
-                      >
-                      <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
-                        >Mono-Technical</span
-                      >
-                    </div>
-                    <p class="axis-note">
-                      <b>Editorial.</b> Fraunces display headlines · Inter body · JetBrains Mono
-                      meta.
-                    </p>
-                  </div>
-                </div>
-
-                <p class="apply-note">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
-                  Changes apply instantly across Motir — there's nothing to save.
-                </p>
               </div>
-
-              <div class="preview-rail">
-                <div class="preview-eyebrow">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Live
-                  preview
+              <div class="card-body">
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Theme</span
+                    ><span class="af-help">Light, dark, or follow your device.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Theme">
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
+                    >
+                    <span class="seg on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
+                    >
+                  </div>
                 </div>
-                <div class="vignette" data-surface="card">
-                  <div class="vg-card" data-surface="card">
-                    <div class="vg-top">
-                      <span class="vg-dot"></span><span class="vg-title">Billing rebuild</span
-                      ><span class="vg-chip">On track</span>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Style</span
+                    ><span class="af-help"
+                      >Shape &amp; feel — silhouette, elevation, density, motion.</span
+                    >
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Style">
+                    <span class="pick">Warm Editorial</span>
+                    <span class="pick is-on"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Soft /
+                      Playful</span
+                    >
+                    <span class="pick">Swiss / Minimal-Flat</span>
+                    <span class="pick">Neo-Brutalism</span>
+                    <span class="pick">Glassmorphism</span>
+                    <span class="pick">Cybercore / Y2K</span>
+                  </div>
+                  <p class="axis-note">
+                    <b>Soft / Playful.</b> More energy — rounded, generous, gently animated.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Palette</span
+                    ><span class="af-help">Colour — surfaces, ink, accent and tints.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Palette">
+                    <span class="pick"
+                      ><span class="sw" style="background: #5645d4"></span>Motir</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #37352f"></span>Graphite</span
+                    >
+                    <span class="pick is-on"
+                      ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #6440d6"></span>Spectrum</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Evergreen.</b> Fresh and technical — an emerald primary over cooled forest
+                    neutrals.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Type</span
+                    ><span class="af-help">Typeface pairing — headline, body and mono roles.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Type">
+                    <span class="pick" style="font-family: 'Source Serif 4', Georgia, serif"
+                      >Motir</span
+                    >
+                    <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
+                    <span class="pick" style="font-family: 'JetBrains Mono', monospace"
+                      >Motir Mono</span
+                    >
+                    <span class="pick" style="font-family: 'Space Grotesk', sans-serif"
+                      >Grotesk</span
+                    >
+                    <span class="pick is-on" style="font-family: 'Fraunces', serif">Editorial</span>
+                    <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
+                      >Mono-Technical</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Editorial.</b> Fraunces display headlines · Inter body · JetBrains Mono meta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="showcase" aria-label="Live look">
+              <div class="sc-eyebrow">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your look —
+                live across Motir
+              </div>
+              <div class="sc-grid">
+                <div class="card sc-item" data-surface="card">
+                  <div class="sc-top">
+                    <span class="kind"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-square-check" /></svg>
+                      PROD-128</span
+                    >
+                    <span class="pill pill-accent">In review</span>
+                  </div>
+                  <h3 class="sc-title">Rebuild the billing flow</h3>
+                  <p class="sc-body">
+                    Move invoicing onto the new ledger so teams get paid on time — headlines, body
+                    and labels all wear the type, colour and shape you pick.
+                  </p>
+                  <div class="sc-labels">
+                    <span class="pill pill-sky">Frontend</span>
+                    <span class="pill pill-peach">Billing</span>
+                    <span class="pill pill-rose">P1</span>
+                  </div>
+                  <div class="sc-meta">5 PTS · DUE JUN 30 · ZHU YUE</div>
+                  <div class="sc-acts">
+                    <span class="btn btn-primary btn-sm">Comment</span>
+                    <span class="btn btn-secondary btn-sm">Assign</span>
+                    <span class="icon-btn"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-more" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="sc-side">
+                  <div class="card" data-surface="card">
+                    <div class="sc-search" data-surface="input">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                      work items…
                     </div>
-                    <div class="vg-sub">
-                      This is Motir wearing your selections — every surface, button and word updates
-                      live.
-                    </div>
-                    <div class="vg-bars">
-                      <div class="vg-bar"></div>
-                      <div class="vg-bar accent"></div>
-                      <div class="vg-bar"></div>
-                    </div>
-                    <div class="vg-input" data-surface="input">Search work items…</div>
-                    <div class="vg-acts">
-                      <span class="vg-btn vg-btn-primary">Create</span
-                      ><span class="vg-btn vg-btn-ghost">Cancel</span>
+                    <div class="sc-list">
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                      <div class="sc-row">
+                        <span class="dot alt"></span><span class="bar short"></span>
+                      </div>
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
                     </div>
                   </div>
-                  <div class="pv-type">
-                    <div class="pt-hd">Ship the roadmap</div>
-                    <div class="pt-bd">
-                      Headlines, body copy and labels all wear the chosen pairing.
-                    </div>
-                    <div class="pt-mn">PROD-128 · IN REVIEW · 5 PTS</div>
-                  </div>
-                  <div class="pal-swatches" title="Evergreen palette roles">
+                  <div class="pal-swatches" title="palette roles">
                     <span style="background: var(--el-accent)"></span>
                     <span style="background: var(--el-tint-rose)"></span>
                     <span style="background: var(--el-tint-mint)"></span>
@@ -2618,12 +2675,15 @@
                     <span style="background: var(--el-tint-peach)"></span>
                     <span style="background: var(--el-text)"></span>
                   </div>
+                  <div class="type-spec" data-surface="card">
+                    <div class="ts-aa">Ag</div>
+                    <div class="ts-h">Ship the roadmap</div>
+                    <div class="ts-b">Body copy renders in the pairing's body face.</div>
+                    <div class="ts-m">PROD-128 · IN REVIEW · 5 PTS</div>
+                  </div>
                 </div>
-                <p class="preview-cap">
-                  A real Motir surface, rendered in Soft / Playful · Evergreen · Editorial.
-                </p>
               </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>

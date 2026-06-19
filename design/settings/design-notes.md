@@ -7,11 +7,11 @@ grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                                                                                                              |
-| ------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                               |
-| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)     | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                               |
-| **Appearance pane**       | **`appearance.mock.html`** (HTML mock)       | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type** with a live specimen preview. Reuses the area shell + the onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route). |
+| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                    |
+| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)     | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                    |
+| **Appearance pane**       | **`appearance.mock.html`** (HTML mock)       | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route). |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -466,10 +466,10 @@ rail shows it as "Soon" (the 7.8.2 state).
 - **The area shell** — rail + content + `Card` grammar — is **`account-settings.mock.html`**
   (7.8.2) verbatim: the back-link + user identity + grouped nav (General /
   Preferences / Security), the serif `h2` page-head, the hairline-separated cards.
-- **The axis pickers** — the `.pick` **chip rows** + the **live specimen vignette**
-  — are the onboarding design-wizard's language (7.3.27 / 7.3.44,
-  `design/ai-chat/onboarding.mock.html`), adapted from the wizard's full-page
-  showcase to a settings-pane card layout.
+- **The axis pickers** — the `.pick` **chip rows** — and the **showcase specimens**
+  (the live card / type specimen / palette swatches) are the onboarding
+  design-wizard's language (7.3.27 / 7.3.44 / 7.3.37,
+  `design/ai-chat/onboarding.mock.html`), adapted to a settings-pane layout.
 - **The three axis registries** drive the option sets, 1:1 with shipped code:
   **Style** `lib/theme/styles.ts` (6 styles: Warm Editorial, Soft / Playful,
   Swiss / Minimal-Flat, Neo-Brutalism, Glassmorphism, Cybercore / Y2K); **Palette**
@@ -485,38 +485,53 @@ rail shows it as "Soon" (the 7.8.2 state).
   will. Component CSS references ONLY `--el-*` colour + element-semantic shape
   tokens (the colour + shape rules).
 
-## Layout — the four controls + a live preview
+## Layout — the page IS the preview (no separate "live preview" widget)
 
-A two-column pane (`.appearance`): the **four axis controls** stacked on the left,
-a **live preview** on the right. _Justified width deviation_ (rung 1): the pane is
-wider than the 680px single-column settings default BECAUSE the live preview is
-core to the feature — the user must **feel** the choice, per the card. Each axis is
-a `Card` (card-head title + sub, card-body control):
+**Key decision (Yue, 2026-06-19).** The three axes apply to **Motir itself**, and
+they apply **instantly** (`localStorage` → `<html>`, the inline-edit-no-refresh
+preference contract — like every theme toggle: Linear / GitHub / Notion all switch
+immediately, the mirror-product standard). So the moment you pick, **the whole page
+re-skins — this page included.** A separate "live preview" card would be redundant:
+it would show "Motir in this selection" while you are already looking at exactly
+that. The earlier v1 had such a preview rail; it was **removed**.
 
-1. **Theme** — a **segmented control** (`.segmented` / `.seg`): Light (`sun`) ·
-   Dark (`moon`) · System (`monitor`); active = `--el-page-bg` fill +
-   `--shadow-subtle` + accent icon. (The shipped `ThemeToggle` pattern.)
-2. **Style** — a `.pick` **chip row** of the 6 styles; active chip = accent border
-   - `--el-tint-lavender` fill + `--el-accent-on-surface` text + a `check`. Below,
-     an `.axis-note` shows the active style's **tagline** (from the registry).
-3. **Palette** — chip row of the 5 palettes, each with an 11px **swatch dot** in
-   the palette's accent hue; active-note = the palette tagline.
-4. **Type** — chip row of the 6 pairings, **each label set in its own headline
-   face** (Source Serif 4 / Inter / JetBrains Mono / Space Grotesk / Fraunces / IBM
-   Plex Mono) so the picker previews the type; active-note = the pairing's faces.
+Instead the page is deliberately **design-rich** so that picking ANY axis visibly
+transforms it — the Appearance page doubles as the **design-system showcase**
+(which is the meta concept: showcase Motir's design ability on Motir itself). Single
+column, two regions:
 
-An `.apply-note` ("Changes apply instantly across Motir — there's nothing to save",
-`check-circle` in `--el-success`) states the no-Save model: Appearance is
-client-side (`localStorage`, the `THEME_STORAGE_KEYS`), applied optimistically —
-the inline-edit-no-refresh contract (a preference, not a server round-trip).
+**1 — The controls** (one `Card`, "Theme & design"), four hairline-separated
+`.axis-field`s (name + helper + control + a live registry `.axis-note`):
 
-**The live preview (the specimen vignette, 7.3.37 / MOTIR-1050).** The right rail
-holds a **composed mini-UI** (`.vignette` → `.vg-card` "Billing rebuild" with a
-status pill, copy, bars, a search `input`, Create / Cancel buttons) + a compact
-**type specimen** (serif headline / sans body / mono meta) + a **palette-role
-swatch strip** + a caption "A real Motir surface, rendered in {Style} · {Palette} ·
-{Type}." It inherits the panel's `data-*` selections, so it is a true live preview,
-not a swatch (the re-plan rule: "a live specimen vignette, not a swatch").
+- **Theme** — a **segmented control** (`.segmented` / `.seg`): Light (`sun`) · Dark
+  (`moon`) · System (`monitor`); active = `--el-page-bg` fill + `--shadow-subtle` +
+  accent icon. (The shipped `ThemeToggle` pattern — the one new composition.)
+- **Style** — a `.pick` **chip row** of the 6 styles; active = accent border +
+  `--el-tint-lavender` fill + `--el-accent-on-surface` text + a `check`.
+- **Palette** — chip row of the 5 palettes, each with an 11px **swatch dot** in the
+  palette's accent hue.
+- **Type** — chip row of the 6 pairings, **each label set in its own headline face**
+  (Source Serif 4 / Inter / JetBrains Mono / Space Grotesk / Fraunces / IBM Plex
+  Mono) so the chips themselves preview the type.
+
+The card sub-copy + the page-head ("the whole app re-skins live… there's nothing to
+save") state the instant-apply, no-Save model.
+
+**2 — The showcase band** (`.showcase`, eyebrow "Your look — live across Motir") — a
+real Motir slice that exercises EVERY axis, so each pick ripples visibly:
+
+- a **work-item card** (`.sc-item`) — a `square-check` kind + `PROD-128` (mono), an
+  **accent status `Pill`** ("In review"), a **serif/headline title** ("Rebuild the
+  billing flow"), body copy (body face), a **label row of tinted `Pill`s**
+  (`--el-tint-sky` / `-peach` / `-rose`, AA `--el-text-strong`), mono meta, and a
+  **primary `Button`** ("Comment") + secondary ("Assign") + ghost icon-button;
+- a **side stack** — a `Card` with a search `Input` + list rows (accent dots +
+  muted bars), the **palette-role swatch strip**, and a **type specimen** ("Ag" +
+  serif headline + body + mono meta).
+
+So colour shows in the accent pill/button/dots + the tinted labels; shape shows in
+the card/button/input/pill radii + elevation; type shows in the title, body, mono
+meta and the "Ag" specimen — all token-driven, all re-rendering on every pick.
 
 ## The access path (mistake-#31 — DRAW the door)
 
@@ -531,14 +546,15 @@ Appearance), drawn, not just named.
 
 - **Panel 1 — Default / factory.** Theme **System** · Style **Warm Editorial** ·
   Palette **Motir** · Type **Motir** — the base look. Shows the four controls, the
-  live preview, and the access path (rail Appearance active). The "empty/default"
+  showcase band, and the access path (rail Appearance active). The "empty/default"
   state.
 - **Panel 2 — A changed state (light).** Theme **Light** · **Swiss / Minimal-Flat**
   · **Cobalt** · **Grotesk**. The **dogfooding moment**: because the choice applies
-  to Motir _itself_, the WHOLE pane — rail, cards, chips, buttons AND the preview —
-  re-skins (cool Cobalt), re-shapes (flatter, 0-radius Swiss geometry) and re-types
-  (Space Grotesk headings) live. `data-style` / `data-palette` / `data-type` sit on
-  the `.stage` (whole shell), exactly as they sit on `<html>` in-app.
+  to Motir _itself_, the WHOLE page — rail, cards, chips, buttons, pills AND the
+  showcase — re-skins (cool Cobalt), re-shapes (flatter, sharper Swiss geometry) and
+  re-types (Space Grotesk headlines) live. `data-style` / `data-palette` /
+  `data-type` sit on the `.stage` (whole shell), exactly as they sit on `<html>`
+  in-app.
 - **Panel 3 — Dark + a changed state.** Theme **Dark** · **Soft / Playful** ·
   **Evergreen** · **Editorial**. Dark-mode parity across the whole area; rounded
   Soft/Playful geometry, an emerald Evergreen palette, Fraunces display headlines.
@@ -560,8 +576,9 @@ Appearance), drawn, not just named.
   row is a `role="radiogroup"` with an `aria-label`. Every icon-only `<svg use>`
   carries `viewBox="0 0 24 24"` (no clipping). The "Soon" → active flip is a real
   navigable row, not a disabled one.
-- **Dark mode** confirmed (Panel 3): rail, cards, chips, segmented, vignette and
-  swatches all flip via the token layer and stay AA.
+- **Dark mode** confirmed (Panel 3): rail, cards, chips, segmented, the showcase
+  card / pills / buttons / type specimen and swatches all flip via the token layer
+  and stay AA.
 
 ## Primitives composed (no hand-rolling)
 
@@ -569,21 +586,24 @@ Appearance), drawn, not just named.
 | -------------------------------- | ------------------------------------------------------------------------------------- |
 | area shell (rail + content)      | `account-settings.mock.html` (7.8.2) — `Card` / settings-row / nav grammar            |
 | axis chips (`.pick`)             | the onboarding design-wizard chip language (7.3.44)                                   |
-| live specimen vignette           | the onboarding live-vignette (`.vg-*`, 7.3.37 / MOTIR-1050)                           |
+| showcase card / type / swatches  | the onboarding live specimens (`.vg-*` / `.type-spec` / `.pal-swatches`, 7.3.37)      |
+| status / label pills             | `components/ui/Pill.tsx` (accent + tinted tones, AA `--el-text-strong`)               |
+| buttons + search input           | `components/ui/Button.tsx` · the `Input` / `Combobox` trigger grammar                 |
 | Theme segmented control          | a token-driven segmented toggle (the `ThemeToggle` pattern) — the one new composition |
 | option sets (style/palette/type) | the shipped registries `lib/theme/{styles,palettes,typography}.ts`                    |
 
 The only new composition is the **Theme segmented control**; everything else reuses
-the area shell, the onboarding picker chips, and the live vignette. The axis options
-come straight from the registries, so the pane never drifts from what the app can
-actually wear.
+the area shell, the onboarding picker chips + specimens, and the shipped `Pill` /
+`Button` / `Input` primitives. The axis options come straight from the registries,
+so the pane never drifts from what the app can actually wear.
 
 ## Build dependency (for 7.3.58)
 
-7.3.58 implements this pane + its `settings/account/appearance` route: a
-**client island** (the selections live in `localStorage` via `THEME_STORAGE_KEYS`
-and are applied to `<html>` by the existing theme bootstrap, so picking re-skins
-instantly with no server write), wiring the four registries to the pickers and the
-live vignette, and flipping the `accountSettingsNav` `appearance` entry from a
-placeholder to a real route (which keeps the route↔registry totality test green by
-construction). No new colour/shape primitive is required.
+7.3.58 implements this pane + its `settings/account/appearance` route: a **client
+island** (the selections live in `localStorage` via `THEME_STORAGE_KEYS` and are
+applied to `<html>` by the existing theme bootstrap, so picking re-skins instantly
+with no server write — no separate preview to wire), rendering the four pickers from
+the registries + the showcase slice, and flipping the `accountSettingsNav`
+`appearance` entry from a placeholder to a real route (which keeps the
+route↔registry totality test green by construction). No new colour/shape primitive
+is required.
