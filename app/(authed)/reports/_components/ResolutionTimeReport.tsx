@@ -199,6 +199,7 @@ function ResolutionTimeBody({
       valueFormat={(_v, gi) =>
         buckets[gi]!.avgDays === null ? noValue : String(buckets[gi]!.avgDays)
       }
+      maxXTicks={8}
       legend={legend}
       width={680}
       height={320}

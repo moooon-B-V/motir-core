@@ -116,6 +116,7 @@ export function AgeReportBody({
           const avg = data.buckets[gi]?.avgDays;
           return avg === null || avg === undefined ? '—' : String(avg);
         }}
+        maxXTicks={5}
         width={width}
         height={height}
         description={t(descKey, { period: t(UNIT_KEY[config.period]), days: data.daysBack })}

@@ -42,6 +42,14 @@ export interface BarChartProps {
    * plus the (group, series) indices so a report can render "—" for an
    * event-less bucket instead of a misleading "0" (the 4.5.2 rule). */
   valueFormat?: (value: number, groupIndex: number, seriesIndex: number) => string;
+  /** Cap the number of X-axis tick LABELS to ≤ this many, evenly spread (first +
+   * last always kept) — for a many-bucket report axis (a daily 30/120-bucket
+   * window) where labelling every bar overlaps into an unreadable smear (the
+   * `spreadTicks` idiom the difference/area chart uses). Default: undefined =
+   * label every group (the velocity primitive, ≤ a handful of bars). When set,
+   * per-bar value labels are also drawn only on the labelled bars, so the chart
+   * reads cleanly; the full series stays in the data table. */
+  maxXTicks?: number;
   width?: number;
   height?: number;
   margin?: Partial<ChartMargin>;
@@ -72,6 +80,7 @@ export function BarChart({
   referenceLine,
   valueLabels = true,
   valueFormat,
+  maxXTicks,
   width = 600,
   height = 300,
   margin,
@@ -82,9 +91,13 @@ export function BarChart({
 }: BarChartProps) {
   const yMax = yTicks.length > 0 ? Math.max(...yTicks.map((t) => t.value)) : 1;
   const n = groups.length;
+  // Which group indices get an X-axis label: every group by default (velocity),
+  // or an evenly-spread subset (first + last always) when `maxXTicks` caps a
+  // many-bucket report axis so the date labels don't overlap.
+  const labelledIdx = pickLabelIndices(n, maxXTicks);
   const xAxis = {
     domain: [0, Math.max(1, n)] as [number, number],
-    ticks: groups.map((g, i) => ({ value: i + 0.5, label: g.label })),
+    ticks: [...labelledIdx].map((i) => ({ value: i + 0.5, label: groups[i]!.label })),
     title: xTitle,
   };
   const legendItems = legend ?? deriveLegend(series, referenceLine);
@@ -133,7 +146,7 @@ export function BarChart({
                             rx={2}
                             fill={s.color}
                           />
-                          {valueLabels && (
+                          {valueLabels && labelledIdx.has(gi) && (
                             <text
                               className="text-[11px] font-semibold"
                               x={barX + barWidth / 2}
@@ -181,6 +194,23 @@ export function BarChart({
       <ChartDataTable {...table} />
     </div>
   );
+}
+
+/**
+ * The group indices that get an X-axis label. Without a `max` (or when there
+ * are few enough bars) every group is labelled — the velocity default. With a
+ * `max` and more bars than that, pick `max` evenly-spread indices, ALWAYS
+ * including the first and last, so a many-bucket report axis (a daily window of
+ * 30–120 buckets) shows a readable handful of date labels instead of an
+ * overlapping smear. Returns a Set for O(1) membership (the value-label gate).
+ */
+function pickLabelIndices(n: number, max?: number): Set<number> {
+  if (n <= 0) return new Set();
+  if (!max || n <= max) return new Set(Array.from({ length: n }, (_, i) => i));
+  const idx = new Set<number>();
+  const step = (n - 1) / (max - 1);
+  for (let i = 0; i < max; i++) idx.add(Math.round(i * step));
+  return idx;
 }
 
 function deriveLegend(series: BarSeries[], ref?: BarReferenceLine): ChartLegendItem[] {
