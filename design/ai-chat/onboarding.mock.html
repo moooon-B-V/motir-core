@@ -4,28 +4,42 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · Motir start-fresh onboarding (Story 7.3 · 7.3.44 / MOTIR-1061) — the canvas IS
-      the roadmap: Idea → Discovery → Vision → Validation → Plan → Epic 1 → Epic 2 → …
+      Design mock · Motir start-fresh onboarding (Story 7.3 · 7.3.68 / MOTIR-1100, revising 7.3.44 /
+      MOTIR-1061) — the GATED, conversation-only model: read-only docs · Continue + narration ·
+      downstream-only cascade · the canvas IS the roadmap
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the `ai-chat` surface — Motir's START-FRESH
-      ONBOARDING flow (Story 7.3, subtask 7.3.44 / MOTIR-1061). The comprehensive
-      screen-by-screen design.
+      ONBOARDING flow (Story 7.3). This asset is subtask 7.3.68 / MOTIR-1100, the
+      revision of 7.3.44 / MOTIR-1061 to the FINALIZED gated, conversation-only
+      model (2026-06-18). Everything 1061 got right is kept; the stale bits below
+      are corrected.
 
-      THE MODEL (one frame, two modes):
+      THE FINALIZED MODEL — grounded in the conductor 7.3.67 (MOTIR-1099), the
+      gated step machine 7.3.9 / 7.3.23, the read-only gates 7.3.5 / 7.3.6, the
+      re-derivation engine 7.3.24, and workflow.html Steps 1-6:
+        · ONE conductor conversation drives the whole pre-plan phase. It gathers
+          framing, then DRAFTS each tier and STOPS at its own review GATE before
+          drafting the next: discovery → vision → feasibility → validation →
+          design → summary → generate. (The feature CATALOG is FOLDED INTO VISION —
+          no separate catalog station/gate.)
         · HUB = a visual CANVAS (left) + a CHAT (compact right rail). The canvas is
           one continuous ROADMAP — another form of display of the work-item tree +
-          the pre-plan phase: Idea → Discovery → Vision → Validation → Plan →
-          Epic 1 → Epic 2 → … (each epic expandable to its stories → subtasks). It
-          shows WHERE YOU ARE the whole way; the chat DRIVES the active step.
-        · A STEP takes the FULL SCREEN — a stage's doc to review, or the design
-          wizard — with a "Back" button + a descriptive header (not
-          cramped short words; the journey lives on the canvas).
-        · Every stage's OUTPUT (its doc) is SHOWN and editable before continuing.
-          Validation is SKIPPABLE and can be front-loaded (validate demand first).
-        · The DESIGN wizard is a FULL-PAGE showcase: a whole product page (its own
-          nav + hero + cards + footer) rendered live in the chosen
-          data-style × data-palette × data-type, so the chrome is part of the demo.
+          the pre-plan phase. It shows WHERE YOU ARE the whole way; the conductor
+          DRIVES the active step.
+        · A STEP takes the FULL SCREEN — a tier's doc to review, or the design
+          wizard — with a "Back" button + a descriptive header.
+        · The docs are READ-ONLY. There is NO inline editing anywhere. The user
+          reacts ONLY in the chat; the conductor classifies the impact and revises.
+          Each tier: draft → read-only review → an explicit CONTINUE (and a Skip,
+          offered in the chat, on the optional tiers). BETWEEN tiers the conductor
+          NARRATES the transition ("I have enough — drafting what we'll build now").
+        · CASCADE is DOWNSTREAM-ONLY. A chat reaction at a later gate that the
+          conductor attributes to an UPSTREAM tier sends the user BACK to re-review
+          that tier, then forward; downstream tiers re-derive (7.3.24). NOTHING is
+          locked until epic generation — every Continue is navigation, not sign-off.
+        · The DESIGN wizard is a FULL-PAGE showcase: a whole product page rendered
+          live in the chosen data-style × data-palette × data-type.
 
       Built FROM the real design system: the token block + the [data-style] /
       [data-palette] / [data-type] axis blocks are copied 1:1 from app/globals.css,
@@ -33,11 +47,15 @@
       showcase re-shape / re-skin / re-type exactly as the running app does.
       Component CSS references ONLY --el-* colour + element-semantic shape tokens.
 
-      Screens: B landing · C hub (canvas roadmap + chat rail) · D/E/F full-screen
-      doc reviews (Understanding your idea / What we'll build / Will people want it? —
-      skippable + validate-early) · G full-page design showcase · H the canvas as
-      the post-plan roadmap (epics, you-are-here) · I an epic expanded to its
-      stories → subtasks · J plan states. Toggle dark to confirm parity.
+      Screens: B landing · C hub (canvas roadmap + chat rail; validate-first ask) ·
+      D/E/F/G full-screen READ-ONLY tier reviews (Understanding your idea / What
+      we'll build / Is it worth building? / Will people want it? — optional tiers
+      skippable, validate-early blocks) · G2 the per-tier gate rhythm + conductor
+      narration (draft → review → Continue; skip-in-chat) · G3 going back —
+      downstream-only cascade / back-navigation, nothing locked · H full-page design
+      showcase · I the canvas as the post-plan roadmap (epics, you-are-here) · J an
+      epic expanded to its stories → subtasks · K plan states. Toggle dark to confirm
+      parity.
     -->
     <!-- Real faces (match next/font in-app) so the data-type axis specimens render their true voice:
          Inter · Source Serif 4 · JetBrains Mono (base) + Space Grotesk · Fraunces · IBM Plex Mono (new pairings). -->
@@ -5464,7 +5482,9 @@
         color: var(--el-text);
         font-weight: 600;
       }
-      .doc-edithint {
+      /* read-only "react in the chat" hint — the docs are NEVER inline-editable
+         (conversation-only model, 7.3.5 / 7.3.6); its icon is a chat bubble, not a pencil */
+      .doc-readhint {
         display: flex;
         align-items: center;
         gap: 7px;
@@ -5475,6 +5495,14 @@
         border-bottom: 1px solid var(--el-border);
         margin-bottom: 8px;
       }
+      .doc-readhint .ro {
+        color: var(--el-accent-on-surface);
+        flex: none;
+      }
+      .doc-readhint b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
       .prose h3 {
         font-family: var(--font-serif);
         font-size: 19px;
@@ -5484,13 +5512,6 @@
         display: flex;
         align-items: center;
         gap: 9px;
-      }
-      .prose h3 .pen {
-        color: var(--el-text-faint);
-        opacity: 0;
-      }
-      .prose h3:hover .pen {
-        opacity: 0.7;
       }
       .prose p {
         font-family: var(--font-sans);
@@ -5636,6 +5657,111 @@
       }
       .doc-foot2 .grow {
         flex: 1;
+      }
+      /* "Continue is navigation, not sign-off" — nothing locks until generation */
+      .gate-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .gate-note svg {
+        color: var(--el-text-faint);
+        flex: none;
+      }
+      /* a banner above the canvas — the conductor's narration / "going back" state */
+      .gate-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        padding: 12px 14px;
+        margin: 0 0 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+      }
+      .gate-banner.back {
+        background: var(--el-tint-peach);
+        border-color: transparent;
+      }
+      .gate-banner .gb-ic {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-page-bg);
+        color: var(--el-accent-on-surface);
+      }
+      .gate-banner.back .gb-ic {
+        background: var(--el-page-bg);
+        color: var(--el-warning);
+      }
+      .gate-banner .gb-t {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .gate-banner .gb-d {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+      .gate-banner .gb-d b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      /* a "drafting now…" / "will refresh" / "revisiting" status pill on a canvas node.
+         AA: the hue lives in the TINT background, the text is --el-text-strong (finding #35);
+         state is also carried by the icon + label, never colour alone. */
+      .pill-drafting {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-refresh {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-revisit {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        border: 1px solid var(--el-warning);
+      }
+      /* a directional caption on a connector (cascade / back-nav) */
+      .conn.v.labeled {
+        position: relative;
+        height: 42px;
+      }
+      .conn.v.labeled .cflow {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+        padding: 2px 7px;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--el-border);
+      }
+      .conn.v.labeled .cflow svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-warning);
       }
 
       /* vertical canvas: done variant of the captured-content block + decision pill */
@@ -5882,8 +6008,8 @@
               margin-top: 14px;
             "
           >
-            Motir walks you through each step and writes up what it finds — you review and edit
-            before moving on.
+            Motir walks you through each step and writes up what it finds — you read it, react in
+            the chat, and continue when it's right. Nothing's locked until your plan is generated.
           </div>
         </div>
       </div>
@@ -6158,7 +6284,8 @@
 
     <!-- ════════════ D · DOC 1 — Understanding your idea (readable document) ════════════ -->
     <div class="panel-label">
-      D · Full-screen step SUMMARY — “Understanding your idea” (a readable write-up; edit inline)
+      D · Full-screen tier review — “Understanding your idea” (a readable write-up; READ-ONLY — you
+      react in the chat, never inline)
     </div>
     <div class="panel">
       <div class="surface">
@@ -6191,24 +6318,22 @@
             You're building a tool for <b>solo freelancers</b> to send invoices and see who has
             actually paid — with automatic reminders for the clients who haven't.
           </p>
-          <div class="doc-edithint">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> Everything here is
-            editable — change it inline, or tell the chat what's off.
+          <div class="doc-readhint">
+            <svg class="ic-sm ro" viewBox="0 0 24 24"><use href="#i-message" /></svg>
+            <span
+              ><b>Read-only.</b> Anything off? Just tell Motir in the chat — it rewrites the
+              write-up for you. Nothing's locked yet.</span
+            >
           </div>
           <div class="prose">
-            <h3>
-              What you're building
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>What you're building</h3>
             <p>
               A focused invoicing tool. Freelancers create and send invoices, mark them paid or
               overdue, and let Motir automatically chase late payers with reminders. The core
               question it answers is the one freelancers actually ask out loud:
               <strong>“who still owes me money?”</strong>
             </p>
-            <h3>
-              Who it's for <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>Who it's for</h3>
             <p>
               Solo freelancers running their own books — designers, writers, developers,
               consultants. Not agencies, not finance teams. Keeping the audience narrow is what lets
@@ -6220,20 +6345,14 @@
                 you</span
               >
             </div>
-            <h3>
-              The problem we're solving
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>The problem we're solving</h3>
             <p>
               Late payment is the number-one cash-flow pain for freelancers. Existing tools either
               do too much (full accounting suites) or too little (free invoicing with no follow-up),
               so chasing money still lands back on the freelancer. The opportunity is a focused tool
               that makes “who's paid, who hasn't, and nudging the rest” effortless.
             </p>
-            <h3>
-              Closest existing products
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>Closest existing products</h3>
             <p>Motir researched the space — here are the three closest, and where you'd differ:</p>
             <div class="scan">
               <div class="scan-row">
@@ -6256,10 +6375,7 @@
                 >
               </div>
             </div>
-            <h3>
-              How we've read your project
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>How we've read your project</h3>
             <p>
               From the conversation, we're treating this as a small commercial product aimed at a
               real market, delivered as a web app. Correct any of this in the chat and the rest of
@@ -6279,6 +6395,9 @@
           <div class="doc-foot2">
             <button class="btn btn-secondary">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
+            ><span class="gate-note"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock-open" /></svg> Continue =
+              next step, not sign-off — nothing locks until your plan generates</span
             ><span class="grow"></span
             ><button class="btn btn-primary btn-lg">
               Looks good — continue
@@ -6323,15 +6442,15 @@
             A focused first version: <b>send invoices, track who's paid, and chase the rest</b> —
             and nothing that gets in the way of that.
           </p>
-          <div class="doc-edithint">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> React in the chat
-            and Motir revises this — and anything it affects — together.
+          <div class="doc-readhint">
+            <svg class="ic-sm ro" viewBox="0 0 24 24"><use href="#i-message" /></svg>
+            <span
+              ><b>Read-only.</b> React in the chat and Motir revises this — and anything it affects
+              — together. There's nothing to edit by hand.</span
+            >
           </div>
           <div class="prose">
-            <h3>
-              In scope for v1
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>In scope for v1</h3>
             <ul>
               <li><b>Create &amp; send invoices</b> — a clean form, PDF, emailed to the client.</li>
               <li><b>Track paid / overdue</b> — at a glance, who has paid and who hasn't.</li>
@@ -6340,10 +6459,7 @@
               </li>
               <li><b>A simple client list</b> — the people you bill, in one place.</li>
             </ul>
-            <h3>
-              Out of scope — for now
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>Out of scope — for now</h3>
             <ul>
               <li class="no">Full accounting &amp; tax</li>
               <li class="no">Multiple users or teams</li>
@@ -6353,10 +6469,7 @@
               Leaving these out keeps v1 small enough to ship and focused on the one job that
               matters.
             </p>
-            <h3>
-              Key decisions
-              <svg class="ic-sm pen" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-            </h3>
+            <h3>Key decisions</h3>
             <p>
               A few choices shape the build — the ones you've pinned, and the ones you've left to
               Motir:
@@ -6383,6 +6496,9 @@
           <div class="doc-foot2">
             <button class="btn btn-secondary">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
+            ><span class="gate-note"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock-open" /></svg> Continue =
+              next step, not sign-off — nothing locks until your plan generates</span
             ><span class="grow"></span
             ><button class="btn btn-primary btn-lg">
               Looks good — continue
@@ -6425,9 +6541,13 @@
           <p class="doc-lead">
             Short answer: <b>yes</b> — a large, proven market, and nothing here is hard to build.
           </p>
-          <div class="doc-edithint">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> A quick reality
-            check before any work is generated. You asked Motir to run this from the chat.
+          <div class="doc-readhint">
+            <svg class="ic-sm ro" viewBox="0 0 24 24"><use href="#i-message" /></svg>
+            <span
+              ><b>Read-only.</b> A quick reality check before any work is generated — you asked
+              Motir to run it from the chat (you could have skipped it there). React in the chat to
+              refine it.</span
+            >
           </div>
           <div class="prose">
             <h3>The market</h3>
@@ -6460,6 +6580,9 @@
           <div class="doc-foot2">
             <button class="btn btn-secondary">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-undo" /></svg> Back</button
+            ><span class="gate-note"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-lock-open" /></svg> Continue =
+              next step, not sign-off — nothing locks until your plan generates</span
             ><span class="grow"></span
             ><button class="btn btn-primary btn-lg">
               Looks good — continue
@@ -6507,9 +6630,12 @@
             There's <b>real, loudly-voiced demand</b> — but it's unproven for your idea
             specifically, so it's worth proving before you commit to building.
           </p>
-          <div class="doc-edithint">
-            <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> What the market
-            looks like, and what Motir recommends doing about it.
+          <div class="doc-readhint">
+            <svg class="ic-sm ro" viewBox="0 0 24 24"><use href="#i-message" /></svg>
+            <span
+              ><b>Read-only.</b> What the market looks like, and what Motir recommends doing about
+              it. React in the chat to refine it — the one decision below is yours to make.</span
+            >
           </div>
           <div class="prose">
             <h3>The demand</h3>
@@ -6615,6 +6741,440 @@
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ G2 · THE GATE RHYTHM — Continue, then the conductor narrates the handoff and drafts the next tier ════════════ -->
+    <div class="panel-label">
+      G2 · The gate rhythm — each tier DRAFTS, you review it READ-ONLY, you press Continue; the
+      conductor then NARRATES the handoff and drafts the next tier. Optional tiers offer Skip in the
+      chat, before they're drafted.
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wz-bar">
+          <span class="l"
+            ><span class="brand"
+              ><span class="tile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg></span></span
+            ><span class="wz-proj">PayFlow · new project</span></span
+          >
+          <span class="r"
+            ><span class="wz-step">Pre-plan · building your direction</span
+            ><button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-history" /></svg> Save &amp; exit
+            </button></span
+          >
+        </div>
+        <div class="wz-body">
+          <section class="canvas dotted">
+            <div class="gate-banner">
+              <span class="gb-ic"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-check" /></svg
+              ></span>
+              <div>
+                <div class="gb-t">You continued from “Understanding your idea”</div>
+                <div class="gb-d">
+                  Motir has enough to draft <b>what we'll build</b> — it's writing it now.
+                  Continuing moved you <b>forward</b>; it didn't lock anything.
+                </div>
+              </div>
+            </div>
+            <div class="canvas-head">
+              <h3>Your project</h3>
+              <span class="mono">draft → review → continue → next</span>
+            </div>
+            <div class="vpipe">
+              <div class="idea-node">
+                <span class="stile accent" style="width: 32px; height: 32px"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
+                ></span>
+                <div>
+                  <div class="mono">Your idea</div>
+                  <div class="q">
+                    “A tool for freelancers to send invoices and track which clients have paid”
+                  </div>
+                </div>
+              </div>
+              <div class="conn v is-done"><span class="vline"></span></div>
+
+              <div class="active-node is-done">
+                <div class="an-head">
+                  <span class="stile sky"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-search" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Understanding your idea</b><span>what · who · competitors</span>
+                  </div>
+                  <span class="pill pill-pinned" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    Reviewed</span
+                  >
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-success)">
+                    <use href="#i-check" /></svg
+                  ><span
+                    ><b>Reviewed &amp; continued</b> — what · who · FreshBooks / Wave / Bonsai</span
+                  >
+                </div>
+              </div>
+              <div class="conn v is-active"><span class="vline"></span></div>
+
+              <div class="active-node">
+                <div class="an-head">
+                  <span
+                    class="stile"
+                    style="background: var(--el-tint-lavender); color: var(--el-accent-on-surface)"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
+                  ></span>
+                  <div class="an-t"><b>What we'll build</b><span>scope · key decisions</span></div>
+                  <span class="pill pill-drafting" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                    Drafting now…</span
+                  >
+                </div>
+                <div class="capt pending">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                  ><span
+                    >Writing in / out of scope and the key decisions — ready to review in a
+                    moment.</span
+                  >
+                </div>
+              </div>
+              <div class="conn v"><span class="vline"></span></div>
+
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
+              >
+                <span class="stile mint"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Is it worth building?</div>
+                  <span class="mono">Optional · you can skip it in the chat</span>
+                </div>
+              </div>
+              <div class="conn v"><span class="vline"></span></div>
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
+              >
+                <span class="stile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Design the look</div>
+                  <span class="mono">Up next · web only</span>
+                </div>
+              </div>
+            </div>
+          </section>
+          <aside class="rail" aria-label="Chat">
+            <div class="rail-head">
+              <span class="dot" aria-hidden="true"></span><span class="mono">Chat</span>
+            </div>
+            <div class="rail-body">
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  That's <b>Understanding your idea</b> set — what you're building, who it's for,
+                  and the closest products.
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  I've got enough to draft <b>what we'll build</b>. Writing it up now — I'll show
+                  you in a second.
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  <span class="typing" aria-label="Motir is drafting"><i></i><i></i><i></i></span>
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  After that I can run a quick <b>reality check</b> on the market — worth it, or
+                  skip ahead to design?
+                </div>
+              </div>
+            </div>
+            <div style="margin: 0 12px 6px; display: flex; gap: 7px">
+              <button class="btn btn-secondary btn-sm" style="flex: 1">Run the check</button>
+              <button class="btn btn-ghost btn-sm" style="flex: 1">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg> Skip it
+              </button>
+            </div>
+            <div
+              style="
+                margin: 0 12px 8px;
+                font-family: var(--font-sans);
+                font-size: 10.5px;
+                color: var(--el-text-muted);
+              "
+            >
+              A skip is a chat decision — made <b>before</b> a doc is drafted. A doc you're already
+              reading has nothing to skip.
+            </div>
+            <div class="composer">
+              <span class="ph-text">Reply, or ask a question…</span
+              ><span class="send"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-send" /></svg
+              ></span>
+            </div>
+          </aside>
+        </div>
+        <div class="wz-note" style="margin: 0 18px 16px">
+          The rhythm repeats for every tier: Motir <b>drafts</b> it, you <b>read</b> it (it's
+          read-only), you press <b>Continue</b>, and Motir <b>narrates</b> the handoff before
+          drafting the next. Continue is just “next step” — <b>nothing is locked</b> until your plan
+          is generated. Optional tiers (the two checks, design) are <b>skipped here in the chat</b>,
+          before they're drafted.
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ G3 · GOING BACK — a later note attributed UPSTREAM sends you back; cascade is downstream-only ════════════ -->
+    <div class="panel-label">
+      G3 · Going back — a chat reaction at a LATER gate that Motir attributes to an UPSTREAM tier
+      sends you back to re-review that tier, then forward. The cascade is downstream-only; nothing's
+      locked.
+    </div>
+    <div class="panel">
+      <div class="surface">
+        <div class="wz-bar">
+          <span class="l"
+            ><span class="brand"
+              ><span class="tile"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg></span></span
+            ><span class="wz-proj">PayFlow · new project</span></span
+          >
+          <span class="r"
+            ><span class="wz-step">Pre-plan · revisiting your direction</span
+            ><button class="btn btn-ghost btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-history" /></svg> Save &amp; exit
+            </button></span
+          >
+        </div>
+        <div class="wz-body">
+          <section class="canvas dotted">
+            <div class="gate-banner back">
+              <span class="gb-ic"
+                ><svg class="ic" viewBox="0 0 24 24"><use href="#i-corner-up-left" /></svg
+              ></span>
+              <div>
+                <div class="gb-t">Going back to “Understanding your idea”</div>
+                <div class="gb-d">
+                  Your note changed <b>who it's for</b> — that's part of the first step, upstream of
+                  everything else. Motir is revisiting it, then <b>refreshing every step after</b>.
+                  Nothing's locked, so this is safe.
+                </div>
+              </div>
+            </div>
+            <div class="canvas-head">
+              <h3>Your project</h3>
+              <span class="mono">downstream-only · upstream is never rewritten</span>
+            </div>
+            <div class="vpipe">
+              <div class="idea-node">
+                <span class="stile accent" style="width: 32px; height: 32px"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-bulb" /></svg
+                ></span>
+                <div>
+                  <div class="mono">Your idea</div>
+                  <div class="q">
+                    “A tool for freelancers to send invoices and track which clients have paid”
+                  </div>
+                </div>
+              </div>
+              <div class="conn v is-done"><span class="vline"></span></div>
+
+              <div class="active-node">
+                <div class="an-head">
+                  <span class="stile sky"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-search" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Understanding your idea</b><span>what · who · competitors</span>
+                  </div>
+                  <span class="pill pill-revisit" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-corner-up-left" /></svg>
+                    Revisiting</span
+                  >
+                </div>
+                <div class="capt">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24" style="color: var(--el-warning)">
+                    <use href="#i-alert" /></svg
+                  ><span
+                    ><b>Who it's for</b> → now includes <b>small agencies</b>, not just solo
+                    freelancers.</span
+                  >
+                </div>
+              </div>
+              <div class="conn v labeled">
+                <span class="vline"></span>
+                <span class="cflow"
+                  ><svg viewBox="0 0 24 24"><use href="#i-rotate" /></svg> re-derives ↓</span
+                >
+              </div>
+
+              <div class="active-node">
+                <div class="an-head">
+                  <span
+                    class="stile"
+                    style="background: var(--el-tint-lavender); color: var(--el-accent-on-surface)"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shapes" /></svg
+                  ></span>
+                  <div class="an-t"><b>What we'll build</b><span>scope · key decisions</span></div>
+                  <span class="pill pill-refresh" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Will
+                    refresh</span
+                  >
+                </div>
+                <div class="capt pending">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg
+                  ><span>Scope re-derives from the wider audience — you'll re-review it next.</span>
+                </div>
+              </div>
+              <div class="conn v labeled">
+                <span class="vline"></span>
+                <span class="cflow"
+                  ><svg viewBox="0 0 24 24"><use href="#i-rotate" /></svg> ↓</span
+                >
+              </div>
+
+              <div class="active-node">
+                <div class="an-head">
+                  <span class="stile mint"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Is it worth building?</b><span>market · build risk</span>
+                  </div>
+                  <span class="pill pill-refresh" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Will
+                    refresh</span
+                  >
+                </div>
+              </div>
+              <div class="conn v labeled">
+                <span class="vline"></span>
+                <span class="cflow"
+                  ><svg viewBox="0 0 24 24"><use href="#i-rotate" /></svg> ↓</span
+                >
+              </div>
+
+              <div class="active-node">
+                <div class="an-head">
+                  <span
+                    class="stile"
+                    style="background: var(--el-tint-peach); color: var(--el-warning)"
+                    ><svg class="ic-lg" viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                  ></span>
+                  <div class="an-t">
+                    <b>Will people want it?</b><span>demand · competition</span>
+                  </div>
+                  <span class="pill pill-neutral" style="margin-left: auto"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-map-pin" /></svg> You were
+                    here</span
+                  >
+                </div>
+                <div class="capt pending">
+                  <svg class="ic-sm cdot" viewBox="0 0 24 24"><use href="#i-rotate" /></svg
+                  ><span
+                    >The note came from this gate — it'll refresh too, after the steps above.</span
+                  >
+                </div>
+              </div>
+              <div class="conn v"><span class="vline"></span></div>
+
+              <div
+                class="snode is-upcoming"
+                style="flex-direction: row; align-items: center; gap: 11px"
+              >
+                <span class="stile"
+                  ><svg class="ic" viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                ></span>
+                <div class="stage-meta" style="flex: 1">
+                  <div class="stitle">Design the look</div>
+                  <span class="mono">Untouched · still ahead</span>
+                </div>
+              </div>
+            </div>
+          </section>
+          <aside class="rail" aria-label="Chat">
+            <div class="rail-head">
+              <span class="dot" aria-hidden="true"></span><span class="mono">Chat</span>
+            </div>
+            <div class="rail-body">
+              <div class="msg me">
+                <span class="av user" aria-hidden="true">Y</span>
+                <div class="bubble">
+                  Actually this should work for small agencies too — not just solo freelancers.
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  That changes <b>who it's for</b> — which lives in <b>Understanding your idea</b>,
+                  the step everything else builds on.
+                </div>
+              </div>
+              <div class="msg">
+                <span class="av bot" aria-hidden="true">M</span>
+                <div class="bubble">
+                  I'll take you <b>back to re-review it</b>, then refresh what we'll build and the
+                  checks after it. A later note never rewrites an earlier step — only the steps
+                  <b>downstream</b>.
+                </div>
+              </div>
+            </div>
+            <div style="margin: 0 12px 6px">
+              <button class="btn btn-primary btn-sm btn-block">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-corner-up-left" /></svg> Go
+                back &amp; re-review
+              </button>
+            </div>
+            <div
+              style="
+                margin: 0 12px 8px;
+                font-family: var(--font-sans);
+                font-size: 10.5px;
+                color: var(--el-text-muted);
+                display: flex;
+                align-items: flex-start;
+                gap: 5px;
+              "
+            >
+              <svg
+                class="ic-sm"
+                viewBox="0 0 24 24"
+                style="color: var(--el-text-faint); flex: none; margin-top: 1px"
+              >
+                <use href="#i-lock-open" />
+              </svg>
+              Nothing's locked until your plan generates — going back is always safe.
+            </div>
+            <div class="composer">
+              <span class="ph-text">Reply, or ask a question…</span
+              ><span class="send"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-send" /></svg
+              ></span>
+            </div>
+          </aside>
+        </div>
+        <div class="wz-note" style="margin: 0 18px 16px">
+          The chat is the <b>only</b> way to change anything — there's no inline editing. Motir
+          reads each note, works out which step it touches (even one you've already passed), sends
+          you back to <b>re-review</b> that step, and replays the gates forward. The cascade only
+          ever flows <b>downstream</b>: a note at the market check can change your idea, but a note
+          about your idea never edits a step before it.
         </div>
       </div>
     </div>
@@ -7335,6 +7895,39 @@
           <circle cx="12" cy="16" r="1" />
           <rect x="3" y="10" width="18" height="12" rx="2" />
           <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+        </g>
+        <g
+          id="i-lock-open"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="16" r="1" />
+          <rect x="3" y="10" width="18" height="12" rx="2" />
+          <path d="M7 10V7a5 5 0 0 1 9.9-1" />
+        </g>
+        <g
+          id="i-message"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+        </g>
+        <g
+          id="i-corner-up-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 14 4 9 9 4" />
+          <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
         </g>
         <g
           id="i-circle-dot"
