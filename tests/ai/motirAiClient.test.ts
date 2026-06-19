@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { submitJob, getJob, parseSseFrame, type RequestActor } from '@/lib/ai/motirAiClient';
+import {
+  submitJob,
+  getJob,
+  getPreplanState,
+  parseSseFrame,
+  type RequestActor,
+} from '@/lib/ai/motirAiClient';
 import { verifyJobToken } from '@/lib/ai/jobToken';
 import {
   MotirAiConfigError,
@@ -150,6 +156,77 @@ describe('getJob', () => {
         ),
     );
     await expect(getJob('job_x')).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
+  });
+});
+
+describe('getPreplanState', () => {
+  const query = { coreWorkspaceId: 'ws_1', coreProjectId: 'pj_1' };
+
+  it('GETs /v1/preplan with the core ids + service credential, returns the parsed state', async () => {
+    const state = {
+      session: {
+        aiProjectId: 'ai_1',
+        classification: 'startup',
+        platform: 'web',
+        docSkipSet: ['feasibility'],
+        designStarter: 'next-prisma-vercel',
+        validationTiming: 'standard',
+        currentGate: 'vision',
+        conversation: [{ role: 'user', content: 'hi' }],
+        status: 'active',
+        createdAt: '2026-06-19T00:00:00.000Z',
+        updatedAt: '2026-06-19T00:00:00.000Z',
+      },
+      docs: [
+        {
+          kind: 'discovery',
+          versions: [
+            { version: 1, changeReason: null, changeKind: 'created', diff: null, createdAt: '…' },
+            {
+              version: 2,
+              changeReason: 'enterprise audience',
+              changeKind: 'direct_revision',
+              diff: [{ path: 'problem.gap', kind: 'changed', before: 'a', after: 'b' }],
+              createdAt: '…',
+            },
+          ],
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(state));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await getPreplanState(query);
+
+    const [reqUrl, init] = fetchMock.mock.calls[0]!;
+    const u = new URL(reqUrl as string);
+    expect(u.pathname).toBe('/v1/preplan');
+    expect(u.searchParams.get('coreWorkspaceId')).toBe('ws_1');
+    expect(u.searchParams.get('coreProjectId')).toBe('pj_1');
+    expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer svc-token' });
+    expect(got).toEqual(state);
+  });
+
+  it('returns the empty state for a not-yet-started project (not an error)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ session: null, docs: [] })));
+    expect(await getPreplanState(query)).toEqual({ session: null, docs: [] });
+  });
+
+  it('maps a 400 to a typed bad-request error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ type: 't', title: 'bad', status: 400, code: 'validation_error' }, 400),
+        ),
+    );
+    await expect(getPreplanState(query)).rejects.toBeInstanceOf(MotirAiBadRequestError);
+  });
+
+  it('maps a transport failure to MotirAiUnavailableError', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    await expect(getPreplanState(query)).rejects.toBeInstanceOf(MotirAiUnavailableError);
   });
 });
 

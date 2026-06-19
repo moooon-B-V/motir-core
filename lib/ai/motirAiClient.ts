@@ -21,8 +21,10 @@ import type {
   JobContextBag,
   JobKind,
   JobStreamEvent,
+  PreplanStateQuery,
   Problem,
   RawJobResponse,
+  RawPreplanStateResponse,
   RawUsageResponse,
   RequestEnvelope,
   Tenant,
@@ -172,6 +174,31 @@ export async function getOrgUsage(query: UsageQuery): Promise<RawUsageResponse> 
   }
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawUsageResponse;
+}
+
+// GET /v1/preplan — the resumable pre-plan read surface (Subtask 7.3.25): the
+// session decisions/position/transcript + each artifact's forward revision log /
+// diffs. Read-through: the caller (the 7.3.5 gate / 7.3.9 resume) has already
+// gated the actor + resolved the core ids. Keyed by (coreWorkspaceId,
+// coreProjectId); motir-ai resolves its AiProject READ-ONLY and returns the empty
+// state for a not-yet-started project (never a 404). A transport failure / non-2xx
+// maps to a typed error the caller renders as the error/retry state.
+export async function getPreplanState(query: PreplanStateQuery): Promise<RawPreplanStateResponse> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreWorkspaceId: query.coreWorkspaceId,
+    coreProjectId: query.coreProjectId,
+  });
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/preplan?${params.toString()}`, {
+      headers: authHeaders(serviceToken),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPreplanStateResponse;
 }
 
 // GET /v1/jobs/:id/stream — yield SSE frames (status / done / error) as they
