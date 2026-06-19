@@ -87,7 +87,12 @@ export function IssueListTable({
   );
 
   const table = (
-    <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
+    <div
+      // surface-material hook (glass frost / aurora glow); inert under
+      // non-material styles. 7.3.38.
+      data-surface="card"
+      className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
+    >
       <div
         role="table"
         aria-label={t('issues.list.tableLabel')}

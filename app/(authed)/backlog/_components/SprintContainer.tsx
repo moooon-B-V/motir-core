@@ -105,6 +105,9 @@ export function SprintContainer({
         state: stateLabel,
         count: sprint.issueCount,
       })}
+      // surface-material hook (glass frost / aurora glow); inert under
+      // non-material styles. 7.3.38.
+      data-surface="card"
       className="rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-subtle)"
     >
       <div className="flex items-center gap-2 border-b border-(--el-border) px-(--spacing-card-padding) py-(--spacing-control-y)">
