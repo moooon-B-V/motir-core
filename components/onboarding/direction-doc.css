@@ -1,0 +1,424 @@
+/* Direction-doc render component (7.3.6 / MOTIR-834) — the READ-ONLY editorial
+   styling for an onboarding tier write-up. Translates the onboarding design's
+   doc styles (design/ai-chat/onboarding.mock.html, screens D–G) onto the
+   STANDARD Markdown elements `renderMarkdown` emits, so a freeform `contentMd`
+   reads as a clean editorial document. Colour flows through `--el-*` only; the
+   per-tier accent arrives as `--dd-accent` (set inline to a `--el-*` token by
+   DirectionDocView). Shape flows through the element-semantic shape tokens. */
+
+.dd-doc {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* kicker — mono eyebrow + tier-colour dot (+ optional tag) */
+.dd-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--el-text-faint);
+  margin-bottom: 13px;
+}
+.dd-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--dd-accent, var(--el-accent-on-surface));
+  flex: none;
+}
+.dd-opt {
+  color: var(--el-text-faint);
+  border: 1px dashed var(--el-border-strong);
+  border-radius: var(--radius-badge);
+  padding: 1px 6px;
+  font-size: 8.5px;
+}
+
+/* plain-language serif title (replaces the contentMd's internal `# Title`) */
+.dd-title {
+  font-family: var(--font-serif);
+  font-size: 31px;
+  font-weight: 700;
+  color: var(--el-text);
+  line-height: 1.1;
+  margin: 0 0 4px;
+}
+
+/* read-only "react in the chat" hint — never a pencil (conversation-only model) */
+.dd-readhint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--el-text-muted);
+  padding: 11px 0 4px;
+  border-bottom: 1px solid var(--el-border);
+  margin-bottom: 8px;
+}
+.dd-readhint svg {
+  color: var(--el-accent-on-surface);
+  flex: none;
+}
+.dd-readhint b {
+  color: var(--el-text-secondary);
+  font-weight: 600;
+}
+
+/* ── the Markdown body, styled editorially ───────────────────────────────── */
+.dd-prose > :first-child {
+  margin-top: 0;
+}
+.dd-prose h1,
+.dd-prose h2 {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--el-text);
+  margin: 30px 0 10px;
+  line-height: 1.2;
+}
+.dd-prose h3 {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--el-text);
+  margin: 26px 0 9px;
+}
+.dd-prose h4,
+.dd-prose h5,
+.dd-prose h6 {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text);
+  margin: 18px 0 6px;
+}
+.dd-prose p {
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--el-text-secondary);
+  margin: 0 0 12px;
+}
+.dd-prose strong {
+  color: var(--el-text);
+  font-weight: 600;
+}
+.dd-prose a {
+  color: var(--el-link);
+}
+.dd-prose ul,
+.dd-prose ol {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.dd-prose li {
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--el-text-secondary);
+  padding: 4px 0 4px 24px;
+  position: relative;
+}
+.dd-prose li::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 13px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--dd-accent, var(--el-accent-on-surface));
+}
+.dd-prose ol {
+  counter-reset: dd-ol;
+}
+.dd-prose ol > li {
+  counter-increment: dd-ol;
+}
+.dd-prose ol > li::before {
+  content: counter(dd-ol);
+  background: none;
+  left: 2px;
+  top: 4px;
+  width: auto;
+  height: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dd-accent, var(--el-accent-on-surface));
+}
+.dd-prose li b,
+.dd-prose li strong {
+  color: var(--el-text);
+  font-weight: 600;
+}
+.dd-prose blockquote {
+  margin: 0 0 12px;
+  padding: 4px 0 4px 16px;
+  border-left: 3px solid var(--el-border-strong);
+  color: var(--el-text-muted);
+}
+/* GFM tables (e.g. a competitive scan / roadmap) → a clean bordered card */
+.dd-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  margin: 6px 0 14px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+.dd-prose th,
+.dd-prose td {
+  text-align: left;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--el-border);
+  color: var(--el-text-secondary);
+  line-height: 1.5;
+  vertical-align: top;
+}
+.dd-prose th {
+  font-weight: 700;
+  color: var(--el-text);
+  background: var(--el-surface-soft);
+}
+.dd-prose tbody tr:last-child td {
+  border-bottom: none;
+}
+.dd-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--el-muted);
+  border-radius: var(--radius-control);
+  padding: 1px 5px;
+}
+.dd-prose pre {
+  background: var(--el-surface-soft);
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  overflow: auto;
+  margin: 0 0 14px;
+}
+.dd-prose pre code {
+  background: none;
+  padding: 0;
+}
+.dd-prose hr {
+  border: none;
+  border-top: 1px solid var(--el-border);
+  margin: 22px 0;
+}
+
+/* ── surfaced "Open questions" callout ───────────────────────────────────── */
+.dd-openq {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  background: var(--el-tint-peach);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+  margin: 18px 0 4px;
+}
+.dd-openq-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  background: var(--el-surface);
+  color: var(--el-text-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.dd-openq-title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text-strong);
+  margin-bottom: 4px;
+}
+/* the questions render through the same prose styles, denser */
+.dd-openq .dd-prose li,
+.dd-openq .dd-prose p {
+  color: var(--el-text-strong);
+  font-size: 13.5px;
+}
+.dd-openq .dd-prose > :last-child {
+  margin-bottom: 0;
+}
+
+/* ── cross-links to the other produced tiers ─────────────────────────────── */
+.dd-xlinks {
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border);
+}
+.dd-xlinks-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--el-text-faint);
+  margin-bottom: 9px;
+}
+.dd-xlinks-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dd-xlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--el-text-secondary);
+  background: var(--el-surface);
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-control);
+  padding: var(--spacing-control-y) var(--spacing-control-x);
+}
+button.dd-xlink {
+  cursor: pointer;
+}
+button.dd-xlink:hover {
+  border-color: var(--el-border-strong);
+  color: var(--el-text);
+}
+.dd-xlink .dd-xlink-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+
+/* ── feature catalog folded into the vision tier ─────────────────────────── */
+.dd-catalog {
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid var(--el-border);
+}
+.dd-catalog-h {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--el-text);
+  margin: 0 0 4px;
+}
+.dd-catalog-sub {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--el-text-muted);
+  margin: 0 0 18px;
+}
+.dd-cat {
+  margin-bottom: 20px;
+}
+.dd-cat-title {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text);
+  margin: 0 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dd-cat-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--el-text-faint);
+}
+.dd-feat {
+  border: 1px solid var(--el-border);
+  border-radius: var(--radius-card);
+  padding: 13px 15px;
+  margin-bottom: 8px;
+  background: var(--el-surface);
+}
+.dd-feat-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.dd-feat-name {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--el-text);
+}
+.dd-feat-desc {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--el-text-muted);
+}
+.dd-feat-desc p:last-child {
+  margin-bottom: 0;
+}
+.dd-phase {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--el-text-strong);
+  background: var(--el-muted);
+  border-radius: var(--radius-badge);
+  padding: 1px 7px;
+}
+
+/* glossary */
+.dd-glossary {
+  margin-top: 22px;
+}
+.dd-gloss-group {
+  margin-bottom: 16px;
+}
+.dd-gloss-term {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text);
+}
+.dd-gloss-aka {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--el-text-faint);
+  margin-left: 6px;
+}
+.dd-gloss-def {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--el-text-muted);
+  margin: 2px 0 0;
+}
+.dd-gloss-eg {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--el-text-faint);
+  margin-top: 3px;
+}
+.dd-gloss-eg b {
+  color: var(--el-text-secondary);
+  font-weight: 600;
+}
+.dd-gloss-item + .dd-gloss-item {
+  margin-top: 11px;
+}
