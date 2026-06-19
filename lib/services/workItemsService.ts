@@ -2495,7 +2495,9 @@ export const workItemsService = {
    * `ProjectAccessDeniedError`, which the route renders as the not-found panel —
    * never an existence leak), then resolves assignee/reporter names + status /
    * due / estimate labels server-side so the client panel stays presentational.
-   * No new query — just a shaped slice of data already read for the detail page.
+   * The full field set (8.8.8) rides the SAME detail read; the only extra read
+   * is the committed sprint's NAME (`sprintId` is on the detail item but its
+   * name is not), and only when the item is actually in a sprint.
    */
   async getQuickView(
     projectId: string,
@@ -2508,7 +2510,16 @@ export const workItemsService = {
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
     ]);
-    return toQuickViewData(detail, members, locale);
+    // Resolve the committed sprint's display name (8.8.8) — the one rail field
+    // not carried by the detail aggregate. Epics span sprints, so the rail omits
+    // the field for them (Jira-faithful, mirroring the detail rail); skip the
+    // lookup for an epic or a backlog item.
+    let sprintName: string | null = null;
+    if (detail.item.sprintId && detail.item.kind !== 'epic') {
+      const sprint = await sprintRepository.findById(detail.item.sprintId, ctx.workspaceId);
+      sprintName = sprint?.name ?? null;
+    }
+    return toQuickViewData(detail, members, locale, sprintName);
   },
 
   /**

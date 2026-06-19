@@ -1,16 +1,39 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ArrowRight, Clock, SearchX } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import {
+  ArrowRight,
+  Bot,
+  Calendar,
+  ChevronRight,
+  Clock,
+  Component as ComponentIcon,
+  Gauge,
+  Goal,
+  SearchX,
+  User,
+} from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
+import { ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
+import { WORK_ITEM_TYPE_META } from '@/lib/issues/workItemTypeMeta';
+import { isTypeableKind } from '@/lib/issues/executorDefaults';
+import { labelTint } from '@/lib/labels/labelTint';
+import { formatDate } from '@/lib/utils/datetime';
+import type { ExecutorDto } from '@/lib/dto/workItems';
+import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
+import type { Locale } from '@/lib/i18n/locales';
 import type { QuickViewData } from '@/lib/dto/quickView';
+
+// The bot/person glyph for the Executor rail row (mirrors the detail rail's
+// ExecutorIndicator, condensed) — a faint value glyph, not a coloured chip.
+const EXECUTOR_GLYPH: Record<ExecutorDto, typeof Bot> = { coding_agent: Bot, human: User };
 
 // The presentational quick-view PANEL (Subtask 2.5.19) — the modal body the
 // IssueQuickView frame wraps, per design/work-items/quick-view.mock.html. Pure
@@ -76,6 +99,15 @@ function Sk({ className }: { className?: string }) {
 
 export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const t = useTranslations('issueViews');
+  const tl = useTranslations('labels');
+  const locale = useLocale() as Locale;
+  // The expanded rail's empty custom fields hide behind a read-only "Show more
+  // fields (N)" disclosure (8.8.8, mirroring the detail rail 5.3.7).
+  const [showAllCustom, setShowAllCustom] = useState(false);
+  const numberFormat = useMemo(
+    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
+    [locale],
+  );
   // A named readiness blocker SWAPS the peek (push `?peek=<blockerKey>`, staying
   // in-list) rather than navigating to the full page — the 2.5.20 design. Build
   // the href the same way QuickViewTrigger opens a peek: preserve every other
@@ -86,6 +118,59 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     const params = new URLSearchParams(searchParams?.toString() ?? '');
     params.set('peek', identifier);
     return `${pathname}?${params.toString()}`;
+  };
+
+  const mutedNone = <span className="text-(--el-text-muted)">{t('none')}</span>;
+
+  // Read-only custom-field value (8.8.8) — the detail rail's per-type value
+  // grammar (CustomFieldsSection.renderValue, 5.3.7), condensed and WITHOUT any
+  // editor (the peek has one write path: Open full page). `user`/`option`/`date`
+  // arrive resolved from the server, so this never re-derives a label from an id.
+  const renderCustomValue = (field: CustomFieldWithValueDto): ReactNode => {
+    const v = field.value;
+    if (!v) return mutedNone;
+    switch (field.fieldType) {
+      case 'text':
+        return (
+          <span className="truncate" title={v.text ?? undefined}>
+            {v.text}
+          </span>
+        );
+      case 'number':
+        return v.number != null ? numberFormat.format(v.number) : mutedNone;
+      case 'date':
+        return v.date ? (
+          <>
+            <Calendar className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
+            <span className="truncate">{formatDate(v.date, locale)}</span>
+          </>
+        ) : (
+          mutedNone
+        );
+      case 'select':
+        return v.option ? (
+          <span className="truncate">
+            {v.option.label}
+            {v.option.archived ? (
+              <span className="text-(--el-text-secondary) italic">
+                {' '}
+                {t('customFields.archivedMark')}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          mutedNone
+        );
+      case 'user':
+        return v.user ? (
+          <>
+            <Avatar name={v.user.name} />
+            <span className="truncate">{v.user.name}</span>
+          </>
+        ) : (
+          mutedNone
+        );
+    }
   };
 
   // ── NOT FOUND / NO ACCESS (panel 4) ──────────────────────────────────────
@@ -138,8 +223,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             <Sk className="mb-2.5 h-3.5 w-full" />
             <Sk className="h-3.5 w-4/5" />
           </div>
-          <dl className="flex min-w-0 flex-col gap-5 border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
-            {[0, 1, 2, 3].map((i) => (
+          {/* The skeleton holds the EXPANDED rail's height (8.8.8) so the modal
+              doesn't resize when the full field set lands. */}
+          <dl className="flex min-w-0 flex-col gap-5 overflow-y-auto border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
               <div key={i} className="flex flex-col gap-1.5">
                 <Sk className="h-2.5 w-14" />
                 <Sk className="h-5 w-28 rounded-(--radius-badge)" />
@@ -153,6 +240,18 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
 
   // ── READY (panel 2) — the populated peek ──────────────────────────────────
   const { data } = props;
+  // Custom fields split the detail-rail way (5.3.7): the VALUED ones render as
+  // rows, the empty ones hide behind the read-only "Show more fields (N)".
+  const valuedCustom = data.customFields.filter((f) => f.value !== null);
+  const emptyCustom = data.customFields.filter((f) => f.value === null);
+  // Type/Executor are leaf-only (epic/story have no work type — mirror the
+  // detail rail). Sprint is omitted for epics (they span sprints, Jira-faithful);
+  // its empty label is status-aware (a done/cancelled item is excluded from the
+  // backlog → "None", otherwise "Backlog"), matching CoreFieldsPanel.
+  const showWorkType = isTypeableKind(data.kind);
+  const TypeGlyph = data.type ? WORK_ITEM_TYPE_META[data.type].icon : null;
+  const ExecutorGlyph = data.executor ? EXECUTOR_GLYPH[data.executor] : null;
+  const sprintEmptyLabel = data.statusCategory === 'done' ? t('none') : t('backlog');
   return (
     <>
       <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
@@ -212,10 +311,52 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </p>
         </div>
 
-        {/* Rail — the detail page's core fields, condensed. */}
+        {/* Rail — the detail page's FULL core-field set (8.8.8), condensed and
+            read-only, in detail.png order. The rail scrolls independently inside
+            the fixed-height modal; built-in fields always render (muted "None"
+            when empty), custom fields split valued / "Show more". */}
         <dl className="flex min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
           <RailField label={t('status')}>
             <StatusValue category={data.statusCategory} label={data.statusLabel} />
+          </RailField>
+
+          {/* Work Type + Executor — leaf-only (Story 2.7). The faint value glyph
+              follows the Estimate/Due grammar (NOT the coloured type chip — the
+              dense rail stays quiet, per the 8.8.4 design). The kind is already
+              in the header (IssueTypeIcon), so the rail adds only the work type. */}
+          {showWorkType ? (
+            <>
+              <RailField label={t('type')}>
+                {data.type && TypeGlyph ? (
+                  <>
+                    <TypeGlyph
+                      className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)"
+                      aria-hidden
+                    />
+                    <span className="truncate">{tl(`workItemType.${data.type}`)}</span>
+                  </>
+                ) : (
+                  <span className="text-(--el-text-muted)">{t('none')}</span>
+                )}
+              </RailField>
+              <RailField label={t('executor')}>
+                {data.executor && ExecutorGlyph ? (
+                  <>
+                    <ExecutorGlyph
+                      className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)"
+                      aria-hidden
+                    />
+                    <span className="truncate">{tl(`executor.${data.executor}`)}</span>
+                  </>
+                ) : (
+                  <span className="text-(--el-text-muted)">{t('none')}</span>
+                )}
+              </RailField>
+            </>
+          ) : null}
+
+          <RailField label={t('priority')}>
+            <PriorityValue priority={data.priority} />
           </RailField>
           <RailField label={t('assignee')}>
             <AssigneeValue name={data.assigneeName} />
@@ -223,26 +364,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <RailField label={t('reporter')}>
             <Avatar name={data.reporterName} />
             <span className="truncate">{data.reporterName}</span>
-          </RailField>
-          <RailField label={t('priority')}>
-            <PriorityValue priority={data.priority} />
-          </RailField>
-          <RailField label={t('dueDate')}>
-            {data.dueLabel ? (
-              <span className="truncate">{data.dueLabel}</span>
-            ) : (
-              <span className="text-(--el-text-muted)">{t('noDueDate')}</span>
-            )}
-          </RailField>
-          <RailField label={t('estimate')}>
-            {data.estimateLabel ? (
-              <>
-                <Clock className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                <span className="truncate">{data.estimateLabel}</span>
-              </>
-            ) : (
-              <span className="text-(--el-text-muted)">{t('noEstimate')}</span>
-            )}
           </RailField>
           <RailField label={t('parent')}>
             {data.parent ? (
@@ -258,6 +379,137 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <span className="text-(--el-text-muted)">{t('none')}</span>
             )}
           </RailField>
+
+          {/* Labels — coloured chips. Reuses the SHIPPED ValueChip + name-hash
+              labelTint (5.4.8), NOT a fixed lavender: the labelTint decision
+              (product owner, 2026-06-10) guarantees a label renders the SAME
+              colour on every surface, so the peek and the detail rail match. */}
+          <RailField label={tl('labelsField')}>
+            {data.labels.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {data.labels.map((l) => (
+                  <ValueChip
+                    key={l.id}
+                    option={{ id: l.id, label: l.name, tint: labelTint(l.name) }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <span className="text-(--el-text-muted)">{t('noLabels')}</span>
+            )}
+          </RailField>
+
+          {/* Components — neutral chips with the component glyph (5.4.8). */}
+          <RailField label={tl('componentsField')}>
+            {data.components.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {data.components.map((c) => (
+                  <ValueChip
+                    key={c.id}
+                    option={{ id: c.id, label: c.name, glyph: ComponentIcon }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <span className="text-(--el-text-muted)">{t('noComponents')}</span>
+            )}
+          </RailField>
+
+          <RailField label={t('dueDate')}>
+            {data.dueLabel ? (
+              <span className="truncate">{data.dueLabel}</span>
+            ) : (
+              <span className="text-(--el-text-muted)">{t('noDueDate')}</span>
+            )}
+          </RailField>
+
+          {/* Sprint — omitted for epics (they span sprints). Goal glyph + name,
+              or the status-aware empty label (Backlog / None). */}
+          {data.kind !== 'epic' ? (
+            <RailField label={t('sprint')}>
+              {data.sprintName ? (
+                <>
+                  <Goal className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
+                  <span className="truncate">{data.sprintName}</span>
+                </>
+              ) : (
+                <span className="text-(--el-text-muted)">{sprintEmptyLabel}</span>
+              )}
+            </RailField>
+          ) : null}
+
+          {/* Story points — the agile estimate, distinct from the TIME estimate. */}
+          <RailField label={t('storyPoints')}>
+            {data.storyPoints != null ? (
+              <>
+                <Gauge className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
+                <span className="truncate">{numberFormat.format(data.storyPoints)}</span>
+              </>
+            ) : (
+              <span className="text-(--el-text-muted)">{t('none')}</span>
+            )}
+          </RailField>
+
+          <RailField label={t('estimate')}>
+            {data.estimateLabel ? (
+              <>
+                <Clock className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
+                <span className="truncate">{data.estimateLabel}</span>
+              </>
+            ) : (
+              <span className="text-(--el-text-muted)">{t('noEstimate')}</span>
+            )}
+          </RailField>
+
+          {/* Custom fields (5.3.7) — valued rows, then the empty ones behind a
+              read-only "Show more fields (N)" disclosure. A faint divider sets
+              the cluster off from the built-ins. */}
+          {data.customFields.length > 0 ? (
+            <>
+              <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
+              {valuedCustom.map((f) => (
+                <RailField key={f.id} label={f.label}>
+                  {renderCustomValue(f)}
+                </RailField>
+              ))}
+              {emptyCustom.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={showAllCustom}
+                    onClick={() => setShowAllCustom((s) => !s)}
+                    className="flex items-center gap-1.5 self-start rounded-(--radius-control) px-1 py-1 font-sans text-xs font-medium text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                  >
+                    <ChevronRight
+                      className={`h-3.5 w-3.5 shrink-0 text-(--el-text-faint) transition-transform ${showAllCustom ? 'rotate-90' : ''}`}
+                      aria-hidden
+                    />
+                    {showAllCustom
+                      ? t('customFields.showFewer')
+                      : t('customFields.showMore', { count: emptyCustom.length })}
+                  </button>
+                  {showAllCustom
+                    ? emptyCustom.map((f) => (
+                        <RailField key={f.id} label={f.label}>
+                          {renderCustomValue(f)}
+                        </RailField>
+                      ))
+                    : null}
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {/* Created / Updated — the quiet audit line at the foot. */}
+          <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
+          <div className="flex flex-col gap-1 font-sans text-xs text-(--el-text-muted)">
+            <span>
+              {t('created')} {formatDate(data.createdAt, locale)}
+            </span>
+            <span>
+              {t('updated')} {formatDate(data.updatedAt, locale)}
+            </span>
+          </div>
         </dl>
       </div>
     </>

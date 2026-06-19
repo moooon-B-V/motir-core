@@ -45,11 +45,20 @@ const DATA: QuickViewData = {
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',
   descriptionMd: 'Sign in with email and password.',
+  type: null,
+  executor: null,
   assigneeName: 'Marco Ortiz',
   reporterName: 'Alice Chen',
   priority: 'medium',
+  labels: [],
+  components: [],
   dueLabel: 'Jun 12, 2026',
+  sprintName: null,
+  storyPoints: null,
   estimateLabel: '8h',
+  customFields: [],
+  createdAt: '2026-06-02T00:00:00.000Z',
+  updatedAt: '2026-06-10T00:00:00.000Z',
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
   readiness: null,
 };
@@ -87,6 +96,74 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
     expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe(
       '/issues/PROD-7',
     );
+  });
+});
+
+describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
+  // A fully-populated leaf (subtask) so the leaf-only Type/Executor rows render
+  // alongside labels, components, sprint, story points, and the audit line.
+  const FULL: QuickViewData = {
+    ...DATA,
+    identifier: 'PROD-9',
+    kind: 'subtask',
+    type: 'code',
+    executor: 'coding_agent',
+    labels: [
+      { id: 'l1', name: 'auth' },
+      { id: 'l2', name: 'security' },
+    ],
+    components: [{ id: 'c1', name: 'API' }],
+    sprintName: 'Sprint 7',
+    storyPoints: 5,
+    createdAt: '2026-06-02T00:00:00.000Z',
+    updatedAt: '2026-06-10T00:00:00.000Z',
+    customFields: [
+      {
+        id: 'f1',
+        key: 'team',
+        label: 'Team',
+        fieldType: 'text',
+        description: null,
+        options: [],
+        value: { text: 'Platform', number: null, date: null, option: null, user: null },
+      },
+      {
+        id: 'f2',
+        key: 'tier',
+        label: 'Tier',
+        fieldType: 'text',
+        description: null,
+        options: [],
+        value: null,
+      },
+    ],
+  };
+
+  it('renders the work type, executor, labels, components, sprint, and story points', () => {
+    render(<IssueQuickViewPanel state="ready" data={FULL} />);
+    expect(screen.getByText('Code')).toBeTruthy();
+    expect(screen.getByText('Coding agent')).toBeTruthy();
+    expect(screen.getByText('auth')).toBeTruthy();
+    expect(screen.getByText('security')).toBeTruthy();
+    expect(screen.getByText('API')).toBeTruthy();
+    expect(screen.getByText('Sprint 7')).toBeTruthy();
+    expect(screen.getByText('5')).toBeTruthy();
+  });
+
+  it('shows valued custom fields and hides empty ones behind "Show more fields (N)"', () => {
+    render(<IssueQuickViewPanel state="ready" data={FULL} />);
+    // The valued custom field is visible; the empty one is hidden until expand.
+    expect(screen.getByText('Platform')).toBeTruthy();
+    expect(screen.queryByText('Tier')).toBeNull();
+    const more = screen.getByRole('button', { name: /Show more fields \(1\)/ });
+    fireEvent.click(more);
+    expect(screen.getByText('Tier')).toBeTruthy();
+  });
+
+  it('omits the leaf-only Type/Executor rows for a container kind (story)', () => {
+    // The base DATA is a story (no work type) — Type/Executor must not render.
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    expect(screen.queryByText('Coding agent')).toBeNull();
   });
 });
 
