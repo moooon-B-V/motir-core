@@ -1,11 +1,18 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { reportsService } from '@/lib/services/reportsService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { InvalidReportWindowError } from '@/lib/reports/errors';
 import { bucketKey, type ReportPeriod } from '@/lib/reports/buckets';
+import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@prisma/client';
+
+const HIGH_AST: FilterAst = {
+  combinator: 'and',
+  conditions: [{ field: 'priority', operator: 'is_any_of', value: ['high'] }],
+};
 
 // Story 8.8 · Subtask 8.8.13 — reportsService.getResolutionTime. Real Postgres,
 // the created-vs-resolved conventions: a SEEDED 1.4.6 revision trail of
@@ -131,5 +138,43 @@ describe('getResolutionTime — the bucket matrix', () => {
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(InvalidReportWindowError);
+  });
+
+  it('narrows to a saved-filter scope through the compiled AST', async () => {
+    const fx = await makeWorkItemFixture();
+    const hi = await createTestWorkItem(fx, { kind: 'task', title: 'hi' });
+    const lo = await createTestWorkItem(fx, { kind: 'task', title: 'lo' });
+    await setCreatedAt(hi.id, daysAgo(4));
+    await setCreatedAt(lo.id, daysAgo(4));
+    await db.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await db.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+    await addRevision(hi.id, fx.ownerId, daysAgo(1), toDone);
+    await addRevision(lo.id, fx.ownerId, daysAgo(1), toDone);
+
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'High only', visibility: 'project', filterParam: encodeFilterParam(HIGH_AST) },
+      fx.ctx,
+    );
+
+    const data = await expectOk(
+      reportsService.getResolutionTime(
+        { savedFilterId: filter.id },
+        { period: 'day', daysBack: 5 },
+        fx.ctx,
+      ),
+    );
+    // Only the high-priority item's resolution (age 3) is in scope.
+    expect(bucketOf(data.buckets, 'day', daysAgo(1))).toMatchObject({ avgDays: 3, count: 1 });
+  });
+
+  it('returns the stale state for a missing saved filter (the non-ok scope branch)', async () => {
+    const fx = await makeWorkItemFixture();
+    const result = await reportsService.getResolutionTime(
+      { savedFilterId: 'nonexistent' },
+      { period: 'day', daysBack: 5 },
+      fx.ctx,
+    );
+    expect(result.state).toBe('stale');
   });
 });

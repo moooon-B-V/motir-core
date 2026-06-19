@@ -19,6 +19,7 @@ import {
 import {
   parseCumulative,
   parseDaysBack,
+  parseMeasure,
   parsePeriod,
   parsePositiveInt,
   parseReportScope,
@@ -181,6 +182,13 @@ describe('route param parsers', () => {
     expect(parseDaysBack(null)).toBe(30);
     expect(parseDaysBack('90')).toBe(90);
     expect(() => parseDaysBack('soon')).toThrow(InvalidReportWindowError);
+  });
+
+  it('parseMeasure defaults to story_points and rejects unknowns (typed, 8.8.13)', () => {
+    expect(parseMeasure(null)).toBe('story_points');
+    expect(parseMeasure('story_points')).toBe('story_points');
+    expect(parseMeasure('issue_count')).toBe('issue_count');
+    expect(() => parseMeasure('hours')).toThrow(InvalidReportWindowError);
   });
 
   it('parseCumulative / parsePositiveInt are the forgiving toggles', () => {

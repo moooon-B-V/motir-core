@@ -1,11 +1,19 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { reportsService } from '@/lib/services/reportsService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { InvalidReportWindowError } from '@/lib/reports/errors';
 import { bucketKey, type ReportPeriod } from '@/lib/reports/buckets';
+import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@prisma/client';
+
+const HIGH_AST: FilterAst = {
+  combinator: 'and',
+  conditions: [{ field: 'priority', operator: 'is_any_of', value: ['high'] }],
+};
 
 // Story 8.8 · Subtask 8.8.13 — reportsService.getAverageAge. Real Postgres. A
 // POINT-IN-TIME read: for each bucket's period-end instant, the average age in
@@ -127,5 +135,51 @@ describe('getAverageAge — the point-in-time matrix', () => {
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(InvalidReportWindowError);
+  });
+
+  it('narrows to a saved-filter scope through the compiled AST', async () => {
+    const fx = await makeWorkItemFixture();
+    const hi = await createTestWorkItem(fx, { kind: 'task', title: 'hi' });
+    const lo = await createTestWorkItem(fx, { kind: 'task', title: 'lo' });
+    await setCreatedAt(hi.id, daysAgo(6));
+    await setCreatedAt(lo.id, daysAgo(6));
+    await db.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await db.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'High only', visibility: 'project', filterParam: encodeFilterParam(HIGH_AST) },
+      fx.ctx,
+    );
+
+    const data = await expectOk(
+      reportsService.getAverageAge(
+        { savedFilterId: filter.id },
+        { period: 'day', daysBack: 5 },
+        fx.ctx,
+      ),
+    );
+    // Only the high-priority open item is in scope (age 6 at now).
+    expect(latestBucket(data.buckets)).toMatchObject({ avgDays: 6, count: 1 });
+  });
+
+  it('returns the stale state for a missing saved filter (the non-ok scope branch)', async () => {
+    const fx = await makeWorkItemFixture();
+    const result = await reportsService.getAverageAge(
+      { savedFilterId: 'nonexistent' },
+      { period: 'day', daysBack: 5 },
+      fx.ctx,
+    );
+    expect(result.state).toBe('stale');
+  });
+
+  it('the repo aggregate short-circuits on an empty bucket list (the guard)', async () => {
+    const fx = await makeWorkItemFixture();
+    const rows = await workItemRevisionRepository.aggregateAverageAgeByBucket(
+      fx.projectId,
+      fx.workspaceId,
+      [],
+    );
+    expect(rows).toEqual([]);
   });
 });

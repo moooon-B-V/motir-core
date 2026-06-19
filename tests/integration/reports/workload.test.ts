@@ -1,10 +1,17 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { reportsService } from '@/lib/services/reportsService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItem } from '@prisma/client';
+
+const HIGH_AST: FilterAst = {
+  combinator: 'and',
+  conditions: [{ field: 'priority', operator: 'is_any_of', value: ['high'] }],
+};
 
 // Story 8.8 · Subtask 8.8.13 — reportsService.getWorkload. Real Postgres. A
 // SNAPSHOT read (no revision trail): open (current status NOT in a
@@ -125,5 +132,57 @@ describe('getWorkload — the ranked open-work matrix', () => {
     expect(data.assignees).toEqual([]);
     expect(data.totalPoints).toBe(0);
     expect(data.totalCount).toBe(0);
+  });
+
+  it('tie-breaks equal-measure assignees by name (the mapper localeCompare branch)', async () => {
+    const fx = await makeWorkItemFixture();
+    const zoe = await createTestUser({ name: 'Zoe' });
+    const ana = await createTestUser({ name: 'Ana' });
+    const seed = async (assigneeId: string) => {
+      const item = await createTestWorkItem(fx, { kind: 'task', title: 'x' });
+      await setFields(item.id, { assigneeId, storyPoints: 5, status: 'todo' });
+    };
+    await seed(zoe.id);
+    await seed(ana.id);
+
+    const data = await expectOk(
+      reportsService.getWorkload({ projectId: fx.projectId }, { measure: 'story_points' }, fx.ctx),
+    );
+    // Equal points (5 each) → name-ascending: Ana before Zoe.
+    expect(data.assignees.map((a) => a.name)).toEqual(['Ana', 'Zoe']);
+  });
+
+  it('narrows to a saved-filter scope through the compiled AST', async () => {
+    const fx = await makeWorkItemFixture();
+    const u = await createTestUser({ name: 'U' });
+    const hi = await createTestWorkItem(fx, { kind: 'task', title: 'hi' });
+    const lo = await createTestWorkItem(fx, { kind: 'task', title: 'lo' });
+    await setFields(hi.id, { assigneeId: u.id, storyPoints: 8, status: 'todo' });
+    await setFields(lo.id, { assigneeId: u.id, storyPoints: 3, status: 'todo' });
+    await db.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await db.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'High only', visibility: 'project', filterParam: encodeFilterParam(HIGH_AST) },
+      fx.ctx,
+    );
+
+    const data = await expectOk(
+      reportsService.getWorkload({ savedFilterId: filter.id }, { measure: 'story_points' }, fx.ctx),
+    );
+    // Only the high-priority item counts through the filter scope.
+    expect(data.totalCount).toBe(1);
+    expect(data.totalPoints).toBe(8);
+  });
+
+  it('returns the stale state for a missing saved filter (the non-ok scope branch)', async () => {
+    const fx = await makeWorkItemFixture();
+    const result = await reportsService.getWorkload(
+      { savedFilterId: 'nonexistent' },
+      { measure: 'story_points' },
+      fx.ctx,
+    );
+    expect(result.state).toBe('stale');
   });
 });

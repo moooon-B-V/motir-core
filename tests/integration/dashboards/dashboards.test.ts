@@ -213,6 +213,43 @@ describe('the widget registry is TOTAL (mistake #29)', () => {
     expect(() => def.parseConfig({ cumulative: 'yes' })).toThrow(InvalidDashboardWidgetConfigError);
   });
 
+  it.each(['average_age', 'resolution_time'] as const)(
+    '%s config (8.8.13): period/days-back defaults, enums, window + bucket caps, no cumulative',
+    (type) => {
+      const def = WIDGET_REGISTRY[type];
+      expect(def.parseConfig(undefined)).toEqual({ period: 'day', daysBack: 30 });
+      expect(def.parseConfig({ period: 'month', daysBack: 180 })).toEqual({
+        period: 'month',
+        daysBack: 180,
+      });
+      expect(() => def.parseConfig({ period: 'year' })).toThrow(InvalidDashboardWidgetConfigError);
+      for (const bad of [0, 367, 1.5, '30']) {
+        expect(() => def.parseConfig({ daysBack: bad })).toThrow(InvalidDashboardWidgetConfigError);
+      }
+      // The 120-bucket cap (a daily 200-day window blows it; week-bucketed fits).
+      expect(() => def.parseConfig({ period: 'day', daysBack: 200 })).toThrow(
+        InvalidDashboardWidgetConfigError,
+      );
+      expect(def.parseConfig({ period: 'week', daysBack: 200 })).toMatchObject({ daysBack: 200 });
+      // `cumulative` is NOT a key for these reports — an unknown key is rejected.
+      expect(() => def.parseConfig({ cumulative: true })).toThrow(
+        InvalidDashboardWidgetConfigError,
+      );
+    },
+  );
+
+  it('workload config (8.8.13): measure defaults to story_points and rejects unknowns', () => {
+    const def = WIDGET_REGISTRY.workload;
+    expect(def.parseConfig(undefined)).toEqual({ measure: 'story_points' });
+    expect(def.parseConfig({ measure: 'issue_count' })).toEqual({ measure: 'issue_count' });
+    for (const bad of ['hours', '', 42, null, true]) {
+      expect(() => def.parseConfig({ measure: bad })).toThrow(InvalidDashboardWidgetConfigError);
+    }
+    expect(() => def.parseConfig({ measure: 'story_points', extra: 1 })).toThrow(
+      InvalidDashboardWidgetConfigError,
+    );
+  });
+
   it('classifyStoredSource: both-null can only mean a SetNull-staled filter widget', () => {
     expect(classifyStoredSource({ savedFilterId: 'f', projectId: null })).toEqual({
       kind: 'saved_filter',
