@@ -30,3 +30,18 @@ export interface PlanDeltaAppliedEntry {
 export interface CommitPlanDeltaResponse {
   applied: PlanDeltaAppliedEntry[];
 }
+
+// GET /api/internal/ai/org-context (Subtask 7.3.45) — the calling org's
+// existing footprint, the read-back the discovery interview weighs when it
+// classifies a new project (an org already running several projects with a
+// multi-person team skews startup/enterprise). The wire shape the planner reads;
+// derived from the org domain's OrgFootprintDTO but owns its own contract (only
+// the org id + name cross — no slug). Scoped to the job token's org, read AS the
+// token's user.
+export interface OrgContextResponse {
+  organization: { id: string; name: string };
+  workspaceCount: number;
+  projectCount: number;
+  projectNames: string[];
+  memberCount: number;
+}
