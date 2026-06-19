@@ -16,6 +16,13 @@ import { AssigneePicker } from '@/components/issues/AssigneePicker';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import {
+  DraftWithAiButton,
+  DraftGateNotice,
+  DraftErrorNotice,
+} from '@/components/issues/DraftWithAi';
+import { useExplanationDraft } from '@/lib/hooks/useExplanationDraft';
+import { isUntouchedAiDraft, explanationSourceForSave } from '@/lib/ai/explanationSource';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemDto, WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
@@ -37,9 +44,20 @@ export interface EditIssueFormProps {
   issue: WorkItemDto;
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
+  /**
+   * Whether motir-core is wired to a Motir AI deployment (Subtask 8.8.12),
+   * resolved server-side on the edit page. Gates the explanation's "Draft with
+   * AI" affordance. Defaults to false (safe disabled state) for test mounts.
+   */
+  aiConfigured?: boolean;
 }
 
-export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) {
+export function EditIssueForm({
+  issue,
+  workflow,
+  members,
+  aiConfigured = false,
+}: EditIssueFormProps) {
   const router = useRouter();
   const t = useTranslations('issueViews');
   const tc = useTranslations('common');
@@ -64,6 +82,20 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
   const [estimate, setEstimate] = useState(
     issue.estimateMinutes != null ? String(issue.estimateMinutes) : '',
   );
+
+  // "Draft with AI" (Subtask 8.8.12) — streams a generated explanation into the
+  // editor from the item's title / description / type.
+  const draft = useExplanationDraft({
+    onText: setExplanation,
+    getContext: () => ({ title: title.trim(), description, type: issue.type ?? null }),
+  });
+  // The AI-drafted badge shows for an untouched fresh draft this session OR a
+  // persisted ai_draft the user hasn't edited yet (it drops the moment the text
+  // diverges from either baseline — mirroring the service's source state machine).
+  const showAiDraftedPill =
+    draft.draftBaseline !== null
+      ? isUntouchedAiDraft(explanation, draft.draftBaseline)
+      : issue.explanationSource === 'ai_draft' && explanation === (issue.explanationMd ?? '');
 
   const [titleError, setTitleError] = useState<string | null>(null);
   const [parentError, setParentError] = useState<string | null>(null);
@@ -104,6 +136,10 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
       // 1) Non-status fields → updateWorkItem (carries the concurrency token).
       let token = updatedAt;
       if (nonStatusDirty) {
+        // Explanation provenance (8.8.12): an untouched AI draft → `ai_draft`,
+        // an edited draft → `user_edited`; omitted otherwise so the service's
+        // auto-flip rule (editing an existing ai_draft → user_edited) applies.
+        const explanationSource = explanationSourceForSave(explanation, draft.draftBaseline);
         const res = await updateIssueAction({
           id: issue.id,
           expectedUpdatedAt: token,
@@ -111,6 +147,7 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
           title: title.trim(),
           descriptionMd: description.trim() ? description : null,
           explanationMd: explanation.trim() ? explanation : null,
+          ...(explanationSource ? { explanationSource } : {}),
           parentId,
           assigneeId,
           priority,
@@ -268,11 +305,11 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         </div>
       </div>
 
-      {/* Editable now (the design treats explanation as a first-class authored
-          field; editing an ai_draft auto-flips its source to user_edited in
-          the service). AI drafting/regeneration is the Epic-7 planning layer.
-          The gloss + AI-drafted badge ride the editor's own label via
-          labelAccessory — no external "Explanation" span, else it shows twice. */}
+      {/* Editable, with "Draft with AI" (Subtask 8.8.12): drafting streams a
+          generated explanation into the editor; editing an ai_draft auto-flips
+          its source to user_edited in the service. The gloss + AI-drafted badge
+          + the Draft button ride the editor's own label via labelAccessory — no
+          external "Explanation" span, else it shows twice. */}
       <MarkdownEditor
         label={t('explanation')}
         labelAccessory={
@@ -280,9 +317,15 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
             <span className="text-(--el-text-secondary) font-normal">
               — {t('explanationGloss')}
             </span>
-            {issue.explanationSource === 'ai_draft' ? (
-              <Pill severity="info">{t('aiDrafted')}</Pill>
-            ) : null}
+            {showAiDraftedPill ? <Pill severity="info">{t('aiDrafted')}</Pill> : null}
+            <DraftWithAiButton
+              phase={draft.phase}
+              hasDraft={draft.draftBaseline !== null}
+              aiConfigured={aiConfigured}
+              disabled={isPending || title.trim().length === 0}
+              onStart={draft.start}
+              onStop={draft.stop}
+            />
           </>
         }
         value={explanation}
@@ -290,6 +333,10 @@ export function EditIssueForm({ issue, workflow, members }: EditIssueFormProps) 
         size="full"
         onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
       />
+      {!aiConfigured ? <DraftGateNotice /> : null}
+      {draft.phase === 'error' ? (
+        <DraftErrorNotice onRetry={draft.start} onDismiss={draft.dismissError} />
+      ) : null}
 
       <div className="text-(--el-text-muted) font-sans text-xs">
         {t('reporterCreated', {

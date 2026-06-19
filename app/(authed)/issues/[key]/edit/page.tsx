@@ -8,6 +8,7 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EditIssueForm } from './_components/EditIssueForm';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
@@ -76,7 +77,12 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('editIssue')}</h1>
-      <EditIssueForm issue={detail.item} workflow={detail.workflow} members={members} />
+      <EditIssueForm
+        issue={detail.item}
+        workflow={detail.workflow}
+        members={members}
+        aiConfigured={isMotirAiConfigured()}
+      />
       <RelationshipsPanel
         blockedBy={detail.blockedBy}
         blocks={detail.blocks}
