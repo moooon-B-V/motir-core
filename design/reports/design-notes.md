@@ -289,3 +289,127 @@ shell's outer boundary, rung 2) at `/dashboard`.
   into the 4.6.2 layer from this spec.
 - The **agile report surfaces** the Reports hub links into (burndown / velocity /
   sprint report) — shipped by 4.4–4.6; referenced greyed, never redrawn.
+
+---
+
+# More reports — average age · resolution time · workload (Story 8.8 · subtask 8.8.7)
+
+Design reference for the **three NEW report pages** the Reports hub’s “More
+reports” placeholder always named — **Average age**, **Resolution time**, and
+**Workload** — plus the hub change that turns the dead dashed _Extension_
+placeholder into three live, clickable cards. The 6.3.3 asset above shipped the
+hub with a deliberately-disabled `HubCardDisabled` (“Average age, resolution
+time, workload — registry additions”); 8.8.7 makes good on it: Yue’s decision is
+to **build them for real**. Drawn in the grammar of the shipped report pages
+(Created-vs-Resolved, Status distribution), reusing `ReportPageChrome`, the
+panel-4 report-control vocabulary, the 4.6.2 SVG chart layer, the legend +
+`<details>` data-table a11y pattern, and the panel-5 states.
+
+| Surface          | Asset                                      | Notes                                                                                                                                                                                                                                                                          |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **More reports** | **`more-reports.mock.html`** (HTML mockup) | 6 panels: new tokens · the UPDATED Reports hub (live cards, no placeholder) · average-age page · resolution-time page · workload page · access path + shared states. Built from the shipped design system + the 4.6.1/6.3.4 chart language. Gates **8.8.13** (implementation). |
+
+Mirror product: **Jira’s Average Age / Resolution Time / Workload reports**
+(decision-ladder rung 1 — verified against Atlassian’s report docs, not asserted:
+Average Age = a bar of average days unresolved over time; Resolution Time = a bar
+of average days-to-resolve over time; Workload = relative open work by assignee).
+
+## The three reports (chart type + controls + data)
+
+| Report              | Route                      | Chart                                                | Controls (reused panel-4 vocab)                   | Data (8.8.13 — `reportsService`, bounded grouped query)                                                                                                                              |
+| ------------------- | -------------------------- | ---------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Average age**     | `/reports/average-age`     | vertical **bar** + dashed window-average             | Scope XOR · Period (day/week/month) · Days back   | per bucket, the avg of `(periodEnd − createdAt)` over issues NOT yet in a **done-category** status at that period end (`getTerminalStatusKeys`); from the 1.4.6 revision trail       |
+| **Resolution time** | `/reports/resolution-time` | vertical **bar** + dashed window-average             | Scope XOR · Period (day/week/month) · Days back   | per bucket (keyed by resolution date), the avg of `(resolvedAt − createdAt)` over issues that entered a done-category status in that period; `resolvedAt` = the done-cat transition  |
+| **Workload**        | `/reports/workload`        | horizontal **ranked bar** (per assignee, descending) | Scope XOR · Measure (Story points \| Issue count) | current `work_item` rows grouped by `assigneeId`, **unresolved** (non-done-category) only; the unassigned bucket is the neutral “None”, always last; one bounded query, no rev trail |
+
+- **Average age + Resolution time reuse the 4.6.2 vertical-bar primitive** (the
+  velocity bar). Y = days, X = period buckets; a **value label** above each bar +
+  a dashed **`--el-chart-average`** window-average line with a legend readout (the
+  velocity-average idiom). Empty bucket → “—”, never `NaN` (the 4.5.2 rule). The
+  two reports share the **same terminal-status (`getTerminalStatusKeys`)
+  deviation** Created-vs-Resolved uses — there is no Resolution field — so all
+  three throughput reports agree on what “resolved” means.
+- **Workload is a horizontal RANKED bar, NOT Jira’s pie — a justified deviation
+  (rung 1).** Jira’s Workload report is a pie by assignee, but a pie reads poorly
+  for a magnitude RANKING across a team-sized set and the shared 6.3.4 donut
+  degrades past 7 segments (the “+N more” roll-up). Workload’s job is _who is
+  carrying how much_ — a ranking — which horizontal bars sorted descending read
+  directly, with no overflow cliff. The one-line justification is written into the
+  card per the no-shortcut/justified-deviation rule. **Measure = story points**
+  (Motir has no time-tracking, so points are the workload unit; Jira’s time-field
+  picker maps to our Story-points ↔ Issue-count toggle). Bars cycle the
+  `--el-chart-cat-1..7` ramp; the unassigned bucket uses `--el-chart-cat-none`.
+
+## NEW `--el-chart-*` tokens (8.8.13 adds these to globals.css Tier 3)
+
+Only **two** net-new tokens — the rest REUSE the 4.6.1/6.3.4 set (the dashed
+`--el-chart-average` line; the categorical ramp for workload). Every chart colour
+still routes through an `--el-chart-*` token, never a raw `--color-*` (mistake #20
+growth pattern); both inherit the `[data-theme="dark"]` flip via their mapping
+(the mockup’s Toggle-dark confirms parity).
+
+| Token                   | Maps to           | Role                                    |
+| ----------------------- | ----------------- | --------------------------------------- |
+| `--el-chart-age`        | `--color-warning` | average-age bar (aging backlog → amber) |
+| `--el-chart-resolution` | `--color-info`    | resolution-time bar (throughput → blue) |
+
+## The hub change (the access path’s first door)
+
+The dead `HubCardDisabled` “More reports · Extension” placeholder is **REMOVED**;
+its three named reports become live `HubCard` links in the **Issue analysis**
+group (which grows 2 → 5 cards on the same `lg:grid-cols-3` grid, wrapping to a
+second row). Icons: `clock` (average age), `timer` (resolution time), `users`
+(workload). These cards ARE the entry affordance — **the access path is drawn
+end-to-end** (the design-content rule): the shell **Reports** nav link → the
+Issue-analysis **card** → the **report page**, and `ReportPageChrome`’s “Back to
+reports” crumb reverses it (panel 5 draws the whole path explicitly).
+
+## Each is a REGISTRY report (the 6.3.1 widget-type registry)
+
+8.8.13 adds `average_age` / `resolution_time` / `workload` to the **dashboard
+widget-type registry** (`lib/dashboards/widgetRegistry.ts`) — the TOTAL map
+6.3.3 designed against. Because the hub + the dashboard add-picker both render
+from their registries, the three reports also become **dashboard gadgets with
+zero extra UI** (the documented registry-addition slot the 6.3.3 notes reserved:
+“More gadget types (… Average Age, Resolution Time) + more report types — registry
+additions”). New renderer kinds: `bar` (average-age + resolution-time) and
+`hbar` (workload) extend the 4.6.2 SVG layer; new editor kinds reuse the
+data-source XOR + a Period/Days-back or Measure control.
+
+## States (REUSED verbatim from panel 5 / 6.3.3)
+
+`loading` (skeleton in the chart’s shape) · `empty` (report-specific zero-data
+copy — “Nothing resolved yet” / “No open work assigned yet”) · `error`
+(`ErrorState` + Retry) · **`no-access`** (the 6.4 per-viewer gate — a saved-filter
+scope the viewer can’t see leaks no figures) · **`stale`** (the inherited 6.2.2
+“Filter missing” body + `Choose a filter`) · page-level **no-project** empty
+state. Every state is carried by TEXT, never colour alone (finding #35); each
+chart is a `role="img"` figure with a describedby summary, a visible legend +
+value labels, and a `<details>` data-table fallback.
+
+## Tokens, shape, a11y
+
+- **Colour via `--el-*` only** — the two new bar tokens + the reused
+  `--el-chart-average` / `--el-chart-cat-*` ramp, plus `--el-text*` for
+  labels/legends, `--el-surface*` / `--el-border` for the Card, `--el-danger` for
+  the error state. AA holds (bars are vivid fills; chips put the hue in the tint
+  background with `--el-text-strong`).
+- **Shape via element-semantic tokens** — `--radius-card` (report Card / state
+  boxes), `--radius-control` (skeleton bars / hub-card icon), `--radius-badge`
+  (pills), `--radius-btn` (Retry / Choose a filter), `--spacing-card-padding`,
+  `--shadow-card` (the highlighted hub card). SVG bar `rx` / point `r` / stroke
+  widths are intrinsic chart shape.
+- **a11y** — `role="img"` + `<desc>` per chart, a visible legend, value labels on
+  every bar, and a `<table>` fallback (`<caption>` + `scope`-ed headers). The
+  series read as text + number; colour is never the sole signal.
+
+## Out of scope (built elsewhere / consumed here)
+
+- The **data reads** — the new `reportsService` aggregations (average-age,
+  resolution-time, workload) + the widget-registry config schemas — 8.8.13. This
+  asset is pure UI.
+- The **chart primitives** — the `bar` + `hbar` renderers 8.8.13 builds into the
+  4.6.2 SVG layer from this spec.
+- **Per-epic / per-component workload variants**, time-tracking-based workload
+  (no time-tracking entity), CSV/image export — no use case yet (no complexity
+  for nothing).
