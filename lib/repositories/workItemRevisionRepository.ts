@@ -341,4 +341,129 @@ export const workItemRevisionRepository = {
       ORDER BY 1
     `;
   },
+
+  /**
+   * The RESOLUTION-TIME aggregate (Story 8.8 · Subtask 8.8.13): per
+   * `date_trunc(period, changedAt)` bucket keyed by the RESOLUTION date, the
+   * AVERAGE of `(changedAt − createdAt)` in DAYS over every status transition
+   * INTO a `done`-category status (from a non-done one) inside the window — one
+   * bounded grouped `$queryRaw` over the 1.4.6 trail (the
+   * `aggregateNetResolvedByBucket` pattern; finding #57). An item resolved,
+   * reopened, then resolved again contributes once PER resolution event ("issues
+   * that entered a done-category status in that period"). "Done" resolves like
+   * every report (join `workflow_status` on the diff's from/to keys, read
+   * `category = 'done'`), so the reports agree on "done". `avgDays` is `float8`
+   * (a fractional day average); `resolvedCount` is the population per bucket (the
+   * data-table column). Archived / triage items are excluded (the created-series
+   * parity basis); `workspaceId` gates the read (finding #26). Event-less buckets
+   * return no row (the service fills the axis with `avgDays: null`). Read-only →
+   * `db` singleton.
+   */
+  async aggregateResolutionTimeByBucket(
+    projectId: string,
+    workspaceId: string,
+    period: 'day' | 'week' | 'month',
+    window: { start: Date; end: Date },
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+  ): Promise<Array<{ bucket: string; avgDays: number; resolvedCount: number }>> {
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    return db.$queryRaw<Array<{ bucket: string; avgDays: number; resolvedCount: number }>>`
+      SELECT
+        to_char(date_trunc(${period}, r."changedAt"), 'YYYY-MM-DD') AS "bucket",
+        AVG(EXTRACT(EPOCH FROM (r."changedAt" - w."createdAt")) / 86400.0)::float8 AS "avgDays",
+        COUNT(*)::int AS "resolvedCount"
+      FROM "work_item_revision" r
+      JOIN "work_item" w
+        ON w."id" = r."workItemId"
+       AND w."projectId" = ${projectId}
+       AND w."workspaceId" = ${workspaceId}
+       AND w."archivedAt" IS NULL
+       AND w."triagedAt" IS NULL
+       AND (${astSql})
+      LEFT JOIN "workflow_status" fs
+        ON fs."project_id" = w."projectId"
+       AND fs."key" = (r."diff" -> 'status' ->> 'from')
+      JOIN "workflow_status" ts
+        ON ts."project_id" = w."projectId"
+       AND ts."key" = (r."diff" -> 'status' ->> 'to')
+      WHERE r."changeKind" = 'updated'
+        AND r."diff" -> 'status' IS NOT NULL
+        AND ts."category" = 'done'
+        AND (fs."category" IS NULL OR fs."category" <> 'done')
+        AND r."changedAt" >= ${window.start}
+        AND r."changedAt" <= ${window.end}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+  },
+
+  /**
+   * The AVERAGE-AGE aggregate (Story 8.8 · Subtask 8.8.13): for each bucket's
+   * period-END instant (passed in by the service via `lib/reports/buckets`
+   * `bucketEnds` — the exclusive upper edge, capped at "now" for the current
+   * bucket), the AVERAGE of `(periodEnd − createdAt)` in DAYS over issues created
+   * by then and NOT yet resolved at that instant. An item's resolution point is
+   * its FIRST transition INTO a `done`-category status (the `resolved` CTE — the
+   * SAME done predicate every report uses); an item with no such transition (or
+   * one whose first resolution is AFTER `periodEnd`) is still open. One bounded
+   * grouped `$queryRaw`: the bucket (key, periodEnd) pairs are UNNESTed and
+   * CROSS-joined to the scoped items, so it is a single point-in-time pass, never
+   * a per-bucket round-trip (finding #57; bounded by items × ≤120 buckets).
+   * Archived / triage items excluded; `workspaceId` gates the read (finding #26).
+   * A bucket with no open items returns no row (the service fills `avgDays:
+   * null`). Read-only → `db` singleton.
+   */
+  async aggregateAverageAgeByBucket(
+    projectId: string,
+    workspaceId: string,
+    buckets: Array<{ key: string; end: Date }>,
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+  ): Promise<Array<{ bucket: string; avgDays: number; openCount: number }>> {
+    if (buckets.length === 0) return [];
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    const keys = buckets.map((b) => b.key);
+    const ends = buckets.map((b) => b.end);
+    return db.$queryRaw<Array<{ bucket: string; avgDays: number; openCount: number }>>`
+      WITH be AS (
+        SELECT * FROM unnest(${keys}::text[], ${ends}::timestamptz[]) AS t("key", "periodEnd")
+      ),
+      resolved AS (
+        SELECT r."workItemId" AS "itemId", MIN(r."changedAt") AS "firstDoneAt"
+        FROM "work_item_revision" r
+        JOIN "work_item" w2
+          ON w2."id" = r."workItemId"
+         AND w2."projectId" = ${projectId}
+         AND w2."workspaceId" = ${workspaceId}
+        LEFT JOIN "workflow_status" fs
+          ON fs."project_id" = w2."projectId" AND fs."key" = (r."diff" -> 'status' ->> 'from')
+        JOIN "workflow_status" ts
+          ON ts."project_id" = w2."projectId" AND ts."key" = (r."diff" -> 'status' ->> 'to')
+        WHERE r."changeKind" = 'updated'
+          AND r."diff" -> 'status' IS NOT NULL
+          AND ts."category" = 'done'
+          AND (fs."category" IS NULL OR fs."category" <> 'done')
+        GROUP BY 1
+      )
+      SELECT
+        be."key" AS "bucket",
+        AVG(EXTRACT(EPOCH FROM (be."periodEnd" - w."createdAt")) / 86400.0)::float8 AS "avgDays",
+        COUNT(*)::int AS "openCount"
+      FROM be
+      JOIN "work_item" w
+        ON w."projectId" = ${projectId}
+       AND w."workspaceId" = ${workspaceId}
+       AND w."archivedAt" IS NULL
+       AND w."triagedAt" IS NULL
+       AND w."createdAt" <= be."periodEnd"
+       AND (${astSql})
+      LEFT JOIN resolved rs ON rs."itemId" = w."id"
+      WHERE rs."firstDoneAt" IS NULL OR rs."firstDoneAt" > be."periodEnd"
+      GROUP BY 1
+      ORDER BY 1
+    `;
+  },
 };

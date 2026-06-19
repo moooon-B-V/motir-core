@@ -1,5 +1,6 @@
 import type { EstimationStatisticDto } from '@/lib/dto/estimation';
 import type {
+  AverageAgeDto,
   BurndownDayDto,
   BurndownScopeChangeDto,
   BurndownSeriesDto,
@@ -8,9 +9,14 @@ import type {
   CreatedVsResolvedDto,
   DistributionDto,
   DistributionSegmentDto,
+  ReportAgeBucketDto,
   ReportPeriodDto,
+  ResolutionTimeDto,
   VelocityDto,
   VelocitySprintDto,
+  WorkloadAssigneeDto,
+  WorkloadDto,
+  WorkloadMeasureDto,
 } from '@/lib/dto/reports';
 
 // Pure assemblers for the reports domain (Story 4.6). The service composes the
@@ -226,4 +232,122 @@ export function toDistributionDto(
     percentage: total === 0 ? 0 : Math.round((r.count / total) * 1000) / 10,
   }));
   return { statistic, total, segments };
+}
+
+// ---------------------------------------------------------------------------
+// Story 8.8 · Subtask 8.8.13 — the three "More reports" assemblers
+// ---------------------------------------------------------------------------
+
+/**
+ * Fill the sparse `{ bucket, avgDays, count }` rows from a per-bucket-average
+ * read into the FULL axis (`lib/reports/buckets.ts` — event-less buckets carry
+ * `avgDays: null`, the chart's "—", never `NaN`), rounding each average to one
+ * decimal (a day-figure), and derive the WINDOW AVERAGE (the dashed line) as the
+ * mean of the NON-NULL bucket averages — `null` when every bucket is empty.
+ * Shared by the average-age + resolution-time reports (same vertical-bar shape).
+ * PURE — no I/O.
+ */
+function assembleAgeBuckets(
+  axis: string[],
+  rows: Array<{ bucket: string; avgDays: number; count: number }>,
+): { buckets: ReportAgeBucketDto[]; windowAverage: number | null } {
+  const byBucket = new Map(rows.map((r) => [r.bucket, r]));
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const buckets: ReportAgeBucketDto[] = axis.map((date) => {
+    const row = byBucket.get(date);
+    return row && row.count > 0
+      ? { date, avgDays: round1(row.avgDays), count: row.count }
+      : { date, avgDays: null, count: 0 };
+  });
+  const present = buckets.filter((b) => b.avgDays !== null) as Array<{ avgDays: number }>;
+  const windowAverage =
+    present.length === 0
+      ? null
+      : round1(present.reduce((sum, b) => sum + b.avgDays, 0) / present.length);
+  return { buckets, windowAverage };
+}
+
+/** Assemble an `AverageAgeDto` — the per-bucket point-in-time average of how
+ * old the still-unresolved issues are. PURE. */
+export function toAverageAgeDto(input: {
+  period: ReportPeriodDto;
+  daysBack: number;
+  windowStart: Date;
+  windowEnd: Date;
+  axis: string[];
+  rows: Array<{ bucket: string; avgDays: number; openCount: number }>;
+}): AverageAgeDto {
+  const { buckets, windowAverage } = assembleAgeBuckets(
+    input.axis,
+    input.rows.map((r) => ({ bucket: r.bucket, avgDays: r.avgDays, count: r.openCount })),
+  );
+  return {
+    period: input.period,
+    daysBack: input.daysBack,
+    windowStart: input.windowStart.toISOString(),
+    windowEnd: input.windowEnd.toISOString(),
+    buckets,
+    windowAverage,
+  };
+}
+
+/** Assemble a `ResolutionTimeDto` — the per-bucket average days-to-resolve,
+ * keyed by resolution date. PURE. */
+export function toResolutionTimeDto(input: {
+  period: ReportPeriodDto;
+  daysBack: number;
+  windowStart: Date;
+  windowEnd: Date;
+  axis: string[];
+  rows: Array<{ bucket: string; avgDays: number; resolvedCount: number }>;
+}): ResolutionTimeDto {
+  const { buckets, windowAverage } = assembleAgeBuckets(
+    input.axis,
+    input.rows.map((r) => ({ bucket: r.bucket, avgDays: r.avgDays, count: r.resolvedCount })),
+  );
+  return {
+    period: input.period,
+    daysBack: input.daysBack,
+    windowStart: input.windowStart.toISOString(),
+    windowEnd: input.windowEnd.toISOString(),
+    buckets,
+    windowAverage,
+  };
+}
+
+/**
+ * Assemble a `WorkloadDto` from the grouped `{ assigneeId, name, points, count }`
+ * rows. Ranks DESCENDING by the active `measure` (story points or issue count),
+ * with the unassigned ("None") bucket — `assigneeId: null` — ALWAYS LAST
+ * regardless of its size (the design's neutral bucket). `points` round to one
+ * decimal (story points are `Decimal(6,2)`); totals are the window sums. An
+ * empty scope yields `{ assignees: [], totalPoints: 0, totalCount: 0 }` — never
+ * `NaN`. PURE — no I/O.
+ */
+export function toWorkloadDto(
+  measure: WorkloadMeasureDto,
+  rows: Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>,
+): WorkloadDto {
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const assignees: WorkloadAssigneeDto[] = rows.map((r) => ({
+    assigneeId: r.assigneeId,
+    name: r.name,
+    points: round1(r.points),
+    count: r.count,
+  }));
+  const measureVal = (a: WorkloadAssigneeDto) => (measure === 'issue_count' ? a.count : a.points);
+  assignees.sort((a, b) => {
+    // Unassigned bucket sinks to the bottom, then rank by the active measure.
+    const au = a.assigneeId === null ? 1 : 0;
+    const bu = b.assigneeId === null ? 1 : 0;
+    if (au !== bu) return au - bu;
+    if (measureVal(b) !== measureVal(a)) return measureVal(b) - measureVal(a);
+    return (a.name ?? '').localeCompare(b.name ?? '');
+  });
+  return {
+    measure,
+    assignees,
+    totalPoints: round1(assignees.reduce((sum, a) => sum + a.points, 0)),
+    totalCount: assignees.reduce((sum, a) => sum + a.count, 0),
+  };
 }

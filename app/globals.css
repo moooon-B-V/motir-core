@@ -835,6 +835,8 @@
   --el-chart-resolved: var(--color-success); /* created-vs-resolved: resolved line */
   --el-chart-deficit: var(--color-destructive); /* fill where created > resolved */
   --el-chart-surplus: var(--color-success); /* fill where resolved > created */
+  --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
+  --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
 
   /* ── Public projects (Story 6.12 · public read-only view) ──────────
      New --el-* roles 6.12.4/6.12.6/6.12.7 add here, each mapped to an

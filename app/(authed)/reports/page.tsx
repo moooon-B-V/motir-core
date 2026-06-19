@@ -2,7 +2,16 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { TrendingDown, BarChart3, ListTree, TrendingUp, PieChart, Plus } from 'lucide-react';
+import {
+  TrendingDown,
+  BarChart3,
+  ListTree,
+  TrendingUp,
+  PieChart,
+  Clock,
+  Timer,
+  Users,
+} from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -113,11 +122,23 @@ export default async function ReportsPage() {
             title={t('hub.distributionTitle')}
             body={t('hub.distributionBody')}
           />
-          <HubCardDisabled
-            icon={<Plus className="h-5 w-5" aria-hidden />}
-            title={t('hub.moreTitle')}
-            tag={t('hub.extensionTag')}
-            body={t('hub.moreBody')}
+          <HubCard
+            href="/reports/average-age"
+            icon={<Clock className="h-5 w-5" aria-hidden />}
+            title={t('hub.averageAgeTitle')}
+            body={t('hub.averageAgeBody')}
+          />
+          <HubCard
+            href="/reports/resolution-time"
+            icon={<Timer className="h-5 w-5" aria-hidden />}
+            title={t('hub.resolutionTimeTitle')}
+            body={t('hub.resolutionTimeBody')}
+          />
+          <HubCard
+            href="/reports/workload"
+            icon={<Users className="h-5 w-5" aria-hidden />}
+            title={t('hub.workloadTitle')}
+            body={t('hub.workloadBody')}
           />
         </div>
       </section>
@@ -172,37 +193,5 @@ function HubCard({
         <span className="text-xs text-(--el-text-secondary)">{body}</span>
       </span>
     </Link>
-  );
-}
-
-function HubCardDisabled({
-  icon,
-  title,
-  tag,
-  body,
-}: {
-  icon: ReactNode;
-  title: string;
-  tag: string;
-  body: string;
-}) {
-  return (
-    // No opacity wrapper: a blanket opacity-60 drops the text below AA contrast.
-    // The "inactive extension" read comes from the dashed border + tag + faint
-    // icon; the text stays at AA-passing --el-text-secondary.
-    <div className="flex items-start gap-3 rounded-(--radius-card) border border-dashed border-(--el-border) p-(--spacing-card-padding)">
-      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-faint)">
-        {icon}
-      </span>
-      <span className="flex flex-col gap-1">
-        <span className="flex items-center gap-2 text-sm font-semibold text-(--el-text-secondary)">
-          {title}
-          <span className="rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[10px] font-medium tracking-wide text-(--el-text-secondary) uppercase">
-            {tag}
-          </span>
-        </span>
-        <span className="text-xs text-(--el-text-secondary)">{body}</span>
-      </span>
-    </div>
   );
 }

@@ -343,6 +343,48 @@ describe('BarChart — 4.6.7 branch pass', () => {
       ).length,
     ).toBe(0);
   });
+
+  it('thins the X-axis labels to maxXTicks (first + last kept) on a many-bucket axis (8.8.13)', () => {
+    const { container } = render(
+      <BarChart
+        series={[{ label: 'Average age', color: chartColor.age }]}
+        // 10 buckets labelled B0..B9 — labelling every one would overlap.
+        groups={Array.from({ length: 10 }, (_, i) => ({ label: `B${i}`, values: [i + 1] }))}
+        yTicks={[0, 5, 10].map((v) => ({ value: v, label: String(v) }))}
+        description="Ten buckets with thinned X labels."
+        maxXTicks={4}
+      />,
+    );
+    // Only ~4 of the 10 bucket labels render on the axis (never all 10), and the
+    // first + last are always kept.
+    const axisLabels = Array.from(container.querySelectorAll('text'))
+      .map((t) => t.textContent ?? '')
+      .filter((s) => /^B\d$/.test(s));
+    expect(axisLabels.length).toBeLessThanOrEqual(4);
+    expect(axisLabels).toContain('B0');
+    expect(axisLabels).toContain('B9');
+  });
+
+  it('formats value labels via valueFormat — "—" for an event-less bucket (8.8.13)', () => {
+    const { container } = render(
+      <BarChart
+        series={[{ label: 'Average age', color: chartColor.age }]}
+        // The middle bucket is event-less (0) — valueFormat renders it as "—".
+        groups={[
+          { label: 'Jan', values: [14] },
+          { label: 'Feb', values: [0] },
+          { label: 'Mar', values: [21] },
+        ]}
+        yTicks={[0, 10, 20].map((v) => ({ value: v, label: String(v) }))}
+        description="Average age with an em-dash for the empty bucket."
+        valueFormat={(value) => (value === 0 ? '—' : String(value))}
+      />,
+    );
+    // The "—" appears as a bar value label (the 4.5.2 rule, never a misleading 0).
+    const svg = container.querySelector('svg') as SVGElement;
+    expect(within(svg as unknown as HTMLElement).getAllByText('—').length).toBeGreaterThan(0);
+    expect(within(svg as unknown as HTMLElement).getByText('14')).toBeTruthy();
+  });
 });
 
 // 6.3.4 — the donut + difference/area forms grown into the same 4.6.2 layer.

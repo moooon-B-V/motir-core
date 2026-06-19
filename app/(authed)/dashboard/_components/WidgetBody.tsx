@@ -2,13 +2,17 @@
 
 import type { DashboardWidgetDto } from '@/lib/dto/dashboards';
 import type {
+  AgeReportConfig,
   CreatedVsResolvedConfig,
   DistributionConfig,
   FilterResultsConfig,
+  WorkloadConfig,
 } from '@/lib/dashboards/widgetRegistry';
 import { FilterResultsBody } from './FilterResultsBody';
 import { DistributionBody } from './DistributionBody';
 import { CreatedVsResolvedBody } from './CreatedVsResolvedBody';
+import { AgeReportBody } from './AgeReportBody';
+import { WorkloadBody } from './WorkloadBody';
 
 // The widget-body dispatcher (6.3.5): mounts the renderer named by the 6.3.1
 // registry's `rendererKind` — the UI never switches on the widget TYPE, so a
@@ -49,6 +53,23 @@ export function WidgetBody({
         <CreatedVsResolvedBody
           source={widget.source}
           config={widget.config as CreatedVsResolvedConfig}
+          onReconfigure={onReconfigure}
+        />
+      );
+    case 'bar':
+      return (
+        <AgeReportBody
+          type={widget.type as 'average_age' | 'resolution_time'}
+          source={widget.source}
+          config={widget.config as AgeReportConfig}
+          onReconfigure={onReconfigure}
+        />
+      );
+    case 'hbar':
+      return (
+        <WorkloadBody
+          source={widget.source}
+          config={widget.config as WorkloadConfig}
           onReconfigure={onReconfigure}
         />
       );

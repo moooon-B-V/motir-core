@@ -3,6 +3,7 @@ import {
   MAX_REPORT_WINDOW_DAYS,
   MAX_REPORT_BUCKETS,
 } from '@/lib/reports/buckets';
+import type { WorkloadMeasureDto } from '@/lib/dto/reports';
 
 // Client-safe view helpers for the Story-6.3 report PAGES (Subtask 6.3.6) — the
 // `?period`/`?daysBack`/`?cumulative`/`?savedFilterId`/`?statistic` URL state and
@@ -23,7 +24,17 @@ export const REPORT_DEFAULTS = {
   daysBack: 30,
   cumulative: false,
   statistic: 'status',
+  /** The workload report's default measure (Subtask 8.8.13) — story points,
+   * Motir's workload unit. */
+  measure: 'story_points' as WorkloadMeasureDto,
 } as const;
+
+/** Coerce a raw `?measure` to a valid workload measure, defaulting (never
+ * throwing — the page-level forgiving parse; the widget route keeps the strict
+ * `parseMeasure` thrower). */
+export function coerceMeasure(raw: string | null): WorkloadMeasureDto {
+  return raw === 'story_points' || raw === 'issue_count' ? raw : REPORT_DEFAULTS.measure;
+}
 
 /**
  * The discrete days-back windows the stepper moves through (the design's
@@ -99,6 +110,8 @@ export interface ReportPageParams {
   daysBack?: number;
   cumulative?: boolean;
   statistic?: string;
+  /** The workload report's measure (Subtask 8.8.13). */
+  measure?: WorkloadMeasureDto;
 }
 
 /**
@@ -117,6 +130,9 @@ export function buildReportHref(pathname: string, params: ReportPageParams): str
   if (params.cumulative) sp.set('cumulative', 'true');
   if (params.statistic && params.statistic !== REPORT_DEFAULTS.statistic) {
     sp.set('statistic', params.statistic);
+  }
+  if (params.measure && params.measure !== REPORT_DEFAULTS.measure) {
+    sp.set('measure', params.measure);
   }
   const qs = sp.toString();
   return qs ? `${pathname}?${qs}` : pathname;

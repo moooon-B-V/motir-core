@@ -38,6 +38,10 @@ export const chartColor = {
   deficit: 'var(--el-chart-deficit)',
   /** Difference fill where resolved outpaces created (catching up — green). */
   surplus: 'var(--el-chart-surplus)',
+  /** Average-age report — the vertical-bar fill (8.8.13). */
+  age: 'var(--el-chart-age)',
+  /** Resolution-time report — the vertical-bar fill (8.8.13). */
+  resolution: 'var(--el-chart-resolution)',
 } as const;
 
 export type ChartColor = (typeof chartColor)[keyof typeof chartColor];
