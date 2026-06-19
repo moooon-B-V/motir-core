@@ -78,6 +78,7 @@ function node(over: Partial<WorkItemTreeRowDto> & { id: string; key: number }): 
   return {
     parentId: null,
     kind: 'task',
+    type: null,
     identifier: `PROD-${over.key}`,
     title: `Issue ${over.key}`,
     status: 'todo',

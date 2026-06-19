@@ -102,6 +102,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     id: `wi_${over.identifier}`,
     title: 'An issue',
     kind: 'task',
+    type: null,
     status: 'todo',
     statusLabel: 'To Do',
     statusCategory: 'todo',

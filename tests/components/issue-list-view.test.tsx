@@ -52,6 +52,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
     id: `wi_${over.identifier}`,
     title: 'An issue',
     kind: 'task',
+    type: null,
     status: 'todo',
     statusLabel: 'To Do',
     statusCategory: 'todo',
@@ -149,6 +150,46 @@ describe('IssueListTable — sortable headers', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Title/ }));
     expect(push).toHaveBeenCalledWith('/issues?view=list&sort=key%3Adesc');
+  });
+});
+
+// The work-Type column (Subtask 8.8.9) — surfaces each leaf's `type` via the
+// shipped WorkItemTypeChip; `null`-type containers render the muted em-dash.
+// Shared by both views (issueColumns), so testing the List exercises the cell.
+describe('IssueListTable — work-Type column (Subtask 8.8.9)', () => {
+  function renderRows(rows: IssueRowData[]) {
+    render(
+      <IssueListTable
+        rows={rows}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+        pagination={{ total: rows.length, page: 1, pageSize: 50 }}
+      />,
+    );
+  }
+
+  // The cells render in column order: Title · Type · Priority · … — so the Type
+  // cell is index 1. (Targeting it by position is robust: the muted "—" empty
+  // glyph is shared by the Due / Est. / Points cells, so a row-wide text query
+  // for "—" would be ambiguous.)
+  const typeCellOf = (identifier: string) =>
+    within(screen.getByTestId(`issue-row-${identifier}`)).getAllByRole('cell')[1]!;
+
+  it('renders the WorkItemTypeChip (i18n label) for a typed leaf', () => {
+    renderRows([row({ identifier: 'PROD-1', kind: 'subtask', type: 'design' })]);
+    // The chip label is the `labels.workItemType.design` gloss → "Design".
+    expect(typeCellOf('PROD-1').textContent).toContain('Design');
+  });
+
+  it('renders a muted em-dash (no chip) for a null-type container', () => {
+    renderRows([row({ identifier: 'PROD-2', kind: 'epic', type: null })]);
+    expect(typeCellOf('PROD-2').textContent).toBe('—');
+  });
+
+  it('exposes a sortable "Type" column header that navigates to ?sort=type:asc', () => {
+    renderRows([row({ identifier: 'PROD-1', type: 'code' })]);
+    fireEvent.click(screen.getByRole('button', { name: /Type/ }));
+    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=type%3Aasc');
   });
 });
 

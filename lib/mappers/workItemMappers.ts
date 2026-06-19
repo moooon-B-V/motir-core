@@ -128,6 +128,7 @@ export function toWorkItemTreeNodeDto(
     id: row.id,
     parentId: row.parentId,
     kind: row.kind,
+    type: row.type,
     key: row.key,
     identifier: row.identifier,
     title: row.title,
@@ -157,6 +158,7 @@ export function toWorkItemListItemDto(row: WorkItemListRow): WorkItemListItemDto
   return {
     id: row.id,
     kind: row.kind,
+    type: row.type,
     key: row.key,
     identifier: row.identifier,
     title: row.title,

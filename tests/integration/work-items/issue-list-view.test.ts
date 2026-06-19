@@ -52,6 +52,22 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     expect(ids(rows)).toEqual(['PROD-1', 'PROD-2', 'PROD-3']);
   });
 
+  it("projects each item's work `type` (Subtask 8.8.9 — Type column)", async () => {
+    const fx = await makeFixture();
+    const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
+    const task = await createWorkItem(fx, { kind: 'task', title: 'Task' });
+    await db.workItem.update({ where: { id: task.id }, data: { type: 'code' } });
+
+    const { items: rows } = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: DEFAULT_SORT },
+      fx.ctx,
+    );
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(task.id)?.type).toBe('code');
+    expect(byId.get(epic.id)?.type).toBeNull(); // container — no work type
+  });
+
   it('sorts by key descending', async () => {
     const fx = await makeFixture();
     await createWorkItem(fx, { kind: 'task', title: 'A' });

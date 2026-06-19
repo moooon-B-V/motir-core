@@ -73,6 +73,9 @@ export interface WorkItemForestRow {
   id: string;
   parentId: string | null;
   kind: WorkItemKind;
+  /** The leaf's work type (Story 2.7) — the row Type chip (8.8.9); `null` on
+   *  containers. Cast to text in the query so `$queryRaw` returns the enum label. */
+  type: WorkItemType | null;
   key: number;
   identifier: string;
   title: string;
@@ -97,6 +100,9 @@ export interface WorkItemForestRow {
 export interface WorkItemListRow {
   id: string;
   kind: WorkItemKind;
+  /** The leaf's work type (Story 2.7) — the row Type chip (8.8.9); `null` on
+   *  containers. `WorkItemTreeRow` / `ArchivedWorkItemRow` inherit it. */
+  type: WorkItemType | null;
   key: number;
   identifier: string;
   title: string;
@@ -293,6 +299,9 @@ export interface PublicRoadmapCursor {
 const ISSUE_SORT_SQL: Record<IssueSortColumn, Prisma.Sql> = {
   key: Prisma.sql`w."key"`,
   title: Prisma.sql`w."title"`,
+  // The Type column (Subtask 8.8.9) — orders by the work_item_type enum's
+  // declaration order (NULL-type containers sort last via the NULLS LAST clause).
+  type: Prisma.sql`w."type"`,
   priority: Prisma.sql`w."priority"`,
   assignee: Prisma.sql`au."name"`,
   reporter: Prisma.sql`ru."name"`,
@@ -1299,6 +1308,7 @@ export const workItemRepository = {
       SELECT f."id",
              f."parentId",
              f."kind"::text       AS "kind",
+             f."type"::text       AS "type",
              f."key",
              f."identifier",
              f."title",
@@ -1354,6 +1364,7 @@ export const workItemRepository = {
     return client.$queryRaw<WorkItemListRow[]>`
       SELECT w."id",
              w."kind"::text       AS "kind",
+             w."type"::text       AS "type",
              w."key",
              w."identifier",
              w."title",
@@ -1698,6 +1709,7 @@ export const workItemRepository = {
       SELECT w."id",
              w."parentId",
              w."kind"::text       AS "kind",
+             w."type"::text       AS "type",
              w."key",
              w."identifier",
              w."title",

@@ -129,6 +129,20 @@ describe('workItemsService.getProjectTree — nesting (no filter)', () => {
     void t;
   });
 
+  it("projects each leaf's work `type` through the forest CTE (Subtask 8.8.9)", async () => {
+    const fx = await makeFixture();
+    const t = await buildForest(fx);
+    // A leaf carries a work type; the container epic carries none.
+    await setType(t.A1a.id, 'design');
+    await setType(t.X.id, 'code');
+
+    const tree = await workItemsService.getProjectTree(fx.projectId, {}, fx.ctx);
+
+    expect(findNode(tree, 'PROD-4')!.type).toBe('design'); // subtask A1a
+    expect(findNode(tree, 'PROD-7')!.type).toBe('code'); // bug X
+    expect(findNode(tree, 'PROD-1')!.type).toBeNull(); // epic E — no work type
+  });
+
   it('excludes archived items (and their descendants drop out of the forest)', async () => {
     const fx = await makeFixture();
     const t = await buildForest(fx);
