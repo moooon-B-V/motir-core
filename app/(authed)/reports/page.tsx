@@ -177,6 +177,9 @@ function HubCard({
   return (
     <Link
       href={href}
+      // surface-material hook (glass frost / aurora glow); inert under
+      // non-material styles. 7.3.38.
+      data-surface="card"
       className={cn(
         'group flex items-start gap-3 rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow',
         'hover:shadow-(--shadow-card) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-(--el-page-bg) focus-visible:outline-none',
