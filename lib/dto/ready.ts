@@ -17,7 +17,12 @@
 // DTO-local string-literal unions (so this module stays Prisma-free); the
 // mapper owns any Prisma→wire conversion.
 
-import type { WorkItemKindDto, WorkItemPriorityDto } from './workItems';
+import type {
+  ExecutorDto,
+  WorkItemKindDto,
+  WorkItemPriorityDto,
+  WorkItemTypeDto,
+} from './workItems';
 
 /**
  * NAMING — `key` is the `PROD-<n>` IDENTIFIER string, not the numeric sequence.
@@ -51,6 +56,44 @@ export interface ReadyItemDto {
   assignee: { id: string; name: string; avatarUrl: string | null } | null;
   /** First ~200 chars of the description, Markdown stripped to plain text. */
   descriptionExcerpt: string | null;
+  /**
+   * The work item's NATURE (Story 2.7) — `code` / `design` / `manual` / … or
+   * `null` on a container kind (epic/story) or an untyped leaf. Drives the
+   * row's `WorkItemTypeChip` (the chip is OMITTED when null) and, together with
+   * {@link ReadyItemDto.executor}, the manual-row variant (8.8.5 / 8.8.10).
+   */
+  type: WorkItemTypeDto | null;
+  /**
+   * WHO executes the work (Story 2.7) — `coding_agent` | `human` | `null`. A
+   * `human` (or `type: 'manual'`) row is NOT agent-runnable, so the list swaps
+   * its `motir run` copy affordance for a *Show instruction* button — see
+   * {@link isManualReadyItem}.
+   */
+  executor: ExecutorDto | null;
+  /**
+   * The full Markdown instruction body — populated ONLY for a MANUAL row (the
+   * source the *Show instruction* modal renders; 8.8.5 / 8.8.10) and `null` for
+   * an agent-runnable row, so the list payload stays lean (the 7.0.3 split
+   * decision: a 50-row page never ships 50 bodies; only the few human-task rows
+   * carry one). The dispatch DTO below OVERRIDES this with the full body for
+   * every item — the agent always needs it.
+   */
+  descriptionMd: string | null;
+}
+
+/**
+ * A ready row is MANUAL — human work a coding agent can't run (`executor:
+ * 'human'`, or `type: 'manual'`) — so the list shows a *Show instruction*
+ * button + instruction modal instead of the `motir run` copy affordance
+ * (8.8.5 / 8.8.10). The mapper uses this to decide whether to ship
+ * `descriptionMd`; the row uses it to pick the variant — ONE predicate, so the
+ * payload decision and the render decision can never drift.
+ */
+export function isManualReadyItem(item: {
+  type: WorkItemTypeDto | null;
+  executor: ExecutorDto | null;
+}): boolean {
+  return item.executor === 'human' || item.type === 'manual';
 }
 
 /**
@@ -60,7 +103,8 @@ export interface ReadyItemDto {
  * had to land first, the parent key, and the ready-to-paste run command.
  */
 export interface ReadyItemDispatchDto extends ReadyItemDto {
-  descriptionMd: string | null;
+  // `descriptionMd` is inherited from `ReadyItemDto`; the dispatch mapper
+  // overrides the base's manual-only value with the FULL body for every item.
   /**
    * File paths the agent should read before executing.
    *

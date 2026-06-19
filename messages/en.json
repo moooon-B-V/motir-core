@@ -1947,6 +1947,18 @@
     "unassigned": "Unassigned",
     "copyAria": "Copy run command for {key}",
     "copyTooltip": "Copy <cmd>{command}</cmd>",
+    "showInstruction": "Show instruction",
+    "showInstructionAria": "Show instruction for {key}",
+    "manualTooltip": "A human task — no run command",
+    "instruction": {
+      "assigned": "Human task · assigned to {name}",
+      "unassigned": "Human task · unassigned",
+      "bodyAria": "Run instruction",
+      "empty": {
+        "title": "No instruction yet",
+        "body": "This human task has no description. Add one on the work item so whoever picks it up knows what to do."
+      }
+    },
     "noProjectTitle": "No project yet",
     "noProjectDescription": "Create or select a project to see what’s ready to start.",
     "popover": {

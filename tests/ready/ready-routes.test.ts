@@ -114,8 +114,12 @@ describe('GET /api/ready — list endpoint (Subtask 7.0.4)', () => {
     expect(row.status).toMatchObject({ category: expect.any(String) });
     expect(row).toHaveProperty('assignee');
     expect(row).toHaveProperty('descriptionExcerpt');
-    // The list row must NOT carry the heavy dispatch-only fields.
-    expect(row).not.toHaveProperty('descriptionMd');
+    // The list row carries `type` + `executor` (8.8.10) — null on this untyped
+    // task fixture. `descriptionMd` rides along ONLY for a manual row (the
+    // *Show instruction* modal source); a non-manual row keeps it null so the
+    // list payload stays lean.
+    expect(row).toMatchObject({ type: null, executor: null, descriptionMd: null });
+    // `runCommand` stays dispatch-only — never on the cheap list row.
     expect(row).not.toHaveProperty('runCommand');
   });
 

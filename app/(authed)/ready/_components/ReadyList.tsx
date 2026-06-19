@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
-import { Copy } from 'lucide-react';
+import { Copy, FileX, ScrollText } from 'lucide-react';
 import type { ReadyItemDto } from '@/lib/dto/ready';
+import { isManualReadyItem } from '@/lib/dto/ready';
 import { useRowWindow } from '@/components/ui/useRowWindow';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { MarkdownView } from '@/components/ui/MarkdownView';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
 import { usePeekOpen } from '../../issues/_components/IssueQuickView';
 import { loadMoreReadyAction } from '../_actions';
@@ -135,8 +140,45 @@ export function ReadyList({ initialItems, initialCursor }: ReadyListProps) {
 
 /** One dispatch card — a flat arrangement of the shipped issue primitives. */
 function ReadyRow({ item }: { item: ReadyItemDto }) {
-  const t = useTranslations('ready');
   const openPeek = usePeekOpen();
+  // A MANUAL row (human work) carries no `motir run` command (8.8.5/8.8.10):
+  // its action slot is the always-visible *Show instruction* button + modal
+  // instead of the hover-revealed agent copy button. ONE predicate with the
+  // mapper's payload decision (`isManualReadyItem`), so they never drift.
+  const isManual = isManualReadyItem(item);
+
+  return (
+    <div className="group relative flex min-h-(--height-control) items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong) hover:bg-(--el-surface-soft)">
+      <IssueTypeIcon type={item.kind} className="h-[18px] w-[18px] shrink-0" />
+      <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.key}</span>
+      {/* Stretched-`::after` button: the whole card opens the peek (notes.html #7). */}
+      <button
+        type="button"
+        onClick={() => openPeek(item.key)}
+        aria-label={`${item.key} ${item.title}`}
+        className="min-w-0 flex-1 truncate rounded-(--radius-control) text-left text-sm text-(--el-text) after:absolute after:inset-0 after:content-[''] group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+      >
+        {item.title}
+      </button>
+      {/* Meta cluster — `[type chip] · [priority] · [assignee] · [action]`. The
+          chip + priority + avatar are non-interactive, so a click falls through
+          to the stretched peek overlay; only the action button is raised above it. */}
+      <div className="flex shrink-0 items-center gap-3">
+        {/* `type: null` (a childless story/epic in the set) omits the chip — a
+            flex row needs no placeholder filler (per design/ready notes). */}
+        {item.type ? <WorkItemTypeChip type={item.type} /> : null}
+        <PriorityValue priority={item.priority} />
+        <ReadyAssignee assignee={item.assignee} />
+        {isManual ? <ShowInstructionAction item={item} /> : <CopyCommandAction item={item} />}
+      </div>
+    </div>
+  );
+}
+
+/** The agent action — the hover-revealed copy button that puts `motir run/plan
+ *  <key>` on the clipboard. Raised above the stretched peek overlay. */
+function CopyCommandAction({ item }: { item: ReadyItemDto }) {
+  const t = useTranslations('ready');
   const { toast } = useToast();
   // Container kinds (epic / story) are *planned/deepened*, not executed — they
   // only enter the ready set while childless (the `NOT EXISTS (children)` ready
@@ -159,41 +201,100 @@ function ReadyRow({ item }: { item: ReadyItemDto }) {
   );
 
   return (
-    <div className="group relative flex min-h-(--height-control) items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong) hover:bg-(--el-surface-soft)">
-      <IssueTypeIcon type={item.kind} className="h-[18px] w-[18px] shrink-0" />
-      <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.key}</span>
-      {/* Stretched-`::after` button: the whole card opens the peek (notes.html #7). */}
-      <button
-        type="button"
-        onClick={() => openPeek(item.key)}
-        aria-label={`${item.key} ${item.title}`}
-        className="min-w-0 flex-1 truncate rounded-(--radius-control) text-left text-sm text-(--el-text) after:absolute after:inset-0 after:content-[''] group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+    <span className="relative z-10">
+      <Tooltip
+        content={t.rich('copyTooltip', {
+          command,
+          cmd: (chunks) => <code className="font-mono">{chunks}</code>,
+        })}
       >
-        {item.title}
-      </button>
-      <div className="flex shrink-0 items-center gap-3">
-        <PriorityValue priority={item.priority} />
-        <ReadyAssignee assignee={item.assignee} />
-        {/* Raised above the stretched overlay so it doesn't open the peek. */}
-        <span className="relative z-10">
-          <Tooltip
-            content={t.rich('copyTooltip', {
-              command,
-              cmd: (chunks) => <code className="font-mono">{chunks}</code>,
-            })}
-          >
-            <button
-              type="button"
-              onClick={copy}
-              aria-label={t('copyAria', { key: item.key })}
-              className="inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) opacity-0 transition-[opacity,color,background-color] hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:text-(--el-text) focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) group-hover:opacity-100 [@media(hover:none)]:opacity-100"
-            >
-              <Copy className="h-4 w-4" aria-hidden />
-            </button>
-          </Tooltip>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={t('copyAria', { key: item.key })}
+          className="inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) opacity-0 transition-[opacity,color,background-color] hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:text-(--el-text) focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        >
+          <Copy className="h-4 w-4" aria-hidden />
+        </button>
+      </Tooltip>
+    </span>
+  );
+}
+
+/** The manual-row action (8.8.5/8.8.10) — an ALWAYS-visible *Show instruction*
+ *  button (a human task can't be run, so reading the instruction is the only
+ *  affordance and must not hide behind hover) that opens the instruction modal. */
+function ShowInstructionAction({ item }: { item: ReadyItemDto }) {
+  const t = useTranslations('ready');
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative z-10">
+      <Tooltip content={t('manualTooltip')}>
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={<ScrollText className="h-[15px] w-[15px]" aria-hidden />}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          aria-label={t('showInstructionAria', { key: item.key })}
+          className="border border-(--el-border) text-(--el-text-secondary)"
+        >
+          {t('showInstruction')}
+        </Button>
+      </Tooltip>
+      <InstructionModal item={item} open={open} onOpenChange={setOpen} />
+    </span>
+  );
+}
+
+/** The instruction modal — the manual item's `descriptionMd` rendered as the
+ *  same Markdown stack as the issue detail page (`Modal` + `MarkdownView`). */
+function InstructionModal({
+  item,
+  open,
+  onOpenChange,
+}: {
+  item: ReadyItemDto;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useTranslations('ready');
+  const tc = useTranslations('common');
+  const body = item.descriptionMd?.trim() ? item.descriptionMd : null;
+  return (
+    <Modal open={open} onOpenChange={onOpenChange} size="lg" title={item.title}>
+      {/* Subhead: key · Manual chip · "Human task · assigned to {name}". */}
+      <div className="-mt-1 mb-(--spacing-md) flex shrink-0 flex-wrap items-center gap-2">
+        <span className="font-mono text-xs text-(--el-text-muted)">{item.key}</span>
+        {item.type ? <WorkItemTypeChip type={item.type} /> : null}
+        <span className="text-sm text-(--el-text-secondary)">
+          {item.assignee
+            ? t('instruction.assigned', { name: item.assignee.name })
+            : t('instruction.unassigned')}
         </span>
       </div>
-    </div>
+      <Modal.Body>
+        {body ? (
+          <MarkdownView value={body} aria-label={t('instruction.bodyAria')} />
+        ) : (
+          // Empty: point the reader at the fix rather than showing a blank pane.
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-(--spacing-lg) text-center">
+            <FileX className="h-10 w-10 text-(--el-text-faint)" aria-hidden />
+            <p className="text-sm font-medium text-(--el-text)">{t('instruction.empty.title')}</p>
+            <p className="max-w-prose text-sm text-(--el-text-muted)">
+              {t('instruction.empty.body')}
+            </p>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          {tc('close')}
+        </Button>
+      </Modal.Footer>
+    </Modal>
   );
 }
 

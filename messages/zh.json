@@ -1947,6 +1947,18 @@
     "unassigned": "未分配",
     "copyAria": "复制 {key} 的运行命令",
     "copyTooltip": "复制 <cmd>{command}</cmd>",
+    "showInstruction": "查看说明",
+    "showInstructionAria": "查看 {key} 的说明",
+    "manualTooltip": "人工任务——没有运行命令",
+    "instruction": {
+      "assigned": "人工任务 · 指派给 {name}",
+      "unassigned": "人工任务 · 未分配",
+      "bodyAria": "执行说明",
+      "empty": {
+        "title": "暂无说明",
+        "body": "此人工任务还没有描述。请在工作项上补充说明，好让接手的人知道该做什么。"
+      }
+    },
     "noProjectTitle": "暂无项目",
     "noProjectDescription": "创建或选择一个项目，查看可以开始的工作。",
     "popover": {

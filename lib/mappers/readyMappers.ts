@@ -1,5 +1,6 @@
 import type { User, WorkItem } from '@prisma/client';
 import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
+import { isManualReadyItem } from '@/lib/dto/ready';
 import { markdownToExcerpt } from '@/lib/markdown/excerpt';
 
 // Prisma → DTO converters for the Ready surface (Subtask 7.0.3). PURE — no DB
@@ -69,6 +70,13 @@ export function toReadyItemDto(row: WorkItem, ctx: ReadyItemContext): ReadyItemD
     status: { key: row.status, category: ctx.statusCategory },
     assignee: toAssigneeDto(ctx.assignee),
     descriptionExcerpt: markdownToExcerpt(row.descriptionMd),
+    type: row.type,
+    executor: row.executor,
+    // Ship the full body ONLY for a manual row (the *Show instruction* modal's
+    // source — 8.8.5/8.8.10); an agent-runnable row carries `null` so the list
+    // payload stays lean (the 7.0.3 split decision). One predicate with the
+    // row's render-side variant choice, via `isManualReadyItem`.
+    descriptionMd: isManualReadyItem(row) ? row.descriptionMd : null,
   };
 }
 
