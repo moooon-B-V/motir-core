@@ -72,6 +72,7 @@
   "issues": {
     "columns": {
       "title": "Title",
+      "type": "Type",
       "priority": "Priority",
       "assignee": "Assignee",
       "reporter": "Reporter",

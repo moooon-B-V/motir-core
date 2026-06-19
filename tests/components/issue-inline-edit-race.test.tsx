@@ -118,6 +118,7 @@ function toRow(
     identifier: dto.identifier,
     title: dto.title,
     kind: dto.kind,
+    type: dto.type,
     status: dto.status,
     statusLabel: meta?.label ?? dto.status,
     statusCategory: meta?.category ?? null,

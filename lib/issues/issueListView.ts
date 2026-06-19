@@ -17,12 +17,14 @@ export type IssueListView = 'tree' | 'list';
  * The columns the flat List can sort by — one per drawn `list.mock.html`
  * header. `key` is the issue key (the mono identifier leading the Title cell —
  * the canonical issue order + the default). `assignee`/`reporter` sort by
- * display name; `status` by the project workflow's status order; the rest are
- * the work-item scalar columns.
+ * display name; `status` by the project workflow's status order; `type` by the
+ * work-item-type enum order (the Type column, Subtask 8.8.9); the rest are the
+ * work-item scalar columns.
  */
 export type IssueSortColumn =
   | 'key'
   | 'title'
+  | 'type'
   | 'priority'
   | 'assignee'
   | 'reporter'
@@ -42,6 +44,7 @@ export interface IssueSort {
 export const ISSUE_SORT_COLUMNS: readonly IssueSortColumn[] = [
   'key',
   'title',
+  'type',
   'priority',
   'assignee',
   'reporter',

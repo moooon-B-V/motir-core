@@ -249,6 +249,7 @@ describe('toArchivedRows', () => {
     return {
       id: 'wi_1',
       kind: 'bug',
+      type: 'code',
       key: 49,
       identifier: 'PROD-49',
       title: 'A bug',

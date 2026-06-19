@@ -3,6 +3,7 @@ import type {
   WorkItemListItemDto,
   WorkItemPriorityDto,
   WorkItemTreeNodeDto,
+  WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { StatusCategoryDto, WorkflowStatusDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -29,6 +30,9 @@ export interface IssueRowData {
   title: string;
   /** Drives the type-hued IssueTypeIcon. */
   kind: WorkItemKindDto;
+  /** The leaf's work TYPE (Story 2.7) → the Type-column `WorkItemTypeChip`
+   *  (Subtask 8.8.9); `null` on containers (epic/story) → a muted em-dash. */
+  type: WorkItemTypeDto | null;
   /** The raw workflow status KEY (not the label) — what the inline StatusPicker
    *  edits + `changeStatusAction` commits (2.5.5); `statusLabel` is its display. */
   status: string;
@@ -115,6 +119,7 @@ function shapeRowData(
     identifier: item.identifier,
     title: item.title,
     kind: item.kind,
+    type: item.type,
     status: item.status,
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,

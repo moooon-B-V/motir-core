@@ -31,6 +31,8 @@ describe('parseSort', () => {
   it('parses a valid column:direction pair', () => {
     expect(parseSort('priority:desc')).toEqual({ column: 'priority', direction: 'desc' });
     expect(parseSort('status:asc')).toEqual({ column: 'status', direction: 'asc' });
+    // The work-Type column is sortable too (Subtask 8.8.9).
+    expect(parseSort('type:asc')).toEqual({ column: 'type', direction: 'asc' });
   });
 
   it('clamps anything invalid to the default (key asc)', () => {

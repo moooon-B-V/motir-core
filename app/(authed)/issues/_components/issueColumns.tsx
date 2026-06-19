@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import type { IssueSortColumn } from '@/lib/issues/issueListView';
@@ -72,6 +73,26 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
           </span>
         </span>
       ),
+    },
+    {
+      // The work-TYPE chip (Story 2.7 type · Subtask 8.8.9) — surfaces each
+      // leaf's `type` (code/design/…) via the shipped WorkItemTypeChip, in a
+      // dedicated column right after Title so it stays vertically aligned across
+      // the tree's per-depth indent (an inline chip would drift with the indent).
+      // `null` on containers (epic/story) → the muted em-dash empty-cell
+      // convention (no chip). Sortable like Jira's navigator Type column, which
+      // also makes the header visible (a non-sortable header renders sr-only).
+      // design/work-items/work-type-indicator.mock.html.
+      key: 'type',
+      header: t('issues.columns.type'),
+      width: 116,
+      sortColumn: 'type',
+      cell: (r) =>
+        r.type ? (
+          <WorkItemTypeChip type={r.type} />
+        ) : (
+          <span className="text-(--el-text-faint)">—</span>
+        ),
     },
     {
       key: 'priority',

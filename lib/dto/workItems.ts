@@ -328,6 +328,10 @@ export interface WorkItemTreeNodeDto {
   id: string;
   parentId: string | null;
   kind: WorkItemKindDto;
+  /** The NATURE of the leaf's work (Story 2.7) — `code`/`design`/… — surfaced as
+   *  the row Type chip (Subtask 8.8.9). `null` on containers (epic/story), which
+   *  carry no work type; the row renders a muted em-dash there. */
+  type: WorkItemTypeDto | null;
   key: number;
   identifier: string;
   title: string;
@@ -365,6 +369,10 @@ export interface WorkItemTreeNodeDto {
 export interface WorkItemListItemDto {
   id: string;
   kind: WorkItemKindDto;
+  /** The NATURE of the leaf's work (Story 2.7) — surfaced as the row Type chip
+   *  (Subtask 8.8.9); `null` on containers (epic/story) → muted em-dash.
+   *  `WorkItemTreeRowDto` / `ArchivedWorkItemDto` inherit it. */
+  type: WorkItemTypeDto | null;
   key: number;
   identifier: string;
   title: string;

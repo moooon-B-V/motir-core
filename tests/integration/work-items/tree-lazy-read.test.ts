@@ -61,6 +61,17 @@ describe('listRootIssues', () => {
     expect(level.total).toBe(2); // the FULL roots count (for aria-setsize)
   });
 
+  it("projects each row's work `type` (Subtask 8.8.9 — Type column)", async () => {
+    const fx = await makeFixture();
+    const { E, X } = await buildForest(fx);
+    await db.workItem.update({ where: { id: X.id }, data: { type: 'code' } });
+
+    const level = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
+
+    expect(level.rows.find((r) => r.id === X.id)?.type).toBe('code'); // bug X — a leaf
+    expect(level.rows.find((r) => r.id === E.id)?.type).toBeNull(); // epic — no work type
+  });
+
   it('pages with take/offset and reports hasMore', async () => {
     const fx = await makeFixture();
     const { E, X } = await buildForest(fx);
