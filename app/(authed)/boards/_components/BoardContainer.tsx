@@ -1133,6 +1133,11 @@ function BoardDnd({
             role="group"
             aria-label={t('boardLabel')}
             tabIndex={0}
+            // `data-board-scroll`: under the 3D / Immersive style this row widens
+            // its gap and adds bottom room so each column's float shadow shows
+            // (the `overflow-x-auto` here forces overflow-y to clip — see
+            // globals.css). Inert under every other style.
+            data-board-scroll=""
             className="flex snap-x snap-proximity gap-4 overflow-x-auto pb-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             data-testid="board"
           >

@@ -308,7 +308,7 @@ export const STYLE_REGISTRY = {
       typography:
         'Inherits the base editorial type pairing; the personality is in depth + light, not the type.',
       components:
-        'Deeply-shadowed rounded cards / board cards / modals that tilt toward the pointer (the data-tilt parallax hook), pill status chips — every framed surface floats.',
+        'Rounded cards / board cards / modals that tilt toward the pointer with layered parallax; PHYSICAL buttons with real thickness (a solid base edge) that press DOWN on click; each board column floats as its own card. Nothing is flat.',
     },
   },
 } satisfies Record<string, StyleDefinition>;

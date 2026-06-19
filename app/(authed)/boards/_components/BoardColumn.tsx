@@ -133,10 +133,12 @@ export function BoardColumn({
       aria-label={t('columnLabel', { name: column.name, count: column.totalCount })}
       data-testid={`board-column-${column.id}`}
       data-over={isOver ? 'true' : undefined}
-      // `data-tilt` floats the column under the 3D / Immersive style (it is tall,
-      // so the engine size-gates it: deep resting shadow, no cursor tilt — its
-      // cards still tilt individually). Inert under every other style.
-      data-tilt=""
+      // `data-board-col-panel` floats the column as a DISTINCT card under the 3D /
+      // Immersive style — a tighter, clip-safe shadow (not the wide --shadow-card,
+      // which an `overflow-x-auto` scroll row clips at the bottom and adjacent
+      // columns occlude on the sides, making the board read as one backing slab).
+      // The cards INSIDE still tilt individually. Inert under every other style.
+      data-board-col-panel=""
       className={`flex h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
         isOver
           ? 'border-(--el-accent) bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)'

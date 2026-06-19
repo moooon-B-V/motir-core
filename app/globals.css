@@ -915,6 +915,85 @@
   position: relative;
 }
 
+/* ── 3D / Immersive — BOARD COLUMNS ─────────────────────────────────────────
+   A board column is a TALL panel inside an `overflow-x-auto` scroll row, which
+   forces overflow-y to clip — so the wide --shadow-card gets cut off at the
+   bottom and adjacent opaque columns occlude each other's side shadows, making
+   the board read as one backing slab. Instead each column gets a TIGHTER,
+   clip/occlusion-safe float shadow (small horizontal bleed, modest drop), and
+   the scroll row widens its gap + adds bottom room so the shadow shows. Result:
+   each column floats as its own distinct card. */
+[data-style='3d-immersive'] [data-board-col-panel] {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
+    0 1px 3px rgba(15, 15, 15, 0.08),
+    0 8px 18px -8px rgba(15, 15, 15, 0.22);
+}
+[data-style='3d-immersive'] [data-board-scroll] {
+  gap: 1.5rem;
+  padding-bottom: 2.25rem;
+  padding-top: 0.25rem;
+}
+
+/* ── 3D / Immersive — PHYSICAL BUTTONS ──────────────────────────────────────
+   In a 3D design a button is not flat: it has visible THICKNESS (a solid base
+   edge in a darker shade of its own fill) and presses DOWN onto that base on
+   click (translateY + the base compresses) — the standard 3D/skeuomorphic
+   button. Filled variants (primary, danger) get the full treatment; the
+   palette-derived base colour keeps the style/palette axes disjoint (a darker
+   accent / danger, never a raw hue). box-shadow is not a colour-painting
+   property, so the material-rule test skips these. The press overrides the
+   base style's `active:scale` with a more physical translateY. */
+[data-style='3d-immersive'] [data-variant='primary'] {
+  box-shadow:
+    0 4px 0 0 var(--el-accent-pressed),
+    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out,
+    background-color var(--transition-duration);
+}
+[data-style='3d-immersive'] [data-variant='danger'] {
+  box-shadow:
+    0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out,
+    background-color var(--transition-duration);
+}
+[data-style='3d-immersive'] [data-variant='secondary'] {
+  box-shadow:
+    0 3px 0 0 var(--el-border-strong),
+    0 5px 10px -3px rgba(15, 15, 15, 0.18);
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out,
+    background-color var(--transition-duration);
+}
+/* Press DOWN onto the base — the button drops by its thickness and the base
+   edge compresses, like a real key. Overrides the base `active:scale`. */
+[data-style='3d-immersive'] [data-variant='primary']:active:not(:disabled),
+[data-style='3d-immersive'] [data-variant='danger']:active:not(:disabled),
+[data-style='3d-immersive'] [data-variant='secondary']:active:not(:disabled) {
+  transform: translateY(3px);
+}
+[data-style='3d-immersive'] [data-variant='primary']:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 0 var(--el-accent-pressed),
+    0 2px 5px rgba(15, 15, 15, 0.22);
+}
+[data-style='3d-immersive'] [data-variant='danger']:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+    0 2px 5px rgba(15, 15, 15, 0.22);
+}
+[data-style='3d-immersive'] [data-variant='secondary']:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 0 var(--el-border-strong),
+    0 2px 4px rgba(15, 15, 15, 0.14);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
    The StyleVignette preview specimen carries its OWN axis attribute on a
