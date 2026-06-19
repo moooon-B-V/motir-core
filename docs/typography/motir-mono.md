@@ -6,15 +6,15 @@
 > [`app/globals.css`](../../app/globals.css). Built from the already-loaded
 > faces — **zero new font payload**.
 
-**Tagline:** Monospace headlines over a sans body — technical, code-native.
-**Faces:** JetBrains Mono headlines · Inter body.
+**Tagline:** Monospace throughout — a code-native UI, headlines, body and all.
+**Faces:** JetBrains Mono headlines + body/UI + meta.
 
 ## Role mapping
 
 | Role              | `--font-*` token | Motir Mono face                                     |
 | ----------------- | ---------------- | --------------------------------------------------- |
 | Headlines (xl+)   | `--font-serif`   | JetBrains Mono (re-pointed off the editorial serif) |
-| Body / UI         | `--font-sans`    | Inter                                               |
+| Body / UI         | `--font-sans`    | JetBrains Mono                                      |
 | Meta / code / IDs | `--font-mono`    | JetBrains Mono                                      |
 
 ## Why it exists

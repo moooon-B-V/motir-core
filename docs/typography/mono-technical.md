@@ -7,15 +7,15 @@
 > `next/font` in [`app/layout.tsx`](../../app/layout.tsx). One new face —
 > **IBM Plex Mono**; the body reuses the already-loaded **Inter**.
 
-**Tagline:** IBM Plex Mono headlines and meta over a neutral sans body — precise, developer-grade.
-**Faces:** IBM Plex Mono headlines + meta/code · Inter body.
+**Tagline:** IBM Plex Mono throughout — a precise, developer-grade UI.
+**Faces:** IBM Plex Mono headlines + body/UI + meta/code.
 
 ## Role mapping
 
 | Role              | `--font-*` token | Mono-Technical face                                    |
 | ----------------- | ---------------- | ------------------------------------------------------ |
 | Headlines (xl+)   | `--font-serif`   | IBM Plex Mono (re-pointed off the editorial serif)     |
-| Body / UI         | `--font-sans`    | Inter (the neutral base body — unchanged)              |
+| Body / UI         | `--font-sans`    | IBM Plex Mono                                          |
 | Meta / code / IDs | `--font-mono`    | IBM Plex Mono (re-pointed off the base JetBrains Mono) |
 
 ## Why it exists
@@ -30,7 +30,7 @@ already wears.
 What makes Mono-Technical a real pairing change — not a `motir-mono` re-skin — is
 that it dresses **both** the headline role (`--font-serif`) **and** the meta/code
 role (`--font-mono`) in IBM Plex Mono, so eyebrows, headings, IDs, and inline
-code all speak one cohesive technical voice over a neutral Inter body.
+code — plus the body/UI (nav, buttons) — all speak one cohesive technical voice.
 `motir-mono` re-points only the headline role and keeps JetBrains Mono for meta.
 
 The `[data-type='mono-technical']` block re-points ONLY `--font-serif` and
