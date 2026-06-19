@@ -6,29 +6,38 @@
     <title>Design mock · Draft explanation with AI (Story 8.8 · 8.8.6 → 8.8.12)</title>
     <!--
       DESIGN ASSET (HTML mockup) for MOTIR-1090 / 8.8.6 — the *Draft with AI*
-      affordance for a work item's EXPLANATION (`explanationMd`), on BOTH the
-      create-issue modal AND the work-item detail page. Gates 8.8.12 (MOTIR-1096,
-      the code) which itself depends on 8.8.11 (MOTIR-1095, the motir-ai
+      affordance for a work item's EXPLANATION (`explanationMd`). Gates 8.8.12
+      (MOTIR-1096, code) which depends on 8.8.11 (MOTIR-1095, the motir-ai
       `generate_explanation` job + SSE stream).
 
-      What ALREADY exists (built ON, not re-invented):
-        · create.pen — the explanation field with a "Draft with AI" entry +
-          "— why this matters (optional)" helper.
-        · detail.pen — the Explanation section in three resting states (empty /
-          ai_draft / user-owned) with "Draft explanation with AI" + "Regenerate
-          with AI" + the "AI-drafted — review me" pill.
-      What 8.8.6 NEWLY specifies (the in-between INTERACTION, the gap):
-        · the loading / STREAMING state (SSE, per 8.8.11),
-        · the drafted text landing DIRECTLY in the editable field/editor — no
-          accept/discard confirmation gate; it's saved by the normal create /
-          editor save, Regenerate re-runs,
-        · how `explanationSource` (ai_drafted vs user_authored) is signalled,
-        · the CLOUD-GATED disabled / "Connect Motir AI" state (self-host w/o a
-          MOTIR_AI connection — mirrors onboarding screen K + MotirAiConfigError),
-        · a stream-FAILED error state (MOTIR_AI_UNAVAILABLE / JOB_FAILED).
+      ⚠️ GROUNDED IN THE SHIPPED COMPONENTS (not the legacy create.pen/detail.pen):
+        · CreateIssueModal.tsx — the Explanation field is a COLLAPSIBLE DISCLOSURE
+          (chevron + "Explanation" + hint; skip text when collapsed). When open it
+          renders a `MarkdownEditor size="min"` AND a secondary "Draft with AI"
+          button (Sparkles, ml-auto) that ALREADY EXISTS, currently `disabled`
+          with a tooltip. 8.8.6 designs the states that button drives once enabled.
+        · IssueExplanation.tsx — the detail page's Explanation is a READ-ONLY
+          `ContentSectionCard`: title + "— why this matters" gloss + (when source
+          is `ai_draft`) an "AI-drafted" Pill + a MarkdownView / empty state + an
+          "Edit" link. Authoring/drafting is NOT inline here — the Edit link routes
+          to the edit form.
+        · EditIssueForm.tsx — an always-visible `MarkdownEditor size="full"` for
+          the explanation (label gloss + an `ai_draft` info Pill). This is the
+          detail-page-side surface where Draft with AI attaches (8.8.12).
+        · Source enum (lib/dto/workItems.ts + schema): `user_authored | ai_draft |
+          user_edited` — already three values. NO `ai_drafted`. Editing an AI draft
+          → `user_edited`. (8.8.12's card says "add ai_drafted" — that's stale; the
+          value exists as `ai_draft`. Flagged to the planner.)
 
-      Tokens copied 1:1 from app/globals.css (light + dark). Colour via --el-*,
-      shape via element-semantic shape tokens — never Tier-0. See design-notes.md.
+      What 8.8.6 NEWLY specifies (the in-between INTERACTION the components leave
+      open): the STREAMING state (SSE, 8.8.11), the drafted text landing DIRECTLY
+      in the MarkdownEditor (no accept/discard gate — saved by Create / the form's
+      Save; Regenerate re-runs), source signalling (`ai_draft` Pill; edit →
+      `user_edited`), the CLOUD-GATED disabled / "Connect Motir AI" state, and the
+      stream-FAILED error state.
+
+      Tokens copied 1:1 from app/globals.css. Colour via --el-*, shape via
+      element-semantic shape tokens — never Tier-0. See design-notes.md.
     -->
     <style>
       /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
@@ -51,8 +60,6 @@
         --color-hairline-strong: #c8c4be;
         --color-border: #e5e3df;
         --color-accent: #ff64c8;
-        --color-accent-teal: #2a9d99;
-        --color-accent-green: #1aae39;
         --color-tint-peach: #ffe8d4;
         --color-tint-rose: #fde0ec;
         --color-tint-mint: #d9f3e1;
@@ -62,7 +69,6 @@
         --color-success: #1aae39;
         --color-warning: #dd5b00;
         --color-destructive: #e03131;
-        --color-destructive-foreground: #ffffff;
         --color-info: #0075de;
         --color-link: #0075de;
 
@@ -72,25 +78,16 @@
         --radius-control: 6px;
         --radius-btn: 8px;
         --radius-badge: 9999px;
-        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
         --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
         --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
         --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
         --spacing-card-padding: 24px;
         --spacing-input-x: 16px;
-        --spacing-input-y: 10px;
         --spacing-btn-x: 18px;
-        --spacing-btn-y: 10px;
-        --spacing-btn-x-sm: 12px;
-        --spacing-control-x: 10px;
-        --spacing-control-y: 7px;
-        --spacing-chip-x: 10px;
-        --spacing-chip-y: 4px;
         --spacing-md: 16px;
         --height-input: 44px;
         --height-btn-md: 40px;
         --height-btn-sm: 32px;
-        --height-control: 34px;
         --focus-ring-color: var(--color-primary);
         --focus-ring-width: 2px;
         --focus-ring-offset: 2px;
@@ -106,10 +103,8 @@
         --el-text-secondary: var(--color-slate);
         --el-text-muted: var(--color-muted-foreground);
         --el-text-faint: var(--color-stone);
-        --el-text-inverted: var(--color-background);
         --el-accent: var(--color-primary);
         --el-accent-text: var(--color-primary-foreground);
-        --el-accent-pressed: var(--color-primary-pressed);
         --el-accent-on-surface: var(--color-primary);
         --el-highlight: var(--color-accent);
         --el-surface: var(--color-surface);
@@ -121,7 +116,6 @@
         --el-link: var(--color-link);
         --el-danger: var(--color-destructive);
         --el-danger-text: #b42318;
-        --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
@@ -139,16 +133,13 @@
         --color-surface-soft: #161616;
         --color-charcoal: #e5e5e5;
         --color-slate: #a4a097;
-        --color-steel: #787671;
         --color-stone: #5d5b54;
         --color-muted: #1a1a1a;
         --color-muted-foreground: #a4a097;
-        --color-hairline: #2a2a2a;
         --color-hairline-soft: #1f1f1f;
         --color-hairline-strong: #3a3a3a;
         --color-border: #2a2a2a;
         --color-primary: #7b6ce5;
-        --color-primary-pressed: #5645d4;
         --color-tint-peach: #3a2a1a;
         --color-tint-rose: #3a1f2a;
         --color-tint-mint: #1a2f25;
@@ -176,7 +167,7 @@
         padding: 32px 24px 120px;
       }
       .review-head {
-        max-width: 1180px;
+        max-width: 1440px;
         margin: 0 auto 28px;
         display: flex;
         align-items: center;
@@ -192,7 +183,7 @@
         margin: 5px 0 0;
         color: var(--el-text-secondary);
         font-size: 13px;
-        max-width: 760px;
+        max-width: 820px;
         line-height: 1.5;
       }
       .toggle {
@@ -208,8 +199,8 @@
         flex: none;
       }
       .section-band {
-        max-width: 1180px;
-        margin: 36px auto 14px;
+        max-width: 1440px;
+        margin: 38px auto 16px;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -232,23 +223,30 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.07em;
-        color: var(--el-accent-on-surface);
-        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        background: var(--el-tint-sky);
         padding: 3px 8px;
         border-radius: var(--radius-badge);
       }
       .panel-row {
-        max-width: 1180px;
+        max-width: 1440px;
         margin: 0 auto;
         display: flex;
         flex-wrap: wrap;
-        gap: 36px;
+        gap: 32px;
         align-items: flex-start;
       }
       .panel {
         display: flex;
         flex-direction: column;
         gap: 10px;
+        width: 360px;
+      }
+      .panel.wide {
+        width: 560px;
+      }
+      .panel.modalw {
+        width: 468px;
       }
       .panel-label {
         font-family: var(--font-mono);
@@ -258,11 +256,15 @@
         letter-spacing: 0.05em;
         color: var(--el-text-faint);
         padding-left: 2px;
-        max-width: 360px;
-        line-height: 1.45;
+        line-height: 1.5;
       }
       .panel-label b {
-        color: var(--el-accent-on-surface);
+        color: var(--el-text-secondary);
+      }
+      .panel-label code {
+        font-family: var(--font-mono);
+        text-transform: none;
+        color: var(--el-text-secondary);
       }
 
       /* ── Modal (components/ui/Modal.tsx) chrome ─────────────────────────── */
@@ -274,6 +276,10 @@
         border-radius: var(--radius-modal);
         box-shadow: var(--shadow-modal);
         padding: var(--spacing-card-padding);
+      }
+      .modal.frag {
+        box-shadow: none;
+        width: 100%;
       }
       .modal-title {
         font-family: var(--font-serif);
@@ -312,25 +318,16 @@
         border-top: 1px solid var(--el-border);
       }
 
-      /* ── Field grammar ──────────────────────────────────────────────────── */
       .field {
         display: flex;
         flex-direction: column;
         gap: 6px;
       }
-      .field > label {
+      .field > .flabel {
         font-family: var(--font-sans);
         font-size: 14px;
         font-weight: 500;
         color: var(--el-text);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .field > label .opt {
-        font-weight: 400;
-        color: var(--el-text-muted);
-        font-size: 13px;
       }
       .control {
         display: flex;
@@ -344,93 +341,132 @@
         font-size: 14px;
         color: var(--el-text);
       }
-      .control .muted {
-        color: var(--el-text-muted);
-      }
-      .control .chev {
-        margin-left: auto;
-        color: var(--el-text-muted);
-      }
-      .control.textarea {
-        height: auto;
-        min-height: 70px;
-        align-items: flex-start;
-        padding: 10px var(--spacing-input-x);
-        color: var(--el-text-muted);
-      }
 
-      /* ── The explanation block — the surface this design owns ───────────── */
-      /* A bordered region sitting under the Explanation label, in BOTH the
-         modal field and the detail section. */
-      .expl {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-input);
-        background: var(--el-surface-soft);
-        overflow: hidden;
-      }
-      .expl-empty {
+      /* ── Explanation DISCLOSURE — exactly the CreateIssueModal markup ─────── */
+      .disc {
         display: flex;
         flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 16px;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 14px;
       }
-      .expl-empty .hint {
-        font-size: 13px;
-        color: var(--el-text-secondary);
-        line-height: 1.45;
-      }
-      .expl-body {
-        padding: 14px 16px;
-        font-size: 13.5px;
-        line-height: 1.55;
-        color: var(--el-text);
-      }
-      .expl-body p {
-        margin: 0 0 10px;
-      }
-      .expl-body p:last-child {
-        margin-bottom: 0;
-      }
-      /* the drafted text sits in the editable field — a quiet editor inset */
-      .expl-body.is-editable {
-        background: var(--el-page-bg);
-        border-radius: var(--radius-input);
-        box-shadow: inset 0 0 0 1px var(--el-border-strong);
-        margin: 12px;
-        padding: 12px 14px;
-      }
-      .caret-edit {
-        display: inline-block;
-        width: 1.5px;
-        height: 1.05em;
-        background: var(--el-text);
-        margin-left: 1px;
-        vertical-align: text-bottom;
-        animation: blink 1s step-end infinite;
-      }
-      .expl-toolbar {
+      .disc-head {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 9px 12px;
-        border-top: 1px solid var(--el-border-soft);
-        background: var(--el-page-bg);
       }
-      .expl-toolbar.top {
-        border-top: none;
-        border-bottom: 1px solid var(--el-border-soft);
+      .disc-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: none;
+        background: transparent;
+        padding: 0;
+        font: inherit;
+        font-weight: 500;
+        color: var(--el-text);
+        cursor: pointer;
       }
-      .expl-toolbar .grow {
-        flex: 1;
+      .disc-toggle .chev {
+        color: var(--el-text);
+        transition: transform 0.12s ease;
+      }
+      .disc-toggle.collapsed .chev {
+        transform: rotate(-90deg);
+      }
+      .disc-hint {
+        color: var(--el-text-secondary);
+        font-size: 14px;
+      }
+      .disc-skip {
+        font-size: 12px;
+        color: var(--el-text-secondary);
       }
 
-      /* the streaming caret + skeleton sweep */
+      /* ── MarkdownEditor (components/ui/MarkdownEditor.tsx) ───────────────── */
+      .mde-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .mde-label .gloss {
+        font-weight: 400;
+        color: var(--el-text-secondary);
+      }
+      .mde {
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-input);
+        overflow: hidden;
+      }
+      .mde.focus {
+        border-color: var(--el-highlight);
+      }
+      .mde-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 5px 6px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .tbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .tbtn:hover {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+      .tbtn .bI {
+        font-family: var(--font-serif);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .tbtn .iI {
+        font-family: var(--font-serif);
+        font-size: 14px;
+        font-style: italic;
+      }
+      .mde-body {
+        padding: 10px 12px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .mde-body.min {
+        min-height: 72px;
+      }
+      .mde-body.full {
+        min-height: 132px;
+      }
+      .mde-body p {
+        margin: 0 0 9px;
+      }
+      .mde-body p:last-child {
+        margin-bottom: 0;
+      }
+      .mde-ph {
+        color: var(--el-text-faint);
+      }
       .caret {
         display: inline-block;
         width: 2px;
         height: 1.05em;
-        background: var(--el-accent);
+        background: var(--el-text);
         margin-left: 1px;
         vertical-align: text-bottom;
         animation: blink 1s step-end infinite;
@@ -440,20 +476,12 @@
           opacity: 0;
         }
       }
-      .stream-meta {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        font-size: 12.5px;
-        font-weight: 500;
-        color: var(--el-accent-on-surface);
-      }
 
       /* ── Button (components/ui/Button.tsx) ──────────────────────────────── */
       .btn {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
+        gap: 6px;
         height: var(--height-btn-md);
         padding: 0 var(--spacing-btn-x);
         border-radius: var(--radius-btn);
@@ -464,23 +492,27 @@
         border: 1px solid transparent;
         white-space: nowrap;
       }
-      .btn-sm {
+      .btn.sm {
         height: var(--height-btn-sm);
-        padding: 0 var(--spacing-btn-x-sm);
-        font-size: 13px;
-        gap: 6px;
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
       }
       .btn-ghost {
         background: transparent;
         color: var(--el-text);
         border-color: var(--el-border);
-      }
-      .btn-ghost:hover {
-        background: var(--el-surface);
-      }
-      .btn-primary {
-        background: var(--el-accent);
-        color: var(--el-accent-text);
       }
       .btn-quiet {
         background: transparent;
@@ -488,54 +520,84 @@
         border-color: transparent;
         padding: 0 8px;
       }
-      .btn-quiet:hover {
-        background: var(--el-surface);
-        color: var(--el-text);
-      }
-      .btn-danger-quiet {
-        background: transparent;
-        color: var(--el-danger-text);
-        border-color: transparent;
-        padding: 0 8px;
-      }
-      .btn:disabled,
+      .btn[disabled],
       .btn.is-disabled {
-        opacity: 0.55;
+        opacity: 0.5;
         cursor: not-allowed;
       }
-      /* the AI action — accent ghost (a "magic" treatment, AA via tint bg) */
-      .btn-ai {
-        background: var(--el-tint-lavender);
-        color: var(--el-accent-on-surface);
-        border-color: transparent;
-      }
-      .btn-ai:hover {
-        background: var(--el-tint-lavender);
-        filter: brightness(0.97);
-      }
-      .btn .ic {
-        flex: none;
+      .ml-auto {
+        margin-left: auto;
       }
 
-      /* ── source pill (ai_drafted) ───────────────────────────────────────── */
+      /* ── Pill (components/ui/Pill.tsx) — hue in tint bg, text-strong (AA) ─── */
       .pill {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        padding: 3px 9px;
         border-radius: var(--radius-badge);
         font-size: 11.5px;
         font-weight: 600;
-        line-height: 1;
+        line-height: 1.3;
+        color: var(--el-text-strong);
       }
-      .pill-ai {
-        background: var(--el-tint-lavender);
-        color: var(--el-accent-on-surface);
+      .pill-info {
+        background: var(--el-tint-sky);
       }
-      .pill-edited {
-        background: var(--el-surface);
-        color: var(--el-text-muted);
+      .pill-neutral {
+        background: var(--el-muted);
+      }
+
+      /* ── ContentSectionCard (issue detail) ──────────────────────────────── */
+      .csc {
+        background: var(--el-page-bg);
         border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 18px var(--spacing-card-padding) 20px;
+      }
+      .csc-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .csc-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .csc-head .gloss {
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+      .edit-link {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        padding: 2px 6px;
+        border-radius: var(--radius-control);
+      }
+      .csc-body {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text);
+      }
+      .csc-body p {
+        margin: 0 0 9px;
+      }
+      .csc-body p:last-child {
+        margin-bottom: 0;
+      }
+      .csc-empty {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        font-style: italic;
       }
 
       /* ── notice / gate card (mirrors onboarding screen K) ───────────────── */
@@ -547,6 +609,7 @@
         border: 1px solid var(--el-border);
         background: var(--el-page-bg);
         align-items: flex-start;
+        width: 360px;
       }
       .notice .ni {
         flex: none;
@@ -573,41 +636,35 @@
         color: var(--el-text-secondary);
         line-height: 1.45;
         margin-top: 2px;
-        max-width: 320px;
       }
 
-      /* ── Detail-section grammar (matches detail.pen left column) ────────── */
-      .dsection {
-        width: 560px;
+      .legend {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
         background: var(--el-page-bg);
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
-        padding: 20px var(--spacing-card-padding);
+        padding: 16px 18px;
+        width: 360px;
       }
-      .dsection-head {
+      .legend-row {
         display: flex;
         align-items: center;
-        gap: 9px;
-        margin-bottom: 12px;
+        gap: 12px;
       }
-      .dsection-head h3 {
-        font-family: var(--font-sans);
+      .legend-row .desc {
         font-size: 13px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
         color: var(--el-text-secondary);
-        margin: 0;
       }
-      .dsection-head .why {
-        font-size: 13px;
-        font-weight: 400;
-        text-transform: none;
-        letter-spacing: 0;
+      .legend-row .desc code {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+      }
+      .legend .none {
+        font-size: 12px;
         color: var(--el-text-faint);
-      }
-      .dsection-head .spacer {
-        flex: 1;
+        font-style: italic;
       }
 
       .spin {
@@ -622,19 +679,27 @@
         width: 15px;
         height: 15px;
       }
+      .stream-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
-        <h1>Draft explanation with AI — create modal &amp; detail page</h1>
+        <h1>Draft explanation with AI — grounded in the shipped UI</h1>
         <p>
           Story 8.8 · design for 8.8.6 (MOTIR-1090), gating 8.8.12 (MOTIR-1096; code) which depends
-          on 8.8.11 (MOTIR-1095; the motir-ai <code>generate_explanation</code> job + SSE stream).
-          Builds on the entry affordances already in <code>create.pen</code> /
-          <code>detail.pen</code>; newly specifies the streaming, drafted-in-editor,
-          source-signalling, cloud-gate, and error states. Built from the real <code>--el-*</code> /
-          shape tokens.
+          on 8.8.11 (MOTIR-1095; the motir-ai job + SSE stream). Drawn against the SHIPPED
+          components — <code>CreateIssueModal</code> (disclosure + min MarkdownEditor + the existing
+          disabled secondary "Draft with AI" button), <code>IssueExplanation</code> (read-only
+          ContentSectionCard, Edit→edit form), and <code>EditIssueForm</code> (full MarkdownEditor)
+          — not the legacy pens. Source enum is <code>ai_draft</code> / <code>user_edited</code>.
         </p>
       </div>
       <button
@@ -672,17 +737,6 @@
           <path d="m6 9 6 6 6-6" />
         </g>
         <g
-          id="i-plus"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M5 12h14M12 5v14" />
-        </g>
-        <!-- sparkles — the AI mark -->
-        <g
           id="i-sparkles"
           fill="none"
           stroke="currentColor"
@@ -692,16 +746,6 @@
         >
           <path d="M9.5 3 11 7.5 15.5 9 11 10.5 9.5 15 8 10.5 3.5 9 8 7.5z" />
           <path d="M18 4v3M19.5 5.5h-3M18 15v3M19.5 16.5h-3" />
-        </g>
-        <g
-          id="i-check"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M20 6 9 17l-5-5" />
         </g>
         <g
           id="i-rotate"
@@ -757,34 +801,53 @@
           <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
         </g>
         <g
-          id="i-info"
+          id="i-link"
           fill="none"
           stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <circle cx="12" cy="12" r="9" />
-          <path d="M12 16v-4M12 8h.01" />
+          <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+          <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+        </g>
+        <g
+          id="i-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+        </g>
+        <g
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
         </g>
       </defs>
     </svg>
 
     <!-- ════════════════════════════════════════════════════════════════════
-         SURFACE 1 · THE CREATE-ISSUE MODAL
-         (entry · streaming · drafted-in-field, in the modal Explanation field)
+         SURFACE 1 · THE CREATE-ISSUE MODAL — the Explanation disclosure
     ════════════════════════════════════════════════════════════════════════ -->
     <div class="section-band">
       <span class="sb-kicker">Surface 1</span>
-      <h2>Create-issue modal · the Explanation field</h2>
+      <h2>Create-issue modal · the Explanation disclosure (the existing "Draft with AI" button)</h2>
     </div>
 
     <div class="panel-row">
-      <!-- ───── 1A · entry (the access path on the modal) ───── -->
-      <div class="panel">
+      <!-- 1A · collapsed (default) -->
+      <div class="panel modalw">
         <div class="panel-label">
-          1A · Entry — the <b>"Draft with AI"</b> affordance sits in the Explanation field's
-          toolbar, beside the editor. (Existing <code>create.pen</code> state.)
+          1A · <b>Collapsed (default)</b> — the shipped disclosure: a chevron + "Explanation" + the
+          hint, with the skip line. (No change — context.)
         </div>
         <div class="modal" role="dialog" aria-label="Create issue">
           <button class="modal-close" aria-label="Close">
@@ -793,314 +856,192 @@
           <h2 class="modal-title">Create issue</h2>
           <div class="modal-body">
             <div class="field">
-              <label>Title</label>
+              <span class="flabel">Title</span>
               <div class="control">
                 <span>Auto-link Google sign-in to existing email account</span>
               </div>
             </div>
-            <div class="field">
-              <label>Description</label>
-              <div class="control textarea">
-                When a user signs in with Google and an email/password account…
+            <div class="disc">
+              <div class="disc-head">
+                <button class="disc-toggle collapsed">
+                  <span class="chev"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                  ></span>
+                  Explanation
+                </button>
+                <span class="disc-hint">— why this matters (optional)</span>
               </div>
-            </div>
-            <div class="field">
-              <label>Explanation <span class="opt">— why this matters (optional)</span></label>
-              <div class="expl">
-                <div class="expl-empty">
-                  <span class="hint"
-                    >Help non-technical reviewers understand why this work matters.</span
-                  >
-                  <button class="btn btn-ai btn-sm">
-                    <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-                    Draft with AI
-                  </button>
-                </div>
-                <div class="expl-toolbar">
-                  <span class="hint" style="font-size: 12.5px; color: var(--el-text-faint)"
-                    >…or write your own.</span
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost">Cancel</button>
-            <button class="btn btn-primary">Create issue</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ───── 1B · streaming ───── -->
-      <div class="panel">
-        <div class="panel-label">
-          1B · <b>Streaming</b> — the draft fills in token-by-token (SSE, 8.8.11). A caret marks the
-          live edge; <b>Stop</b> halts. Inputs (Title/Description) feed the job context.
-        </div>
-        <div class="modal" role="dialog" aria-label="Create issue">
-          <button class="modal-close" aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
-          </button>
-          <h2 class="modal-title">Create issue</h2>
-          <div class="modal-body">
-            <div class="field">
-              <label>Title</label>
-              <div class="control">
-                <span>Auto-link Google sign-in to existing email account</span>
-              </div>
-            </div>
-            <div class="field">
-              <label>Explanation <span class="opt">— why this matters (optional)</span></label>
-              <div class="expl">
-                <div class="expl-toolbar top">
-                  <span class="stream-meta">
-                    <svg class="ic-sm spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
-                    Drafting…
-                  </span>
-                  <span class="grow"></span>
-                  <button class="btn btn-quiet btn-sm">
-                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-stop" /></svg>
-                    Stop
-                  </button>
-                </div>
-                <div class="expl-body">
-                  <p>
-                    Users who already signed up with email and password sometimes return and sign in
-                    with Google instead. Today that creates a second, separate account — so their
-                    work, history<span class="caret"></span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost">Cancel</button>
-            <button class="btn btn-primary">Create issue</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ───── 1C · drafted — text lands in the field ───── -->
-      <div class="panel">
-        <div class="panel-label">
-          1C · <b>Drafted</b> — when the stream finishes the text just stays in the editable
-          Explanation field (no confirmation step). It's editable like any text; it saves as
-          <code>ai_drafted</code> when the issue is created. <b>Regenerate</b> re-runs; editing the
-          text makes it <code>user_authored</code>.
-        </div>
-        <div class="modal" role="dialog" aria-label="Create issue">
-          <button class="modal-close" aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
-          </button>
-          <h2 class="modal-title">Create issue</h2>
-          <div class="modal-body">
-            <div class="field">
-              <label>Title</label>
-              <div class="control">
-                <span>Auto-link Google sign-in to existing email account</span>
-              </div>
-            </div>
-            <div class="field">
-              <label>Explanation <span class="opt">— why this matters (optional)</span></label>
-              <div class="expl">
-                <div class="expl-toolbar top">
-                  <span class="pill pill-ai">
-                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-                    AI-drafted — review me
-                  </span>
-                  <span class="grow"></span>
-                  <button class="btn btn-quiet btn-sm">
-                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
-                    Regenerate
-                  </button>
-                </div>
-                <div class="expl-body is-editable" contenteditable="false">
-                  <p>
-                    Users who already signed up with email and password sometimes return and sign in
-                    with Google instead. Today that creates a second, separate account — splitting
-                    their work and history across two logins.
-                  </p>
-                  <p>
-                    This change recognises the shared email and links the two sign-in methods to one
-                    account, so people land where they expect no matter how they log in.<span
-                      class="caret-edit"
-                    ></span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost">Cancel</button>
-            <button class="btn btn-primary">Create issue</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════
-         SURFACE 2 · THE WORK-ITEM DETAIL PAGE (Explanation section)
-    ════════════════════════════════════════════════════════════════════════ -->
-    <div class="section-band">
-      <span class="sb-kicker">Surface 2</span>
-      <h2>Work-item detail page · the Explanation section</h2>
-    </div>
-
-    <div class="panel-row">
-      <!-- ───── 2A · empty + entry ───── -->
-      <div class="panel">
-        <div class="panel-label">
-          2A · <b>Empty + entry</b> — the access path on the detail page:
-          <b>"Draft explanation with AI"</b> alongside <b>Write it yourself</b>. (Existing
-          <code>detail.pen</code> state.)
-        </div>
-        <div class="dsection">
-          <div class="dsection-head">
-            <h3>Explanation</h3>
-            <span class="why">— why this matters</span>
-          </div>
-          <div class="expl">
-            <div class="expl-empty">
-              <span class="hint"
-                >Help non-technical reviewers understand why this work matters.</span
+              <span class="disc-skip"
+                >Skip this — explanation can be drafted with AI or added after creating.</span
               >
-              <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                <button class="btn btn-ai btn-sm">
-                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-                  Draft explanation with AI
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1B · expanded + entry -->
+      <div class="panel modalw">
+        <div class="panel-label">
+          1B · <b>Expanded — the entry</b>. The existing secondary <b>Draft with AI</b> button
+          (Sparkles, <code>ml-auto</code>) sits on the disclosure header row, over the
+          <code>size="min"</code> MarkdownEditor. ENABLED when AI is connected.
+        </div>
+        <div class="modal" role="dialog" aria-label="Create issue">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Create issue</h2>
+          <div class="modal-body">
+            <div class="field">
+              <span class="flabel">Title</span>
+              <div class="control">
+                <span>Auto-link Google sign-in to existing email account</span>
+              </div>
+            </div>
+            <div class="disc">
+              <div class="disc-head">
+                <button class="disc-toggle">
+                  <span class="chev"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                  ></span>
+                  Explanation
                 </button>
-                <button class="btn btn-ghost btn-sm">
-                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-                  Write it yourself
+                <span class="disc-hint">— why this matters (optional)</span>
+                <button class="btn btn-secondary sm ml-auto">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                  Draft with AI
                 </button>
+              </div>
+              <div class="mde">
+                <div class="mde-toolbar">
+                  <span class="tbtn"><span class="bI">B</span></span>
+                  <span class="tbtn"><span class="iI">I</span></span>
+                  <span class="tbtn"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-link" /></svg
+                  ></span>
+                  <span class="tbtn"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list" /></svg
+                  ></span>
+                  <span class="tbtn"
+                    ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-code" /></svg
+                  ></span>
+                </div>
+                <div class="mde-body min">
+                  <span class="mde-ph">Why does this work matter?</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1C · streaming + 1D drafted (field fragments) -->
+      <div class="panel">
+        <div class="panel-label">
+          1C · <b>Streaming</b> — the button becomes <b>Drafting… · Stop</b>; the editor fills
+          token-by-token (SSE, 8.8.11) with a caret.
+        </div>
+        <div class="modal frag">
+          <div class="disc">
+            <div class="disc-head">
+              <button class="disc-toggle">
+                <span class="chev"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+                ></span>
+                Explanation
+              </button>
+              <span class="disc-hint">— why this matters (optional)</span>
+              <button class="btn btn-secondary sm ml-auto">
+                <svg class="ic-sm spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+                Drafting…
+                <span
+                  style="
+                    width: 1px;
+                    height: 16px;
+                    background: var(--el-border-strong);
+                    margin: 0 2px;
+                  "
+                ></span>
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-stop" /></svg>
+              </button>
+            </div>
+            <div class="mde focus">
+              <div class="mde-toolbar">
+                <span class="tbtn"><span class="bI">B</span></span>
+                <span class="tbtn"><span class="iI">I</span></span>
+                <span class="tbtn"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-link" /></svg
+                ></span>
+                <span class="tbtn"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list" /></svg
+                ></span>
+                <span class="tbtn"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-code" /></svg
+                ></span>
+              </div>
+              <div class="mde-body min">
+                <p>
+                  Users who already signed up with email and password sometimes return and sign in
+                  with Google instead — today that creates a second<span class="caret"></span>
+                </p>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- ───── 2B · streaming ───── -->
-      <div class="panel">
-        <div class="panel-label">
-          2B · <b>Streaming</b> — same SSE flow on the detail page; the section title gets the live
-          "Drafting…" meter + <b>Stop</b>. Title/description/type/parent feed the context.
+        <div class="panel-label" style="margin-top: 8px">
+          1D · <b>Drafted</b> — the text just stays in the editor, editable. The button is now
+          <b>Regenerate</b>; an <b>AI-drafted</b> pill marks the source. No confirmation — it saves
+          as <code>ai_draft</code> with <b>Create issue</b>; editing flips it to
+          <code>user_edited</code>.
         </div>
-        <div class="dsection">
-          <div class="dsection-head">
-            <h3>Explanation</h3>
-            <span class="why">— why this matters</span>
-            <span class="spacer"></span>
-            <span class="stream-meta">
-              <svg class="ic-sm spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
-              Drafting…
-            </span>
-            <button class="btn btn-quiet btn-sm">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-stop" /></svg>
-              Stop
-            </button>
-          </div>
-          <div class="expl">
-            <div class="expl-body">
-              <p>
-                Users who already signed up with email and password sometimes return and sign in
-                with Google instead. Today that creates a second, separate account — so their work,
-                history<span class="caret"></span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel-row" style="margin-top: 30px">
-      <!-- ───── 2C · drafted — text lands in the editor (edit mode) ───── -->
-      <div class="panel">
-        <div class="panel-label">
-          2C · <b>Drafted — in the editor</b> — the streamed text lands directly in the explanation
-          editor (no confirmation). You edit it like any text and <b>Save</b> through the editor's
-          normal controls; <b>Regenerate</b> re-runs. Saving unedited keeps <code>ai_drafted</code>;
-          editing first makes it <code>user_authored</code>.
-        </div>
-        <div class="dsection">
-          <div class="dsection-head">
-            <h3>Explanation</h3>
-            <span class="why">— why this matters</span>
-            <span class="spacer"></span>
-            <span class="pill pill-ai">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-              AI-drafted
-            </span>
-          </div>
-          <div class="expl">
-            <div class="expl-body is-editable" contenteditable="false">
-              <p>
-                Users who already signed up with email and password sometimes return and sign in
-                with Google instead. Today that creates a second, separate account — splitting their
-                work and history across two logins.
-              </p>
-              <p>
-                This change recognises the shared email and links the two sign-in methods to one
-                account, so people land where they expect no matter how they log in.<span
-                  class="caret-edit"
+        <div class="modal frag">
+          <div class="disc">
+            <div class="disc-head">
+              <button class="disc-toggle">
+                <span class="chev"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
                 ></span>
-              </p>
-            </div>
-            <div class="expl-toolbar">
-              <button class="btn btn-quiet btn-sm">
+                Explanation
+              </button>
+              <span class="pill pill-info">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                AI-drafted
+              </span>
+              <button class="btn btn-secondary sm ml-auto">
                 <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
                 Regenerate
               </button>
-              <span class="grow"></span>
-              <button class="btn btn-ghost btn-sm">Cancel</button>
-              <button class="btn btn-ai btn-sm">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                Save
-              </button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ───── 2D · post-draft resting (ai_drafted source badge) ───── -->
-      <div class="panel">
-        <div class="panel-label">
-          2D · <b>Saved · <code>ai_drafted</code></b> — the persisted resting state. The
-          <b>"AI-drafted — review me"</b> pill signals the source; <b>Regenerate with AI</b> +
-          inline <b>Edit</b> stay available. (Existing <code>detail.pen</code> state, with the
-          source badge specified here.)
-        </div>
-        <div class="dsection">
-          <div class="dsection-head">
-            <h3>Explanation</h3>
-            <span class="why">— why this matters</span>
-            <span class="spacer"></span>
-            <span class="pill pill-ai">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-              AI-drafted — review me
-            </span>
-          </div>
-          <div class="expl">
-            <div class="expl-body">
-              <p>
-                Users who already signed up with email and password sometimes return and sign in
-                with Google instead. Today that creates a second, separate account — splitting their
-                work and history across two logins.
-              </p>
-              <p>
-                This change recognises the shared email and links the two sign-in methods to one
-                account, so people land where they expect no matter how they log in.
-              </p>
-            </div>
-            <div class="expl-toolbar">
-              <button class="btn btn-quiet btn-sm">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-                Edit
-              </button>
-              <span class="grow"></span>
-              <button class="btn btn-ai btn-sm">
-                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
-                Regenerate with AI
-              </button>
+            <div class="mde">
+              <div class="mde-toolbar">
+                <span class="tbtn"><span class="bI">B</span></span>
+                <span class="tbtn"><span class="iI">I</span></span>
+                <span class="tbtn"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-link" /></svg
+                ></span>
+                <span class="tbtn"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list" /></svg
+                ></span>
+                <span class="tbtn"
+                  ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-code" /></svg
+                ></span>
+              </div>
+              <div class="mde-body min">
+                <p>
+                  Users who already signed up with email and password sometimes return and sign in
+                  with Google instead — today that creates a second, separate account, splitting
+                  their work across two logins. This change links the two methods to one account.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1108,121 +1049,253 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════
-         CROSS-CUTTING STATES · cloud-gate · source · error
+         SURFACE 2 · THE DETAIL PAGE — read-only card + the edit form
     ════════════════════════════════════════════════════════════════════════ -->
     <div class="section-band">
-      <span class="sb-kicker">States</span>
-      <h2>Cloud-gate · source signalling · error</h2>
+      <span class="sb-kicker">Surface 2</span>
+      <h2>Detail page · read-only Explanation card → the edit form (where drafting attaches)</h2>
     </div>
 
     <div class="panel-row">
-      <!-- ───── 3A · cloud-gated / disabled ───── -->
-      <div class="panel">
+      <!-- 2A · read-only empty -->
+      <div class="panel wide">
         <div class="panel-label">
-          3A · <b>Cloud-gated</b> — a self-host with no Motir AI connection (<code>MOTIR_AI_*</code>
-          unset → <code>MotirAiConfigError</code>). The "Draft with AI" control is disabled with a
-          tooltip; an inline notice offers <b>Connect Motir AI</b>. Mirrors onboarding screen K.
+          2A · <b>Read-only card — empty</b> (<code>IssueExplanation</code>). The detail card does
+          NOT draft inline; the access path is the <b>Edit</b> link → the edit form.
         </div>
-        <div class="dsection">
-          <div class="dsection-head">
-            <h3>Explanation</h3>
-            <span class="why">— why this matters</span>
+        <div class="csc">
+          <div class="csc-head">
+            <h2>Explanation</h2>
+            <span class="gloss">— why this matters</span>
+            <span class="edit-link"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> Edit</span
+            >
           </div>
-          <div class="expl">
-            <div class="expl-empty">
-              <span class="hint"
-                >Help non-technical reviewers understand why this work matters.</span
-              >
-              <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                <button
-                  class="btn btn-ai btn-sm is-disabled"
-                  aria-disabled="true"
-                  title="Connect Motir AI to draft with AI"
-                >
-                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-                  Draft with AI
-                </button>
-                <button class="btn btn-ghost btn-sm">
-                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-                  Write it yourself
-                </button>
-              </div>
+          <div class="csc-empty">No explanation yet.</div>
+        </div>
+
+        <div class="panel-label" style="margin-top: 8px">
+          2B · <b>Read-only card — <code>ai_draft</code></b
+          >. The neutral <b>AI-drafted</b> Pill in the header signals the source (shipped). Edit →
+          the edit form to revise / regenerate.
+        </div>
+        <div class="csc">
+          <div class="csc-head">
+            <h2>Explanation</h2>
+            <span class="gloss">— why this matters</span>
+            <span class="pill pill-neutral">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              AI-drafted
+            </span>
+            <span class="edit-link"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg> Edit</span
+            >
+          </div>
+          <div class="csc-body">
+            <p>
+              Users who already signed up with email and password sometimes return and sign in with
+              Google instead — today that creates a second, separate account, splitting their work
+              across two logins. This change links the two methods to one account, so people land
+              where they expect no matter how they log in.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2C/2D · the edit form -->
+      <div class="panel wide">
+        <div class="panel-label">
+          2C · <b>Edit form — entry</b> (<code>EditIssueForm</code>). The full MarkdownEditor's
+          label row carries the gloss + the <b>Draft with AI</b> button (8.8.12 adds it here too).
+        </div>
+        <div class="csc">
+          <div class="mde-label">
+            Explanation <span class="gloss">— why this matters</span>
+            <button class="btn btn-secondary sm ml-auto">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              Draft with AI
+            </button>
+          </div>
+          <div class="mde">
+            <div class="mde-toolbar">
+              <span class="tbtn"><span class="bI">B</span></span>
+              <span class="tbtn"><span class="iI">I</span></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-link" /></svg
+              ></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list" /></svg
+              ></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-code" /></svg
+              ></span>
+            </div>
+            <div class="mde-body full"><span class="mde-ph">Why does this work matter?</span></div>
+          </div>
+        </div>
+
+        <div class="panel-label" style="margin-top: 8px">
+          2D · <b>Edit form — drafted</b>. Streamed text lands in the editor (editable);
+          <b>Regenerate</b> + the <b>AI-drafted</b> pill. Saved with the form's normal <b>Save</b>.
+        </div>
+        <div class="csc">
+          <div class="mde-label">
+            Explanation <span class="gloss">— why this matters</span>
+            <span class="pill pill-info">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              AI-drafted
+            </span>
+            <button class="btn btn-secondary sm ml-auto">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+              Regenerate
+            </button>
+          </div>
+          <div class="mde">
+            <div class="mde-toolbar">
+              <span class="tbtn"><span class="bI">B</span></span>
+              <span class="tbtn"><span class="iI">I</span></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-link" /></svg
+              ></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-list" /></svg
+              ></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-code" /></svg
+              ></span>
+            </div>
+            <div class="mde-body full">
+              <p>
+                Users who already signed up with email and password sometimes return and sign in
+                with Google instead — today that creates a second, separate account, splitting their
+                work across two logins. This change links the two methods to one account.
+              </p>
             </div>
           </div>
-          <div class="notice" style="margin-top: 14px">
-            <span class="ni"
-              ><svg width="20" height="20" viewBox="0 0 24 24"><use href="#i-plug" /></svg
-            ></span>
-            <div>
-              <div class="notice-t">AI drafting isn't configured</div>
-              <div class="notice-d">
-                Drafting runs on Motir Cloud; this self-hosted workspace has no connection yet.
-              </div>
-              <div style="margin-top: 9px">
-                <button class="btn btn-primary btn-sm">Connect Motir AI</button>
-              </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Save changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         STATES · cloud-gate · error · source signalling
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div class="section-band">
+      <span class="sb-kicker">States</span>
+      <h2>Cloud-gate · error · source signalling</h2>
+    </div>
+
+    <div class="panel-row">
+      <!-- 3A · cloud-gated -->
+      <div class="panel">
+        <div class="panel-label">
+          3A · <b>Cloud-gated</b> — self-host with no Motir AI connection (<code>MOTIR_AI_*</code>
+          unset → <code>MotirAiConfigError</code>). The button is the shipped
+          <code>disabled</code> state; the tooltip becomes <b>Connect Motir AI</b>.
+        </div>
+        <div
+          class="disc"
+          style="
+            background: var(--el-page-bg);
+            border: 1px solid var(--el-border);
+            border-radius: var(--radius-card);
+            padding: 16px;
+          "
+        >
+          <div class="disc-head">
+            <button class="disc-toggle">
+              <span class="chev"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-chevD" /></svg
+              ></span>
+              Explanation
+            </button>
+            <span class="disc-hint">— why this matters (optional)</span>
+            <button
+              class="btn btn-secondary sm ml-auto is-disabled"
+              aria-disabled="true"
+              title="Connect Motir AI to draft with AI"
+            >
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              Draft with AI
+            </button>
+          </div>
+          <div class="mde">
+            <div class="mde-toolbar">
+              <span class="tbtn"><span class="bI">B</span></span>
+              <span class="tbtn"><span class="iI">I</span></span>
+              <span class="tbtn"
+                ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-link" /></svg
+              ></span>
+            </div>
+            <div class="mde-body min"><span class="mde-ph">Why does this work matter?</span></div>
+          </div>
+        </div>
+        <div class="notice" style="margin-top: 4px">
+          <span class="ni"
+            ><svg width="20" height="20" viewBox="0 0 24 24"><use href="#i-plug" /></svg
+          ></span>
+          <div>
+            <div class="notice-t">AI drafting isn't configured</div>
+            <div class="notice-d">
+              Drafting runs on Motir Cloud; this self-hosted workspace has no connection yet.
+            </div>
+            <div style="margin-top: 9px">
+              <button class="btn btn-primary sm">Connect Motir AI</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ───── 3B · source signalling + error ───── -->
+      <!-- 3B · error -->
       <div class="panel">
         <div class="panel-label">
-          3B · <b>Source signalling</b> — <code>ai_drafted</code> shows the lavender pill; editing
-          the text flips the source to <code>user_authored</code> (a quiet "Edited" chip, pill
-          removed). <b>Below:</b> the stream-failed error state (MOTIR_AI_UNAVAILABLE / JOB_FAILED).
+          3B · <b>Stream failed</b> — <code>MOTIR_AI_UNAVAILABLE</code> /
+          <code>MOTIR_AI_JOB_FAILED</code>. Any text generated so far stays in the editor.
         </div>
-        <!-- source legend -->
-        <div class="dsection" style="display: flex; flex-direction: column; gap: 14px">
-          <div style="display: flex; align-items: center; gap: 12px">
-            <span class="pill pill-ai">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-              AI-drafted — review me
-            </span>
-            <span style="font-size: 13px; color: var(--el-text-secondary)"
-              ><code>explanationSource = ai_drafted</code></span
-            >
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px">
-            <span class="pill pill-edited">
-              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
-              Edited
-            </span>
-            <span style="font-size: 13px; color: var(--el-text-secondary)"
-              >after a human edit → <code>user_authored</code></span
-            >
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px">
-            <span style="font-size: 13px; color: var(--el-text-faint)">(no badge)</span>
-            <span style="font-size: 13px; color: var(--el-text-secondary)"
-              >hand-written from the start → <code>user_authored</code></span
-            >
-          </div>
-        </div>
-        <!-- error -->
-        <div class="dsection" style="margin-top: 6px">
-          <div class="dsection-head">
-            <h3>Explanation</h3>
-            <span class="why">— why this matters</span>
-          </div>
-          <div class="notice is-error">
-            <span class="ni"
-              ><svg width="20" height="20" viewBox="0 0 24 24"><use href="#i-alert" /></svg
-            ></span>
-            <div>
-              <div class="notice-t">Couldn't finish the draft</div>
-              <div class="notice-d">
-                Motir AI is unavailable right now. Any text generated so far is kept — try again.
-              </div>
-              <div style="margin-top: 9px; display: flex; gap: 8px">
-                <button class="btn btn-ai btn-sm">
-                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
-                  Try again
-                </button>
-                <button class="btn btn-ghost btn-sm">Dismiss</button>
-              </div>
+        <div class="notice is-error">
+          <span class="ni"
+            ><svg width="20" height="20" viewBox="0 0 24 24"><use href="#i-alert" /></svg
+          ></span>
+          <div>
+            <div class="notice-t">Couldn't finish the draft</div>
+            <div class="notice-d">
+              Motir AI is unavailable right now. Any text generated so far is kept — try again.
             </div>
+            <div style="margin-top: 9px; display: flex; gap: 8px">
+              <button class="btn btn-secondary sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg> Try again
+              </button>
+              <button class="btn btn-ghost sm">Dismiss</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3C · source legend -->
+      <div class="panel">
+        <div class="panel-label">
+          3C · <b>Source signalling</b> — the shipped enum (<code>WorkItemExplanationSource</code>).
+          Only <code>ai_draft</code> carries a badge; editing an AI draft sets
+          <code>user_edited</code> (badge drops).
+        </div>
+        <div class="legend">
+          <div class="legend-row">
+            <span class="pill pill-neutral"
+              ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              AI-drafted</span
+            >
+            <span class="desc"><code>ai_draft</code> — generated, unedited</span>
+          </div>
+          <div class="legend-row">
+            <span class="none">(no badge)</span>
+            <span class="desc">edited an AI draft → <code>user_edited</code></span>
+          </div>
+          <div class="legend-row">
+            <span class="none">(no badge)</span>
+            <span class="desc">hand-written → <code>user_authored</code></span>
           </div>
         </div>
       </div>
