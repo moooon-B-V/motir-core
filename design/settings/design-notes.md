@@ -506,13 +506,22 @@ column, two regions:
 - **Theme** — a **segmented control** (`.segmented` / `.seg`): Light (`sun`) · Dark
   (`moon`) · System (`monitor`); active = `--el-page-bg` fill + `--shadow-subtle` +
   accent icon. (The shipped `ThemeToggle` pattern — the one new composition.)
+  Picking Dark flips the **whole app chrome — the left rail included** (the rail is
+  `--el-sidebar-bg`, which is `[data-theme=dark]`-driven), not just the content;
+  Panel 3 shows the dark rail. This is the dogfood: Theme sits on `<html>`, so it
+  themes everything.
 - **Style** — a `.pick` **chip row** of the 6 styles; active = accent border +
   `--el-tint-lavender` fill + `--el-accent-on-surface` text + a `check`.
 - **Palette** — chip row of the 5 palettes, each with an 11px **swatch dot** in the
   palette's accent hue.
-- **Type** — chip row of the 6 pairings, **each label set in its own headline face**
-  (Source Serif 4 / Inter / JetBrains Mono / Space Grotesk / Fraunces / IBM Plex
-  Mono) so the chips themselves preview the type.
+- **Typography** — chip row of the 6 pairings, **each label set in its own headline
+  face** (Source Serif 4 / Inter / JetBrains Mono / Space Grotesk / Fraunces / IBM
+  Plex Mono) so the chips themselves preview the type. **Labelled "Typography", not
+  "Type" (Yue, 2026-06-19):** `type` is the internal axis name (`data-type`,
+  `typography.ts`, `TypeId`) and is correct designer jargon, but as a user-facing
+  label next to Style / Palette it reads ambiguously to non-designers (= "kind"),
+  so the UI says **Typography** (unambiguous, matches `typography.ts`). The
+  `data-type` attribute / registry id stay `type`.
 
 The card sub-copy + the page-head ("the whole app re-skins live… there's nothing to
 save") state the instant-apply, no-Save model.
