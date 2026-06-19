@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { sprintsService } from '@/lib/services/sprintsService';
+import { backlogService } from '@/lib/services/backlogService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { truncateAuthTables } from '../../helpers/db';
@@ -366,5 +368,77 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
         'en',
       ),
     ).rejects.toThrow(WorkItemNotFoundError);
+  });
+
+  // 8.8.8 — the expanded field set: the peek now carries the FULL core-field
+  // set (type/executor/story-points/labels/audit), and resolves the committed
+  // sprint's NAME server-side (the one field not in the detail aggregate).
+  it('carries the full core-field set incl. the resolved sprint name (8.8.8)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent story' },
+      fx.ctx,
+    );
+    const subtask = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'Render all fields',
+        parentId: story.id,
+        type: 'code',
+        storyPoints: 5,
+      },
+      fx.ctx,
+    );
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Sprint 7' }, fx.ctx);
+    await backlogService.assignToSprint(subtask.id, sprint.id, undefined, fx.ctx);
+
+    const peek = await workItemsService.getQuickView(
+      fx.projectId,
+      subtask.identifier,
+      fx.project.accessLevel,
+      fx.ctx,
+      'en',
+    );
+    expect(peek.type).toBe('code');
+    // Executor is seeded from the type→executor default when a type is set.
+    expect(peek.executor).toBe('coding_agent');
+    expect(peek.storyPoints).toBe(5);
+    expect(peek.labels).toEqual([]);
+    expect(peek.components).toEqual([]);
+    expect(peek.customFields).toEqual([]);
+    expect(peek.createdAt).toBeTruthy();
+    expect(peek.updatedAt).toBeTruthy();
+    // The committed sprint's NAME is resolved server-side from sprintId.
+    expect(peek.sprintName).toBe('Sprint 7');
+  });
+
+  it('leaves sprintName null for a backlog item and for an epic (8.8.8)', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Spanning epic' },
+      fx.ctx,
+    );
+    const backlogStory = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Backlog story', parentId: epic.id },
+      fx.ctx,
+    );
+
+    const epicPeek = await workItemsService.getQuickView(
+      fx.projectId,
+      epic.identifier,
+      fx.project.accessLevel,
+      fx.ctx,
+      'en',
+    );
+    const storyPeek = await workItemsService.getQuickView(
+      fx.projectId,
+      backlogStory.identifier,
+      fx.project.accessLevel,
+      fx.ctx,
+      'en',
+    );
+    expect(epicPeek.sprintName).toBeNull();
+    expect(storyPeek.sprintName).toBeNull();
   });
 });

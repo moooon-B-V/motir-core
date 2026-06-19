@@ -13,10 +13,17 @@ import { formatDurationMinutes } from '@/lib/utils/duration';
 // panel stays purely presentational. The readiness verdict is passed through
 // unchanged — an item with NO blockers is `ready` (bug-ready-banner-no-deps);
 // open blockers are named so the panel can map each to a `?peek=` swap-peek link.
+//
+// 8.8.8 widened the payload to the full core-field set (type/executor/labels/
+// components/sprint/story-points/custom-fields/audit). All of it rides the
+// SAME detail aggregate read EXCEPT the sprint NAME — `sprintId` is on the
+// detail item but the name is not, so the service resolves it and hands it in
+// as `sprintName` (the one field this mapper cannot derive from `detail`).
 export function toQuickViewData(
   detail: IssueDetailDto,
   members: WorkspaceMemberDTO[],
   locale: Locale,
+  sprintName: string | null,
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -29,12 +36,21 @@ export function toQuickViewData(
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
     descriptionMd: item.descriptionMd,
+    type: item.type,
+    executor: item.executor,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,
     reporterName: nameById.get(item.reporterId) ?? item.reporterId,
     priority: item.priority,
+    labels: detail.labels.map((l) => ({ id: l.id, name: l.name })),
+    components: detail.components.map((c) => ({ id: c.id, name: c.name })),
     dueLabel: item.dueDate ? formatDate(item.dueDate, locale) : null,
+    sprintName,
+    storyPoints: item.storyPoints,
     estimateLabel:
       item.estimateMinutes != null ? formatDurationMinutes(item.estimateMinutes) : null,
+    customFields: detail.customFields,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
     parent: parent
       ? { identifier: parent.identifier, title: parent.title, kind: parent.kind }
       : null,
