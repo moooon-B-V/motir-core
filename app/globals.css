@@ -701,6 +701,101 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   3D / Immersive — the depth + perspective style (7.3.39, DEFERRED follow-up).
+   EXPERIMENTAL. The identity is DEPTH: deep, layered two-stop shadows (a soft
+   ambient wash + a directional key light) lift every surface dramatically off
+   the canvas, so cards read as physical objects floating in space — and (motion
+   permitting) interactive surfaces LIFT toward you on hover for a parallax read.
+   Overrides ONLY shape/feel tokens — never a colour token (that is the
+   data-palette axis; this style wears whatever palette is active, so the active
+   palette's AA contrast is preserved by construction). The shadow ink is the
+   same literal near-ink the base shadows already hard-code (rgba(15,15,15,…)) —
+   NOT a palette token — so the colour axis stays untouched. The differentiator
+   vs Glassmorphism: glass is a translucent MATERIAL over a gradient; 3D is
+   OPAQUE depth — real layered light + lift, no blur, no tint. The depth is
+   "performance + accessibility heavy" (the card's caveat), so the motion half is
+   gated behind `prefers-reduced-motion` (see the component rule below) and the
+   static deep-shadow look is what reduced-motion users get.
+   See docs/styles/3d-immersive.md. ─────────────────────────────────────────── */
+[data-style='3d-immersive'] {
+  /* Silhouette — generously rounded dimensional tiles. --radius-pill is left
+     untouched so genuinely-circular affordances (avatars, status dots, the
+     spinner) stay round. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 14px;
+  --radius-input: 14px;
+  --radius-card: 20px;
+  --radius-modal: 28px;
+  --radius-badge: 9999px; /* soft, dimensional status pills */
+  --radius-control: 12px;
+  --radius-kbd: 8px;
+
+  /* Elevation — THE signature. Every shadow token becomes a deep, layered
+     two-stop drop: a tight ambient wash close to the surface PLUS a wide,
+     soft directional key light, so each tile floats far above the canvas and
+     reads as a physical object. Scales from --shadow-subtle up to
+     --shadow-hero-mockup. Pure near-ink (rgba), no palette token — the colour
+     axis is untouched. */
+  --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05), 0 3px 8px -2px rgba(15, 15, 15, 0.09);
+  --shadow-card: 0 2px 6px rgba(15, 15, 15, 0.06), 0 18px 36px -10px rgba(15, 15, 15, 0.22);
+  --shadow-elevated: 0 4px 12px rgba(15, 15, 15, 0.08), 0 30px 60px -14px rgba(15, 15, 15, 0.28);
+  --shadow-modal: 0 8px 22px rgba(15, 15, 15, 0.1), 0 52px 104px -22px rgba(15, 15, 15, 0.34);
+  --shadow-hero-mockup:
+    0 14px 32px rgba(15, 15, 15, 0.12), 0 72px 130px -26px rgba(15, 15, 15, 0.4);
+
+  /* Typography is the data-type axis now — 3D / Immersive ships
+     `defaultTypeId: 'motir'` (the base editorial pairing); the personality is
+     depth + light, not type. A [data-style] block sets NO --font-* token. */
+
+  /* Density — roomy and immersive; depth wants air around each tile. */
+  --spacing-btn-x: 22px;
+  --spacing-btn-y: 12px;
+  --spacing-input-x: 18px;
+  --spacing-input-y: 13px;
+  --spacing-card-padding: 28px;
+  --spacing-control-x: 14px;
+  --spacing-control-y: 8px;
+  --height-control: 40px;
+  --height-input: 46px;
+
+  /* Motion — smooth and floaty. A slower ease for the depth to feel weighty,
+     with a gentle press that settles a lifted surface back down. The hover
+     LIFT itself is the component rule below (reduced-motion-gated). */
+  --transition-duration: 260ms;
+  --transition-fast: 180ms;
+  --transition-slow: 360ms;
+  --active-scale: 0.98;
+}
+
+/* 3D / Immersive — the parallax LIFT (the "motion" + perspective half of the
+   identity). A component-variant override, NOT a [data-style] token block, so
+   it can carry a transform + a deeper shadow on hover. It is GATED behind
+   `prefers-reduced-motion: no-preference` — the card flags this style as
+   accessibility-heavy, so users who ask for reduced motion get NO transform/
+   transition and keep the static deep-shadow depth instead. It sets NO colour
+   (transform + box-shadow only; box-shadow draws the existing near-ink token),
+   so the style/palette axes stay disjoint and styleRegistry.test.ts's
+   material-rule check (which only inspects colour-painting rules) skips it. Only
+   transform-able floating surfaces opt in via the `data-surface` hook. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-style='3d-immersive'] [data-surface='card'],
+  [data-style='3d-immersive'] [data-surface='popover'] {
+    transition:
+      transform var(--transition-duration) cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow var(--transition-duration) cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-style='3d-immersive'] [data-surface='card']:hover,
+  [data-style='3d-immersive'] [data-surface='popover']:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-elevated);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
    The StyleVignette preview specimen carries its OWN axis attribute on a
    nested wrapper (`.style-vignette[data-style='…']`), so it cannot lean on the

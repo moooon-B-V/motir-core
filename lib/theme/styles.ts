@@ -284,6 +284,33 @@ export const STYLE_REGISTRY = {
         'Sharp glow-ringed panels, mono headings, rectangular chips; the lit edge replaces the drop shadow everywhere.',
     },
   },
+  '3d-immersive': {
+    id: '3d-immersive',
+    name: '3D / Immersive',
+    tagline: 'Depth and perspective — dimensional cards floating over the page.',
+    inspiration:
+      'Spatial / depth UI — visionOS spatial layers, Stripe-era layered cards, soft real-world light.',
+    designDoc: 'docs/styles/3d-immersive.md',
+    defaultTypeId: 'motir',
+    dimensions: {
+      silhouette:
+        'Generously rounded dimensional tiles — 14px buttons/inputs, 20px cards, 28px modals. Soft, tactile, never sharp.',
+      stroke:
+        'Borders nearly vanish (a faint hairline) — structure is read from depth + shadow, not an outline.',
+      elevation:
+        'The identity axis: deep, layered two-stop shadows (a soft ambient wash + a directional key light) lift every surface dramatically off the canvas, so cards read as physical objects floating in space.',
+      surface:
+        'Opaque dimensional cards floating over the canvas; depth (not tint or glass) is the material — surfaces hover, they never sit flat.',
+      density:
+        'Roomy and immersive — 22×12 buttons, 28px card padding, 40px controls; depth wants air around each tile.',
+      motion:
+        'Smooth and floaty — a slower 260ms ease, and (motion permitting) interactive surfaces LIFT toward you on hover for a parallax/dimensional read; a gentle press settles them back.',
+      typography:
+        'Inherits the base editorial type pairing; the personality is in depth + light, not the type.',
+      components:
+        'Deeply-shadowed rounded cards / popovers / modals that lift on hover (the data-surface depth layer), pill status chips — every framed surface floats.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

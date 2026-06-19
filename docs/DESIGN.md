@@ -399,7 +399,9 @@ rubric (see its `docs/styles/<id>.md`).
 | Soft / Playful       | `soft-playful`       | [`docs/styles/soft-playful.md`](./styles/soft-playful.md) — the pill alternate                 |
 | Swiss / Minimal-Flat | `swiss-minimal-flat` | [`docs/styles/swiss-minimal-flat.md`](./styles/swiss-minimal-flat.md) — flat, sharp, gridded   |
 | Neo-Brutalism        | `neo-brutalism`      | [`docs/styles/neo-brutalism.md`](./styles/neo-brutalism.md) — raw, thick borders, hard shadows |
+| Glassmorphism        | `glassmorphism`      | [`docs/styles/glassmorphism.md`](./styles/glassmorphism.md) — translucent frosted glass        |
 | Cybercore / Y2K      | `cybercore-y2k`      | [`docs/styles/cybercore-y2k.md`](./styles/cybercore-y2k.md) — neon-on-dark, glow, grid, mono   |
+| 3D / Immersive       | `3d-immersive`       | [`docs/styles/3d-immersive.md`](./styles/3d-immersive.md) — deep layered depth, floating tiles |
 
 Each registry entry maps to exactly one `DESIGN.md`; the `/tokens` page composes
 the active style's mapping (the toggle + dimension breakdown). Adding a style =
