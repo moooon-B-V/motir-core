@@ -1,12 +1,32 @@
 # AI chat / onboarding — design notes
 
 Design reference for the `ai-chat` UI area — **Motir's start-fresh onboarding
-journey** (Story 7.3, `MOTIR-804`; this asset is subtask **7.3.44 /
-`MOTIR-1061`**). The single, comprehensive **screen-by-screen** design of the
-flow, reviewable before any UI is built.
+journey** (Story 7.3, `MOTIR-804`). The single, comprehensive
+**screen-by-screen** design of the flow, reviewable before any UI is built.
 
-> **Rebuilt on review feedback (Yue, 2026-06-18).** Supersedes the cancelled
-> wizard designs `7.3.26`/`MOTIR-1039` + `7.3.43`/`MOTIR-1060`.
+> **Revised to the gated, conversation-only model (subtask 7.3.68 /
+> `MOTIR-1100`, 2026-06-18).** This asset began as `7.3.44` / `MOTIR-1061`;
+> `MOTIR-1100` brings it onto the FINALIZED model and is now the source of truth.
+> Everything `1061` got right is kept (canvas roadmap + chat rail, full-screen
+> per-tier review, validate-first ask, the design step styling its whole self,
+> the feature catalog folded into vision). What changed: **(1)** all inline doc
+> editing is REMOVED — the docs are READ-ONLY and the chat is the sole input;
+> **(2)** the per-tier **Continue gate + conductor narration** is drawn; **(3)**
+> the **downstream-only cascade / back-navigation** + "nothing locked until
+> generate" is drawn.
+>
+> **Grounded in the workflow-defining subtasks** (the design-content dependency
+> rule — design TO the spec, never invent the flow): the **conductor**
+> `7.3.67`/`MOTIR-1099` (one prompt drives the whole gated conversation:
+> ask → draft-tier(ready) → narrate → classify-impact across the DAG), the
+> **gated step machine** `7.3.9`/`MOTIR-838` + `7.3.23`/`MOTIR-1036` (per-tier
+> gates, dependency-closed skips, catalog folded into vision), the **read-only
+> gates** `7.3.5`/`MOTIR-833` + `7.3.6`/`MOTIR-834` (Continue / Skip + chat-only,
+> cascade-back re-review, NO edit affordance), the **re-derivation engine**
+> `7.3.24`/`MOTIR-1037` (downstream-only coordinated re-derivation), the
+> **validate-first** ask `7.3.47`/`MOTIR-1064`, and `workflow.html` Steps 1-6.
+> Supersedes the cancelled wizard designs `7.3.26`/`MOTIR-1039` +
+> `7.3.43`/`MOTIR-1060`.
 
 ---
 
@@ -21,42 +41,56 @@ The whole flow is **one frame with two modes**:
    **stories → subtasks**. It shows **where you are** the whole way through (with
    descriptive station names, not jargon). The **chat drives** the active step; it
    never takes the screen.
-2. **A step takes the FULL SCREEN** — a doc to review, or the design step — with a
-   plain **"Back"** button (no internal words like "canvas") and a **descriptive**
-   header (`Pre-plan · doc 1 of 4`, not a row of meaningless short words; the
-   journey lives on the canvas).
+2. **A step takes the FULL SCREEN** — a READ-ONLY write-up to review, or the design
+   step — with a plain **"Back"** button (no internal words like "canvas") and a
+   **descriptive** header (`Pre-plan · building your direction`, not a row of
+   meaningless short words and never "doc N of 4"; the journey lives on the canvas).
 
 **Labels are PLAIN LANGUAGE, never jargon** — a founder won't know "Feasibility"
 or "Validation". The four pre-plan docs read: **"Understanding your idea"** ·
 **"What we'll build"** · **"Is it worth building?"** (optional) · **"Will people
-want it?"** (optional). Each is **shown and editable** before you continue. The two
-optional ones are **skipped in the CHAT** (before they generate), never on the doc.
-Validation can be **front-loaded** (validate demand first). The agent **drives the
-flow** (proceeds on its own; Skip cancels). The design step **styles its whole
-self**. (All detailed below.)
+want it?"** (optional). Each is **shown READ-ONLY** at its own review gate, then an
+explicit **Continue** advances to the next tier. **There is NO inline editing
+anywhere** — you react ONLY in the chat, and the conductor revises the write-up for
+you (`7.3.5` / `7.3.6`). The two optional ones are **skipped in the CHAT** (before
+they generate), never on the doc. Validation can be **front-loaded** (validate
+demand first). The conductor **drives the flow** (proceeds on its own; Skip cancels
+an upcoming optional tier). The design step **styles its whole self**. (All
+detailed below.)
 
-This is the fix for the prior drafts: the canvas-left + chat-right layout is kept
-(the chat never dominates), the progress is **on the canvas** (visual +
-descriptive), the roadmap **continues past Plan** into the epics/stories (the same
-canvas, a view of the work-item tree), the **skip is a chat decision**, and the
-design step is the example **at full page scale**.
+**The gated rhythm** (the model's spine — see §"The gate rhythm"): the conductor
+DRAFTS a tier → you review it READ-ONLY → you press **Continue** → the conductor
+**NARRATES** the handoff in the chat ("I have enough — drafting what we'll build
+now") → it drafts the next tier. **Nothing is locked until epic generation** (the
+single commit) — every Continue is **navigation, not sign-off**. A chat reaction
+the conductor attributes to an **upstream** tier sends you **back** to re-review
+that tier, then forward; downstream tiers re-derive. **Cascade is downstream-only.**
+
+This keeps what the prior drafts got right: the canvas-left + chat-right layout
+(the chat never dominates), progress **on the canvas** (visual + descriptive), the
+roadmap **continuing past Plan** into the epics/stories (the same canvas, a view of
+the work-item tree), the **skip as a chat decision**, and the design step as the
+example **at full page scale** — and corrects them to the conversation-only,
+gated model above.
 
 ---
 
 ## The screens (in journey order)
 
-| #     | Screen                                     | What it is                                                                                                                                                                                                                                                             |
-| ----- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B** | **Public landing**                         | the idea prompt **+ the workflow preview**: the **3 mandatory steps** (Understanding your idea · What we'll build · Your plan/build) shown as descriptive blocks, with a **click-to-expand** bar revealing the optional steps (reality check · market check · design). |
-| **C** | **The hub**                                | the **canvas roadmap on the LEFT** — each done station **shows its captured findings** — + the **chat right rail**; here the agent raises the **validate-first ask** (with context) and **blocks** until you choose.                                                   |
-| **D** | **Doc 1 · "Understanding your idea"**      | a **readable document** (editorial prose): what / who, the **mirror scan** (real comparables), inferred class + platform — inline-editable.                                                                                                                            |
-| **E** | **Doc 2 · "What we'll build"**             | a **readable document**: in / out of scope (v1) + key decisions (pinned vs delegated) + the **read → react → revise** revision inline.                                                                                                                                 |
-| **F** | **Doc 3 · "Is it worth building?"** (opt.) | a **readable document**: the market, how hard it is to build, things to watch. Skipped (if at all) earlier, in the chat.                                                                                                                                               |
-| **G** | **Doc 4 · "Will people want it?"** (opt.)  | a **readable document**: demand + competition + the **validate-demand-first recommendation**, with the accept/decline **decision on the page** (also asked in the chat) — it **blocks** continuing.                                                                    |
-| **H** | **Design step** (whole page styled)        | the **ENTIRE page** — header, pickers, buttons, list, footer — rendered live in the chosen **style × palette × type**. Change a pick → it all restyles.                                                                                                                |
-| **I** | **The canvas as the roadmap** (post-plan)  | the road continues past Plan: **Epic 1 (done) → Epic 2 (you are here, progress meter) → Epic 3 → + more**.                                                                                                                                                             |
-| **J** | **An epic expanded**                       | the epic opens to its **stories → subtasks** (the work-item tree, same road language) with per-item status + work-type chips (Code / Design / Content / …).                                                                                                            |
-| **K** | **Plan states**                            | the degraded **"AI planning not configured"** gate + loading / resume / error.                                                                                                                                                                                         |
+| #      | Screen                                    | What it is                                                                                                                                                                                                                                                             |
+| ------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B**  | **Public landing**                        | the idea prompt **+ the workflow preview**: the **3 mandatory steps** (Understanding your idea · What we'll build · Your plan/build) shown as descriptive blocks, with a **click-to-expand** bar revealing the optional steps (reality check · market check · design). |
+| **C**  | **The hub**                               | the **canvas roadmap on the LEFT** — each done station **shows its captured findings** — + the **chat right rail**; here the agent raises the **validate-first ask** (with context) and **blocks** until you choose.                                                   |
+| **D**  | **"Understanding your idea"**             | a **readable, READ-ONLY document** (editorial prose): what / who, the **mirror scan** (real comparables), inferred class + platform. React in the chat — no inline edit.                                                                                               |
+| **E**  | **"What we'll build"**                    | a **READ-ONLY document**: in / out of scope (v1) + key decisions (pinned vs delegated). The **read → react → revise** loop runs through the **chat**, never inline.                                                                                                    |
+| **F**  | **"Is it worth building?"** (opt.)        | a **READ-ONLY document**: the market, how hard it is to build, things to watch. Skipped (if at all) earlier, in the chat.                                                                                                                                              |
+| **G**  | **"Will people want it?"** (opt.)         | a **READ-ONLY document**: demand + competition + the **validate-demand-first recommendation**, with the accept/decline **decision on the page** (also asked in the chat) — it **blocks** continuing.                                                                   |
+| **G2** | **The gate rhythm + narration**           | the per-tier loop drawn: draft → READ-ONLY review → **Continue** → the conductor **narrates** the handoff (typing) and drafts the next tier; **Skip offered in the chat** for an optional tier; "Continue = navigation, nothing locked".                               |
+| **G3** | **Going back — downstream-only cascade**  | a chat reaction at a LATER gate that the conductor attributes **upstream** sends you **back** to re-review that tier; the canvas shows the "Revisiting" state + downstream tiers "Will refresh"; cascade arrows point **downstream only**; nothing is locked.          |
+| **H**  | **Design step** (whole page styled)       | the **ENTIRE page** — header, pickers, buttons, list, footer — rendered live in the chosen **style × palette × type**. Change a pick → it all restyles.                                                                                                                |
+| **I**  | **The canvas as the roadmap** (post-plan) | the road continues past Plan: **Epic 1 (done) → Epic 2 (you are here, progress meter) → Epic 3 → + more**.                                                                                                                                                             |
+| **J**  | **An epic expanded**                      | the epic opens to its **stories → subtasks** (the work-item tree, same road language) with per-item status + work-type chips (Code / Design / Content / …).                                                                                                            |
+| **K**  | **Plan states**                           | the degraded **"AI planning not configured"** gate + loading / resume / error.                                                                                                                                                                                         |
 
 ---
 
@@ -114,19 +148,46 @@ running app does. The result composes into a `DESIGN.md` starter. The **v1 set**
 
 ---
 
-## ⚠️ Motir DRIVES the workflow; Skip CANCELS a step (it's an agent, not a form)
+## ⚠️ The gate rhythm — the conductor DRAFTS, you Continue, it NARRATES (screen G2)
 
-**The AI agent runs the workflow on its own.** It does **not** ask _"shall I do the
-next step?"_ and wait — if the user never replied, nothing would happen. When it
-has what it needs, it **proceeds to the next step automatically** and **writes up
-what it finds**; the chat narrates progress (_"Now I'm checking whether it's worth
-building… I'll write it up and move on by myself"_) with a typing indicator, not a
-blocking question.
+**One conductor drives the conversation, but each tier STOPS at a review gate.** The
+conductor (`7.3.67`) does **not** ask _"shall I draft the next step?"_ and wait — it
+gathers what it needs through the chat, then **drafts a tier on its own** and stops
+at that tier's **review gate**. The user reads the READ-ONLY write-up and presses
+**Continue**; the conductor then **narrates the handoff** in the chat (_"That's
+Understanding your idea set — I've got enough to draft what we'll build. Writing it
+up now…"_) with a typing indicator, and drafts the next tier. So the rhythm per tier
+is: **draft → READ-ONLY review → Continue → narrate → next**.
 
-For the two **optional** steps (the worth-building check and the market check),
-the chat shows a **Skip** control — pressing it **cancels that step and the agent
-advances directly** to the next. Skip is offered **before** a doc generates; a
-generated report has nothing to "skip".
+**Continue is navigation, not sign-off.** Pressing Continue moves you forward; it
+does **not** lock anything. **Nothing is locked until epic generation** — the single
+commit at the end. The doc footers and the gate banner say so explicitly.
+
+**Skip is a CHAT decision, before a tier drafts (not a button on a generated doc).**
+For the two **optional** tiers (the worth-building check and the market check) — and
+the design step — the conductor **offers Skip in the chat** before it drafts that
+tier (`7.3.9` surfaces the per-tier skip control; when the interview already revealed
+the work is done, it pre-suggests the skip). Pressing Skip **cancels that tier and
+advances** to the next. A **generated report has nothing to "skip"** — once a doc is
+on screen, its gate has only **Continue**. (This is why screen G2 draws Skip as chat
+chips at the optional-tier handoff, never as a footer button on D/E/F/G.) Skips are
+**dependency-closed**: skipping the worth-building check also drops the market check,
+since validation builds on it (`7.3.23`).
+
+## ⚠️ Going back — the downstream-only cascade (screen G3)
+
+**The chat is the SOLE way to change anything — there is NO inline editing.** When
+the user reacts in the chat, the conductor **classifies the impact across the whole
+dependency DAG** (discovery → vision → feasibility → validation) — a remark made at a
+**later** gate can change an **upstream** tier (the product can do the same thing a
+different way). When it does, the machine sends the user **BACK to re-review that
+upstream tier** ("Revisiting"), then **replays the gates forward**, while the
+**downstream** tiers **re-derive** (`7.3.24`) — drawn on the canvas as "Will refresh".
+
+**Cascade is DOWNSTREAM-ONLY.** A note at the market check can change your idea, but a
+note about your idea never edits a step before it; upstream is never rewritten by a
+downstream note. Because nothing is locked until generation, going back is always
+safe — the G3 banner + the chat reassure the user of this.
 
 ## ⚠️ Validate-demand-first — the one BLOCKING ask (MOTIR-1064 / 7.3.47)
 
@@ -159,9 +220,9 @@ findings; upcoming steps are ghosted rows.
 
 The four full-screen pages (D/E/F/G) are **step summaries** the user reads — a
 clean **editorial write-up** (kicker + serif title + lead, then prose sections,
-lists, a competitor "scan"), inline-editable. **Don't call them "docs" or number
-them "doc N of 4"** (Yue) — "doc" is an internal word and there's nothing to
-download; each page is just the write-up of that step.
+lists, a competitor "scan"), **READ-ONLY** (you react in the chat, never inline).
+**Don't call them "docs" or number them "doc N of 4"** (Yue) — "doc" is an internal
+word and there's nothing to download; each page is just the write-up of that step.
 
 ---
 
@@ -176,7 +237,9 @@ download; each page is just the write-up of that step.
   showcase (that IS the demo). `rounded-full` only on dots / avatars.
 - **Not colour-alone** — every station / state pairs an icon + label + tint; the
   roadmap "you are here" pairs a `map-pin` + label; pinned vs delegated keep their
-  `pin` / `wand` markers.
+  `pin` / `wand` markers; the new gate states pair a glyph + word —
+  `Drafting now…` (`sparkles`) · `Will refresh` (`rotate`) · `Revisiting`
+  (`corner-up-left`, ringed) — so the state never rests on hue alone.
 - **AA holds** — each style × palette pair is AA by construction; Cybercore renders
   its native dark register.
 - **A11y** — the chat rail and the canvas are labelled regions; decorative icons
@@ -184,21 +247,24 @@ download; each page is just the write-up of that step.
 
 ## Primitives composed (no hand-rolling)
 
-| Element                                 | Built from                                                                                                          |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| canvas roadmap (stations + road)        | NEW ARRANGEMENT of `Card` (`.estation`) + tint glyph tiles + connector lines + progress meters                      |
-| chat rail + bubbles + composer          | `Card` + `Avatar` + `Input` (the compact right rail)                                                                |
-| full-screen step frame                  | a `step-top` bar (`Button` back + a descriptive label) over a centred doc body                                      |
-| doc fields / scope boxes / mirror cards | `Card` + labelled fields + hover-reveal `pencil` (inline edit)                                                      |
-| full-page design showcase               | NEW ARRANGEMENT of `Card`/`Button`/`Pill`/list wrapped in the real axis attributes (the `/tokens` specimen pattern) |
-| epic → story → subtask tree (H/I)       | NEW ARRANGEMENT of `Card` + the `--el-type-*` work-type hues + the connector language                               |
-| state callouts                          | `Card` tints + `Button`; the spinner is `Spinner`                                                                   |
-| icons                                   | lucide-react + Google / GitHub marks                                                                                |
+| Element                           | Built from                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| canvas roadmap (stations + road)  | NEW ARRANGEMENT of `Card` (`.estation`) + tint glyph tiles + connector lines + progress meters                                                                                                    |
+| chat rail + bubbles + composer    | `Card` + `Avatar` + `Input` (the compact right rail)                                                                                                                                              |
+| full-screen step frame            | a `step-top` bar (`Button` back + a descriptive label) over a centred doc body                                                                                                                    |
+| READ-ONLY doc body + read hint    | `Card` + prose sections + a `.doc-readhint` "react in the chat" banner (a `message` glyph, **never a `pencil`**)                                                                                  |
+| doc-footer Continue gate          | `Button` (Back) + a `.gate-note` ("Continue = navigation, nothing locks until generate", `lock-open` glyph) + `Button` (Continue)                                                                 |
+| gate banner / "going back" state  | `.gate-banner` (`Card` tint + glyph tile + title/desc); the `.back` variant tints peach for the cascade re-review                                                                                 |
+| narration + cascade canvas states | the `.active-node` blocks reuse `Pill` states — `Drafting now…` / `Will refresh` / `Revisiting` (hue in tint bg, `--el-text-strong`) + a `typing` indicator + downstream `cflow` connector labels |
+| full-page design showcase         | NEW ARRANGEMENT of `Card`/`Button`/`Pill`/list wrapped in the real axis attributes (the `/tokens` specimen pattern)                                                                               |
+| epic → story → subtask tree (I/J) | NEW ARRANGEMENT of `Card` + the `--el-type-*` work-type hues + the connector language                                                                                                             |
+| state callouts                    | `Card` tints + `Button`; the spinner is `Spinner`                                                                                                                                                 |
+| icons                             | lucide-react + Google / GitHub marks                                                                                                                                                              |
 
 ## Deliverable
 
 The three-file design-asset set under `design/ai-chat/`: `design-notes.md` (this
-file) · `onboarding.mock.html` (the HTML mockup — source of truth, screens B–J) ·
-`onboarding.png` (the full-page export). Rendered with Playwright chromium
-(full-page, light theme, `deviceScaleFactor: 2`, 1200px wide); `prettier --check`
-clean.
+file) · `onboarding.mock.html` (the HTML mockup — source of truth, screens B–K incl.
+the new G2 gate-rhythm + G3 cascade panels) · `onboarding.png` (the full-page
+export). Rendered with Playwright chromium (full-page, light theme,
+`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean.
