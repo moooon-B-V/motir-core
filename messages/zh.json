@@ -3470,5 +3470,51 @@
     "errorBody": "Motir AI 暂时不可用。已生成的内容会保留——请重试。",
     "tryAgain": "重试",
     "dismiss": "忽略"
+  },
+  "onboarding": {
+    "nav": {
+      "product": "产品",
+      "pricing": "定价",
+      "docs": "文档",
+      "logIn": "登录",
+      "signUp": "注册"
+    },
+    "landing": {
+      "badge": "氛围项目",
+      "headline": "你想做点什么？",
+      "subhead": "描述你的想法。Motir 会规划整个项目 —— 品牌、定价、营销和代码 —— 跟踪各类工作，并为你交付代码。",
+      "ideaLabel": "描述你的想法",
+      "heroPlaceholder": "一个帮自由职业者开发票、跟踪哪些客户已付款的工具……",
+      "heroHint": "免费开始 · 无需信用卡",
+      "startPlanning": "开始规划",
+      "previewCaption": "接下来会发生什么",
+      "footnote": "Motir 会带你走完每一步，并把它的发现整理成文 —— 你阅读、在对话中给出反馈，满意后继续。在生成计划之前，一切都不会被锁定。",
+      "steps": {
+        "understandTitle": "理解你的想法",
+        "understandDesc": "我们通过对话弄清你要做什么、面向谁 —— 并找出最接近的现有产品。",
+        "scopeTitle": "我们要做什么",
+        "scopeDesc": "我们就第一个版本的范围（做什么、不做什么）以及背后的关键决策达成一致。",
+        "planTitle": "先有计划，再开始构建",
+        "planDesc": "一份完整的待办清单，Motir 据此构建 —— 并以路线图的形式跟踪每个史诗。"
+      },
+      "optional": {
+        "summary": "过程中的可选步骤",
+        "summaryHint": "—— Motir 仅在适合你的项目时才加入这些步骤",
+        "names": "可行性检查 · 市场检查 · 设计",
+        "optionalTag": "可选",
+        "webOnlyTag": "仅限网页",
+        "worthTitle": "值得做吗？",
+        "worthDesc": "一次快速的现实检查 —— 市场有多大、构建有多难。",
+        "demandTitle": "会有人想要它吗？",
+        "demandDesc": "我们核查真实需求与竞争对手 —— 还可以在你构建之前，先用一个营销站点验证需求。",
+        "designTitle": "设计你的外观",
+        "designDesc": "选择你产品的外观与质感 —— 或者跳过，使用 Motir 的默认风格。"
+      }
+    },
+    "connectGate": {
+      "title": "尚未配置 AI 规划",
+      "body": "规划运行在 Motir Cloud 上；此自托管工作区尚未建立连接。",
+      "cta": "连接 Motir AI"
+    }
   }
 }

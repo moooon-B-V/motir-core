@@ -1,15 +1,21 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center">
-      <h1 className="font-serif text-6xl font-semibold tracking-tight">Motir</h1>
-      <p className="text-(--el-text-muted) mt-4 text-sm">AI-native project management · GPL-3.0</p>
-      <a
-        href="/tokens"
-        className="mt-8 text-xs underline-offset-4 hover:underline"
-        style={{ color: 'var(--el-link)' }}
-      >
-        view design tokens →
-      </a>
-    </main>
-  );
+import { ConnectAiGate } from '@/app/_components/ConnectAiGate';
+import { PublicFrontDoor } from '@/app/_components/PublicFrontDoor';
+import { isAiPlanningConfigured } from '@/lib/ai/planningConfig';
+
+// The public front door (Subtask 7.3.14 — the root a brand-new visitor lands on,
+// the *vibe project* framing). Replaces the placeholder root page.
+//
+//   - **Cloud / connected** (AI planning configured) → the marketing landing +
+//     hero prompt (`PublicFrontDoor`, design Surfaces 1 + 2).
+//   - **Self-hosted, not connected** → the "Connect Motir AI" gate
+//     (`ConnectAiGate`, design Surface 6) — the hero would be useless without a
+//     planner to talk to (the cloud-gated-AI decision).
+//
+// The decision is read server-side from the deployment's env (no client flag, no
+// `motir-ai` import — the open-core boundary).
+export default function HomePage() {
+  if (!isAiPlanningConfigured()) {
+    return <ConnectAiGate />;
+  }
+  return <PublicFrontDoor />;
 }
