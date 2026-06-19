@@ -36,6 +36,7 @@ const CANONICAL_ERROR_CODES = [
 const CANONICAL_JOB_KINDS = [
   'noop',
   'discovery',
+  'generate_explanation',
   'generate_tree',
   'expand_item',
   'augment',

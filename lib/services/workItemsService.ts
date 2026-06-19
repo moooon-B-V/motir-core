@@ -1062,15 +1062,21 @@ export const workItemsService = {
       }
 
       // ── Explanation-source state machine ──────────────────────────────
-      // When the patch carries explanationMd and the current source is an
+      // When the patch CHANGES explanationMd and the current source is an
       // un-reviewed ai_draft, editing the explanation transitions the source
       // to user_edited — UNLESS the caller set explanationSource explicitly
       // (explicit always wins). The transition is captured in the diff so the
       // activity feed surfaces "AI draft → user edited".
+      //
+      // Gate on an ACTUAL change (`update.explanationMd` is set only when the
+      // value differs — line above), NOT merely on the field being present:
+      // the edit form always submits explanationMd, so a save that touches only
+      // another field (e.g. priority) must NOT silently flip an unchanged
+      // ai_draft to user_edited and drop its badge (Subtask 8.8.12).
       let effectiveSource = patch.explanationSource;
-      const explanationProvided = patch.explanationMd !== undefined;
+      const explanationChanged = update.explanationMd !== undefined;
       if (
-        explanationProvided &&
+        explanationChanged &&
         current.explanationSource === 'ai_draft' &&
         patch.explanationSource === undefined
       ) {

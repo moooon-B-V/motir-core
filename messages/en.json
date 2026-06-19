@@ -414,8 +414,6 @@
       "description": "Description",
       "explanation": "Explanation",
       "explanationHint": "— why this matters (optional)",
-      "draftWithAiTooltip": "AI drafting arrives with the planning layer (Epic 7)",
-      "draftWithAi": "Draft with AI",
       "explanationSkip": "Skip this — explanation can be drafted with AI or added after creating.",
       "priority": "Priority"
     },
@@ -3421,5 +3419,20 @@
       "errorDescription": "Something went wrong fetching this organization's usage. The figures are temporarily unavailable — your credits are safe.",
       "loading": "Loading usage…"
     }
+  },
+  "draftWithAi": {
+    "button": "Draft with AI",
+    "drafting": "Drafting…",
+    "stop": "Stop",
+    "regenerate": "Regenerate",
+    "aiDrafted": "AI-drafted",
+    "gateTooltip": "Connect Motir AI to draft with AI",
+    "gateTitle": "AI drafting isn't configured",
+    "gateBody": "Drafting runs on Motir Cloud; this self-hosted workspace has no connection yet.",
+    "connect": "Connect Motir AI",
+    "errorTitle": "Couldn't finish the draft",
+    "errorBody": "Motir AI is unavailable right now. Any text generated so far is kept — try again.",
+    "tryAgain": "Try again",
+    "dismiss": "Dismiss"
   }
 }

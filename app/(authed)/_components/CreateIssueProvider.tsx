@@ -43,6 +43,7 @@ const CreateIssueContext = createContext<CreateIssueContextValue | null>(null);
 export function CreateIssueProvider({
   hasProject,
   canEdit = true,
+  aiConfigured = false,
   children,
 }: {
   hasProject: boolean;
@@ -56,6 +57,12 @@ export function CreateIssueProvider({
    * test mounts keep their prior behaviour.
    */
   canEdit?: boolean;
+  /**
+   * Whether motir-core is wired to a Motir AI deployment (Subtask 8.8.12),
+   * resolved server-side in the authed layout. Forwarded to the create modal to
+   * gate its "Draft with AI" affordance. Defaults to false (safe disabled state).
+   */
+  aiConfigured?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -86,7 +93,12 @@ export function CreateIssueProvider({
     <CreateIssueContext.Provider value={value}>
       {children}
       {hasProject && canEdit && (
-        <CreateIssueModal open={open} onOpenChange={setOpen} onCreated={notifyIssueCreated} />
+        <CreateIssueModal
+          open={open}
+          onOpenChange={setOpen}
+          onCreated={notifyIssueCreated}
+          aiConfigured={aiConfigured}
+        />
       )}
     </CreateIssueContext.Provider>
   );

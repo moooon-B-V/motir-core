@@ -13,6 +13,7 @@ export const ENVELOPE_VERSION = 'v1' as const;
 export const JOB_KINDS = [
   'noop',
   'discovery',
+  'generate_explanation',
   'generate_tree',
   'expand_item',
   'augment',
@@ -35,6 +36,11 @@ export interface JobContextBag {
   rootItemKey?: string | null;
   discovery?: unknown;
   code?: unknown;
+  // The work-item context a `generate_explanation` job (8.8.11) drafts an
+  // explanation FROM — the title / description / type / parent the "Draft with
+  // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
+  // like `discovery`); the motir-ai handler parses it into an ExplanationInput.
+  explanation?: unknown;
 }
 
 export interface RequestEnvelope {
