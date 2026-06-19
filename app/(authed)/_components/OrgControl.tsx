@@ -78,7 +78,10 @@ export function OrgControl({ activeOrg, orgs }: OrgControlProps) {
           >
             <span className="flex items-center gap-2">
               <OrgAvatar name={activeOrg.name} />
-              <span className="max-w-[20ch] truncate">{activeOrg.name}</span>
+              {/* font-serif: the org name is a header IDENTITY label — it wears the
+                  headline role so the `data-type` axis re-types the header chrome
+                  too (see ProjectSwitcher). */}
+              <span className="max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
             </span>
           </Button>
         </Popover.Trigger>

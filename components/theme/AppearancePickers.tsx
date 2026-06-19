@@ -246,6 +246,20 @@ export function StylePicker({
   return <AxisRadioGroup label={label} value={value} onChange={onChange} options={options} />;
 }
 
+/**
+ * Each palette's signature primary hue, hardcoded — the light-theme
+ * `--color-primary-fill` of its `[data-palette]` block in `app/globals.css`
+ * (graphite's is its near-black ink CTA). Used for the picker swatch so the dot
+ * shows the palette's identity colour independent of the active theme/style.
+ */
+const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
+  motir: '#5645d4',
+  cobalt: '#3650c2',
+  graphite: '#1a1d21',
+  evergreen: '#0c7a52',
+  spectrum: '#5a37c9',
+};
+
 /** Palette (colour) — the 5-palette chip row, each with its accent swatch dot. */
 export function PalettePicker({
   value,
@@ -259,13 +273,18 @@ export function PalettePicker({
   const options: AxisOption<PaletteId>[] = PALETTE_IDS.map((id) => ({
     id,
     label: PALETTE_REGISTRY[id].name,
-    // The dot scopes `data-palette` to itself, so globals.css recomputes
-    // `--el-accent` for it → the palette's own accent hue, with no per-palette
-    // hex table here.
+    // The dot's colour is HARDCODED (the palette's light-theme signature primary
+    // — its `--color-primary-fill` in globals.css), NOT a `data-palette`-scoped
+    // `--el-accent`. A scoped `--el-accent` resolves under the ACTIVE theme/style,
+    // so the dot would shift with dark mode (and a base palette nested under a
+    // non-base `<html>` inherits the wrong accent — the StyleVignette nested-base
+    // caveat). A fixed swatch always shows the palette's own identity hue. The
+    // `Record<PaletteId, …>` keeps it total — a new palette won't typecheck until
+    // its swatch is added.
     leading: (
       <span
-        data-palette={id}
-        className="size-[11px] shrink-0 rounded-full bg-(--el-accent)"
+        className="size-[11px] shrink-0 rounded-full"
+        style={{ background: PALETTE_SWATCH_HEX[id] }}
         aria-hidden
       />
     ),
