@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { TriangleAlert } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { StyleVignette } from '@/components/theme/StyleVignette';
 import {
@@ -23,25 +24,35 @@ import type { ThemePattern } from '@/lib/theme/types';
  * app, and it re-renders LIVE as they pick. The mock of record is
  * `design/settings/appearance.mock.html` (7.3.57 / MOTIR-1074).
  *
- * A pure CLIENT island: it reads + writes the 1.0.5 ThemeProvider via
- * `useTheme()`, which owns persistence (localStorage `THEME_STORAGE_KEYS`) and the
- * `<html>` `data-*` attributes the pre-hydration init script applies. So picking
- * an axis re-skins the WHOLE app instantly — this page included — with NO server
- * write and NO `router.refresh()` (the inline-edit-no-refresh preference contract;
- * the page-state rule's "edited surface is its own confirmation"). Because the page
- * itself re-skins, the design has no separate "live preview" widget; the showcase
- * band is a focused product slice (the 7.3.37 `StyleVignette` in LIVE mode) that
- * makes the change legible at a glance.
+ * A CLIENT island: it reads + writes the 1.0.5 ThemeProvider via `useTheme()`,
+ * which owns the live `<html>` `data-*` attributes + localStorage and (Subtask
+ * 7.3.62) the cross-device persistence. So picking an axis re-skins the WHOLE app
+ * instantly — this page included — with NO `router.refresh()` (the
+ * inline-edit-no-refresh preference contract; the page-state rule's "edited
+ * surface is its own confirmation"). Because the page itself re-skins, the design
+ * has no separate "live preview" widget; the showcase band is a focused product
+ * slice (the 7.3.37 `StyleVignette` in LIVE mode) that makes the change legible.
  *
- * v1 is localStorage-only / per-device. Cross-device server sync is the
- * MOTIR-1076..1080 cluster (the `/api/appearance-preference` service already
- * landed in 1077); wiring this pane to persist through it is 1079's job
- * (`blocked_by` this subtask) — out of scope here.
+ * Cross-device sync (Subtask 7.3.62, the MOTIR-1076..1080 cluster): each pick is
+ * OPTIMISTIC — it flips the UI + localStorage instantly, then the provider fires a
+ * debounced PATCH to `/api/appearance-preference` (1077) so the choice follows the
+ * user to every device, reconciled from the seq-guarded 200 body. A failed save
+ * degrades quietly via the `syncState: 'error'` footer below — the local switch is
+ * never lost. The pane opens reflecting the server-seeded preference (7.3.61).
  */
 export function AppearanceCard() {
   const t = useTranslations('settings.appearance');
-  const { pattern, styleId, palette, type, setPattern, setStyleId, setPalette, setType } =
-    useTheme();
+  const {
+    pattern,
+    styleId,
+    palette,
+    type,
+    setPattern,
+    setStyleId,
+    setPalette,
+    setType,
+    syncState,
+  } = useTheme();
 
   const themeLabels: Record<ThemePattern, string> = {
     light: t('theme.light'),
@@ -59,6 +70,21 @@ export function AppearanceCard() {
             </h3>
             <p className="mt-0.5 font-sans text-sm text-(--el-text-muted)">{t('card.subtitle')}</p>
           </div>
+        }
+        // Quiet, non-blocking "couldn't sync" affordance (Subtask 7.3.62): the
+        // axis change already applied locally (live UI + localStorage); this only
+        // says the cross-device save didn't land. Rendered as a soft footer note
+        // (role="status", aria-live polite) so it never interrupts picking.
+        footer={
+          syncState === 'error' ? (
+            <p
+              role="status"
+              className="flex items-center gap-1.5 font-sans text-xs text-(--el-text-muted)"
+            >
+              <TriangleAlert className="size-3.5 shrink-0 text-(--el-warning)" aria-hidden />
+              {t('sync.error')}
+            </p>
+          ) : undefined
         }
       >
         <div className="flex flex-col">
