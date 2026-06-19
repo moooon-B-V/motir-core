@@ -3,20 +3,21 @@
 Design reference for the `work-items` UI area. Each surface names the design
 asset it lives in, the primitives it composes from, copy strings, and placement.
 
-| Surface                                          | Asset                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------ | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`          | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                                                                                                                              |
-| Create issue modal                               | `create.pen` + `create.png`                   | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                                                                                                                        |
-| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                       | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                                                                                                                            |
-| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)      | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                                                                                                                           |
-| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)            | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                                                                                                                            |
-| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)          | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                                                                                                                                   |
-| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup)   | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                                                                                                                           |
-| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)           | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                                                                                                                              |
-| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)      | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                                                                                                                         |
-| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)          | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                                                                                                                             |
-| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** + `quick-view.png` | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. **8.8.4 EXPANDS the rail to the full core-field set (gates 8.8.8) — overturns the curated subset.** See below. |
-| **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)        | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below.                                                                                                |
+| Surface                                          | Asset                                               | Notes                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Issue detail page                                | `detail.pen` (Pencil) + `detail.png`                | header eyebrow + Description / Explanation / Activity (left) · core-fields rail (right). Built across 2.4.1–2.4.4.                                                                                                                                                                                                                                                                                           |
+| Create issue modal                               | `create.pen` + `create.png`                         | type/parent/title/description/priority + optional Explanation (panel 3).                                                                                                                                                                                                                                                                                                                                     |
+| Tree view (issue list, nested)                   | `tree.pen` + `tree.png`                             | issue tree rows + the `[Filter]`·`[Tree ▾]`·`[+ New issue]` toolbar.                                                                                                                                                                                                                                                                                                                                         |
+| **Tree view at scale (sort · lazy · virtual)**   | **`tree-scale.mock.html`** (HTML mockup)            | The scale shape `tree.png` leaves unspecified (it loads the whole forest, no sort headers) — sortable treegrid headers + lazy-expand + virtualization. Finding #57. Gates 2.5.13 + 2.5.14. See below.                                                                                                                                                                                                        |
+| **Flat sortable List view + view switcher**      | **`list.mock.html`** (HTML mockup)                  | The List mode `tree.png` leaves unspecified (it draws only Tree + a disabled switcher seam). Gates 2.5.8. See below.                                                                                                                                                                                                                                                                                         |
+| **Filter bar (kind · status · assignee · text)** | **`filter.mock.html`** (HTML mockup)                | The open `[Filter]` popover `tree.png` leaves unspecified (it draws only a disabled `[Filter]` seam). Gates 2.5.4. See below.                                                                                                                                                                                                                                                                                |
+| **Relationships panel + ready/blocked badge**    | **`relationships.mock.html`** (HTML mockup)         | The element `detail.pen` does NOT specify. See below.                                                                                                                                                                                                                                                                                                                                                        |
+| **Link management (add / remove links)**         | **`links.mock.html`** (HTML mockup)                 | Extends the relationships panel with the add/remove UI (2.4.8 → 2.4.9). See below.                                                                                                                                                                                                                                                                                                                           |
+| **DatePicker calendar (Due-date field)**         | **`datepicker.mock.html`** (HTML mockup)            | The design-system replacement for the native `<input type="date">` popup; consumed by the Due-date fields (2.4.11 → 2.4.12). See below.                                                                                                                                                                                                                                                                      |
+| **Create modal — Due date field**                | **`create.mock.html`** (HTML mockup)                | Extends `create.pen` with a Due-date row (`DatePicker`, after Priority) — finding #56 / "mirror Jira" (2.3.11 → 2.3.12). See below.                                                                                                                                                                                                                                                                          |
+| **Work-item quick view (peek)**                  | **`quick-view.mock.html`** + `quick-view.png`       | The peek modal + row trigger neither `tree.png` nor the 2.4 detail design specifies — a large two-column in-list preview (full description + core-fields rail) with "Open full page →", plus the **ready/blocked readiness banner** in the peek (2.5.20). Gates 2.5.19 + 2.5.21. **8.8.4 EXPANDS the rail to the full core-field set (gates 8.8.8) — overturns the curated subset.** See below.              |
+| **Comments + @mentions (Activity section)**      | **`comments.mock.html`** (HTML mockup)              | The comment thread, composer, mention popup and every comment state — `detail.pen` draws ONLY the Activity placeholder ("Comments coming in Epic 5"). Single-level threading, oldest-first + sort toggle, "Edited" tag, hard-delete confirm, "Show more" paging. Gates 5.1.4 + 5.1.5. See below.                                                                                                             |
+| **Draft explanation with AI**                    | **`draft-with-ai.mock.html`** + `draft-with-ai.png` | The _Draft with AI_ INTERACTION for `explanationMd`, on BOTH the create modal and the detail page. `create.pen` / `detail.pen` already draw the entry affordances + resting states; this asset specifies the in-between: streaming (SSE, 8.8.11), accept/discard, `explanationSource` signalling, the cloud-gate, and the error state. Story 8.8 · 8.8.6 (MOTIR-1090). Gates 8.8.12 (MOTIR-1096). See below. |
 
 ---
 
@@ -3301,3 +3302,154 @@ meaning never rides hue alone (every chip pairs icon + text label).
 
 No new design-system entry is invented — the chip, the icon, and the hue tokens
 (`--el-type-*`, globals.css 794-803) all already ship from Story 2.7.
+
+---
+
+## Draft explanation with AI (Story 8.8 · 8.8.6 → 8.8.12)
+
+The _Draft with AI_ affordance lets a user generate the optional work-item
+**Explanation** (`explanationMd`, the plain-language "why this matters" written
+for non-technical reviewers) instead of writing it by hand. It lives on **both**
+surfaces that own the Explanation field: the **create-issue modal** and the
+**work-item detail page**. `draft-with-ai.mock.html` is the design asset;
+`draft-with-ai.png` is the full-page export.
+
+**What this asset does NOT re-invent.** The _entry affordances_ and the _resting
+states_ already exist in the legacy pens and are kept verbatim:
+
+- `create.pen` — the Explanation field with a **"Draft with AI"** button and the
+  `— why this matters (optional)` helper.
+- `detail.pen` — the Explanation section in three resting states
+  (**empty** with "Draft explanation with AI", **ai_draft** with the
+  "AI-drafted — review me" pill + "Regenerate with AI", **user-owned** prose),
+  and the `— why this matters` gloss.
+
+**What 8.8.6 NEWLY specifies — the in-between INTERACTION** (the gap the pens
+leave): the **loading/streaming** state, the **accept/discard** review step,
+how **`explanationSource`** (`ai_drafted` vs `user_authored`) is signalled, the
+**cloud-gated** disabled / "Connect Motir AI" state, and the **error** state.
+
+### Workflow grounding (the design-content dependency rule)
+
+The streamed interaction is **not invented here** — it is grounded in the
+subtasks that SPECIFY the behaviour, read at design time (cited per the
+design-content dependency rule, MOTIR.md):
+
+- **8.8.11 / MOTIR-1095** (motir-ai, `relates_to`) — the `generate_explanation`
+  job over `POST /v1/jobs` + `GET /v1/jobs/:id/stream`. This is **why the draft
+  STREAMS** (token-by-token via SSE) rather than appearing atomically, and why
+  there is a distinct loading state, a **Stop** control, and an **error** state
+  (the `MotirAiUnavailableError` / `MOTIR_AI_JOB_FAILED` taxonomy in
+  `lib/ai/errors.ts`).
+- **8.8.12 / MOTIR-1096** (code, `blocked_by` this design) — wires it through
+  `lib/ai/motirAiClient.ts`, renders the streaming/accept-discard states, and on
+  **accept** persists `explanationMd` + sets `explanationSource = ai_drafted`
+  (a new Prisma enum value). The **accept/discard** step and the **source
+  signalling** below are designed to that contract.
+- **Cloud-gate** — AI is cloud-gated (`motirAiClient` reads `MOTIR_AI_URL` /
+  `MOTIR_AI_SERVICE_TOKEN`; unset → `MotirAiConfigError`). The disabled state +
+  "Connect Motir AI" notice mirror the onboarding **screen K** gate
+  (`design/ai-chat/onboarding.mock.html`: "AI planning isn't configured" /
+  "Planning runs on Motir Cloud; this self-hosted workspace has no connection
+  yet" / **Connect Motir AI**), restated for drafting.
+
+### The Explanation block (the surface this asset owns)
+
+A bordered region (`.expl`, `--radius-input` + `--el-border` over
+`--el-surface-soft`) that sits under the Explanation label — identical grammar in
+the **modal field** and the **detail section**, so the interaction reads the same
+on both. It has up to three bands: an optional **top toolbar** (status + a stop /
+regenerate control), the **body** (the editor / streamed markdown), and an
+optional **bottom toolbar** (the accept/discard actions). On the detail page the
+status/stop chips ride the **section header** (`.dsection-head`) instead of a top
+toolbar, matching the detail layout.
+
+### States (panel by panel)
+
+**Surface 1 — create-issue modal** (`Modal`, `--radius-modal`):
+
+1. **1A · Entry** — the empty Explanation field. Helper "Help non-technical
+   reviewers understand why this work matters." + a **"Draft with AI"** button
+   (`.btn-ai`: `--el-tint-lavender` fill, `--el-accent-on-surface` text + label,
+   `sparkles` icon) and an "…or write your own." footnote. (From `create.pen`.)
+2. **1B · Streaming** — top toolbar shows a spinning `rotate` glyph + **Drafting…**
+   (`--el-accent-on-surface`) and a quiet **Stop** (`stop` icon); the body fills
+   token-by-token, with a blinking `--el-accent` **caret** at the live edge.
+3. **1C · Accept / Discard** — top toolbar carries the **"AI draft — review me"**
+   pill (`.pill-ai`, lavender) + **Regenerate**; the completed draft sits in the
+   body; a bottom toolbar offers **Discard** (`.btn-danger-quiet`) and the
+   primary **Use draft** (`.btn-ai` + `check`). Nothing is persisted until
+   **Use draft**.
+
+**Surface 2 — work-item detail page** (`.dsection` left-column card):
+
+4. **2A · Empty + entry** — "Draft explanation with AI" + a **Write it yourself**
+   (`pencil`) ghost button, on the same helper. (From `detail.pen`.)
+5. **2B · Streaming** — the section header gets the **Drafting…** meter + **Stop**;
+   body streams with the caret.
+6. **2C · Accept / Discard** — header pill "AI draft — review me"; body holds the
+   finished draft; bottom toolbar **Discard · Regenerate · Use draft**.
+7. **2D · Saved (`ai_drafted`)** — the persisted resting state: the
+   **"AI-drafted — review me"** pill in the header signals the source; **Edit**
+   (inline) + **Regenerate with AI** stay available. (From `detail.pen`.)
+
+**Cross-cutting states:**
+
+8. **3A · Cloud-gated** — a self-host with no Motir AI connection. The
+   **"Draft with AI"** button is disabled (`.is-disabled`, `aria-disabled`,
+   tooltip "Connect Motir AI to draft with AI") and **Write it yourself** stays
+   enabled (drafting is optional, never a wall). An inline `.notice` with a
+   `plug` glyph (`--el-tint-yellow` / `--el-warning`) reads **"AI drafting isn't
+   configured" / "Drafting runs on Motir Cloud; this self-hosted workspace has no
+   connection yet."** + a primary **Connect Motir AI**.
+9. **3B · Source signalling + error** — the source legend:
+   `ai_drafted` → lavender **"AI-drafted — review me"** pill (`sparkles`);
+   **after a human edits** the drafted text → the source flips to
+   `user_authored` and the pill becomes a quiet **"Edited"** chip (`.pill-edited`,
+   `pencil`); hand-written from the start → **no badge** (`user_authored`).
+   The **error** state is a `.notice.is-error` (`alert` glyph, `--el-tint-rose` /
+   `--el-danger-text`): **"Couldn't finish the draft" / "Motir AI is unavailable
+   right now. Any text generated so far is kept — try again."** + **Try again** /
+   **Dismiss** (maps to `MOTIR_AI_UNAVAILABLE` / `MOTIR_AI_JOB_FAILED`).
+
+### Primitives composed (no hand-rolling)
+
+| Element                        | Built from                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
+| modal field / detail section   | `Modal` + the field grammar / `ContentSectionCard` (`.dsection`), as in `create`/`detail` |
+| "Draft with AI" action         | `Button` variant — accent-ghost over `--el-tint-lavender` + `sparkles` (the AI mark)      |
+| streaming meter · stop · caret | `Spinner` (`rotate`) + a quiet `Button` (`stop`) + a `--el-accent` caret span             |
+| accept / discard toolbar       | `Button` (`.btn-ai` "Use draft" / `.btn-danger-quiet` "Discard" / quiet "Regenerate")     |
+| source pill                    | `Pill` — `.pill-ai` (lavender, `ai_drafted`) · `.pill-edited` (quiet, after edit)         |
+| cloud-gate / error notice      | `Card` tint callout (`plug` / `alert` glyph) + `Button` — mirrors onboarding screen K     |
+| icons                          | lucide-react (`sparkles`, `rotate`, `stop`, `check`, `pencil`, `plug`, `alert`, `x`)      |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*` (no Tier-0): the AI treatment is
+  `--el-tint-lavender` background + `--el-accent-on-surface` text/icon (AA on the
+  tint, finding #35); warning gate is `--el-tint-yellow` / `--el-warning`; error
+  is `--el-tint-rose` / `--el-danger-text`; body/borders use the standard
+  `--el-text*` / `--el-surface*` / `--el-border*`.
+- **Shape** strictly via element-semantic tokens (`--radius-input` for the block,
+  `--radius-btn` buttons, `--radius-badge` pills, `--radius-card` notices,
+  `--spacing-*` / `--height-*` for control boxes); `rounded-full` only on the
+  pill radius token, never raw.
+- **Not colour-alone** — the AI source pairs a `sparkles` icon + label + tint;
+  streaming pairs a spinner + "Drafting…"; the gate/error pair an icon + heading.
+- **A11y** — the disabled gate uses `aria-disabled` + a tooltip (never a dead
+  button with no reason); the stop / regenerate / accept / discard controls are
+  separate sibling `Button`s, never nested interactives; decorative icons are
+  `aria-hidden`. Drafting is **optional everywhere** — "Write it yourself" is
+  always offered, so the gate never blocks creating or editing a work item.
+- **Page-state after accept (for 8.8.12)** — accepting writes `explanationMd` +
+  `explanationSource`; on the detail page the Explanation section is the edited
+  cell (keep the optimistic value, no tree refresh — the inline-edit rule), and
+  any source badge rendered elsewhere refreshes with it.
+
+### Deliverable
+
+The three-file set under `design/work-items/`: this `design-notes.md` section ·
+`draft-with-ai.mock.html` (HTML mockup, source of truth) · `draft-with-ai.png`
+(full-page export). Rendered with Playwright chromium (full-page, light theme,
+`deviceScaleFactor: 2`, 1240px wide); `prettier --check` clean.

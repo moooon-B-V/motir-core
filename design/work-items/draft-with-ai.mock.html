@@ -1,0 +1,1212 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Draft explanation with AI (Story 8.8 · 8.8.6 → 8.8.12)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for MOTIR-1090 / 8.8.6 — the *Draft with AI*
+      affordance for a work item's EXPLANATION (`explanationMd`), on BOTH the
+      create-issue modal AND the work-item detail page. Gates 8.8.12 (MOTIR-1096,
+      the code) which itself depends on 8.8.11 (MOTIR-1095, the motir-ai
+      `generate_explanation` job + SSE stream).
+
+      What ALREADY exists (built ON, not re-invented):
+        · create.pen — the explanation field with a "Draft with AI" entry +
+          "— why this matters (optional)" helper.
+        · detail.pen — the Explanation section in three resting states (empty /
+          ai_draft / user-owned) with "Draft explanation with AI" + "Regenerate
+          with AI" + the "AI-drafted — review me" pill.
+      What 8.8.6 NEWLY specifies (the in-between INTERACTION, the gap):
+        · the loading / STREAMING state (SSE, per 8.8.11),
+        · the ACCEPT / DISCARD step on a generated draft,
+        · how `explanationSource` (ai_drafted vs user_authored) is signalled,
+        · the CLOUD-GATED disabled / "Connect Motir AI" state (self-host w/o a
+          MOTIR_AI connection — mirrors onboarding screen K + MotirAiConfigError),
+        · a stream-FAILED error state (MOTIR_AI_UNAVAILABLE / JOB_FAILED).
+
+      Tokens copied 1:1 from app/globals.css (light + dark). Colour via --el-*,
+      shape via element-semantic shape tokens — never Tier-0. See design-notes.md.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf1c7;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 10px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 7px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 34px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: #b42318;
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-item-bg-hover: #eeede9;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d16;
+        --color-link: #58a6ff;
+        --el-danger-text: #ff8a80;
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 23px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 5px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 760px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .section-band {
+        max-width: 1180px;
+        margin: 36px auto 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .section-band::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--el-border);
+      }
+      .section-band h2 {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        margin: 0;
+        color: var(--el-text-strong);
+      }
+      .section-band .sb-kicker {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-accent-on-surface);
+        background: var(--el-tint-lavender);
+        padding: 3px 8px;
+        border-radius: var(--radius-badge);
+      }
+      .panel-row {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 36px;
+        align-items: flex-start;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding-left: 2px;
+        max-width: 360px;
+        line-height: 1.45;
+      }
+      .panel-label b {
+        color: var(--el-accent-on-surface);
+      }
+
+      /* ── Modal (components/ui/Modal.tsx) chrome ─────────────────────────── */
+      .modal {
+        position: relative;
+        width: 460px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 var(--spacing-md);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+      }
+      .modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--el-border);
+      }
+
+      /* ── Field grammar ──────────────────────────────────────────────────── */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .field > label {
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .field > label .opt {
+        font-weight: 400;
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .control .muted {
+        color: var(--el-text-muted);
+      }
+      .control .chev {
+        margin-left: auto;
+        color: var(--el-text-muted);
+      }
+      .control.textarea {
+        height: auto;
+        min-height: 70px;
+        align-items: flex-start;
+        padding: 10px var(--spacing-input-x);
+        color: var(--el-text-muted);
+      }
+
+      /* ── The explanation block — the surface this design owns ───────────── */
+      /* A bordered region sitting under the Explanation label, in BOTH the
+         modal field and the detail section. */
+      .expl {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        overflow: hidden;
+      }
+      .expl-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px;
+      }
+      .expl-empty .hint {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+      }
+      .expl-body {
+        padding: 14px 16px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      .expl-body p {
+        margin: 0 0 10px;
+      }
+      .expl-body p:last-child {
+        margin-bottom: 0;
+      }
+      .expl-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-page-bg);
+      }
+      .expl-toolbar.top {
+        border-top: none;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .expl-toolbar .grow {
+        flex: 1;
+      }
+
+      /* the streaming caret + skeleton sweep */
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.05em;
+        background: var(--el-accent);
+        margin-left: 1px;
+        vertical-align: text-bottom;
+        animation: blink 1s step-end infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      .stream-meta {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-accent-on-surface);
+      }
+
+      /* ── Button (components/ui/Button.tsx) ──────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 13px;
+        gap: 6px;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-quiet {
+        background: transparent;
+        color: var(--el-text-secondary);
+        border-color: transparent;
+        padding: 0 8px;
+      }
+      .btn-quiet:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .btn-danger-quiet {
+        background: transparent;
+        color: var(--el-danger-text);
+        border-color: transparent;
+        padding: 0 8px;
+      }
+      .btn:disabled,
+      .btn.is-disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      /* the AI action — accent ghost (a "magic" treatment, AA via tint bg) */
+      .btn-ai {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+        border-color: transparent;
+      }
+      .btn-ai:hover {
+        background: var(--el-tint-lavender);
+        filter: brightness(0.97);
+      }
+      .btn .ic {
+        flex: none;
+      }
+
+      /* ── source pill (ai_drafted) ───────────────────────────────────────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 11.5px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .pill-ai {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .pill-edited {
+        background: var(--el-surface);
+        color: var(--el-text-muted);
+        border: 1px solid var(--el-border);
+      }
+
+      /* ── notice / gate card (mirrors onboarding screen K) ───────────────── */
+      .notice {
+        display: flex;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        align-items: flex-start;
+      }
+      .notice .ni {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .notice.is-error .ni {
+        background: var(--el-tint-rose);
+        color: var(--el-danger-text);
+      }
+      .notice-t {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .notice-d {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+        margin-top: 2px;
+        max-width: 320px;
+      }
+
+      /* ── Detail-section grammar (matches detail.pen left column) ────────── */
+      .dsection {
+        width: 560px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px var(--spacing-card-padding);
+      }
+      .dsection-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 12px;
+      }
+      .dsection-head h3 {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+        margin: 0;
+      }
+      .dsection-head .why {
+        font-size: 13px;
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--el-text-faint);
+      }
+      .dsection-head .spacer {
+        flex: 1;
+      }
+
+      .spin {
+        animation: rot 0.9s linear infinite;
+      }
+      @keyframes rot {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .ic-sm {
+        width: 15px;
+        height: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Draft explanation with AI — create modal &amp; detail page</h1>
+        <p>
+          Story 8.8 · design for 8.8.6 (MOTIR-1090), gating 8.8.12 (MOTIR-1096; code) which depends
+          on 8.8.11 (MOTIR-1095; the motir-ai <code>generate_explanation</code> job + SSE stream).
+          Builds on the entry affordances already in <code>create.pen</code> /
+          <code>detail.pen</code>; newly specifies the streaming, accept/discard, source-signalling,
+          cloud-gate, and error states. Built from the real <code>--el-*</code> / shape tokens.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- lucide icon defs (24×24 stroke) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </g>
+        <g
+          id="i-chevD"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14M12 5v14" />
+        </g>
+        <!-- sparkles — the AI mark -->
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M9.5 3 11 7.5 15.5 9 11 10.5 9.5 15 8 10.5 3.5 9 8 7.5z" />
+          <path d="M18 4v3M19.5 5.5h-3M18 15v3M19.5 16.5h-3" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-rotate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8" />
+          <path d="M3 3v5h5" />
+        </g>
+        <g
+          id="i-stop"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+        </g>
+        <g
+          id="i-plug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 22v-5M9 8V2M15 8V2M6 8h12v3a6 6 0 0 1-12 0z" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 9v4M12 17h.01" />
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 16v-4M12 8h.01" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         SURFACE 1 · THE CREATE-ISSUE MODAL
+         (entry · streaming · accept/discard, in the modal Explanation field)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div class="section-band">
+      <span class="sb-kicker">Surface 1</span>
+      <h2>Create-issue modal · the Explanation field</h2>
+    </div>
+
+    <div class="panel-row">
+      <!-- ───── 1A · entry (the access path on the modal) ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          1A · Entry — the <b>"Draft with AI"</b> affordance sits in the Explanation field's
+          toolbar, beside the editor. (Existing <code>create.pen</code> state.)
+        </div>
+        <div class="modal" role="dialog" aria-label="Create issue">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Create issue</h2>
+          <div class="modal-body">
+            <div class="field">
+              <label>Title</label>
+              <div class="control">
+                <span>Auto-link Google sign-in to existing email account</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Description</label>
+              <div class="control textarea">
+                When a user signs in with Google and an email/password account…
+              </div>
+            </div>
+            <div class="field">
+              <label>Explanation <span class="opt">— why this matters (optional)</span></label>
+              <div class="expl">
+                <div class="expl-empty">
+                  <span class="hint"
+                    >Help non-technical reviewers understand why this work matters.</span
+                  >
+                  <button class="btn btn-ai btn-sm">
+                    <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                    Draft with AI
+                  </button>
+                </div>
+                <div class="expl-toolbar">
+                  <span class="hint" style="font-size: 12.5px; color: var(--el-text-faint)"
+                    >…or write your own.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ───── 1B · streaming ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          1B · <b>Streaming</b> — the draft fills in token-by-token (SSE, 8.8.11). A caret marks the
+          live edge; <b>Stop</b> halts. Inputs (Title/Description) feed the job context.
+        </div>
+        <div class="modal" role="dialog" aria-label="Create issue">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Create issue</h2>
+          <div class="modal-body">
+            <div class="field">
+              <label>Title</label>
+              <div class="control">
+                <span>Auto-link Google sign-in to existing email account</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Explanation <span class="opt">— why this matters (optional)</span></label>
+              <div class="expl">
+                <div class="expl-toolbar top">
+                  <span class="stream-meta">
+                    <svg class="ic-sm spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+                    Drafting…
+                  </span>
+                  <span class="grow"></span>
+                  <button class="btn btn-quiet btn-sm">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-stop" /></svg>
+                    Stop
+                  </button>
+                </div>
+                <div class="expl-body">
+                  <p>
+                    Users who already signed up with email and password sometimes return and sign in
+                    with Google instead. Today that creates a second, separate account — so their
+                    work, history<span class="caret"></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ───── 1C · accept / discard ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          1C · <b>Accept / Discard</b> — when the stream finishes, the draft is held in a review
+          state. <b>Use draft</b> keeps it (marks the field <code>ai_drafted</code>);
+          <b>Discard</b> clears it; <b>Regenerate</b> re-runs.
+        </div>
+        <div class="modal" role="dialog" aria-label="Create issue">
+          <button class="modal-close" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h2 class="modal-title">Create issue</h2>
+          <div class="modal-body">
+            <div class="field">
+              <label>Title</label>
+              <div class="control">
+                <span>Auto-link Google sign-in to existing email account</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Explanation <span class="opt">— why this matters (optional)</span></label>
+              <div class="expl">
+                <div class="expl-toolbar top">
+                  <span class="pill pill-ai">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                    AI draft — review me
+                  </span>
+                  <span class="grow"></span>
+                  <button class="btn btn-quiet btn-sm">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+                    Regenerate
+                  </button>
+                </div>
+                <div class="expl-body">
+                  <p>
+                    Users who already signed up with email and password sometimes return and sign in
+                    with Google instead. Today that creates a second, separate account — splitting
+                    their work and history across two logins.
+                  </p>
+                  <p>
+                    This change recognises the shared email and links the two sign-in methods to one
+                    account, so people land where they expect no matter how they log in.
+                  </p>
+                </div>
+                <div class="expl-toolbar">
+                  <button class="btn btn-danger-quiet btn-sm">Discard</button>
+                  <span class="grow"></span>
+                  <button class="btn btn-ai btn-sm">
+                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                    Use draft
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create issue</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         SURFACE 2 · THE WORK-ITEM DETAIL PAGE (Explanation section)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div class="section-band">
+      <span class="sb-kicker">Surface 2</span>
+      <h2>Work-item detail page · the Explanation section</h2>
+    </div>
+
+    <div class="panel-row">
+      <!-- ───── 2A · empty + entry ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          2A · <b>Empty + entry</b> — the access path on the detail page:
+          <b>"Draft explanation with AI"</b> alongside <b>Write it yourself</b>. (Existing
+          <code>detail.pen</code> state.)
+        </div>
+        <div class="dsection">
+          <div class="dsection-head">
+            <h3>Explanation</h3>
+            <span class="why">— why this matters</span>
+          </div>
+          <div class="expl">
+            <div class="expl-empty">
+              <span class="hint"
+                >Help non-technical reviewers understand why this work matters.</span
+              >
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button class="btn btn-ai btn-sm">
+                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                  Draft explanation with AI
+                </button>
+                <button class="btn btn-ghost btn-sm">
+                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  Write it yourself
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ───── 2B · streaming ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          2B · <b>Streaming</b> — same SSE flow on the detail page; the section title gets the live
+          "Drafting…" meter + <b>Stop</b>. Title/description/type/parent feed the context.
+        </div>
+        <div class="dsection">
+          <div class="dsection-head">
+            <h3>Explanation</h3>
+            <span class="why">— why this matters</span>
+            <span class="spacer"></span>
+            <span class="stream-meta">
+              <svg class="ic-sm spin" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+              Drafting…
+            </span>
+            <button class="btn btn-quiet btn-sm">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-stop" /></svg>
+              Stop
+            </button>
+          </div>
+          <div class="expl">
+            <div class="expl-body">
+              <p>
+                Users who already signed up with email and password sometimes return and sign in
+                with Google instead. Today that creates a second, separate account — so their work,
+                history<span class="caret"></span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-row" style="margin-top: 30px">
+      <!-- ───── 2C · accept / discard ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          2C · <b>Accept / Discard</b> — a finished draft is held for review before it is persisted
+          to <code>explanationMd</code>. <b>Use draft</b> saves it as <code>ai_drafted</code>.
+        </div>
+        <div class="dsection">
+          <div class="dsection-head">
+            <h3>Explanation</h3>
+            <span class="why">— why this matters</span>
+            <span class="spacer"></span>
+            <span class="pill pill-ai">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              AI draft — review me
+            </span>
+          </div>
+          <div class="expl">
+            <div class="expl-body">
+              <p>
+                Users who already signed up with email and password sometimes return and sign in
+                with Google instead. Today that creates a second, separate account — splitting their
+                work and history across two logins.
+              </p>
+              <p>
+                This change recognises the shared email and links the two sign-in methods to one
+                account, so people land where they expect no matter how they log in.
+              </p>
+            </div>
+            <div class="expl-toolbar">
+              <button class="btn btn-danger-quiet btn-sm">Discard</button>
+              <button class="btn btn-quiet btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+                Regenerate
+              </button>
+              <span class="grow"></span>
+              <button class="btn btn-ai btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                Use draft
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ───── 2D · post-draft resting (ai_drafted source badge) ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          2D · <b>Saved · <code>ai_drafted</code></b> — the persisted resting state. The
+          <b>"AI-drafted — review me"</b> pill signals the source; <b>Regenerate with AI</b> +
+          inline <b>Edit</b> stay available. (Existing <code>detail.pen</code> state, with the
+          source badge specified here.)
+        </div>
+        <div class="dsection">
+          <div class="dsection-head">
+            <h3>Explanation</h3>
+            <span class="why">— why this matters</span>
+            <span class="spacer"></span>
+            <span class="pill pill-ai">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              AI-drafted — review me
+            </span>
+          </div>
+          <div class="expl">
+            <div class="expl-body">
+              <p>
+                Users who already signed up with email and password sometimes return and sign in
+                with Google instead. Today that creates a second, separate account — splitting their
+                work and history across two logins.
+              </p>
+              <p>
+                This change recognises the shared email and links the two sign-in methods to one
+                account, so people land where they expect no matter how they log in.
+              </p>
+            </div>
+            <div class="expl-toolbar">
+              <button class="btn btn-quiet btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                Edit
+              </button>
+              <span class="grow"></span>
+              <button class="btn btn-ai btn-sm">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+                Regenerate with AI
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         CROSS-CUTTING STATES · cloud-gate · source · error
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div class="section-band">
+      <span class="sb-kicker">States</span>
+      <h2>Cloud-gate · source signalling · error</h2>
+    </div>
+
+    <div class="panel-row">
+      <!-- ───── 3A · cloud-gated / disabled ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          3A · <b>Cloud-gated</b> — a self-host with no Motir AI connection (<code>MOTIR_AI_*</code>
+          unset → <code>MotirAiConfigError</code>). The "Draft with AI" control is disabled with a
+          tooltip; an inline notice offers <b>Connect Motir AI</b>. Mirrors onboarding screen K.
+        </div>
+        <div class="dsection">
+          <div class="dsection-head">
+            <h3>Explanation</h3>
+            <span class="why">— why this matters</span>
+          </div>
+          <div class="expl">
+            <div class="expl-empty">
+              <span class="hint"
+                >Help non-technical reviewers understand why this work matters.</span
+              >
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button
+                  class="btn btn-ai btn-sm is-disabled"
+                  aria-disabled="true"
+                  title="Connect Motir AI to draft with AI"
+                >
+                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                  Draft with AI
+                </button>
+                <button class="btn btn-ghost btn-sm">
+                  <svg class="ic ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+                  Write it yourself
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="notice" style="margin-top: 14px">
+            <span class="ni"
+              ><svg width="20" height="20" viewBox="0 0 24 24"><use href="#i-plug" /></svg
+            ></span>
+            <div>
+              <div class="notice-t">AI drafting isn't configured</div>
+              <div class="notice-d">
+                Drafting runs on Motir Cloud; this self-hosted workspace has no connection yet.
+              </div>
+              <div style="margin-top: 9px">
+                <button class="btn btn-primary btn-sm">Connect Motir AI</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ───── 3B · source signalling + error ───── -->
+      <div class="panel">
+        <div class="panel-label">
+          3B · <b>Source signalling</b> — <code>ai_drafted</code> shows the lavender pill; editing
+          the text flips the source to <code>user_authored</code> (a quiet "Edited" chip, pill
+          removed). <b>Below:</b> the stream-failed error state (MOTIR_AI_UNAVAILABLE / JOB_FAILED).
+        </div>
+        <!-- source legend -->
+        <div class="dsection" style="display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span class="pill pill-ai">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              AI-drafted — review me
+            </span>
+            <span style="font-size: 13px; color: var(--el-text-secondary)"
+              ><code>explanationSource = ai_drafted</code></span
+            >
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span class="pill pill-edited">
+              <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-pencil" /></svg>
+              Edited
+            </span>
+            <span style="font-size: 13px; color: var(--el-text-secondary)"
+              >after a human edit → <code>user_authored</code></span
+            >
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="font-size: 13px; color: var(--el-text-faint)">(no badge)</span>
+            <span style="font-size: 13px; color: var(--el-text-secondary)"
+              >hand-written from the start → <code>user_authored</code></span
+            >
+          </div>
+        </div>
+        <!-- error -->
+        <div class="dsection" style="margin-top: 6px">
+          <div class="dsection-head">
+            <h3>Explanation</h3>
+            <span class="why">— why this matters</span>
+          </div>
+          <div class="notice is-error">
+            <span class="ni"
+              ><svg width="20" height="20" viewBox="0 0 24 24"><use href="#i-alert" /></svg
+            ></span>
+            <div>
+              <div class="notice-t">Couldn't finish the draft</div>
+              <div class="notice-d">
+                Motir AI is unavailable right now. Any text generated so far is kept — try again.
+              </div>
+              <div style="margin-top: 9px; display: flex; gap: 8px">
+                <button class="btn btn-ai btn-sm">
+                  <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
+                  Try again
+                </button>
+                <button class="btn btn-ghost btn-sm">Dismiss</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
