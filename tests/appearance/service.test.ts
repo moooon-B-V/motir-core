@@ -43,19 +43,24 @@ describe('appearancePreferenceService.getResolved', () => {
 });
 
 describe('appearancePreferenceService.getApplied', () => {
-  it('resolves to all defaults for an untouched user (no row), unpinned type', async () => {
+  it('returns null for an untouched user (no row) — no server value to honour', async () => {
     const user = await createTestUser();
 
-    const applied = await appearancePreferenceService.getApplied(user.id);
-
-    expect(applied).toEqual({
-      pattern: THEME_DEFAULTS.pattern,
-      styleId: DEFAULT_STYLE_ID,
-      paletteId: DEFAULT_PALETTE_ID,
-      typeId: DEFAULT_TYPE_ID,
-      typePinned: false,
-    });
+    // No stored preference → null, so the caller uses the localStorage path
+    // (anonymous behaviour); a present-but-empty server pref must not clobber a
+    // signed-in user's device-local choice.
+    expect(await appearancePreferenceService.getApplied(user.id)).toBeNull();
     expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
+  });
+
+  it('returns null when every axis has been cleared back to default (row all-null)', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, { pattern: 'dark' });
+    await appearancePreferenceService.update(user.id, { pattern: null });
+
+    // The row exists but carries no real choice → treated as no preference.
+    expect(await userAppearancePreferenceRepository.findByUserId(user.id)).not.toBeNull();
+    expect(await appearancePreferenceService.getApplied(user.id)).toBeNull();
   });
 
   it('follows the active STYLE default type when the user pinned no type', async () => {
