@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Ready rows — work-type chip + manual "Show instruction" (Story 8.8 · 8.8.5,
+      gating 8.8.10)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the READY-set dispatch rows (Story 8.8 ·
+      subtask 8.8.5). Layout source of truth for the UI code subtask 8.8.10
+      (MOTIR-1094), which carries 8.8.5 in dependsOn.
+
+      WHAT THIS ADDS to the shipped /ready surface (design/ready/ready.mock.html):
+        (1) the work-TYPE chip (WorkItemTypeChip) on each ready row, in the meta
+            cluster — distinct from the kind icon at the row's lead.
+        (2) the MANUAL variant — when a row's item is human work
+            (executor: human / type: manual), a coding agent cannot run it, so the
+            hover-revealed Copy button is REPLACED by a "Show instruction" button
+            that opens a modal rendering the item's descriptionMd via the shipped
+            Modal + MarkdownView. The access path (row -> button -> modal) is drawn.
+
+      Built FROM the real design system — token block copied 1:1 from
+      app/globals.css; the dispatch card, copy icon-button, Tooltip, Modal
+      (@radix-ui/react-dialog wrapper, max-h 90vh + scrolling Modal.Body) and the
+      WorkItemTypeChip recipe all mirror the shipped primitives.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) the /ready list with type chips on every row, incl. a manual row whose
+            "Show instruction" button is shown (the at-rest entry affordance).
+        (2) hover contrast — an AGENT row (Copy + tooltip) beside a MANUAL row
+            (Show instruction + tooltip).
+        (3) the instruction MODAL open — Modal + MarkdownView over descriptionMd.
+        (4) the modal EMPTY state (manual item with no instruction yet).
+        (5) the modal LONG-content state — the body scrolls, header + footer pinned.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-deploy: var(--color-destructive);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-sky: #1a2a3a;
+        --color-link: #58a6ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 880px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 880px;
+      }
+      .panel {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+
+      /* page head — mirrors the shipped /ready header */
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .count-chip {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+
+      /* ── dispatch card (ready row) — from design/ready/ready.mock.html ─────── */
+      .ready-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .rcard {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        cursor: pointer;
+      }
+      .rcard:hover {
+        border-color: var(--el-border-strong);
+        background: var(--el-surface-soft);
+      }
+      .rcard:hover .rc-title {
+        text-decoration: underline;
+      }
+      .kind-icon {
+        flex: none;
+        width: 18px;
+        height: 18px;
+      }
+      .kind-icon svg {
+        width: 18px;
+        height: 18px;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      .rc-key {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .rc-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .rc-meta {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* WorkItemTypeChip — reproduced from components/issues/WorkItemTypeChip.tsx */
+      .wtchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.35;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .wtchip svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .wt-code {
+        background: color-mix(in srgb, var(--el-type-code) 14%, var(--el-page-bg));
+      }
+      .wt-code svg {
+        color: var(--el-type-code);
+      }
+      .wt-design {
+        background: color-mix(in srgb, var(--el-type-design) 14%, var(--el-page-bg));
+      }
+      .wt-design svg {
+        color: var(--el-type-design);
+      }
+      .wt-test {
+        background: color-mix(in srgb, var(--el-type-test) 14%, var(--el-page-bg));
+      }
+      .wt-test svg {
+        color: var(--el-type-test);
+      }
+      .wt-content {
+        background: color-mix(in srgb, var(--el-type-content) 14%, var(--el-page-bg));
+      }
+      .wt-content svg {
+        color: var(--el-type-content);
+      }
+      .wt-manual {
+        background: color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg));
+      }
+      .wt-manual svg {
+        color: var(--el-type-manual);
+      }
+
+      /* priority Pill (PRIORITY_META) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .pill .pic {
+        width: 13px;
+        height: 13px;
+      }
+      .pill--danger {
+        background: var(--color-tint-rose);
+        color: #9b1c4b;
+      }
+      .pill--warning {
+        background: var(--color-tint-peach);
+        color: #8a3a00;
+      }
+      .pill--neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .pill--info {
+        background: var(--color-tint-sky);
+        color: #0b4c8c;
+      }
+
+      .person {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .avatar {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .avatar.dashed {
+        background: transparent;
+        border: 1.5px dashed var(--el-border-strong);
+        color: var(--el-text-faint);
+      }
+      .person .nm {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+
+      /* the row action slot — copy (agent) OR show-instruction (manual) */
+      .act-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .copy-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+        opacity: 0;
+      }
+      .rcard:hover .copy-btn,
+      .copy-btn:focus-visible {
+        opacity: 1;
+      }
+      .copy-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .copy-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .rcard.is-hover .copy-btn {
+        opacity: 1;
+      }
+      /* manual "Show instruction" — a labelled ghost button, ALWAYS visible
+         (reading the instruction is the only way to action a human task, so it
+         must not hide behind hover the way the agent Copy affordance can). */
+      .instr-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .instr-btn:hover {
+        background: var(--el-surface);
+        border-color: var(--el-border-strong);
+        color: var(--el-text);
+      }
+      .instr-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* Tooltip — dark bubble (components/ui/Tooltip.tsx) */
+      .tooltip {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 8px);
+        white-space: nowrap;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-card);
+      }
+      .tooltip code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: rgba(255, 255, 255, 0.16);
+        padding: 0 4px;
+        border-radius: 3px;
+      }
+
+      .note {
+        max-width: 880px;
+        margin: 12px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        border-left: 2px dashed var(--el-border-strong);
+        padding: 4px 0 4px 12px;
+      }
+      .note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── Modal (components/ui/Modal.tsx — radix dialog wrapper) ─────────── */
+      .modal-stage {
+        position: relative;
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        min-height: 460px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 28px;
+      }
+      .modal-stage .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+      }
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 32rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        max-height: 400px;
+        overflow: hidden;
+      }
+      .modal-close {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+        background: var(--el-muted);
+      }
+      .modal-close svg {
+        width: 16px;
+        height: 16px;
+      }
+      .modal-title {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 28px 6px 0;
+        line-height: 1.3;
+      }
+      .modal-subhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+        flex: none;
+      }
+      .modal-subhead .rc-key {
+        font-size: 12px;
+      }
+      .modal-subhead .who {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .modal-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .modal-footer {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        border-top: 1px solid var(--el-border);
+        margin-top: var(--spacing-md);
+        padding-top: var(--spacing-md);
+      }
+      .btn-secondary {
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      /* MarkdownView — motir-prose read surface (lib/markdown) */
+      .prose {
+        color: var(--el-text);
+        font-size: 14px;
+        line-height: 1.65;
+      }
+      .prose h3 {
+        font-family: var(--font-sans);
+        font-size: 15px;
+        font-weight: 600;
+        margin: 18px 0 6px;
+        color: var(--el-text-strong);
+      }
+      .prose h3:first-child {
+        margin-top: 0;
+      }
+      .prose p {
+        margin: 0 0 10px;
+      }
+      .prose ol,
+      .prose ul {
+        margin: 0 0 12px;
+        padding-left: 22px;
+      }
+      .prose li {
+        margin: 4px 0;
+      }
+      .prose a {
+        color: var(--el-link);
+        text-decoration: underline;
+      }
+      .prose code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .prose strong {
+        color: var(--el-text-strong);
+      }
+
+      /* modal empty state */
+      .modal-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 8px;
+        padding: 24px 12px;
+      }
+      .modal-empty .ic {
+        width: 40px;
+        height: 40px;
+        color: var(--el-text-faint);
+      }
+      .modal-empty h4 {
+        margin: 4px 0 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .modal-empty p {
+        margin: 0;
+        max-width: 320px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.55;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Ready rows — work-type chip + manual "Show instruction"</h1>
+        <p>
+          Story 8.8 · 8.8.5 design (gates 8.8.10 / MOTIR-1094) · adds to
+          design/ready/ready.mock.html
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6" />
+          <path d="m8 6-6 6 6 6" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-flask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"
+          />
+          <path d="M6.453 15h11.094" />
+          <path d="M8.5 2h7" />
+        </g>
+        <g
+          id="i-hand"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+          <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+          <path
+            d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          />
+        </g>
+        <!-- scroll-text — the "Show instruction" glyph -->
+        <g
+          id="i-scroll-text"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 12h-5" />
+          <path d="M15 8h-5" />
+          <path d="M19 17V5a2 2 0 0 0-2-2H4" />
+          <path
+            d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"
+          />
+        </g>
+        <!-- file-x — empty-instruction glyph -->
+        <g
+          id="i-file-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+          <path d="m14.5 12.5-5 5" />
+          <path d="m9.5 12.5 5 5" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 1 — /ready list with type chips + a manual row ════════════ -->
+    <div class="panel-label">1 · /ready — work-type chip on every row; one manual row</div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <div class="title-row">
+            <h2>Ready to start</h2>
+            <span class="count-chip">4 ready</span>
+          </div>
+          <p class="sub">Motir · PROD</p>
+        </div>
+      </div>
+      <div class="ready-list" role="list" aria-label="Ready work items">
+        <!-- agent row — code -->
+        <div class="rcard" role="listitem">
+          <span class="kind-icon t-bug"
+            ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+          ></span>
+          <span class="rc-key">PROD-49</span>
+          <span class="rc-title">OAuth callback drops the state param on Safari ≤16</span>
+          <div class="rc-meta">
+            <span class="wtchip wt-code"
+              ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+            >
+            <span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            >
+            <span class="person"
+              ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+            >
+            <span class="act-wrap"
+              ><button class="copy-btn" aria-label="Copy run command for PROD-49">
+                <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg></button
+            ></span>
+          </div>
+        </div>
+
+        <!-- MANUAL row — show-instruction button always visible -->
+        <div class="rcard" role="listitem">
+          <span class="kind-icon t-subtask"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+          ></span>
+          <span class="rc-key">PROD-45</span>
+          <span class="rc-title">Register the Google OAuth client + secret</span>
+          <div class="rc-meta">
+            <span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            >
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="act-wrap"
+              ><button class="instr-btn" aria-label="Show instruction for PROD-45">
+                <svg viewBox="0 0 24 24"><use href="#i-scroll-text" /></svg>Show instruction
+              </button></span
+            >
+          </div>
+        </div>
+
+        <!-- agent row — code -->
+        <div class="rcard" role="listitem">
+          <span class="kind-icon t-task"
+            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+          ></span>
+          <span class="rc-key">PROD-42</span>
+          <span class="rc-title">Add the Google OAuth callback route</span>
+          <div class="rc-meta">
+            <span class="wtchip wt-code"
+              ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+            >
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="act-wrap"
+              ><button class="copy-btn" aria-label="Copy run command for PROD-42">
+                <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg></button
+            ></span>
+          </div>
+        </div>
+
+        <!-- agent row — test, unassigned -->
+        <div class="rcard" role="listitem">
+          <span class="kind-icon t-subtask"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+          ></span>
+          <span class="rc-key">PROD-44</span>
+          <span class="rc-title">E2E — sign-in via Google happy path</span>
+          <div class="rc-meta">
+            <span class="wtchip wt-test"
+              ><svg viewBox="0 0 24 24"><use href="#i-flask" /></svg>Test</span
+            >
+            <span class="pill pill--info"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+            >
+            <span class="person"
+              ><span class="avatar dashed">?</span><span class="nm">Unassigned</span></span
+            >
+            <span class="act-wrap"
+              ><button class="copy-btn" aria-label="Copy run command for PROD-44">
+                <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg></button
+            ></span>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        The <code>WorkItemTypeChip</code> leads the meta cluster (the two "tags" — type + priority —
+        group together), before assignee + the action slot. The chip's lead <em>kind</em> icon and
+        the type chip are deliberately distinct (kind = the row's lead glyph; type = the chip). A
+        ready item with <code>type: null</code> (a story/task with no work-type) simply omits the
+        chip — no <code>—</code> placeholder in a flex row.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 2 — hover contrast: agent Copy vs manual Show instruction ════════════ -->
+    <div class="panel-label">
+      2 · Hover — agent row (Copy + tooltip) vs manual row (Show instruction + tooltip)
+    </div>
+    <div class="panel">
+      <div class="ready-list">
+        <!-- agent hover -->
+        <div class="rcard is-hover" role="listitem">
+          <span class="kind-icon t-task"
+            ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+          ></span>
+          <span class="rc-key">PROD-42</span>
+          <span class="rc-title">Add the Google OAuth callback route</span>
+          <div class="rc-meta">
+            <span class="wtchip wt-code"
+              ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+            >
+            <span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            >
+            <span class="person"
+              ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+            >
+            <span class="act-wrap"
+              ><div class="tooltip" role="tooltip">Copy <code>motir run PROD-42</code></div>
+              <button class="copy-btn" aria-label="Copy run command for PROD-42">
+                <svg viewBox="0 0 24 24"><use href="#i-copy" /></svg></button
+            ></span>
+          </div>
+        </div>
+        <!-- manual hover — tooltip clarifies the button opens the instruction -->
+        <div class="rcard is-hover" role="listitem">
+          <span class="kind-icon t-subtask"
+            ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+          ></span>
+          <span class="rc-key">PROD-45</span>
+          <span class="rc-title">Register the Google OAuth client + secret</span>
+          <div class="rc-meta">
+            <span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            >
+            <span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            >
+            <span class="person"
+              ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+            >
+            <span class="act-wrap"
+              ><div class="tooltip" role="tooltip">A human task — no run command</div>
+              <button class="instr-btn" aria-label="Show instruction for PROD-45">
+                <svg viewBox="0 0 24 24"><use href="#i-scroll-text" /></svg>Show instruction
+              </button></span
+            >
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        A coding agent can't run human work, so the manual row has <strong>no run command</strong> —
+        the Copy icon-button is swapped for a labelled <strong>Show instruction</strong> button
+        (lucide <code>scroll-text</code>). It stays visible at rest (not hover-gated like Copy)
+        because reading the instruction is the only way to action the item. Its tooltip names
+        <em>why</em> it differs.
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 3 — the instruction modal (Modal + MarkdownView) ════════════ -->
+    <div class="panel-label">
+      3 · Show instruction → modal: Modal + MarkdownView over descriptionMd
+    </div>
+    <div class="panel">
+      <div class="modal-stage">
+        <div class="scrim"></div>
+        <div class="modal" role="dialog" aria-label="Instruction for PROD-45">
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h3 class="modal-title">Register the Google OAuth client + secret</h3>
+          <div class="modal-subhead">
+            <span class="rc-key">PROD-45</span>
+            <span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            >
+            <span class="who">Human task · assigned to Alice Chen</span>
+          </div>
+          <div class="modal-body">
+            <div class="prose">
+              <p>
+                A human must create the OAuth client in Google Cloud — a coding agent has no console
+                access. Once the credentials exist, drop them into the env and the dependent code
+                subtask (<code>PROD-42</code>) unblocks.
+              </p>
+              <h3>Steps</h3>
+              <ol>
+                <li>
+                  Open the <a href="#">Google Cloud Console</a> →
+                  <strong>APIs &amp; Services → Credentials</strong>.
+                </li>
+                <li>
+                  Create an <strong>OAuth client ID</strong> of type <em>Web application</em>.
+                </li>
+                <li>
+                  Add the authorized redirect URI:
+                  <code>https://app.motir.co/api/auth/callback/google</code>.
+                </li>
+                <li>Copy the <strong>Client ID</strong> and <strong>Client secret</strong>.</li>
+              </ol>
+              <h3>Then</h3>
+              <p>
+                Set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in the
+                Vercel project env (Production + Preview), then mark this item done.
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary">Close</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        Composes the shipped <code>Modal</code> (size <code>lg</code> = 32rem) +
+        <code>MarkdownView</code> rendering the item's <code>descriptionMd</code> — the SAME
+        markdown stack and <code>motir-prose</code> styling as the issue detail page, so the
+        run-instruction reads identically there. Header: the item title (serif) + a subhead with the
+        mono key, the Manual chip, and the assignee. The <code>×</code> and the footer
+        <strong>Close</strong> both dismiss (Radix handles ESC / click-outside / focus-trap /
+        focus-return).
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 4 — empty-instruction state ════════════ -->
+    <div class="panel-label">4 · Empty state — a manual item with no instruction yet</div>
+    <div class="panel">
+      <div class="modal-stage">
+        <div class="scrim"></div>
+        <div class="modal" role="dialog" aria-label="Instruction for PROD-71">
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h3 class="modal-title">Point the apex DNS at Vercel</h3>
+          <div class="modal-subhead">
+            <span class="rc-key">PROD-71</span>
+            <span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            >
+            <span class="who">Human task · unassigned</span>
+          </div>
+          <div class="modal-body">
+            <div class="modal-empty">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-file-x" /></svg>
+              <h4>No instruction yet</h4>
+              <p>
+                This human task has no description. Add one on the work item so whoever picks it up
+                knows what to do.
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary">Close</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        When <code>descriptionMd</code> is empty, the body shows a quiet empty state (lucide
+        <code>file-x</code> + copy) instead of a blank pane — and points the reader at the fix (add
+        a description on the item).
+      </p>
+    </div>
+
+    <!-- ════════════ PANEL 5 — long content scrolls, chrome pinned ════════════ -->
+    <div class="panel-label">
+      5 · Long instruction — body scrolls, title + footer pinned (max-h 90vh)
+    </div>
+    <div class="panel">
+      <div class="modal-stage">
+        <div class="scrim"></div>
+        <div class="modal" role="dialog" aria-label="Instruction for PROD-58">
+          <button class="modal-close" aria-label="Close">
+            <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <h3 class="modal-title">Provision the Vercel Blob store + token</h3>
+          <div class="modal-subhead">
+            <span class="rc-key">PROD-58</span>
+            <span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            >
+            <span class="who">Human task · assigned to Riya Shah</span>
+          </div>
+          <div class="modal-body">
+            <div class="prose">
+              <p>
+                Attachments (subtask 2.3.7) need a Vercel Blob store and a read/write token. This is
+                dashboard + secret work a coding agent can't do.
+              </p>
+              <h3>1 · Create the store</h3>
+              <ol>
+                <li>
+                  Vercel dashboard → the <code>motir-core</code> project → <strong>Storage</strong>.
+                </li>
+                <li>
+                  Create a <strong>Blob</strong> store; name it <code>motir-attachments</code>.
+                </li>
+                <li>Connect it to Production, Preview, and Development.</li>
+              </ol>
+              <h3>2 · Wire the token</h3>
+              <p>
+                Connecting the store auto-adds <code>BLOB_READ_WRITE_TOKEN</code> to the project
+                env. Confirm it appears under <strong>Settings → Environment Variables</strong> for
+                all three targets.
+              </p>
+              <h3>3 · Local dev</h3>
+              <p>
+                Run <code>vercel env pull .env.local</code> so the token lands in your local env,
+                then restart the dev server.
+              </p>
+              <h3>4 · Verify</h3>
+              <ol>
+                <li>Open any work item → Attachments.</li>
+                <li>Upload a small image; it should appear with a thumbnail.</li>
+                <li>Reload — the attachment persists (served from Blob).</li>
+              </ol>
+              <h3>Then</h3>
+              <p>
+                Mark this item done; the dependent upload subtask (<code>PROD-59</code>) unblocks.
+              </p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary">Close</button>
+          </div>
+        </div>
+      </div>
+      <p class="note">
+        Long <code>descriptionMd</code> scrolls inside <code>Modal.Body</code> (<code
+          >flex-1 overflow-y-auto</code
+        >) while the title, subhead, and footer stay pinned — the panel never exceeds
+        <code>max-h-[90vh]</code>. (Here the stage caps the panel shorter so the scroll is visible
+        in the export.)
+      </p>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,1265 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Work-type indicator in the list &amp; tree rows (Story 8.8 · 8.8.5, gating
+      8.8.9)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the WORK-TYPE INDICATOR in the issue LIST
+      and TREE rows (Story 8.8 · subtask 8.8.5). Layout source of truth for the
+      UI code subtask 8.8.9 (MOTIR-1093), which carries 8.8.5 in dependsOn.
+
+      WHAT THIS ADDS — a "Type" column surfacing each leaf's work TYPE
+      (code / design / test / content / research / review / decision / deploy /
+      manual / chore) via the SHIPPED `WorkItemTypeChip` primitive
+      (components/issues/WorkItemTypeChip.tsx) — DISTINCT from the kind icon
+      (epic/story/task/bug/subtask) already shown in the Title cell. Both the
+      list and tree render from the shared `buildIssueColumns` set
+      (app/(authed)/issues/_components/issueColumns.tsx), so the column is added
+      ONCE there and flows to both `IssueListTable` and `IssueTreeTable`.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*, incl. the
+      full --el-type-* work-type hue set, 794-803), and the markup mirrors the
+      SHIPPED list/tree rows (list.mock.html · tree.png) — the `WorkItemTypeChip`
+      recipe (tint BACKGROUND via color-mix of the --el-type-* hue, --el-text-strong
+      label, the hued WorkItemTypeIcon glyph) is reproduced verbatim.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) the LIST view with the new Type column — leaves show their chip;
+            null-type containers (epic/story) show the muted "—".
+        (2) the TREE view — the same Type column, aligned regardless of the
+            title's per-depth indent; a collapsed parent + nested leaves.
+        (3) a legend of all ten type chips (the WorkItemTypeChip set).
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-sky: #dcecfa;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-accent: var(--color-primary);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        /* per-KIND issue-type hues (Title cell icon) */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        /* per-TYPE work hues — app/globals.css 794-803 (the chip's colour source) */
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-deploy: var(--color-destructive);
+        --el-sidebar-bg: var(--color-surface);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-link: #58a6ff;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ── Page-head (mirrors app/(authed)/issues/page.tsx header) ─────────── */
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: #fff;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── The table — list + tree share this grid (issueColumns.tsx) ──────── */
+      .lt-table {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      /* Title | TYPE | Priority | Assignee | Status — Type inserted after Title. */
+      .lt-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 116px 124px 168px 132px;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+      }
+      .lt-head {
+        height: 40px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .lt-head .th {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-tertiary);
+      }
+      .lt-row {
+        height: 48px;
+        border-bottom: 1px solid var(--el-border);
+        text-decoration: none;
+        color: inherit;
+      }
+      .lt-row:last-child {
+        border-bottom: 0;
+      }
+      .lt-row:hover {
+        background: var(--el-surface-soft);
+      }
+      .lt-row:hover .ttl {
+        text-decoration: underline;
+      }
+
+      .cell-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+      }
+      .cell-title .lr-id {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .cell-title .ttl {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .kind-icon {
+        flex: none;
+        width: 16px;
+        height: 16px;
+      }
+      .kind-icon svg {
+        width: 16px;
+        height: 16px;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+
+      /* WorkItemTypeChip — reproduced 1:1 from components/issues/WorkItemTypeChip.tsx */
+      .wtchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.35;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .wtchip svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      /* tint background = color-mix(hue PCT% into page bg); PCT 18 for the near-neutral
+         meta types (manual/chore/decision), else 14 — workItemTypeChipBackground(). */
+      .wt-code {
+        background: color-mix(in srgb, var(--el-type-code) 14%, var(--el-page-bg));
+      }
+      .wt-code svg {
+        color: var(--el-type-code);
+      }
+      .wt-design {
+        background: color-mix(in srgb, var(--el-type-design) 14%, var(--el-page-bg));
+      }
+      .wt-design svg {
+        color: var(--el-type-design);
+      }
+      .wt-test {
+        background: color-mix(in srgb, var(--el-type-test) 14%, var(--el-page-bg));
+      }
+      .wt-test svg {
+        color: var(--el-type-test);
+      }
+      .wt-content {
+        background: color-mix(in srgb, var(--el-type-content) 14%, var(--el-page-bg));
+      }
+      .wt-content svg {
+        color: var(--el-type-content);
+      }
+      .wt-research {
+        background: color-mix(in srgb, var(--el-type-research) 14%, var(--el-page-bg));
+      }
+      .wt-research svg {
+        color: var(--el-type-research);
+      }
+      .wt-review {
+        background: color-mix(in srgb, var(--el-type-review) 14%, var(--el-page-bg));
+      }
+      .wt-review svg {
+        color: var(--el-type-review);
+      }
+      .wt-deploy {
+        background: color-mix(in srgb, var(--el-type-deploy) 14%, var(--el-page-bg));
+      }
+      .wt-deploy svg {
+        color: var(--el-type-deploy);
+      }
+      .wt-decision {
+        background: color-mix(in srgb, var(--el-type-decision) 18%, var(--el-page-bg));
+      }
+      .wt-decision svg {
+        color: var(--el-type-decision);
+      }
+      .wt-manual {
+        background: color-mix(in srgb, var(--el-type-manual) 18%, var(--el-page-bg));
+      }
+      .wt-manual svg {
+        color: var(--el-type-manual);
+      }
+      .wt-chore {
+        background: color-mix(in srgb, var(--el-type-chore) 18%, var(--el-page-bg));
+      }
+      .wt-chore svg {
+        color: var(--el-type-chore);
+      }
+      /* null-type containers — the muted em-dash, the shipped empty-cell convention */
+      .muted-cell {
+        color: var(--el-text-faint);
+        font-size: 14px;
+      }
+
+      /* priority + status Pills (shipped PRIORITY_META / status tones) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .pill .pic {
+        width: 13px;
+        height: 13px;
+      }
+      .pill--danger {
+        background: var(--color-tint-rose);
+        color: #9b1c4b;
+      }
+      .pill--warning {
+        background: var(--color-tint-peach);
+        color: #8a3a00;
+      }
+      .pill--neutral {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .pill--info {
+        background: var(--color-tint-sky);
+        color: #0b4c8c;
+      }
+      .pill--inprogress {
+        background: var(--color-tint-sky);
+        color: #0b4c8c;
+      }
+      .pill--done {
+        background: var(--color-tint-mint, #d9f3e1);
+        color: #1a7a33;
+      }
+      .pill--blocked {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+
+      .cell-person {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .avatar {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .cell-person .nm {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+
+      /* tree-specific — indent + chevron (mirrors tree.png / TreeTable) */
+      .tr-cell {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+      }
+      .chevron {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-right: 4px;
+        color: var(--el-text-tertiary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .chevron svg {
+        width: 14px;
+        height: 14px;
+        transition: transform 0.12s;
+      }
+      .chevron.is-open svg {
+        transform: rotate(90deg);
+      }
+      .chevron-slot {
+        flex: none;
+        width: 20px;
+      }
+      .indent-1 {
+        padding-left: 0;
+      }
+      .indent-2 {
+        padding-left: 22px;
+      }
+      .indent-3 {
+        padding-left: 44px;
+      }
+
+      .note {
+        max-width: 1080px;
+        margin: 12px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        border-left: 2px dashed var(--el-border-strong);
+        padding: 4px 0 4px 12px;
+      }
+      .note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+        box-shadow: var(--shadow-subtle);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Work-type indicator — list &amp; tree rows</h1>
+        <p>
+          Story 8.8 · 8.8.5 design (gates 8.8.9 / MOTIR-1093) · the <code>WorkItemTypeChip</code> in
+          a "Type" column
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- SVG sprite -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-chevron"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <!-- work-TYPE glyphs (lucide v1.16.0, WORK_ITEM_TYPE_META) -->
+        <g
+          id="i-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6" />
+          <path d="m8 6-6 6 6 6" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="i-flask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"
+          />
+          <path d="M6.453 15h11.094" />
+          <path d="M8.5 2h7" />
+        </g>
+        <g
+          id="i-filetext"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+          <path d="M10 9H8" />
+          <path d="M16 13H8" />
+          <path d="M16 17H8" />
+        </g>
+        <g
+          id="i-lightbulb"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6" />
+          <path d="M10 22h4" />
+        </g>
+        <g
+          id="i-clipboard-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <path d="m9 14 2 2 4-4" />
+        </g>
+        <g
+          id="i-scale"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3v18" />
+          <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
+          <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
+          <path d="m5 8 3 8a5 5 0 0 1-6 0zV7" />
+          <path d="M7 21h10" />
+        </g>
+        <g
+          id="i-rocket"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
+          />
+          <path
+            d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05" />
+        </g>
+        <g
+          id="i-hand"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+          <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+          <path
+            d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          />
+        </g>
+        <g
+          id="i-wrench"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════════════ PANEL 1 — LIST ════════════════════════ -->
+    <div class="panel-label">1 · List view — the Type column (after Title)</div>
+    <div class="panel">
+      <div class="page-head">
+        <div>
+          <h2>Issues</h2>
+          <p class="sub">All work items in Motir — Q3 launch</p>
+        </div>
+        <div class="toolbar">
+          <button class="tb-btn">
+            List<svg class="ic" viewBox="0 0 24 24"><use href="#i-chevron" /></svg>
+          </button>
+          <button class="tb-btn primary">+ New issue</button>
+        </div>
+      </div>
+
+      <div class="lt-table" role="table" aria-label="Issues">
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader">Title</div>
+          <div class="th" role="columnheader">Type</div>
+          <div class="th" role="columnheader">Priority</div>
+          <div class="th" role="columnheader">Assignee</div>
+          <div class="th" role="columnheader">Status</div>
+        </div>
+
+        <!-- epic — null type → muted em-dash -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+            ><span class="lr-id">PROD-12</span
+            ><span class="ttl">Q3 launch — Auth &amp; sign-in</span></span
+          >
+          <span class="muted-cell" aria-label="No type">—</span>
+          <span
+            ><span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span><span class="pill pill--inprogress">In Progress</span></span>
+        </a>
+
+        <!-- story — null type → muted em-dash -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-31</span><span class="ttl">Google OAuth sign-in</span></span
+          >
+          <span class="muted-cell" aria-label="No type">—</span>
+          <span
+            ><span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span><span class="pill pill--inprogress">In Progress</span></span>
+        </a>
+
+        <!-- subtask leaf — code -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-42</span
+            ><span class="ttl">Add Google OAuth callback route</span></span
+          >
+          <span
+            ><span class="wtchip wt-code"
+              ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span><span class="pill pill--blocked">Blocked</span></span>
+        </a>
+
+        <!-- subtask leaf — design -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-43</span
+            ><span class="ttl">Design the OAuth consent screen</span></span
+          >
+          <span
+            ><span class="wtchip wt-design"
+              ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Design</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+          >
+          <span><span class="pill pill--done">Done</span></span>
+        </a>
+
+        <!-- subtask leaf — test -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-44</span
+            ><span class="ttl">E2E — sign-in via Google happy path</span></span
+          >
+          <span
+            ><span class="wtchip wt-test"
+              ><svg viewBox="0 0 24 24"><use href="#i-flask" /></svg>Test</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--info"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>Low</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span><span class="pill pill--blocked">Blocked</span></span>
+        </a>
+
+        <!-- subtask leaf — manual -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-45</span
+            ><span class="ttl">Register the Google OAuth client + secret</span></span
+          >
+          <span
+            ><span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span><span class="pill pill--neutral">To Do</span></span>
+        </a>
+
+        <!-- task leaf — content -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-34</span
+            ><span class="ttl">Password-reset email — copy + template</span></span
+          >
+          <span
+            ><span class="wtchip wt-content"
+              ><svg viewBox="0 0 24 24"><use href="#i-filetext" /></svg>Content</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+          >
+          <span><span class="pill pill--done">Done</span></span>
+        </a>
+
+        <!-- bug leaf — code -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-bug"
+              ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+            ><span class="lr-id">PROD-49</span
+            ><span class="ttl">OAuth callback drops the state param on Safari</span></span
+          >
+          <span
+            ><span class="wtchip wt-code"
+              ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">J</span><span class="nm">Jamal Tate</span></span
+          >
+          <span><span class="pill pill--inprogress">In Progress</span></span>
+        </a>
+      </div>
+      <p class="note">
+        The <strong>Type</strong> column sits immediately after Title (it qualifies the item, next
+        to its name). Leaves render the <code>WorkItemTypeChip</code>;
+        <strong>epics &amp; stories carry <code>type: null</code></strong> and render the muted
+        <code>—</code> — the shipped empty-cell convention (kind is already the Title-cell icon, so
+        a chip there would be redundant). Added ONCE as a column in
+        <code>buildIssueColumns</code> (<code>issueColumns.tsx</code>); the issue DTO must carry
+        <code>type</code> (8.8.9).
+      </p>
+    </div>
+
+    <!-- ════════════════════════ PANEL 2 — TREE ════════════════════════ -->
+    <div class="panel-label">2 · Tree view — same column, aligned across indent depths</div>
+    <div class="panel">
+      <div class="lt-table" role="treegrid" aria-label="Issue tree">
+        <div class="lt-grid lt-head" role="row">
+          <div class="th" role="columnheader">Title</div>
+          <div class="th" role="columnheader">Type</div>
+          <div class="th" role="columnheader">Priority</div>
+          <div class="th" role="columnheader">Assignee</div>
+          <div class="th" role="columnheader">Status</div>
+        </div>
+
+        <!-- epic (depth 1, expanded) -->
+        <a class="lt-grid lt-row" role="row" aria-level="1" aria-expanded="true" href="#">
+          <span class="cell-title tr-cell indent-1"
+            ><span class="chevron is-open"
+              ><svg viewBox="0 0 24 24"><use href="#i-chevron" /></svg></span
+            ><span class="kind-icon t-epic"
+              ><svg viewBox="0 0 24 24"><use href="#i-zap" /></svg></span
+            ><span class="lr-id">PROD-12</span
+            ><span class="ttl">Q3 launch — Auth &amp; sign-in</span></span
+          >
+          <span class="muted-cell" aria-label="No type">—</span>
+          <span
+            ><span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span><span class="pill pill--inprogress">In Progress</span></span>
+        </a>
+
+        <!-- story (depth 2, expanded) -->
+        <a class="lt-grid lt-row" role="row" aria-level="2" aria-expanded="true" href="#">
+          <span class="cell-title tr-cell indent-2"
+            ><span class="chevron is-open"
+              ><svg viewBox="0 0 24 24"><use href="#i-chevron" /></svg></span
+            ><span class="kind-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-31</span><span class="ttl">Google OAuth sign-in</span></span
+          >
+          <span class="muted-cell" aria-label="No type">—</span>
+          <span
+            ><span class="pill pill--warning"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>High</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span><span class="pill pill--inprogress">In Progress</span></span>
+        </a>
+
+        <!-- subtask leaves (depth 3) — chevron-slot keeps the Type column aligned -->
+        <a class="lt-grid lt-row" role="row" aria-level="3" href="#">
+          <span class="cell-title tr-cell indent-3"
+            ><span class="chevron-slot"></span
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-42</span
+            ><span class="ttl">Add Google OAuth callback route</span></span
+          >
+          <span
+            ><span class="wtchip wt-code"
+              ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span><span class="pill pill--blocked">Blocked</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" aria-level="3" href="#">
+          <span class="cell-title tr-cell indent-3"
+            ><span class="chevron-slot"></span
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-43</span
+            ><span class="ttl">Design the OAuth consent screen</span></span
+          >
+          <span
+            ><span class="wtchip wt-design"
+              ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Design</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+          >
+          <span><span class="pill pill--done">Done</span></span>
+        </a>
+        <a class="lt-grid lt-row" role="row" aria-level="3" href="#">
+          <span class="cell-title tr-cell indent-3"
+            ><span class="chevron-slot"></span
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-45</span
+            ><span class="ttl">Register the Google OAuth client + secret</span></span
+          >
+          <span
+            ><span class="wtchip wt-manual"
+              ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--danger"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>Highest</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">A</span><span class="nm">Alice Chen</span></span
+          >
+          <span><span class="pill pill--neutral">To Do</span></span>
+        </a>
+
+        <!-- collapsed story (depth 2) — chevron closed, children not shown -->
+        <a class="lt-grid lt-row" role="row" aria-level="2" aria-expanded="false" href="#">
+          <span class="cell-title tr-cell indent-2"
+            ><span class="chevron"
+              ><svg viewBox="0 0 24 24"><use href="#i-chevron" /></svg></span
+            ><span class="kind-icon t-story"
+              ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+            ><span class="lr-id">PROD-23</span
+            ><span class="ttl">Email + password sign-in</span></span
+          >
+          <span class="muted-cell" aria-label="No type">—</span>
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">M</span><span class="nm">Marco Ortiz</span></span
+          >
+          <span><span class="pill pill--done">Done</span></span>
+        </a>
+      </div>
+      <p class="note">
+        The Type column is a <em>fixed</em> grid track, so the chip aligns vertically no matter how
+        deep the title indents — the indent eats the Title (1fr) cell only. Containers (epic/story)
+        still read <code>—</code>; the chevron + chevron-slot keep leaf and parent title content
+        aligned, exactly as the shipped tree.
+      </p>
+    </div>
+
+    <!-- ════════════════════════ PANEL 3 — LEGEND ════════════════════════ -->
+    <div class="panel-label">3 · The ten work-type chips (WorkItemTypeChip set)</div>
+    <div class="panel">
+      <div class="legend">
+        <span class="wtchip wt-code"
+          ><svg viewBox="0 0 24 24"><use href="#i-code" /></svg>Code</span
+        >
+        <span class="wtchip wt-design"
+          ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Design</span
+        >
+        <span class="wtchip wt-test"
+          ><svg viewBox="0 0 24 24"><use href="#i-flask" /></svg>Test</span
+        >
+        <span class="wtchip wt-content"
+          ><svg viewBox="0 0 24 24"><use href="#i-filetext" /></svg>Content</span
+        >
+        <span class="wtchip wt-research"
+          ><svg viewBox="0 0 24 24"><use href="#i-lightbulb" /></svg>Research</span
+        >
+        <span class="wtchip wt-review"
+          ><svg viewBox="0 0 24 24"><use href="#i-clipboard-check" /></svg>Review</span
+        >
+        <span class="wtchip wt-decision"
+          ><svg viewBox="0 0 24 24"><use href="#i-scale" /></svg>Decision</span
+        >
+        <span class="wtchip wt-deploy"
+          ><svg viewBox="0 0 24 24"><use href="#i-rocket" /></svg>Deploy</span
+        >
+        <span class="wtchip wt-manual"
+          ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+        >
+        <span class="wtchip wt-chore"
+          ><svg viewBox="0 0 24 24"><use href="#i-wrench" /></svg>Chore</span
+        >
+      </div>
+      <p class="note">
+        Each chip = the type's <code>--el-type-*</code> hue in a <code>color-mix()</code> tint
+        <strong>background</strong> (14%, or 18% for the near-neutral
+        <em>manual / chore / decision</em>) + an <code>--el-text-strong</code> label + the hued
+        <code>WorkItemTypeIcon</code> glyph — the <code>workItemTypeChipBackground()</code> recipe,
+        unchanged. AA holds via charcoal-on-tint (finding #35); meaning never rides hue alone (icon
+        + label).
+      </p>
+    </div>
+  </body>
+</html>

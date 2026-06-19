@@ -3231,3 +3231,73 @@ no separate "remove from sprint" affordance — picking Backlog IS the remove).
 is the per-item menu row; bulk lives with the backlog/board bulk tools, 4.2).
 A sprint-state **badge** on the value line beyond the `(completed)` mark (kept
 clean — Jira renders the sprint name plain). These are noted, not built.
+
+---
+
+## Work-type indicator — the `Type` column (8.8.5, gating 8.8.9)
+
+Asset: **`work-type-indicator.mock.html`** / **`.png`**. Surfaces each leaf's work
+**`type`** (the NATURE of the work — `code` / `design` / `test` / `content` /
+`research` / `review` / `decision` / `deploy` / `manual` / `chore`) in the LIST
+and TREE rows, via the shipped **`WorkItemTypeChip`**
+(`components/issues/WorkItemTypeChip.tsx`). This is **distinct from the _kind_
+icon** (`epic`/`story`/`task`/`bug`/`subtask`) already shown as the Title-cell
+lead glyph — kind = WHAT the item is in the hierarchy; type = WHAT KIND OF WORK
+the leaf is.
+
+### Placement — a dedicated `Type` column (NOT inline)
+
+Both views render from the **shared `buildIssueColumns` set**
+(`app/(authed)/issues/_components/issueColumns.tsx`), so the indicator is added
+**ONCE** as a new `IssueColumn` and flows to both `IssueListTable` and
+`IssueTreeTable` (8.8.9). It is a column, not an inline element in the Title cell,
+because:
+
+- a fixed grid track keeps the chip **aligned vertically across the tree's
+  per-depth indent** (the indent eats only the Title `1fr` cell; the Type column
+  stays put) — an inline chip would drift right with each indent level;
+- it matches the **mirror product** (Jira's issue navigator renders Type / Labels
+  as their own sortable columns), and leaves the Title cell's `[kind icon · key ·
+title]` group clean;
+- "add it once in `issueColumns.tsx`" (8.8.9's own framing) is most naturally a
+  new column entry.
+
+**Position:** immediately **after Title** (Title · **Type** · Priority · Assignee
+· … · Status) — type qualifies the item, so it sits next to its name. Column
+width ~**116px** (the longest labels, "Research" / "Decision", are 8 chars; the
+chip fits without truncation).
+
+### Null type — epics & stories
+
+`type` is **`null` on containers** (epic / story); only leaves carry a work type.
+A null-type cell renders the **muted em-dash `—`** (`text-(--el-text-faint)`) —
+the shipped empty-cell convention used by the Due / Estimate cells in `list.mock.html`.
+No chip, no icon: the kind icon in the Title cell already says "this is a
+container," so a type chip there would be redundant. (8.8.9 must handle `null`
+in the column's `cell` and ensure `IssueRowData` / the issue DTO carries `type`.)
+
+### The chip recipe (unchanged — reused verbatim)
+
+`WorkItemTypeChip` = the type's `--el-type-*` hue in a `color-mix()` **tint
+BACKGROUND** (14%, or **18% for the near-neutral `manual` / `chore` / `decision`**
+— `workItemTypeChipBackground()`), an **`--el-text-strong`** label, and the hued
+**`WorkItemTypeIcon`** glyph (14px). AA holds via charcoal-on-tint (finding #35);
+meaning never rides hue alone (every chip pairs icon + text label).
+
+| Element               | token / source                                            |
+| --------------------- | --------------------------------------------------------- |
+| chip background       | `color-mix(var(--el-type-*) 14% \| 18%, --el-page-bg)`    |
+| chip label            | `--el-text-strong`, `text-xs font-medium`                 |
+| chip icon             | `WorkItemTypeIcon` — lucide glyph in `--el-type-*` (14px) |
+| chip radius / padding | `--radius-badge` · `--spacing-chip-x/y`                   |
+| null-type cell        | `—` in `--el-text-faint` (the empty-cell convention)      |
+
+### Primitives composed (no hand-rolling)
+
+| Element         | Shipped primitive                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| type chip       | `components/issues/WorkItemTypeChip.tsx` (+ `WorkItemTypeIcon`, `workItemTypeChipBackground`) |
+| list / tree row | the shared `buildIssueColumns` set (`issueColumns.tsx`) → `IssueListTable` / `IssueTreeTable` |
+
+No new design-system entry is invented — the chip, the icon, and the hue tokens
+(`--el-type-*`, globals.css 794-803) all already ship from Story 2.7.
