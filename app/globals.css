@@ -702,21 +702,21 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    3D / Immersive — the depth + perspective style (7.3.39, DEFERRED follow-up).
-   EXPERIMENTAL. The identity is DEPTH: deep, layered two-stop shadows (a soft
-   ambient wash + a directional key light) lift every surface dramatically off
-   the canvas, so cards read as physical objects floating in space — and (motion
-   permitting) interactive surfaces LIFT toward you on hover for a parallax read.
+   EXPERIMENTAL. The identity is DEPTH + the standard "3D card" interaction:
+   deep, multi-layer shadows (specular highlight + contact + ambient + far key
+   light) float every surface dramatically off the canvas, and the ImmersiveTilt
+   shell engine tips `[data-tilt]` tiles TOWARD THE CURSOR (rotateX/rotateY over a
+   perspective — the vanilla-tilt effect; see the @media block below).
    Overrides ONLY shape/feel tokens — never a colour token (that is the
    data-palette axis; this style wears whatever palette is active, so the active
-   palette's AA contrast is preserved by construction). The shadow ink is the
-   same literal near-ink the base shadows already hard-code (rgba(15,15,15,…)) —
-   NOT a palette token — so the colour axis stays untouched. The differentiator
-   vs Glassmorphism: glass is a translucent MATERIAL over a gradient; 3D is
-   OPAQUE depth — real layered light + lift, no blur, no tint. The depth is
-   "performance + accessibility heavy" (the card's caveat), so the motion half is
-   gated behind `prefers-reduced-motion` (see the component rule below) and the
-   static deep-shadow look is what reduced-motion users get.
-   See docs/styles/3d-immersive.md. ─────────────────────────────────────────── */
+   palette's AA contrast is preserved by construction). The shadow light/ink is
+   literal rgba (white specular highlight + near-ink shadow), NOT a palette token,
+   so the colour axis stays untouched. The differentiator vs Glassmorphism: glass
+   is a translucent MATERIAL over a gradient; 3D is OPAQUE depth — real layered
+   light + a cursor-tracking tilt, no blur, no tint. "Performance + accessibility
+   heavy" (the card's caveat), so the tilt is gated behind `prefers-reduced-motion`
+   (BOTH the engine and the @media block below) — reduced-motion users keep the
+   static deep-shadow depth. See docs/styles/3d-immersive.md. ────────────────── */
 [data-style='3d-immersive'] {
   /* Silhouette — generously rounded dimensional tiles. --radius-pill is left
      untouched so genuinely-circular affordances (avatars, status dots, the
@@ -734,18 +734,29 @@
   --radius-control: 12px;
   --radius-kbd: 8px;
 
-  /* Elevation — THE signature. Every shadow token becomes a deep, layered
-     two-stop drop: a tight ambient wash close to the surface PLUS a wide,
-     soft directional key light, so each tile floats far above the canvas and
-     reads as a physical object. Scales from --shadow-subtle up to
-     --shadow-hero-mockup. Pure near-ink (rgba), no palette token — the colour
-     axis is untouched. */
-  --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05), 0 3px 8px -2px rgba(15, 15, 15, 0.09);
-  --shadow-card: 0 2px 6px rgba(15, 15, 15, 0.06), 0 18px 36px -10px rgba(15, 15, 15, 0.22);
-  --shadow-elevated: 0 4px 12px rgba(15, 15, 15, 0.08), 0 30px 60px -14px rgba(15, 15, 15, 0.28);
-  --shadow-modal: 0 8px 22px rgba(15, 15, 15, 0.1), 0 52px 104px -22px rgba(15, 15, 15, 0.34);
+  /* Elevation — THE signature. Every shadow token becomes a DEEP, multi-layer
+     drop: a top specular highlight (inset, a lit edge where light catches the
+     raised tile) + a tight contact shadow + a mid ambient + a wide, soft key
+     light far below, so each tile floats dramatically off the canvas and reads
+     as a physical object — not the timid lift a single shadow gives. Scales from
+     --shadow-subtle up to --shadow-hero-mockup. Pure rgba light/ink (white
+     highlight + near-ink shadow), no palette token — the colour axis is
+     untouched (a white specular highlight reads as "lit" on any palette). */
+  --shadow-subtle:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(15, 15, 15, 0.06),
+    0 5px 12px -2px rgba(15, 15, 15, 0.13);
+  --shadow-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 2px 4px rgba(15, 15, 15, 0.05),
+    0 12px 24px -6px rgba(15, 15, 15, 0.16), 0 28px 56px -12px rgba(15, 15, 15, 0.3);
+  --shadow-elevated:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.65), 0 4px 8px rgba(15, 15, 15, 0.06),
+    0 20px 40px -8px rgba(15, 15, 15, 0.22), 0 44px 80px -16px rgba(15, 15, 15, 0.38);
+  --shadow-modal:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 8px 16px rgba(15, 15, 15, 0.08),
+    0 32px 64px -12px rgba(15, 15, 15, 0.28), 0 72px 120px -24px rgba(15, 15, 15, 0.46);
   --shadow-hero-mockup:
-    0 14px 32px rgba(15, 15, 15, 0.12), 0 72px 130px -26px rgba(15, 15, 15, 0.4);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 16px 32px rgba(15, 15, 15, 0.1),
+    0 96px 160px -32px rgba(15, 15, 15, 0.5);
 
   /* Typography is the data-type axis now — 3D / Immersive ships
      `defaultTypeId: 'motir'` (the base editorial pairing); the personality is
@@ -762,35 +773,53 @@
   --height-control: 40px;
   --height-input: 46px;
 
-  /* Motion — smooth and floaty. A slower ease for the depth to feel weighty,
-     with a gentle press that settles a lifted surface back down. The hover
-     LIFT itself is the component rule below (reduced-motion-gated). */
+  /* Motion — smooth and floaty. A slower ease for the depth to feel weighty.
+     The signature INTERACTION is the pointer-parallax TILT below (the standard
+     "3D card" effect — cards tip toward the cursor), driven by the
+     ImmersiveTilt shell engine. */
   --transition-duration: 260ms;
   --transition-fast: 180ms;
   --transition-slow: 360ms;
   --active-scale: 0.98;
 }
 
-/* 3D / Immersive — the parallax LIFT (the "motion" + perspective half of the
-   identity). A component-variant override, NOT a [data-style] token block, so
-   it can carry a transform + a deeper shadow on hover. It is GATED behind
-   `prefers-reduced-motion: no-preference` — the card flags this style as
-   accessibility-heavy, so users who ask for reduced motion get NO transform/
-   transition and keep the static deep-shadow depth instead. It sets NO colour
-   (transform + box-shadow only; box-shadow draws the existing near-ink token),
-   so the style/palette axes stay disjoint and styleRegistry.test.ts's
-   material-rule check (which only inspects colour-painting rules) skips it. Only
-   transform-able floating surfaces opt in via the `data-surface` hook. */
+/* 3D / Immersive — the POINTER-PARALLAX TILT (the standard "3D card" effect,
+   the interactive half of the identity). The ImmersiveTilt shell engine
+   (components/theme/ImmersiveTilt.tsx) — active ONLY when data-style is this
+   style and the user has NOT requested reduced motion — reads the cursor
+   position over a `[data-tilt]` tile and writes per-tile `--tilt-rx` / `--tilt-ry`
+   rotation vars, so the tile tips toward the pointer (rotateX/rotateY over a
+   perspective) and lifts; on leave the engine zeroes the vars and the tile eases
+   back flat. The whole block is GATED behind `prefers-reduced-motion:
+   no-preference` (the card flags this style accessibility-heavy) — a
+   reduced-motion user gets NO transform at all and keeps the static deep-shadow
+   depth. It sets NO colour (transform + box-shadow only; box-shadow draws the
+   existing near-ink token), so the style/palette axes stay disjoint and
+   styleRegistry.test.ts's material-rule check (which inspects only
+   colour-painting rules) skips it. Tiles opt in with the `data-tilt` hook
+   (Card, BoardCard). */
 @media (prefers-reduced-motion: no-preference) {
-  [data-style='3d-immersive'] [data-surface='card'],
-  [data-style='3d-immersive'] [data-surface='popover'] {
+  /* The transition lives on the resting tile so BOTH the tilt-in and the
+     settle-back-flat animate. Crucially, NO `transform` is set at rest — only
+     the actively-hovered tile (data-tilt-active) gets one, so a resting card
+     never establishes a transform stacking context that could reposition a
+     non-portaled fixed/absolute descendant. On leave the engine drops the
+     attribute and the transform eases back to none over 400ms. */
+  [data-style='3d-immersive'] [data-tilt] {
     transition:
-      transform var(--transition-duration) cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow var(--transition-duration) cubic-bezier(0.22, 1, 0.36, 1);
+      transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 260ms ease-out;
   }
-  [data-style='3d-immersive'] [data-surface='card']:hover,
-  [data-style='3d-immersive'] [data-surface='popover']:hover {
-    transform: translateY(-4px);
+  /* While the pointer is over the tile the engine sets data-tilt-active='1':
+     tip it toward the cursor (the per-tile --tilt-rx/ry the engine writes),
+     drop the transform transition so it tracks the cursor in real time, and
+     deepen the shadow so the lifted tile casts further. */
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] {
+    transform: perspective(var(--tilt-perspective, 1100px)) rotateX(var(--tilt-rx, 0deg))
+      rotateY(var(--tilt-ry, 0deg));
+    transition:
+      transform 80ms linear,
+      box-shadow 260ms ease-out;
     box-shadow: var(--shadow-elevated);
   }
 }

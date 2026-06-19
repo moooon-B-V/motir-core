@@ -11,6 +11,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
 import { themeInitScript } from '@/lib/theme/init-script';
+import { ImmersiveTilt } from '@/components/theme/ImmersiveTilt';
 import { ToastProvider } from '@/components/ui/Toast';
 import { localeDir, type Locale } from '@/lib/i18n/locales';
 import './globals.css';
@@ -125,6 +126,9 @@ export default async function RootLayout({
       <body className="min-h-full">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
+            {/* Pointer-parallax engine for the 3D / Immersive style — inert for
+                every other style and under reduced motion (7.3.39). */}
+            <ImmersiveTilt />
             <ToastProvider>{children}</ToastProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
