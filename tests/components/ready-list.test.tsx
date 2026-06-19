@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { ReadyItemDto } from '@/lib/dto/ready';
@@ -36,6 +36,9 @@ function item(over: Partial<ReadyItemDto> & { key: string; kind: WorkItemKindDto
     status: { key: 'todo', category: 'todo' },
     assignee: null,
     descriptionExcerpt: null,
+    type: null,
+    executor: null,
+    descriptionMd: null,
     ...over,
   };
 }
@@ -95,5 +98,66 @@ describe('ReadyList copy command verb', () => {
     await waitFor(() =>
       expect(screen.getByText('Paste motir run PROD-3 into your terminal.')).toBeTruthy(),
     );
+  });
+});
+
+describe('ReadyList work-type chip (8.8.10)', () => {
+  it('renders the type chip when the row has a `type`', () => {
+    renderRows([item({ kind: 'subtask', key: 'PROD-7', type: 'code', executor: 'coding_agent' })]);
+    // The chip label is the i18n type gloss (`labels.workItemType.code`).
+    expect(screen.getByText('Code')).toBeTruthy();
+  });
+
+  it('omits the chip when `type` is null (a childless story/epic in the set)', () => {
+    renderRows([item({ kind: 'story', key: 'PROD-2', type: null })]);
+    // No work-type gloss rendered for a null type — no placeholder filler.
+    expect(screen.queryByText('Code')).toBeNull();
+    expect(screen.queryByText('Manual')).toBeNull();
+  });
+});
+
+describe('ReadyList manual *Show instruction* variant (8.8.10)', () => {
+  const manual = (over: Partial<ReadyItemDto> = {}) =>
+    item({
+      kind: 'subtask',
+      key: 'PROD-9',
+      type: 'manual',
+      executor: 'human',
+      descriptionMd: 'Provision the **blob store** in the dashboard.',
+      ...over,
+    });
+
+  it('swaps the copy button for *Show instruction* on a manual row', () => {
+    renderRows([manual()]);
+    // No agent copy affordance — a human task has no run command.
+    expect(screen.queryByRole('button', { name: 'Copy run command for PROD-9' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show instruction for PROD-9' })).toBeTruthy();
+  });
+
+  it('treats a human-executor row with no `type` as manual', () => {
+    renderRows([manual({ type: null, executor: 'human' })]);
+    expect(screen.getByRole('button', { name: 'Show instruction for PROD-9' })).toBeTruthy();
+  });
+
+  it('opens the instruction modal rendering the item descriptionMd as Markdown', async () => {
+    renderRows([manual()]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show instruction for PROD-9' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+    const dialog = screen.getByRole('dialog');
+    // Title = the item title; the body renders the Markdown (bold → <strong>).
+    expect(within(dialog).getByText('Item PROD-9')).toBeTruthy();
+    expect(within(dialog).getByText('blob store')).toBeTruthy();
+    expect(within(dialog).getByText('Human task · unassigned')).toBeTruthy();
+  });
+
+  it('shows the empty state when a manual row has no instruction body', async () => {
+    renderRows([manual({ descriptionMd: null })]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show instruction for PROD-9' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+    expect(within(screen.getByRole('dialog')).getByText('No instruction yet')).toBeTruthy();
   });
 });

@@ -74,7 +74,42 @@ describe('toReadyItemDto', () => {
       status: { key: 'open', category: 'todo' },
       assignee: { id: 'user_a', name: 'Ada Lovelace', avatarUrl: 'https://cdn.example/ada.png' },
       descriptionExcerpt: 'Plain description body.',
+      type: null,
+      executor: null,
+      // Not a manual row → no inline body (lean list payload).
+      descriptionMd: null,
     });
+  });
+
+  it('carries `type` + `executor`; ships the inline body ONLY for a manual row', () => {
+    // Agent-runnable row (executor coding_agent, type code) → no inline body.
+    const agent = toReadyItemDto(makeWorkItem({ type: 'code', executor: 'coding_agent' }), {
+      statusCategory: 'todo',
+      assignee: null,
+    });
+    expect(agent.type).toBe('code');
+    expect(agent.executor).toBe('coding_agent');
+    expect(agent.descriptionMd).toBeNull();
+
+    // Manual row (executor human) → the full body rides along for the modal.
+    const manual = toReadyItemDto(
+      makeWorkItem({
+        type: 'manual',
+        executor: 'human',
+        descriptionMd: 'Do the thing **by hand**.',
+      }),
+      { statusCategory: 'todo', assignee: null },
+    );
+    expect(manual.type).toBe('manual');
+    expect(manual.executor).toBe('human');
+    expect(manual.descriptionMd).toBe('Do the thing **by hand**.');
+
+    // Manual by EXECUTOR alone (human, type null) still ships the body.
+    const humanNoType = toReadyItemDto(
+      makeWorkItem({ type: null, executor: 'human', descriptionMd: 'Provision the store.' }),
+      { statusCategory: 'todo', assignee: null },
+    );
+    expect(humanNoType.descriptionMd).toBe('Provision the store.');
   });
 
   it('null assignee → null; image absent → avatarUrl null', () => {
