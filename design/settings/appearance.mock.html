@@ -1,0 +1,2708 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Motir Appearance settings pane (Story 7.3 · 7.3.57 / MOTIR-1074) — Theme × Style
+      × Palette × Type
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the account-settings `Appearance` pane —
+      Story 7.3, subtask 7.3.57 / MOTIR-1074. THE META CONCEPT MADE CONCRETE:
+      Motir dogfoods its own three-axis design system (Colour `data-palette` ·
+      Type `data-type` · Shape/feel `data-style`, + light/dark) by letting the
+      signed-in user theme the MOTIR APP ITSELF.
+
+      KEY DESIGN DECISION (v2): the axes apply to Motir itself, instant-apply (like
+      every theme toggle — Linear/GitHub/Notion), so the WHOLE PAGE re-skins on
+      selection. The page IS the preview — there is NO separate "live preview"
+      widget. Instead the page is deliberately DESIGN-RICH (controls + a showcase
+      band of real Motir UI: a work-item card, status pills in varied tints,
+      buttons, a search input, a type specimen, palette swatches) so that picking
+      ANY axis visibly transforms the entire page.
+
+      Built FROM the real design system: the :root tokens, the [data-theme=dark]
+      block, every [data-style]/[data-palette]/[data-type] axis block + the
+      nested-palette fix are copied 1:1 from app/globals.css via the onboarding mock
+      (7.3.44/MOTIR-1061), and the six real next/font faces are loaded — so each
+      panel re-skins / re-shapes / re-types EXACTLY as the running app does.
+      Component CSS references ONLY --el-* colour + element-semantic shape tokens.
+      The area shell (rail + content + cards) mirrors account-settings.mock.html
+      (7.8.2); the axis chips + showcase card/type/swatch language reuse the
+      onboarding design wizard (7.3.27 / 7.3.44 / 7.3.37).
+
+      Panels: 1 default (factory) · 2 a changed state, light (whole page re-skins —
+      the dogfooding moment) · 3 dark + a changed state (dark parity). Each draws
+      the ACCESS PATH (the rail with Appearance active) + the four controls + the
+      showcase.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ════════════════════════════════════════════════════════════════════
+         Tier 0 + shape tokens + Tier 3 --el-* + next/font role vars —
+         copied 1:1 from app/globals.css (light) via the onboarding mock.
+         ════════════════════════════════════════════════════════════════════ */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Typography — the next/font *-source role vars the [data-type] axis
+           re-points (see app/globals.css §AXIS 3). Defined here to REAL faces so
+           every type specimen swaps its true voice, not a fallback. */
+        --font-sans-source: 'Inter';
+        --font-serif-source: 'Source Serif 4';
+        --font-mono-source: 'JetBrains Mono';
+        --font-grotesk-source: 'Space Grotesk';
+        --font-editorial-source: 'Fraunces';
+        --font-mono-technical-source: 'IBM Plex Mono';
+        --font-sans:
+          var(--font-sans-source), ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, sans-serif;
+        --font-serif: var(--font-serif-source), Georgia, serif;
+        --font-mono: var(--font-mono-source), ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        /* Tier 3 — element tokens (components consume ONLY these) */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-epic: var(--color-accent);
+        /* work-item TYPE hues (the work-nature palette) — match lib/issues/workItemTypeMeta.ts */
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-manual: var(--color-stone);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — the review page only) ─────── */
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--el-surface); color: var(--el-text);
+        font-family: var(--font-sans); -webkit-font-smoothing: antialiased; padding: 32px 24px 96px;
+      }
+      .review-head { max-width: 1080px; margin: 0 auto 8px; }
+      .review-head h1 { font-family: var(--font-serif); font-size: 22px; margin: 0; }
+      .review-head p { margin: 6px 0 0; color: var(--el-text-secondary); font-size: 13px; max-width: 92ch; line-height: 1.5; }
+      .panel-label {
+        font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+        color: var(--el-text-faint); margin: 44px auto 10px; max-width: 1080px; line-height: 1.5;
+      }
+      .panel { max-width: 1080px; margin: 0 auto; }
+
+      /* ── account-settings AREA shell ─────────────────────────────────────── */
+      .stage { border: 1px solid var(--el-border); border-radius: var(--radius-card); overflow: hidden; box-shadow: var(--shadow-card); }
+      .shell { display: flex; min-height: 680px; background: var(--el-page-bg); }
+      .rail {
+        flex: none; width: 252px; background: var(--el-sidebar-bg); border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px; display: flex; flex-direction: column; gap: 14px;
+      }
+      .rail-head { display: flex; flex-direction: column; gap: 10px; }
+      .back {
+        display: inline-flex; align-items: center; gap: 8px; height: var(--height-control);
+        padding: 0 var(--spacing-control-x); border-radius: var(--radius-control); font-size: 13px;
+        font-weight: 500; color: var(--el-text-secondary); cursor: pointer;
+      }
+      .back:hover { background: var(--el-sidebar-item-bg-hover); color: var(--el-text); }
+      .back svg { width: 16px; height: 16px; }
+      .me { display: flex; align-items: center; gap: 10px; padding: 6px var(--spacing-control-x) 2px; }
+      .me .av {
+        flex: none; width: 30px; height: 30px; border-radius: 9999px; background: var(--el-text);
+        color: var(--el-text-inverted); display: inline-flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 600;
+      }
+      .me .meta { min-width: 0; }
+      .me .nm { font-size: 13.5px; font-weight: 600; color: var(--el-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .me .em { font-size: 11px; color: var(--el-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .settings-eyebrow {
+        font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x); text-transform: uppercase;
+      }
+      .grp { display: flex; flex-direction: column; gap: 4px; }
+      .grp + .grp { margin-top: 12px; }
+      .grp-label {
+        font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.07em; color: var(--el-text-faint); padding: 0 var(--spacing-control-x); margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex; align-items: center; gap: 12px; height: var(--height-control); padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control); font-size: 13.5px; color: var(--el-text-secondary); cursor: pointer; border: 1px solid transparent;
+      }
+      .nav-row:hover { background: var(--el-sidebar-item-bg-hover); color: var(--el-text); }
+      .nav-row .ni { flex: none; display: inline-flex; color: var(--el-text-muted); }
+      .nav-row .ni svg { width: 18px; height: 18px; }
+      .nav-row .nl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active); color: var(--el-text); font-weight: 500;
+        border-color: var(--el-sidebar-border); box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni { color: var(--el-accent); }
+      .nav-row.soon { cursor: default; color: var(--el-text-faint); }
+      .nav-row.soon:hover { background: transparent; color: var(--el-text-faint); }
+      .nav-row.soon .ni { color: var(--el-text-faint); }
+      .soon-chip {
+        margin-left: auto; font-family: var(--font-sans); font-size: 10px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.04em; color: var(--el-text-strong); background: var(--el-tint-yellow); padding: 1px 7px; border-radius: var(--radius-badge);
+      }
+
+      /* content + cards */
+      .content { flex: 1; min-width: 0; background: var(--el-page-bg); padding: 30px 32px 36px; overflow: hidden; }
+      .page-head { margin-bottom: 20px; }
+      .page-head h2 { font-family: var(--font-serif); font-size: 26px; font-weight: 600; color: var(--el-text); margin: 0; }
+      .page-head .sub { font-size: 13px; color: var(--el-text-muted); margin-top: 6px; max-width: 82ch; line-height: 1.55; }
+      .card {
+        background: var(--el-page-bg); border: 1px solid var(--el-border); border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle); overflow: hidden;
+      }
+      .card-head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+        padding: 15px var(--spacing-card-padding); border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 { font-size: 15px; font-weight: 600; color: var(--el-text); margin: 0; }
+      .card-head .hsub { font-size: 12px; color: var(--el-text-muted); margin-top: 3px; max-width: 64ch; line-height: 1.5; }
+      .card-body { padding: 2px var(--spacing-card-padding) 6px; }
+      .ic { width: 16px; height: 16px; flex: none; }
+      .ic-sm { width: 14px; height: 14px; flex: none; }
+
+      /* ── Appearance: the controls card (axis fields) ─────────────────────── */
+      .controls { margin-bottom: 22px; }
+      .axis-field { padding: 16px 0; border-bottom: 1px solid var(--el-border-soft); }
+      .axis-field:last-child { border-bottom: 0; }
+      .af-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 11px; flex-wrap: wrap; }
+      .af-name { font-size: 14px; font-weight: 600; color: var(--el-text); }
+      .af-help { font-size: 12.5px; color: var(--el-text-muted); }
+      .segmented { display: inline-flex; padding: 3px; gap: 3px; background: var(--el-muted); border: 1px solid var(--el-border); border-radius: var(--radius-btn); }
+      .seg {
+        display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
+        border-radius: calc(var(--radius-btn) - 2px); font-size: 13px; font-weight: 500; color: var(--el-text-secondary);
+        cursor: pointer; border: 1px solid transparent; white-space: nowrap;
+      }
+      .seg svg { width: 15px; height: 15px; }
+      .seg.on { background: var(--el-page-bg); color: var(--el-text); box-shadow: var(--shadow-subtle); border-color: var(--el-border); }
+      .seg.on svg { color: var(--el-accent); }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+      .axis-note { margin: 11px 0 0; font-size: 12.5px; color: var(--el-text-muted); line-height: 1.45; }
+      .axis-note b { color: var(--el-text-secondary); font-weight: 600; }
+
+      /* ── Appearance: the showcase band (the page IS the preview) ─────────── */
+      .showcase {
+        border: 1px solid var(--el-border); border-radius: var(--radius-card); background: var(--el-surface-soft);
+        padding: 16px; box-shadow: var(--shadow-subtle);
+      }
+      .sc-eyebrow {
+        display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.06em; color: var(--el-text-faint); margin: 2px 2px 14px;
+      }
+      .sc-eyebrow svg { color: var(--el-accent); }
+      .sc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 248px; gap: 16px; align-items: start; }
+
+      .sc-item { padding: var(--spacing-card-padding); display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow-card); }
+      .sc-top { display: flex; align-items: center; gap: 10px; }
+      .sc-top .kind { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--el-text-secondary); }
+      .sc-top .kind svg { color: var(--el-accent); }
+      .sc-title { font-family: var(--font-serif); font-size: 20px; font-weight: 700; color: var(--el-text); margin: 0; line-height: 1.2; }
+      .sc-body { font-family: var(--font-sans); font-size: 13px; color: var(--el-text-secondary); margin: 0; line-height: 1.5; }
+      .sc-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+      .sc-meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.05em; color: var(--el-text-muted); }
+      .sc-acts { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+
+      /* Pill (Pill.tsx) — tinted backgrounds + AA --el-text-strong (finding #35) */
+      .pill {
+        display: inline-flex; align-items: center; border-radius: var(--radius-badge); padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; border: 1px solid transparent; white-space: nowrap; margin-left: auto;
+      }
+      .sc-labels .pill, .sc-top .pill { margin-left: 0; }
+      .sc-top .pill { margin-left: auto; }
+      .pill-accent { background: var(--el-accent); color: var(--el-accent-text); }
+      .pill-sky { background: var(--el-tint-sky); color: var(--el-text-strong); }
+      .pill-peach { background: var(--el-tint-peach); color: var(--el-text-strong); }
+      .pill-rose { background: var(--el-tint-rose); color: var(--el-text-strong); }
+      .pill-mint { background: var(--el-tint-mint); color: var(--el-text-strong); }
+
+      /* Button (Button.tsx) */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-sans);
+        font-size: 14px; font-weight: 500; line-height: 1; border-radius: var(--radius-btn); height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x); border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+      }
+      .btn-sm { height: var(--height-btn-sm); padding: 0 14px; font-size: 12.5px; }
+      .btn-primary { background: var(--el-accent); color: var(--el-accent-text); }
+      .btn-secondary { background: transparent; color: var(--el-text); border-color: var(--el-border-strong); }
+      .icon-btn {
+        display: inline-flex; align-items: center; justify-content: center; width: var(--height-btn-sm); height: var(--height-btn-sm);
+        padding: var(--spacing-icon-btn); border-radius: var(--radius-control); border: 1px solid transparent; background: transparent; color: var(--el-text-muted); cursor: pointer;
+      }
+      .icon-btn:hover { background: var(--el-surface); }
+
+      .sc-side { display: flex; flex-direction: column; gap: 12px; }
+      .sc-side .card { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+      .sc-search {
+        display: flex; align-items: center; gap: 8px; height: var(--height-input); padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong); border-radius: var(--radius-input); font-size: 12.5px; color: var(--el-text-muted);
+      }
+      .sc-search svg { color: var(--el-text-muted); }
+      .sc-list { display: flex; flex-direction: column; gap: 10px; }
+      .sc-row { display: flex; align-items: center; gap: 9px; }
+      .sc-row .dot { width: 9px; height: 9px; border-radius: 9999px; background: var(--el-accent); flex: none; }
+      .sc-row .dot.alt { background: var(--el-tint-rose); }
+      .sc-row .bar { height: 7px; border-radius: var(--radius-badge); background: var(--el-muted); flex: 1; }
+      .sc-row .bar.short { max-width: 60%; }
+
+      /* ── axis-picker chips (.pick) — from the onboarding mock ─────────────── */
+      .picker-bar {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 14px 0 4px;
+      }
+      .picker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .picker > .pl {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .pick {
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        background: var(--el-page-bg);
+        padding: 5px 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .pick.is-on {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+      }
+      .pick .sw {
+        width: 11px;
+        height: 11px;
+        border-radius: var(--radius-pill);
+      }
+      /* ── showcase specimens (.pal-swatches / .type-spec) — from the onboarding mock ── */
+      .vignette {
+        position: relative;
+        padding: 16px;
+        background: var(--el-surface);
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .vg-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-card-padding);
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        position: relative;
+      }
+      .vg-top {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .vg-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: var(--radius-pill);
+        background: var(--el-accent);
+        flex: none;
+      }
+      .vg-title {
+        font-family: var(--font-serif);
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .vg-chip {
+        margin-left: auto;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .vg-sub {
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.4;
+      }
+      .vg-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin: 1px 0 2px;
+      }
+      .vg-bar {
+        height: 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+      .vg-bar.accent {
+        background: color-mix(in srgb, var(--el-accent) 55%, var(--el-muted));
+      }
+      .vg-input {
+        height: var(--height-input, 40px);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 var(--spacing-input-x, 14px);
+        display: flex;
+        align-items: center;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+      .vg-acts {
+        display: flex;
+        gap: 8px;
+        margin-top: 2px;
+      }
+      .vg-btn {
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        transition: transform var(--transition-duration, 150ms) ease;
+      }
+      .vg-btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .vg-btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+        border-color: var(--el-border-strong);
+      }
+      /* Neo-Brutalism's heavy-border component override keys off `.border`;
+         mirror the app hook so the brutalist specimen frames thicken. */
+      [data-style='neo-brutalism'] .vg-card,
+      [data-style='neo-brutalism'] .vg-input,
+      [data-style='neo-brutalism'] .vg-btn-ghost {
+        border-width: 2px;
+      }
+
+      /* Glassmorphism vignette — the body-scoped gradient canvas, adapted to the
+         vignette wrapper (the [data-surface] frosted-panel rules below DO apply,
+         since they are descendant-scoped). */
+      .vignette[data-style='glassmorphism'] {
+        background-color: var(--el-surface);
+        background-image:
+          radial-gradient(
+            62% 70% at 10% -10%,
+            color-mix(in srgb, var(--el-accent) 28%, transparent),
+            transparent 70%
+          ),
+          radial-gradient(
+            58% 65% at 110% 8%,
+            color-mix(in srgb, var(--el-highlight) 26%, transparent),
+            transparent 68%
+          ),
+          radial-gradient(
+            72% 80% at 50% 120%,
+            color-mix(in srgb, var(--el-link) 26%, transparent),
+            transparent 72%
+          );
+      }
+      /* Cybercore vignette — dark-first; the tech-grid canvas + neon glow ring.
+         currentColor on the card drives the glow halo (the real --shadow-card
+         recipe); inner text sets its own colour so readability holds. */
+      .vignette[data-style='cybercore-y2k'] {
+        background-color: var(--el-page-bg);
+        background-image:
+          linear-gradient(
+            color-mix(in srgb, var(--el-accent-on-surface) 14%, transparent) 1px,
+            transparent 1px
+          ),
+          linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--el-accent-on-surface) 14%, transparent) 1px,
+            transparent 1px
+          );
+        background-size: 26px 26px;
+      }
+      .vignette[data-style='cybercore-y2k'] .vg-card {
+        color: var(--el-accent-on-surface);
+      }
+
+      /* palette role swatches under a palette specimen */
+      .pal-swatches {
+        display: flex;
+        gap: 0;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        margin-top: 2px;
+      }
+      .pal-swatches span {
+        flex: 1;
+      }
+
+      /* type specimen — the headline/body/mono voice */
+      .type-spec {
+        padding: 18px;
+        background: var(--el-surface);
+        min-height: 150px;
+      }
+      .type-spec .ts-aa {
+        font-family: var(--font-serif);
+        font-size: 38px;
+        line-height: 1;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .type-spec .ts-h {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 12px 0 5px;
+      }
+      .type-spec .ts-b {
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .type-spec .ts-m {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        color: var(--el-text-muted);
+        margin-top: 9px;
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         AXIS BLOCKS — copied 1:1 from app/globals.css via the onboarding mock:
+         [data-style] shape · [data-palette] --el-* colour · [data-type] --font-* ·
+         [data-palette] nested-specimen fix. ── do not edit; mirror the app.
+         ════════════════════════════════════════════════════════════════════ */
+      [data-style='soft-playful'] {
+        /* Figma's pill geometry */
+        --radius-btn: 9999px; /* pill */
+        --radius-input: 24px;
+        --radius-card: 24px;
+        --radius-modal: 32px;
+        --radius-badge: 9999px;
+        --radius-control: 12px; /* small affordances round up with the rest */
+        --radius-kbd: 8px;
+
+        /* Softer, more diffused shadows */
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+
+        /* Roomier spacing */
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 12px;
+        --spacing-input-x: 18px;
+        --spacing-input-y: 14px;
+        --spacing-card-padding: 28px;
+        --spacing-control-x: 14px;
+        --spacing-control-y: 8px;
+        --spacing-icon-btn: 8px;
+        --spacing-chip-x: 14px;
+        --spacing-chip-y: 4px;
+        --spacing-kbd-x: 8px;
+        --spacing-kbd-y: 3px;
+        --spacing-tooltip-x: 12px;
+        --spacing-tooltip-y: 6px;
+        --height-control: 40px;
+
+        /* Slightly slower transitions for softer feel */
+        --transition-duration: 200ms;
+        --active-scale: 0.97;
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────────
+         Swiss / Minimal-Flat — the International-Typographic style (7.3.33).
+         Structural, calm, gridded: hard right angles (sharp 2px corners), every
+         shadow removed (truly flat — depth is carried by hairline rules +
+         whitespace), a restrained neo-grotesque sans for headlines too (the serif
+         is swapped to the sans stack — a type token, not colour), tight/crisp
+         control density against generous card whitespace, and minimal motion (fast,
+         no press-scale). Overrides ONLY shape/feel tokens — never a colour token
+         (that is the data-palette axis; this style wears whatever palette is active).
+         The differentiator vs the planned Neo-Brutalism style: Swiss is REFINED and
+         calm (hairline borders, no shadow), not harsh (thick borders, hard offset
+         shadows). See docs/styles/swiss-minimal-flat.md. ───────────────────────── */
+      [data-style='swiss-minimal-flat'] {
+        /* Silhouette — hard right angles. Sharp 2px on every surface; --radius-pill
+           is left untouched so genuinely-circular affordances (avatars, dots) stay
+           round. */
+        --radius-xs: 1px;
+        --radius-sm: 2px;
+        --radius-md: 2px;
+        --radius-lg: 2px;
+        --radius-xl: 3px;
+        --radius-btn: 2px;
+        --radius-input: 2px;
+        --radius-card: 2px;
+        --radius-modal: 2px;
+        --radius-badge: 2px; /* rectangular status chips — NOT pills (the Swiss silhouette) */
+        --radius-control: 2px;
+        --radius-kbd: 2px;
+
+        /* Elevation — flat. Every surface drops its shadow; structure is drawn with
+           hairline borders + whitespace, never lift. */
+        --shadow-subtle: none;
+        --shadow-card: none;
+        --shadow-elevated: none;
+        --shadow-modal: none;
+        --shadow-hero-mockup: none;
+
+        /* Typography is the data-type axis now — Swiss ships `defaultTypeId:
+           'motir-sans'` (sans headlines), applied via the [data-type='motir-sans']
+           block below. A [data-style] block sets NO --font-* token (disjointness). */
+
+        /* Density — tight, gridded controls; generous card whitespace. */
+        --spacing-btn-x: 16px;
+        --spacing-btn-y: 9px;
+        --spacing-input-x: 14px;
+        --spacing-input-y: 11px;
+        --spacing-card-padding: 28px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 34px;
+        --height-input: 42px;
+
+        /* Motion — minimal and calm. Fast transitions, NO press-scale bounce. */
+        --transition-duration: 100ms;
+        --transition-fast: 80ms;
+        --transition-slow: 160ms;
+        --hover-scale: 1;
+        --active-scale: 1;
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────────
+         Glassmorphism — translucent frosted glass over a vibrant gradient (7.3.35).
+         The FIRST surface-MATERIAL style: where Swiss / Soft-Playful only re-shape
+         the silhouette, glass re-shapes the SURFACE itself — frosted backdrop-blur
+         panels, a soft palette-derived gradient canvas, light 1px borders, layered
+         diffuse depth, a rounded silhouette, and gentle motion.
+
+         It ships in TWO parts (the style contract was extended for this — see
+         docs/styles/glassmorphism.md + DESIGN.md):
+           1. This [data-style] TOKEN BLOCK — shape/feel tokens ONLY (radius / shadow /
+              motion / density) PLUS palette-AGNOSTIC material SCALARS (blur radius,
+              surface/border ALPHAs, wash strength). No hue lives here, so it stays
+              disjoint from the palette axis — still enforced by styleRegistry.test.ts.
+           2. A palette-DERIVED MATERIAL LAYER (the [data-surface] rules just below)
+              that turns those scalars into frosted translucency + the gradient canvas
+              via color-mix()/alpha OVER the active palette tokens, introducing NO new
+              hue — so "style x palette" stays orthogonal (swap the palette and the
+              glass re-tints; swap the style and the hues are untouched). This is the
+              surface-MATERIAL axis Swiss / Soft-Playful never needed.
+         ───────────────────────────────────────────────────────────────────────── */
+      [data-style='glassmorphism'] {
+        /* Silhouette — rounded, soft (not pill). Generous radii read as "glass tile". */
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 22px;
+        --radius-btn: 12px;
+        --radius-input: 12px;
+        --radius-card: 18px;
+        --radius-modal: 22px;
+        --radius-badge: 9999px; /* chips stay pills — soft is the glass register */
+        --radius-control: 10px;
+        --radius-kbd: 6px;
+
+        /* Elevation — layered, diffuse, soft. Glass FLOATS: bigger, softer, lower-
+           opacity shadows than the base, so panels read as hovering sheets. (rgba
+           literals are neutral shadow ink, not a palette hue.) */
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
+        --shadow-card: 0 8px 32px -8px rgba(15, 15, 15, 0.18);
+        --shadow-elevated: 0 16px 48px -12px rgba(15, 15, 15, 0.24);
+        --shadow-modal: 0 28px 70px -16px rgba(15, 15, 15, 0.34);
+        --shadow-hero-mockup: 0 32px 80px -16px rgba(15, 15, 15, 0.38);
+
+        /* Density — comfortable, a touch roomy (glass wants air around its tiles). */
+        --spacing-btn-x: 20px;
+        --spacing-btn-y: 11px;
+        --spacing-card-padding: 26px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 7px;
+        --height-control: 38px;
+
+        /* Motion — gentle, smooth (glass slides; never snaps). */
+        --transition-duration: 220ms;
+        --transition-slow: 320ms;
+        --active-scale: 0.98;
+
+        /* ── Material SCALARS — palette-AGNOSTIC (no hue, so no colour token here).
+           Consumed only by the [data-surface] material layer below; they are the
+           "glass recipe": how far to blur, and how much of the palette surface to
+           keep opaque (the rest lets the blurred gradient show through). ── */
+        --glass-blur: 16px; /* frosted-panel backdrop blur */
+        --glass-blur-strong: 26px; /* modal / overlay blur — more separation */
+        --glass-surface-alpha: 64%; /* opacity of a frosted card / popover */
+        --glass-modal-alpha: 82%; /* modals stay more opaque for body-text AA */
+        --glass-chrome-alpha: 62%; /* sidebar / chrome translucency */
+        --glass-input-alpha: 58%; /* form-control fill translucency */
+        --glass-border-alpha: 58%; /* light 1px hairline over the blur */
+        --glass-wash: 15%; /* gradient-canvas tint strength over the page bg */
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────────
+         Glassmorphism MATERIAL LAYER — palette-DERIVED surface treatment (7.3.35).
+         The style-contract EXTENSION: a style may own its surface MATERIAL in these
+         STYLE-SCOPED component rules as long as every colour is DERIVED from the
+         active palette via color-mix()/var() (never a raw hue) — so the style axis
+         stays disjoint from the palette axis. Surfaces are tagged with the
+         `data-surface` hook the shared primitives now emit (Card / Modal / Popover /
+         Sidebar / Input). Enforced by the "surface-material layer" test in
+         tests/theme/styleRegistry.test.ts. These are descendant-scoped selectors, so
+         they are NOT the bare [data-style] token block and never carry a hue token
+         there — the disjoint-axis token-block test still passes. ───────────────── */
+
+      /* The canvas: the palette's page bg + three soft corner washes. The hue sources
+         are the `--el-*` accent roles (NOT Tier-0 `--color-*`), so the washes re-tint
+         with the active palette — the `data-palette` axis (7.3.48 / MOTIR-1065)
+         overrides `--el-*`, never `--color-*`, so reading `--el-*` here is what keeps
+         the glass orthogonal to the palette. The gradient is what the frosted panels
+         blur — without it, the blur is invisible. */
+      [data-style='glassmorphism'] body {
+        background-image:
+          radial-gradient(
+            62% 70% at 12% -5%,
+            color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+            transparent 70%
+          ),
+          radial-gradient(
+            58% 65% at 105% 6%,
+            color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
+            transparent 68%
+          ),
+          radial-gradient(
+            72% 78% at 50% 112%,
+            color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
+            transparent 72%
+          );
+        background-attachment: fixed;
+      }
+
+      /* Frosted container surfaces — cards & popovers float as translucent sheets. */
+      [data-style='glassmorphism'] [data-surface='card'],
+      [data-style='glassmorphism'] [data-surface='popover'] {
+        background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
+        border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+        backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+      }
+
+      /* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
+      [data-style='glassmorphism'] [data-surface='modal'] {
+        background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
+        border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
+        -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+        backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+      }
+
+      /* The sidebar rail — frosted chrome over the canvas. */
+      [data-style='glassmorphism'] [data-surface='sidebar'] {
+        background-color: color-mix(in srgb, var(--el-sidebar-bg) var(--glass-chrome-alpha), transparent);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+        backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+      }
+
+      /* Form controls — a translucent fill so inputs read as glass too. */
+      [data-style='glassmorphism'] [data-surface='input'] {
+        background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
+        -webkit-backdrop-filter: blur(var(--glass-blur));
+        backdrop-filter: blur(var(--glass-blur));
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────────
+         Neo-Brutalism — the raw, punchy, utilitarian style (7.3.34).
+         The LOUD end of the angular family — where Swiss is refined and calm, this is
+         harsh on purpose: hard 0px corners on every surface, heavy 2px solid borders
+         doing the structural work, and HARD-OFFSET drop shadows with ZERO blur (a
+         solid block of shadow, not a soft lift). Tight utilitarian density, raw
+         monospace headlines, and snappy mechanical motion (near-instant, no
+         press-scale). Overrides ONLY shape/feel tokens — never a colour token (that is
+         the data-palette axis; this style wears whatever palette is active, so the
+         active palette's AA contrast is preserved by construction). The heavy-border
+         axis has no Tier-0 token (components draw a 1px Tailwind `border`), so it is
+         carried by the style-scoped component-variant block that FOLLOWS this token
+         block. See docs/styles/neo-brutalism.md. ─────────────────────────────────── */
+      [data-style='neo-brutalism'] {
+        /* Silhouette — zero radius. Hard 0px corners on every surface; --radius-pill
+           is left untouched so genuinely-circular affordances (avatars, status dots,
+           the spinner) stay round. */
+        --radius-xs: 0;
+        --radius-sm: 0;
+        --radius-md: 0;
+        --radius-lg: 0;
+        --radius-xl: 0;
+        --radius-btn: 0;
+        --radius-input: 0;
+        --radius-card: 0;
+        --radius-modal: 0;
+        --radius-badge: 0; /* rectangular (non-pill) status chips — the brutalist block */
+        --radius-control: 0;
+        --radius-kbd: 0;
+
+        /* Elevation — HARD-OFFSET shadows, zero blur. A solid offset block of shadow
+           (Xpx Ypx 0 0) instead of a soft diffuse lift; the chunky frame is the whole
+           point. The shadow colour is a literal near-ink (matching how the base
+           shadows already hard-code their rgba) — NOT a palette token, so the colour
+           axis stays untouched. */
+        --shadow-subtle: 2px 2px 0 0 rgba(15, 15, 15, 1);
+        --shadow-card: 4px 4px 0 0 rgba(15, 15, 15, 1);
+        --shadow-elevated: 6px 6px 0 0 rgba(15, 15, 15, 1);
+        --shadow-modal: 8px 8px 0 0 rgba(15, 15, 15, 1);
+        --shadow-hero-mockup: 12px 12px 0 0 rgba(15, 15, 15, 1);
+
+        /* Typography is the data-type axis now — Neo-Brutalism ships `defaultTypeId:
+           'motir-mono'` (mono headlines), applied via the [data-type='motir-mono']
+           block below. A [data-style] block sets NO --font-* token (disjointness). */
+
+        /* Density — tight, utilitarian. Chunky controls, compact card padding, no
+           wasted space. */
+        --spacing-btn-x: 16px;
+        --spacing-btn-y: 10px;
+        --spacing-input-x: 14px;
+        --spacing-input-y: 11px;
+        --spacing-card-padding: 20px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        /* Motion — snappy, mechanical. Near-instant transitions and NO press-scale;
+           the UI reacts, it does not ease. */
+        --transition-duration: 60ms;
+        --transition-fast: 40ms;
+        --transition-slow: 100ms;
+        --hover-scale: 1;
+        --active-scale: 1;
+      }
+
+      /* Neo-Brutalism — component-variant override: HEAVY borders (the deliverable's
+         "component-variant overrides" axis). There is no Tier-0 border-WIDTH token —
+         every primitive (Button outline, Card, Input, Modal, Pill, Popover, …) draws
+         a 1px Tailwind `.border`. This style-scoped rule thickens that full box border
+         to a loud 2px on every framed surface WITHOUT touching a colour token or any
+         component file, so the heaviness is real but stays entirely inside the
+         neo-brutalism scope (no other style is affected). It is intentionally a
+         descendant rule, not a bare token block, so the disjoint-axis test (which
+         inspects token blocks) does not treat it as one — and it sets no colour
+         anyway, so the two axes stay disjoint regardless. */
+      [data-style='neo-brutalism'] .border {
+        border-width: 2px;
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────────
+         Cybercore / Y2K — the neon-on-dark retro-tech style (7.3.36). Dark-first.
+         The identity is GLOW + GRID + MONO: surfaces are lit by an outward halo
+         (neon glow elevation) instead of a drop shadow, a faint tech grid textures
+         the canvas (see the body rule below), headlines render in mono for a
+         terminal read, corners are hard HUD frames, and motion is fast/electric.
+         Overrides ONLY shape/feel tokens — never a colour token (that is the
+         data-palette axis; the neon hue comes from the active palette / dark theme,
+         and this style amplifies it into a halo). The glow + grid are built from
+         `currentColor`, so they pick up whatever hue the palette provides and never
+         pin one — keeping the style/palette axes disjoint AND preserving the
+         palette's AA by construction (no text/background pair is touched). The
+         differentiator vs Swiss / Minimal-Flat: Swiss is flat + calm, Cybercore is
+         LIT + electric (glow rings, grid texture, mono headlines, snappy press).
+         See docs/styles/cybercore-y2k.md. ────────────────────────────────────── */
+      [data-style='cybercore-y2k'] {
+        /* Silhouette — hard HUD/terminal frames. Sharp small corners on every
+           surface; --radius-pill stays untouched so circular affordances (avatars,
+           status dots, the spinner) stay round. */
+        --radius-xs: 1px;
+        --radius-sm: 2px;
+        --radius-md: 3px;
+        --radius-lg: 4px;
+        --radius-xl: 4px;
+        --radius-btn: 3px;
+        --radius-input: 3px;
+        --radius-card: 4px;
+        --radius-modal: 4px;
+        --radius-badge: 2px; /* rectangular HUD chips — not pills */
+        --radius-control: 2px;
+        --radius-kbd: 2px;
+
+        /* Elevation — NEON GLOW, not drop-shadow. Every surface emits an outward
+           halo built from currentColor (the active hue), so it reads as lit rather
+           than lifted; the 1px ring carries the "stroke" (lit edge) too. No colour
+           token is referenced — only currentColor, so the palette stays in charge of
+           the hue and AA is untouched. */
+        --shadow-subtle: 0 0 0 1px color-mix(in srgb, currentColor 9%, transparent);
+        --shadow-card:
+          0 0 0 1px color-mix(in srgb, currentColor 12%, transparent),
+          0 0 14px -3px color-mix(in srgb, currentColor 24%, transparent);
+        --shadow-elevated:
+          0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
+          0 0 22px -4px color-mix(in srgb, currentColor 32%, transparent);
+        --shadow-modal:
+          0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+          0 0 40px -6px color-mix(in srgb, currentColor 40%, transparent);
+        --shadow-hero-mockup:
+          0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),
+          0 0 56px -8px color-mix(in srgb, currentColor 45%, transparent);
+
+        /* Typography is the data-type axis now — Cybercore ships `defaultTypeId:
+           'motir-mono'` (mono headlines), applied via the [data-type='motir-mono']
+           block below. A [data-style] block sets NO --font-* token (disjointness). */
+
+        /* Density — tight, technical HUD rhythm: compact controls, snug card pad. */
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 9px;
+        --spacing-input-x: 14px;
+        --spacing-input-y: 11px;
+        --spacing-card-padding: 20px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --height-control: 34px;
+        --height-input: 42px;
+
+        /* Motion — snappy and electric. Very fast transitions, crisp press-scale. */
+        --transition-duration: 90ms;
+        --transition-fast: 60ms;
+        --transition-slow: 140ms;
+        --hover-scale: 1;
+        --active-scale: 0.97;
+      }
+
+      /* Cybercore surface texture — the tech grid (the "surface treatment" feel
+         axis). A component-variant override, NOT a [data-style] token block, so it
+         can carry the faint grid lines: built from currentColor at a very low alpha
+         so it adapts to the active palette and sits BEHIND content (text never
+         renders on it), keeping AA intact. Dark-first — on the dark theme this reads
+         as a Tron grid over the near-black canvas. */
+      [data-style='cybercore-y2k'] body {
+        background-image:
+          linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+          linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+        background-size: 32px 32px;
+        background-position: center top;
+      }
+
+      /* ── Palette: Cobalt (data-palette="cobalt") — Subtask 7.3.49 ───────────────
+         A cool, calm, trustworthy INSTITUTIONAL-BLUE re-skin: slate-cool surfaces, a
+         confident cobalt primary/accent, a cool cyan highlight, cooled pastel tints.
+         Mood anchored in getdesign.md's Coinbase (clean institutional blue) / IBM
+         (structured blue) analysis; the actual light/dark ramps + UI-state steps are
+         built from Radix Colors (Blue / Indigo / Slate / Red / Jade / Amber) — the
+         accessibility-first 12-step scales designed for UI states.
+
+         This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+         --el-* layer references (exactly how the [data-theme='dark'] block works), so
+         every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+         work-item type hues — re-skins coherently with no per-token churn. It sets
+         ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+         spacing / shadow / sizing / motion / type) — that is the independent
+         data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+         Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+         pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light and dark —
+         verified numerically + by rendered specimen, never eyeballed. See
+         docs/palettes/cobalt.md for the colour-role reference. */
+      [data-palette='cobalt'] {
+        /* brand & primary — confident cobalt (Radix Indigo family) */
+        --color-primary: #3a57cf; /* cobalt AS text/icon on a surface (AA on white/surface) */
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #2b44ad;
+        --color-primary-fill: #3650c2; /* fill behind white labels (white-on AA) */
+
+        /* surfaces — white canvas over cool slate sections */
+        --color-background: #ffffff;
+        --color-foreground: #0f1b2e; /* cool navy ink */
+        --color-surface: #eef2f8; /* cool slate section background */
+        --color-surface-soft: #f7f9fc; /* quieter cool division */
+
+        /* text scale — cool slate hierarchy */
+        --color-ink: #0f1b2e;
+        --color-charcoal: #1e2c40; /* body emphasis / AA-safe text on tints */
+        --color-slate: #46556b; /* secondary text */
+        --color-steel: #586a82; /* tertiary / footer */
+        --color-stone: #8493a6; /* faint labels */
+        --color-muted: #eef2f8;
+        --color-muted-foreground: #5b6a7e; /* captions — AA on white + surfaces */
+
+        /* borders — cool slate hairlines */
+        --color-hairline: #d8e0ea;
+        --color-hairline-soft: #e6ebf2;
+        --color-hairline-strong: #bcc7d6;
+        --color-border: #d8e0ea;
+
+        /* accent secondary — a cool cyan highlight (replaces the warm brand pink) */
+        --color-accent: #0e93a8; /* cool cyan — decorative / epic & design type hue */
+        --color-accent-orange: #c2410c;
+        --color-accent-teal: #0e8f86;
+        --color-accent-green: #18874c; /* cooled green */
+
+        /* card tints — cooled pastel washes (6 distinct feature hues) */
+        --color-tint-peach: #fde7d4;
+        --color-tint-rose: #fbe0ea;
+        --color-tint-mint: #d6f0e2;
+        --color-tint-lavender: #e4e8fb; /* cool indigo tint */
+        --color-tint-sky: #dbeafb; /* cool blue tint — the most-used wash */
+        --color-tint-yellow: #fbf2d2;
+
+        /* semantic */
+        --color-success: #18874c;
+        --color-warning: #c2410c;
+        --color-destructive: #d3322f; /* white-on AA */
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0d63b8;
+
+        /* links — a cleaner sky-blue, distinct from the cobalt primary (AA on the
+           soft surface a hovered row paints, too) */
+        --color-link: #0d63b8;
+        --color-link-pressed: #0a4f95;
+
+        /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+           palette overrides it directly — one shade darker than the cool surface. */
+        --el-sidebar-item-bg-hover: #e4e9f1;
+      }
+
+      /* Cobalt — dark companion. A cool navy canvas (not the base near-black);
+         brightened cobalt/link hues so they read AS text on the dark surface, and a
+         darker accent fill so white labels still clear AA. */
+      [data-palette='cobalt'][data-theme='dark'] {
+        --color-background: #0b111d; /* deep cool navy canvas */
+        --color-foreground: #e7edf6;
+        --color-surface: #131d2c;
+        --color-surface-soft: #0f1825;
+
+        --color-ink: #e7edf6;
+        --color-charcoal: #d3deec;
+        --color-slate: #a0b1c6;
+        --color-steel: #7e90a6;
+        --color-stone: #5f6f84;
+        --color-muted: #131d2c;
+        --color-muted-foreground: #94a4ba;
+
+        --color-hairline: #243245;
+        --color-hairline-soft: #1a2433;
+        --color-hairline-strong: #324258;
+        --color-border: #243245;
+
+        /* cobalt — brightened as text on navy; fill darkened for white-label AA */
+        --color-primary: #7e98f2;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #3a51b8;
+        --color-primary-fill: #4a63cf;
+
+        /* cooled tints, dimmed for the navy canvas */
+        --color-tint-peach: #2f2317;
+        --color-tint-rose: #301a25;
+        --color-tint-mint: #15281f;
+        --color-tint-lavender: #1c2238;
+        --color-tint-sky: #13243a;
+        --color-tint-yellow: #2b2814;
+
+        --color-accent: #2ec3d6; /* bright cool cyan highlight on dark */
+        --color-accent-orange: #f08a4b;
+        --color-accent-teal: #2db6a8;
+        --color-accent-green: #34c578;
+
+        --color-success: #34c578;
+        --color-warning: #f08a4b;
+        --color-destructive: #d83847; /* white-on AA on the navy canvas */
+        --color-destructive-foreground: #ffffff;
+        --color-info: #6fb3ff;
+
+        --color-link: #6fb3ff;
+        --color-link-pressed: #93c5ff;
+
+        /* sidebar hover — one shade lighter than the dark cool surface */
+        --el-sidebar-item-bg-hover: #1c2840;
+      }
+
+      /* ── Palette: Graphite (data-palette="graphite") — Subtask 7.3.51 ───────────
+         A stark, editorial, COOL-NEUTRAL MONOCHROME re-skin — the cool foil to
+         Motir's warmth: true greyscale surfaces + ink on a clean Radix Slate scale,
+         a single restrained accent. The accent is expressed two ways, exactly as
+         Vercel / Linear do it: the primary CTA is a high-contrast INK fill (near-black
+         on light, near-white on dark — the monochrome statement), while the one
+         chromatic accent — a restrained cool blue — carries links, active/selected
+         states, focus, and the decorative highlight. Surfaces, ink, and borders are
+         pure cool greyscale; semantic (danger/success/warning/info) and work-item
+         type hues stay chromatic-but-cooled so status & kind remain legible (the
+         finding-#54 guard — never collapse the UI to grey + one colour).
+
+         Mood + accent hue anchored in getdesign.md's Vercel (black-and-white
+         precision) / Linear (ultra-minimal) analysis; the actual light/dark ramps +
+         UI-state steps are built from Radix Colors (Slate / Blue / Red / Grass /
+         Amber / Teal) — the accessibility-first 12-step scales designed for UI
+         states. Slate is the cool neutral closest to the brand anchor.
+
+         This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+         --el-* layer references (exactly how the [data-theme='dark'] block works), so
+         every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+         work-item type hues — re-skins coherently with no per-token churn. It sets
+         ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+         spacing / shadow / sizing / motion / type) — that is the independent
+         data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+         Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+         pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light and dark —
+         verified numerically + by rendered specimen, never eyeballed. See
+         docs/palettes/graphite.md for the colour-role reference. */
+      [data-palette='graphite'] {
+        /* brand & primary — the high-contrast INK CTA + the single cool-blue accent.
+           --color-primary is the accent AS text/icon/focus on a surface (the cool
+           blue, AA on white & the slate surface); --color-primary-fill is the CTA
+           FILL behind white labels — near-black ink, the monochrome statement. */
+        --color-primary: #155bc4; /* cool-blue accent — links / active / focus / icon */
+        --color-primary-foreground: #ffffff; /* white labels on the ink fill */
+        --color-primary-pressed: #2b2f35; /* pressed ink CTA (one step off the fill) */
+        --color-primary-fill: #1a1d21; /* near-black graphite CTA fill (white-on AA) */
+
+        /* surfaces — pure white canvas over cool slate sections (Radix Slate) */
+        --color-background: #ffffff; /* stark white canvas */
+        --color-foreground: #16191d; /* cool near-black ink */
+        --color-surface: #eef0f3; /* cool slate section background */
+        --color-surface-soft: #f8f9fa; /* quieter cool division */
+
+        /* text scale — cool slate hierarchy (Radix Slate 11→9 below body) */
+        --color-ink: #16191d;
+        --color-charcoal: #20242a; /* body emphasis / AA-safe text on tints */
+        --color-slate: #565c64; /* secondary text — AA on white + surfaces */
+        --color-steel: #6b7079; /* tertiary / footer */
+        --color-stone: #8a8f98; /* faint labels (decorative, sub-AA — as the base) */
+        --color-muted: #eef0f3;
+        --color-muted-foreground: #5d636b; /* captions — AA on white + surfaces */
+
+        /* borders — cool slate hairlines */
+        --color-hairline: #e2e4e9;
+        --color-hairline-soft: #ebedf0;
+        --color-hairline-strong: #c8ccd3;
+        --color-border: #e2e4e9;
+
+        /* accent secondary — the cool-blue highlight replaces the warm brand pink */
+        --color-accent: #2563c9; /* cool-blue decorative highlight / epic & design hue */
+        --color-accent-orange: #c2410c; /* review hue / warning — cooled */
+        --color-accent-teal: #0e8f86; /* subtask / content hue */
+        --color-accent-green: #18804a; /* story hue / success — cooled */
+
+        /* card tints — cooled pastel washes (6 distinct feature hues; charcoal text
+           on them clears AA in both themes) */
+        --color-tint-peach: #f7e6d6;
+        --color-tint-rose: #f6dfe8;
+        --color-tint-mint: #d9efe1;
+        --color-tint-lavender: #e4e6f3; /* cool indigo wash */
+        --color-tint-sky: #dde9f6; /* cool blue wash — the accent tint */
+        --color-tint-yellow: #f6f1d6;
+
+        /* semantic */
+        --color-success: #18804a;
+        --color-warning: #c2410c;
+        --color-destructive: #c92a2a; /* white-on AA */
+        --color-destructive-foreground: #ffffff;
+        --color-info: #155bc4; /* shares the accent blue (coherent in mono) */
+
+        /* links — the accent blue (AA on white AND the soft surface a hovered row
+           paints behind it) */
+        --color-link: #155bc4;
+        --color-link-pressed: #114a9e;
+
+        /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+           palette overrides it directly — one shade darker than the cool surface. */
+        --el-sidebar-item-bg-hover: #e6e8ec;
+      }
+
+      /* Graphite — dark companion. A cool near-black slate canvas; the CTA fill
+         inverts to near-WHITE ink (Vercel's dark white-button), the accent blue
+         brightens so it reads AS text on the dark canvas, and semantic/type hues
+         brighten to clear AA on near-black. */
+      [data-palette='graphite'][data-theme='dark'] {
+        --color-background: #0c0d0f; /* stark cool near-black canvas */
+        --color-foreground: #edeef0;
+        --color-surface: #18191c; /* cool slate section */
+        --color-surface-soft: #141517; /* quieter cool division */
+
+        --color-ink: #edeef0;
+        --color-charcoal: #d7d9dd; /* emphasis / AA-safe on tints */
+        --color-slate: #a9adb5; /* secondary — AA on the dark canvas */
+        --color-steel: #888d96; /* tertiary / footer */
+        --color-stone: #696e77; /* faint labels */
+        --color-muted: #18191c;
+        --color-muted-foreground: #a0a4ac; /* captions — AA on dark */
+
+        --color-hairline: #282a2e;
+        --color-hairline-soft: #1d1f22;
+        --color-hairline-strong: #3a3d42;
+        --color-border: #282a2e;
+
+        /* accent — blue brightened AS text on near-black; CTA fill inverts to
+           near-white ink with near-black labels (the dark monochrome statement) */
+        --color-primary: #7db1ff; /* bright cool-blue accent — links / active / focus */
+        --color-primary-foreground: #0c0d0f; /* near-black labels on the white fill */
+        --color-primary-pressed: #d3d5d9; /* pressed white-ink CTA */
+        --color-primary-fill: #edeef0; /* near-white ink CTA fill (black-on AA) */
+
+        /* cooled tints, dimmed for the near-black canvas */
+        --color-tint-peach: #2e2418;
+        --color-tint-rose: #2f1c26;
+        --color-tint-mint: #15271e;
+        --color-tint-lavender: #1f2236;
+        --color-tint-sky: #15233a;
+        --color-tint-yellow: #2a2716;
+
+        --color-accent: #5b9dff; /* bright cool-blue highlight on dark */
+        --color-accent-orange: #f08a4b;
+        --color-accent-teal: #2db6a8;
+        --color-accent-green: #34b86e;
+
+        --color-success: #34b86e;
+        --color-warning: #f08a4b;
+        --color-destructive: #d83847; /* white-on AA on the dark canvas */
+        --color-destructive-foreground: #ffffff;
+        --color-info: #7db1ff;
+
+        --color-link: #7db1ff;
+        --color-link-pressed: #a3c8ff;
+
+        /* sidebar hover — one shade lighter than the dark cool surface */
+        --el-sidebar-item-bg-hover: #202226;
+      }
+
+      /* ── Palette: Evergreen (data-palette="evergreen") — Subtask 7.3.50 ──────────
+         A fresh, technical emerald scheme — Supabase (dark emerald) / Spotify
+         (vibrant green) / MongoDB (spring green), built on Radix green/jade ramps.
+         See docs/palettes/evergreen.md.
+
+         Like every palette block, this re-skins by overriding the Tier-0 --color-*
+         layer (COLOUR only — never a shape/feel token, which is the data-style axis):
+         because the Tier-3 --el-* element tokens reference --color-*, this cascades a
+         COORDINATED re-skin through every surface, ink step, accent/CTA, link,
+         semantic, tint, work-item-type hue, and chart colour at once — no per-`--el-*`
+         enumeration, no drift from the element layer. The work-item type / chart hues
+         stay a distinguishable rainbow (a `code` chip must still read distinct from a
+         `test` chip); only the palette's MOOD shifts emerald. Every text-on-surface,
+         CTA, link, and chip pairing passes WCAG AA in light AND dark (verified by
+         render specimen; see the doc).
+
+         Concrete-hex --el-* tokens that do NOT resolve through --color-*
+         (--el-sidebar-item-bg-hover) are re-skinned explicitly below. */
+      [data-palette='evergreen'] {
+        /* Brand / primary — emerald CTA (white label text clears AA on the fill) */
+        --color-primary: #0c7a52;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #095f40;
+        --color-primary-fill: #0c7a52;
+
+        /* Surfaces — lightly cooled (green-leaning) neutrals over a white canvas */
+        --color-background: #ffffff;
+        --color-foreground: #14201b;
+        --color-surface: #eef3f0;
+        --color-surface-soft: #f6faf8;
+
+        /* Text scale — cooled forest-charcoal ink hierarchy */
+        --color-ink: #14201b;
+        --color-charcoal: #1d2c25;
+        --color-slate: #42534a;
+        --color-steel: #5e6f66;
+        --color-stone: #8f9f96;
+        --color-muted: #eef2f0;
+        --color-muted-foreground: #5e6f66;
+
+        /* Borders / hairlines — cool green-grey */
+        --color-hairline: #d9e2dc;
+        --color-hairline-soft: #e6ece9;
+        --color-hairline-strong: #c2d0c8;
+        --color-border: #d9e2dc;
+
+        /* Secondary accents — a harmonized-but-distinct rainbow for type/chart hues.
+           Violet replaces the house pink as the complementary accent (epic/design),
+           so those chips stay distinct from the emerald greens. */
+        --color-accent: #8257e6; /* violet — epic / design / highlight */
+        --color-accent-orange: #c2410c; /* review */
+        --color-accent-teal: #0d8a86; /* subtask / content */
+        --color-accent-green: #157f3a; /* story — fresh grass green */
+
+        /* Card tints — cool/green-leaning washes (lavender shifts toward the violet
+           accent; carry charcoal text at AA) */
+        --color-tint-peach: #ffe9d6;
+        --color-tint-rose: #f6dced;
+        --color-tint-mint: #d5f1e1;
+        --color-tint-lavender: #e7e0fa;
+        --color-tint-sky: #d8ecf6;
+        --color-tint-yellow: #fbf3d2;
+
+        /* Semantic — green-leaning success; the rest kept distinct for legibility */
+        --color-success: #127c3e; /* grassier than the emerald primary, so they read apart */
+        --color-warning: #b45309;
+        --color-destructive: #d63d3d;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #1366c4; /* a clear blue — keeps task/code apart from teal subtask/content */
+
+        /* Links — blue affordance (distinct from the emerald accent), AA on both the
+           page and the soft hovered-row surface */
+        --color-link: #0a6ebd;
+        --color-link-pressed: #08537f;
+
+        /* Concrete-hex --el token (does not resolve through --color-*) — cool hover
+           lift one shade darker than the cooled light surface */
+        --el-sidebar-item-bg-hover: #e4ebe7;
+      }
+
+      /* Evergreen — dark companion. Bright emerald on a deep-forest canvas
+         (Supabase-style: the bright accent FILL carries DARK label text). Mirrors the
+         Tier-1 dark flip for the cooled neutrals. */
+      [data-palette='evergreen'][data-theme='dark'] {
+        --color-primary: #3ddc97;
+        --color-primary-foreground: #06140d; /* dark ink on the bright emerald fill */
+        --color-primary-pressed: #2bbd7f;
+        --color-primary-fill: #3ddc97;
+
+        --color-background: #0c130f;
+        --color-foreground: #e8efe9;
+        --color-surface: #141d18;
+        --color-surface-soft: #101713;
+
+        --color-ink: #e8efe9;
+        --color-charcoal: #d6e0d9;
+        --color-slate: #9aaaa1;
+        --color-steel: #6f8077;
+        --color-stone: #5a6b62;
+        --color-muted: #141d18;
+        --color-muted-foreground: #9aaaa1;
+
+        --color-hairline: #25322b;
+        --color-hairline-soft: #1b251f;
+        --color-hairline-strong: #35453c;
+        --color-border: #25322b;
+
+        --color-accent: #a78bfa; /* violet */
+        --color-accent-orange: #fb923c;
+        --color-accent-teal: #2dd4bf;
+        --color-accent-green: #34d27a;
+
+        /* Pastel tints dimmed for the dark canvas */
+        --color-tint-peach: #2f2114;
+        --color-tint-rose: #2e1822;
+        --color-tint-mint: #11271c;
+        --color-tint-lavender: #211b33;
+        --color-tint-sky: #122430;
+        --color-tint-yellow: #2b2712;
+
+        --color-success: #34d27a;
+        --color-warning: #fb923c;
+        --color-destructive: #f87171;
+        --color-destructive-foreground: #06140d; /* dark ink on the bright red */
+        --color-info: #5aa8f5;
+
+        --color-link: #56b6f5;
+        --color-link-pressed: #7cc7f8;
+
+        /* hover lift one shade *lighter* than the dark surface (mirrors base recipe) */
+        --el-sidebar-item-bg-hover: #1e2a23;
+      }
+
+         AXIS 3 (TYPE) — data-type overrides (Subtask 7.3.53)
+         Registry: lib/theme/typography.ts. A named type pairing re-points the
+         `--font-*` ROLE tokens (sans / serif / mono) — and ONLY font tokens, NEVER a
+         colour (--el / --color) or shape (--radius / --spacing / --shadow) token. The
+         shared --font-size scale stays common (sizes are layout, not brand).
+
+         v1 ships three pairings built from the THREE already-loaded next/font faces
+         (Inter · Source Serif 4 · JetBrains Mono) — ZERO new payload:
+           - `motir`      — the BASE (editorial serif headlines); it IS the Tier-0
+                            --font-* defaults, so — like the `motir` palette — it needs
+                            NO override block.
+           - `motir-sans` — all-sans: the serif headline face re-points to the sans
+                            stack (reproduces the old Swiss `--font-serif` override).
+           - `motir-mono` — mono headlines: re-points to the mono stack (reproduces
+                            the old Neo-Brutalism / Cybercore override).
+         A STYLE declares a `defaultTypeId` (lib/theme/styles.ts) — the pairing applied
+         when the user hasn't pinned a `data-type` — so the out-of-the-box look is
+         UNCHANGED (swiss → motir-sans, neo/cybercore → motir-mono). Each later
+         "Type: …" subtask (7.3.54+) ADDS its `[data-type='<id>']` block + faces here:
+           - `grotesk` (7.3.54)        — Space Grotesk on the headline role over Inter.
+           - `mono-technical` (7.3.56) — IBM Plex Mono on the headline + meta/code
+                            roles over the Inter body; loads one new face (in layout.tsx).
+         ═══════════════════════════════════════════════════════════════════════ */
+
+      [data-type='motir-sans'] {
+        /* Sans headlines — re-point the editorial serif role at the sans stack. */
+        --font-serif:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      [data-type='motir-mono'] {
+        /* Mono headlines — re-point the editorial serif role at the mono stack. */
+        --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+
+      /* ── Palette: Spectrum (data-palette="spectrum") — Subtask 7.3.52 ───────────
+         A vibrant, playful, energetic MULTI-ACCENT re-skin: crisp cool-white
+         surfaces, a bright violet primary, a candy-magenta highlight, and a
+         saturated, well-separated rainbow tint/accent set — friendly, never garish.
+         Visibly distinct from Motir (warm cream → crisp cool surfaces; muted pastels
+         → candy-bright tints), not just an accent-hue swap. Mood anchored in
+         getdesign.md's Figma (vibrant multi-colour) / Airtable (colourful, friendly)
+         analysis; the actual light/dark ramps + UI-state steps are built from Radix
+         Colors (Violet / Iris / Pink / Blue / Jade / Amber / Red) — the
+         accessibility-first 12-step scales designed for UI states.
+
+         This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
+         --el-* layer references (exactly how the [data-theme='dark'] block works), so
+         every --el-* token — surfaces, ink, accent, links, semantic, tints, and
+         work-item type hues — re-skins coherently with no per-token churn. It sets
+         ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
+         spacing / shadow / sizing / motion / type) — that is the independent
+         data-style axis (paletteRegistry.test.ts enforces the disjointness).
+
+         Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
+         pairing clears WCAG AA (≥4.5 text; ≥3.0 icon/UI hue) in BOTH light and dark —
+         verified numerically + by rendered specimen, never eyeballed. See
+         docs/palettes/spectrum.md for the colour-role reference. */
+      [data-palette='spectrum'] {
+        /* brand & primary — bright violet (Radix Violet/Iris family) */
+        --color-primary: #6440d6; /* violet AS text/icon on a surface (AA ~6.5:1 on white) */
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5331b8;
+        --color-primary-fill: #5a37c9; /* fill behind white labels (white-on AA ~7.4:1) */
+
+        /* surfaces — crisp cool white over faintly violet-tinted sections */
+        --color-background: #ffffff;
+        --color-foreground: #1a1626; /* cool near-black ink with a faint violet cast */
+        --color-surface: #f4f2fb; /* cool violet-tinted section background */
+        --color-surface-soft: #faf9fe; /* quieter cool division */
+
+        /* text scale — cool violet-neutral hierarchy */
+        --color-ink: #1a1626;
+        --color-charcoal: #2a2440; /* body emphasis / AA-safe text on tints */
+        --color-slate: #524d66; /* secondary text */
+        --color-steel: #6b6680; /* tertiary / footer */
+        --color-stone: #938da6; /* faint labels */
+        --color-muted: #f4f2fb;
+        --color-muted-foreground: #5e5975; /* captions — AA ~6.6:1 on white + surfaces */
+
+        /* borders — cool violet hairlines */
+        --color-hairline: #e6e2f3;
+        --color-hairline-soft: #efecf8;
+        --color-hairline-strong: #cfc8e6;
+        --color-border: #e6e2f3;
+
+        /* accent secondary — a candy magenta-pink highlight (the playful brand spark;
+           also the epic & design type hue) + a vivid, well-separated accent trio */
+        --color-accent: #e23d97; /* vivid magenta-pink — decorative / epic & design hue */
+        --color-accent-orange: #ea580c;
+        --color-accent-teal: #0d9488;
+        --color-accent-green: #16a34a;
+
+        /* card tints — candy-bright washes (6 distinct, saturated feature hues; each
+           light enough that --el-text-strong charcoal clears AA ≥10:1 on it) */
+        --color-tint-peach: #ffe1c2;
+        --color-tint-rose: #ffd9e8;
+        --color-tint-mint: #c7f5d9;
+        --color-tint-lavender: #e6ddff;
+        --color-tint-sky: #d2e7ff;
+        --color-tint-yellow: #fff0b8;
+
+        /* semantic */
+        --color-success: #16a34a;
+        --color-warning: #ea580c;
+        --color-destructive: #d92e2b; /* white-on AA */
+        --color-destructive-foreground: #ffffff;
+        --color-info: #2563eb;
+
+        /* links — a clean vivid blue, distinct from the violet primary (AA on the
+           soft surface a hovered row paints, too) */
+        --color-link: #2563eb;
+        --color-link-pressed: #1d4ed8;
+
+        /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
+           palette overrides it directly — one shade darker than the cool surface. */
+        --el-sidebar-item-bg-hover: #ece8f8;
+      }
+
+      /* Spectrum — dark companion. A deep cool-violet canvas (not the base
+         near-black); brightened violet/pink/link hues so they read AS text on the
+         dark surface, and a darker accent fill so white labels still clear AA. */
+      [data-palette='spectrum'][data-theme='dark'] {
+        --color-background: #14111f; /* deep cool-violet canvas */
+        --color-foreground: #ece9f6;
+        --color-surface: #1d1830;
+        --color-surface-soft: #181426;
+
+        --color-ink: #ece9f6;
+        --color-charcoal: #ddd8ee;
+        --color-slate: #aaa3c2;
+        --color-steel: #8a82a3;
+        --color-stone: #6b6485;
+        --color-muted: #1d1830;
+        --color-muted-foreground: #a39bbd;
+
+        --color-hairline: #2b2440;
+        --color-hairline-soft: #211b33;
+        --color-hairline-strong: #3a3257;
+        --color-border: #2b2440;
+
+        /* violet — brightened as text on the violet canvas; fill darkened for
+           white-label AA */
+        --color-primary: #a78bfa;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5331b8;
+        --color-primary-fill: #6d4fd6;
+
+        /* candy tints, dimmed for the dark canvas (light --el-text-strong on them) */
+        --color-tint-peach: #34261a;
+        --color-tint-rose: #351c28;
+        --color-tint-mint: #16301f;
+        --color-tint-lavender: #251f3c;
+        --color-tint-sky: #16263f;
+        --color-tint-yellow: #322c16;
+
+        --color-accent: #ff5fb0; /* bright candy magenta-pink on dark */
+        --color-accent-orange: #fb8b4c;
+        --color-accent-teal: #2dc4b8;
+        --color-accent-green: #36c977;
+
+        --color-success: #36c977;
+        --color-warning: #fb8b4c;
+        --color-destructive: #f0555f; /* reads AS text on the dark canvas (AA ~5.5:1) */
+        --color-destructive-foreground: #ffffff;
+        --color-info: #6fa8ff;
+
+        --color-link: #8fb8ff;
+        --color-link-pressed: #b3d0ff;
+
+        /* sidebar hover — one shade lighter than the dark cool surface */
+        --el-sidebar-item-bg-hover: #261f3d;
+      }
+
+      [data-type='grotesk'] {
+        /* Grotesk (7.3.54) — geometric / neo-grotesque sans headlines. Re-point the
+           editorial-serif headline role at Space Grotesk (loaded in app/layout.tsx as
+           --font-grotesk-source). Body stays Inter (--font-sans) and meta stays
+           JetBrains Mono (--font-mono) — the pairing changes the headline FACE, the
+           defining move. ONLY font tokens here (the disjointness guard): no colour
+           (--el / --color) or shape (--radius / --spacing / --shadow / --height). */
+        --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+      }
+
+      [data-type='editorial'] {
+        /* Editorial (7.3.55) — a characterful display serif over the humanist sans
+           body. Adds one new face: Fraunces, loaded in app/layout.tsx as
+           --font-editorial-source. Re-point the headline (serif) role at it; body
+           (Inter, --font-sans) and meta (JetBrains, --font-mono) keep the base roles,
+           so the change is a real, visible FACE swap — magazine, considered — not a
+           size tweak. ONLY --font-* role tokens here (the disjointness guard): no
+           colour (--el/--color) or shape (--radius/--spacing/--shadow) token. */
+        --font-serif: var(--font-editorial-source), 'Fraunces', Georgia, serif;
+      }
+
+      [data-type='mono-technical'] {
+        /* Mono-Technical (7.3.56) — a precise, developer-grade pairing. IBM Plex Mono
+           dresses BOTH the headline role (--font-serif) AND the meta/code role
+           (--font-mono); the body (--font-sans) stays the neutral Inter base. The
+           headline + meta sharing one technical mono voice is what distinguishes this
+           from motir-mono (JetBrains-Mono headlines only). Only --font-* role tokens
+           are touched — colour (--el/--color) and shape (--radius/--spacing) are the
+           other two, independent axes (the disjointness guard). */
+        --font-serif: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-mono: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+      }
+
+
+            /* ── Palette axis fix for NESTED specimens ──────────────────────────────
+               In the app, data-palette sits on <html>, so the :root --el-* layer
+               recomputes against the palette's overridden --color-*. In this mock a
+               palette wraps a NESTED element, where the already-resolved --el-* is
+               merely inherited. Re-emitting the derived --el-* layer scoped to
+               [data-palette] makes it recompute against that element's local
+               --color-* (set by the [data-palette='id'] blocks above) — so a palette
+               specimen re-skins exactly as the shipped app does. ── */
+            [data-palette] {
+              --el-page-bg: var(--color-background);
+              --el-page-text: var(--color-foreground);
+              --el-page-text-muted: var(--color-muted-foreground);
+              --el-text: var(--color-foreground);
+              --el-text-strong: var(--color-charcoal);
+              --el-text-secondary: var(--color-slate);
+              --el-text-muted: var(--color-muted-foreground);
+              --el-text-tertiary: var(--color-steel);
+              --el-text-faint: var(--color-stone);
+              --el-text-inverted: var(--color-background);
+              --el-accent: var(--color-primary-fill);
+              --el-accent-text: var(--color-primary-foreground);
+              --el-accent-on-surface: var(--color-primary);
+              --el-accent-pressed: var(--color-primary-pressed);
+              --el-highlight: var(--color-accent);
+              --el-surface: var(--color-surface);
+              --el-surface-soft: var(--color-surface-soft);
+              --el-surface-text: var(--color-foreground);
+              --el-muted: var(--color-muted);
+              --el-border: var(--color-border);
+              --el-border-soft: var(--color-hairline-soft);
+              --el-border-strong: var(--color-hairline-strong);
+              --el-link: var(--color-link);
+              --el-link-pressed: var(--color-link-pressed);
+              --el-danger: var(--color-destructive);
+              --el-danger-text: var(--color-destructive-foreground);
+              --el-success: var(--color-success);
+              --el-warning: var(--color-warning);
+              --el-info: var(--color-info);
+              --el-tint-peach: var(--color-tint-peach);
+              --el-tint-rose: var(--color-tint-rose);
+              --el-tint-mint: var(--color-tint-mint);
+              --el-tint-lavender: var(--color-tint-lavender);
+              --el-tint-sky: var(--color-tint-sky);
+              --el-tint-yellow: var(--color-tint-yellow);
+              --el-type-story: var(--color-accent-green);
+              --el-type-task: var(--color-info);
+              --el-type-subtask: var(--color-accent-teal);
+              --el-type-epic: var(--color-accent);
+              /* work-item TYPE hues (the work-nature palette) — match lib/issues/workItemTypeMeta.ts */
+              --el-type-code: var(--color-info);
+              --el-type-design: var(--color-accent);
+              --el-type-test: var(--color-success);
+              --el-type-content: var(--color-accent-teal);
+              --el-type-research: var(--color-primary);
+              --el-type-review: var(--color-accent-orange);
+              --el-type-deploy: var(--color-destructive);
+              --el-type-manual: var(--color-stone);
+              --el-hero-wash-a: var(--color-tint-lavender);
+              --el-hero-wash-b: var(--color-tint-sky);
+              --el-code-bg: var(--color-muted);
+              --el-code-text: var(--color-charcoal);
+            }
+
+      /* ── Mock-only nested-theme fix for the SIDEBAR tokens ────────────────
+         --el-sidebar-* are declared on :root as var(--color-*). This mock puts
+         data-theme / data-palette on the nested .stage (so one page shows light
+         + dark panels), NOT on <html> — so those root-resolved tokens don't
+         recompute for the nested scope and the rail would keep the light/base
+         value (the onboarding [data-palette] fix re-emits the PAGE tokens but has
+         no sidebar tokens). Re-emit them scoped to the nested axis attrs so the
+         rail re-skins WITH the page. In the real app data-theme/palette sit on
+         <html>, so this block is unnecessary there. ── */
+      [data-theme],
+      [data-palette] {
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>Appearance settings — Theme × Style × Palette × Type</h1>
+      <p>
+        Story 7.3 · 7.3.57 / MOTIR-1074. Motir dogfoods its own three-axis design system: the user
+        themes the Motir app itself. Because the look applies instantly to Motir, the whole page
+        re-skins — so the page is designed rich enough to BE the showcase (controls + a real Motir
+        slice), no separate preview. Three panels: default, a changed state (whole page transforms),
+        and dark.
+      </p>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
+        </g>
+        <g
+          id="i-palette"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"
+          />
+        </g>
+        <g
+          id="i-bell"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+          <path
+            d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+          />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-sun"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2" />
+          <path d="M12 20v2" />
+          <path d="m4.93 4.93 1.41 1.41" />
+          <path d="m17.66 17.66 1.41 1.41" />
+          <path d="M2 12h2" />
+          <path d="M20 12h2" />
+          <path d="m6.34 17.66-1.41 1.41" />
+          <path d="m19.07 4.93-1.41 1.41" />
+        </g>
+        <g
+          id="i-moon"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+        </g>
+        <g
+          id="i-monitor"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="3" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-square-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
+        </g>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="panel-label">
+      1 · Default — factory defaults (Theme: System · Warm Editorial · Motir · Motir). The
+      account-settings rail with <b>Appearance ACTIVE</b> (the reserved "Soon" slot flipped to a
+      real entry — the access path), the four axis controls, and the showcase band: a real Motir
+      slice (work-item card, status pills, buttons, search, type specimen, palette swatches) that
+      re-skins with every pick.
+    </div>
+    <div class="panel">
+      <div class="stage" data-theme="light">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span><span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Appearance</h2>
+              <p class="sub">
+                Theme Motir itself. Motir is built on a three-axis design system — style × palette ×
+                typography, plus light/dark — and this is that system turned on itself: pick below
+                and the <b>whole app re-skins live</b>, this page included. The look is personal to
+                your account and applied on every device you sign in on; there's nothing to save.
+              </p>
+            </div>
+
+            <div class="card controls">
+              <div class="card-head">
+                <div>
+                  <h3>Theme &amp; design</h3>
+                  <p class="hsub">
+                    Four independent axes. Everything on this page updates the instant you choose.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Theme</span
+                    ><span class="af-help">Light, dark, or follow your device.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Theme">
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
+                    >
+                    <span class="seg on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
+                    >
+                  </div>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Style</span
+                    ><span class="af-help"
+                      >Shape &amp; feel — silhouette, elevation, density, motion.</span
+                    >
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Style">
+                    <span class="pick is-on"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Warm
+                      Editorial</span
+                    >
+                    <span class="pick">Soft / Playful</span>
+                    <span class="pick">Swiss / Minimal-Flat</span>
+                    <span class="pick">Neo-Brutalism</span>
+                    <span class="pick">Glassmorphism</span>
+                    <span class="pick">Cybercore / Y2K</span>
+                  </div>
+                  <p class="axis-note">
+                    <b>Warm Editorial.</b> Thoughtful, warm, technical-but-not-cold, slightly
+                    editorial.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Palette</span
+                    ><span class="af-help">Colour — surfaces, ink, accent and tints.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Palette">
+                    <span class="pick is-on"
+                      ><span class="sw" style="background: #5645d4"></span>Motir</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #37352f"></span>Graphite</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #6440d6"></span>Spectrum</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Motir.</b> Warm and editorial — cream surfaces, charcoal ink, a purple
+                    primary, pastel tints.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Typography</span
+                    ><span class="af-help">Typeface pairing — headline, body and mono roles.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Typography">
+                    <span class="pick is-on" style="font-family: 'Source Serif 4', Georgia, serif"
+                      >Motir</span
+                    >
+                    <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
+                    <span class="pick" style="font-family: 'JetBrains Mono', monospace"
+                      >Motir Mono</span
+                    >
+                    <span class="pick" style="font-family: 'Space Grotesk', sans-serif"
+                      >Grotesk</span
+                    >
+                    <span class="pick" style="font-family: 'Fraunces', serif">Editorial</span>
+                    <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
+                      >Mono-Technical</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Motir.</b> Source Serif 4 headlines · Inter body · JetBrains Mono meta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="showcase" aria-label="Live look">
+              <div class="sc-eyebrow">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your look —
+                live across Motir
+              </div>
+              <div class="sc-grid">
+                <div class="card sc-item" data-surface="card">
+                  <div class="sc-top">
+                    <span class="kind"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-square-check" /></svg>
+                      PROD-128</span
+                    >
+                    <span class="pill pill-accent">In review</span>
+                  </div>
+                  <h3 class="sc-title">Rebuild the billing flow</h3>
+                  <p class="sc-body">
+                    Move invoicing onto the new ledger so teams get paid on time — headlines, body
+                    and labels all wear the type, colour and shape you pick.
+                  </p>
+                  <div class="sc-labels">
+                    <span class="pill pill-sky">Frontend</span>
+                    <span class="pill pill-peach">Billing</span>
+                    <span class="pill pill-rose">P1</span>
+                  </div>
+                  <div class="sc-meta">5 PTS · DUE JUN 30 · ZHU YUE</div>
+                  <div class="sc-acts">
+                    <span class="btn btn-primary btn-sm">Comment</span>
+                    <span class="btn btn-secondary btn-sm">Assign</span>
+                    <span class="icon-btn"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-more" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="sc-side">
+                  <div class="card" data-surface="card">
+                    <div class="sc-search" data-surface="input">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                      work items…
+                    </div>
+                    <div class="sc-list">
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                      <div class="sc-row">
+                        <span class="dot alt"></span><span class="bar short"></span>
+                      </div>
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                    </div>
+                  </div>
+                  <div class="pal-swatches" title="palette roles">
+                    <span style="background: var(--el-accent)"></span>
+                    <span style="background: var(--el-tint-rose)"></span>
+                    <span style="background: var(--el-tint-mint)"></span>
+                    <span style="background: var(--el-tint-sky)"></span>
+                    <span style="background: var(--el-tint-peach)"></span>
+                    <span style="background: var(--el-text)"></span>
+                  </div>
+                  <div class="type-spec" data-surface="card">
+                    <div class="ts-aa">Ag</div>
+                    <div class="ts-h">Ship the roadmap</div>
+                    <div class="ts-b">Body copy renders in the pairing's body face.</div>
+                    <div class="ts-m">PROD-128 · IN REVIEW · 5 PTS</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      2 · A changed state — Light · <b>Swiss / Minimal-Flat</b> · <b>Cobalt</b> · <b>Grotesk</b>.
+      The dogfooding moment: because the look applies to Motir ITSELF, the WHOLE page transforms —
+      rail, cards, chips, buttons, pills AND the showcase: flatter 0-radius Swiss shape, cool Cobalt
+      colour, Space Grotesk headlines. The page is the preview.
+    </div>
+    <div class="panel">
+      <div
+        class="stage"
+        data-theme="light"
+        data-style="swiss-minimal-flat"
+        data-palette="cobalt"
+        data-type="grotesk"
+      >
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span><span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Appearance</h2>
+              <p class="sub">
+                Theme Motir itself. Motir is built on a three-axis design system — style × palette ×
+                typography, plus light/dark — and this is that system turned on itself: pick below
+                and the <b>whole app re-skins live</b>, this page included. The look is personal to
+                your account and applied on every device you sign in on; there's nothing to save.
+              </p>
+            </div>
+
+            <div class="card controls">
+              <div class="card-head">
+                <div>
+                  <h3>Theme &amp; design</h3>
+                  <p class="hsub">
+                    Four independent axes. Everything on this page updates the instant you choose.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Theme</span
+                    ><span class="af-help">Light, dark, or follow your device.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Theme">
+                    <span class="seg on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
+                    >
+                  </div>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Style</span
+                    ><span class="af-help"
+                      >Shape &amp; feel — silhouette, elevation, density, motion.</span
+                    >
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Style">
+                    <span class="pick">Warm Editorial</span>
+                    <span class="pick">Soft / Playful</span>
+                    <span class="pick is-on"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Swiss /
+                      Minimal-Flat</span
+                    >
+                    <span class="pick">Neo-Brutalism</span>
+                    <span class="pick">Glassmorphism</span>
+                    <span class="pick">Cybercore / Y2K</span>
+                  </div>
+                  <p class="axis-note">
+                    <b>Swiss / Minimal-Flat.</b> International-typographic, structural, calm — flat,
+                    sharp, gridded.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Palette</span
+                    ><span class="af-help">Colour — surfaces, ink, accent and tints.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Palette">
+                    <span class="pick"
+                      ><span class="sw" style="background: #5645d4"></span>Motir</span
+                    >
+                    <span class="pick is-on"
+                      ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #37352f"></span>Graphite</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #6440d6"></span>Spectrum</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Cobalt.</b> Cool and institutional — slate-cool surfaces, a confident cobalt
+                    primary.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Typography</span
+                    ><span class="af-help">Typeface pairing — headline, body and mono roles.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Typography">
+                    <span class="pick" style="font-family: 'Source Serif 4', Georgia, serif"
+                      >Motir</span
+                    >
+                    <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
+                    <span class="pick" style="font-family: 'JetBrains Mono', monospace"
+                      >Motir Mono</span
+                    >
+                    <span class="pick is-on" style="font-family: 'Space Grotesk', sans-serif"
+                      >Grotesk</span
+                    >
+                    <span class="pick" style="font-family: 'Fraunces', serif">Editorial</span>
+                    <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
+                      >Mono-Technical</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Grotesk.</b> Space Grotesk headlines · Inter body · JetBrains Mono meta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="showcase" aria-label="Live look">
+              <div class="sc-eyebrow">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your look —
+                live across Motir
+              </div>
+              <div class="sc-grid">
+                <div class="card sc-item" data-surface="card">
+                  <div class="sc-top">
+                    <span class="kind"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-square-check" /></svg>
+                      PROD-128</span
+                    >
+                    <span class="pill pill-accent">In review</span>
+                  </div>
+                  <h3 class="sc-title">Rebuild the billing flow</h3>
+                  <p class="sc-body">
+                    Move invoicing onto the new ledger so teams get paid on time — headlines, body
+                    and labels all wear the type, colour and shape you pick.
+                  </p>
+                  <div class="sc-labels">
+                    <span class="pill pill-sky">Frontend</span>
+                    <span class="pill pill-peach">Billing</span>
+                    <span class="pill pill-rose">P1</span>
+                  </div>
+                  <div class="sc-meta">5 PTS · DUE JUN 30 · ZHU YUE</div>
+                  <div class="sc-acts">
+                    <span class="btn btn-primary btn-sm">Comment</span>
+                    <span class="btn btn-secondary btn-sm">Assign</span>
+                    <span class="icon-btn"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-more" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="sc-side">
+                  <div class="card" data-surface="card">
+                    <div class="sc-search" data-surface="input">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                      work items…
+                    </div>
+                    <div class="sc-list">
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                      <div class="sc-row">
+                        <span class="dot alt"></span><span class="bar short"></span>
+                      </div>
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                    </div>
+                  </div>
+                  <div class="pal-swatches" title="palette roles">
+                    <span style="background: var(--el-accent)"></span>
+                    <span style="background: var(--el-tint-rose)"></span>
+                    <span style="background: var(--el-tint-mint)"></span>
+                    <span style="background: var(--el-tint-sky)"></span>
+                    <span style="background: var(--el-tint-peach)"></span>
+                    <span style="background: var(--el-text)"></span>
+                  </div>
+                  <div class="type-spec" data-surface="card">
+                    <div class="ts-aa">Ag</div>
+                    <div class="ts-h">Ship the roadmap</div>
+                    <div class="ts-b">Body copy renders in the pairing's body face.</div>
+                    <div class="ts-m">PROD-128 · IN REVIEW · 5 PTS</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-label">
+      3 · Dark + a changed state — <b>Dark</b> · <b>Soft / Playful</b> · <b>Evergreen</b> ·
+      <b>Editorial</b>. Dark-mode parity across the whole area; rounded Soft/Playful geometry, an
+      emerald Evergreen palette, Fraunces display headlines. Every tint, accent and face flips
+      through the token layer and stays AA.
+    </div>
+    <div class="panel">
+      <div
+        class="stage"
+        data-theme="dark"
+        data-style="soft-playful"
+        data-palette="evergreen"
+        data-type="editorial"
+      >
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row soon">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span
+                  ><span class="nl">Profile</span><span class="soon-chip">Soon</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span
+                  ><span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span
+                  ><span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span
+                  ><span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span
+                  ><span class="nl">API tokens</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Appearance</h2>
+              <p class="sub">
+                Theme Motir itself. Motir is built on a three-axis design system — style × palette ×
+                typography, plus light/dark — and this is that system turned on itself: pick below
+                and the <b>whole app re-skins live</b>, this page included. The look is personal to
+                your account and applied on every device you sign in on; there's nothing to save.
+              </p>
+            </div>
+
+            <div class="card controls">
+              <div class="card-head">
+                <div>
+                  <h3>Theme &amp; design</h3>
+                  <p class="hsub">
+                    Four independent axes. Everything on this page updates the instant you choose.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Theme</span
+                    ><span class="af-help">Light, dark, or follow your device.</span>
+                  </div>
+                  <div class="segmented" role="group" aria-label="Theme">
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sun" /></svg>Light</span
+                    >
+                    <span class="seg on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-moon" /></svg>Dark</span
+                    >
+                    <span class="seg"
+                      ><svg viewBox="0 0 24 24"><use href="#i-monitor" /></svg>System</span
+                    >
+                  </div>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Style</span
+                    ><span class="af-help"
+                      >Shape &amp; feel — silhouette, elevation, density, motion.</span
+                    >
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Style">
+                    <span class="pick">Warm Editorial</span>
+                    <span class="pick is-on"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>Soft /
+                      Playful</span
+                    >
+                    <span class="pick">Swiss / Minimal-Flat</span>
+                    <span class="pick">Neo-Brutalism</span>
+                    <span class="pick">Glassmorphism</span>
+                    <span class="pick">Cybercore / Y2K</span>
+                  </div>
+                  <p class="axis-note">
+                    <b>Soft / Playful.</b> More energy — rounded, generous, gently animated.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Palette</span
+                    ><span class="af-help">Colour — surfaces, ink, accent and tints.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Palette">
+                    <span class="pick"
+                      ><span class="sw" style="background: #5645d4"></span>Motir</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #3a57cf"></span>Cobalt</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #37352f"></span>Graphite</span
+                    >
+                    <span class="pick is-on"
+                      ><span class="sw" style="background: #0c7a52"></span>Evergreen</span
+                    >
+                    <span class="pick"
+                      ><span class="sw" style="background: #6440d6"></span>Spectrum</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Evergreen.</b> Fresh and technical — an emerald primary over cooled forest
+                    neutrals.
+                  </p>
+                </div>
+                <div class="axis-field">
+                  <div class="af-head">
+                    <span class="af-name">Typography</span
+                    ><span class="af-help">Typeface pairing — headline, body and mono roles.</span>
+                  </div>
+                  <div class="chips" role="radiogroup" aria-label="Typography">
+                    <span class="pick" style="font-family: 'Source Serif 4', Georgia, serif"
+                      >Motir</span
+                    >
+                    <span class="pick" style="font-family: 'Inter', sans-serif">Motir Sans</span>
+                    <span class="pick" style="font-family: 'JetBrains Mono', monospace"
+                      >Motir Mono</span
+                    >
+                    <span class="pick" style="font-family: 'Space Grotesk', sans-serif"
+                      >Grotesk</span
+                    >
+                    <span class="pick is-on" style="font-family: 'Fraunces', serif">Editorial</span>
+                    <span class="pick" style="font-family: 'IBM Plex Mono', monospace"
+                      >Mono-Technical</span
+                    >
+                  </div>
+                  <p class="axis-note">
+                    <b>Editorial.</b> Fraunces display headlines · Inter body · JetBrains Mono meta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <section class="showcase" aria-label="Live look">
+              <div class="sc-eyebrow">
+                <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg> Your look —
+                live across Motir
+              </div>
+              <div class="sc-grid">
+                <div class="card sc-item" data-surface="card">
+                  <div class="sc-top">
+                    <span class="kind"
+                      ><svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-square-check" /></svg>
+                      PROD-128</span
+                    >
+                    <span class="pill pill-accent">In review</span>
+                  </div>
+                  <h3 class="sc-title">Rebuild the billing flow</h3>
+                  <p class="sc-body">
+                    Move invoicing onto the new ledger so teams get paid on time — headlines, body
+                    and labels all wear the type, colour and shape you pick.
+                  </p>
+                  <div class="sc-labels">
+                    <span class="pill pill-sky">Frontend</span>
+                    <span class="pill pill-peach">Billing</span>
+                    <span class="pill pill-rose">P1</span>
+                  </div>
+                  <div class="sc-meta">5 PTS · DUE JUN 30 · ZHU YUE</div>
+                  <div class="sc-acts">
+                    <span class="btn btn-primary btn-sm">Comment</span>
+                    <span class="btn btn-secondary btn-sm">Assign</span>
+                    <span class="icon-btn"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-more" /></svg
+                    ></span>
+                  </div>
+                </div>
+                <div class="sc-side">
+                  <div class="card" data-surface="card">
+                    <div class="sc-search" data-surface="input">
+                      <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+                      work items…
+                    </div>
+                    <div class="sc-list">
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                      <div class="sc-row">
+                        <span class="dot alt"></span><span class="bar short"></span>
+                      </div>
+                      <div class="sc-row"><span class="dot"></span><span class="bar"></span></div>
+                    </div>
+                  </div>
+                  <div class="pal-swatches" title="palette roles">
+                    <span style="background: var(--el-accent)"></span>
+                    <span style="background: var(--el-tint-rose)"></span>
+                    <span style="background: var(--el-tint-mint)"></span>
+                    <span style="background: var(--el-tint-sky)"></span>
+                    <span style="background: var(--el-tint-peach)"></span>
+                    <span style="background: var(--el-text)"></span>
+                  </div>
+                  <div class="type-spec" data-surface="card">
+                    <div class="ts-aa">Ag</div>
+                    <div class="ts-h">Ship the roadmap</div>
+                    <div class="ts-b">Body copy renders in the pairing's body face.</div>
+                    <div class="ts-m">PROD-128 · IN REVIEW · 5 PTS</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
