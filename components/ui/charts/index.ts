@@ -14,6 +14,9 @@ export type { LineChartProps, LineSeries, ChartAnnotation, ReferenceLine } from 
 export { BarChart } from './BarChart';
 export type { BarChartProps, BarSeries, BarGroup, BarReferenceLine } from './BarChart';
 
+export { HBarChart } from './HBarChart';
+export type { HBarChartProps, HBarDatum } from './HBarChart';
+
 export { ChartFrame } from './ChartFrame';
 export type { ChartFrameProps, ChartFrameScales, PlotBox } from './ChartFrame';
 

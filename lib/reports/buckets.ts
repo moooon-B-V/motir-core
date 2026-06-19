@@ -92,6 +92,21 @@ export function bucketAxis(period: ReportPeriod, start: Date, end: Date): string
 }
 
 /**
+ * For each bucket key on `axis`, the instant that bucket "closes" for a
+ * point-in-time read (Subtask 8.8.13 average age): the START of the NEXT period
+ * (its exclusive upper edge), CAPPED at the window `end` so the current/last
+ * bucket measures age as-of the read instant ("now"), never a future instant.
+ * Returned aligned 1:1 with `bucketAxis(period, start, end)`. UTC, matching
+ * `date_trunc`.
+ */
+export function bucketEnds(period: ReportPeriod, axis: string[], end: Date): Date[] {
+  return axis.map((key) => {
+    const next = nextBucket(period, new Date(`${key}T00:00:00.000Z`));
+    return next.getTime() <= end.getTime() ? next : end;
+  });
+}
+
+/**
  * Validate a (period, daysBack) config — the typed 422 gate (finding #57:
  * the read is a capped grouped aggregate, never open-ended). `daysBack` must
  * be an integer in `[1, MAX_REPORT_WINDOW_DAYS]` AND the resulting axis must

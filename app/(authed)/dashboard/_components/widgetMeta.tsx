@@ -3,10 +3,12 @@ import {
   Bookmark,
   Bug,
   CircleDot,
+  Clock,
   Folder,
   Layers,
   Table,
   Tag,
+  Timer,
   TrendingUp,
   User,
   Users,
@@ -30,6 +32,9 @@ export const WIDGET_TYPE_GLYPH: Record<DashboardWidgetType, LucideIcon> = {
   filter_results: Table,
   distribution: PieChart,
   created_vs_resolved: TrendingUp,
+  average_age: Clock,
+  resolution_time: Timer,
+  workload: Users,
 };
 
 /** The eight builtin statistic types (the TOTAL statistic registry's static

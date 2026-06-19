@@ -10,10 +10,13 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { loadFilterReferents, workItemsService } from '@/lib/services/workItemsService';
 import {
+  toAverageAgeDto,
   toBurndownSeriesDto,
   toCreatedVsResolvedDto,
   toDistributionDto,
+  toResolutionTimeDto,
   toVelocityDto,
+  toWorkloadDto,
 } from '@/lib/mappers/reportsMappers';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
@@ -26,6 +29,7 @@ import {
 } from '@/lib/reports/statisticTypes';
 import {
   bucketAxis,
+  bucketEnds,
   reportWindow,
   validateReportWindow,
   type ReportPeriod,
@@ -37,14 +41,18 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { EstimationStatisticDto } from '@/lib/dto/estimation';
 import type { PagedIssueListDto } from '@/lib/dto/workItems';
 import type {
+  AverageAgeDto,
   BurndownSeriesDto,
   BurndownStatisticDto,
   CreatedVsResolvedDto,
   DistributionDto,
   ReportScopeDto,
   ReportWidgetResultDto,
+  ResolutionTimeDto,
   VelocityDto,
   VelocitySprintDto,
+  WorkloadDto,
+  WorkloadMeasureDto,
 } from '@/lib/dto/reports';
 
 // Reports service (Story 4.6) — the read-only analytics layer over the data
@@ -294,6 +302,121 @@ export const reportsService = {
         resolved: resolvedRows,
       }),
     };
+  },
+
+  /**
+   * The AVERAGE-AGE read (Story 8.8 · Subtask 8.8.13) — the point-in-time
+   * vertical-bar report behind `/reports/average-age` (and the `average_age`
+   * dashboard gadget). For each period bucket's END instant (capped at "now"),
+   * the average age in days of issues created by then and not yet resolved at
+   * that instant, reconstructed from the 1.4.6 revision trail (the SAME
+   * done-category predicate every report uses). Same scope / window / typed-state
+   * contract as {@link getCreatedVsResolved}: a malformed window is the typed 422
+   * (regardless of scope), a degraded scope returns `no_access` / `stale`.
+   * Bounded (finding #57): one grouped point-in-time query over a validated
+   * window (≤ 120 buckets).
+   */
+  async getAverageAge(
+    scope: ReportScopeDto,
+    config: { period: ReportPeriod; daysBack: number },
+    ctx: ServiceContext,
+  ): Promise<ReportWidgetResultDto<AverageAgeDto>> {
+    validateReportWindow(config.period, config.daysBack);
+
+    const resolved = await resolveReportScope(scope, ctx);
+    if (resolved.state !== 'ok') return resolved;
+
+    const { start, end } = reportWindow(new Date(), config.daysBack);
+    const axis = bucketAxis(config.period, start, end);
+    const ends = bucketEnds(config.period, axis, end);
+    const filter = await scopeAstFilter(resolved, ctx);
+    const rows = await workItemRevisionRepository.aggregateAverageAgeByBucket(
+      resolved.projectId,
+      ctx.workspaceId,
+      axis.map((key, i) => ({ key, end: ends[i]! })),
+      filter,
+    );
+
+    return {
+      state: 'ok',
+      data: toAverageAgeDto({
+        period: config.period,
+        daysBack: config.daysBack,
+        windowStart: start,
+        windowEnd: end,
+        axis,
+        rows,
+      }),
+    };
+  },
+
+  /**
+   * The RESOLUTION-TIME read (Story 8.8 · Subtask 8.8.13) — the vertical-bar
+   * report behind `/reports/resolution-time` (and the `resolution_time` gadget).
+   * Per period bucket keyed by RESOLUTION date, the average days-to-resolve over
+   * issues that entered a done-category status in that period (the 1.4.6 trail;
+   * same done predicate as every report). Same scope / window / typed-state
+   * contract as {@link getCreatedVsResolved}.
+   */
+  async getResolutionTime(
+    scope: ReportScopeDto,
+    config: { period: ReportPeriod; daysBack: number },
+    ctx: ServiceContext,
+  ): Promise<ReportWidgetResultDto<ResolutionTimeDto>> {
+    validateReportWindow(config.period, config.daysBack);
+
+    const resolved = await resolveReportScope(scope, ctx);
+    if (resolved.state !== 'ok') return resolved;
+
+    const { start, end } = reportWindow(new Date(), config.daysBack);
+    const axis = bucketAxis(config.period, start, end);
+    const filter = await scopeAstFilter(resolved, ctx);
+    const rows = await workItemRevisionRepository.aggregateResolutionTimeByBucket(
+      resolved.projectId,
+      ctx.workspaceId,
+      config.period,
+      { start, end },
+      filter,
+    );
+
+    return {
+      state: 'ok',
+      data: toResolutionTimeDto({
+        period: config.period,
+        daysBack: config.daysBack,
+        windowStart: start,
+        windowEnd: end,
+        axis,
+        rows,
+      }),
+    };
+  },
+
+  /**
+   * The WORKLOAD read (Story 8.8 · Subtask 8.8.13) — the horizontal ranked-bar
+   * report behind `/reports/workload` (and the `workload` gadget). Open
+   * (non-done-category, non-archived) work per assignee, ranked by the `measure`
+   * (story points or issue count). No time window — it is a snapshot of the
+   * CURRENT `work_item` rows (one bounded grouped query, no revision trail), so
+   * the only config is the measure. Same scope / typed-state contract as the
+   * other reads (`no_access` / `stale` on a degraded scope); no window to 422.
+   */
+  async getWorkload(
+    scope: ReportScopeDto,
+    config: { measure: WorkloadMeasureDto },
+    ctx: ServiceContext,
+  ): Promise<ReportWidgetResultDto<WorkloadDto>> {
+    const resolved = await resolveReportScope(scope, ctx);
+    if (resolved.state !== 'ok') return resolved;
+
+    const filter = await scopeAstFilter(resolved, ctx);
+    const rows = await workItemRepository.aggregateWorkloadByAssignee(
+      resolved.projectId,
+      ctx.workspaceId,
+      filter,
+    );
+
+    return { state: 'ok', data: toWorkloadDto(config.measure, rows) };
   },
 
   /**

@@ -35,6 +35,7 @@ export interface WidgetDraft {
   period: 'day' | 'week' | 'month';
   daysBack: number;
   cumulative: boolean;
+  measure: 'story_points' | 'issue_count';
 }
 
 const EMPTY_SOURCE: SourceValue = { kind: 'project', savedFilterId: null, projectId: null };
@@ -47,6 +48,7 @@ export function emptyDraft(): WidgetDraft {
     period: 'day',
     daysBack: 30,
     cumulative: false,
+    measure: 'story_points',
   };
 }
 
@@ -154,6 +156,9 @@ export function WidgetConfigModal({
   function buildConfig(): Record<string, unknown> {
     if (editorKind === 'filter_results_editor') return { pageSize: draft.pageSize };
     if (editorKind === 'distribution_editor') return { statisticType: draft.statisticType };
+    if (editorKind === 'age_report_editor')
+      return { period: draft.period, daysBack: draft.daysBack };
+    if (editorKind === 'workload_editor') return { measure: draft.measure };
     return { period: draft.period, daysBack: draft.daysBack, cumulative: draft.cumulative };
   }
 
@@ -272,6 +277,55 @@ export function WidgetConfigModal({
               label={t('cumulative')}
             />
           </>
+        ) : null}
+
+        {editorKind === 'age_report_editor' ? (
+          <>
+            <FormField label={t('period')} htmlFor="widget-period">
+              <div id="widget-period">
+                <Segmented
+                  label={t('period')}
+                  options={[
+                    { value: 'day', label: t('periodDay') },
+                    { value: 'week', label: t('periodWeek') },
+                    { value: 'month', label: t('periodMonth') },
+                  ]}
+                  value={draft.period}
+                  onChange={(period) => setDraft((d) => ({ ...d, period }))}
+                />
+              </div>
+            </FormField>
+            <FormField
+              label={t('daysBack')}
+              htmlFor="widget-daysback"
+              helperText={t('daysBackHint', { max: CREATED_VS_RESOLVED_DAYS_BACK_MAX })}
+            >
+              <Stepper
+                id="widget-daysback"
+                value={draft.daysBack}
+                min={1}
+                max={CREATED_VS_RESOLVED_DAYS_BACK_MAX}
+                step={draft.period === 'day' ? 7 : draft.period === 'week' ? 7 : 30}
+                onChange={(daysBack) => setDraft((d) => ({ ...d, daysBack }))}
+              />
+            </FormField>
+          </>
+        ) : null}
+
+        {editorKind === 'workload_editor' ? (
+          <FormField label={t('measure')} htmlFor="widget-measure">
+            <div id="widget-measure">
+              <Segmented
+                label={t('measure')}
+                options={[
+                  { value: 'story_points', label: t('measurePoints') },
+                  { value: 'issue_count', label: t('measureCount') },
+                ]}
+                value={draft.measure}
+                onChange={(measure) => setDraft((d) => ({ ...d, measure }))}
+              />
+            </div>
+          </FormField>
         ) : null}
       </div>
 

@@ -12,6 +12,34 @@ import { WIDGET_REGISTRY, WIDGET_TYPES } from '@/lib/dashboards/widgetRegistry';
 // mounts WidgetConfigModal in create mode for the chosen type's editor kind).
 
 function Thumbnail({ rendererKind }: { rendererKind: string }) {
+  if (rendererKind === 'bar') {
+    return (
+      <svg width="118" height="58" viewBox="0 0 118 58" aria-hidden>
+        <line
+          x1="6"
+          x2="112"
+          y1="22"
+          y2="22"
+          stroke="var(--el-chart-average)"
+          strokeWidth="2"
+          strokeDasharray="5 3"
+        />
+        <rect x="14" y="30" width="14" height="22" rx="2" fill="var(--el-chart-age)" />
+        <rect x="38" y="18" width="14" height="34" rx="2" fill="var(--el-chart-age)" />
+        <rect x="62" y="26" width="14" height="26" rx="2" fill="var(--el-chart-age)" />
+        <rect x="86" y="12" width="14" height="40" rx="2" fill="var(--el-chart-age)" />
+      </svg>
+    );
+  }
+  if (rendererKind === 'hbar') {
+    return (
+      <svg width="118" height="58" viewBox="0 0 118 58" aria-hidden>
+        <rect x="6" y="8" width="92" height="9" rx="2" fill="var(--el-chart-cat-1)" />
+        <rect x="6" y="24" width="66" height="9" rx="2" fill="var(--el-chart-cat-2)" />
+        <rect x="6" y="40" width="40" height="9" rx="2" fill="var(--el-chart-cat-none)" />
+      </svg>
+    );
+  }
   if (rendererKind === 'donut') {
     return (
       <svg width="58" height="58" viewBox="0 0 220 220" aria-hidden>

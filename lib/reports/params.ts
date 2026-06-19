@@ -1,6 +1,6 @@
 import { InvalidReportScopeError, InvalidReportWindowError } from '@/lib/reports/errors';
 import { isReportPeriod, type ReportPeriod } from '@/lib/reports/buckets';
-import type { ReportScopeDto } from '@/lib/dto/reports';
+import type { ReportScopeDto, WorkloadMeasureDto } from '@/lib/dto/reports';
 
 // Query-param parsers for the 6.3.2 report/widget routes (the
 // `parseSort`/`parseView` convention from lib/issues/issueListView.ts —
@@ -51,6 +51,20 @@ export function parseDaysBack(raw: string | null): number {
  * opts in — the URL-param convention for boolean toggles). */
 export function parseCumulative(raw: string | null): boolean {
   return raw === 'true';
+}
+
+/** Parse the workload `?measure=story_points|issue_count` (default
+ * `story_points` — Motir's workload unit). An unknown value is a typed 422,
+ * matching `parsePeriod` (a misconfigured widget surfaces, never silently
+ * re-defaults). */
+export function parseMeasure(raw: string | null): WorkloadMeasureDto {
+  if (raw === null) return 'story_points';
+  if (raw !== 'story_points' && raw !== 'issue_count') {
+    throw new InvalidReportWindowError(
+      `unknown measure: ${raw} (expected story_points or issue_count)`,
+    );
+  }
+  return raw;
 }
 
 /** Parse a positive-integer param (`?page=`, `?pageSize=`) — `undefined`

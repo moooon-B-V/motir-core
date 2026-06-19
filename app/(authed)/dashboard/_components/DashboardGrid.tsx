@@ -928,6 +928,8 @@ function draftFromWidget(widget: DashboardWidgetDto): WidgetDraft {
     period: (cfg.period as WidgetDraft['period']) ?? base.period,
     daysBack: typeof cfg.daysBack === 'number' ? cfg.daysBack : base.daysBack,
     cumulative: typeof cfg.cumulative === 'boolean' ? cfg.cumulative : base.cumulative,
+    measure:
+      cfg.measure === 'story_points' || cfg.measure === 'issue_count' ? cfg.measure : base.measure,
   };
 }
 

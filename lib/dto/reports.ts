@@ -230,3 +230,103 @@ export interface DistributionDto {
   total: number;
   segments: DistributionSegmentDto[];
 }
+
+// ---------------------------------------------------------------------------
+// Story 8.8 · Subtask 8.8.13 — the three "More reports" (average age /
+// resolution time / workload). Each is a registry report (the 6.3.1 widget-type
+// registry) AND a standalone report page (8.8.7 design `design/reports/`), so
+// these DTOs cross the same widget-result envelope (`ReportWidgetResultDto`).
+// ---------------------------------------------------------------------------
+
+/**
+ * One X-axis bucket of the average-age / resolution-time reports — a vertical
+ * bar. `avgDays` is the bucket's average in DAYS, `null` for an event-less
+ * bucket (the chart draws "—", never `NaN` — the 4.5.2 rule); `count` is the
+ * population the average was taken over (the data-table's secondary column —
+ * unresolved-at-period-end for average age, resolved-in-period for resolution
+ * time). The bucket-key semantics match `lib/reports/buckets.ts`
+ * (`date_trunc` — UTC day / ISO-Monday week / month-first).
+ */
+export interface ReportAgeBucketDto {
+  /** The bucket's UTC start day, `YYYY-MM-DD`. */
+  date: string;
+  avgDays: number | null;
+  count: number;
+}
+
+/**
+ * The AVERAGE-AGE read (`reportsService.getAverageAge`) — a vertical bar of how
+ * old the still-UNRESOLVED issues are, per period. For each bucket's period end
+ * (capped at the read instant for the current bucket), the average of
+ * `(periodEnd − createdAt)` over issues created by then and NOT yet in a
+ * `done`-category status at that instant (reconstructed from the 1.4.6 revision
+ * trail — an item's first done-category transition is its resolution point; the
+ * SAME done-category predicate the burndown / velocity / created-vs-resolved
+ * reports use, so every report agrees on "done"). `buckets` is the FULL axis
+ * (event-less buckets carry `avgDays: null`), oldest → newest; `windowAverage`
+ * is the mean of the non-null bucket averages (the dashed window-average line),
+ * `null` when every bucket is empty.
+ */
+export interface AverageAgeDto {
+  period: ReportPeriodDto;
+  daysBack: number;
+  /** Window start (ISO 8601, UTC midnight `daysBack - 1` days before `end`). */
+  windowStart: string;
+  /** Window end (ISO 8601 — the read instant). */
+  windowEnd: string;
+  buckets: ReportAgeBucketDto[];
+  windowAverage: number | null;
+}
+
+/**
+ * The RESOLUTION-TIME read (`reportsService.getResolutionTime`) — a vertical bar
+ * of how long issues took to resolve, per period keyed by RESOLUTION date. For
+ * each bucket, the average of `(resolvedAt − createdAt)` over issues that
+ * entered a `done`-category status in that period; `resolvedAt` is that
+ * done-category transition from the 1.4.6 revision trail (an item resolved,
+ * reopened, then resolved again counts once per resolution — "issues that
+ * entered a done-category status in that period"). Same axis/`windowAverage`
+ * conventions as {@link AverageAgeDto}.
+ */
+export interface ResolutionTimeDto {
+  period: ReportPeriodDto;
+  daysBack: number;
+  windowStart: string;
+  windowEnd: string;
+  buckets: ReportAgeBucketDto[];
+  windowAverage: number | null;
+}
+
+/** The workload measure — story points (Motir's workload unit; Jira's
+ * time-field maps to this) or a raw issue count. The horizontal-bar lengths +
+ * the data table's primary column key off it. */
+export type WorkloadMeasureDto = 'story_points' | 'issue_count';
+
+/**
+ * One assignee row of the workload report — a horizontal bar. `assigneeId`/
+ * `name` are `null` for the unassigned ("None") bucket (the UI labels it). Both
+ * the `points` (summed `storyPoints`, unestimated counting 0) and `count`
+ * (number of open issues) are carried so the Measure toggle is a client-side
+ * re-rank with no refetch.
+ */
+export interface WorkloadAssigneeDto {
+  assigneeId: string | null;
+  name: string | null;
+  points: number;
+  count: number;
+}
+
+/**
+ * The WORKLOAD read (`reportsService.getWorkload`) — open (non-`done`-category,
+ * non-archived) work per assignee, ranked. `assignees` is sorted DESCENDING by
+ * the active `measure`, with the unassigned ("None") bucket ALWAYS LAST (the
+ * design's neutral bucket). One bounded grouped query over current `work_item`
+ * rows — no revision trail. Empty scope → `{ assignees: [], totals 0 }` (never
+ * `NaN`).
+ */
+export interface WorkloadDto {
+  measure: WorkloadMeasureDto;
+  assignees: WorkloadAssigneeDto[];
+  totalPoints: number;
+  totalCount: number;
+}

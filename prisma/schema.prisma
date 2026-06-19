@@ -2598,6 +2598,9 @@ enum DashboardWidgetType {
   filter_results
   distribution
   created_vs_resolved
+  average_age
+  resolution_time
+  workload
 
   @@map("dashboard_widget_type")
 }

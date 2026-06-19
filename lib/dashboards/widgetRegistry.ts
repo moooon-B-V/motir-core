@@ -58,8 +58,22 @@ export interface CreatedVsResolvedConfig {
   daysBack: number;
   cumulative: boolean;
 }
+/** The average-age + resolution-time reports share a (period, daysBack) config
+ * — the same vertical-bar-over-a-window shape, no cumulative toggle. */
+export interface AgeReportConfig {
+  period: 'day' | 'week' | 'month';
+  daysBack: number;
+}
+export interface WorkloadConfig {
+  measure: 'story_points' | 'issue_count';
+}
 
-export type WidgetConfig = FilterResultsConfig | DistributionConfig | CreatedVsResolvedConfig;
+export type WidgetConfig =
+  | FilterResultsConfig
+  | DistributionConfig
+  | CreatedVsResolvedConfig
+  | AgeReportConfig
+  | WorkloadConfig;
 
 /** One registry entry — the TOTAL contract every widget type carries. */
 export interface WidgetTypeDefinition {
@@ -71,11 +85,19 @@ export interface WidgetTypeDefinition {
    * InvalidDashboardWidgetConfigError when not exactly one id is set. */
   resolveDataSource(source: WidgetSourceInput): WidgetSourceDescriptor;
   /** The 6.3.5 renderer this type mounts (the 6.3.3 design's widget-body
-   * vocabulary). */
-  rendererKind: 'issue_table' | 'donut' | 'difference_area';
+   * vocabulary). Subtask 8.8.13 adds `bar` (average-age + resolution-time
+   * vertical bars) and `hbar` (workload horizontal ranked bars). */
+  rendererKind: 'issue_table' | 'donut' | 'difference_area' | 'bar' | 'hbar';
   /** The 6.3.5 config-panel this type opens (the 6.3.3 design's
-   * config-panel vocabulary). */
-  editorKind: 'filter_results_editor' | 'distribution_editor' | 'created_vs_resolved_editor';
+   * config-panel vocabulary). Subtask 8.8.13 adds `age_report_editor` (the
+   * shared period/days-back panel for average-age + resolution-time) and
+   * `workload_editor` (the measure toggle). */
+  editorKind:
+    | 'filter_results_editor'
+    | 'distribution_editor'
+    | 'created_vs_resolved_editor'
+    | 'age_report_editor'
+    | 'workload_editor';
 }
 
 function asRecord(raw: unknown, type: string): Record<string, unknown> {
@@ -226,6 +248,76 @@ const createdVsResolved: WidgetTypeDefinition = {
   },
 };
 
+/** Parse + validate a (period, daysBack) config — the shared core of
+ * created-vs-resolved and the 8.8.13 age reports (same window + bucket-cap
+ * rule). The `type` label personalizes the error messages. */
+function parsePeriodWindow(
+  raw: unknown,
+  type: string,
+): { period: 'day' | 'week' | 'month'; daysBack: number } {
+  const rec = asRecord(raw, type);
+  rejectUnknownKeys(rec, ['period', 'daysBack'], type);
+  const period = rec.period === undefined ? 'day' : rec.period;
+  if (period !== 'day' && period !== 'week' && period !== 'month') {
+    throw new InvalidDashboardWidgetConfigError(
+      `${type}: \`period\` must be "day", "week", or "month".`,
+    );
+  }
+  const daysBack =
+    rec.daysBack === undefined
+      ? 30
+      : parseIntInRange(rec.daysBack, 'daysBack', type, 1, CREATED_VS_RESOLVED_DAYS_BACK_MAX);
+  const bucketSpan = period === 'day' ? 1 : period === 'week' ? 7 : 30;
+  if (Math.ceil(daysBack / bucketSpan) > CREATED_VS_RESOLVED_BUCKETS_MAX) {
+    throw new InvalidDashboardWidgetConfigError(
+      `${type}: \`daysBack\` of ${daysBack} exceeds ${CREATED_VS_RESOLVED_BUCKETS_MAX} "${period}" buckets — widen the period or narrow the window.`,
+    );
+  }
+  return { period, daysBack };
+}
+
+/** The average-age + resolution-time reports (Subtask 8.8.13) — a vertical bar
+ * over a (period, daysBack) window. Two registry types sharing one config
+ * parser + renderer (`bar`) + editor (`age_report_editor`); they differ only in
+ * the read the service runs and the chart's colour token. */
+const averageAge: WidgetTypeDefinition = {
+  type: 'average_age',
+  rendererKind: 'bar',
+  editorKind: 'age_report_editor',
+  resolveDataSource: requireExactlyOneSource,
+  parseConfig(raw): AgeReportConfig {
+    return parsePeriodWindow(raw, 'average_age');
+  },
+};
+
+const resolutionTime: WidgetTypeDefinition = {
+  type: 'resolution_time',
+  rendererKind: 'bar',
+  editorKind: 'age_report_editor',
+  resolveDataSource: requireExactlyOneSource,
+  parseConfig(raw): AgeReportConfig {
+    return parsePeriodWindow(raw, 'resolution_time');
+  },
+};
+
+const workload: WidgetTypeDefinition = {
+  type: 'workload',
+  rendererKind: 'hbar',
+  editorKind: 'workload_editor',
+  resolveDataSource: requireExactlyOneSource,
+  parseConfig(raw): WorkloadConfig {
+    const rec = asRecord(raw, 'workload');
+    rejectUnknownKeys(rec, ['measure'], 'workload');
+    const measure = rec.measure === undefined ? 'story_points' : rec.measure;
+    if (measure !== 'story_points' && measure !== 'issue_count') {
+      throw new InvalidDashboardWidgetConfigError(
+        'workload: `measure` must be "story_points" or "issue_count".',
+      );
+    }
+    return { measure };
+  },
+};
+
 /** The registry — TOTAL over `DashboardWidgetType` (the `satisfies` clause
  * makes a missing enum value a compile error; the enumeration test makes it
  * a runtime failure too). */
@@ -233,6 +325,9 @@ export const WIDGET_REGISTRY = {
   filter_results: filterResults,
   distribution,
   created_vs_resolved: createdVsResolved,
+  average_age: averageAge,
+  resolution_time: resolutionTime,
+  workload,
 } as const satisfies Record<DashboardWidgetType, WidgetTypeDefinition>;
 
 /** Every registered type, for enumeration (tests, the 6.3.5 add-picker). */

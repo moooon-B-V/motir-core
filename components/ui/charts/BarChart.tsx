@@ -38,6 +38,10 @@ export interface BarChartProps {
   referenceLine?: BarReferenceLine;
   /** Draw the numeric value above each bar (default true — read as text). */
   valueLabels?: boolean;
+  /** Format a bar's value label (default `String(value)`). Receives the value
+   * plus the (group, series) indices so a report can render "—" for an
+   * event-less bucket instead of a misleading "0" (the 4.5.2 rule). */
+  valueFormat?: (value: number, groupIndex: number, seriesIndex: number) => string;
   width?: number;
   height?: number;
   margin?: Partial<ChartMargin>;
@@ -67,6 +71,7 @@ export function BarChart({
   ariaLabel,
   referenceLine,
   valueLabels = true,
+  valueFormat,
   width = 600,
   height = 300,
   margin,
@@ -136,7 +141,7 @@ export function BarChart({
                               fill={s.color}
                               textAnchor="middle"
                             >
-                              {value}
+                              {valueFormat ? valueFormat(value, gi, si) : value}
                             </text>
                           )}
                         </g>

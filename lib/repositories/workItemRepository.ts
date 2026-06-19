@@ -2092,6 +2092,54 @@ export const workItemRepository = {
   },
 
   /**
+   * The WORKLOAD aggregate (Story 8.8 · Subtask 8.8.13): one bounded GROUP-BY
+   * over the scoped, non-archived, NON-triage, OPEN (current status NOT in a
+   * `done`-category) `work_item` rows, per `assigneeId` — both the summed
+   * `storyPoints` (an unestimated item contributes 0, never `NaN`) and the issue
+   * COUNT, so the Measure toggle (story points ↔ issue count) is a client re-rank
+   * with no refetch. The unassigned bucket is the `NULL` `assigneeId` row
+   * (LEFT-joined name `NULL` — the UI's neutral "None"). "Done" resolves like
+   * every report: join `workflow_status` on the item's CURRENT status key and
+   * read `category = 'done'` (a `NULL` join — a status with no matching row —
+   * counts as open, never silently dropped). The optional compiled FilterAST
+   * (the 6.2 saved-filter scope) narrows the set; a project scope passes none.
+   * `workspaceId` gates the read (finding #26). Bounded by the team size
+   * (segments, never items — finding #57). Read-only path → `db` singleton.
+   */
+  async aggregateWorkloadByAssignee(
+    projectId: string,
+    workspaceId: string,
+    filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+  ): Promise<
+    Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
+  > {
+    const astSql = filter?.ast
+      ? compileFilterConditionsSql(filter.ast, filter.referents)
+      : Prisma.sql`TRUE`;
+    return db.$queryRaw<
+      Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
+    >`
+      SELECT
+        w."assigneeId"                          AS "assigneeId",
+        au."name"                               AS "name",
+        COALESCE(SUM(w."storyPoints"), 0)::float8 AS "points",
+        COUNT(*)::int                           AS "count"
+      FROM "work_item" w
+      LEFT JOIN "user" au ON au."id" = w."assigneeId"
+      LEFT JOIN "workflow_status" cs
+        ON cs."project_id" = w."projectId"
+       AND cs."key" = w."status"
+      WHERE w."projectId" = ${projectId}
+        AND w."workspaceId" = ${workspaceId}
+        AND w."archivedAt" IS NULL
+        AND ${notInTriageSql('w')}
+        AND (cs."category" IS NULL OR cs."category" <> 'done')
+        AND (${astSql})
+      GROUP BY 1, 2
+      ORDER BY "points" DESC, "count" DESC, 2 ASC NULLS LAST, 1 ASC NULLS LAST`;
+  },
+
+  /**
    * Resolve the nearest ANCESTOR-EPIC id for each of `itemIds` (the loaded
    * board page) — the per-card half of the epic group-by, so the client never
    * re-derives lane membership. Same upward recursive walk as
