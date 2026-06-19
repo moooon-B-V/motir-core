@@ -1397,8 +1397,13 @@
 }
 
 [data-type='motir-mono'] {
-  /* Mono headlines — re-point the editorial serif role at the mono stack. */
+  /* Mono throughout — re-point BOTH the headline (serif) role AND the body/UI
+     (sans) role at the mono stack, so the WHOLE app (nav, header, buttons,
+     content) re-types to a code-native monospace voice, not just headlines (Yue,
+     2026-06-19: the type axis must re-type the whole UI, chrome included). Meta
+     already is mono. ONLY --font-* tokens (the disjointness guard). */
   --font-serif: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-sans: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 /* ── Palette: Spectrum (data-palette="spectrum") — Subtask 7.3.52 ───────────
@@ -1541,13 +1546,15 @@
 }
 
 [data-type='grotesk'] {
-  /* Grotesk (7.3.54) — geometric / neo-grotesque sans headlines. Re-point the
-     editorial-serif headline role at Space Grotesk (loaded in app/layout.tsx as
-     --font-grotesk-source). Body stays Inter (--font-sans) and meta stays
-     JetBrains Mono (--font-mono) — the pairing changes the headline FACE, the
-     defining move. ONLY font tokens here (the disjointness guard): no colour
-     (--el / --color) or shape (--radius / --spacing / --shadow / --height). */
+  /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
+     BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk
+     (loaded in app/layout.tsx as --font-grotesk-source), so the WHOLE app (nav,
+     header, buttons, content) re-types — Space Grotesk reads cleanly as a UI sans
+     (Yue, 2026-06-19: the type axis must re-type the whole UI, chrome included).
+     Meta stays JetBrains Mono (--font-mono). ONLY font tokens here (the
+     disjointness guard): no colour (--el / --color) or shape token. */
   --font-serif: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-grotesk-source), ui-sans-serif, system-ui, sans-serif;
 }
 
 [data-type='editorial'] {
@@ -1563,14 +1570,17 @@
 
 [data-type='mono-technical'] {
   /* Mono-Technical (7.3.56) — a precise, developer-grade pairing. IBM Plex Mono
-     dresses BOTH the headline role (--font-serif) AND the meta/code role
-     (--font-mono); the body (--font-sans) stays the neutral Inter base. The
-     headline + meta sharing one technical mono voice is what distinguishes this
-     from motir-mono (JetBrains-Mono headlines only). Only --font-* role tokens
-     are touched — colour (--el/--color) and shape (--radius/--spacing) are the
-     other two, independent axes (the disjointness guard). */
+     dresses the headline role (--font-serif), the meta/code role (--font-mono)
+     AND the body/UI role (--font-sans), so the WHOLE app (nav, header, buttons,
+     content) re-types to one technical mono voice (Yue, 2026-06-19: the type axis
+     must re-type the whole UI, chrome included). Sharing the technical mono
+     everywhere is what distinguishes this from motir-mono (which uses the
+     JetBrains mono stack). Only --font-* role tokens are touched — colour
+     (--el/--color) and shape (--radius/--spacing) are the other two, independent
+     axes (the disjointness guard). */
   --font-serif: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
   --font-mono: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
+  --font-sans: var(--font-mono-technical-source, ui-monospace), 'SF Mono', Menlo, monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

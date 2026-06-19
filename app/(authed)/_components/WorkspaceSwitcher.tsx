@@ -100,7 +100,10 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
             rightIcon={<ChevronDown className="h-4 w-4" />}
             aria-label={t('workspaceSwitcher.switch')}
           >
-            <span className="max-w-[24ch] truncate">
+            {/* font-serif: the workspace name is a header IDENTITY label — headline
+                role so the `data-type` axis re-types the header chrome (see
+                ProjectSwitcher). */}
+            <span className="max-w-[24ch] truncate font-serif">
               {active?.name ?? t('workspaceSwitcher.select')}
             </span>
           </Button>

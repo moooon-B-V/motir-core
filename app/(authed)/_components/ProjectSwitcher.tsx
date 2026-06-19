@@ -87,7 +87,12 @@ export function ProjectSwitcher({
                   size={22}
                 />
               ) : null}
-              <span className="min-w-0 flex-1 truncate text-left">
+              {/* font-serif: the project name is the left-nav IDENTITY label, so
+                  it wears the headline (`--font-serif`) role — the one role the
+                  `data-type` axis re-points — making the type axis visibly re-type
+                  the chrome, not just content (matches the StyleVignette nav
+                  brand). Nav ITEM labels stay sans. */}
+              <span className="min-w-0 flex-1 truncate text-left font-serif">
                 {active?.name ?? t('projectSwitcher.none')}
               </span>
               {isArchived ? (

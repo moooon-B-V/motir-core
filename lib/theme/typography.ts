@@ -35,7 +35,7 @@
  * payload and carry NO new-typeface design decision:
  *   - `motir`      — the base: editorial serif headlines over a sans body.
  *   - `motir-sans` — all-sans (Inter headlines); reproduces the Swiss look.
- *   - `motir-mono` — mono headlines; reproduces the Neo-Brutalism / Cybercore look.
+ *   - `motir-mono` — mono THROUGHOUT (headlines + body/UI); a code-native UI.
  * `motir` is the base — like the `motir` palette / `warm-editorial` style it
  * needs NO `[data-type]` override block; the base `--font-*` tokens already are
  * it.
@@ -43,11 +43,21 @@
  * ── New-typeface pairings (Grotesk / Editorial / Mono-Technical, 7.3.54–56) ──
  * Each adds a real type-design decision and loads its own next/font face(s),
  * re-pointing a role in its own `[data-type]` block:
- *   - `grotesk` (7.3.54)        — Space Grotesk headlines over the Inter body.
+ *   - `grotesk` (7.3.54)        — Space Grotesk THROUGHOUT (headlines + body/UI).
  *   - `editorial` (7.3.55)      — Fraunces display-serif headlines over the Inter
  *     body; a magazine, considered pairing (one new face — Inter + JetBrains reused).
- *   - `mono-technical` (7.3.56) — IBM Plex Mono headlines + meta over an Inter
- *     body; a precise, developer-grade pairing (one new face — Inter reused).
+ *     Body STAYS Inter — a display serif is unreadable as UI, so this pairing
+ *     re-types headlines only (the legibility exception to whole-UI re-typing).
+ *   - `mono-technical` (7.3.56) — IBM Plex Mono THROUGHOUT (headlines + body/UI +
+ *     meta); a precise, developer-grade UI (one new face — Inter reused for nothing
+ *     now, kept as the ultimate fallback).
+ *
+ * ── Whole-UI re-typing (Yue, 2026-06-19) ────────────────────────────────
+ * A type pairing re-types the WHOLE app, chrome included (nav, header, buttons),
+ * not just headlines: a pairing whose signature face reads as a UI sans/mono
+ * (`grotesk`, `motir-mono`, `mono-technical`) ALSO re-points the body/UI role
+ * (`--font-sans`) in its `[data-type]` block. The display-serif `editorial` and
+ * the all-Inter `motir` / `motir-sans` keep the Inter body for legibility.
  * Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block (its
  * face loaded in `app/layout.tsx`) + its `docs/typography/<id>.md`.
  */
@@ -93,16 +103,15 @@ export const TYPE_REGISTRY = {
   'motir-mono': {
     id: 'motir-mono',
     name: 'Motir Mono',
-    tagline: 'Monospace headlines over a sans body — technical, code-native.',
-    faces: 'JetBrains Mono headlines · Inter body.',
+    tagline: 'Monospace throughout — a code-native UI, headlines, body and all.',
+    faces: 'JetBrains Mono headlines + body/UI + meta.',
     designDoc: 'docs/typography/motir-mono.md',
   },
   grotesk: {
     id: 'grotesk',
     name: 'Grotesk',
-    tagline:
-      'Geometric neo-grotesque headlines over a clean sans body — tight, confident, product-y.',
-    faces: 'Space Grotesk headlines · Inter body · JetBrains Mono meta.',
+    tagline: 'Geometric neo-grotesque across the whole UI — tight, confident, product-y.',
+    faces: 'Space Grotesk headlines + body/UI · JetBrains Mono meta.',
     designDoc: 'docs/typography/grotesk.md',
   },
   editorial: {
@@ -115,9 +124,8 @@ export const TYPE_REGISTRY = {
   'mono-technical': {
     id: 'mono-technical',
     name: 'Mono-Technical',
-    tagline:
-      'IBM Plex Mono headlines and meta over a neutral sans body — precise, developer-grade.',
-    faces: 'IBM Plex Mono headlines + meta/code · Inter body. (one new face — Inter is reused)',
+    tagline: 'IBM Plex Mono throughout — a precise, developer-grade UI.',
+    faces: 'IBM Plex Mono headlines + body/UI + meta/code.',
     designDoc: 'docs/typography/mono-technical.md',
   },
 } satisfies Record<string, TypographyDefinition>;

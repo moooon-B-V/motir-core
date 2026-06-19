@@ -6,11 +6,11 @@
 > [`app/globals.css`](../../app/globals.css). Unlike the v1 base-face trio it
 > ADDS one face — **Space Grotesk** — loaded via `next/font` in
 > [`app/layout.tsx`](../../app/layout.tsx) (the `--font-grotesk-source` variable);
-> body and meta reuse the already-loaded Inter / JetBrains Mono, so the only new
+> meta reuses the already-loaded JetBrains Mono and the body/UI reuses the new Space Grotesk face, so the only new
 > payload is the display face, and only when this pairing is selected.
 
-**Tagline:** Geometric neo-grotesque headlines over a clean sans body — tight, confident, product-y.
-**Faces:** Space Grotesk headlines · Inter body · JetBrains Mono meta.
+**Tagline:** Geometric neo-grotesque across the whole UI — tight, confident, product-y.
+**Faces:** Space Grotesk headlines + body/UI · JetBrains Mono meta.
 **Source:** anchored in [getdesign.md](https://getdesign.md/) — the technical,
 product-y sans language of **Vercel (Geist)**, **Linear**, and **Framer**.
 Space Grotesk is the license-clear Google Fonts grotesque closest to that feel
@@ -31,7 +31,7 @@ brand). Grotesk's roles:
 | Role              | `--font-*` token | Grotesk face                                           |
 | ----------------- | ---------------- | ------------------------------------------------------ |
 | Headlines (xl+)   | `--font-serif`   | **Space Grotesk** (re-pointed off the editorial serif) |
-| Body / UI         | `--font-sans`    | Inter                                                  |
+| Body / UI         | `--font-sans`    | Space Grotesk                                          |
 | Meta / code / IDs | `--font-mono`    | JetBrains Mono                                         |
 
 ## Why it exists
@@ -40,7 +40,7 @@ The base **Motir** pairing wears an editorial serif (Source Serif 4) for
 headlines — warm, magazine-like. Grotesk is its technical counterpart: a
 geometric / neo-grotesque sans display face gives headlines a tighter, more
 confident, product-native voice — the look modern dev-tool brands (Vercel,
-Linear, Framer) wear. The body stays Inter so reading copy is unchanged; the
+Linear, Framer) wear. The body/UI also wears Space Grotesk (it reads cleanly as a UI sans), so the whole app — nav, header, buttons — re-types; the
 **headline FACE** carries the whole personality shift, which is the most visible
 typographic decision a UI makes.
 
