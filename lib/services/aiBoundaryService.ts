@@ -1,8 +1,10 @@
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
-import { toPlanTreeSkeleton } from '@/lib/mappers/aiBoundaryMappers';
+import { organizationsService } from '@/lib/services/organizationsService';
+import { toPlanTreeSkeleton, toOrgContextResponse } from '@/lib/mappers/aiBoundaryMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { OrganizationNotFoundError } from '@/lib/organizations/errors';
 import { PlanDeltaValidationError } from '@/lib/ai/planDelta';
 import type { PlanDelta, PlanDeltaCreateOp, PlanDeltaFields } from '@/lib/ai/planDelta';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -10,6 +12,7 @@ import type {
   PlanTreeResponse,
   CommitPlanDeltaResponse,
   PlanDeltaAppliedEntry,
+  OrgContextResponse,
 } from '@/lib/dto/ai';
 import type { CreateWorkItemInput, UpdateWorkItemInput } from '@/lib/dto/workItems';
 
@@ -70,6 +73,27 @@ export const aiBoundaryService = {
       project: { projectId, projectKey: project.identifier },
       items: toPlanTreeSkeleton(items),
     };
+  },
+
+  // GET /api/internal/ai/org-context (Subtask 7.3.45) — the calling org's
+  // existing footprint, the read-back the discovery interview weighs when it
+  // classifies a new project. The token scopes to a WORKSPACE; the org is that
+  // workspace's parent. resolveWorkspaceAccess gates the workspace AS the token's
+  // user AND yields its organizationId in one call (returns null when the user
+  // can't reach the workspace → 404-not-403, the no-leak posture); the org
+  // footprint is then summarised through organizationsService (also AS the user).
+  async readOrgContext(ctx: ServiceContext): Promise<OrgContextResponse> {
+    const access = await organizationsService.resolveWorkspaceAccess(ctx.userId, ctx.workspaceId);
+    if (!access) {
+      // The token's user can't reach this workspace — surface as not-found, never
+      // leak that the org exists (OrganizationNotFoundError → 404, like plan-tree).
+      throw new OrganizationNotFoundError(ctx.workspaceId);
+    }
+    const footprint = await organizationsService.summarizeOrgFootprint({
+      userId: ctx.userId,
+      organizationId: access.organizationId,
+    });
+    return toOrgContextResponse(footprint);
   },
 
   // POST /api/internal/ai/plan-delta — commit the proposed delta through

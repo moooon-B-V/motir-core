@@ -4,6 +4,7 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withOrgContext } from '@/lib/organizations/context';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
@@ -24,6 +25,7 @@ import {
 import type {
   CurrentOrganizationDTO,
   OrganizationDTO,
+  OrgFootprintDTO,
   OrgMemberDTO,
   OrgMemberPageDTO,
 } from '@/lib/dto/organizations';
@@ -64,6 +66,12 @@ const SLUG_RETRY_ATTEMPTS = 3;
 // client can't request an unbounded page (defeating the at-scale rule).
 const ROSTER_DEFAULT_LIMIT = 25;
 const ROSTER_MAX_LIMIT = 100;
+
+// The org-footprint summary caps the project-NAME sample (the at-scale rule,
+// finding #57): the COUNTS stay exact, but only the first N names cross the
+// boundary so a huge org can't return an unbounded list. A classification signal
+// needs a representative handful, not every name.
+const FOOTPRINT_PROJECT_NAME_CAP = 50;
 
 function slugify(name: string): string {
   const slug = name
@@ -508,6 +516,74 @@ export const organizationsService = {
         return { members, nextCursor, total };
       },
     );
+  },
+
+  // ── The org footprint summary (the "how established is this org?" signal) ──
+
+  /**
+   * Summarize `(userId)`'s view of `organizationId`'s footprint — workspace /
+   * project counts, a capped sample of project names, and the org-wide team
+   * size — for the AI discovery classification (Subtask 7.3.45). The actor must
+   * be a member of the org (a non-member raises OrganizationNotFoundError → 404,
+   * the no-leak rule).
+   *
+   * Read AS the actor, honouring RLS exactly like the rest of this service:
+   *   - `memberCount` is the ORG-WIDE team size — counted under the active-org
+   *     context, where the org-membership policy admits every member's row.
+   *   - `workspaces` is what the actor can see in the org — the workspace policy
+   *     admits the workspaces they're a member of (no app.workspace_id is bound
+   *     here, so the membership branch is the one that bites).
+   *   - PROJECTS are workspace-scoped under RLS (the project policy keys strictly
+   *     on `app.workspace_id`), so they're counted by ENTERING each workspace's
+   *     context — one bound transaction per workspace. `projectNames` is capped
+   *     (FOOTPRINT_PROJECT_NAME_CAP) while `projectCount` stays exact.
+   *
+   * No cross-tenant bypass: an org's footprint is summarised only from rows the
+   * token's user could already read, the same posture as the read-back surface.
+   */
+  async summarizeOrgFootprint(input: {
+    userId: string;
+    organizationId: string;
+  }): Promise<OrgFootprintDTO> {
+    // Org-wide team size + the actor's workspaces in the org, in one bound
+    // transaction. assertOrgMember gates access (404-not-403) before counting.
+    const { organization, memberCount, workspaces } = await withOrgContext(
+      { userId: input.userId, organizationId: input.organizationId },
+      async (tx) => {
+        await assertOrgMember(input.userId, input.organizationId, tx);
+        const organization = await organizationRepository.findByIdInTx(input.organizationId, tx);
+        if (!organization) throw new OrganizationNotFoundError(input.organizationId);
+        const memberCount = await organizationMembershipRepository.countByOrg(
+          input.organizationId,
+          tx,
+        );
+        const workspaces = await workspaceRepository.listByOrganization(input.organizationId, tx);
+        return { organization, memberCount, workspaces };
+      },
+    );
+
+    // Projects: counted per workspace under the workspace context the project
+    // RLS policy needs. The names sample is capped; the count is exact.
+    let projectCount = 0;
+    const projectNames: string[] = [];
+    for (const workspace of workspaces) {
+      const projects = await withWorkspaceContext(
+        { userId: input.userId, workspaceId: workspace.id },
+        (tx) => projectRepository.findByWorkspace(workspace.id, tx),
+      );
+      projectCount += projects.length;
+      for (const project of projects) {
+        if (projectNames.length < FOOTPRINT_PROJECT_NAME_CAP) projectNames.push(project.name);
+      }
+    }
+
+    return {
+      organization: toOrganizationDTO(organization),
+      workspaceCount: workspaces.length,
+      projectCount,
+      projectNames,
+      memberCount,
+    };
   },
 };
 

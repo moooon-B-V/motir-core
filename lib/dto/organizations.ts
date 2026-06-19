@@ -41,3 +41,24 @@ export interface CurrentOrganizationDTO {
   organization: OrganizationDTO;
   role: string;
 }
+
+// A COARSE summary of an organization's existing footprint — its workspace /
+// project counts, a sample of project names, and its team size (Story 7.3 ·
+// Subtask 7.3.45). It feeds a "how established is this org?" signal: the AI
+// discovery classification weighs it, since an org already running several
+// projects with a multi-person team skews startup/enterprise, not a first hobby
+// project.
+//
+// Read AS the actor (the cross-tenant no-leak posture): `memberCount` is the
+// org-wide team size (the org-membership policy admits every member under the
+// active-org context), while `workspaceCount` / `projectCount` / `projectNames`
+// reflect what the actor can see in the org — the workspaces they belong to and
+// the projects within them. `projectNames` is a capped SAMPLE (the at-scale
+// rule, finding #57 — never load an unbounded list); the counts are exact.
+export interface OrgFootprintDTO {
+  organization: OrganizationDTO;
+  workspaceCount: number;
+  projectCount: number;
+  projectNames: string[];
+  memberCount: number;
+}
