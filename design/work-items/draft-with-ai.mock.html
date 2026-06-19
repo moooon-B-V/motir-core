@@ -19,7 +19,9 @@
           with AI" + the "AI-drafted — review me" pill.
       What 8.8.6 NEWLY specifies (the in-between INTERACTION, the gap):
         · the loading / STREAMING state (SSE, per 8.8.11),
-        · the ACCEPT / DISCARD step on a generated draft,
+        · the drafted text landing DIRECTLY in the editable field/editor — no
+          accept/discard confirmation gate; it's saved by the normal create /
+          editor save, Regenerate re-runs,
         · how `explanationSource` (ai_drafted vs user_authored) is signalled,
         · the CLOUD-GATED disabled / "Connect Motir AI" state (self-host w/o a
           MOTIR_AI connection — mirrors onboarding screen K + MotirAiConfigError),
@@ -390,6 +392,23 @@
       .expl-body p:last-child {
         margin-bottom: 0;
       }
+      /* the drafted text sits in the editable field — a quiet editor inset */
+      .expl-body.is-editable {
+        background: var(--el-page-bg);
+        border-radius: var(--radius-input);
+        box-shadow: inset 0 0 0 1px var(--el-border-strong);
+        margin: 12px;
+        padding: 12px 14px;
+      }
+      .caret-edit {
+        display: inline-block;
+        width: 1.5px;
+        height: 1.05em;
+        background: var(--el-text);
+        margin-left: 1px;
+        vertical-align: text-bottom;
+        animation: blink 1s step-end infinite;
+      }
       .expl-toolbar {
         display: flex;
         align-items: center;
@@ -613,8 +632,9 @@
           Story 8.8 · design for 8.8.6 (MOTIR-1090), gating 8.8.12 (MOTIR-1096; code) which depends
           on 8.8.11 (MOTIR-1095; the motir-ai <code>generate_explanation</code> job + SSE stream).
           Builds on the entry affordances already in <code>create.pen</code> /
-          <code>detail.pen</code>; newly specifies the streaming, accept/discard, source-signalling,
-          cloud-gate, and error states. Built from the real <code>--el-*</code> / shape tokens.
+          <code>detail.pen</code>; newly specifies the streaming, drafted-in-editor,
+          source-signalling, cloud-gate, and error states. Built from the real <code>--el-*</code> /
+          shape tokens.
         </p>
       </div>
       <button
@@ -752,7 +772,7 @@
 
     <!-- ════════════════════════════════════════════════════════════════════
          SURFACE 1 · THE CREATE-ISSUE MODAL
-         (entry · streaming · accept/discard, in the modal Explanation field)
+         (entry · streaming · drafted-in-field, in the modal Explanation field)
     ════════════════════════════════════════════════════════════════════════ -->
     <div class="section-band">
       <span class="sb-kicker">Surface 1</span>
@@ -860,12 +880,13 @@
         </div>
       </div>
 
-      <!-- ───── 1C · accept / discard ───── -->
+      <!-- ───── 1C · drafted — text lands in the field ───── -->
       <div class="panel">
         <div class="panel-label">
-          1C · <b>Accept / Discard</b> — when the stream finishes, the draft is held in a review
-          state. <b>Use draft</b> keeps it (marks the field <code>ai_drafted</code>);
-          <b>Discard</b> clears it; <b>Regenerate</b> re-runs.
+          1C · <b>Drafted</b> — when the stream finishes the text just stays in the editable
+          Explanation field (no confirmation step). It's editable like any text; it saves as
+          <code>ai_drafted</code> when the issue is created. <b>Regenerate</b> re-runs; editing the
+          text makes it <code>user_authored</code>.
         </div>
         <div class="modal" role="dialog" aria-label="Create issue">
           <button class="modal-close" aria-label="Close">
@@ -885,7 +906,7 @@
                 <div class="expl-toolbar top">
                   <span class="pill pill-ai">
                     <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-                    AI draft — review me
+                    AI-drafted — review me
                   </span>
                   <span class="grow"></span>
                   <button class="btn btn-quiet btn-sm">
@@ -893,7 +914,7 @@
                     Regenerate
                   </button>
                 </div>
-                <div class="expl-body">
+                <div class="expl-body is-editable" contenteditable="false">
                   <p>
                     Users who already signed up with email and password sometimes return and sign in
                     with Google instead. Today that creates a second, separate account — splitting
@@ -901,16 +922,10 @@
                   </p>
                   <p>
                     This change recognises the shared email and links the two sign-in methods to one
-                    account, so people land where they expect no matter how they log in.
+                    account, so people land where they expect no matter how they log in.<span
+                      class="caret-edit"
+                    ></span>
                   </p>
-                </div>
-                <div class="expl-toolbar">
-                  <button class="btn btn-danger-quiet btn-sm">Discard</button>
-                  <span class="grow"></span>
-                  <button class="btn btn-ai btn-sm">
-                    <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                    Use draft
-                  </button>
                 </div>
               </div>
             </div>
@@ -998,11 +1013,13 @@
     </div>
 
     <div class="panel-row" style="margin-top: 30px">
-      <!-- ───── 2C · accept / discard ───── -->
+      <!-- ───── 2C · drafted — text lands in the editor (edit mode) ───── -->
       <div class="panel">
         <div class="panel-label">
-          2C · <b>Accept / Discard</b> — a finished draft is held for review before it is persisted
-          to <code>explanationMd</code>. <b>Use draft</b> saves it as <code>ai_drafted</code>.
+          2C · <b>Drafted — in the editor</b> — the streamed text lands directly in the explanation
+          editor (no confirmation). You edit it like any text and <b>Save</b> through the editor's
+          normal controls; <b>Regenerate</b> re-runs. Saving unedited keeps <code>ai_drafted</code>;
+          editing first makes it <code>user_authored</code>.
         </div>
         <div class="dsection">
           <div class="dsection-head">
@@ -1011,11 +1028,11 @@
             <span class="spacer"></span>
             <span class="pill pill-ai">
               <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
-              AI draft — review me
+              AI-drafted
             </span>
           </div>
           <div class="expl">
-            <div class="expl-body">
+            <div class="expl-body is-editable" contenteditable="false">
               <p>
                 Users who already signed up with email and password sometimes return and sign in
                 with Google instead. Today that creates a second, separate account — splitting their
@@ -1023,19 +1040,21 @@
               </p>
               <p>
                 This change recognises the shared email and links the two sign-in methods to one
-                account, so people land where they expect no matter how they log in.
+                account, so people land where they expect no matter how they log in.<span
+                  class="caret-edit"
+                ></span>
               </p>
             </div>
             <div class="expl-toolbar">
-              <button class="btn btn-danger-quiet btn-sm">Discard</button>
               <button class="btn btn-quiet btn-sm">
                 <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-rotate" /></svg>
                 Regenerate
               </button>
               <span class="grow"></span>
+              <button class="btn btn-ghost btn-sm">Cancel</button>
               <button class="btn btn-ai btn-sm">
                 <svg class="ic-sm" viewBox="0 0 24 24"><use href="#i-check" /></svg>
-                Use draft
+                Save
               </button>
             </div>
           </div>
