@@ -783,6 +783,45 @@
   --active-scale: 0.98;
 }
 
+/* 3D / Immersive — the IMMERSIVE BACKGROUND (depth atmosphere on EVERY page,
+   not just card surfaces) + the resting FLOAT (every tile lifts off that
+   canvas). Both are STATIC depth, so they sit OUTSIDE the reduced-motion gate —
+   a reduced-motion user still gets the full immersive depth, only the tilt is
+   suppressed. The background is palette-DERIVED (color-mix over --el tokens,
+   never a raw hue), so the style/palette axes stay disjoint and the material-
+   rule test passes: a palette swap re-tints the atmosphere, a style swap leaves
+   hues alone. This is what makes the table/list/board pages (no card surfaces of
+   their own) read as immersive too. */
+[data-style='3d-immersive'] body {
+  background-image:
+    radial-gradient(
+      130% 85% at 50% -15%,
+      color-mix(in srgb, var(--el-accent) 9%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      95% 75% at 108% 112%,
+      color-mix(in srgb, var(--el-link) 8%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      150% 130% at 50% 42%,
+      transparent 52%,
+      color-mix(in srgb, var(--el-text) 8%, transparent)
+    );
+  background-attachment: fixed;
+}
+
+/* Every [data-tilt] tile FLOATS — a deep resting shadow lifts it off the
+   immersive canvas. Static depth, so it is NOT gated on reduced motion (only the
+   tilt is). box-shadow is not a colour-painting property, so the material-rule
+   test skips this; the shadow ink is the existing near-ink token. Default Cards
+   carry no resting shadow, so this is what makes them (and the marked page
+   panels) read as raised under this style. */
+[data-style='3d-immersive'] [data-tilt] {
+  box-shadow: var(--shadow-card);
+}
+
 /* 3D / Immersive — the POINTER-PARALLAX TILT (the standard "3D card" effect,
    the interactive half of the identity). The ImmersiveTilt shell engine
    (components/theme/ImmersiveTilt.tsx) — active ONLY when data-style is this

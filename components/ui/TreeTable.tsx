@@ -444,6 +444,11 @@ export function TreeTable<Row>({
 
   return (
     <div
+      // `data-tilt` floats this panel under the 3D / Immersive style (7.3.39).
+      // It is a large surface, so the tilt engine size-gates it: deep resting
+      // shadow (it lifts off the immersive canvas), no cursor tilt. Inert under
+      // every other style + reduced motion.
+      data-tilt=""
       className={cn(
         'overflow-hidden rounded-(--radius-card) border border-(--el-border)',
         className,

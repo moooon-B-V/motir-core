@@ -35,6 +35,14 @@ import { tiltFromPointer } from '@/lib/theme/tilt';
 const STYLE_ID = '3d-immersive';
 const MAX_TILT_DEG = 7;
 const TILT_HOOK = '[data-tilt]';
+/**
+ * Only TILE-sized surfaces tilt; a large panel (a work-item table, a board
+ * column, a backlog list) instead just FLOATS (its static resting shadow) — a
+ * full-page table tipping toward the cursor would be disorienting and would risk
+ * clipping sticky headers / portaled menus. Above this px in either dimension a
+ * `[data-tilt]` surface is treated as a panel: depth, no tilt.
+ */
+const MAX_TILE_PX = 560;
 
 export function ImmersiveTilt() {
   useEffect(() => {
@@ -65,6 +73,11 @@ export function ImmersiveTilt() {
       const { el, x, y } = pending;
       pending = null;
       const rect = el.getBoundingClientRect();
+      // A large panel floats but does NOT tilt — leave it at its resting depth.
+      if (rect.width > MAX_TILE_PX || rect.height > MAX_TILE_PX) {
+        reset(el);
+        return;
+      }
       const { rx, ry } = tiltFromPointer(rect, x, y, MAX_TILT_DEG);
       el.style.setProperty('--tilt-rx', `${rx.toFixed(2)}deg`);
       el.style.setProperty('--tilt-ry', `${ry.toFixed(2)}deg`);

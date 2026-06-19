@@ -114,6 +114,27 @@ every card/panel across the app tilts) and the kanban `BoardCard` (so `/boards`
 tips toward the cursor). While a board card is being dragged, dnd-kit's inline
 `transform` overrides the tilt transform, so the two never fight.
 
+### Immersive background + floating panels (every page, not just cards)
+
+The table/list/board pages have no card surfaces of their own, so two more
+pieces make them read as immersive:
+
+- **An immersive background** on `[data-style='3d-immersive'] body` — a soft,
+  palette-derived (`color-mix` over `--el-accent`/`--el-link`/`--el-text`) depth
+  atmosphere with a centre vignette, `background-attachment: fixed`. It pins no
+  hue (palette-derived, like glassmorphism's canvas) and shows on **every** page.
+- **Floating panels.** Every `[data-tilt]` tile carries a deep **resting** shadow
+  (`--shadow-card`, static — applies even under reduced motion) so it lifts off
+  that canvas. Beyond `Card`/`BoardCard`, the major page panels are marked
+  `data-tilt`: the shared `TreeTable` (the `/issues` tree), `IssueListTable` (the
+  list view), the `BacklogContainer` sprint/backlog panel, the kanban
+  `BoardColumn`, and the dashboard `WidgetCard`.
+- **Size-gating.** The tilt engine only _tilts_ tiles up to `MAX_TILE_PX` (560)
+  in either dimension; a larger panel (a table, a column, a backlog) **floats but
+  does not tilt** — tipping a full table toward the cursor would be disorienting
+  and could clip sticky headers / portaled menus. So small tiles tilt; big panels
+  just lift.
+
 ## Why this is more than a token swap
 
 The feel-bearing axes a pure radius swap would miss are all moved here:

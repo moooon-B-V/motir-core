@@ -58,6 +58,10 @@ export function WidgetCard({
       role="group"
       aria-label={t('widget.regionAria', { title })}
       data-testid={`dashboard-widget-${widget.id}`}
+      // `data-tilt` floats the dashboard widget under the 3D / Immersive style
+      // (small widgets tilt toward the cursor; large ones just float). Inert
+      // under every other style + reduced motion.
+      data-tilt=""
       className={`flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) shadow-(--shadow-subtle) ${
         dragging ? 'opacity-60 shadow-(--shadow-elevated)' : ''
       }`}

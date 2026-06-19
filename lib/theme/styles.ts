@@ -300,7 +300,7 @@ export const STYLE_REGISTRY = {
       elevation:
         'The identity axis: deep, layered two-stop shadows (a soft ambient wash + a directional key light) lift every surface dramatically off the canvas, so cards read as physical objects floating in space.',
       surface:
-        'Opaque dimensional cards floating over the canvas; depth (not tint or glass) is the material — surfaces hover, they never sit flat.',
+        'A palette-derived immersive background atmosphere on every page, with opaque dimensional panels (cards, tables, board columns, widgets) floating above it on deep resting shadows — depth (not tint or glass) is the material; nothing sits flat.',
       density:
         'Roomy and immersive — 22×12 buttons, 28px card padding, 40px controls; depth wants air around each tile.',
       motion:

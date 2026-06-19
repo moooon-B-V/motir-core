@@ -87,7 +87,12 @@ export function IssueListTable({
   );
 
   const table = (
-    <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
+    // `data-tilt` floats this panel under the 3D / Immersive style (size-gated:
+    // deep resting shadow, no cursor tilt). Inert under every other style.
+    <div
+      data-tilt=""
+      className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
+    >
       <div
         role="table"
         aria-label={t('issues.list.tableLabel')}
