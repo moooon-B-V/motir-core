@@ -19,6 +19,7 @@ import {
 import { DEFAULT_STYLE_ID, isStyleId, resolveStyle, type StyleId } from '@/lib/theme/styles';
 import { DEFAULT_PALETTE_ID, isPaletteId, type PaletteId } from '@/lib/theme/palettes';
 import { isTypeId, type TypeId } from '@/lib/theme/typography';
+import type { AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 
 /**
  * Theme context for Motir's three-axis design system (style · palette · type),
@@ -95,19 +96,44 @@ function getColorSchemeServerSnapshot(): ResolvedThemePattern {
   return 'light';
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Lazy initializers — run once on first render, read localStorage
-  // synchronously without an effect.
+export function ThemeProvider({
+  children,
+  initialPreference = null,
+}: {
+  children: ReactNode;
+  /**
+   * The signed-in user's APPLIED appearance, resolved server-side (Subtask
+   * 7.3.61). When present it SEEDS this island's state — the page-state
+   * contract: a client island must be GIVEN the server value, not left to
+   * re-read localStorage (which `useState` would do only at mount, ignoring the
+   * authoritative server pref and risking a flash from a stale value synced on
+   * another device). `null` (anonymous) keeps the original localStorage path.
+   */
+  initialPreference?: AppliedAppearanceDto | null;
+}) {
+  // Lazy initializers — run once on first render. Seed from the server
+  // preference when signed in (authoritative, cross-device); otherwise read
+  // localStorage synchronously without an effect.
   const [pattern, setPatternState] = useState<ThemePattern>(() =>
-    readStorage<ThemePattern>(THEME_STORAGE_KEYS.pattern, THEME_DEFAULTS.pattern),
+    initialPreference
+      ? initialPreference.pattern
+      : readStorage<ThemePattern>(THEME_STORAGE_KEYS.pattern, THEME_DEFAULTS.pattern),
   );
   const [styleId, setStyleIdState] = useState<StyleId>(() => {
+    if (initialPreference) {
+      return isStyleId(initialPreference.styleId) ? initialPreference.styleId : DEFAULT_STYLE_ID;
+    }
     // A stale / unknown stored value (e.g. a pre-7.3.32 `default`/`soft`
     // display-style leftover) resolves to the default, never a dead id.
     const stored = readStorage<string>(THEME_STORAGE_KEYS.style, THEME_DEFAULTS.style);
     return isStyleId(stored) ? stored : DEFAULT_STYLE_ID;
   });
   const [palette, setPaletteState] = useState<PaletteId>(() => {
+    if (initialPreference) {
+      return isPaletteId(initialPreference.paletteId)
+        ? initialPreference.paletteId
+        : DEFAULT_PALETTE_ID;
+    }
     // A stale / unknown stored value resolves to the default, never a dead id.
     const stored = readStorage<string>(THEME_STORAGE_KEYS.palette, THEME_DEFAULTS.palette);
     return isPaletteId(stored) ? stored : DEFAULT_PALETTE_ID;
@@ -116,6 +142,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // default pairing". Only a valid stored id pins; anything else (unset/stale)
   // falls through to the style default below.
   const [typeChoice, setTypeChoiceState] = useState<TypeId | null>(() => {
+    if (initialPreference) {
+      // The server pref carries the EFFECTIVE type + whether it was pinned: an
+      // unpinned user must stay `null` so they keep following the style default.
+      return initialPreference.typePinned && isTypeId(initialPreference.typeId)
+        ? initialPreference.typeId
+        : null;
+    }
     const stored = readStorage<string>(THEME_STORAGE_KEYS.type, '');
     return isTypeId(stored) ? stored : null;
   });

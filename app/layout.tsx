@@ -10,7 +10,10 @@ import {
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
-import { themeInitScript } from '@/lib/theme/init-script';
+import { buildThemeInitScript } from '@/lib/theme/init-script';
+import { getSession } from '@/lib/auth';
+import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
+import type { AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 import { ToastProvider } from '@/components/ui/Toast';
 import { localeDir, type Locale } from '@/lib/i18n/locales';
 import './globals.css';
@@ -101,30 +104,57 @@ export default async function RootLayout({
   const locale = (await getLocale()) as Locale;
   const messages = await getMessages();
 
+  // Cross-device appearance (Subtask 7.3.61): for a signed-in user the SERVER
+  // preference is authoritative — it followed them to this device. Resolve it
+  // here so the user's real appearance applies on the FIRST byte on any device,
+  // with no flash and no client round-trip. Anonymous visitors keep the
+  // localStorage-only path (`applied === null`).
+  const session = await getSession();
+  const applied: AppliedAppearanceDto | null = session
+    ? await appearancePreferenceService.getApplied(session.user.id)
+    : null;
+
+  // The fully server-resolvable axes render directly on <html> so they paint on
+  // the first byte. `data-theme` is the exception: an explicit `light`/`dark` is
+  // server-set, but `system` only resolves via matchMedia on the client, so it
+  // is left to the init script (same for every anonymous visitor).
+  const serverThemeAttrs: Record<string, string> = applied
+    ? {
+        'data-style': applied.styleId,
+        'data-palette': applied.paletteId,
+        'data-type': applied.typeId,
+        ...(applied.pattern !== 'system' ? { 'data-theme': applied.pattern } : {}),
+      }
+    : {};
+
   return (
     <html
       lang={locale}
       dir={localeDir[locale]}
       className={`${inter.variable} ${sourceSerif.variable} ${jetbrainsMono.variable} ${ibmPlexMono.variable} ${spaceGrotesk.variable} ${fraunces.variable} h-full antialiased`}
       suppressHydrationWarning
+      {...serverThemeAttrs}
     >
       <head>
         {/*
           FOUC prevention: run before React hydrates to apply the user's
-          saved theme + style to <html>. Without this the page
-          briefly flashes the SSR default before the client applies
-          localStorage preferences.
+          appearance to <html>. For a signed-in user the server preference is
+          embedded (it wins over localStorage and reconciles it); for an
+          anonymous visitor it reads localStorage. Without this the page
+          briefly flashes the default before the client applies preferences.
 
-          Safety: `themeInitScript` is a static, compile-time string in
-          lib/theme/init-script.ts — no user input flows into it. This is
-          the standard theme-init pattern (see next-themes, shadcn/ui,
-          dooooWeb) and is XSS-safe because the script content is fixed.
+          Safety: the only per-request data is the user's APPLIED preference,
+          whose fields are closed-enum registry ids / `system|light|dark` / a
+          boolean — never free user input — and it is JSON-embedded with `<`
+          escaped (see buildThemeInitScript). The rest is a static, compile-time
+          string. This is the standard theme-init pattern (next-themes,
+          shadcn/ui, dooooWeb).
         */}
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: buildThemeInitScript(applied) }} />
       </head>
       <body className="min-h-full">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider>
+          <ThemeProvider initialPreference={applied}>
             <ToastProvider>{children}</ToastProvider>
           </ThemeProvider>
         </NextIntlClientProvider>

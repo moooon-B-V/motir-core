@@ -42,6 +42,65 @@ describe('appearancePreferenceService.getResolved', () => {
   });
 });
 
+describe('appearancePreferenceService.getApplied', () => {
+  it('returns null for an untouched user (no row) — no server value to honour', async () => {
+    const user = await createTestUser();
+
+    // No stored preference → null, so the caller uses the localStorage path
+    // (anonymous behaviour); a present-but-empty server pref must not clobber a
+    // signed-in user's device-local choice.
+    expect(await appearancePreferenceService.getApplied(user.id)).toBeNull();
+    expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
+  });
+
+  it('returns null when every axis has been cleared back to default (row all-null)', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, { pattern: 'dark' });
+    await appearancePreferenceService.update(user.id, { pattern: null });
+
+    // The row exists but carries no real choice → treated as no preference.
+    expect(await userAppearancePreferenceRepository.findByUserId(user.id)).not.toBeNull();
+    expect(await appearancePreferenceService.getApplied(user.id)).toBeNull();
+  });
+
+  it('follows the active STYLE default type when the user pinned no type', async () => {
+    const user = await createTestUser();
+    // swiss-minimal-flat's defaultTypeId is `motir-sans` (≠ the global default),
+    // so an unpinned type must apply the STYLE default, not `motir` — the
+    // precedence 7.3.60 deferred to this subtask.
+    await appearancePreferenceService.update(user.id, { styleId: 'swiss-minimal-flat' });
+
+    const applied = await appearancePreferenceService.getApplied(user.id);
+
+    expect(applied).toEqual({
+      pattern: THEME_DEFAULTS.pattern,
+      styleId: 'swiss-minimal-flat',
+      paletteId: DEFAULT_PALETTE_ID,
+      typeId: 'motir-sans',
+      typePinned: false,
+    });
+  });
+
+  it('keeps an explicitly pinned type and marks it pinned', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, {
+      pattern: 'dark',
+      styleId: 'swiss-minimal-flat',
+      typeId: 'editorial',
+    });
+
+    const applied = await appearancePreferenceService.getApplied(user.id);
+
+    expect(applied).toEqual({
+      pattern: 'dark',
+      styleId: 'swiss-minimal-flat',
+      paletteId: DEFAULT_PALETTE_ID,
+      typeId: 'editorial',
+      typePinned: true,
+    });
+  });
+});
+
 describe('appearancePreferenceService.update', () => {
   it('persists a partial patch, resolves the rest to defaults, and returns the DTO', async () => {
     const user = await createTestUser();

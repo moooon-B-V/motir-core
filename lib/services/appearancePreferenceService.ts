@@ -1,8 +1,12 @@
+import type { UserAppearancePreference } from '@prisma/client';
 import { db } from '@/lib/db';
 import { userAppearancePreferenceRepository } from '@/lib/repositories/userAppearancePreferenceRepository';
 import type { UpsertUserAppearancePreferenceInput } from '@/lib/repositories/userAppearancePreferenceRepository';
-import { toAppearancePreferenceDto } from '@/lib/mappers/appearancePreferenceMappers';
-import type { AppearancePreferenceDto } from '@/lib/dto/appearancePreference';
+import {
+  toAppearancePreferenceDto,
+  toAppliedAppearanceDto,
+} from '@/lib/mappers/appearancePreferenceMappers';
+import type { AppearancePreferenceDto, AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 import { InvalidAppearanceValueError } from '@/lib/appearance/errors';
 import { isThemePattern } from '@/lib/theme/types';
 import { isStyleId } from '@/lib/theme/styles';
@@ -48,6 +52,19 @@ function validateAxis(
   if (!guard(value)) throw new InvalidAppearanceValueError(axis, value);
 }
 
+/**
+ * Is there a server-stored preference to honour? `true` only when a row exists
+ * AND at least one axis is non-null — a row with every axis cleared (the user
+ * reset everything) carries no real choice, so it is treated as "no preference"
+ * and the localStorage path applies (see `getApplied`).
+ */
+function hasStoredPreference(row: UserAppearancePreference | null): boolean {
+  if (!row) return false;
+  return (
+    row.pattern !== null || row.styleId !== null || row.paletteId !== null || row.typeId !== null
+  );
+}
+
 export const appearancePreferenceService = {
   /**
    * The current user's appearance preference with every axis RESOLVED to a
@@ -57,6 +74,28 @@ export const appearancePreferenceService = {
   async getResolved(userId: string): Promise<AppearancePreferenceDto> {
     const row = await userAppearancePreferenceRepository.findByUserId(userId);
     return toAppearancePreferenceDto(row);
+  },
+
+  /**
+   * The user's APPLIED appearance — the four `<html>` data-attribute values
+   * (Subtask 7.3.61), with the type axis resolved through the style-default
+   * precedence (a pinned type wins, else the active style's default). Read by
+   * the root layout to render the signed-in user's real appearance on the first
+   * byte (cross-device, no flash) and to seed the FOUC init script + the theme
+   * context. Read-only (no `tx`).
+   *
+   * Returns `null` when the user has **no stored preference** (no row, or a row
+   * with every axis cleared to null). This is the precedence the FOUC rule keys
+   * off: the server preference is authoritative ONLY "when a server value is
+   * present"; absent one, the caller falls back to the localStorage path
+   * (anonymous behaviour) so a signed-in user's device-local choice is not
+   * clobbered by an empty server pref. A row exists only once the user pins an
+   * axis (`update`), so a freshly-seeded user resolves to `null` here.
+   */
+  async getApplied(userId: string): Promise<AppliedAppearanceDto | null> {
+    const row = await userAppearancePreferenceRepository.findByUserId(userId);
+    if (!hasStoredPreference(row)) return null;
+    return toAppliedAppearanceDto(row);
   },
 
   /**
