@@ -1,5 +1,6 @@
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
-import type { PlanTreeSkeletonItem } from '@/lib/dto/ai';
+import type { PlanTreeSkeletonItem, OrgContextResponse } from '@/lib/dto/ai';
+import type { OrgFootprintDTO } from '@/lib/dto/organizations';
 
 // Map the flat work-item summaries (the breadth read) to the plan-tree skeleton
 // (contract §6). `parentKey` is resolved from `parentId` via an in-batch
@@ -15,4 +16,17 @@ export function toPlanTreeSkeleton(items: WorkItemSummaryDto[]): PlanTreeSkeleto
     status: i.status,
     parentKey: i.parentId ? (idToKey.get(i.parentId) ?? null) : null,
   }));
+}
+
+// Map the org-domain footprint summary to the AI boundary's wire shape (contract
+// §6, Subtask 7.3.45). Only the org id + name cross — the boundary doesn't expose
+// the slug; the counts + the capped name sample pass through unchanged.
+export function toOrgContextResponse(footprint: OrgFootprintDTO): OrgContextResponse {
+  return {
+    organization: { id: footprint.organization.id, name: footprint.organization.name },
+    workspaceCount: footprint.workspaceCount,
+    projectCount: footprint.projectCount,
+    projectNames: footprint.projectNames,
+    memberCount: footprint.memberCount,
+  };
 }

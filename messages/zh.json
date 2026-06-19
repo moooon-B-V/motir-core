@@ -414,8 +414,6 @@
       "description": "描述",
       "explanation": "说明",
       "explanationHint": "—— 为什么重要（可选）",
-      "draftWithAiTooltip": "AI起草将随规划层（Epic 7）一同推出",
-      "draftWithAi": "用AI起草",
       "explanationSkip": "可跳过——说明可以用AI起草，也可以在创建后再补充。",
       "priority": "优先级"
     },
@@ -3421,6 +3419,21 @@
       "errorDescription": "获取该组织用量时出错。数据暂时不可用 —— 你的额度是安全的。",
       "loading": "正在加载用量…"
     }
+  },
+  "draftWithAi": {
+    "button": "用AI起草",
+    "drafting": "起草中…",
+    "stop": "停止",
+    "regenerate": "重新生成",
+    "aiDrafted": "AI起草",
+    "gateTooltip": "连接 Motir AI 后即可用 AI 起草",
+    "gateTitle": "尚未配置 AI 起草",
+    "gateBody": "起草由 Motir Cloud 提供；此自托管工作区尚未连接。",
+    "connect": "连接 Motir AI",
+    "errorTitle": "未能完成起草",
+    "errorBody": "Motir AI 暂时不可用。已生成的内容会保留——请重试。",
+    "tryAgain": "重试",
+    "dismiss": "忽略"
   },
   "onboarding": {
     "nav": {

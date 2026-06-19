@@ -23,6 +23,7 @@ import type {
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
+  WorkItemExplanationSourceDto,
   ExecutorDto,
   WorkItemSummaryDto,
   TreeLevelDto,
@@ -51,8 +52,15 @@ export interface CreateIssueInput {
   // The "why this matters" axis (Story 1.4). Optional at create time (the modal
   // exposes it as a collapsible section per design/work-items/create.png); when
   // a human types it, the service defaults explanationSource to user_authored.
-  // AI drafting ("Draft with AI") is the Epic-7 planning layer.
+  // "Draft with AI" (Subtask 8.8.12) is now wired in the modal.
   explanationMd?: string | null;
+  // Explanation provenance (Subtask 8.8.12). The modal sends `ai_draft` for an
+  // untouched AI draft, `user_edited` after the user edits a draft, and OMITS it
+  // for a hand-typed explanation (the service then defaults it to
+  // `user_authored`). Whitelisted here so it actually reaches the service —
+  // otherwise an AI draft would persist as `user_authored` (create-action
+  // whitelist drops un-listed fields).
+  explanationSource?: WorkItemExplanationSourceDto;
   priority?: WorkItemPriorityDto;
   // Accepted for forward-compat but NOT yet surfaced in the modal: the filtered
   // parent picker is 2.3.4, the assignee combobox a later subtask. Until those
@@ -109,6 +117,11 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         title,
         descriptionMd: input.descriptionMd?.trim() ? input.descriptionMd : null,
         explanationMd: input.explanationMd?.trim() ? input.explanationMd : null,
+        // Only forward the source when there's actually explanation text + an AI
+        // provenance to record; a blank explanation carries no source claim.
+        ...(input.explanationSource && input.explanationMd?.trim()
+          ? { explanationSource: input.explanationSource }
+          : {}),
         parentId: input.parentId ?? null,
         assigneeId: input.assigneeId ?? null,
         ...(input.priority ? { priority: input.priority } : {}),

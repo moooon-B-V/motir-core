@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,14 @@ import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { cn } from '@/lib/utils/cn';
+import {
+  DraftWithAiButton,
+  DraftGateNotice,
+  DraftErrorNotice,
+  AiDraftedPill,
+} from '@/components/issues/DraftWithAi';
+import { useExplanationDraft } from '@/lib/hooks/useExplanationDraft';
+import { isUntouchedAiDraft, explanationSourceForSave } from '@/lib/ai/explanationSource';
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
@@ -50,9 +58,22 @@ export interface CreateIssueModalProps {
    * can't reach — e.g. the board — refetch. Optional.
    */
   onCreated?: () => void;
+  /**
+   * Whether motir-core is wired to a Motir AI deployment (Subtask 8.8.12,
+   * server-resolved in the authed layout via `isMotirAiConfigured`). Gates the
+   * "Draft with AI" affordance: false → the button is disabled with a
+   * "Connect Motir AI" tooltip + an inline notice. Defaults to false so a
+   * non-shell / test mount renders the safe disabled state.
+   */
+  aiConfigured?: boolean;
 }
 
-export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueModalProps) {
+export function CreateIssueModal({
+  open,
+  onOpenChange,
+  onCreated,
+  aiConfigured = false,
+}: CreateIssueModalProps) {
   const t = useTranslations('shell');
   const tc = useTranslations('common');
   const tErr = useTranslations('errors');
@@ -95,6 +116,16 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
   const trimmedTitle = title.trim();
   const canSubmit = trimmedTitle.length > 0 && trimmedTitle.length <= MAX_TITLE_LENGTH;
 
+  // "Draft with AI" (Subtask 8.8.12) — streams a generated explanation into the
+  // editor. The draft context is the item the user is filling in; only the title
+  // is required (the draft button is disabled until there is one).
+  const draft = useExplanationDraft({
+    onText: setExplanation,
+    getContext: () => ({ title: trimmedTitle, description, type }),
+  });
+  // The AI-drafted badge shows while the editor still holds the untouched draft.
+  const showAiDraftedPill = isUntouchedAiDraft(explanation, draft.draftBaseline);
+
   function reset() {
     setKind('task');
     setType(null);
@@ -110,6 +141,7 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
     setTitleError(null);
     setParentError(null);
     setLinksError(null);
+    draft.reset();
   }
 
   function close() {
@@ -130,11 +162,16 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
       return;
     }
     startTransition(async () => {
+      // Explanation provenance (8.8.12): an untouched AI draft persists as
+      // `ai_draft`; an edited draft as `user_edited`; a hand-typed one omits the
+      // field (the service defaults it to `user_authored`).
+      const explanationSource = explanationSourceForSave(explanation, draft.draftBaseline);
       const result = await createIssueAction({
         kind,
         title: trimmedTitle,
         descriptionMd: description.trim() ? description : null,
         explanationMd: explanation.trim() ? explanation : null,
+        ...(explanationSource ? { explanationSource } : {}),
         priority,
         parentId,
         // Type + executor (Story 2.7), leaf-only: sent only when a type was
@@ -279,8 +316,8 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
 
           {/* Explanation — the "why this matters" axis (Story 1.4), per
             design/work-items/create.png panel 3: a collapsible, OPTIONAL
-            markdown section. "Draft with AI" is the Epic-7 planning layer
-            (disabled until it ships); a human can author it here today. */}
+            markdown section. "Draft with AI" (Subtask 8.8.12) streams a
+            generated explanation into the editor; a human can also author it. */}
           <div ref={explanationRef} className="flex scroll-mt-2 flex-col gap-1.5 font-sans text-sm">
             <div className="flex items-center gap-2">
               <button
@@ -296,29 +333,38 @@ export function CreateIssueModal({ open, onOpenChange, onCreated }: CreateIssueM
                 />
                 {t('createIssue.explanation')}
               </button>
-              <span className="text-(--el-text-secondary)">{t('createIssue.explanationHint')}</span>
+              {showAiDraftedPill ? (
+                <AiDraftedPill />
+              ) : (
+                <span className="text-(--el-text-secondary)">
+                  {t('createIssue.explanationHint')}
+                </span>
+              )}
               {explanationOpen ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  leftIcon={<Sparkles className="h-3.5 w-3.5" />}
-                  className="ml-auto"
-                  disabled
-                  title={t('createIssue.draftWithAiTooltip')}
-                >
-                  {t('createIssue.draftWithAi')}
-                </Button>
+                <DraftWithAiButton
+                  phase={draft.phase}
+                  hasDraft={draft.draftBaseline !== null}
+                  aiConfigured={aiConfigured}
+                  disabled={isPending || trimmedTitle.length === 0}
+                  onStart={draft.start}
+                  onStop={draft.stop}
+                />
               ) : null}
             </div>
             {explanationOpen ? (
-              <MarkdownEditor
-                label={t('createIssue.explanation')}
-                value={explanation}
-                onChange={setExplanation}
-                size="min"
-                onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
-              />
+              <>
+                <MarkdownEditor
+                  label={t('createIssue.explanation')}
+                  value={explanation}
+                  onChange={setExplanation}
+                  size="min"
+                  onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
+                />
+                {!aiConfigured ? <DraftGateNotice /> : null}
+                {draft.phase === 'error' ? (
+                  <DraftErrorNotice onRetry={draft.start} onDismiss={draft.dismissError} />
+                ) : null}
+              </>
             ) : (
               <span className="text-xs text-(--el-text-secondary)">
                 {t('createIssue.explanationSkip')}

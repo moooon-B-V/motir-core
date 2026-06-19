@@ -18,6 +18,7 @@ import type {
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
+  WorkItemExplanationSourceDto,
 } from '@/lib/dto/workItems';
 
 // Server Actions for the issue edit form (Subtask 2.3.6). Two DISTINCT paths —
@@ -52,6 +53,11 @@ export interface UpdateIssueInput {
   // explanationSource state machine (editing an ai_draft auto-flips it to
   // user_edited; a user_authored one stays user_authored).
   explanationMd?: string | null;
+  // Explanation provenance (Subtask 8.8.12). The edit form sends `ai_draft` for
+  // an untouched fresh AI draft and `user_edited` once the user edits a draft;
+  // it omits the field when the explanation was hand-typed or untouched, so the
+  // service's auto-flip rule applies. Explicit values win over the auto-flip.
+  explanationSource?: WorkItemExplanationSourceDto;
   parentId?: string | null;
   assigneeId?: string | null;
   priority?: WorkItemPriorityDto;
@@ -91,6 +97,7 @@ export async function updateIssueAction(input: UpdateIssueInput): Promise<IssueA
         title: input.title,
         descriptionMd: input.descriptionMd,
         explanationMd: input.explanationMd,
+        explanationSource: input.explanationSource,
         parentId: input.parentId,
         assigneeId: input.assigneeId,
         priority: input.priority,

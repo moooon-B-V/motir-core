@@ -10,6 +10,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { notificationsService } from '@/lib/services/notificationsService';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -171,7 +172,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
           TopNav "Search" trigger and the AppCommandPalette below share one
           context. */}
       <CommandPaletteProvider>
-        <CreateIssueProvider hasProject={Boolean(activeProject)} canEdit={canEdit}>
+        <CreateIssueProvider
+          hasProject={Boolean(activeProject)}
+          canEdit={canEdit}
+          aiConfigured={isMotirAiConfigured()}
+        >
           <ProjectAccessProvider canEdit={canEdit} canManage={canManage}>
             {/* ReportProvider (Subtask 6.11.7) owns the in-app report-widget
                 modal + open state, mounted once so the top-nav and inbox-header

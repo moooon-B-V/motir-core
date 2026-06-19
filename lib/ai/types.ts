@@ -13,6 +13,7 @@ export const ENVELOPE_VERSION = 'v1' as const;
 export const JOB_KINDS = [
   'noop',
   'discovery',
+  'generate_explanation',
   'generate_tree',
   'expand_item',
   'augment',
@@ -35,6 +36,11 @@ export interface JobContextBag {
   rootItemKey?: string | null;
   discovery?: unknown;
   code?: unknown;
+  // The work-item context a `generate_explanation` job (8.8.11) drafts an
+  // explanation FROM — the title / description / type / parent the "Draft with
+  // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
+  // like `discovery`); the motir-ai handler parses it into an ExplanationInput.
+  explanation?: unknown;
 }
 
 export interface RequestEnvelope {
@@ -131,4 +137,56 @@ export interface RawUsageResponse {
   monthlyHistory: { yearMonth: string; credits: number }[];
   perModel: { model: string; inputTokens: number; outputTokens: number; credits: number }[];
   recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
+}
+
+// ── Pre-plan read surface (Subtask 7.3.25) ───────────────────────────────────
+// The resumable pre-plan state motir-core fetches over GET /v1/preplan to resume
+// the onboarding loop and render each artifact's revision diffs at the gate
+// (7.3.5). Mirrors motir-ai's preplanSessionService PreplanStateDto. Keyed by the
+// core (workspace, project) — motir-ai resolves its AiProject from them, READ-ONLY,
+// returning the empty state ({ session: null, docs: [] }) for a not-yet-started
+// project (never a 404). Versioning is forward-only — no rollback.
+
+export interface PreplanStateQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+}
+
+// The session-persistent decisions + resume essentials (one per project). Dates
+// are ISO strings on the wire (motir-ai serializes its DateTime columns to JSON).
+export interface RawPreplanSession {
+  aiProjectId: string;
+  classification: string | null;
+  platform: string | null;
+  docSkipSet: string[];
+  designStarter: string | null;
+  validationTiming: string | null;
+  currentGate: string | null;
+  conversation: unknown;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// One entry of an artifact's forward revision log: when/why/what for a version.
+// `diff` is the structured doc diff (motir-ai docDiff.ts) the gate renders, or
+// null for the first (created) version.
+export interface RawPreplanRevisionEntry {
+  version: number;
+  changeReason: string | null;
+  changeKind: string | null;
+  diff: unknown;
+  createdAt: string;
+}
+
+export interface RawPreplanArtifactLog {
+  kind: 'discovery' | 'vision' | 'feasibility' | 'validation';
+  versions: RawPreplanRevisionEntry[];
+}
+
+// The raw GET /v1/preplan wire body. Both halves are empty/null for a project
+// that never started a pre-plan (a fresh resume, not an error).
+export interface RawPreplanStateResponse {
+  session: RawPreplanSession | null;
+  docs: RawPreplanArtifactLog[];
 }

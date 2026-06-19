@@ -261,6 +261,35 @@ describe('updateWorkItem — explanation-source state machine', () => {
     );
     expect(edited.explanationSource).toBe('user_authored');
   });
+
+  // Subtask 8.8.12: the auto-flip must gate on an ACTUAL explanationMd change,
+  // not merely on the field being present in the patch. The edit form always
+  // submits explanationMd, so a save that touches only another field (e.g.
+  // priority) sends the UNCHANGED ai_draft text — that must NOT silently flip the
+  // source to user_edited and drop the AI-drafted badge.
+  it('keeps ai_draft when the patch resubmits the SAME explanationMd while changing another field', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      createInput(fx, {
+        title: 'Has draft',
+        explanationMd: 'AI wrote this',
+        explanationSource: 'ai_draft',
+        priority: 'medium',
+      }),
+      fx.ctx,
+    );
+    expect(created.explanationSource).toBe('ai_draft');
+
+    const edited = await workItemsService.updateWorkItem(
+      created.id,
+      // explanationMd is present but unchanged; only priority actually changes.
+      { explanationMd: 'AI wrote this', priority: 'high' },
+      fx.ctx,
+    );
+    expect(edited.priority).toBe('high');
+    expect(edited.explanationMd).toBe('AI wrote this');
+    expect(edited.explanationSource).toBe('ai_draft');
+  });
 });
 
 // ── assignWorkItem ──────────────────────────────────────────────────────
