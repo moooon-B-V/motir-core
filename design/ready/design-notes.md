@@ -220,3 +220,90 @@ success)`, `CheckCircle2` icon in `--el-success`), bottom-right of the viewport:
 No new design-system entry is invented in this Story. If a future need arises
 that a shipped primitive can't cover, that is a NEW `design/` subtask, not a code
 workaround.
+
+---
+
+## Work-type chip + manual "Show instruction" (8.8.5, gating 8.8.10)
+
+Asset: **`work-type-manual.mock.html`** / **`.png`** — adds two related treatments
+to the dispatch rows above. (The base ready row anatomy is unchanged; this layers
+onto it.)
+
+### (1) The work-type chip on ready rows
+
+Each ready row gains the shipped **`WorkItemTypeChip`**
+(`components/issues/WorkItemTypeChip.tsx`) — the leaf's work `type` (`code` /
+`design` / `test` / … / `manual`), **distinct from the kind icon** at the row's
+lead. It sits at the **head of the meta cluster**, before the priority `Pill`
+(the two "tags" — type + priority — group together), then assignee, then the
+action slot: `[type chip] · [priority] · [assignee] · [action]`. A ready item
+with `type: null` (a story/task with no work type) **omits the chip** — no `—`
+placeholder, since a flex row (unlike the list's grid) needs no column filler.
+The chip recipe is unchanged (tint background via `workItemTypeChipBackground()`,
+`--el-text-strong` label, hued `WorkItemTypeIcon` — 14% mix, 18% for `manual`).
+
+### (2) The manual variant — copy button → "Show instruction"
+
+A coding agent **cannot run human work**, so a ready row whose item is manual
+(**`executor: human`** / **`type: manual`**) has **no `motir run` command**. Its
+action slot swaps the hover-revealed **Copy** icon-button for a labelled
+**"Show instruction"** button:
+
+- A **ghost `Button` size `sm`** (`--height-btn-sm`, `--radius-btn`, `--el-border`,
+  `text-(--el-text-secondary)`) with a leading lucide **`scroll-text`** glyph
+  (15px) and the text **"Show instruction"**. `aria-label` **"Show instruction
+  for PROD-<n>"**.
+- **Always visible** (not hover-gated like the agent Copy button) — reading the
+  instruction is the only way to action a human task, so it must not hide behind
+  hover. The agent Copy button stays reveal-on-hover (the row is calm at rest and
+  the command is one hover away). The **Manual type chip** is the at-rest
+  discriminator that flags a row as human work before you even reach the button.
+- Hover **Tooltip**: **"A human task — no run command"** (the shipped `Tooltip`,
+  dark `--el-text` bubble) — names WHY it differs from the other rows' Copy.
+
+Clicking opens the **instruction modal**.
+
+### The instruction modal (`Modal` + `MarkdownView`)
+
+The shipped **`Modal`** (`components/ui/Modal.tsx`, size **`lg`** = 32rem) +
+**`MarkdownView`** (`components/ui/MarkdownView.tsx`) rendering the item's
+**`descriptionMd`** — the SAME markdown stack + `motir-prose` styling as the issue
+detail page, so the run-instruction reads identically wherever it appears.
+
+- **Header** — `Modal title` (serif `text-xl`) = the work item **title**. A
+  **subhead** row below it: the mono key (`PROD-<n>`), the **Manual** type chip,
+  and **"Human task · assigned to {name}"** (or "· unassigned").
+- **Body** — `Modal.Body` (the shipped `flex-1 overflow-y-auto` scroll recipe)
+  wrapping `MarkdownView value={descriptionMd}`.
+- **Footer** — `Modal.Footer` with a single **"Close"** ghost `Button`; the
+  built-in `×` and Radix's ESC / click-outside / focus-trap / focus-return all
+  also dismiss.
+
+**States:**
+
+- **Empty** — when `descriptionMd` is blank, the body shows a quiet empty block
+  (lucide **`file-x`** 40px in `--el-text-faint` + **"No instruction yet"** +
+  "This human task has no description. Add one on the work item so whoever picks
+  it up knows what to do.") instead of a blank pane, pointing the reader at the
+  fix.
+- **Long content** — the body **scrolls** (`max-h-[90vh]` on the panel) while the
+  title, subhead, and footer stay pinned — the shipped `Modal` column layout.
+
+**Data note for 8.8.10:** `ReadyItemDto` must carry `executor` + `type` (to pick
+the variant) and the modal's description source — `descriptionMd` inline, or a
+**fetch-on-open** (`get_work_item` / the detail endpoint) to keep the list
+payload lean. Fetch-on-open is preferable when descriptions are long; the modal
+then shows a brief loading state before the `MarkdownView`.
+
+### Primitives composed (no hand-rolling)
+
+| Element                 | Shipped primitive                                                               |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| type chip               | `components/issues/WorkItemTypeChip.tsx`                                        |
+| show-instruction button | `components/ui/Button.tsx` (ghost, size `sm`) + lucide `scroll-text`            |
+| button tooltip          | `components/ui/Tooltip.tsx`                                                     |
+| instruction modal       | `components/ui/Modal.tsx` (size `lg`, `Modal.Body` + `Modal.Footer`)            |
+| instruction body        | `components/ui/MarkdownView.tsx` (`descriptionMd`)                              |
+| empty state             | inline (lucide `file-x` + copy) — the same shape as `EmptyState` at modal scale |
+
+No new design-system entry is invented — every piece reuses a shipped primitive.
