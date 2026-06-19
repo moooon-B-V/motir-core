@@ -1750,6 +1750,22 @@
               --el-code-bg: var(--color-muted);
               --el-code-text: var(--color-charcoal);
             }
+
+      /* ── Mock-only nested-theme fix for the SIDEBAR tokens ────────────────
+         --el-sidebar-* are declared on :root as var(--color-*). This mock puts
+         data-theme / data-palette on the nested .stage (so one page shows light
+         + dark panels), NOT on <html> — so those root-resolved tokens don't
+         recompute for the nested scope and the rail would keep the light/base
+         value (the onboarding [data-palette] fix re-emits the PAGE tokens but has
+         no sidebar tokens). Re-emit them scoped to the nested axis attrs so the
+         rail re-skins WITH the page. In the real app data-theme/palette sit on
+         <html>, so this block is unnecessary there. ── */
+      [data-theme],
+      [data-palette] {
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
     </style>
   </head>
   <body>
