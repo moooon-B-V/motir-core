@@ -57,6 +57,8 @@ export function ImmersiveTilt() {
     function reset(el: HTMLElement) {
       el.style.removeProperty('--tilt-rx');
       el.style.removeProperty('--tilt-ry');
+      el.style.removeProperty('--tilt-glare-x');
+      el.style.removeProperty('--tilt-glare-y');
       el.removeAttribute('data-tilt-active');
     }
 
@@ -78,9 +80,12 @@ export function ImmersiveTilt() {
         reset(el);
         return;
       }
-      const { rx, ry } = tiltFromPointer(rect, x, y, MAX_TILT_DEG);
+      const { rx, ry, px, py } = tiltFromPointer(rect, x, y, MAX_TILT_DEG);
       el.style.setProperty('--tilt-rx', `${rx.toFixed(2)}deg`);
       el.style.setProperty('--tilt-ry', `${ry.toFixed(2)}deg`);
+      // Glare follows the cursor across the face (the specular sweep), 0..100%.
+      el.style.setProperty('--tilt-glare-x', `${(px * 100).toFixed(1)}%`);
+      el.style.setProperty('--tilt-glare-y', `${(py * 100).toFixed(1)}%`);
       el.setAttribute('data-tilt-active', '1');
     }
 

@@ -1,178 +1,196 @@
 # Style — 3D / Immersive (`data-style="3d-immersive"`)
 
-> **DEFERRED follow-up (post-v1), EXPERIMENTAL.** The depth + perspective
-> alternate. Shipped as the `[data-style='3d-immersive']` block in
-> [`app/globals.css`](../../app/globals.css) (Tier 2), registered in
-> [`lib/theme/styles.ts`](../../lib/theme/styles.ts).
+> **DEFERRED follow-up (post-v1), EXPERIMENTAL.** A complete design **direction**
+> (shape/feel axis), authored in the Motir `DESIGN.md` shape so the onboarding
+> **design wizard** can emit it for a user's product: pick "3D / Immersive" and
+> this is the design language the build agent reads. Shipped in `motir-core` as
+> the `[data-style='3d-immersive']` block in
+> [`app/globals.css`](../../app/globals.css), the registry entry in
+> [`lib/theme/styles.ts`](../../lib/theme/styles.ts), and the pointer-parallax
+> engine [`components/theme/ImmersiveTilt.tsx`](../../components/theme/ImmersiveTilt.tsx)
+> — so the spec below is a real, running reference, not an aspiration.
 
-**Tagline:** Depth and perspective — dimensional cards floating over the page.
-**Inspiration:** Spatial / depth UI — visionOS spatial layers, Stripe-era
-layered cards, soft real-world light.
-**Wrong moods:** flat, austere, gridded, hard-edged, paper-like.
+**Tagline:** Spatial depth — surfaces are physical objects on layered planes that
+tip toward you and parallax under the light.
+**Inspiration:** Spatial / depth UI — visionOS layers, Stripe-era layered cards,
+the standard "3D card" tilt (vanilla-tilt.js / react-parallax-tilt / Atropos).
+**Wrong moods:** flat, austere, gridded, papery, hard-edged, static.
 
-This is the STYLE (shape/feel) axis only. **Colour is the independent
-`data-palette` axis** — 3D / Immersive inherits whatever palette is active and
-changes no hue. The `[data-style]` block overrides ONLY shape/feel tokens; see
-[`DESIGN.md`](../DESIGN.md) for the colour system and the two-axis contract.
+This is the STYLE (shape/feel) axis only — **colour is the independent
+`data-palette` axis**. Every depth effect here is colour-free or palette-derived,
+so a palette swap re-tints the atmosphere and leaves the geometry alone, and a
+style swap leaves hues alone. See [`../DESIGN.md`](../DESIGN.md) for the two-axis
+contract.
 
-**Where the "depth" comes from.** Two halves:
+---
 
-1. **Static depth (CSS tokens).** Every shadow token becomes a **deep, multi-layer**
-   drop — a top specular highlight (a lit edge where light catches the raised
-   tile) + a tight contact shadow + a mid ambient + a wide, soft key light far
-   below — so each surface lifts dramatically off the canvas and reads as a
-   physical object floating in space. The light/ink is literal `rgba` (white
-   highlight + near-ink shadow), never a palette token, so the colour axis is
-   untouched and the active palette's AA contrast is preserved by construction.
-2. **The 3D interaction (the `ImmersiveTilt` engine).** This is the one style
-   that ships a **behaviour**, not just CSS tokens — because the standard "3D
-   card" effect (vanilla-tilt.js / react-parallax-tilt / Atropos) is
-   _intrinsically interactive_ and a CSS `[data-style]` block cannot express it.
-   A shell-mounted engine ([`components/theme/ImmersiveTilt.tsx`](../../components/theme/ImmersiveTilt.tsx))
-   reads the cursor over a `[data-tilt]` tile and tips it **toward the pointer**
-   (`rotateX`/`rotateY` over a perspective), lifting it as it turns. It is active
-   **only** when this style is selected and the user has **not** requested reduced
-   motion (both observed live), and settles the tile flat on leave.
+## 1. Visual theme & atmosphere
 
-**How it differs from Glassmorphism:** both are soft, rounded, and floating, but
-Glassmorphism is a translucent **material** (frosted backdrop-blur over a
-palette-derived gradient canvas), whereas 3D / Immersive is **opaque depth** —
-real layered light and lift, no blur, no tint, no gradient canvas. Glass re-tints
-with the palette; 3D's depth is colour-free and stays constant across palettes.
+The whole UI reads as a **shallow 3D scene**: an immersive depth field behind the
+content, with every panel a physical object floating above it and tipping toward
+the cursor. Nothing is flat-on-the-page. The mood is tactile, spatial, alive —
+the opposite of a flat document. Calm depth, not a gimmick: motion is gated,
+hierarchy comes from _Z-distance_ (how far a surface floats) as much as from size
+or colour.
 
-## Feel-bearing dimensions
+The single most important rule of this direction, and the one a half-hearted
+implementation gets wrong: **3D is layered parallax, not a tilting flat plane.**
+A card whose contents are glued to its face and rotates as one rigid rectangle
+reads as "flat-with-a-tilt." A _real_ 3D surface puts its contents on **separate
+depth planes** that move relative to each other as it tips. That separation —
+`perspective` + `transform-style: preserve-3d` + per-layer `translateZ` — is §6.
 
-| Dimension             | 3D / Immersive                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Shape / silhouette    | Generously rounded dimensional tiles — 14px buttons/inputs, 20px cards, 28px modals. Soft, tactile.                      |
-| Border / stroke       | Borders nearly vanish (a faint hairline) — structure is read from depth + shadow, not an outline.                        |
-| Elevation philosophy  | The identity: deep, layered two-stop shadows (ambient wash + directional key light) float every surface.                 |
-| Surface / background  | Opaque dimensional cards floating over the canvas; depth (not tint or glass) is the material.                            |
-| Density rhythm        | Roomy and immersive — 22×12 buttons, 28px card padding, 40px controls; depth wants air.                                  |
-| Motion                | The standard 3D-card **pointer-parallax tilt** — tiles tip toward the cursor (reduced-motion-gated); settle on leave.    |
-| Typography            | Inherits the base editorial pairing (`motir`); the personality is in depth + light, not the type.                        |
-| Component silhouettes | Deeply-shadowed rounded cards / board cards / modals that tilt toward the pointer; pill status chips. Every tile floats. |
+## 2. Colour
 
-## Token overrides (`[data-style='3d-immersive']`)
+3D / Immersive sets **no hue** — it inherits whatever `data-palette` is active and
+preserves its AA contrast by construction. The two places this direction paints
+pixels are both **palette-derived**, never a raw hue:
 
-Only shape/feel tokens — no colour token appears in the block (the disjoint-axis
-acceptance criterion; enforced by `tests/theme/styleRegistry.test.ts`). The
-shadow ink is `rgba(15, 15, 15, …)`, the same near-ink the base + neo-brutalism
-shadow tokens use — never a `--color-*` / `--el-*`:
+- the **immersive background** (a `color-mix()` depth field over `--el-accent` /
+  `--el-link` / `--el-text` — §6), and
+- the **glare** specular sweep (a `color-mix()` over `--el-page-bg` — §6/§7).
 
-- **Radius (silhouette):** generous dimensional rounding — the generic scale
-  opens up (`--radius-xs: 6px` … `--radius-xl: 24px`) and the semantic surfaces
-  follow (`--radius-btn / -input: 14px`, `--radius-card: 20px`,
-  `--radius-modal: 28px`, `--radius-control: 12px`, `--radius-kbd: 8px`), with
-  **`--radius-badge: 9999px`** keeping soft dimensional status pills.
-  `--radius-pill` is left **untouched** so genuinely-circular affordances
-  (avatars, status dots, the spinner) stay round.
-- **Elevation (the signature):** every shadow token becomes a **deep, layered
-  two-stop** drop — a tight ambient wash + a wide soft key light — scaling up
-  from `--shadow-subtle` through `--shadow-card`, `--shadow-elevated`,
-  `--shadow-modal`, to `--shadow-hero-mockup` (the deepest float). Surfaces read
-  as physical objects lifted off the page.
-- **Typography:** unchanged — `defaultTypeId: 'motir'` (the base editorial
-  pairing). A `[data-style]` block sets no `--font-*` token (the type axis is
-  independent, `data-type`).
-- **Density:** roomy — `--spacing-btn-x/y: 22/12`, `--spacing-input-x/y: 18/13`,
-  `--spacing-control-x/y: 14/8`, `--height-control: 40px`, `--height-input: 46px`
-  over a generous `--spacing-card-padding: 28px`; depth wants air around each tile.
-- **Motion:** `--transition-duration: 260ms` (`--transition-fast: 180ms`,
-  `--transition-slow: 360ms`) with `--active-scale: 0.98` — a slower, weighty
-  ease so the depth feels heavy, with a gentle press that settles a lifted
-  surface back down.
+A palette swap re-tints both; a style swap touches neither. (Shadows use a fixed
+near-ink `rgba`, the same the base shadows do — a shadow is not a palette colour.)
 
-### The pointer-parallax tilt (the standard 3D-card effect)
+## 3. Typography
 
-The interactive half is the **standard "3D card" tilt** — the effect
-vanilla-tilt.js / react-parallax-tilt / Atropos all implement — which a CSS
-token block cannot express, so **this style ships a behaviour** (the one style
-that does). Two parts:
+Inherits the base editorial pairing (`defaultTypeId: 'motir'`) — the personality
+is depth and light, not type. (Type is the independent `data-type` axis; this
+direction sets no `--font-*`.) One caveat the depth imposes: text on a tilted /
+`translateZ`-lifted plane sub-pixel-softens slightly — keep body copy **on the
+card face** (Z 0), and lift only short, large headers/labels onto a forward plane
+where the softening is invisible.
 
-- **The engine** — [`components/theme/ImmersiveTilt.tsx`](../../components/theme/ImmersiveTilt.tsx),
-  mounted once in the app shell. A single delegated `pointermove` listener finds
-  the `[data-tilt]` tile under the cursor, maps the pointer to a rotation
-  (`lib/theme/tilt.ts` — pure, unit-tested), and writes per-tile `--tilt-rx` /
-  `--tilt-ry` vars + a `data-tilt-active` flag (rAF-coalesced, one
-  `getBoundingClientRect` per frame). It is **inert** unless `<html data-style>`
-  is `3d-immersive` **and** the user has not requested reduced motion — both
-  watched live (a `MutationObserver` + the `prefers-reduced-motion` media query),
-  so toggling the style in the Appearance picker enables/disables it with no
-  reload.
-- **The CSS** — `[data-style='3d-immersive'] [data-tilt]` turns those vars into
-  `transform: perspective(1100px) rotateX(var(--tilt-rx)) rotateY(var(--tilt-ry))`,
-  deepening the shadow to `--shadow-elevated` while active and easing the tile
-  flat on leave. The whole block lives inside
-  `@media (prefers-reduced-motion: no-preference)`. It pins **no hue** (only
-  `transform` and `box-shadow`), so the style/palette axes stay disjoint and
-  `styleRegistry.test.ts`'s material-rule check (which inspects only
-  colour-painting rules) skips it.
+## 4. Component depth treatment (the plane ladder)
 
-Tiles opt in with the **`data-tilt`** hook: the shared `Card` primitive (so
-every card/panel across the app tilts) and the kanban `BoardCard` (so `/boards`
-tips toward the cursor). While a board card is being dragged, dnd-kit's inline
-`transform` overrides the tilt transform, so the two never fight.
+Every surface is assigned a **depth plane**. The ladder (nearest the viewer →
+farthest) and the elevation each surface carries:
 
-### Immersive background + floating panels (every page, not just cards)
+| Surface                                                                    | Plane / treatment                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Modal / dialog**                                                         | Highest float — `--shadow-modal`; the page behind dims and recedes.                                                                                                                                                                        |
+| **Popover / dropdown / menu**                                              | Floats on `--shadow-elevated`; tips with the cursor like a small card.                                                                                                                                                                     |
+| **Card — the reference 3D object**                                         | Floats on `--shadow-card`. On tilt: the **header/title** rides a **front** plane (`translateZ ~42px`), the **footer** a nearer **back** plane (`~14px`), the **body stays on the face** (Z 0). A cursor-tracked **glare** sweeps the face. |
+| **Board card (kanban tile)**                                               | A small card — tips toward the cursor, lifts on hover.                                                                                                                                                                                     |
+| **Page panels** (work-item table, board column, backlog, dashboard widget) | **Float, but do not tilt** — they're large; a full table tipping is disorienting and clips sticky headers. They carry the deep resting shadow only (see size-gating, §7).                                                                  |
+| **Button**                                                                 | Sits on the surface; presses _into_ it (`--active-scale: 0.98`).                                                                                                                                                                           |
+| **Input / control**                                                        | On the face; generous rounded dimensional silhouette.                                                                                                                                                                                      |
+| **Status pill / badge**                                                    | Stays a flat pill on its parent's plane (a chip doesn't float).                                                                                                                                                                            |
 
-The table/list/board pages have no card surfaces of their own, so two more
-pieces make them read as immersive:
+The plane a surface sits on is the hierarchy: a modal is "closer" than a card,
+which is "closer" than the table it sits in, which floats over the canvas.
 
-- **An immersive background** on `[data-style='3d-immersive'] body` — a soft,
-  palette-derived (`color-mix` over `--el-accent`/`--el-link`/`--el-text`) depth
-  atmosphere with a centre vignette, `background-attachment: fixed`. It pins no
-  hue (palette-derived, like glassmorphism's canvas) and shows on **every** page.
-- **Floating panels.** Every `[data-tilt]` tile carries a deep **resting** shadow
-  (`--shadow-card`, static — applies even under reduced motion) so it lifts off
-  that canvas. Beyond `Card`/`BoardCard`, the major page panels are marked
-  `data-tilt`: the shared `TreeTable` (the `/issues` tree), `IssueListTable` (the
-  list view), the `BacklogContainer` sprint/backlog panel, the kanban
-  `BoardColumn`, and the dashboard `WidgetCard`.
-- **Size-gating.** The tilt engine only _tilts_ tiles up to `MAX_TILE_PX` (560)
-  in either dimension; a larger panel (a table, a column, a backlog) **floats but
-  does not tilt** — tipping a full table toward the cursor would be disorienting
-  and could clip sticky headers / portaled menus. So small tiles tilt; big panels
-  just lift.
+## 5. Layout & density
 
-## Why this is more than a token swap
+Roomy and immersive — depth wants air around each floating object so its shadow
+can read. Generous control padding (`--spacing-btn 22/12`, `--spacing-card-padding
+28px`, `--height-control 40px`) and generous dimensional radii (cards 20px,
+modals 28px, buttons/inputs 14px) — soft, tactile tiles, never sharp.
 
-The feel-bearing axes a pure radius swap would miss are all moved here:
+## 6. Depth & Elevation — the core of this direction
 
-- **Elevation** flips from "modest drop shadows" to **deep, multi-layer depth**
-  (specular highlight + contact + ambient + far key light) — the single biggest
-  static change and the source of the floating read.
-- **Motion** adds the **pointer-parallax tilt** — the genuine 3D interaction, not
-  just a colour transition — so tiles respond spatially to the cursor.
-- **Density** opens up (roomy padding + taller controls), giving each lifted
-  tile the air depth needs to read.
+Two halves: **static depth** (always on, even under reduced motion) and the
+**3D interaction** (gated).
 
-Because every `motir-core` primitive consumes the semantic shape tokens
-(`Card` → `--radius-card` + `--shadow-card`, `Modal` → `--radius-modal` +
-`--shadow-modal`, `Button` → `--radius-btn` + `--active-scale`, `Input` →
-`--radius-input` + `--height-input`, `Popover` → `--shadow-elevated`), the token
-block alone re-shapes the entire UI into floating tiles; the tilt engine adds the
-interactive 3D on top.
+### 6a. Static depth — the float
 
-## Accessibility & performance
+- **The shadow ladder is deep and multi-layer.** Every elevation token is a
+  specular top highlight + a tight contact shadow + a mid ambient + a wide, soft
+  key light far below — so a surface reads as a physical object lifted off the
+  canvas, not a card with a faint drop shadow. Scales `--shadow-subtle` →
+  `--shadow-card` → `--shadow-elevated` → `--shadow-modal` → `--shadow-hero-mockup`.
+- **Every floating surface carries a resting shadow.** Default cards have none in
+  the base style; here every `[data-tilt]` tile gets `--shadow-card` at rest so it
+  lifts off the canvas. Static — applies under reduced motion too.
+- **The immersive background.** `body` wears a palette-derived depth field —
+  soft `color-mix()` washes from `--el-accent` (top) and `--el-link` (corner) plus
+  a centre vignette from `--el-text`, `background-attachment: fixed`. It gives
+  _every_ page (even flat tables) atmosphere and a sense of space the floating
+  panels sit within.
 
-This style is flagged **EXPERIMENTAL — performance + accessibility heavy; gate
-carefully**, and it is gated on both fronts:
+### 6b. The 3D interaction — layered parallax (the proper technique)
 
-- **Reduced motion.** Both the tilt engine (it checks `prefers-reduced-motion`
-  and won't run) AND the tilt CSS (wrapped in `@media (prefers-reduced-motion:
-no-preference)`) are disabled for a reduced-motion user — belt and suspenders.
-  They keep the static deep-shadow depth, which carries the whole identity with
-  zero movement.
-- **Performance.** Depth is **box-shadow** (compositor-friendly); the tilt moves
-  only **`transform`** (GPU-accelerated, no layout/paint). The engine is a single
-  passive delegated listener, rAF-coalesced to one rect read per frame — not a
-  listener per card — and is completely idle for every other style.
-- **Contrast.** The style changes no colour token, so the active palette's AA
-  contrast is preserved by construction; the white specular highlight and the
-  shadows sit on surface edges, never under text.
-- **Contrast.** The style changes no colour token, so the active palette's AA
-  contrast is preserved by construction (text/background pairs are untouched).
-  The shadows sit on surface edges, never under text, so no foreground/background
-  contrast is reduced. Verify on the `/tokens` specimen + the design-mockup
-  render checklist.
+This is what separates real 3D from a flat-plane tilt, and it is the standard
+vanilla-tilt / Atropos technique:
+
+1. **Perspective + `preserve-3d`.** While a tile is active the engine applies
+   `transform: perspective(900px) rotateX(var(--tilt-rx)) rotateY(var(--tilt-ry))`
+   AND `transform-style: preserve-3d` — establishing a real 3D coordinate space so
+   the tile's children render _in depth_, not flattened onto its face.
+2. **Per-layer `translateZ` (the parallax).** The card's slots ride different
+   planes — header on a **front** plane (`translateZ(42px)`), footer on a **back**
+   plane (`translateZ(14px)`), body on the **face** (Z 0). As the card tips, the
+   planes shift relative to each other: the title visibly floats _above_ the body.
+   That inter-layer motion is the 3D read; without it you get the "halfway" look.
+3. **Cursor-tracked glare.** A `radial-gradient` specular sweep (palette-derived,
+   `color-mix` over `--el-page-bg`) follows the pointer across the face
+   (`--tilt-glare-x/y`), fading in only while active — the light catching a
+   tilted surface.
+4. **The tip itself.** Rotation maxes at ~7° at the edges, flat at the centre, on
+   a tight `perspective(900px)` for a tangible (not extreme) tip; a gentle scale /
+   deeper shadow as it lifts; eases flat on leave.
+
+## 7. Motion & accessibility
+
+- **The engine.** [`ImmersiveTilt`](../../components/theme/ImmersiveTilt.tsx),
+  mounted once in the shell: one delegated, rAF-coalesced `pointermove` listener
+  maps the cursor over a `[data-tilt]` tile to a rotation + glare position
+  (`lib/theme/tilt.ts`, pure + unit-tested) and writes per-tile CSS vars. No
+  per-tile listeners.
+- **Size-gating.** Only tile-sized surfaces (≤ `MAX_TILE_PX` 560 in either
+  dimension) _tilt_; larger panels (tables, columns, backlog) **float without
+  tilting** — tipping a full table would be disorienting and could clip sticky
+  headers / portaled menus.
+- **Reduced motion (the "gate carefully" caveat).** The tilt + parallax + glare
+  are disabled in **both** the engine (it checks `prefers-reduced-motion`) and the
+  CSS (the whole interaction block is inside `@media (prefers-reduced-motion:
+no-preference)`). A reduced-motion user keeps the full _static_ depth (deep
+  shadows, immersive background, floating panels) with zero movement.
+- **Performance.** Depth is `box-shadow` (compositor-friendly); the interaction
+  animates only `transform` (GPU). Idle for every other style.
+- **Contrast.** No colour token changes, so the palette's AA holds. Body copy
+  stays on the face (Z 0) to avoid tilt sub-pixel softening; only short headers
+  lift.
+
+## 8. Do's & Don'ts
+
+**Do**
+
+- Put content on **depth planes** — lift short headers/labels onto a forward
+  plane; keep body copy on the face.
+- Express hierarchy with **Z-distance** (how far a surface floats) + the shadow
+  ladder, not just size.
+- Keep the immersive background and glare **palette-derived** (`color-mix` over
+  `--el-*`), never a raw hue.
+
+**Don't**
+
+- ❌ Tilt a card as a **rigid flat plane** (no `preserve-3d`, no per-layer
+  `translateZ`) — that is the "flat-design + 3D mix" failure this direction
+  exists to avoid.
+- ❌ Tilt **large panels** (tables, columns) — float them instead.
+- ❌ Lift **body text / dense content** onto a Z-plane — it softens; only short
+  headers/labels.
+- ❌ Pin a hue in the background or glare — keep the colour axis disjoint.
+
+---
+
+## Implementation map (the running reference)
+
+| Piece                                                           | Where                                                                                                                             |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Token block (radius / shadow ladder / density / motion)         | `[data-style='3d-immersive']` in [`app/globals.css`](../../app/globals.css)                                                       |
+| Immersive background + resting float + tilt/parallax/glare CSS  | same file, the `[data-style='3d-immersive'] body` + `[data-tilt]` rules                                                           |
+| Pointer-parallax engine (cursor → rotation + glare vars, gated) | [`components/theme/ImmersiveTilt.tsx`](../../components/theme/ImmersiveTilt.tsx) + [`lib/theme/tilt.ts`](../../lib/theme/tilt.ts) |
+| Depth-plane hooks                                               | `data-tilt` (the floating tile) + `data-tilt-layer="front                                                                         | back"`(the parallax slots) — emitted by`Card`, `BoardCard`, and the page panels |
+| Registry entry (the rubric dimensions)                          | `STYLE_REGISTRY['3d-immersive']` in [`lib/theme/styles.ts`](../../lib/theme/styles.ts)                                            |
+
+**How the wizard uses this.** The onboarding design step lets a user pick a design
+direction; "3D / Immersive" maps to **this document** as the design language, and
+to the `[data-style='3d-immersive']` implementation as the reference build. The
+emitted product `DESIGN.md` carries §1–§8 above (atmosphere, colour approach,
+type, component plane ladder, layout, depth & elevation, motion, do/don't) — the
+same shape as Motir's own [`DESIGN.md`](../DESIGN.md), grounded in
+[getdesign.md](https://getdesign.md) references for the palette/type axes it
+composes with.

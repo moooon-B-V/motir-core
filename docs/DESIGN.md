@@ -303,6 +303,16 @@ Dark mode keeps shadows but reduces opacity — the contrast in dark mode
 comes more from `--color-surface` vs `--color-background` than from
 shadow depth.
 
+**Depth as a swappable axis.** The shadow ladder above is the _default_ (Warm
+Editorial) elevation model — flat-with-hairlines. A **style** can redefine depth
+entirely: the **3D / Immersive** direction (§9) turns elevation into a true
+spatial model — a deep multi-layer shadow ladder, an immersive palette-derived
+background, and a `perspective` + `transform-style: preserve-3d` +
+per-layer-`translateZ` **layered parallax** (surfaces tip toward the cursor and
+their slots float on separate depth planes). That is the canonical example of a
+style owning §6 wholesale; its full spec is
+[`docs/styles/3d-immersive.md`](./styles/3d-immersive.md).
+
 ## 7. Do's and Don'ts
 
 ### Do

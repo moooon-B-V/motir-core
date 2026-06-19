@@ -851,16 +851,68 @@
   }
   /* While the pointer is over the tile the engine sets data-tilt-active='1':
      tip it toward the cursor (the per-tile --tilt-rx/ry the engine writes),
-     drop the transform transition so it tracks the cursor in real time, and
-     deepen the shadow so the lifted tile casts further. */
+     drop the transform transition so it tracks the cursor in real time, deepen
+     the shadow so the lifted tile casts further, and — the proper-3D bit —
+     establish a 3D context (`preserve-3d`) so the card's slots can sit on
+     separate translateZ planes and PARALLAX (a flat-plane tilt without this is
+     the "halfway / flat-3D mix" tell). `position: relative` anchors the glare. */
   [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] {
-    transform: perspective(var(--tilt-perspective, 1100px)) rotateX(var(--tilt-rx, 0deg))
+    transform: perspective(var(--tilt-perspective, 900px)) rotateX(var(--tilt-rx, 0deg))
       rotateY(var(--tilt-ry, 0deg));
+    transform-style: preserve-3d;
     transition:
       transform 80ms linear,
       box-shadow 260ms ease-out;
     box-shadow: var(--shadow-elevated);
   }
+
+  /* DEPTH PLANES — the card's slots lift onto different translateZ planes so
+     they parallax above the card face as it tilts (the title/header pops most,
+     the footer sits nearer the face; the body stays ON the face so arbitrary
+     content never renders skewed). Only while actively tilting, so a resting
+     card is perfectly flat. This is the standard layered-parallax technique
+     (vanilla-tilt / Atropos): perspective + preserve-3d + per-layer translateZ. */
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] [data-tilt-layer='front'] {
+    transform: translateZ(42px);
+    transition: transform 80ms linear;
+  }
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] [data-tilt-layer='back'] {
+    transform: translateZ(14px);
+    transition: transform 80ms linear;
+  }
+
+  /* GLARE — a cursor-tracked specular sweep across the face (the light catching
+     a tilted surface). Palette-DERIVED (color-mix over --el-page-bg, never a raw
+     hue → passes the material-rule test; a palette swap re-tints the sheen). It
+     rides a high translateZ so it reads as light on the front glass, fades in
+     only while active, and never eats pointer events. */
+  [data-style='3d-immersive'] [data-tilt]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      circle at var(--tilt-glare-x, 50%) var(--tilt-glare-y, 50%),
+      color-mix(in srgb, var(--el-page-bg) 65%, transparent),
+      transparent 55%
+    );
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+    pointer-events: none;
+  }
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1']::after {
+    opacity: 0.45;
+    /* Just above the card FACE but BELOW the popped header/footer planes, so it
+       lights the surface without washing the floating title. */
+    transform: translateZ(2px);
+  }
+}
+
+/* `position: relative` anchors the glare ::after to each tile. Static (outside
+   the motion gate) so the anchor is stable; the glare itself only shows while
+   tilting (above). */
+[data-style='3d-immersive'] [data-tilt] {
+  position: relative;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

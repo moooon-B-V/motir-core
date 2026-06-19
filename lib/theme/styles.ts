@@ -298,7 +298,7 @@ export const STYLE_REGISTRY = {
       stroke:
         'Borders nearly vanish (a faint hairline) — structure is read from depth + shadow, not an outline.',
       elevation:
-        'The identity axis: deep, layered two-stop shadows (a soft ambient wash + a directional key light) lift every surface dramatically off the canvas, so cards read as physical objects floating in space.',
+        'The identity axis: deep multi-layer shadows float every surface off the canvas, and on tilt a card becomes a TRUE 3D object — perspective + preserve-3d + per-slot translateZ planes (header pops forward, footer behind) parallax under a cursor-tracked glare. Not a flat-plane tilt.',
       surface:
         'A palette-derived immersive background atmosphere on every page, with opaque dimensional panels (cards, tables, board columns, widgets) floating above it on deep resting shadows — depth (not tint or glass) is the material; nothing sits flat.',
       density:
