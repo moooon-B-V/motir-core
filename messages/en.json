@@ -3421,5 +3421,51 @@
       "errorDescription": "Something went wrong fetching this organization's usage. The figures are temporarily unavailable — your credits are safe.",
       "loading": "Loading usage…"
     }
+  },
+  "onboarding": {
+    "nav": {
+      "product": "Product",
+      "pricing": "Pricing",
+      "docs": "Docs",
+      "logIn": "Log in",
+      "signUp": "Sign up"
+    },
+    "landing": {
+      "badge": "Vibe project",
+      "headline": "What do you want to build?",
+      "subhead": "Describe your idea. Motir plans the whole project — brand, pricing, marketing and the code — tracks every kind of work, and ships the code for you.",
+      "ideaLabel": "Describe your idea",
+      "heroPlaceholder": "A tool for freelancers to send invoices and track which clients have paid…",
+      "heroHint": "Free to start · no card",
+      "startPlanning": "Start planning",
+      "previewCaption": "Here's what happens next",
+      "footnote": "Motir walks you through each step and writes up what it finds — you read it, react in the chat, and continue when it's right. Nothing's locked until your plan is generated.",
+      "steps": {
+        "understandTitle": "Understanding your idea",
+        "understandDesc": "We chat to figure out what you're building and who it's for — and find the closest existing products.",
+        "scopeTitle": "What we'll build",
+        "scopeDesc": "We agree on what's in and out for the first version, and the key decisions behind it.",
+        "planTitle": "Your plan, then the build",
+        "planDesc": "A complete to-do list Motir builds from — and tracks as a roadmap through every epic."
+      },
+      "optional": {
+        "summary": "Optional steps along the way",
+        "summaryHint": "— Motir adds these only when they fit your project",
+        "names": "reality check · market check · design",
+        "optionalTag": "optional",
+        "webOnlyTag": "web only",
+        "worthTitle": "Is it worth building?",
+        "worthDesc": "A quick reality check — how big the market is and how hard it'll be to build.",
+        "demandTitle": "Will people want it?",
+        "demandDesc": "We check real demand and competitors — and can prove demand first with a marketing site before you build.",
+        "designTitle": "Design your look",
+        "designDesc": "Pick how your product looks and feels — or skip it and use Motir's default."
+      }
+    },
+    "connectGate": {
+      "title": "AI planning isn't configured",
+      "body": "Planning runs on Motir Cloud; this self-hosted workspace has no connection yet.",
+      "cta": "Connect Motir AI"
+    }
   }
 }
