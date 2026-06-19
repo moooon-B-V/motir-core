@@ -1,8 +1,11 @@
 import { db } from '@/lib/db';
 import { userAppearancePreferenceRepository } from '@/lib/repositories/userAppearancePreferenceRepository';
 import type { UpsertUserAppearancePreferenceInput } from '@/lib/repositories/userAppearancePreferenceRepository';
-import { toAppearancePreferenceDto } from '@/lib/mappers/appearancePreferenceMappers';
-import type { AppearancePreferenceDto } from '@/lib/dto/appearancePreference';
+import {
+  toAppearancePreferenceDto,
+  toAppliedAppearanceDto,
+} from '@/lib/mappers/appearancePreferenceMappers';
+import type { AppearancePreferenceDto, AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 import { InvalidAppearanceValueError } from '@/lib/appearance/errors';
 import { isThemePattern } from '@/lib/theme/types';
 import { isStyleId } from '@/lib/theme/styles';
@@ -57,6 +60,19 @@ export const appearancePreferenceService = {
   async getResolved(userId: string): Promise<AppearancePreferenceDto> {
     const row = await userAppearancePreferenceRepository.findByUserId(userId);
     return toAppearancePreferenceDto(row);
+  },
+
+  /**
+   * The user's APPLIED appearance — the four `<html>` data-attribute values
+   * (Subtask 7.3.61), with the type axis resolved through the style-default
+   * precedence (a pinned type wins, else the active style's default). Read by
+   * the root layout to render the signed-in user's real appearance on the first
+   * byte (cross-device, no flash) and to seed the FOUC init script + the theme
+   * context. Read-only (no `tx`).
+   */
+  async getApplied(userId: string): Promise<AppliedAppearanceDto> {
+    const row = await userAppearancePreferenceRepository.findByUserId(userId);
+    return toAppliedAppearanceDto(row);
   },
 
   /**

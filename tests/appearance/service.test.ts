@@ -42,6 +42,60 @@ describe('appearancePreferenceService.getResolved', () => {
   });
 });
 
+describe('appearancePreferenceService.getApplied', () => {
+  it('resolves to all defaults for an untouched user (no row), unpinned type', async () => {
+    const user = await createTestUser();
+
+    const applied = await appearancePreferenceService.getApplied(user.id);
+
+    expect(applied).toEqual({
+      pattern: THEME_DEFAULTS.pattern,
+      styleId: DEFAULT_STYLE_ID,
+      paletteId: DEFAULT_PALETTE_ID,
+      typeId: DEFAULT_TYPE_ID,
+      typePinned: false,
+    });
+    expect(await userAppearancePreferenceRepository.findByUserId(user.id)).toBeNull();
+  });
+
+  it('follows the active STYLE default type when the user pinned no type', async () => {
+    const user = await createTestUser();
+    // swiss-minimal-flat's defaultTypeId is `motir-sans` (≠ the global default),
+    // so an unpinned type must apply the STYLE default, not `motir` — the
+    // precedence 7.3.60 deferred to this subtask.
+    await appearancePreferenceService.update(user.id, { styleId: 'swiss-minimal-flat' });
+
+    const applied = await appearancePreferenceService.getApplied(user.id);
+
+    expect(applied).toEqual({
+      pattern: THEME_DEFAULTS.pattern,
+      styleId: 'swiss-minimal-flat',
+      paletteId: DEFAULT_PALETTE_ID,
+      typeId: 'motir-sans',
+      typePinned: false,
+    });
+  });
+
+  it('keeps an explicitly pinned type and marks it pinned', async () => {
+    const user = await createTestUser();
+    await appearancePreferenceService.update(user.id, {
+      pattern: 'dark',
+      styleId: 'swiss-minimal-flat',
+      typeId: 'editorial',
+    });
+
+    const applied = await appearancePreferenceService.getApplied(user.id);
+
+    expect(applied).toEqual({
+      pattern: 'dark',
+      styleId: 'swiss-minimal-flat',
+      paletteId: DEFAULT_PALETTE_ID,
+      typeId: 'editorial',
+      typePinned: true,
+    });
+  });
+});
+
 describe('appearancePreferenceService.update', () => {
   it('persists a partial patch, resolves the rest to defaults, and returns the DTO', async () => {
     const user = await createTestUser();

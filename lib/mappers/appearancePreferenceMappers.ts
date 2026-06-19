@@ -1,9 +1,10 @@
 import type { UserAppearancePreference } from '@prisma/client';
-import type { AppearancePreferenceDto } from '@/lib/dto/appearancePreference';
+import type { AppearancePreferenceDto, AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 import { resolvePattern } from '@/lib/theme/types';
 import { resolveStyle } from '@/lib/theme/styles';
 import { resolvePalette } from '@/lib/theme/palettes';
 import { resolveType } from '@/lib/theme/typography';
+import { resolveAxesToApplied } from '@/lib/theme/appearance-resolution';
 
 // Prisma → DTO mapping for the appearance-preference surface (Story 7.3 ·
 // Subtask 7.3.60). The single place absence + stale values collapse to the
@@ -24,4 +25,20 @@ export function toAppearancePreferenceDto(
     paletteId: resolvePalette(row?.paletteId).id,
     typeId: resolveType(row?.typeId).id,
   };
+}
+
+/**
+ * Resolve a stored row (or its absence) to the APPLIED appearance — the shape
+ * that drives the `<html>` data-attributes (Subtask 7.3.61). Unlike
+ * {@link toAppearancePreferenceDto}, the type axis follows the active style's
+ * default when the user has pinned no type (delegated to the registry-pure
+ * `resolveAxesToApplied`, shared with the client's anonymous path).
+ */
+export function toAppliedAppearanceDto(row: UserAppearancePreference | null): AppliedAppearanceDto {
+  return resolveAxesToApplied({
+    pattern: row?.pattern,
+    styleId: row?.styleId,
+    paletteId: row?.paletteId,
+    typeId: row?.typeId,
+  });
 }
