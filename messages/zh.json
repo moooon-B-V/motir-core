@@ -2685,7 +2685,6 @@
       "direct": "直接相关",
       "watching": "关注"
     },
-    "watchingDisabledTooltip": "关注——将在工作项关注功能上线后可用",
     "options": "通知选项",
     "markAllRead": "全部标为已读",
     "settings": "通知设置",

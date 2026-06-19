@@ -8,6 +8,7 @@ import type {
   MarkAllReadResultDTO,
   MarkReadResultDTO,
   NotificationsPageDTO,
+  UnreadByCategoryDTO,
   UnreadCountDTO,
 } from '@/lib/dto/notifications';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -66,6 +67,29 @@ async function resolveActors(
   return new Map(actors.map((u) => [u.id, u]));
 }
 
+/**
+ * The per-drawer-tab unread breakdown (bug 8.8.1) — one category-scoped unread
+ * count per tab, both index-backed (the partial `notification_unread_idx`),
+ * read in parallel. The GLOBAL `unreadCount` the bell badge shows is the SUM of
+ * these (the `NotificationCategory` enum is exactly `direct | watching`), so the
+ * drawer reports the sum to the bell while each tab badge reads its own entry.
+ */
+async function unreadByCategory(
+  recipientUserId: string,
+  tx: Prisma.TransactionClient,
+): Promise<UnreadByCategoryDTO> {
+  const [direct, watching] = await Promise.all([
+    notificationRepository.countUnreadByRecipient(recipientUserId, { category: 'direct' }, tx),
+    notificationRepository.countUnreadByRecipient(recipientUserId, { category: 'watching' }, tx),
+  ]);
+  return { direct, watching };
+}
+
+/** Global unread total = the sum of the per-tab breakdown (the bell badge). */
+function totalUnread(byCategory: UnreadByCategoryDTO): number {
+  return byCategory.direct + byCategory.watching;
+}
+
 export const notificationsService = {
   /**
    * One cursor-paged window of the caller's feed (take 20), with the total +
@@ -88,19 +112,20 @@ export const notificationsService = {
       const rows = window.slice(0, NOTIFICATION_PAGE_SIZE);
       const hasMore = window.length > NOTIFICATION_PAGE_SIZE;
 
-      const [actorsById, totalCount, unreadCount] = await Promise.all([
+      const [actorsById, totalCount, byCategory] = await Promise.all([
         resolveActors(
           rows.map((r) => r.actorId),
           tx,
         ),
         notificationRepository.countByRecipient(ctx.userId, { category: options.category }, tx),
-        notificationRepository.countUnreadByRecipient(ctx.userId, tx),
+        unreadByCategory(ctx.userId, tx),
       ]);
 
       return {
         notifications: rows.map((row) => toNotificationDto(row, actorsById)),
         totalCount,
-        unreadCount,
+        unreadCount: totalUnread(byCategory),
+        unreadByCategory: byCategory,
         nextCursor: hasMore ? (rows[rows.length - 1]?.id ?? null) : null,
       };
     });
@@ -113,7 +138,7 @@ export const notificationsService = {
    */
   async getUnreadCount(ctx: ServiceContext): Promise<UnreadCountDTO> {
     return withWorkspaceContext(ctx, async (tx) => {
-      const unreadCount = await notificationRepository.countUnreadByRecipient(ctx.userId, tx);
+      const unreadCount = await notificationRepository.countUnreadByRecipient(ctx.userId, {}, tx);
       return { unreadCount };
     });
   },
@@ -141,12 +166,16 @@ export const notificationsService = {
           ? await notificationRepository.markRead(notificationId, new Date(), tx)
           : existing;
 
-      const [actorsById, unreadCount] = await Promise.all([
+      const [actorsById, byCategory] = await Promise.all([
         resolveActors([row.actorId], tx),
-        notificationRepository.countUnreadByRecipient(ctx.userId, tx),
+        unreadByCategory(ctx.userId, tx),
       ]);
 
-      return { notification: toNotificationDto(row, actorsById), unreadCount };
+      return {
+        notification: toNotificationDto(row, actorsById),
+        unreadCount: totalUnread(byCategory),
+        unreadByCategory: byCategory,
+      };
     });
   },
 
@@ -159,8 +188,8 @@ export const notificationsService = {
   async markAllRead(ctx: ServiceContext): Promise<MarkAllReadResultDTO> {
     return withWorkspaceContext(ctx, async (tx) => {
       await notificationRepository.markAllReadByRecipient(ctx.userId, new Date(), tx);
-      const unreadCount = await notificationRepository.countUnreadByRecipient(ctx.userId, tx);
-      return { unreadCount };
+      const byCategory = await unreadByCategory(ctx.userId, tx);
+      return { unreadCount: totalUnread(byCategory), unreadByCategory: byCategory };
     });
   },
 };
