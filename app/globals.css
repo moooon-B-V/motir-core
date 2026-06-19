@@ -700,6 +700,44 @@
   background-position: center top;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
+   The StyleVignette preview specimen carries its OWN axis attribute on a
+   nested wrapper (`.style-vignette[data-style='…']`), so it cannot lean on the
+   `body`-scoped material canvas above — a glassmorphism / cybercore vignette
+   would otherwise float its frosted/glow surfaces over a flat fill. These rules
+   paint the same canvas onto the vignette's `.sv-canvas` layer, scoped to a
+   DIRECT child of the marked wrapper so an ancestor `<html data-style>` can't
+   bleed the wrong canvas into a differently-scoped vignette. Palette-DERIVED
+   (color-mix / currentColor over the active palette, never a raw hue) and
+   descendant-scoped — so styleRegistry.test.ts reads them as material rules,
+   not bare token blocks. */
+.style-vignette[data-style='glassmorphism'] > .sv-canvas {
+  background-image:
+    radial-gradient(
+      62% 70% at 12% -5%,
+      color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      58% 65% at 105% 6%,
+      color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
+      transparent 68%
+    ),
+    radial-gradient(
+      72% 78% at 50% 112%,
+      color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
+      transparent 72%
+    );
+}
+.style-vignette[data-style='cybercore-y2k'] > .sv-canvas {
+  background-color: var(--el-page-bg);
+  background-image:
+    linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 3 — Element tokens (--el-*)
    Components reference these, NEVER --color-* directly. This is the

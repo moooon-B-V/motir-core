@@ -43,6 +43,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Tooltip } from '@/components/ui/Tooltip';
 import type { ThemePattern } from '@/lib/theme/types';
 import { STYLE_DIMENSIONS, STYLE_REGISTRY, STYLE_IDS } from '@/lib/theme/styles';
+import { StyleVignette } from '@/components/theme/StyleVignette';
 
 /**
  * /tokens — the design system reference route.
@@ -149,6 +150,67 @@ const STYLE_OPTIONS = STYLE_IDS.map((id) => ({
   value: id,
   label: STYLE_REGISTRY[id].name,
 }));
+
+/**
+ * The 7.3.37 preview vignette — the composed mini-surface that makes a style's
+ * FEEL legible (not a swatch table). One LIVE vignette that follows the toggles
+ * above, plus a SCOPED row showing every registered style at once (each pinned
+ * via `styleId`, all inheriting the active palette + type) — the exact pattern
+ * the onboarding Style gallery (7.3.27) and the Appearance pane (7.3.58) reuse.
+ */
+function StylePreview() {
+  return (
+    <section
+      style={{
+        marginBottom: 'var(--spacing-section)',
+        scrollMarginTop: 'var(--spacing-xl)',
+      }}
+    >
+      <h2
+        className="font-serif text-2xl font-semibold"
+        style={{ marginBottom: 'var(--spacing-sm)' }}
+      >
+        Style preview vignette
+      </h2>
+      <p
+        className="text-sm"
+        style={{
+          color: 'var(--el-page-text-muted)',
+          marginBottom: 'var(--spacing-lg)',
+          maxWidth: '64ch',
+          lineHeight: 1.5,
+        }}
+      >
+        A composed mini-surface — nav, work-item card, search input, button row, and a floating
+        modal — rendered live under the design tokens. The first follows the toggles above (live);
+        the gallery row pins each registered style so you can compare the whole feel side by side,
+        not a colour chip.
+      </p>
+      <div style={{ maxWidth: '520px', marginBottom: 'var(--spacing-2xl)' }}>
+        <StyleVignette label="Live preview — follows the active style, palette, and type" />
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 'var(--spacing-lg)',
+        }}
+      >
+        {STYLE_IDS.map((id) => (
+          <div
+            key={id}
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}
+          >
+            <div className="font-mono text-xs" style={{ color: 'var(--el-page-text-muted)' }}>
+              {STYLE_REGISTRY[id].name}
+            </div>
+            <StyleVignette styleId={id} label={`${STYLE_REGISTRY[id].name} style preview`} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   // Slug id so each specimen section is directly addressable (deep links, and a
@@ -393,6 +455,8 @@ export default function TokensPage() {
       </header>
 
       <ThemeControls />
+
+      <StylePreview />
 
       <Section title="Typography">
         <div style={{ marginBottom: 'var(--spacing-2xl)' }}>
