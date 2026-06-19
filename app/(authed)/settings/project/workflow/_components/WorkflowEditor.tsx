@@ -141,7 +141,7 @@ export function WorkflowEditor({
   return (
     <div className="flex flex-col gap-5">
       {/* Policy mode */}
-      <section className="border-(--el-border) bg-card flex flex-col gap-2 rounded-lg border p-4">
+      <section className="border-(--el-border) bg-card flex flex-col gap-2 rounded-(--radius-card) border p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="font-sans text-sm font-semibold text-(--el-text)">

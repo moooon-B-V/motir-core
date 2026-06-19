@@ -812,14 +812,23 @@
   background-attachment: fixed;
 }
 
-/* Every [data-tilt] tile FLOATS — a deep resting shadow lifts it off the
-   immersive canvas. Static depth, so it is NOT gated on reduced motion (only the
-   tilt is). box-shadow is not a colour-painting property, so the material-rule
-   test skips this; the shadow ink is the existing near-ink token. Default Cards
-   carry no resting shadow, so this is what makes them (and the marked page
-   panels) read as raised under this style. */
-[data-style='3d-immersive'] [data-tilt] {
+/* EVERY PANEL FLOATS — systematic depth across the WHOLE app, not just the
+   handful of surfaces that use the <Card> primitive. A "panel" is any element
+   with the card radius (`rounded-(--radius-card)` → the compiled class
+   `.rounded-\(--radius-card\)`): cards, popovers, callouts, list/table panels,
+   widgets, the hand-rolled `<div className="rounded-(--radius-card) border …">`
+   surfaces every screen builds. They all get the deep resting float shadow so no
+   screen is left flat. This is the same global-utility-targeting approach
+   neo-brutalism uses for `.border`. Static depth (NOT motion-gated). box-shadow
+   is not a colour-painting property, so the material-rule test skips it.
+   Per-surface exceptions (the board column's clip-safe shadow, modals) override
+   below by source order. Modals carry their own deeper shadow via the modal
+   radius (next rule). */
+[data-style='3d-immersive'] .rounded-\(--radius-card\) {
   box-shadow: var(--shadow-card);
+}
+[data-style='3d-immersive'] .rounded-\(--radius-modal\) {
+  box-shadow: var(--shadow-modal);
 }
 
 /* 3D / Immersive — the POINTER-PARALLAX TILT (the standard "3D card" effect,
@@ -928,6 +937,16 @@
     inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
     0 1px 3px rgba(15, 15, 15, 0.08),
     0 8px 18px -8px rgba(15, 15, 15, 0.22);
+  /* The column is `h-[calc(100dvh-12rem)]` — sized to fill the board area. In
+     the `overflow-x-auto` row that exactly-filling height means the column's
+     rounded BOTTOM corner + its drop shadow sit at the overflow-clip boundary
+     and get sheared flat (the reported "sharp bottom corner"). Trim the height
+     so the rounded corner + shadow clear the clip and the column reads as a
+     fully-rounded floating card. Also clip the column's OWN children to its
+     radius so a flush inner surface can't square a corner — the board cards pop
+     on hover but the DragOverlay clone is portaled, so nothing 3D is lost. */
+  height: calc(100dvh - 14.5rem);
+  overflow: hidden;
 }
 [data-style='3d-immersive'] [data-board-scroll] {
   gap: 1.5rem;
