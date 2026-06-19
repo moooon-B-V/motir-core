@@ -13,8 +13,8 @@ import type { LucideIcon } from 'lucide-react';
 //      filesystem). The area-ROOT redirect page is excluded (see that test).
 //
 // A later story mounts its page by ADDING an entry (or flipping a placeholder to
-// a real one): 7.8.3 lights up the reserved API-tokens slot below, and the
-// Profile / Appearance slots wait on their own future stories. The asset of
+// a real one): 7.8.3 lit up the API-tokens slot and 7.3.58 the Appearance slot
+// below; the Profile slot still waits on its own future story. The asset of
 // record is `design/settings/account-settings.mock.html` (7.8.2).
 //
 // DELIBERATE DEVIATION from `projectSettingsNav`: there is **no `access`
@@ -59,10 +59,9 @@ export interface AccountSettingsNavEntry {
    * A designed-for, not-yet-built slot — rendered as a disabled "Soon" row so the
    * area's shape is legible from day one, but NOT a real route (excluded from the
    * route↔registry totality assertion and from the command palette). The reserved
-   * slots: Profile (a future personal-details story) and Appearance (deliberately
-   * not designed in 7.8.2 — its own future story owns it). (API tokens WAS such a
-   * slot until Story 7.8.3 shipped its pane + route and flipped it to a real
-   * entry.)
+   * slot: Profile (a future personal-details story). (API tokens WAS such a slot
+   * until Story 7.8.3, and Appearance until Story 7.3.58, each shipped its pane +
+   * route and flipped it to a real entry.)
    */
   placeholder?: boolean;
 }
@@ -103,13 +102,14 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
   {
     id: 'appearance',
     group: 'preferences',
-    href: '',
+    href: '/settings/account/appearance',
     icon: Palette,
     labelKey: 'appearance',
-    // Reserved "Soon": theme / accent / font / display style are NOT designed in
-    // 7.8.2 (the scope guard — a mocked control set we won't build would mislead);
-    // their own future story owns it.
-    placeholder: true,
+    // Lit up by Story 7.3.58 (the Appearance pane + its route): the three-axis
+    // design system — theme × style × palette × type — turned on Motir itself.
+    // 7.8.2 reserved this as a "Soon" placeholder; flipping it to a real entry
+    // here keeps the route↔registry totality test green by construction (the new
+    // pane has an on-disk route now), exactly as 7.8.3 did for API tokens.
   },
   {
     id: 'apiTokens',

@@ -62,9 +62,9 @@ describe('accountSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('reserves Profile / Appearance as designed-for "Soon" placeholders (API tokens went live in 7.8.3)', () => {
+  it('reserves Profile as the designed-for "Soon" placeholder (API tokens went live in 7.8.3, Appearance in 7.3.58)', () => {
     const placeholders = ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder).map((e) => e.id);
-    expect(placeholders).toEqual(['profile', 'appearance']);
+    expect(placeholders).toEqual(['profile']);
     // A placeholder carries no route, so it never enters the real-route set.
     for (const entry of ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder)) {
       expect(entry.href).toBe('');

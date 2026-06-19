@@ -1535,6 +1535,42 @@
         "desc": "Menus, labels and dates use this language."
       }
     },
+    "appearance": {
+      "heading": "Appearance",
+      "subtitle": "Theme Motir to your taste — its colour, type and shape. Everything applies live across the whole app, on this device. There's nothing to save.",
+      "card": {
+        "title": "Theme & design",
+        "subtitle": "Pick a theme, style, palette and type pairing. The whole app re-skins instantly — this page included."
+      },
+      "theme": {
+        "name": "Theme",
+        "help": "Light, dark, or match your device.",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System",
+        "note": {
+          "light": "Always the light theme.",
+          "dark": "Always the dark theme.",
+          "system": "Follows your device's light / dark setting."
+        }
+      },
+      "style": {
+        "name": "Style",
+        "help": "The shape and feel — silhouette, elevation, density."
+      },
+      "palette": {
+        "name": "Palette",
+        "help": "The colour scheme the interface wears."
+      },
+      "type": {
+        "name": "Typography",
+        "help": "The typeface pairing for headings and body."
+      },
+      "showcase": {
+        "eyebrow": "Your look — live across Motir",
+        "label": "Live preview of the current theme, style, palette and type"
+      }
+    },
     "automation": {
       "title": "Automation",
       "subtitle": "When something happens in {projectName}, run actions automatically. Rules run as their owner — only project admins can manage them.",
