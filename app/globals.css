@@ -459,7 +459,9 @@
      shows THROUGH the panel (the old 64% read as near-solid white = "flat with a
      little blur"). */
   --glass-surface-alpha: 50%; /* opacity of a frosted card / popover */
-  --glass-modal-alpha: 70%; /* modals stay more opaque for body-text AA */
+  --glass-modal-alpha: 56%; /* the modal panel is GLASS too — translucent enough
+                               that the frosted page shows through it (only a
+                               touch more opaque than a card, for its body text) */
   --glass-chrome-alpha: 52%; /* sidebar / chrome translucency */
   --glass-input-alpha: 44%; /* form-control fill translucency */
   --glass-border-alpha: 72%; /* the glass RIM — a more visible lit edge */
