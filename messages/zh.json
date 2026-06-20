@@ -201,6 +201,15 @@
       "fallback": "或将此链接复制到浏览器中打开：",
       "expires": "此链接将在1小时后过期。如果这不是你本人的操作，可以忽略此邮件。"
     },
+    "emailChange": {
+      "subject": "确认你的新Motir邮箱",
+      "preview": "确认你的新Motir邮箱地址",
+      "greeting": "你好，{name}：",
+      "lede": "请确认将 {email} 设为你Motir账号的新邮箱地址。",
+      "confirm": "确认新邮箱",
+      "fallback": "或将此链接复制到浏览器中打开：",
+      "expires": "此链接将在1小时后过期。如果这不是你本人的操作，可以忽略此邮件，你的邮箱地址将保持不变。"
+    },
     "mentionNotification": {
       "subject": "{author}在{identifier}中提到了你：{title}",
       "preview": "{author}在{identifier}中提到了你",

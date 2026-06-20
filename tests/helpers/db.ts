@@ -16,7 +16,7 @@ import { db } from '@/lib/db';
 // user; it is named too for clarity.
 export async function truncateAuthTables(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "verification", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "verification", "email_change_request", "user" RESTART IDENTITY CASCADE',
   );
 }
 
