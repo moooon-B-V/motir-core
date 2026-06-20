@@ -1294,34 +1294,62 @@
 }
 
 /* ── Hand-Drawn / Indie (data-style="hand-drawn-indie") — Subtask 7.3.41 ─────
-   DEFERRED follow-up. A sketchy, friendly, zine-like aesthetic: every surface
-   gets a slightly IRREGULAR hand-inked corner (an asymmetric multi-value radius
-   — no two corners alike — so a card/button/input reads as a DRAWN box, never a
-   machined rectangle), a touch-heavier 1.5px ink outline, a soft hand-placed
-   offset shadow (a doodled drop nudged down-right), a roomy relaxed rhythm, and
-   a springy bounce on hover/press. Colour stays the palette axis (no --color-*/
---el-* here — the irregular outline + soft shadow carry the feel, not a tint),
-   so this is a TOKEN-ONLY style (+ one component-variant border-width override),
-   AA-preserved by construction. Its out-of-the-box type is the characterful
-   Editorial (Fraunces) pairing via `defaultTypeId` — the warmest registered face
-   echoing the hand-drawn wonk (a true marker/script face is a future data-type).
-   See docs/styles/hand-drawn-indie.md. */
-[data-style='hand-drawn-indie'] {
-  /* Silhouette — wobbly, hand-inked corners. The generic scale stays soft +
-     single-valued; the SEMANTIC surface tokens get the asymmetric "drawn" radius
-     (slash = horizontal / vertical corner radii, so each corner differs). */
-  --radius-xs: 5px;
-  --radius-sm: 8px;
-  --radius-md: 11px;
-  --radius-lg: 15px;
-  --radius-xl: 20px;
-  --radius-btn: 14px 11px 15px 12px / 12px 15px 11px 14px;
-  --radius-input: 13px 16px 12px 15px / 15px 12px 16px 13px;
-  --radius-card: 20px 14px 22px 13px / 13px 22px 14px 20px;
-  --radius-modal: 26px 18px 28px 17px / 17px 28px 18px 26px;
-  --radius-badge: 13px 9px 12px 10px / 10px 12px 9px 13px;
-  --radius-control: 11px 8px 12px 9px / 9px 12px 8px 11px;
-  --radius-kbd: 7px 5px 8px 6px / 6px 8px 5px 7px;
+   DEFERRED follow-up. A sketchy, friendly, zine-like aesthetic. TWO moves make
+   it read as genuinely hand-drawn, not just "softly rounded":
+   (1) WONKY corners — every framed surface gets a strongly asymmetric
+       multi-value radius (one corner near-sharp, the opposite generously round,
+       no two alike) so a card/button/input reads as a DRAWN box; and
+   (2) ROUGH edges — a `feTurbulence`+`feDisplacementMap` filter (`#hd-rough`,
+       defined once by <HandDrawnFilter/> in the root layout) warps the OUTLINE
+       into an ink-like wobble. Asymmetric radius alone only bends the corners;
+       the displacement is what makes the LINES wavy (the Excalidraw / rough.js
+       look). It is applied to a CONTENT-SAFE `::after` pseudo-border so only the
+       outline is displaced — the text stays crisp.
+   Plus a soft hand-placed offset shadow, a roomy rhythm, and a springy
+   hover/press bounce. Colour stays the palette axis: the token block sets no
+   --color-*/
+--el-* (AA preserved),
+and
+  the
+  rough-border
+  rule
+  takes
+  its
+  ink
+  from
+  the
+  palette
+  (var(--el-border-strong)).
+  Out-of-the-box
+  type
+  is
+  the
+  characterful
+  Editorial
+  (Fraunces)
+  pairing
+  via
+  `defaultTypeId`.
+  See
+  docs/styles/hand-drawn-indie.md.
+  */
+  [data-style='hand-drawn-indie'] {
+  /* Silhouette — WONKY hand-drawn corners. The slash splits horizontal /
+     vertical corner radii, and the four values per side differ widely, so each
+     corner of a box is a different curve (the "drawn rectangle" tell). Generic
+     scale stays soft + single-valued; the SEMANTIC surfaces carry the wonk. */
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 14px 40px 12px 36px / 36px 14px 38px 16px;
+  --radius-input: 16px 48px 14px 42px / 42px 16px 46px 18px;
+  --radius-card: 18px 58px 22px 48px / 48px 20px 54px 24px;
+  --radius-modal: 22px 66px 20px 56px / 56px 22px 60px 26px;
+  --radius-badge: 9px 26px 11px 22px / 22px 11px 24px 9px;
+  --radius-control: 10px 26px 12px 22px / 22px 12px 24px 10px;
+  --radius-kbd: 6px 18px 8px 15px / 15px 8px 16px 6px;
 
   /* Elevation — soft, hand-placed offset shadows (a doodled drop, nudged
      down-right); friendly + low, never a hard brutalist block. Warm ink. */
@@ -1350,11 +1378,29 @@
   --active-scale: 0.97;
 }
 
-/* Component-variant override: sketchy ink stroke — a touch heavier than the
-   hairline so the drawn edge reads (no colour, so the axes stay disjoint and the
-   material-layer test skips it). Mirrors neo-brutalism's `.border` width bump. */
+/* The ROUGH, hand-inked edge. Every framed surface (`.border`) gets a wavy ink
+   outline drawn on a `::after` overlay and warped by the `#hd-rough` turbulence
+   filter — the move that makes the lines look DRAWN, not machine-straight. The
+   pseudo-element is positioned over the surface and `pointer-events: none`, so
+   only the outline is displaced; the surface's own text/content is untouched
+   (crisp). The real `.border` is KEPT (thickened) as the structural fallback if
+   the filter can't render, and the overlay sits on top — where the wave pulls
+   in, a sliver of the straight border shows through, reading as a drawn-twice
+   sketch. The overlay ink is palette-DERIVED (var(--el-border-strong)) so the
+   colour axis stays disjoint and it adapts to dark mode (it is a descendant
+   rule, not a bare [data-style] token block). */
 [data-style='hand-drawn-indie'] .border {
-  border-width: 1.5px;
+  position: relative;
+  border-width: 2px;
+}
+[data-style='hand-drawn-indie'] .border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 2px solid var(--el-border-strong);
+  border-radius: inherit;
+  filter: url(#hd-rough);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

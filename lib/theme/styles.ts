@@ -342,20 +342,20 @@ export const STYLE_REGISTRY = {
     id: 'hand-drawn-indie',
     name: 'Hand-Drawn / Indie',
     tagline:
-      'Sketchy and friendly — wobbly hand-inked corners, soft offset shadows, a playful bounce.',
+      'Sketchy and friendly — rough hand-inked edges, wonky corners, soft offset shadows, a playful bounce.',
     inspiration:
       'Indie / zine + hand-drawn web design — Excalidraw’s rough hand-sketched strokes and doodled notebook UIs: warm, imperfect, human.',
     designDoc: 'docs/styles/hand-drawn-indie.md',
     defaultTypeId: 'editorial',
     dimensions: {
       silhouette:
-        'Wobbly, hand-inked corners — every surface gets a slightly irregular asymmetric radius (no two corners alike) so cards/buttons/inputs read as DRAWN boxes, never machined rectangles.',
+        'Wonky hand-drawn corners — every surface gets a strongly asymmetric multi-value radius (one corner near-sharp, the opposite generously round, no two alike) so cards/buttons/inputs read as DRAWN boxes, never machined rectangles.',
       stroke:
-        'Sketchy 1.5px ink outlines — a touch heavier than a hairline so the drawn edge is visible (applied via a style-scoped component-variant block); the line does the structural work, like pen on paper.',
+        'Genuinely ROUGH, wavy ink edges — a turbulence-displacement filter (Excalidraw / rough.js style) warps each outline into a hand-inked wobble, drawn on a content-safe pseudo-border so the lines are sketchy but the text stays crisp.',
       elevation:
         'Soft, hand-placed offset shadows — a gentle blurred drop nudged down-right (a doodled shadow), friendly and low; never a hard brutalist block nor a flat removal.',
       surface:
-        'Opaque, warm, paper-like panels — colour stays the palette axis; the personality is in the irregular outline + the soft shadow, not a tint or a wash.',
+        'Opaque, warm, paper-like panels — colour stays the palette axis; the personality is in the rough wavy outline + the soft shadow, not a tint or a wash.',
       density:
         'Roomy and relaxed — generous 20×12 buttons, 26px card padding, taller 38px controls; the hand-drawn feel wants air, like margins round a sketch.',
       motion:
@@ -363,7 +363,7 @@ export const STYLE_REGISTRY = {
       typography:
         'Ships the Editorial pairing (Fraunces display headlines + Inter body) — the warmest, most characterful registered face, its soft optical wonk echoing the hand-drawn shapes; an actual marker/script face is a future data-type addition.',
       components:
-        'Wobbly-cornered buttons/inputs/cards/modals, irregular (non-pill) status chips, sketchy 1.5px-bordered surfaces with soft hand-placed shadows.',
+        'Wonky-cornered buttons/inputs/cards/modals, irregular (non-pill) status chips, rough wavy-ink-bordered surfaces with soft hand-placed shadows.',
     },
   },
 } satisfies Record<string, StyleDefinition>;
