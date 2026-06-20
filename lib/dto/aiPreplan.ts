@@ -24,9 +24,18 @@ export interface PreplanRevisionDTO {
 // The four pre-plan artifacts the onboarding loop produces, in journey order.
 export type PreplanArtifactKind = 'discovery' | 'vision' | 'feasibility' | 'validation';
 
-// One artifact's full forward revision LOG (its ordered version history).
+// One artifact's CURRENT rendered body + its full forward revision LOG.
+// `currentBody` / `currentVersion` are the latest version's Markdown write-up +
+// its number — what the 7.3.5 read-only review renders through 834's
+// `DirectionDocView` (mapped via `toDirectionDocView` in lib/onboarding/
+// directionDoc.ts), so the body is NEVER invented client-side. Sourced from the
+// motir-ai `/v1/preplan` body (the field 7.3.72 added). `versions` is the
+// orthogonal when/why/what diff timeline the gate renders separately. A kind
+// present here always has ≥1 version, so both body fields are populated.
 export interface PreplanArtifactLogDTO {
   kind: PreplanArtifactKind;
+  currentBody: string;
+  currentVersion: number;
   versions: PreplanRevisionDTO[];
 }
 
