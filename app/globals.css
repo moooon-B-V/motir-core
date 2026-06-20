@@ -1307,33 +1307,11 @@
        outline is displaced — the text stays crisp.
    Plus a soft hand-placed offset shadow, a roomy rhythm, and a springy
    hover/press bounce. Colour stays the palette axis: the token block sets no
-   --color-*/
---el-* (AA preserved),
-and
-  the
-  rough-border
-  rule
-  takes
-  its
-  ink
-  from
-  the
-  palette
-  (var(--el-border-strong)).
-  Out-of-the-box
-  type
-  is
-  the
-  characterful
-  Editorial
-  (Fraunces)
-  pairing
-  via
-  `defaultTypeId`.
-  See
-  docs/styles/hand-drawn-indie.md.
-  */
-  [data-style='hand-drawn-indie'] {
+   `--color-` / `--el-` colour token (AA preserved), and the rough-border rule
+   takes its ink from the palette (var(--el-border-strong)). Out-of-the-box type
+   is the characterful Editorial (Fraunces) pairing via `defaultTypeId`. See
+   docs/styles/hand-drawn-indie.md. */
+[data-style='hand-drawn-indie'] {
   /* Silhouette — WONKY hand-drawn corners. The slash splits horizontal /
      vertical corner radii, and the four values per side differ widely, so each
      corner of a box is a different curve (the "drawn rectangle" tell). Generic
