@@ -1,11 +1,17 @@
 import { Prisma, type User } from '@prisma/client';
 import { db } from '@/lib/db';
 import { hash, verify } from '@/lib/auth/passwords';
+import { assertPasswordStrength } from '@/lib/auth/passwordPolicy';
 import { accountRepository } from '@/lib/repositories/accountRepository';
+import { sessionRepository } from '@/lib/repositories/sessionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { toUserProfileDto } from '@/lib/mappers/userMappers';
-import { DuplicateEmailError } from '@/lib/users/errors';
-import type { UserProfileDto } from '@/lib/dto/users';
+import {
+  DuplicateEmailError,
+  NoCredentialPasswordError,
+  WrongCurrentPasswordError,
+} from '@/lib/users/errors';
+import type { PasswordCapabilityDto, UserProfileDto } from '@/lib/dto/users';
 
 // Users service — business logic for the User entity.
 //
@@ -42,6 +48,75 @@ export const usersService = {
   async getProfile(userId: string): Promise<UserProfileDto | null> {
     const user = await userRepository.findById(userId);
     return user ? toUserProfileDto(user) : null;
+  },
+
+  /**
+   * Whether the user can CHANGE a password (true) or must SET one via the
+   * reset-link path (false). True iff a credential Account row with a stored
+   * hash exists; OAuth-only users (Google sign-in, no credential row) are
+   * false. The Account › Profile security pane (Subtask 8.8.24) branches on
+   * this; the profile read (8.8.21) may surface it alongside name/email.
+   */
+  async getPasswordCapability(userId: string): Promise<PasswordCapabilityDto> {
+    const credential = await accountRepository.findCredentialByUserId(userId);
+    return { hasPassword: Boolean(credential?.password) };
+  },
+
+  /**
+   * Change a credential user's password: verify the current password, then
+   * store an argon2id hash of the new one. Wired for the in-app "Change
+   * password" setting (Subtask 8.8.23).
+   *
+   *   - Strength-validates the new password FIRST (typed WeakPasswordError)
+   *     and hashes it before opening the transaction, so the row lock is held
+   *     only for the verify + write, not the (CPU-heavy) argon2 hash.
+   *   - Locks the credential Account row `FOR UPDATE` and re-reads inside the
+   *     tx (lock-before-read-derived-update): two concurrent changes serialize
+   *     instead of one clobbering the other.
+   *   - OAuth-only users (no credential row) → NoCredentialPasswordError; the
+   *     UI should have routed them to the set-password path via `hasPassword`.
+   *   - Wrong current password → WrongCurrentPasswordError (never a raw
+   *     argon2/Prisma error).
+   *   - `revokeOtherSessions` (optional) deletes every OTHER session, keeping
+   *     the caller's current one (`currentSessionToken`) signed in — no cookie
+   *     rotation needed. Returns the number of sessions revoked.
+   *
+   * Hashing uses lib/auth/passwords.ts (the single argon2id primitive), so the
+   * stored hash is byte-compatible with the sign-in verify path.
+   */
+  async changePassword(input: {
+    userId: string;
+    currentPassword: string;
+    newPassword: string;
+    currentSessionToken?: string | null;
+    revokeOtherSessions?: boolean;
+  }): Promise<{ revokedSessions: number }> {
+    assertPasswordStrength(input.newPassword);
+    const newPasswordHash = await hash(input.newPassword);
+
+    return db.$transaction(async (tx) => {
+      const credential = await accountRepository.lockCredentialByUserId(input.userId, tx);
+      if (!credential?.password) {
+        throw new NoCredentialPasswordError();
+      }
+
+      const currentOk = await verify(input.currentPassword, credential.password);
+      if (!currentOk) {
+        throw new WrongCurrentPasswordError();
+      }
+
+      await accountRepository.updatePassword(credential.id, newPasswordHash, tx);
+
+      let revokedSessions = 0;
+      if (input.revokeOtherSessions && input.currentSessionToken) {
+        revokedSessions = await sessionRepository.deleteOthersForUser(
+          input.userId,
+          input.currentSessionToken,
+          tx,
+        );
+      }
+      return { revokedSessions };
+    });
   },
 
   /**

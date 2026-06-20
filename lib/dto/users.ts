@@ -11,3 +11,15 @@ export interface UserProfileDto {
   name: string;
   email: string;
 }
+
+/**
+ * The user's password capability — what the Account › Profile security pane
+ * (Subtask 8.8.24) branches on. `hasPassword` is true iff the user has a
+ * credential (`providerId="credential"`) Account row with a stored hash:
+ *   - true  → render the "Change password" form (current + new).
+ *   - false → OAuth-only account; render "Set a password" which sends the
+ *             reset-link via the shipped request-password-reset flow.
+ */
+export interface PasswordCapabilityDto {
+  hasPassword: boolean;
+}
