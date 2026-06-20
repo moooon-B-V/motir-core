@@ -12,6 +12,7 @@ the same primitives — no Pencil→code gap.
 | **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                    |
 | **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)     | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                    |
 | **Appearance pane**       | **`appearance.mock.html`** (HTML mock)       | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route). |
+| **Profile pane**          | **`profile.mock.html`** (HTML mock)          | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -616,3 +617,115 @@ the registries + the showcase slice, and flipping the `accountSettingsNav`
 `appearance` entry from a placeholder to a real route (which keeps the
 route↔registry totality test green by construction). No new colour/shape primitive
 is required.
+
+---
+
+# Profile pane (Story 8.8 · 8.8.20 / MOTIR-1205)
+
+Asset: **`profile.mock.html`** → **`profile.png`**. Flips the **last reserved
+"Soon" slot** — `General › Profile` (`accountSettingsNav` `placeholder: true`,
+icon `User`, route `/settings/account/profile`) — into a real personal-details
+surface. It is the standard **Linear-style Profile + Security split** (verified
+linear.app/docs/profile): the photo / name / sign-in email you present to the
+team, plus the password you sign in with. Item #11 of the 8.8 launch-readiness
+pass; password change/reset is the explicitly-requested setting (Yue).
+
+## Grounded in shipped reality (NOT invented) — per-behaviour source
+
+The pane reuses the **shipped account-settings area** verbatim (rail + identity
+header + grouped nav + `Card` panes + the `.srow` settings-row grammar from the
+Language pane). The behaviours it depicts are sourced as follows — and, per the
+design-against-shipped-reality rule, the mock is **honest about which backend is
+already wired vs. which the follow-on build subtask must add** (this card has no
+linked sibling subtasks, so the "specs" it cites ARE shipped code + the named
+standard, which is richer than a phantom sibling spec would be):
+
+| Behaviour in the mock | Source / grounding | Backend state today |
+| --- | --- | --- |
+| **Password — change (credential user)** | Better-Auth `emailAndPassword` default `/api/auth/change-password` (current → new); the **8-char minimum** mirrors the shipped `/reset-password/new` rule (`lib/auth/index.ts`). | **Shipped** (endpoint mounted by Better-Auth). |
+| **Password — "Send a reset link" (OAuth-only user)** | The **fully-shipped reset flow**: `sendResetPassword` → `/reset-password` → `/reset-password/new`, 1-hour token (`lib/auth/index.ts` ll. 93–134; `lib/emailTemplates/passwordReset.tsx`). | **Shipped.** Reused as-is so a Google-only user can SET a password. |
+| **Credential vs OAuth-only branch** | The real schema distinction: `Account.provider === 'credential'` (has a password) vs `'google'` only (`accountRepository` / `userRepository where: { providerId: 'credential' }`). Google OAuth is configured (`socialProviders.google`). | **Shipped** (the data to branch on exists). |
+| **Avatar — upload / remove** | `lib/blob/uploader.ts` `putAttachment()` (Vercel Blob, returns `{ url }`) + `deleteAttachmentBlob()`. The `User.image` field exists. | **Primitive shipped; no avatar route/UI yet** — the build subtask adds the upload route + `updateUser(image)`. |
+| **Name — inline edit** | `User.name` exists; standard inline-edit grammar (the page-state inline-edit contract: success response = confirmation, no tree refresh). | **No `updateUser(name)` route yet** — build subtask adds it. |
+| **Email — change-with-confirmation (link to the NEW address; pending state until confirmed)** | The card's own decision (confirmation sent to the new address); mechanism mirrors Better-Auth's `changeEmail` (verify-before-apply). The pending-state + email-taken error follow the standard. | **NOT wired** — the `changeEmail` plugin is **off** (`requireEmailVerification: false`, no plugin). The build subtask must enable `changeEmail` + a confirmation email template (`lib/emailTemplates/`). |
+
+> **Planning flag (surfaced, not silently absorbed — notes.html #27/#30 shape):**
+> the **email-change**, **name update**, and **avatar update** write-backends do
+> NOT exist yet (only the blob-uploader primitive does). Design-before-code
+> (Principle #13) lets this pane *specify* those flows, but the **8.8.x Profile
+> build subtask must include** (a) `updateUser(name, image)` route(s) through the
+> 4-layer stack, (b) an avatar-upload route over `putAttachment`, and (c)
+> Better-Auth `changeEmail` + a new confirmation-email template. The
+> change-password and reset-link branches need **no** new backend. The planner
+> should ensure the build subtask's scope (and `dependsOn`) reflects this — it is
+> not a one-file UI bolt-on.
+
+## Layout — two Cards inside the shipped area shell
+
+`page-head` (serif `h2` "Profile" + muted `.sub`), then a `.stack` (max-width
+680px) of two `Card`s, each `card-head` (title + `hsub`) over a `card-body` of
+`.srow` rows (label/desc left via `.sl .name`/`.desc`, control right via `.sc`,
+hairline `--el-border-soft` between rows, none on the last):
+
+**Card 1 — "Profile"** (General):
+- **Photo** row — `Avatar` (circular; **initials fallback** `--el-text` fill /
+  `--el-text-inverted` text when no image, OR the uploaded image) + **Change**
+  (`Button` secondary sm, `camera` glyph) + **Remove** (`Button` danger-ghost sm,
+  `trash` glyph — only when an image is set; revert-to-initials, per Linear).
+- **Name** row — value + **Edit** (ghost sm, `pencil`). Edit mode: an `Input`
+  (`--height-input`, focus ring `--el-accent`) + **Save** (primary sm) / **Cancel**
+  (ghost sm); empty → `.err-text` "Name can't be empty." + `--el-danger` border.
+- **Email** row — value + **Change email** (ghost sm, `mail`). Pending state:
+  old email struck (`--el-text-muted`, line-through) + a **`Pill`** (`pill-warn`,
+  peach tint + `--el-text-strong`, `clock` glyph) "Pending → newaddr" + helper
+  "Confirmation sent. Applies once confirmed." + **Resend** / **Cancel** links.
+
+**Card 2 — "Password & security"** (Security):
+- **Password** row, by account type:
+  - **Credential** → "Last changed …" desc + **Change password** (`Button`
+    secondary sm, `lock`).
+  - **OAuth-only** → a **`callout`** (sky tint, `--el-info`) "You sign in with
+    **Google**. Send yourself a reset link to set a password…" + **Send a
+    password-reset link** (secondary sm, `mail`).
+
+## States drawn (panels)
+
+1. **Resting** (credential, light) — the access path: rail **General › Profile
+   ACTIVE** (canvas-inset active treatment, accent icon); all rows at rest,
+   avatar = initials.
+2. **Editing / pending / errors** — avatar uploaded (Change + Remove); Name in
+   edit mode with the empty-name validation error; Email pending-confirmation.
+3. **Change-password modal** (`Modal`, Radix Dialog grammar) — Current / New
+   (`helper` "At least 8 characters") / Confirm, each `Input` with an `eye`
+   show/hide; footer **Cancel** + **Update** showing the **saving spinner**; a
+   success **`Toast`** ("Password updated").
+4. **Change-email modal** with the **email-taken** error box (`--el-tint-rose` +
+   `--el-danger`); the **OAuth-only** Password card variant; the **loading
+   skeleton** (shimmer `.sk` rows + circular avatar placeholder).
+5. **Dark parity** — the resting pane on `data-theme="dark"`.
+
+## Token discipline
+
+Colour only via `--el-*` (text `--el-text`/`-secondary`/`-muted`/`-faint`/
+`-strong`/`-inverted`; accent `--el-accent`/`-text`/`-on-surface`; status
+`--el-danger`/`-text`, `--el-success`, `--el-warning`, `--el-info`; tints
+`--el-tint-{peach,rose,sky,mint}`; surfaces `--el-page-bg`/`-surface`/`-muted`;
+borders `--el-border`/`-soft`/`-strong`; links `--el-link`). Shape only via
+element-semantic tokens (`--radius-card`/`-input`/`-modal`/`-btn`/`-badge`/
+`-control`; `--spacing-card-padding`/`-input-x`/`-btn-x`/`-chip-*`; `--height-
+input`/`-btn-sm`/`-btn-md`; `--shadow-subtle`/`-modal`/`-elevated`). No Tier-0
+`--color-*`, no raw `rounded-*`/`p-*`/`h-*` (avatar/spinner circles use
+`border-radius: 9999px`, the sanctioned exception for genuinely circular things).
+
+## Build dependency (for the 8.8.x Profile build subtask)
+
+Implements this pane + the `settings/account/profile` route, flipping the
+`accountSettingsNav` `profile` entry from `placeholder: true` to a real route
+(keeps the route↔registry totality test green by construction, exactly as 7.8.3
+did for API tokens and 7.3.58 for Appearance). Backend to add, per the table
+above: `updateUser(name, image)` + avatar-upload route (over `putAttachment`) +
+Better-Auth `changeEmail` enablement + a confirmation-email template; the
+password change/reset paths reuse shipped Better-Auth. The name/email inline
+edits follow the **inline-edit no-tree-refresh** page-state contract (success
+response = confirmation), and the rail identity header (`.me`) re-reads the
+updated name/avatar on a server refresh.

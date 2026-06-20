@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Motir Account › Profile pane (Story 8.8 · 8.8.20 / MOTIR-1205) — name · avatar ·
+      email · password
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the account-settings `General › Profile`
+      pane — Story 8.8, subtask 8.8.20 / MOTIR-1205. Flips the reserved
+      `General › Profile` "Soon" placeholder (lib/settings/accountSettingsNav.ts,
+      `placeholder: true`) into a real personal-details surface: the standard
+      Linear-style Profile + Security split (verified linear.app/docs/profile).
+
+      GROUNDED IN SHIPPED REALITY (verified — see design-notes.md "Profile" §):
+        • Area shell (rail + identity header + grouped nav + Card panes) is copied
+          1:1 from account-settings.mock.html (7.8.2) / appearance.mock.html
+          (7.3.57). The rail's "Soon" Profile row flips to ACTIVE here — the
+          access/entry path the access-path gate requires.
+        • Settings-row grammar (.srow: label+desc left, control right, hairline
+          separators) reuses the shipped Language pane (LanguageCard.tsx).
+        • Modal / field / input / callout / toast / button / pill / Switch CSS is
+          the same shipped-primitive vocabulary the account-settings mock uses
+          (components/ui/Modal·Input·FormField·Toast·Button·Pill·Card).
+        • PASSWORD: the reset flow is FULLY SHIPPED (lib/auth/index.ts
+          sendResetPassword + /reset-password + /reset-password/new, 1-hour token).
+          Credential users get the Better-Auth change-password endpoint
+          (current→new, 8-char min, matching the shipped /reset-password/new rule);
+          OAuth-only users (Account.provider === 'google', no 'credential' row) get
+          "Send a password-reset link" reusing that shipped flow so they can SET a
+          password. The credential-vs-OAuth branch is the real schema distinction.
+        • EMAIL-CHANGE / NAME / AVATAR write backends are NOT wired yet (no
+          changeEmail plugin, no updateUser route, no avatar route — only the blob
+          uploader primitive lib/blob/uploader.ts exists). Design-before-code
+          (Principle #13): this pane SPECIFIES those flows for the follow-on code
+          subtask; design-notes.md flags shipped-vs-must-build per behaviour and
+          does NOT pretend the backend exists.
+
+      Colour via --el-* only (never Tier-0 --color-*); shape via element-semantic
+      tokens (--radius-*/--spacing-*/--height-*/--shadow-*), never raw
+      rounded-*/p-*/h-*. Token block + dark block copied 1:1 from
+      account-settings.mock.html / app/globals.css.
+
+      Panels:
+        1 Resting (light) — credential user, all four sections at rest + access path
+        2 Editing / pending / errors (light) — name in edit mode, email pending
+          confirmation, avatar uploaded + Remove, field validation + email-taken
+        3 Change-password modal (credential) + success toast (light)
+        4 Change-email modal (email-taken error) · OAuth-only password variant ·
+          loading skeleton (light)
+        5 Dark parity — resting pane
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ════════════════════════════════════════════════════════════════════
+         Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from
+         account-settings.mock.html (app/globals.css, light).
+         ════════════════════════════════════════════════════════════════════ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans-source: 'Inter';
+        --font-serif-source: 'Source Serif 4';
+        --font-mono-source: 'JetBrains Mono';
+        --font-sans:
+          var(--font-sans-source), ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, sans-serif;
+        --font-serif: var(--font-serif-source), Georgia, serif;
+        --font-mono: var(--font-mono-source), ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+
+        --spacing-sm: 8px;
+        --spacing-md: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        /* Tier 3 — element tokens (components consume ONLY these) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — the review page only) ─────── */
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--el-surface); color: var(--el-text);
+        font-family: var(--font-sans); -webkit-font-smoothing: antialiased; padding: 32px 24px 96px;
+      }
+      .review-head { max-width: 1080px; margin: 0 auto 8px; }
+      .review-head h1 { font-family: var(--font-serif); font-size: 22px; margin: 0; }
+      .review-head p { margin: 6px 0 0; color: var(--el-text-secondary); font-size: 13px; max-width: 92ch; line-height: 1.5; }
+      .panel-label {
+        font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+        color: var(--el-text-faint); margin: 44px auto 10px; max-width: 1080px; line-height: 1.5;
+      }
+      .panel-label b { color: var(--el-text-secondary); }
+      .panel { max-width: 1080px; margin: 0 auto; }
+
+      /* ── account-settings AREA shell (copied from account-settings.mock.html) ── */
+      .stage { border: 1px solid var(--el-border); border-radius: var(--radius-card); overflow: hidden; box-shadow: var(--shadow-card); }
+      .shell { display: flex; min-height: 640px; background: var(--el-page-bg); }
+      .rail {
+        flex: none; width: 252px; background: var(--el-sidebar-bg); border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px; display: flex; flex-direction: column; gap: 14px;
+      }
+      .rail-head { display: flex; flex-direction: column; gap: 10px; }
+      .back {
+        display: inline-flex; align-items: center; gap: 8px; height: var(--height-control);
+        padding: 0 var(--spacing-control-x); border-radius: var(--radius-control); font-size: 13px;
+        font-weight: 500; color: var(--el-text-secondary); cursor: pointer;
+      }
+      .back:hover { background: var(--el-sidebar-item-bg-hover); color: var(--el-text); }
+      .back svg { width: 16px; height: 16px; }
+      .me { display: flex; align-items: center; gap: 10px; padding: 6px var(--spacing-control-x) 2px; }
+      .me .av {
+        flex: none; width: 30px; height: 30px; border-radius: 9999px; background: var(--el-text);
+        color: var(--el-text-inverted); display: inline-flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 600;
+      }
+      .me .meta { min-width: 0; display: flex; flex-direction: column; }
+      .me .nm { font-size: 13.5px; font-weight: 600; color: var(--el-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .me .em { font-size: 11px; color: var(--el-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .settings-eyebrow {
+        font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x); text-transform: uppercase;
+      }
+      .grp { display: flex; flex-direction: column; gap: 4px; }
+      .grp + .grp { margin-top: 12px; }
+      .grp-label {
+        font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.07em; color: var(--el-text-faint); padding: 0 var(--spacing-control-x); margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex; align-items: center; gap: 12px; height: var(--height-control); padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control); font-size: 13.5px; color: var(--el-text-secondary); cursor: pointer; border: 1px solid transparent;
+      }
+      .nav-row:hover { background: var(--el-sidebar-item-bg-hover); color: var(--el-text); }
+      .nav-row .ni { flex: none; display: inline-flex; color: var(--el-text-muted); }
+      .nav-row .ni svg { width: 18px; height: 18px; }
+      .nav-row .nl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active); color: var(--el-text); font-weight: 500;
+        border-color: var(--el-sidebar-border); box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni { color: var(--el-accent); }
+      .nav-row.soon { cursor: default; color: var(--el-text-faint); }
+      .nav-row.soon:hover { background: transparent; color: var(--el-text-faint); }
+      .nav-row.soon .ni { color: var(--el-text-faint); }
+      .soon-chip {
+        margin-left: auto; font-family: var(--font-sans); font-size: 10px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.04em; color: var(--el-text-strong); background: var(--el-tint-yellow); padding: 1px 7px; border-radius: var(--radius-badge);
+      }
+
+      /* content + cards */
+      .content { flex: 1; min-width: 0; background: var(--el-page-bg); padding: 30px 32px 36px; overflow: hidden; }
+      .page-head { margin-bottom: 20px; }
+      .page-head h2 { font-family: var(--font-serif); font-size: 26px; font-weight: 600; color: var(--el-text); margin: 0; }
+      .page-head .sub { font-size: 13px; color: var(--el-text-muted); margin-top: 6px; max-width: 82ch; line-height: 1.55; }
+      .stack { display: flex; flex-direction: column; gap: 20px; max-width: 680px; }
+      .card {
+        background: var(--el-page-bg); border: 1px solid var(--el-border); border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle); overflow: hidden;
+      }
+      .card-head {
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+        padding: 16px var(--spacing-card-padding); border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 { font-size: 15px; font-weight: 600; color: var(--el-text); margin: 0; }
+      .card-head .hsub { font-size: 12px; color: var(--el-text-muted); margin-top: 3px; max-width: 54ch; line-height: 1.5; }
+      .card-body { padding: 4px var(--spacing-card-padding) 8px; }
+      .ic { width: 16px; height: 16px; flex: none; }
+      .ic-sm { width: 14px; height: 14px; flex: none; }
+
+      /* ── Settings row grammar (label/desc left, control right) ───────────── */
+      .srow {
+        display: flex; align-items: center; justify-content: space-between; gap: 24px;
+        padding: 16px 0; border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child { border-bottom: 0; }
+      .srow.tall { align-items: center; }
+      .srow .sl { min-width: 0; }
+      .srow .sl .name { font-size: 14px; font-weight: 500; color: var(--el-text); }
+      .srow .sl .desc { font-size: 12.5px; color: var(--el-text-muted); margin-top: 2px; line-height: 1.45; max-width: 46ch; }
+      .srow .sc { flex: none; display: flex; align-items: center; gap: 10px; }
+      .srow .sc .val { font-size: 14px; color: var(--el-text); }
+
+      /* value + inline edit field */
+      .editfield { display: flex; align-items: center; gap: 8px; }
+      .input {
+        display: flex; align-items: center; gap: 8px; height: var(--height-input); min-width: 240px;
+        padding: 0 var(--spacing-input-x); border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong); background: var(--el-page-bg);
+      }
+      .input.focused { border-color: var(--el-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent); }
+      .input.err { border-color: var(--el-danger); }
+      .input input, .input .ival { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-sans); font-size: 14px; color: var(--el-text); }
+      .input .eye { color: var(--el-text-muted); cursor: pointer; }
+      .input .eye svg { width: 16px; height: 16px; display: block; }
+
+      /* avatar block (Avatar.tsx — circular; image OR initials) */
+      .avatar { width: 52px; height: 52px; border-radius: 9999px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+        font-size: 19px; font-weight: 600; color: var(--el-text-inverted); background: var(--el-text); overflow: hidden; }
+      .avatar.photo { background: radial-gradient(120% 120% at 30% 25%, #ffd9a8 0%, #f48fb1 42%, #7b6ce5 100%); }
+      .avatar.lg { width: 64px; height: 64px; }
+
+      /* ── Buttons (Button.tsx) ────────────────────────────────────────────── */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-sans);
+        font-size: 14px; font-weight: 500; line-height: 1; border-radius: var(--radius-btn); height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x); border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+      }
+      .btn svg { width: 15px; height: 15px; }
+      .btn-sm { height: var(--height-btn-sm); padding: 0 14px; font-size: 12.5px; }
+      .btn-primary { background: var(--el-accent); color: var(--el-accent-text); }
+      .btn-secondary { background: transparent; color: var(--el-text); border-color: var(--el-border-strong); }
+      .btn-ghost { background: transparent; color: var(--el-text-secondary); }
+      .btn-ghost:hover { background: var(--el-surface); color: var(--el-text); }
+      .btn-danger-ghost { background: transparent; color: var(--el-danger); }
+      .btn-danger-ghost:hover { background: var(--el-tint-rose); }
+      .btn[disabled], .btn.is-disabled { opacity: 0.55; cursor: default; }
+      .btn .spin { width: 14px; height: 14px; border-radius: 9999px; border: 2px solid color-mix(in srgb, var(--el-accent-text) 45%, transparent); border-top-color: var(--el-accent-text); animation: spin 0.7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* Pill (Pill.tsx) — tinted bg + AA --el-text-strong (finding #35) */
+      .pill {
+        display: inline-flex; align-items: center; gap: 5px; border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x); font-family: var(--font-sans);
+        font-size: 11.5px; font-weight: 600; border: 1px solid transparent; white-space: nowrap;
+      }
+      .pill svg { width: 12px; height: 12px; }
+      .pill-warn { background: var(--el-tint-peach); color: var(--el-text-strong); }
+      .pill-warn svg { color: var(--el-warning); }
+      .pill-mint { background: var(--el-tint-mint); color: var(--el-text-strong); }
+      .pill-mint svg { color: var(--el-success); }
+
+      /* callout (inline notice — same as account-settings.mock.html) */
+      .callout { display: flex; gap: 10px; align-items: flex-start; background: var(--el-tint-sky); border-radius: var(--radius-card); padding: 12px 14px; }
+      .callout .ic { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--el-info); }
+      .callout p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--el-text-strong); }
+      .callout.warn { background: var(--el-tint-peach); }
+      .callout.warn .ic { color: var(--el-warning); }
+      .callout.danger { background: var(--el-tint-rose); }
+      .callout.danger .ic { color: var(--el-danger); }
+
+      /* field-level error text + box (FormField error variants) */
+      .field { display: flex; flex-direction: column; gap: 6px; }
+      .field > label { font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--el-text); }
+      .field .helper { font-size: 12px; color: var(--el-text-muted); }
+      .field .err-text { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--el-danger); }
+      .field .err-text svg { width: 13px; height: 13px; }
+      .err-box {
+        display: flex; align-items: flex-start; gap: 8px; background: var(--el-tint-rose);
+        border-radius: var(--radius-input); padding: 9px 12px; font-size: 12.5px; color: var(--el-text-strong); line-height: 1.45;
+      }
+      .err-box svg { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--el-danger); }
+
+      /* ── Modal (Modal.tsx — Radix Dialog panel + overlay) ────────────────── */
+      .mstage {
+        position: relative;
+        background:
+          repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(120,118,113,0.04) 10px, rgba(120,118,113,0.04) 20px),
+          var(--el-surface-soft);
+        border: 1px solid var(--el-border); border-radius: var(--radius-card); padding: 40px 16px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;
+      }
+      .overlay-tint { position: absolute; inset: 0; background: rgba(0,0,0,0.18); border-radius: var(--radius-card); }
+      .modal {
+        position: relative; width: 100%; max-width: 28rem; background: var(--el-page-bg);
+        border: 1px solid var(--el-border); border-radius: var(--radius-modal); box-shadow: var(--shadow-modal); padding: var(--spacing-card-padding);
+      }
+      .modal-title { font-family: var(--font-serif); font-size: 20px; font-weight: 600; margin: 0; color: var(--el-text); }
+      .modal-desc { margin: 4px 0 0; font-size: 14px; line-height: 1.5; color: var(--el-text-muted); }
+      .modal-head { margin-bottom: var(--spacing-md); padding-right: 28px; }
+      .modal-close {
+        position: absolute; top: 12px; right: 12px; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+        padding: var(--spacing-icon-btn); border-radius: var(--radius-control); border: 0; background: transparent; color: var(--el-text-muted); cursor: pointer;
+      }
+      .modal-close:hover { color: var(--el-text); }
+      .modal-close svg { width: 16px; height: 16px; }
+      .modal-body { display: flex; flex-direction: column; gap: 16px; }
+      .modal-foot { margin-top: 24px; display: flex; justify-content: flex-end; gap: 8px; }
+      .modal .input { min-width: 0; width: 100%; }
+
+      /* ── Toast (Toast.tsx — success variant) ─────────────────────────────── */
+      .toast {
+        position: absolute; bottom: 16px; right: 16px; width: 340px; max-width: calc(100% - 32px);
+        display: flex; align-items: flex-start; gap: 12px; background: var(--el-page-bg);
+        border: 1px solid var(--el-success); border-radius: var(--radius-card); box-shadow: var(--shadow-elevated); padding: 12px 16px;
+      }
+      .toast.info { border-color: var(--el-info); }
+      .toast .t-ic { width: 16px; height: 16px; flex: none; margin-top: 1px; color: var(--el-success); }
+      .toast.info .t-ic { color: var(--el-info); }
+      .toast .t-body { flex: 1; min-width: 0; }
+      .toast .t-title { font-size: 14px; font-weight: 500; color: var(--el-text); }
+      .toast .t-desc { margin-top: 2px; font-size: 12px; color: var(--el-text-muted); line-height: 1.4; }
+      .toast .t-close { width: 22px; height: 22px; flex: none; border-radius: var(--radius-control); border: 0; background: transparent; color: var(--el-text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+      .toast .t-close svg { width: 14px; height: 14px; }
+
+      /* ── Skeleton (loading) ──────────────────────────────────────────────── */
+      .sk { background: var(--el-muted); border-radius: var(--radius-badge); height: 12px; position: relative; overflow: hidden; }
+      .sk.av { width: 52px; height: 52px; border-radius: 9999px; }
+      .sk::after {
+        content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--el-page-bg) 60%, transparent), transparent);
+        animation: shimmer 1.3s infinite;
+      }
+      @keyframes shimmer { to { transform: translateX(100%); } }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>Account › Profile — name · avatar · email · password</h1>
+      <p>
+        Story 8.8 · 8.8.20 / MOTIR-1205. Flips the reserved <b>General › Profile</b> "Soon"
+        placeholder into a real personal-details surface (the Linear-style Profile + Security split):
+        edit your name, photo and sign-in email, and manage your password. Built from the shipped
+        account-settings area shell + design-system primitives; the password flows reuse the shipped
+        reset path, and credential vs OAuth-only users get the right password action. Five panels:
+        resting · editing/pending/errors · change-password modal · change-email + OAuth variant +
+        loading · dark parity.
+      </p>
+    </div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="i-arrow-left" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 19-7-7 7-7" /><path d="M19 12H5" />
+        </g>
+        <g id="i-user" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 0 0-16 0" />
+        </g>
+        <g id="i-languages" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" /><path d="m22 22-5-10-5 10" /><path d="M14 18h6" />
+        </g>
+        <g id="i-bell" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
+        </g>
+        <g id="i-palette" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+        </g>
+        <g id="i-key" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g id="i-mail" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </g>
+        <g id="i-lock" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g id="i-camera" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />
+        </g>
+        <g id="i-trash" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+        </g>
+        <g id="i-pencil" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" />
+        </g>
+        <g id="i-x" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+        </g>
+        <g id="i-eye" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" />
+        </g>
+        <g id="i-chevron-down" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g id="i-check-circle" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.801 10A10 10 0 1 1 17 3.335" /><path d="m9 11 3 3L22 4" />
+        </g>
+        <g id="i-alert-circle" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" />
+        </g>
+        <g id="i-clock" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+        </g>
+        <g id="i-google" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" /><path d="M12 8v8" /><path d="M8 12h8" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════ PANEL 1 — Resting (light) ════════════ -->
+    <div class="panel-label">
+      1 · Resting (credential user, light). The <b>access path</b>: rail General › Profile flipped
+      from "Soon" to <b>ACTIVE</b>. Profile card — Photo (initials fallback + Change), Name, Email
+      (each at rest with its edit affordance); Password &amp; security card — Change password.
+    </div>
+    <div class="panel">
+      <div class="stage" data-theme="light">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span>
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active" aria-current="page">
+                  <span class="ni"><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span><span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span><span class="nl">Language</span></div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span><span class="nl">Notifications</span></div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span><span class="nl">Appearance</span></div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span><span class="nl">API tokens</span></div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>Profile</h2>
+              <p class="sub">
+                Your personal details — the name and photo teammates see across Motir, and the email
+                and password you sign in with. Changes apply to your account everywhere you're signed in.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head"><div><h3>Profile</h3><p class="hsub">How you appear to your team.</p></div></div>
+                <div class="card-body">
+                  <div class="srow tall">
+                    <div class="sl"><div class="name">Photo</div><div class="desc">PNG or JPG, up to 2&nbsp;MB. Shown on your avatar, comments and mentions.</div></div>
+                    <div class="sc">
+                      <span class="avatar">ZY</span>
+                      <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Change</button>
+                    </div>
+                  </div>
+                  <div class="srow">
+                    <div class="sl"><div class="name">Name</div><div class="desc">Shown on your work, comments and mentions.</div></div>
+                    <div class="sc">
+                      <span class="val">Zhu Yue</span>
+                      <button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Edit</button>
+                    </div>
+                  </div>
+                  <div class="srow">
+                    <div class="sl"><div class="name">Email</div><div class="desc">Used to sign in and to send you notifications.</div></div>
+                    <div class="sc">
+                      <span class="val">zhuyue@motir.co</span>
+                      <button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><use href="#i-mail" /></svg>Change email</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head"><div><h3>Password &amp; security</h3><p class="hsub">The password you use to sign in with email.</p></div></div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl"><div class="name">Password</div><div class="desc">Last changed 3 months ago.</div></div>
+                    <div class="sc">
+                      <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Change password</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 — Editing / pending / errors (light) ════════════ -->
+    <div class="panel-label">
+      2 · Editing, pending &amp; error states (light). Photo uploaded (Remove appears); Name in
+      <b>edit mode</b> (input + Save/Cancel) with the empty-name validation error; Email in
+      <b>pending-confirmation</b> state (a link was sent to the new address — applies only on confirm).
+    </div>
+    <div class="panel">
+      <div class="stage" data-theme="light">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span>
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active" aria-current="page"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span><span class="nl">Profile</span></div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span><span class="nl">Language</span></div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span><span class="nl">Notifications</span></div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span><span class="nl">Appearance</span></div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span><span class="nl">API tokens</span></div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head"><h2>Profile</h2><p class="sub">Inline edits save in place; the email change waits for you to confirm from the new inbox.</p></div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head"><div><h3>Profile</h3><p class="hsub">How you appear to your team.</p></div></div>
+                <div class="card-body">
+                  <div class="srow tall">
+                    <div class="sl"><div class="name">Photo</div><div class="desc">PNG or JPG, up to 2&nbsp;MB. Shown on your avatar, comments and mentions.</div></div>
+                    <div class="sc">
+                      <span class="avatar photo"></span>
+                      <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Change</button>
+                      <button class="btn btn-danger-ghost btn-sm"><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Remove</button>
+                    </div>
+                  </div>
+                  <div class="srow" style="align-items: flex-start">
+                    <div class="sl"><div class="name">Name</div><div class="desc">Shown on your work, comments and mentions.</div></div>
+                    <div class="sc" style="flex-direction: column; align-items: flex-end; gap: 6px">
+                      <div class="editfield">
+                        <span class="input err focused" style="min-width: 240px"><span class="ival" style="color: var(--el-text-faint)">&nbsp;</span></span>
+                        <button class="btn btn-primary btn-sm">Save</button>
+                        <button class="btn btn-ghost btn-sm">Cancel</button>
+                      </div>
+                      <span class="field"><span class="err-text"><svg viewBox="0 0 24 24"><use href="#i-alert-circle" /></svg>Name can't be empty.</span></span>
+                    </div>
+                  </div>
+                  <div class="srow" style="align-items: flex-start">
+                    <div class="sl"><div class="name">Email</div><div class="desc">Used to sign in and to send you notifications.</div></div>
+                    <div class="sc" style="flex-direction: column; align-items: flex-end; gap: 7px">
+                      <span class="val" style="color: var(--el-text-muted); text-decoration: line-through">zhuyue@motir.co</span>
+                      <span class="pill pill-warn"><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg>Pending → yue@acme.com</span>
+                      <div style="display: flex; gap: 14px; font-size: 12.5px">
+                        <span style="color: var(--el-text-muted)">Confirmation sent. Applies once confirmed.</span>
+                        <a style="color: var(--el-link); text-decoration: none">Resend</a>
+                        <a style="color: var(--el-link); text-decoration: none">Cancel</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head"><div><h3>Password &amp; security</h3><p class="hsub">The password you use to sign in with email.</p></div></div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl"><div class="name">Password</div><div class="desc">Last changed 3 months ago.</div></div>
+                    <div class="sc"><button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Change password</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 — Change-password modal + success toast (light) ════════════ -->
+    <div class="panel-label">
+      3 · Change password (credential user) — the Modal: current → new → confirm, each with a
+      show/hide toggle and the shipped <b>8-character minimum</b> (matches /reset-password/new). On
+      success, the Toast confirms. Saving state shown on the primary button.
+    </div>
+    <div class="panel">
+      <div class="mstage" data-theme="light">
+        <div class="overlay-tint"></div>
+        <div class="modal">
+          <div class="modal-head">
+            <h3 class="modal-title">Change password</h3>
+            <p class="modal-desc">Enter your current password, then choose a new one.</p>
+          </div>
+          <button class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button>
+          <div class="modal-body">
+            <div class="field">
+              <label>Current password</label>
+              <span class="input"><span class="ival" style="letter-spacing: 2px">••••••••••</span><span class="eye"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg></span></span>
+            </div>
+            <div class="field">
+              <label>New password</label>
+              <span class="input"><span class="ival" style="letter-spacing: 2px">•••••••••••••</span><span class="eye"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg></span></span>
+              <span class="helper">At least 8 characters.</span>
+            </div>
+            <div class="field">
+              <label>Confirm new password</label>
+              <span class="input"><span class="ival" style="letter-spacing: 2px">•••••••••••••</span><span class="eye"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg></span></span>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary"><span class="spin"></span>Updating…</button>
+          </div>
+        </div>
+
+        <div class="toast">
+          <span class="t-ic"><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg></span>
+          <div class="t-body"><div class="t-title">Password updated</div><div class="t-desc">Use your new password next time you sign in.</div></div>
+          <button class="t-close" aria-label="Dismiss"><svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — Change-email modal · OAuth-only variant · loading ════════════ -->
+    <div class="panel-label">
+      4 · Three more states (light). <b>Change email</b> modal with the <b>email-taken</b> error;
+      the <b>OAuth-only</b> Password card (Google sign-in → "Send a password-reset link", reusing the
+      shipped reset flow, so they can set a password); and the <b>loading skeleton</b>.
+    </div>
+    <div class="panel">
+      <div class="mstage" data-theme="light" style="align-items: flex-start">
+        <div class="overlay-tint"></div>
+        <!-- change-email modal -->
+        <div class="modal modal-sm" style="max-width: 25rem">
+          <div class="modal-head">
+            <h3 class="modal-title">Change email</h3>
+            <p class="modal-desc">We'll send a confirmation link to the new address. Your email changes only after you confirm from that inbox.</p>
+          </div>
+          <button class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24"><use href="#i-x" /></svg></button>
+          <div class="modal-body">
+            <div class="field">
+              <label>New email</label>
+              <span class="input err"><span class="ival">yue@acme.com</span></span>
+              <span class="err-box"><svg viewBox="0 0 24 24"><use href="#i-alert-circle" /></svg>That email is already in use by another account.</span>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary"><svg viewBox="0 0 24 24"><use href="#i-mail" /></svg>Send confirmation</button>
+          </div>
+        </div>
+
+        <!-- OAuth-only password card + loading skeleton, stacked -->
+        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 24rem">
+          <div class="card">
+            <div class="card-head"><div><h3>Password &amp; security</h3><p class="hsub">Sign-in method.</p></div></div>
+            <div class="card-body">
+              <div style="padding: 14px 0">
+                <div class="callout">
+                  <span class="ic"><svg viewBox="0 0 24 24"><use href="#i-google" /></svg></span>
+                  <p>You sign in with <b>Google</b>. Send yourself a reset link to set a password and also sign in with email.</p>
+                </div>
+                <div style="margin-top: 14px; display: flex; justify-content: flex-end">
+                  <button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-mail" /></svg>Send a password-reset link</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" aria-busy="true" aria-label="Loading profile">
+            <div class="card-head"><div><h3>Profile</h3></div></div>
+            <div class="card-body">
+              <div class="srow tall"><div class="sl" style="width: 100%"><div class="sk" style="width: 64px; margin-bottom: 8px"></div><div class="sk" style="width: 180px; height: 9px"></div></div><div class="sc"><span class="sk av"></span></div></div>
+              <div class="srow"><div class="sl" style="width: 100%"><div class="sk" style="width: 52px; margin-bottom: 8px"></div><div class="sk" style="width: 150px; height: 9px"></div></div><div class="sc"><span class="sk" style="width: 90px"></span></div></div>
+              <div class="srow"><div class="sl" style="width: 100%"><div class="sk" style="width: 56px; margin-bottom: 8px"></div><div class="sk" style="width: 160px; height: 9px"></div></div><div class="sc"><span class="sk" style="width: 110px"></span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 — Dark parity (resting) ════════════ -->
+    <div class="panel-label">5 · Dark parity — the resting pane renders correctly on <b>data-theme="dark"</b>.</div>
+    <div class="panel">
+      <div class="stage" data-theme="dark">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span>
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta"><span class="nm">Zhu Yue</span><span class="em">zhuyue@motir.co</span></span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active" aria-current="page"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-user" /></svg></span><span class="nl">Profile</span></div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg></span><span class="nl">Language</span></div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg></span><span class="nl">Notifications</span></div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg></span><span class="nl">Appearance</span></div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row"><span class="ni"><svg viewBox="0 0 24 24"><use href="#i-key" /></svg></span><span class="nl">API tokens</span></div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head"><h2>Profile</h2><p class="sub">Your personal details — the name and photo teammates see across Motir, and the email and password you sign in with.</p></div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head"><div><h3>Profile</h3><p class="hsub">How you appear to your team.</p></div></div>
+                <div class="card-body">
+                  <div class="srow tall">
+                    <div class="sl"><div class="name">Photo</div><div class="desc">PNG or JPG, up to 2&nbsp;MB. Shown on your avatar, comments and mentions.</div></div>
+                    <div class="sc"><span class="avatar photo"></span><button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Change</button><button class="btn btn-danger-ghost btn-sm"><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Remove</button></div>
+                  </div>
+                  <div class="srow">
+                    <div class="sl"><div class="name">Name</div><div class="desc">Shown on your work, comments and mentions.</div></div>
+                    <div class="sc"><span class="val">Zhu Yue</span><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Edit</button></div>
+                  </div>
+                  <div class="srow">
+                    <div class="sl"><div class="name">Email</div><div class="desc">Used to sign in and to send you notifications.</div></div>
+                    <div class="sc"><span class="val">zhuyue@motir.co</span><button class="btn btn-ghost btn-sm"><svg viewBox="0 0 24 24"><use href="#i-mail" /></svg>Change email</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-head"><div><h3>Password &amp; security</h3><p class="hsub">The password you use to sign in with email.</p></div></div>
+                <div class="card-body">
+                  <div class="srow">
+                    <div class="sl"><div class="name">Password</div><div class="desc">Last changed 3 months ago.</div></div>
+                    <div class="sc"><button class="btn btn-secondary btn-sm"><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Change password</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
