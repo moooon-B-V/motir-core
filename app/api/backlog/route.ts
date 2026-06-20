@@ -14,6 +14,10 @@ import {
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
+import { parseIssueFilter } from '@/lib/issues/issueListFilter';
+import { upgradeFacetsIntoAst } from '@/lib/issues/issueListAdvancedFilter';
+import { decodeFilterParam } from '@/lib/filters/ast';
+import { FilterValidationError } from '@/lib/filters/errors';
 
 const MAX_TITLE_LENGTH = 200;
 
@@ -32,6 +36,17 @@ const MAX_TITLE_LENGTH = 200;
 // rung 3 card prose). The 4.2 backlog UI binds here against the active project.
 //
 // Query: ?cursor=<last id> (omit for page 1) · ?limit=<1..100> (default 50).
+//
+// FILTER (Story 8.8 · Subtask 8.8.17): the backlog read takes the SAME filter
+// params as `/issues` + the board — the quick facets `?kind` · `?type` ·
+// `?status` · `?assignee` · `?q` and the advanced builder's `?filter=v1:` AST.
+// They're parsed exactly as `/issues` (`parseIssueFilter`) + decoded
+// (`decodeFilterParam`), then merged into ONE predicate via the board's lossless
+// `upgradeFacetsIntoAst` AND-merge and threaded to the service, which resolves +
+// validates it (an invalid field/operator/value → `FilterValidationError` → 422
+// below). A malformed/forged advanced param decodes to facets-only (the
+// forged-URL degrade the board route + the navigator use — the page never emits
+// a bad param). `cursor` / `limit` are unchanged.
 export async function GET(req: Request): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
@@ -51,12 +66,37 @@ export async function GET(req: Request): Promise<Response> {
   // not rejected — friendlier for a list fetch.
   const limit = limitRaw ? Number(limitRaw) : undefined;
 
-  const page = await backlogService.getBacklog(
-    ctx.projectId,
-    { cursor, limit },
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  );
-  return NextResponse.json(page);
+  // Parse the quick facets + decode the advanced AST, then fold them into one
+  // predicate (the board-page precedent). Empty selection → no AST → the
+  // unfiltered read (byte-for-byte the 4.1.4 projection).
+  const facets = parseIssueFilter({
+    kind: params.getAll('kind'),
+    type: params.getAll('type'),
+    status: params.getAll('status'),
+    assignee: params.getAll('assignee'),
+    q: params.get('q') ?? undefined,
+    filter: params.get('filter') ?? undefined,
+  });
+  const decoded = facets.advanced ? decodeFilterParam(facets.advanced) : null;
+  const advancedAst = decoded && decoded.ok ? decoded.ast : null;
+  const effectiveAst = upgradeFacetsIntoAst(facets, advancedAst);
+  const filterAst = effectiveAst.conditions.length > 0 ? effectiveAst : undefined;
+
+  try {
+    const page = await backlogService.getBacklog(
+      ctx.projectId,
+      { cursor, limit, filterAst },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
+    return NextResponse.json(page);
+  } catch (err) {
+    // A structurally-valid AST that fails registry validation (unknown
+    // field/operator or a bad value) → typed 422, mirroring the board route.
+    if (err instanceof FilterValidationError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    throw err;
+  }
 }
 
 // POST /api/backlog (Subtask 4.2.2) — inline "+ Create issue" from the backlog

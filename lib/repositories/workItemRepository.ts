@@ -2433,11 +2433,69 @@ export const workItemRepository = {
   async findBacklogPage(
     projectId: string,
     workspaceId: string,
-    options: { take: number; cursor?: string; excludeStatusKeys?: string[] },
+    options: {
+      take: number;
+      cursor?: string;
+      excludeStatusKeys?: string[];
+      // The shared backlog filter (Story 8.8 · Subtask 8.8.17) — a compiled
+      // FilterAST AND-ed into the page read so the backlog shows only matching
+      // issues. Omitted on the unfiltered backlog (the byte-for-byte 4.1.1
+      // builder read below). Resolved by `backlogService.resolveBacklogFilter`.
+      filter?: { ast: FilterAst; referents?: ProjectFilterReferents };
+    },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     const client = tx ?? db;
-    const { take, cursor, excludeStatusKeys = [] } = options;
+    const { take, cursor, excludeStatusKeys = [], filter } = options;
+
+    // Advanced filter active (Subtask 8.8.17): AND the compiled FilterAST (alias
+    // `w`) into the page read. The AST can't be expressed through the Prisma
+    // query builder — it compiles to a parameterized SQL fragment over the full
+    // row (incl. the 6.1.2 label/component/custom-field EXISTS probes) — so we
+    // resolve the matching, seek-paginated, capped ids in ONE raw query that
+    // applies the SAME base predicates as the builder path, then hydrate the
+    // real `WorkItem` rows through Prisma and restore the raw query's order (the
+    // 6.15.2 `findColumnCards` precedent, exactly). No filter → the existing
+    // builder read, byte-for-byte the 4.1.1 projection (no regression).
+    if (filter && filter.ast.conditions.length > 0) {
+      const excludeSql =
+        excludeStatusKeys.length > 0
+          ? Prisma.sql`AND w."status" <> ALL(${excludeStatusKeys})`
+          : Prisma.empty;
+      // The seek predicate replicates Prisma's `cursor: { id }, skip: 1` over
+      // `orderBy [backlogRank asc, id asc]`: continue STRICTLY AFTER the cursor
+      // row in (backlogRank, id) order. The cursor row's keys are read by id
+      // (its filter-match is irrelevant — the page boundary is filter-
+      // independent, exactly as Prisma's cursor). The row-value `>` gives the
+      // lexicographic (backlogRank, id) walk; both columns are text, so it
+      // sorts identically to the Prisma orderBy.
+      const cursorSql = cursor
+        ? Prisma.sql`AND (w."backlogRank", w."id") > (
+            SELECT c."backlogRank", c."id" FROM "work_item" c WHERE c."id" = ${cursor}
+          )`
+        : Prisma.empty;
+      const idRows = await client.$queryRaw<Array<{ id: string }>>`
+        SELECT w."id"
+          FROM "work_item" w
+          WHERE w."projectId" = ${projectId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."sprintId" IS NULL
+            AND w."archivedAt" IS NULL
+            AND ${notInTriageSql('w')}
+            ${excludeSql}
+            ${cursorSql}
+            AND (${compileFilterConditionsSql(filter.ast, filter.referents)})
+          ORDER BY w."backlogRank" ASC, w."id" ASC
+          LIMIT ${take + 1}`;
+      const ids = idRows.map((r) => r.id);
+      if (ids.length === 0) return [];
+      const rows = await client.workItem.findMany({ where: { id: { in: ids } } });
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      // `findMany({ id: { in } })` does not preserve the id list order — restore
+      // the raw query's (backlogRank, id) seek order + window.
+      return ids.map((id) => byId.get(id)).filter((r): r is WorkItem => r !== undefined);
+    }
+
     return client.workItem.findMany({
       where: {
         projectId,
@@ -2470,9 +2528,35 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     excludeStatusKeys: string[] = [],
+    // The same shared backlog filter `findBacklogPage` takes (Subtask 8.8.17):
+    // when present the count is the FILTERED total (the "N issues" header tracks
+    // the filtered page). Omitted → the byte-for-byte 4.1.1 Prisma count.
+    filter?: { ast: FilterAst; referents?: ProjectFilterReferents },
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? db;
+
+    // Filtered total (Subtask 8.8.17): COUNT over the SAME base predicates as
+    // `findBacklogPage`'s raw read with the compiled FilterAST AND-ed in, so the
+    // header denominator matches the filtered page exactly.
+    if (filter && filter.ast.conditions.length > 0) {
+      const excludeSql =
+        excludeStatusKeys.length > 0
+          ? Prisma.sql`AND w."status" <> ALL(${excludeStatusKeys})`
+          : Prisma.empty;
+      const rows = await client.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*)::int AS "count"
+          FROM "work_item" w
+          WHERE w."projectId" = ${projectId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."sprintId" IS NULL
+            AND w."archivedAt" IS NULL
+            AND ${notInTriageSql('w')}
+            ${excludeSql}
+            AND (${compileFilterConditionsSql(filter.ast, filter.referents)})`;
+      return rows[0]?.count ?? 0;
+    }
+
     return client.workItem.count({
       where: {
         projectId,
