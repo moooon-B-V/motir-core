@@ -1423,7 +1423,7 @@ and
   :is(.border-b, .border-t):not(.border):not(.fixed):not(.absolute):not(.sticky) {
   position: relative;
 }
-[data-style='hand-drawn-indie'] [data-surface] .border-b:not(.border):not(:last-child)::after {
+[data-style='hand-drawn-indie'] [data-surface] .border-b:not(.border)::after {
   content: '';
   position: absolute;
   left: 0;
@@ -1444,6 +1444,15 @@ and
   pointer-events: none;
   border-top: 2px solid var(--el-border-strong);
   filter: url(#hd-rough);
+}
+/* Suppress the overlay only where the REAL divider is removed: the last row of a
+   fully-rendered list strips its border via `last:border-b-0`. (We can't use
+   `:not(:last-child)` on the draw rule — a STICKY table header sits alone in its
+   own `role="rowgroup"`, so it is itself a `:last-child` and would be wrongly
+   skipped, which left the work-item table header's divider straight.) Same
+   specificity as the draw rule, placed after, so it wins on the real last row. */
+[data-style='hand-drawn-indie'] [data-surface] .last\:border-b-0:last-child::after {
+  content: none;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

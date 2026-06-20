@@ -115,8 +115,12 @@ from two pieces:
   dividers). So the single-side dividers (`.border-b` / `.border-t` — table rows,
   section rules) get the same wavy `::after`, scoped **inside `[data-surface]`
   panels** to bound the count to real surfaces (whose rows are virtualised, so
-  only ~viewport-many overlays ever render). `:not(.border)` avoids double-handling
-  and `:not(:last-child)` mirrors the common `last:border-b-0` strip.
+  only ~viewport-many overlays ever render). `:not(.border)` avoids
+  double-handling, and the overlay is suppressed only on the genuinely
+  border-removed last row via its real `last:border-b-0` class — NOT via
+  `:not(:last-child)`, because a STICKY table header sits alone in its own
+  `role="rowgroup"` and is therefore itself a `:last-child`, so that heuristic
+  wrongly skipped the work-item table header's divider.
 
 - **Why the overlay needs care with positioning.** The `::after` needs a
   positioned host, so static surfaces get `position: relative`. But a centred
