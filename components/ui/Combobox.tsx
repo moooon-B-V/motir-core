@@ -505,6 +505,7 @@ export function Combobox<T extends string>({
   const menu = inDialog ? (
     <div
       ref={menuRef}
+      data-menu-surface=""
       className={cn(
         'absolute left-0 z-50 w-max min-w-full max-w-[18rem] rounded-(--radius-card) bg-(--el-page-bg) p-1',
         'shadow-(--shadow-elevated) border border-(--el-border)',
@@ -518,6 +519,7 @@ export function Combobox<T extends string>({
   ) : (
     <div
       ref={menuRef}
+      data-menu-surface=""
       // Width sizes to the widest option but never narrower than the trigger
       // (minWidth set in updatePosition) and is capped so a long label can't run
       // off-screen. Hidden until positioned to avoid a first-paint flash at 0,0.

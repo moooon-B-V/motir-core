@@ -1013,6 +1013,48 @@
     0 2px 4px rgba(15, 15, 15, 0.14);
 }
 
+/* ── 3D / Immersive — DROPDOWNS / POPOVERS / MENUS unfold in 3D ──────────────
+   A flat fade-in is the "still not 3D" tell on overlays. The standard 3D
+   dropdown UNFOLDS: it swings open from its top edge over a perspective
+   (transform-origin top + rotateX, folded → flat). Every floating overlay in the
+   app shares `shadow-(--shadow-elevated)` (popovers, comboboxes, multi-selects,
+   menus, tooltips, toasts), so one global rule on the compiled
+   `.shadow-\(--shadow-elevated\)` class gives them all the 3D open — and restores
+   the deeper elevated shadow (the global card-float rule above would otherwise
+   flatten them to --shadow-card). gated by reduced-motion. */
+@keyframes immersive-menu-open {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateX(-26deg) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Restore the deeper ELEVATED shadow on every overlay (the global card-float
+   rule above would otherwise flatten any `shadow-(--shadow-elevated)` surface to
+   --shadow-card). Global + static so menus, tooltips, drag-overlays all keep the
+   right depth. */
+[data-style='3d-immersive'] .shadow-\(--shadow-elevated\) {
+  box-shadow: var(--shadow-elevated);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* The 3D UNFOLD is scoped to actual MENU surfaces (the Popover primitive +
+     the `data-menu-surface` hook on Combobox / MultiSelect / BoardSwitcher
+     menus) — NOT every elevated surface, so a drag-overlay or toast doesn't
+     unexpectedly fold open. */
+  [data-style='3d-immersive'] [data-surface='popover'],
+  [data-style='3d-immersive'] [data-menu-surface] {
+    transform-origin: top center;
+    animation: immersive-menu-open 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* A Radix popover that flips ABOVE its trigger folds from the bottom edge. */
+  [data-style='3d-immersive'] [data-surface='popover'][data-side='top'] {
+    transform-origin: bottom center;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
    The StyleVignette preview specimen carries its OWN axis attribute on a
