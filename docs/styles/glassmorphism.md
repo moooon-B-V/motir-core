@@ -25,7 +25,15 @@ shape-only token block, so it ships in two parts (see the two-axis contract in
    scalars into frosted translucency + a gradient canvas via
    `color-mix()`/alpha **over the active palette tokens**, introducing **no new
    hue**. Surfaces opt in through the `data-surface` hook the shared primitives
-   emit (`Card` / `Modal` / `Popover` / `Sidebar` / `Input`).
+   emit (`Card` / `Modal` / `Popover` / `Sidebar` / `Input` / `overlay`).
+
+**Modals are the showcase surface.** A modal floats over real page content, so it
+is where glass reads best. The modal/command-palette **backdrop**
+(`data-surface="overlay"`) is therefore NOT a dark scrim under glass: it's a
+light, palette-derived veil + a page `backdrop-filter: blur`, so the whole page
+behind frosts and the (also-frosted) modal panel refracts it. A dark scrim would
+make the glass blur darkness — the "flat" failure. The command-palette panel also
+carries `data-surface="modal"` so it frosts too.
 
 Because the material is palette-_derived_, the two axes stay orthogonal: pick a
 different palette and the glass re-tints automatically; pick a different style

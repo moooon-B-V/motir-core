@@ -74,9 +74,12 @@ export function CommandPalette({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+        <Dialog.Overlay data-surface="overlay" className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content
           aria-label="Command palette"
+          // `data-surface="modal"` frosts the palette panel under glassmorphism
+          // (it was missing, so the command palette never went glass).
+          data-surface="modal"
           // Radix Dialog (v1.1.15) is modal-by-default (focus trap + outside
           // inert) but doesn't emit aria-modal itself — set it explicitly so
           // screen readers treat the rest of the page as inert while the

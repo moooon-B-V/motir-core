@@ -560,6 +560,17 @@
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
+/* The MODAL / command-palette BACKDROP — the most important glass surface, since
+   a modal floats over real page content. Under glass it is NOT a dark scrim: a
+   light, palette-derived veil + a page BLUR, so the whole page behind frosts and
+   the (also-frosted) modal panel refracts it — the proper glass-modal look.
+   Overrides the primitives' `bg-black/40` utility. Palette-derived (no hue). */
+[data-style='glassmorphism'] [data-surface='overlay'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) 24%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Neo-Brutalism — the raw, punchy, utilitarian style (7.3.34).
    The LOUD end of the angular family — where Swiss is refined and calm, this is
