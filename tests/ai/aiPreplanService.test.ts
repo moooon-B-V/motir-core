@@ -9,6 +9,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn() }));
 
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import { getPreplanState } from '@/lib/ai/motirAiClient';
+import { toDirectionDocView } from '@/lib/onboarding/directionDoc';
 import type { ProjectContext } from '@/lib/projects';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 
@@ -36,6 +37,8 @@ const fullRaw: RawPreplanStateResponse = {
   docs: [
     {
       kind: 'discovery',
+      currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nB2B teams.',
+      currentVersion: 2,
       versions: [
         {
           version: 1,
@@ -53,7 +56,20 @@ const fullRaw: RawPreplanStateResponse = {
         },
       ],
     },
-    { kind: 'vision', versions: [] },
+    {
+      kind: 'vision',
+      currentBody: '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
+      currentVersion: 1,
+      versions: [
+        {
+          version: 1,
+          changeReason: null,
+          changeKind: null,
+          diff: null,
+          createdAt: '2026-06-19T10:40:00.000Z',
+        },
+      ],
+    },
   ],
 };
 
@@ -94,7 +110,7 @@ describe('aiPreplanService.getPreplanState', () => {
     expect(dto.session).not.toHaveProperty('aiProjectId');
   });
 
-  it('preserves each artifact’s forward revision log incl. the per-revision diffs verbatim', async () => {
+  it('preserves each artifact’s current body + version AND the forward revision log (diffs verbatim)', async () => {
     vi.mocked(getPreplanState).mockResolvedValue(fullRaw);
 
     const dto = await aiPreplanService.getPreplanState(ctx);
@@ -102,6 +118,8 @@ describe('aiPreplanService.getPreplanState', () => {
     expect(dto.docs).toEqual([
       {
         kind: 'discovery',
+        currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nB2B teams.',
+        currentVersion: 2,
         versions: [
           {
             version: 1,
@@ -119,8 +137,39 @@ describe('aiPreplanService.getPreplanState', () => {
           },
         ],
       },
-      { kind: 'vision', versions: [] },
+      {
+        kind: 'vision',
+        currentBody: '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
+        currentVersion: 1,
+        versions: [
+          {
+            version: 1,
+            changeReason: null,
+            changeKind: null,
+            diff: null,
+            createdAt: '2026-06-19T10:40:00.000Z',
+          },
+        ],
+      },
     ]);
+  });
+
+  it('threads each produced tier’s current body + version through to the DTO, mappable to a DirectionDocView', async () => {
+    vi.mocked(getPreplanState).mockResolvedValue(fullRaw);
+
+    const dto = await aiPreplanService.getPreplanState(ctx);
+
+    // The body is sourced from the motir-ai wire, never synthesized.
+    expect(dto.docs.map((d) => [d.kind, d.currentBody, d.currentVersion])).toEqual([
+      ['discovery', '# Discovery (Tier 1)\n\n## 1. Audience\n\nB2B teams.', 2],
+      ['vision', '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.', 1],
+    ]);
+    // …and folds straight onto 834's read-only view model at the 7.3.5 gate.
+    expect(toDirectionDocView(dto.docs[1]!)).toEqual({
+      kind: 'vision',
+      contentMd: '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
+      version: 1,
+    });
   });
 
   it('passes the empty resume state through as session: null / docs: [] (a not-yet-started project, not an error)', async () => {

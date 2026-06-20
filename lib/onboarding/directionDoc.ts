@@ -33,6 +33,22 @@ export interface DirectionDocView {
   version?: number;
 }
 
+/**
+ * Map a pre-plan artifact log (one entry of the `/api/ai/pre-plan` read DTO)
+ * onto the read-only `DirectionDocView` the 7.3.5 gate renders. The body is the
+ * artifact's CURRENT rendered Markdown (`currentBody`, threaded from motir-ai by
+ * 7.3.72/MOTIR-1189) — never synthesized client-side; `currentVersion` carries
+ * its monotonic save number. The forward `versions` diff timeline is a separate
+ * concern (the revision history), so it is intentionally NOT folded in here.
+ */
+export function toDirectionDocView(log: {
+  kind: DirectionDocKind;
+  currentBody: string;
+  currentVersion: number;
+}): DirectionDocView {
+  return { kind: log.kind, contentMd: log.currentBody, version: log.currentVersion };
+}
+
 // ── Feature catalog (structured; folded into the vision tier) ────────────────
 // Mirrors motir-ai `FeatureCatalogDto` and its children. The phase/status enums
 // match motir-ai's `FeaturePhase` / `FeatureStatus` exactly.

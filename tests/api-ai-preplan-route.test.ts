@@ -91,7 +91,16 @@ describe('GET /api/ai/pre-plan', () => {
         createdAt: '2026-06-19T10:00:00.000Z',
         updatedAt: '2026-06-19T11:00:00.000Z',
       },
-      docs: [{ kind: 'discovery', versions: [] }],
+      docs: [
+        {
+          kind: 'discovery',
+          currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nFounders.',
+          currentVersion: 1,
+          versions: [
+            { version: 1, changeReason: null, changeKind: null, diff: null, createdAt: 'iso1' },
+          ],
+        },
+      ],
     });
 
     const res = await GET();
@@ -106,7 +115,18 @@ describe('GET /api/ai/pre-plan', () => {
     const body = await res.json();
     expect(body.session.classification).toBe('startup');
     expect(body.session).not.toHaveProperty('aiProjectId'); // internal id not leaked
-    expect(body.docs).toEqual([{ kind: 'discovery', versions: [] }]);
+    // Each produced tier's rendered body reaches the browser (the 7.3.5 gate
+    // renders it through DirectionDocView) alongside its forward revision log.
+    expect(body.docs).toEqual([
+      {
+        kind: 'discovery',
+        currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nFounders.',
+        currentVersion: 1,
+        versions: [
+          { version: 1, changeReason: null, changeKind: null, diff: null, createdAt: 'iso1' },
+        ],
+      },
+    ]);
   });
 
   it('200s the empty state for a project that never started a pre-plan (not an error)', async () => {

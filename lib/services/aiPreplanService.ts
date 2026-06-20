@@ -55,6 +55,10 @@ function mapPreplanState(raw: RawPreplanStateResponse): PreplanStateDTO {
       : null,
     docs: raw.docs.map((doc) => ({
       kind: doc.kind,
+      // The latest rendered body the 7.3.5 gate displays (7.3.72/MOTIR-1188),
+      // passed through verbatim alongside the forward revision log.
+      currentBody: doc.currentBody,
+      currentVersion: doc.currentVersion,
       versions: doc.versions.map((v) => ({
         version: v.version,
         changeReason: v.changeReason,

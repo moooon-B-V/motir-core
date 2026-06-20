@@ -180,6 +180,8 @@ describe('getPreplanState', () => {
       docs: [
         {
           kind: 'discovery',
+          currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nEnterprise teams.',
+          currentVersion: 2,
           versions: [
             { version: 1, changeReason: null, changeKind: 'created', diff: null, createdAt: '…' },
             {

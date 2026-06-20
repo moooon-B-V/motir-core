@@ -338,6 +338,33 @@ export const STYLE_REGISTRY = {
         'Rounded cards / board cards / modals that tilt toward the pointer with layered parallax; PHYSICAL buttons with real thickness (a solid base edge) that press DOWN on click; each board column floats as its own card. Nothing is flat.',
     },
   },
+  neumorphism: {
+    id: 'neumorphism',
+    name: 'Neumorphism',
+    tagline: 'Soft extruded surfaces that swell out of a single monochrome field.',
+    inspiration:
+      'Neumorphism / soft-UI — Dribbble-era "soft shadow" interfaces where panels are pressed OUT of (or INTO) one continuous surface by a paired light + dark shadow.',
+    designDoc: 'docs/styles/neumorphism.md',
+    defaultTypeId: 'motir',
+    dimensions: {
+      silhouette:
+        'Soft, generously rounded pebbles — 12px buttons/inputs, 18px cards, 22px modals. Tactile and friendly, the rounding that lets a shadow wrap a surface.',
+      stroke:
+        'Borders nearly vanish — a faint hairline kept ONLY as the accessibility fallback (see below); structure is read from the paired soft shadow, not an outline.',
+      elevation:
+        'The identity axis: a DUAL soft shadow — a light highlight top-left + a palette-derived dark shadow bottom-right — extrudes each surface OUT of the canvas (raised), while inputs and pressed controls invert it to an INSET well (pressed in). Depth is a soft swell, never a hard drop.',
+      surface:
+        'Monochrome and continuous: the page canvas and every panel share ONE opaque palette surface, so a card looks moulded out of the background rather than placed on top of it — the soft-UI "single material" look. Opaque (text AA preserved), with the depth carried entirely by the shadows.',
+      density:
+        'Comfortable and roomy — 20×11 buttons, 26px card padding, 38px controls; the soft shadows need air around each surface to read as extruded.',
+      motion:
+        'Gentle — 200ms ease and a soft press-scale; nothing snaps, matching the moulded surfaces (form fields rest as concave inset wells, panels swell out raised).',
+      typography:
+        'Inherits the base editorial type pairing; the personality is in the moulded surfaces, not the type.',
+      components:
+        'Raised, soft-shadowed cards / popovers / modals / sidebar (the data-surface material layer); concave inset inputs; pill status chips. Every surface swells from or sinks into the one field.',
+    },
+  },
   'hand-drawn-indie': {
     id: 'hand-drawn-indie',
     name: 'Hand-Drawn / Indie',

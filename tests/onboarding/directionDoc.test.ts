@@ -4,6 +4,7 @@ import {
   splitOpenQuestions,
   phaseLabel,
   statusPillVariant,
+  toDirectionDocView,
   TIER_META,
   DIRECTION_DOC_ORDER,
 } from '@/lib/onboarding/directionDoc';
@@ -73,6 +74,30 @@ describe('catalog label maps', () => {
     expect(statusPillVariant('todo')).toBe('planned');
     expect(statusPillVariant('in_progress')).toBe('in-progress');
     expect(statusPillVariant('done')).toBe('done');
+  });
+});
+
+describe('toDirectionDocView', () => {
+  it('maps a pre-plan artifact log onto the read-only view model — body from currentBody, never invented', () => {
+    const log = {
+      kind: 'vision' as const,
+      currentBody: '# Motir — Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
+      currentVersion: 3,
+      versions: [
+        { version: 1, changeReason: null, changeKind: null, diff: null, createdAt: 'iso1' },
+        { version: 3, changeReason: 'r', changeKind: 'edit', diff: {}, createdAt: 'iso3' },
+      ],
+    };
+    expect(toDirectionDocView(log)).toEqual({
+      kind: 'vision',
+      contentMd: '# Motir — Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
+      version: 3,
+    });
+  });
+
+  it('carries the kind through and ignores the orthogonal revision diff timeline', () => {
+    const view = toDirectionDocView({ kind: 'discovery', currentBody: 'body', currentVersion: 1 });
+    expect(view).toEqual({ kind: 'discovery', contentMd: 'body', version: 1 });
   });
 });
 
