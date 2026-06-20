@@ -4,8 +4,28 @@ import { hash, verify } from '@/lib/auth/passwords';
 import { accountRepository } from '@/lib/repositories/accountRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { toUserProfileDto } from '@/lib/mappers/userMappers';
-import { DuplicateEmailError } from '@/lib/users/errors';
+import {
+  DuplicateEmailError,
+  InvalidAvatarUrlError,
+  InvalidProfileNameError,
+  UserNotFoundError,
+} from '@/lib/users/errors';
+import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
+import { avatarBlobPrefix, isOwnAvatarBlobUrl } from '@/lib/blob/referencedUrls';
+import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
+import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import type { UserProfileDto } from '@/lib/dto/users';
+
+/** Upper bound on a profile display name (Subtask 8.8.21). Generous enough for
+ *  real names + handles, short enough to keep a row label sane. */
+export const MAX_PROFILE_NAME_LENGTH = 80;
+
+/** What `updateProfile` accepts. An OMITTED key (`undefined`) leaves that field
+ *  unchanged; `image: null` REMOVES the avatar; `image: <url>` sets it. */
+export interface UpdateProfileInput {
+  name?: string;
+  image?: string | null;
+}
 
 // Users service — business logic for the User entity.
 //
@@ -42,6 +62,90 @@ export const usersService = {
   async getProfile(userId: string): Promise<UserProfileDto | null> {
     const user = await userRepository.findById(userId);
     return user ? toUserProfileDto(user) : null;
+  },
+
+  /**
+   * Update the session user's OWN personal details — name and/or avatar (Story
+   * 8.8 · Subtask 8.8.21, behind the Account › Profile pane 8.8.24). Both fields
+   * are independently optional: an omitted key is untouched; `image: null`
+   * removes the avatar; `image: <url>` sets it.
+   *
+   * Validation: a present `name` must be non-empty (trimmed) and within
+   * {@link MAX_PROFILE_NAME_LENGTH}; a present non-null `image` must be one of
+   * OUR Vercel-Blob uploads under THIS user's `avatars/<userId>/` prefix
+   * (`isOwnAvatarBlobUrl`), so a foreign/arbitrary URL is rejected rather than
+   * stored. Name + avatar are keyed by the session user id and set to absolute
+   * values (not read-derived), so there is no lost-update hazard and no
+   * `FOR UPDATE` is needed (email uniqueness, which DOES race, is handled
+   * separately in 8.8.22). The single write runs in one `$transaction`.
+   *
+   * Avatar GC: when the update REPLACES or REMOVES a prior avatar that was our
+   * own-avatar blob, the old blob is `del`'d — but ONLY after the row commits
+   * (external I/O outside the tx), and ONLY when it is ours: a provider URL from
+   * an OAuth signup (e.g. a Google avatar) is never deleted.
+   */
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<UserProfileDto> {
+    const before = await userRepository.findById(userId);
+    if (!before) throw new UserNotFoundError(userId);
+
+    const data: { name?: string; image?: string | null } = {};
+
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (name.length === 0) {
+        throw new InvalidProfileNameError('Name is required.');
+      }
+      if (name.length > MAX_PROFILE_NAME_LENGTH) {
+        throw new InvalidProfileNameError(
+          `Name must be ${MAX_PROFILE_NAME_LENGTH} characters or fewer.`,
+        );
+      }
+      data.name = name;
+    }
+
+    let oldAvatarToDelete: string | null = null;
+    if (input.image !== undefined) {
+      const image = input.image; // string (set) | null (remove)
+      if (image !== null && !isOwnAvatarBlobUrl(image, userId)) {
+        throw new InvalidAvatarUrlError();
+      }
+      data.image = image;
+      // The prior avatar is ours to garbage-collect iff it's actually changing
+      // AND it's one of our own-avatar blobs (never a foreign/OAuth provider URL).
+      if (before.image && before.image !== image && isOwnAvatarBlobUrl(before.image, userId)) {
+        oldAvatarToDelete = before.image;
+      }
+    }
+
+    const updated = await db.$transaction((tx) => userRepository.updateProfile(tx, userId, data));
+
+    // Delete the replaced/removed blob AFTER the row commits (CLAUDE.md: external
+    // side-effects live outside the transaction), so a rolled-back update can
+    // never orphan a still-referenced avatar.
+    if (oldAvatarToDelete) {
+      await deleteAttachmentBlob(oldAvatarToDelete);
+    }
+
+    return toUserProfileDto(updated);
+  },
+
+  /**
+   * Store an uploaded avatar image and return its public URL (Story 8.8 ·
+   * Subtask 8.8.21) — the backend the Profile pane's `AvatarField` (8.8.24)
+   * POSTs a file to. Gates size + image-only MIME (the shared upload allowlist),
+   * then writes to the per-user `avatars/<userId>/` prefix so the URL passes
+   * `updateProfile`'s `isOwnAvatarBlobUrl` gate. Unlike an attachment upload
+   * this keeps NO audit row — an avatar is transient personal substrate, its
+   * lifecycle owned entirely by the user row's `image` column (and its GC by
+   * `updateProfile`). The caller then PATCHes the returned URL as `image`.
+   */
+  async uploadAvatar(file: File, userId: string): Promise<{ url: string }> {
+    if (file.size > MAX_UPLOAD_BYTES) throw new FileTooLargeError(MAX_UPLOAD_BYTES);
+    if (!isImageType(file.type)) throw new UnsupportedFileTypeError(file.type);
+
+    const pathname = `${avatarBlobPrefix(userId)}${file.name}`;
+    const { url } = await putAttachment(pathname, file, file.type);
+    return { url };
   },
 
   /**
