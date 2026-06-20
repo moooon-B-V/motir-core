@@ -1620,6 +1620,396 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Retrofuturism — chrome + gradient sweeps + retro display (7.3.40, DEFERRED
+   follow-up). The 70s/80s sci-fi / Outrun look: a synthwave HORIZON gradient
+   sweeps the canvas, and every surface wears a CHROME BEVEL (a bright top
+   highlight fading to a dark base) plus a diagonal reflective sheen, so panels
+   read as machined chrome rather than flat cards. The retro display read is the
+   `grotesk` type pairing (the style's defaultTypeId — wide geometric headlines),
+   NOT a `--font-*` override here (type is the independent data-type axis, 7.3.53).
+   Overrides ONLY shape/feel tokens — never a colour token (the data-palette
+   axis; the style wears whatever palette is active, so AA contrast is preserved
+   by construction). The metallic bevel/sheen lives in the MATERIAL LAYER below,
+   palette-DERIVED: every colour comes from color-mix()/var(--el-*) over the
+   active palette, or from the achromatic white/black KEYWORDS that make the
+   chrome read as lightness — never a raw hex hue (so the style stays disjoint
+   from the palette; enforced by tests/theme/styleRegistry.test.ts). The
+   differentiator vs Cybercore/Y2K: cybercore GLOWS neon on dark behind a tech
+   grid; retrofuturism is REFLECTIVE chrome over a sunset horizon. See
+   docs/styles/retrofuturism.md. ──────────────────────────────────────────── */
+[data-style='retrofuturism'] {
+  /* Silhouette — streamlined chrome capsules. --radius-pill stays untouched so
+     genuinely-circular affordances (avatars, status dots, the spinner) stay
+     round. Buttons + chips go FULL pill (chrome lozenges); panels stay softly
+     rounded. */
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-btn: 9999px; /* chrome-capsule buttons */
+  --radius-input: 12px;
+  --radius-card: 16px;
+  --radius-modal: 22px;
+  --radius-badge: 9999px; /* status chips stay pills — the streamlined register */
+  --radius-control: 10px;
+  --radius-kbd: 6px;
+
+  /* Elevation — a soft NEUTRAL lift only. The chrome bevel highlight + the
+     palette-derived colour glow are painted in the material layer below (no hue
+     may appear here); these neutral rgba shadows are the diffuse base the chrome
+     sits on. (rgba literals are neutral shadow ink — a cool near-black — not a
+     palette hue, so the token block stays colour-free.) */
+  --shadow-subtle: 0 1px 2px rgba(10, 12, 30, 0.06);
+  --shadow-card: 0 10px 26px -12px rgba(10, 12, 30, 0.22);
+  --shadow-elevated: 0 18px 40px -14px rgba(10, 12, 30, 0.28);
+  --shadow-modal: 0 28px 60px -18px rgba(10, 12, 30, 0.34);
+  --shadow-hero-mockup: 0 34px 74px -18px rgba(10, 12, 30, 0.4);
+
+  /* Density — confident and roomy; the chrome wants room to catch the light. */
+  --spacing-btn-x: 22px;
+  --spacing-btn-y: 11px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+
+  /* Motion — smooth and gliding; transitions ease, with a confident press. */
+  --transition-duration: 200ms;
+  --transition-slow: 320ms;
+  --active-scale: 0.97;
+
+  /* ── Material SCALARS — palette-AGNOSTIC (no hue, so no colour token here).
+     Consumed only by the [data-style='retrofuturism'] material rules below: the
+     synthwave SKY / HORIZON / GROUND band strengths + the neon GRID line alpha
+     and cell size (the Outrun floor), the chrome SPECULAR streak + bevel
+     highlight/shade (mixed from the achromatic white/black keywords), and the
+     palette-derived glow. Bold by design — this style is dark-FIRST (the neon
+     horizon + grid read strongest on a dark palette), so the strengths run high.
+     ── */
+  --retro-sky: 24%; /* the upper-sky wash (cool, from --el-link) */
+  --retro-horizon: 72%; /* the bright sun/horizon GLOW band — the signature */
+  --retro-ground: 26%; /* the warm ground wash rising from the bottom */
+  --retro-grid: 52%; /* the neon perspective-grid line alpha */
+  --retro-grid-size: 60px; /* the grid cell size before the perspective tilt */
+  --retro-spec: 44%; /* the bright diagonal SPECULAR streak across chrome */
+  --retro-bevel-light: 44%; /* the bright top metallic bevel highlight (white mix) */
+  --retro-bevel-shade: 28%; /* the dark base of the bevel (black mix) */
+  --retro-sheen: 18%; /* the quieter chrome edge tint (rail / input) */
+  --retro-glow: 32%; /* palette-derived colour glow on a card / popover */
+  --retro-glow-strong: 44%; /* the modal's / primary button's deeper glow */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Retrofuturism MATERIAL LAYER — palette-DERIVED chrome + horizon (7.3.40).
+   The same style-contract extension glassmorphism / aurora use: a style may own
+   its surface material in STYLE-SCOPED component rules as long as every colour
+   is DERIVED from the active palette via color-mix()/var() (or the achromatic
+   white/black keywords for pure metallic lightness) — never a raw hex hue — so
+   the style axis stays disjoint from the palette axis. These descendant-scoped
+   selectors are NOT the bare token block, so they never trip the colour-free
+   token-block test; they ARE read as material rules and must be palette-derived
+   (enforced by the "surface-material layer" test in styleRegistry.test.ts).
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* The canvas: the palette's page bg + a SYNTHWAVE SKY — a cool upper-sky wash, a
+   bright sun/HORIZON GLOW band ~62% down, and a warm ground wash rising from the
+   bottom. Every hue comes from the `--el-*` accent roles (NOT Tier-0
+   `--color-*`), so the sky re-tints with the active palette — the `data-palette`
+   axis overrides `--el-*`, never `--color-*`, which keeps the horizon orthogonal
+   to the palette. Painted as the body's own background (always behind content),
+   the proven 3D/Immersive atmosphere approach. */
+[data-style='retrofuturism'] body {
+  background-image:
+    linear-gradient(
+      180deg,
+      transparent 54%,
+      color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 60.5%,
+      color-mix(in srgb, var(--el-accent) var(--retro-horizon), transparent) 62.5%,
+      transparent 69%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
+      transparent 46%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
+      transparent 42%
+    );
+  background-size: 100% 100%;
+  background-attachment: fixed;
+}
+
+/* The Outrun GRID FLOOR — a receding neon grid below the horizon. A separate
+   fixed layer (`body::after`) so it can be perspective-tilted and masked to fade
+   into the horizon; `z-index: -1` keeps it BEHIND all app content (above only the
+   body's own sky background), so it textures the floor without ever covering the
+   UI. Lines are `color-mix()` over `--el-*` accents (palette-derived, no hue of
+   their own); the mask uses the achromatic `black` keyword (no hex). The grid is
+   STATIC depth — like 3D/Immersive's atmosphere it carries the identity, so it is
+   not motion-gated (there is no animation to suppress). */
+[data-style='retrofuturism'] body::after {
+  content: '';
+  position: fixed;
+  left: -30%;
+  right: -30%;
+  bottom: 0;
+  height: 42vh;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--el-highlight) var(--retro-grid), transparent) 0 2px,
+      transparent 2px var(--retro-grid-size)
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 2px,
+      transparent 2px var(--retro-grid-size)
+    );
+  background-size: var(--retro-grid-size) var(--retro-grid-size);
+  transform: perspective(300px) rotateX(75deg);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, black 2%, transparent 80%);
+  mask-image: linear-gradient(to top, black 2%, transparent 80%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Chrome container surfaces — OPAQUE (text AA is preserved against the base
+   surface the palette already tuned) carrying a diagonal SPECULAR streak (a
+   bright `white` light-bar swept across the panel, the reflective-metal read) AND
+   a vertical CHROME BEVEL (bright `white` top → dark `black` base — both
+   achromatic lightness, no hue), over a soft lift + a palette-derived colour
+   glow. The streak/bevel ride background-image over the opaque background-color,
+   so they never pull a surface far from its base tone; the inset top/bottom lines
+   are the lit chrome rim. Applied to EVERY panel via the global card-radius
+   utility (the 3D/Immersive coverage approach), not just the <Card> primitive. */
+[data-style='retrofuturism'] [data-surface='card'],
+[data-style='retrofuturism'] [data-surface='popover'],
+[data-style='retrofuturism'] .rounded-\(--radius-card\) {
+  background-color: var(--el-surface);
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 36%,
+      color-mix(in srgb, white var(--retro-spec), transparent) 49%,
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+      transparent 16%,
+      transparent 78%,
+      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+    );
+  box-shadow:
+    var(--shadow-card),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
+    0 0 28px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+}
+
+/* Modal panel — the same chrome, with a deeper palette glow so the dialog
+   separates cleanly from the grid behind it (and body text stays on the solid
+   surface). Overrides the card-radius rule above for the modal radius. */
+[data-style='retrofuturism'] [data-surface='modal'] {
+  background-color: var(--el-surface);
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 34%,
+      color-mix(in srgb, white var(--retro-spec), transparent) 49%,
+      transparent 64%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+      transparent 14%,
+      transparent 80%,
+      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+    );
+  box-shadow:
+    var(--shadow-modal),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    0 0 56px -14px color-mix(in srgb, var(--el-highlight) var(--retro-glow-strong), transparent);
+}
+
+/* The sidebar rail — opaque chrome with a quieter specular + bevel so it reads as
+   part of the polished-metal family, not a flat slab. */
+[data-style='retrofuturism'] [data-surface='sidebar'] {
+  background-color: var(--el-sidebar-bg);
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 40%,
+      color-mix(in srgb, white var(--retro-sheen), transparent) 50%,
+      transparent 60%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-sheen), transparent),
+      transparent 24%,
+      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+    );
+}
+
+/* Text inputs (a TYPING field) — a RECESSED chrome well: the bevel inverts (a
+   dark lip at the top) + an inset shadow, so the field reads as stamped INTO the
+   metal. Clickable controls (dropdown / select / picker triggers + buttons) get
+   the RAISED chrome below instead — matching the CTA — so a typing field stays
+   recessed while everything you click reads as a raised chrome control. */
+[data-style='retrofuturism'] [data-surface='input'] {
+  background-color: var(--el-page-bg);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, black var(--retro-sheen), transparent) 0%,
+    transparent 34%
+  );
+  box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+}
+
+/* ── EVERY clickable control reads as RETRO CHROME (7.3.40) ──────────────────
+   The whole point of the style: not just the `Button` primitive, but every
+   button-SHAPED control gets a machined-chrome treatment, so nothing sits flat.
+   Buttons render in THREE shapes across the app, so keying on `data-variant`
+   alone (only the `Button` primitive sets it) misses most of them — these rules
+   instead key on the UTILITY CLASSES the design system emits
+   (`.rounded-(--radius-btn)` + the fill / `.border` class), which are
+   tag-agnostic and catch all of:
+     • the `Button` primitive (`<button>` with `data-variant`),
+     • `<a>` / `<Link>` styled via `buttonVariants()` (NO `data-variant` — e.g.
+       the "View all issues" / empty-state links),
+     • hand-rolled `<button>` / `<a>` with `rounded-(--radius-btn) border` (the
+       /issues filter bar: Filter / Advanced / Saved / the Tree·List switcher),
+     • input-styled dropdown / select / picker triggers
+       (`button.rounded-(--radius-input)`),
+     • the SEGMENTED control (`components/ui/Segmented.tsx` — the board "Group by"
+       switch & friends: a `[role='group']` track + `aria-pressed` segments).
+   Two families: a FILLED CTA (accent / danger) keeps its hue under a metallic
+   sweep; everything else is NEUTRAL GUNMETAL steel. All palette-derived
+   (color-mix / var(--el-*)); the light/shade are the achromatic white/black
+   keywords (no hex). The gunmetal base is `--el-surface` DARKENED — on a light
+   palette the bare surface ≈ the page, so a white-highlight bevel over it is
+   invisible (flat white); a mid-grey gives the highlight AND the shade contrast,
+   so the metal reads on light AND dark. ───────────────────────────────────── */
+
+/* FILLED CTAs — accent (primary) keeps its hue under a diagonal specular glint +
+   a vertical metallic sweep + a palette glow. Keyed on the fill class so it
+   covers the `Button` primitive AND `buttonVariants()` anchors alike. */
+[data-style='retrofuturism'] .rounded-\(--radius-btn\).bg-\(--el-accent\) {
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 38%,
+      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-spec), var(--el-accent)) 0%,
+      var(--el-accent) 46%,
+      color-mix(in srgb, black var(--retro-bevel-shade), var(--el-accent)) 100%
+    );
+  box-shadow:
+    var(--shadow-subtle),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    0 0 22px -6px color-mix(in srgb, var(--el-accent) var(--retro-glow-strong), transparent);
+}
+
+/* Danger CTAs — the same machined sweep, in the danger hue (so a destructive
+   button reads as red chrome, not a flat red, matching the accent CTA). */
+[data-style='retrofuturism'] .rounded-\(--radius-btn\).bg-\(--el-danger\) {
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 38%,
+      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-spec), var(--el-danger)) 0%,
+      var(--el-danger) 46%,
+      color-mix(in srgb, black var(--retro-bevel-shade), var(--el-danger)) 100%
+    );
+  box-shadow:
+    var(--shadow-subtle),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    0 0 22px -6px color-mix(in srgb, var(--el-danger) var(--retro-glow-strong), transparent);
+}
+
+/* NEUTRAL STEEL chrome — every OTHER clickable control: bordered buttons + links
+   (secondary `Button`, secondary anchors, the hand-rolled filter-bar buttons, the
+   "View all" links) and the dropdown / select / picker triggers.
+   `:not([role='group'])` excludes the segmented TRACK (its own rule below); the
+   FILLED CTAs are excluded automatically (they carry a fill class, not `.border`).
+   The gunmetal base is set here because secondary controls ship `bg-transparent`. */
+[data-style='retrofuturism'] .rounded-\(--radius-btn\).border:not([role='group']),
+[data-style='retrofuturism'] button.rounded-\(--radius-input\) {
+  background-color: color-mix(in srgb, black 24%, var(--el-surface));
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 36%,
+      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+      transparent 64%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+      transparent 42%,
+      transparent 60%,
+      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+    );
+  box-shadow:
+    var(--shadow-subtle),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent),
+    0 0 18px -8px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+}
+
+/* SEGMENTED control (the board "Group by" switch + every other `Segmented` use):
+   the classic metal segmented control — a RECESSED gunmetal TRACK (the
+   `[role='group']` wrapper) with the ACTIVE segment (`aria-pressed='true'`) raised
+   out of it as a chrome chip. Inactive segments stay transparent on the track. */
+[data-style='retrofuturism'] [role='group'].rounded-\(--radius-btn\) {
+  background-color: color-mix(in srgb, black 15%, var(--el-surface));
+  box-shadow: inset 0 1px 3px color-mix(in srgb, black var(--retro-glow), transparent);
+}
+[data-style='retrofuturism'] [role='group'] [aria-pressed='true'] {
+  background-color: color-mix(in srgb, black 24%, var(--el-surface));
+  background-image:
+    linear-gradient(
+      158deg,
+      transparent 36%,
+      color-mix(in srgb, white var(--retro-spec), transparent) 50%,
+      transparent 64%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white var(--retro-bevel-light), transparent) 0%,
+      transparent 42%,
+      transparent 60%,
+      color-mix(in srgb, black var(--retro-bevel-shade), transparent) 100%
+    );
+  box-shadow:
+    var(--shadow-subtle),
+    inset 0 1px 0 color-mix(in srgb, white 60%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 24%, transparent);
+}
+
+/* Hover — brighten the steel a touch (the controls' own `hover:bg-*` utilities
+   are out-specified by the rules above, so restore a clear hover signal). */
+[data-style='retrofuturism']
+  .rounded-\(--radius-btn\).border:not([role='group']):hover:not(:disabled),
+[data-style='retrofuturism'] button.rounded-\(--radius-input\):hover:not(:disabled),
+[data-style='retrofuturism'] [role='group'] [aria-pressed='false']:hover:not(:disabled) {
+  background-color: color-mix(in srgb, black 14%, var(--el-surface));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
    The StyleVignette preview specimen carries its OWN axis attribute on a
    nested wrapper (`.style-vignette[data-style='…']`), so it cannot lean on the
@@ -1682,6 +2072,42 @@
       color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
       transparent 55%
     );
+}
+
+/* Retrofuturism's synthwave sky + horizon glow + a hint of the neon grid,
+   painted statically onto the preview swatch (the gallery shows many vignettes
+   at once, so the swatch holds a still frame — the live grid floor is reserved
+   for the full `body`). Palette-derived. */
+.style-vignette[data-style='retrofuturism'] > .sv-canvas {
+  background-color: var(--el-page-bg);
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 1px,
+      transparent 1px 18px
+    ),
+    linear-gradient(
+      180deg,
+      transparent 56%,
+      color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 64%,
+      transparent 72%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
+      transparent 50%
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
+      transparent 46%
+    );
+  background-size:
+    18px 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%;
+  background-position: center bottom;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
