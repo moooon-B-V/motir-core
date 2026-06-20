@@ -338,6 +338,34 @@ export const STYLE_REGISTRY = {
         'Rounded cards / board cards / modals that tilt toward the pointer with layered parallax; PHYSICAL buttons with real thickness (a solid base edge) that press DOWN on click; each board column floats as its own card. Nothing is flat.',
     },
   },
+  'hand-drawn-indie': {
+    id: 'hand-drawn-indie',
+    name: 'Hand-Drawn / Indie',
+    tagline:
+      'Sketchy and friendly — wobbly hand-inked corners, soft offset shadows, a playful bounce.',
+    inspiration:
+      'Indie / zine + hand-drawn web design — Excalidraw’s rough hand-sketched strokes and doodled notebook UIs: warm, imperfect, human.',
+    designDoc: 'docs/styles/hand-drawn-indie.md',
+    defaultTypeId: 'editorial',
+    dimensions: {
+      silhouette:
+        'Wobbly, hand-inked corners — every surface gets a slightly irregular asymmetric radius (no two corners alike) so cards/buttons/inputs read as DRAWN boxes, never machined rectangles.',
+      stroke:
+        'Sketchy 1.5px ink outlines — a touch heavier than a hairline so the drawn edge is visible (applied via a style-scoped component-variant block); the line does the structural work, like pen on paper.',
+      elevation:
+        'Soft, hand-placed offset shadows — a gentle blurred drop nudged down-right (a doodled shadow), friendly and low; never a hard brutalist block nor a flat removal.',
+      surface:
+        'Opaque, warm, paper-like panels — colour stays the palette axis; the personality is in the irregular outline + the soft shadow, not a tint or a wash.',
+      density:
+        'Roomy and relaxed — generous 20×12 buttons, 26px card padding, taller 38px controls; the hand-drawn feel wants air, like margins round a sketch.',
+      motion:
+        'Springy and playful — gentle 200ms transitions with a bouncy hover lift (1.02) and a deeper press squish (0.97); the UI has a friendly wobble.',
+      typography:
+        'Ships the Editorial pairing (Fraunces display headlines + Inter body) — the warmest, most characterful registered face, its soft optical wonk echoing the hand-drawn shapes; an actual marker/script face is a future data-type addition.',
+      components:
+        'Wobbly-cornered buttons/inputs/cards/modals, irregular (non-pill) status chips, sketchy 1.5px-bordered surfaces with soft hand-placed shadows.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */
