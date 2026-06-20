@@ -1,0 +1,251 @@
+'use client';
+
+import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { drainSseFrames } from '@/lib/ai/sseFrames';
+import { toDirectionDocView, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
+import {
+  type DiscoveryState,
+  initialDiscoveryState,
+  normalizeFrame,
+  reduceDiscovery,
+} from '@/lib/onboarding/discoveryLoop';
+
+// The client driver for the authed discovery onboarding loop (Subtask 7.3.5 /
+// MOTIR-833). It owns ALL the I/O the pure `discoveryLoop` reducer can't:
+//   - POST /api/ai/chat { prompt } → { jobId }, then read the SSE stream from
+//     /api/ai/chat/:jobId/stream (the 7.3.4 chat seam) frame-by-frame;
+//   - GET /api/ai/pre-plan (the 7.3.70 read seam, bodies threaded by 7.3.73) to
+//     RESUME on mount and to load a tier's read-only body when a `docs` frame
+//     announces it.
+// It mirrors `useExplanationDraft`'s fetch-ReadableStream + drainSseFrames shape
+// (the established motir-core SSE-consumer pattern) and feeds every frame through
+// `normalizeFrame` into the reducer. NO planning logic lives here — motir-ai owns
+// the conductor; the browser only reaches it through these two routes.
+//
+// Continue / Skip / the validate-early decision are CONVERSATION turns (the
+// model is conversation-only — there is no doc editing and no structured advance
+// endpoint): each posts a short natural-language turn the conductor reads as an
+// `advance` / skip / decision. The canned phrasings come from the caller (i18n)
+// so the copy stays translatable.
+
+interface SubmitResponse {
+  jobId?: string;
+  code?: string;
+  error?: string;
+}
+
+function mapDocs(dto: PreplanStateDTO) {
+  return dto.docs.map((d) =>
+    toDirectionDocView({
+      kind: d.kind,
+      currentBody: d.currentBody,
+      currentVersion: d.currentVersion,
+    }),
+  );
+}
+
+export interface UseDiscoveryChat {
+  state: DiscoveryState;
+  /** Send a free-form chat turn (the sole input). */
+  send: (text: string) => void;
+  /** Approve the tier under review and return to the hub (the conductor narrates
+   *  + drafts the next). `approvalText` is the canned advance phrasing (i18n). */
+  continueTier: (approvalText: string) => void;
+  /** Skip an upcoming optional tier from the chat (the conductor advances past it). */
+  skipTier: (skipText: string) => void;
+  /** Answer the blocking validate-demand-first ask (MOTIR-1064). */
+  decideValidateEarly: (decisionText: string) => void;
+  /** Re-open a produced tier's read-only review. */
+  openTier: (kind: DirectionDocKind) => void;
+  /** Leave the full-screen review for the hub. */
+  back: () => void;
+  dismissError: () => void;
+}
+
+export interface UseDiscoveryChatOptions {
+  /** The idea preserved across the auth redirect (7.3.14 cookie) — seeded as the
+   *  FIRST turn for a fresh session, ignored when a session already exists. */
+  initialIdea?: string | null;
+}
+
+export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDiscoveryChat {
+  const { initialIdea } = options;
+  const [state, dispatch] = useReducer(reduceDiscovery, undefined, initialDiscoveryState);
+
+  // One in-flight turn at a time; abort it on unmount. `mountedRef` guards every
+  // post-await dispatch so a late frame never lands after teardown.
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const startedRef = useRef(false);
+
+  // Re-read the pre-plan bodies (resume on mount; refresh after docs/revisions).
+  const fetchPreplan = useCallback(async (signal: AbortSignal): Promise<PreplanStateDTO | null> => {
+    const res = await fetch('/api/ai/pre-plan', {
+      headers: { Accept: 'application/json' },
+      signal,
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as PreplanStateDTO;
+  }, []);
+
+  const runTurn = useCallback(
+    async (text: string) => {
+      // Serialize turns: ignore a send while one is streaming.
+      if (abortRef.current) return;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      dispatch({ type: 'userTurn', text });
+
+      try {
+        const submitRes = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: text }),
+          signal: controller.signal,
+        });
+        const submitBody = (await submitRes.json().catch(() => ({}))) as SubmitResponse;
+        if (!submitRes.ok || !submitBody.jobId) {
+          throw new StreamFailure(submitBody.code ?? 'MOTIR_AI_UNAVAILABLE', submitBody.error);
+        }
+
+        const streamRes = await fetch(
+          `/api/ai/chat/${encodeURIComponent(submitBody.jobId)}/stream`,
+          { headers: { Accept: 'text/event-stream' }, signal: controller.signal },
+        );
+        if (!streamRes.ok || !streamRes.body) {
+          const body = (await streamRes.json().catch(() => ({}))) as SubmitResponse;
+          throw new StreamFailure(body.code ?? 'MOTIR_AI_UNAVAILABLE', body.error);
+        }
+
+        const reader = streamRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        // Kinds announced this turn whose bodies we must fetch + which to open.
+        let docsAnnounced = false;
+        let openKind: DirectionDocKind | null = null;
+
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const { frames, rest } = drainSseFrames(buffer);
+          buffer = rest;
+          for (const { event, data } of frames) {
+            const frame = normalizeFrame(event, data);
+            if (!frame || !mountedRef.current) continue;
+            dispatch({ type: 'frame', frame });
+            if (frame.event === 'docs') {
+              docsAnnounced = true;
+              openKind = frame.data.docs[frame.data.docs.length - 1]!.kind;
+            } else if (frame.event === 'revisions') {
+              docsAnnounced = true; // refresh affected bodies, don't auto-open (1179)
+            }
+          }
+        }
+
+        // A tier was (re)drafted this turn → pull its read-only body and, for a
+        // freshly-drafted tier, jump into its review gate.
+        if (docsAnnounced && mountedRef.current) {
+          const dto = await fetchPreplan(controller.signal);
+          if (dto && mountedRef.current) {
+            dispatch({ type: 'docsLoaded', docs: mapDocs(dto) });
+            if (openKind) dispatch({ type: 'openReview', kind: openKind });
+          }
+        }
+      } catch (err) {
+        if (mountedRef.current && !isAbort(err)) {
+          const code = err instanceof StreamFailure ? err.code : 'MOTIR_AI_UNAVAILABLE';
+          const message = err instanceof Error ? err.message : undefined;
+          dispatch({ type: 'streamError', code, message });
+        }
+      } finally {
+        abortRef.current = null;
+        if (mountedRef.current) dispatch({ type: 'streamEnd' });
+      }
+    },
+    [fetchPreplan],
+  );
+
+  // Resume on mount: hydrate from the persisted pre-plan state; if there's none
+  // and the visitor brought an idea (the 7.3.14 cookie), seed the first turn.
+  useEffect(() => {
+    mountedRef.current = true;
+    if (startedRef.current) return;
+    startedRef.current = true;
+    const controller = new AbortController();
+
+    void (async () => {
+      const dto = await fetchPreplan(controller.signal).catch(() => null);
+      if (!mountedRef.current) return;
+      if (dto) {
+        dispatch({ type: 'hydrate', session: dto.session, docs: mapDocs(dto) });
+      }
+      const fresh = !dto || dto.session === null;
+      if (fresh && initialIdea && initialIdea.trim()) {
+        void runTurn(initialIdea.trim());
+      }
+    })();
+
+    return () => {
+      mountedRef.current = false;
+      controller.abort();
+      abortRef.current?.abort();
+    };
+    // Run once on mount; runTurn/fetchPreplan are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const send = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed) void runTurn(trimmed);
+    },
+    [runTurn],
+  );
+
+  const continueTier = useCallback(
+    (approvalText: string) => {
+      dispatch({ type: 'backToHub' });
+      void runTurn(approvalText);
+    },
+    [runTurn],
+  );
+
+  const skipTier = useCallback((skipText: string) => void runTurn(skipText), [runTurn]);
+  const decideValidateEarly = useCallback(
+    (decisionText: string) => void runTurn(decisionText),
+    [runTurn],
+  );
+  const openTier = useCallback(
+    (kind: DirectionDocKind) => dispatch({ type: 'openReview', kind }),
+    [],
+  );
+  const back = useCallback(() => dispatch({ type: 'backToHub' }), []);
+  const dismissError = useCallback(() => dispatch({ type: 'dismissError' }), []);
+
+  return {
+    state,
+    send,
+    continueTier,
+    skipTier,
+    decideValidateEarly,
+    openTier,
+    back,
+    dismissError,
+  };
+}
+
+class StreamFailure extends Error {
+  constructor(
+    readonly code: string,
+    message?: string,
+  ) {
+    super(message ?? code);
+    this.name = 'StreamFailure';
+  }
+}
+
+function isAbort(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}

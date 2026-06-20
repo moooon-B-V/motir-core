@@ -3518,6 +3518,45 @@
       "title": "AI planning isn't configured",
       "body": "Planning runs on Motir Cloud; this self-hosted workspace has no connection yet.",
       "cta": "Connect Motir AI"
+    },
+    "chat": {
+      "railLabel": "Chat",
+      "assistantName": "Motir",
+      "assistantInitial": "M",
+      "composerPlaceholder": "Reply, or ask a question…",
+      "send": "Send",
+      "working": "Motir is thinking…",
+      "drafting": "Drafting now…",
+      "stepHeader": "Pre-plan · building your direction",
+      "back": "Back",
+      "saveExit": "Save & exit",
+      "gateNote": "Continue = next step, not sign-off — nothing locks until your plan generates",
+      "continueLabel": "Looks good — continue",
+      "skipLabel": "Skip it",
+      "runCheckLabel": "Run the check",
+      "skipHint": "A skip is a chat decision — made before a step is drafted. A write-up you're already reading has nothing to skip.",
+      "validateLockNote": "This sets the build order — Motir waits here until you choose.",
+      "proveDemandLabel": "Prove demand first",
+      "buildItAllLabel": "No — build it all",
+      "completeTitle": "That's your direction set",
+      "completeBody": "Every step is reviewed. Turning it into a plan comes next.",
+      "goToPlanLabel": "Go to plan phase",
+      "goToPlanSoon": "Coming next",
+      "errorBody": "Something went wrong reaching Motir. Try again.",
+      "retry": "Try again",
+      "dismiss": "Dismiss",
+      "emptyTitle": "Tell Motir what you want to build",
+      "emptyBody": "Describe your idea in the chat and Motir drafts each step for you to review.",
+      "progressTitle": "Your project",
+      "progressCaption": "idea → checks → design → plan",
+      "replies": {
+        "continue": "Looks good — let's continue.",
+        "skip": "Let's skip that step and move on.",
+        "proveDemand": "Let's prove demand first — build the marketing site and waitlist before the product.",
+        "buildItAll": "No — let's build the product straight away."
+      },
+      "noProjectTitle": "No active project",
+      "noProjectBody": "Pick or create a project first, then Motir can plan it with you."
     }
   }
 }

@@ -3518,6 +3518,45 @@
       "title": "尚未配置 AI 规划",
       "body": "规划运行在 Motir Cloud 上；此自托管工作区尚未建立连接。",
       "cta": "连接 Motir AI"
+    },
+    "chat": {
+      "railLabel": "对话",
+      "assistantName": "Motir",
+      "assistantInitial": "M",
+      "composerPlaceholder": "回复，或提个问题……",
+      "send": "发送",
+      "working": "Motir 正在思考……",
+      "drafting": "正在起草……",
+      "stepHeader": "前期规划 · 梳理你的方向",
+      "back": "返回",
+      "saveExit": "保存并退出",
+      "gateNote": "继续 = 进入下一步，并非定稿 —— 在生成计划之前一切都不会锁定",
+      "continueLabel": "看起来不错 —— 继续",
+      "skipLabel": "跳过",
+      "runCheckLabel": "做这项检查",
+      "skipHint": "跳过是对话里的决定 —— 在某一步起草之前做出。正在阅读的内容没有可跳过的。",
+      "validateLockNote": "这会决定构建顺序 —— 在你做出选择前，Motir 会在此等待。",
+      "proveDemandLabel": "先验证需求",
+      "buildItAllLabel": "不用 —— 直接全部开发",
+      "completeTitle": "你的方向已确定",
+      "completeBody": "每一步都已审阅。接下来把它变成一份计划。",
+      "goToPlanLabel": "进入计划阶段",
+      "goToPlanSoon": "即将推出",
+      "errorBody": "连接 Motir 时出了点状况。请重试。",
+      "retry": "重试",
+      "dismiss": "知道了",
+      "emptyTitle": "告诉 Motir 你想做什么",
+      "emptyBody": "在对话里描述你的想法，Motir 会为你逐步起草、供你审阅。",
+      "progressTitle": "你的项目",
+      "progressCaption": "想法 → 检查 → 设计 → 计划",
+      "replies": {
+        "continue": "看起来不错，我们继续吧。",
+        "skip": "这一步跳过，继续往下吧。",
+        "proveDemand": "我们先验证需求 —— 在做产品之前先搭一个营销页和等候名单。",
+        "buildItAll": "不用，直接开始做产品吧。"
+      },
+      "noProjectTitle": "没有进行中的项目",
+      "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。"
     }
   }
 }
