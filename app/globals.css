@@ -742,6 +742,197 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Aurora — soft, DRIFTING aurora light behind fluid, gently-glowing surfaces
+   (7.3.38). The third surface-MATERIAL style (after glassmorphism + cybercore):
+   where glass re-shapes the surface into frosted TRANSLUCENCY and cybercore lits
+   it with a sharp neon ring, Aurora keeps surfaces OPAQUE and FLUID and moves the
+   identity onto (a) a slowly-animated, palette-derived aurora gradient canvas —
+   ribbons of light that drift like the northern lights — and (b) a gentle,
+   palette-derived COLOUR glow halo on each panel, so surfaces feel lit from
+   within rather than lifted by a hard shadow.
+
+   It ships in TWO parts, the same surface-material contract glassmorphism
+   established (see docs/styles/aurora.md + DESIGN.md):
+     1. This [data-style] TOKEN BLOCK — shape/feel tokens ONLY (fluid radii, soft
+        NEUTRAL shadows, smooth slow motion, roomy density) PLUS palette-AGNOSTIC
+        material SCALARS (wash strengths, surface sheen, the drift duration). No
+        hue lives here, so it stays disjoint from the palette axis — still
+        enforced by the token-block test in styleRegistry.test.ts.
+     2. A palette-DERIVED MATERIAL LAYER (the rules below) that paints the animated
+        aurora canvas + the per-surface colour glow via color-mix() OVER the
+        active palette tokens (--el-*), introducing NO new hue — so "style x
+        palette" stays orthogonal (swap the palette and the aurora re-tints; swap
+        the style and the hues are untouched). Surfaces opt in via the same
+        `data-surface` hook the shared primitives emit.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-style='aurora'] {
+  /* Silhouette — fluid, soft. A touch larger/rounder than glass so panels read
+     as organic, flowing forms. --radius-pill stays untouched so circular
+     affordances (avatars, status dots, the spinner) stay round. */
+  --radius-xs: 7px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 14px;
+  --radius-input: 14px;
+  --radius-card: 20px;
+  --radius-modal: 26px;
+  --radius-badge: 9999px; /* chips stay pills — soft is the aurora register */
+  --radius-control: 12px;
+  --radius-kbd: 7px;
+
+  /* Elevation — a soft NEUTRAL lift only. The colour glow halo is palette-DERIVED
+     and so lives in the material layer below (not here, where no hue may appear);
+     these neutral rgba shadows are the diffuse base lift the glow sits on top of.
+     (rgba literals are neutral shadow ink — a cool near-black — not a palette
+     hue, so the token block stays colour-free.) */
+  --shadow-subtle: 0 1px 2px rgba(20, 20, 45, 0.05);
+  --shadow-card: 0 8px 30px -12px rgba(20, 20, 45, 0.16);
+  --shadow-elevated: 0 16px 44px -14px rgba(20, 20, 45, 0.22);
+  --shadow-modal: 0 26px 64px -18px rgba(20, 20, 45, 0.3);
+  --shadow-hero-mockup: 0 32px 78px -18px rgba(20, 20, 45, 0.34);
+
+  /* Density — comfortable, a touch roomy (the light wants room to breathe). */
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 11px;
+  --spacing-card-padding: 26px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+
+  /* Motion — smooth and slow. Transitions glide; nothing snaps. */
+  --transition-duration: 260ms;
+  --transition-slow: 380ms;
+  --active-scale: 0.985;
+
+  /* ── Material SCALARS — palette-AGNOSTIC (no hue, so no colour token here).
+     Consumed only by the [data-style='aurora'] material rules below: how strong
+     each aurora ribbon tints the canvas, the faint top-sheen on a surface, the
+     glow-halo strengths, and how slowly the canvas drifts. ── */
+  --aurora-wash: 22%; /* primary ribbon tint over the page canvas */
+  --aurora-wash-soft: 15%; /* the cooler secondary ribbon (green/teal band) */
+  --aurora-sheen: 7%; /* faint lit-from-above sheen on an opaque surface */
+  --aurora-glow: 22%; /* colour-glow halo strength on a card / popover */
+  --aurora-glow-strong: 30%; /* the modal's slightly deeper halo */
+  --aurora-drift-duration: 28s; /* one slow breath of the drifting canvas */
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Aurora MATERIAL LAYER — palette-DERIVED surface treatment (7.3.38).
+   The same style-contract extension glassmorphism uses: a style may own its
+   surface material in STYLE-SCOPED component rules as long as every colour is
+   DERIVED from the active palette via color-mix()/var() (never a raw hue) — so
+   the style axis stays disjoint from the palette axis. These descendant-scoped
+   selectors are NOT the bare token block, so they never trip the colour-free
+   token-block test; they ARE read as material rules and must be palette-derived
+   (enforced by the "surface-material layer" test in styleRegistry.test.ts).
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* The canvas: the palette's page bg + four soft aurora ribbons that slowly
+   DRIFT. Hues come from the `--el-*` accent roles (NOT Tier-0 `--color-*`), so
+   the ribbons re-tint with the active palette — the `data-palette` axis overrides
+   `--el-*`, never `--color-*`, which is what keeps the aurora orthogonal to the
+   palette. background-size > 100% gives the gradient room to drift; the whole
+   field eases back and forth over `--aurora-drift-duration`. */
+[data-style='aurora'] body {
+  background-image:
+    radial-gradient(
+      58% 75% at 12% 0%,
+      color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      54% 70% at 92% 8%,
+      color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      68% 82% at 62% 104%,
+      color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      48% 64% at 34% 58%,
+      color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
+      transparent 55%
+    );
+  background-size: 180% 180%;
+  background-attachment: fixed;
+  animation: aurora-drift var(--aurora-drift-duration) ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  from {
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 100%,
+      0% 60%;
+  }
+  to {
+    background-position:
+      100% 40%,
+      0% 60%,
+      40% 0%,
+      100% 100%;
+  }
+}
+
+/* Respect a reduced-motion preference — the aurora settles to a still gradient
+   (the identity holds; only the drift stops). */
+@media (prefers-reduced-motion: reduce) {
+  [data-style='aurora'] body {
+    animation: none;
+  }
+}
+
+/* Fluid container surfaces — OPAQUE (text AA is preserved against the base
+   surface the palette already tuned) with a faint lit-from-above aurora sheen and
+   a gentle palette-derived COLOUR glow halo, so panels feel lit from within
+   rather than lifted by a hard shadow. The sheen sits on background-image over
+   the opaque background-color, so it never pulls the surface far enough from its
+   base tone to threaten contrast. */
+[data-style='aurora'] [data-surface='card'],
+[data-style='aurora'] [data-surface='popover'] {
+  background-color: var(--el-surface);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
+    transparent 42%
+  );
+  box-shadow:
+    var(--shadow-card),
+    0 0 26px -8px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+    0 0 40px -14px color-mix(in srgb, var(--el-link) var(--aurora-glow), transparent);
+}
+
+/* Modal panel — opaque, with a deeper glow so the dialog separates cleanly from
+   the drifting canvas behind it (and body text stays on the solid surface). */
+[data-style='aurora'] [data-surface='modal'] {
+  background-color: var(--el-surface);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-highlight) var(--aurora-sheen), transparent),
+    transparent 38%
+  );
+  box-shadow:
+    var(--shadow-modal),
+    0 0 60px -16px color-mix(in srgb, var(--el-accent) var(--aurora-glow-strong), transparent);
+}
+
+/* The sidebar rail — opaque chrome carrying the faint aurora sheen so it reads as
+   part of the lit surface family, not a flat slab. */
+[data-style='aurora'] [data-surface='sidebar'] {
+  background-color: var(--el-sidebar-bg);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--el-accent) var(--aurora-sheen), transparent),
+    transparent 30%
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    3D / Immersive — the depth + perspective style (7.3.39, DEFERRED follow-up).
    EXPERIMENTAL. The identity is DEPTH + the standard "3D card" interaction:
    deep, multi-layer shadows (specular highlight + contact + ambient + far key
@@ -1138,6 +1329,33 @@
     linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
   background-size: 26px 26px;
+}
+/* Aurora's drifting ribbons, painted statically onto the preview swatch (the
+   gallery shows many vignettes at once, so the swatch holds a still frame of the
+   canvas — the live drift is reserved for the full `body`). Palette-derived. */
+.style-vignette[data-style='aurora'] > .sv-canvas {
+  background-color: var(--el-page-bg);
+  background-image:
+    radial-gradient(
+      58% 75% at 12% 0%,
+      color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      54% 70% at 92% 8%,
+      color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      68% 82% at 62% 104%,
+      color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      48% 64% at 34% 58%,
+      color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
+      transparent 55%
+    );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

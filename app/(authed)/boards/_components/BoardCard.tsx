@@ -151,6 +151,11 @@ export function BoardCard({
         // dragging, dnd-kit's inline `transform` (a translate) overrides the
         // tilt transform, so the two never fight; at rest the tilt applies.
         data-tilt=""
+        // `data-surface` opts the board card into the surface-MATERIAL layer so a
+        // surface-material style (glassmorphism frost, aurora glow) reaches the
+        // board — not only Card-built settings surfaces. Inert under non-material
+        // styles (no `[data-style] [data-surface]` rule targets them). 7.3.38.
+        data-surface="card"
         style={{ transform: CSS.Translate.toString(transform), transition }}
         // While lifted, the resting card is the dashed ghost marking the insertion
         // slot (the DragOverlay carries the visible clone); `touch-none` keeps a
@@ -195,6 +200,7 @@ export function BoardCardOverlay({
 }) {
   return (
     <div
+      data-surface="card"
       className={`${CARD_CLASS} w-[17rem] rotate-2 cursor-grabbing border-(--el-accent) shadow-(--shadow-elevated)`}
     >
       <BoardCardView card={card} assigneeName={assigneeName} />

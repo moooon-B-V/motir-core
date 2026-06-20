@@ -284,6 +284,33 @@ export const STYLE_REGISTRY = {
         'Sharp glow-ringed panels, mono headings, rectangular chips; the lit edge replaces the drop shadow everywhere.',
     },
   },
+  aurora: {
+    id: 'aurora',
+    name: 'Aurora',
+    tagline: 'Soft, drifting aurora light behind fluid, gently-glowing surfaces.',
+    inspiration:
+      'The northern lights — slow ribbons of colour over a night sky — and the soft animated-gradient "aurora" hero look (Stripe / Vercel ambient gradients).',
+    designDoc: 'docs/styles/aurora.md',
+    defaultTypeId: 'motir',
+    dimensions: {
+      silhouette:
+        'Fluid, soft corners — 14px buttons/inputs, 20px cards, 26px modals. Organic and rounded, a touch softer than glass.',
+      stroke:
+        'Quiet 1px hairlines; structure is implied by the gentle glow and elevation, never drawn by a heavy rule.',
+      elevation:
+        'A soft neutral lift PLUS a gentle palette-derived COLOUR glow halo — surfaces feel lit from within, never hard-edged.',
+      surface:
+        'The identity axis: opaque fluid surfaces floating over a slowly-DRIFTING, animated aurora gradient canvas (palette-derived ribbons).',
+      density:
+        'Comfortable and roomy — 20×11 buttons, 26px card padding, 38px controls; the light wants space to breathe.',
+      motion:
+        'Smooth and slow — 260ms eased transitions, a faint press-scale, and a 28s ambient drift of the aurora canvas (stilled under prefers-reduced-motion).',
+      typography:
+        'Inherits the base editorial pairing (Source Serif headlines + Inter body); the personality is in the moving light, not the type.',
+      components:
+        'Fluid, gently-glowing cards / popovers / modals / sidebar (the data-surface material layer); pill status chips.',
+    },
+  },
   '3d-immersive': {
     id: '3d-immersive',
     name: '3D / Immersive',

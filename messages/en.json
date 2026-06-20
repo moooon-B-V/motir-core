@@ -1535,10 +1535,13 @@
     },
     "appearance": {
       "heading": "Appearance",
-      "subtitle": "Theme Motir to your taste — its colour, type and shape. Everything applies live across the whole app, on this device. There's nothing to save.",
+      "subtitle": "Theme Motir to your taste — its colour, type and shape. Everything applies live across the whole app, and saves to your account so it follows you to every device.",
       "card": {
         "title": "Theme & design",
         "subtitle": "Pick a theme, style, palette and type pairing. The whole app re-skins instantly — this page included."
+      },
+      "sync": {
+        "error": "Couldn't sync to your account — your changes are saved on this device."
       },
       "theme": {
         "name": "Theme",
@@ -3485,7 +3488,7 @@
       "subhead": "Describe your idea. Motir plans the whole project — brand, pricing, marketing and the code — tracks every kind of work, and ships the code for you.",
       "ideaLabel": "Describe your idea",
       "heroPlaceholder": "A tool for freelancers to send invoices and track which clients have paid…",
-      "heroHint": "Free to start · no card",
+      "heroHint": "Free to start · no credit card",
       "startPlanning": "Start planning",
       "previewCaption": "Here's what happens next",
       "footnote": "Motir walks you through each step and writes up what it finds — you read it, react in the chat, and continue when it's right. Nothing's locked until your plan is generated.",

@@ -22,7 +22,7 @@ import { isTypeId } from '@/lib/theme/typography';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + 3D / Immersive)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
@@ -30,6 +30,7 @@ describe('style registry', () => {
       'neo-brutalism',
       'glassmorphism',
       'cybercore-y2k',
+      'aurora',
       '3d-immersive',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
@@ -38,6 +39,7 @@ describe('style registry', () => {
     expect(STYLE_REGISTRY['neo-brutalism'].name).toBe('Neo-Brutalism');
     expect(STYLE_REGISTRY['glassmorphism'].name).toBe('Glassmorphism');
     expect(STYLE_REGISTRY['cybercore-y2k'].name).toBe('Cybercore / Y2K');
+    expect(STYLE_REGISTRY['aurora'].name).toBe('Aurora');
     expect(STYLE_REGISTRY['3d-immersive'].name).toBe('3D / Immersive');
   });
 

@@ -22,3 +22,33 @@ export interface AppearancePreferenceDto {
   /** Axis 3 — the active `data-type` id (e.g. `motir`). */
   typeId: string;
 }
+
+/**
+ * The APPLIED appearance — what actually drives the four `<html>` data-attributes
+ * (Subtask 7.3.61). It differs from `AppearancePreferenceDto` in ONE place that
+ * the per-axis DTO deliberately deferred to this subtask: the **type axis is
+ * application-resolved**, not per-axis-resolved. A user who has not pinned a type
+ * follows the active STYLE's `defaultTypeId` here — NOT the global default the
+ * per-axis mapper falls back to. `typePinned` records whether the user actually
+ * pinned a type, so the client can seed the theme context's `typeChoice`
+ * (pinned id vs. `null` = follow-style) and the init script can reconcile the
+ * localStorage `type` key without converting an unpinned user into a pinned one.
+ *
+ * `pattern` is the RAW choice (`system` | `light` | `dark`): `system` only
+ * resolves to light/dark at runtime via `matchMedia`, so the server renders
+ * `data-theme` only for an explicit `light`/`dark` and leaves `system` to the
+ * init script. The other three axes have no runtime input and are fully
+ * server-resolvable, so they render on the first byte.
+ */
+export interface AppliedAppearanceDto {
+  /** Raw light/dark base — `system` resolves to light/dark via matchMedia. */
+  pattern: ThemePattern;
+  /** Axis 2 — the resolved `data-style` id. */
+  styleId: string;
+  /** Axis 1 — the resolved `data-palette` id. */
+  paletteId: string;
+  /** Axis 3 — the EFFECTIVE `data-type` id (pinned id, else the style default). */
+  typeId: string;
+  /** Whether the user explicitly pinned a type (vs. following the style default). */
+  typePinned: boolean;
+}

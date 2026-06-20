@@ -62,6 +62,10 @@ export function WidgetCard({
       // (small widgets tilt toward the cursor; large ones just float). Inert
       // under every other style + reduced motion.
       data-tilt=""
+      // `data-surface` opts the dashboard/report widget into the surface-MATERIAL
+      // layer (glassmorphism frost, aurora glow), like the board card. Inert under
+      // non-material styles. 7.3.38.
+      data-surface="card"
       className={`flex flex-col overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) shadow-(--shadow-subtle) ${
         dragging ? 'opacity-60 shadow-(--shadow-elevated)' : ''
       }`}

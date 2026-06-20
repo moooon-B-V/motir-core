@@ -88,9 +88,11 @@ export function IssueListTable({
 
   const table = (
     // `data-tilt` floats this panel under the 3D / Immersive style (size-gated:
-    // deep resting shadow, no cursor tilt). Inert under every other style.
+    // deep resting shadow, no cursor tilt); `data-surface` opts it into the
+    // surface-material layer (glass frost / aurora glow). Both inert otherwise.
     <div
       data-tilt=""
+      data-surface="card"
       className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
     >
       <div

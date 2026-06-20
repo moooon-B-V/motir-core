@@ -449,6 +449,10 @@ export function TreeTable<Row>({
       // shadow (it lifts off the immersive canvas), no cursor tilt. Inert under
       // every other style + reduced motion.
       data-tilt=""
+      // surface-material hook so the tree panel (work-item tree, etc.) picks up a
+      // surface-material style (glass frost / aurora glow), matching the list
+      // panel. Inert under non-material styles. 7.3.38.
+      data-surface="card"
       className={cn(
         'overflow-hidden rounded-(--radius-card) border border-(--el-border)',
         className,
