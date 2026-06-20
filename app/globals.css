@@ -956,32 +956,19 @@
 
 /* ── 3D / Immersive — PHYSICAL BUTTONS ──────────────────────────────────────
    In a 3D design a button is not flat: it has visible THICKNESS (a solid base
-   edge in a darker shade of its own fill) and presses DOWN onto that base on
-   click (translateY + the base compresses) — the standard 3D/skeuomorphic
-   button. Filled variants (primary, danger) get the full treatment; the
-   palette-derived base colour keeps the style/palette axes disjoint (a darker
-   accent / danger, never a raw hue). box-shadow is not a colour-painting
-   property, so the material-rule test skips these. The press overrides the
-   base style's `active:scale` with a more physical translateY. */
-[data-style='3d-immersive'] [data-variant='primary'] {
-  box-shadow:
-    0 4px 0 0 var(--el-accent-pressed),
-    0 7px 12px -3px rgba(15, 15, 15, 0.32);
-  transition:
-    transform 90ms ease-out,
-    box-shadow 90ms ease-out,
-    background-color var(--transition-duration);
-}
-[data-style='3d-immersive'] [data-variant='danger'] {
-  box-shadow:
-    0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
-    0 7px 12px -3px rgba(15, 15, 15, 0.32);
-  transition:
-    transform 90ms ease-out,
-    box-shadow 90ms ease-out,
-    background-color var(--transition-duration);
-}
-[data-style='3d-immersive'] [data-variant='secondary'] {
+   edge) and presses DOWN onto it on click (translateY + the base compresses) —
+   the standard 3D/skeuomorphic button. This must cover EVERY button, not just
+   the <Button> primitive: the ~35 hand-rolled `rounded-(--radius-btn)` <button>s
+   (the /issues toolbar triggers — Filter / Advanced / Saved / the Tree-List
+   switcher — links-styled-as-buttons, etc.) were flat. So the GLOBAL rule on the
+   button-radius class is the baseline (a neutral `--el-border-strong` edge, which
+   suits the outline/toolbar buttons); FILLED variants override it with a
+   colour-matched edge (primary → `--el-accent-pressed`, danger → a darkened
+   `--el-danger` — palette-derived, so the axes stay disjoint); ghost stays flat
+   (the quiet button). box-shadow is not a colour-painting property, so the
+   material-rule test skips these. The press overrides the base `active:scale`
+   with a more physical translateY. */
+[data-style='3d-immersive'] .rounded-\(--radius-btn\) {
   box-shadow:
     0 3px 0 0 var(--el-border-strong),
     0 5px 10px -3px rgba(15, 15, 15, 0.18);
@@ -990,12 +977,27 @@
     box-shadow 90ms ease-out,
     background-color var(--transition-duration);
 }
+[data-style='3d-immersive'] [data-variant='primary'] {
+  box-shadow:
+    0 4px 0 0 var(--el-accent-pressed),
+    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+}
+[data-style='3d-immersive'] [data-variant='danger'] {
+  box-shadow:
+    0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+}
+/* Ghost — the deliberately-flat quiet button; no thickness. */
+[data-style='3d-immersive'] [data-variant='ghost'] {
+  box-shadow: none;
+}
 /* Press DOWN onto the base — the button drops by its thickness and the base
    edge compresses, like a real key. Overrides the base `active:scale`. */
-[data-style='3d-immersive'] [data-variant='primary']:active:not(:disabled),
-[data-style='3d-immersive'] [data-variant='danger']:active:not(:disabled),
-[data-style='3d-immersive'] [data-variant='secondary']:active:not(:disabled) {
+[data-style='3d-immersive'] .rounded-\(--radius-btn\):active:not(:disabled) {
   transform: translateY(3px);
+  box-shadow:
+    0 1px 0 0 var(--el-border-strong),
+    0 2px 4px rgba(15, 15, 15, 0.14);
 }
 [data-style='3d-immersive'] [data-variant='primary']:active:not(:disabled) {
   box-shadow:
@@ -1007,10 +1009,8 @@
     0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
     0 2px 5px rgba(15, 15, 15, 0.22);
 }
-[data-style='3d-immersive'] [data-variant='secondary']:active:not(:disabled) {
-  box-shadow:
-    0 1px 0 0 var(--el-border-strong),
-    0 2px 4px rgba(15, 15, 15, 0.14);
+[data-style='3d-immersive'] [data-variant='ghost']:active:not(:disabled) {
+  box-shadow: none;
 }
 
 /* ── 3D / Immersive — DROPDOWNS / POPOVERS / MENUS unfold in 3D ──────────────
