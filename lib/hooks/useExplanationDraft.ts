@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { drainSseFrames } from '@/lib/ai/sseFrames';
 
 // The client side of "Draft with AI" (Subtask 8.8.12): submits a
 // `generate_explanation` job to /api/ai/explanation and streams the drafted
@@ -59,41 +60,6 @@ interface SubmitResponse {
   jobId?: string;
   code?: string;
   error?: string;
-}
-
-// Split a chunk buffer into complete SSE frames (separated by a blank line),
-// returning the parsed frames + the unconsumed remainder.
-function drainFrames(buffer: string): { frames: { event: string; data: unknown }[]; rest: string } {
-  const frames: { event: string; data: unknown }[] = [];
-  let rest = buffer;
-  let sep = rest.indexOf('\n\n');
-  while (sep !== -1) {
-    const raw = rest.slice(0, sep);
-    rest = rest.slice(sep + 2);
-    const parsed = parseFrame(raw);
-    if (parsed) frames.push(parsed);
-    sep = rest.indexOf('\n\n');
-  }
-  return { frames, rest };
-}
-
-function parseFrame(frame: string): { event: string; data: unknown } | null {
-  let event = 'message';
-  const dataLines: string[] = [];
-  for (const line of frame.split('\n')) {
-    if (line.startsWith(':')) continue;
-    if (line.startsWith('event:')) event = line.slice('event:'.length).trim();
-    else if (line.startsWith('data:')) dataLines.push(line.slice('data:'.length).trim());
-  }
-  if (dataLines.length === 0) return null;
-  const rawData = dataLines.join('\n');
-  let data: unknown = rawData;
-  try {
-    data = JSON.parse(rawData);
-  } catch {
-    // leave as the raw string
-  }
-  return { event, data };
 }
 
 export function useExplanationDraft(options: UseExplanationDraftOptions): UseExplanationDraft {
@@ -169,7 +135,7 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          const { frames, rest } = drainFrames(buffer);
+          const { frames, rest } = drainSseFrames(buffer);
           buffer = rest;
           for (const { event, data } of frames) {
             if (event === 'token') {
