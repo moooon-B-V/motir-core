@@ -365,6 +365,34 @@ export const STYLE_REGISTRY = {
         'Raised, soft-shadowed cards / popovers / modals / sidebar (the data-surface material layer); concave inset inputs; pill status chips. Every surface swells from or sinks into the one field.',
     },
   },
+  'hand-drawn-indie': {
+    id: 'hand-drawn-indie',
+    name: 'Hand-Drawn / Indie',
+    tagline:
+      'Sketchy and friendly — rough hand-inked edges, wonky corners, soft offset shadows, a playful bounce.',
+    inspiration:
+      'Indie / zine + hand-drawn web design — Excalidraw’s rough hand-sketched strokes and doodled notebook UIs: warm, imperfect, human.',
+    designDoc: 'docs/styles/hand-drawn-indie.md',
+    defaultTypeId: 'editorial',
+    dimensions: {
+      silhouette:
+        'Wonky hand-drawn corners — every surface gets a strongly asymmetric multi-value radius (one corner near-sharp, the opposite generously round, no two alike) so cards/buttons/inputs read as DRAWN boxes, never machined rectangles.',
+      stroke:
+        'Genuinely ROUGH, wavy ink edges — a turbulence-displacement filter (Excalidraw / rough.js style) warps each outline into a hand-inked wobble, drawn on a content-safe pseudo-border so the lines are sketchy but the text stays crisp.',
+      elevation:
+        'Soft, hand-placed offset shadows — a gentle blurred drop nudged down-right (a doodled shadow), friendly and low; never a hard brutalist block nor a flat removal.',
+      surface:
+        'Opaque, warm, paper-like panels — colour stays the palette axis; the personality is in the rough wavy outline + the soft shadow, not a tint or a wash.',
+      density:
+        'Roomy and relaxed — generous 20×12 buttons, 26px card padding, taller 38px controls; the hand-drawn feel wants air, like margins round a sketch.',
+      motion:
+        'Springy and playful — gentle 200ms transitions with a bouncy hover lift (1.02) and a deeper press squish (0.97); the UI has a friendly wobble.',
+      typography:
+        'Ships the Editorial pairing (Fraunces display headlines + Inter body) — the warmest, most characterful registered face, its soft optical wonk echoing the hand-drawn shapes; an actual marker/script face is a future data-type addition.',
+      components:
+        'Wonky-cornered buttons/inputs/cards/modals, irregular (non-pill) status chips, rough wavy-ink-bordered surfaces with soft hand-placed shadows.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

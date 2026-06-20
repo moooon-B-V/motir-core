@@ -1293,6 +1293,146 @@
   }
 }
 
+/* ── Hand-Drawn / Indie (data-style="hand-drawn-indie") — Subtask 7.3.41 ─────
+   DEFERRED follow-up. A sketchy, friendly, zine-like aesthetic. TWO moves make
+   it read as genuinely hand-drawn, not just "softly rounded":
+   (1) WONKY corners — every framed surface gets a strongly asymmetric
+       multi-value radius (one corner near-sharp, the opposite generously round,
+       no two alike) so a card/button/input reads as a DRAWN box; and
+   (2) ROUGH edges — a `feTurbulence`+`feDisplacementMap` filter (`#hd-rough`,
+       defined once by <HandDrawnFilter/> in the root layout) warps the OUTLINE
+       into an ink-like wobble. Asymmetric radius alone only bends the corners;
+       the displacement is what makes the LINES wavy (the Excalidraw / rough.js
+       look). It is applied to a CONTENT-SAFE `::after` pseudo-border so only the
+       outline is displaced — the text stays crisp.
+   Plus a soft hand-placed offset shadow, a roomy rhythm, and a springy
+   hover/press bounce. Colour stays the palette axis: the token block sets no
+   `--color-` / `--el-` colour token (AA preserved), and the rough-border rule
+   takes its ink from the palette (var(--el-border-strong)). Out-of-the-box type
+   is the characterful Editorial (Fraunces) pairing via `defaultTypeId`. See
+   docs/styles/hand-drawn-indie.md. */
+[data-style='hand-drawn-indie'] {
+  /* Silhouette — WONKY hand-drawn corners. The slash splits horizontal /
+     vertical corner radii, and the four values per side differ widely, so each
+     corner of a box is a different curve (the "drawn rectangle" tell). Generic
+     scale stays soft + single-valued; the SEMANTIC surfaces carry the wonk. */
+  --radius-xs: 6px;
+  --radius-sm: 9px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 14px 40px 12px 36px / 36px 14px 38px 16px;
+  --radius-input: 16px 48px 14px 42px / 42px 16px 46px 18px;
+  --radius-card: 18px 58px 22px 48px / 48px 20px 54px 24px;
+  --radius-modal: 22px 66px 20px 56px / 56px 22px 60px 26px;
+  --radius-badge: 9px 26px 11px 22px / 22px 11px 24px 9px;
+  --radius-control: 10px 26px 12px 22px / 22px 12px 24px 10px;
+  --radius-kbd: 6px 18px 8px 15px / 15px 8px 16px 6px;
+
+  /* Elevation — soft, hand-placed offset shadows (a doodled drop, nudged
+     down-right); friendly + low, never a hard brutalist block. Warm ink. */
+  --shadow-subtle: 1px 2px 4px -1px rgba(38, 30, 22, 0.1);
+  --shadow-card: 2px 4px 9px -3px rgba(38, 30, 22, 0.14);
+  --shadow-elevated: 3px 6px 16px -4px rgba(38, 30, 22, 0.17);
+  --shadow-modal: 5px 9px 30px -8px rgba(38, 30, 22, 0.22);
+  --shadow-hero-mockup: 6px 12px 40px -10px rgba(38, 30, 22, 0.22);
+
+  /* Density — roomy + relaxed; the sketch wants margins around it. */
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 12px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 12px;
+  --spacing-card-padding: 26px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 8px;
+  --height-control: 38px;
+  --height-input: 44px;
+
+  /* Motion — springy + playful: a bouncy hover lift and a deeper press squish. */
+  --transition-duration: 200ms;
+  --transition-fast: 130ms;
+  --transition-slow: 320ms;
+  --hover-scale: 1.02;
+  --active-scale: 0.97;
+}
+
+/* The ROUGH, hand-inked edge. A wavy ink line is drawn on a `::after` overlay
+   warped by the `#hd-rough` turbulence filter — the move that makes lines look
+   DRAWN, not machine-straight. The overlay is `pointer-events: none` and only it
+   is filtered, so the surface's own text/content stays CRISP (filtering the
+   element itself would smear the text). The real border is KEPT (2px) as the
+   structural fallback. The ink is palette-DERIVED (var(--el-border-strong)), so
+   the colour axis stays disjoint and it adapts to dark mode.
+
+   The overlay needs a positioned host. We add `position: relative` ONLY to
+   STATIC elements: a `fixed`/`absolute` element (a centered modal / command
+   palette — both `.fixed .border`) or a `sticky` header is ALREADY a containing
+   block, so overriding its position would break it (overriding `.fixed` is what
+   knocked the modals off-centre). Those positioned elements still get the `::after`
+   overlay (they're already a containing block), just not the position override.
+
+   Two line kinds are roughened so the frame AND the inner grid match (no straight
+   dividers inside a wavy card): the full-box `.border`, and the single-side
+   dividers `.border-b` / `.border-t` (table rows, section rules) — the latter
+   scoped INSIDE `[data-surface]` panels to bound the count to real surfaces (and
+   their rows are virtualised, so only ~viewport-many overlays ever render). */
+[data-style='hand-drawn-indie'] .border {
+  border-width: 2px;
+}
+[data-style='hand-drawn-indie'] .border:not(.fixed):not(.absolute):not(.sticky) {
+  position: relative;
+}
+[data-style='hand-drawn-indie'] .border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 2px solid var(--el-border-strong);
+  border-radius: inherit;
+  filter: url(#hd-rough);
+}
+
+/* Internal grid dividers — make the inner rules as rough as the frame. Scoped
+   inside framed surfaces; `:not(.border)` so a full-box element isn't handled
+   twice; `:not(:last-child)` mirrors the common `last:border-b-0` strip so the
+   final row gets no phantom line. */
+[data-style='hand-drawn-indie']
+  [data-surface]
+  :is(.border-b, .border-t):not(.border):not(.fixed):not(.absolute):not(.sticky) {
+  position: relative;
+}
+[data-style='hand-drawn-indie'] [data-surface] .border-b:not(.border)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 0;
+  pointer-events: none;
+  border-bottom: 2px solid var(--el-border-strong);
+  filter: url(#hd-rough);
+}
+[data-style='hand-drawn-indie'] [data-surface] .border-t:not(.border)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 0;
+  pointer-events: none;
+  border-top: 2px solid var(--el-border-strong);
+  filter: url(#hd-rough);
+}
+/* Suppress the overlay only where the REAL divider is removed: the last row of a
+   fully-rendered list strips its border via `last:border-b-0`. (We can't use
+   `:not(:last-child)` on the draw rule — a STICKY table header sits alone in its
+   own `role="rowgroup"`, so it is itself a `:last-child` and would be wrongly
+   skipped, which left the work-item table header's divider straight.) Same
+   specificity as the draw rule, placed after, so it wins on the real last row. */
+[data-style='hand-drawn-indie'] [data-surface] .last\:border-b-0:last-child::after {
+  content: none;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Neumorphism — the soft-extruded "soft UI" style (7.3.42, DEFERRED follow-up).
    EXPERIMENTAL. The identity is a SINGLE MONOCHROME FIELD out of which every

@@ -22,7 +22,7 @@ import { isTypeId } from '@/lib/theme/typography';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
@@ -33,6 +33,7 @@ describe('style registry', () => {
       'aurora',
       '3d-immersive',
       'neumorphism',
+      'hand-drawn-indie',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
@@ -43,6 +44,7 @@ describe('style registry', () => {
     expect(STYLE_REGISTRY['aurora'].name).toBe('Aurora');
     expect(STYLE_REGISTRY['3d-immersive'].name).toBe('3D / Immersive');
     expect(STYLE_REGISTRY['neumorphism'].name).toBe('Neumorphism');
+    expect(STYLE_REGISTRY['hand-drawn-indie'].name).toBe('Hand-Drawn / Indie');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {
