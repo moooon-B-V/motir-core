@@ -179,8 +179,16 @@ export interface RawPreplanRevisionEntry {
   createdAt: string;
 }
 
+// `currentBody` / `currentVersion` are the latest version's rendered Markdown
+// body + its number (the fields 7.3.72/MOTIR-1188 added to the motir-ai docs[]
+// entry) — what the 7.3.5 gate's `DirectionDocView` renders for the read-only
+// tier review. A kind only appears in `docs` once it has ≥1 version, so motir-ai
+// always populates both (defensively `''` / fallback in its no-current-doc
+// guard); forward-only revision diffs stay in `versions`.
 export interface RawPreplanArtifactLog {
   kind: 'discovery' | 'vision' | 'feasibility' | 'validation';
+  currentBody: string;
+  currentVersion: number;
   versions: RawPreplanRevisionEntry[];
 }
 
