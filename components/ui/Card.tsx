@@ -59,6 +59,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       ref={ref}
       className={cn(cardVariants({ tint, clickable }), className)}
+      // `data-tilt` is the hook the 3D / Immersive style's pointer-parallax
+      // engine (ImmersiveTilt, 7.3.39) uses to tip this tile toward the cursor.
+      // Inert for every other style + under reduced motion; harmless otherwise.
+      data-tilt=""
       // `data-surface` is the hook a surface-MATERIAL style (e.g. glassmorphism)
       // uses to frost this panel — see globals.css's material layer. Only the
       // default (untinted) card opts in; a pastel-tint feature card keeps its
@@ -67,10 +71,23 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       {...(clickable ? { tabIndex: 0, role: 'button' } : {})}
       {...rest}
     >
-      {header ? <div className="mb-(--spacing-md)">{header}</div> : null}
+      {/* `data-tilt-layer` lifts the slot onto a translateZ plane under the 3D /
+          Immersive style (7.3.39) so it PARALLAXES above the card face as the
+          card tilts — `front` (the header/title pops most), `back` (the footer
+          sits nearer the face). Inert under every other style + reduced motion.
+          The body stays on the face so arbitrary content never renders on a
+          skewed Z-plane. */}
+      {header ? (
+        <div data-tilt-layer="front" className="mb-(--spacing-md)">
+          {header}
+        </div>
+      ) : null}
       <div>{children}</div>
       {footer ? (
-        <div className="border-(--el-border) mt-(--spacing-md) border-t pt-(--spacing-md)">
+        <div
+          data-tilt-layer="back"
+          className="border-(--el-border) mt-(--spacing-md) border-t pt-(--spacing-md)"
+        >
           {footer}
         </div>
       ) : null}

@@ -14,6 +14,7 @@ import { buildThemeInitScript } from '@/lib/theme/init-script';
 import { getSession } from '@/lib/auth';
 import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
 import type { AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
+import { ImmersiveTilt } from '@/components/theme/ImmersiveTilt';
 import { ToastProvider } from '@/components/ui/Toast';
 import { localeDir, type Locale } from '@/lib/i18n/locales';
 import './globals.css';
@@ -155,6 +156,9 @@ export default async function RootLayout({
       <body className="min-h-full">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider initialPreference={applied} signedIn={Boolean(session)}>
+            {/* Pointer-parallax engine for the 3D / Immersive style — inert for
+                every other style and under reduced motion (7.3.39). */}
+            <ImmersiveTilt />
             <ToastProvider>{children}</ToastProvider>
           </ThemeProvider>
         </NextIntlClientProvider>

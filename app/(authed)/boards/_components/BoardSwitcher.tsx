@@ -387,6 +387,7 @@ export function BoardSwitcher({
                       role="menu"
                       aria-label={t('manageBoardAria', { name: board.name })}
                       data-testid={`board-switcher-manage-menu-${board.id}`}
+                      data-menu-surface=""
                       className="absolute top-8 right-0 z-10 flex w-56 flex-col gap-0.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1.5 shadow-(--shadow-elevated)"
                     >
                       <ManageItem

@@ -201,6 +201,9 @@ function BacklogRegion({
   return (
     <section
       aria-label={t('backlogRegionLabel', { count: state.totalCount })}
+      // `data-tilt` floats this backlog/sprint panel under the 3D / Immersive
+      // style (size-gated: deep resting shadow, no cursor tilt).
+      data-tilt=""
       // surface-material hook (glass frost / aurora glow); inert under
       // non-material styles. 7.3.38.
       data-surface="card"

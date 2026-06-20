@@ -122,7 +122,14 @@ function ModalRoot({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className={cn('fixed inset-0 z-40 bg-black/40', overlayClassName)} />
+        {/* `data-surface="overlay"` lets the glassmorphism style turn this dark
+            scrim into a LIGHT, page-blurring backdrop, so the frosted modal
+            refracts the (blurred) page behind it instead of darkness — the
+            point of a glass modal. Inert for every other style. */}
+        <Dialog.Overlay
+          data-surface="overlay"
+          className={cn('fixed inset-0 z-40 bg-black/40', overlayClassName)}
+        />
         {/*
           PRODECT_FINDINGS #8: Radix checks for a describing element
           (Dialog.Description → aria-describedby) independently of the Title

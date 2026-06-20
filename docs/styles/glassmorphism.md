@@ -25,7 +25,15 @@ shape-only token block, so it ships in two parts (see the two-axis contract in
    scalars into frosted translucency + a gradient canvas via
    `color-mix()`/alpha **over the active palette tokens**, introducing **no new
    hue**. Surfaces opt in through the `data-surface` hook the shared primitives
-   emit (`Card` / `Modal` / `Popover` / `Sidebar` / `Input`).
+   emit (`Card` / `Modal` / `Popover` / `Sidebar` / `Input` / `overlay`).
+
+**Modals are the showcase surface.** A modal floats over real page content, so it
+is where glass reads best. The modal/command-palette **backdrop**
+(`data-surface="overlay"`) is therefore NOT a dark scrim under glass: it's a
+light, palette-derived veil + a page `backdrop-filter: blur`, so the whole page
+behind frosts and the (also-frosted) modal panel refracts it. A dark scrim would
+make the glass blur darkness — the "flat" failure. The command-palette panel also
+carries `data-surface="modal"` so it frosts too.
 
 Because the material is palette-_derived_, the two axes stay orthogonal: pick a
 different palette and the glass re-tints automatically; pick a different style
@@ -64,13 +72,23 @@ the block (the disjoint-axis acceptance criterion; enforced by
 26px`, `--spacing-control-x/y: 12/7`, `--height-control: 38px`.
 - **Motion:** `--transition-duration: 220ms` (`--transition-slow: 320ms`) and a
   light `--active-scale: 0.98` — smooth, never springy or snappy.
-- **Material scalars (palette-agnostic):** `--glass-blur: 16px`,
-  `--glass-blur-strong: 26px` (modals), the surface/chrome/input/border opacity
-  fractions (`--glass-surface-alpha: 64%`, `--glass-modal-alpha: 82%`,
-  `--glass-chrome-alpha: 62%`, `--glass-input-alpha: 58%`,
-  `--glass-border-alpha: 58%`), and `--glass-wash: 15%` (gradient-canvas tint
-  strength). These carry no hue, so they live here; the material layer consumes
-  them.
+- **Material scalars (palette-agnostic):** `--glass-blur: 18px`,
+  `--glass-blur-strong: 30px` (modals), the surface/chrome/input/border opacity
+  fractions — kept **low so the canvas shows THROUGH** the glass
+  (`--glass-surface-alpha: 50%`, `--glass-modal-alpha: 70%`,
+  `--glass-chrome-alpha: 52%`, `--glass-input-alpha: 44%`,
+  `--glass-border-alpha: 72%` the lit rim), `--glass-wash: 42%` (a **vibrant**
+  gradient-canvas tint — glass needs real colour behind it to refract; a
+  near-white canvas reads "flat with a little blur"), `--glass-saturate: 180%`
+  (punchier refraction), and the white specular `--glass-sheen` / `--glass-rim`
+  (light is palette-agnostic). These carry no hue, so they live here; the
+  material layer consumes them.
+
+**The three things that make it read as glass (not a flat blurred box):** a
+**vibrant canvas** to refract (high `--glass-wash`), **genuine translucency**
+(low surface alpha, so the colour shows through), and a **lit edge** — the
+`linear-gradient` sheen raking across the panel + the inset `--glass-rim`
+highlight + a soft drop shadow so the sheet floats.
 
 ## The material layer (palette-derived)
 

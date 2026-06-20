@@ -300,6 +300,7 @@ export function MultiSelectPicker({
           role="listbox"
           aria-multiselectable="true"
           aria-label={label}
+          data-menu-surface=""
           className="absolute top-full left-0 z-10 mt-1 w-max max-w-72 min-w-60 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1 shadow-(--shadow-elevated)"
         >
           {options.map((opt, i) => {

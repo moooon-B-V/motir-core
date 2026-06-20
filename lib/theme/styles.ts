@@ -311,6 +311,33 @@ export const STYLE_REGISTRY = {
         'Fluid, gently-glowing cards / popovers / modals / sidebar (the data-surface material layer); pill status chips.',
     },
   },
+  '3d-immersive': {
+    id: '3d-immersive',
+    name: '3D / Immersive',
+    tagline: 'Depth and perspective — dimensional cards floating over the page.',
+    inspiration:
+      'Spatial / depth UI — visionOS spatial layers, Stripe-era layered cards, soft real-world light.',
+    designDoc: 'docs/styles/3d-immersive.md',
+    defaultTypeId: 'motir',
+    dimensions: {
+      silhouette:
+        'Generously rounded dimensional tiles — 14px buttons/inputs, 20px cards, 28px modals. Soft, tactile, never sharp.',
+      stroke:
+        'Borders nearly vanish (a faint hairline) — structure is read from depth + shadow, not an outline.',
+      elevation:
+        'The identity axis: deep multi-layer shadows float every surface off the canvas, and on tilt a card becomes a TRUE 3D object — perspective + preserve-3d + per-slot translateZ planes (header pops forward, footer behind) parallax under a cursor-tracked glare. Not a flat-plane tilt.',
+      surface:
+        'A palette-derived immersive background atmosphere on every page, with opaque dimensional panels (cards, tables, board columns, widgets) floating above it on deep resting shadows — depth (not tint or glass) is the material; nothing sits flat.',
+      density:
+        'Roomy and immersive — 22×12 buttons, 28px card padding, 40px controls; depth wants air around each tile.',
+      motion:
+        'The standard "3D card" pointer-parallax — tiles tip toward the cursor (rotateX/rotateY over a perspective) via the ImmersiveTilt engine, lifting as they turn; reduced-motion-gated, settling flat on leave.',
+      typography:
+        'Inherits the base editorial type pairing; the personality is in depth + light, not the type.',
+      components:
+        'Rounded cards / board cards / modals that tilt toward the pointer with layered parallax; PHYSICAL buttons with real thickness (a solid base edge) that press DOWN on click; each board column floats as its own card. Nothing is flat.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

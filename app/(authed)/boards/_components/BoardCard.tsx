@@ -146,6 +146,11 @@ export function BoardCard({
         onClick={() => onOpenQuickView(card.identifier)}
         aria-label={t('openIssueAria', { key: card.identifier, title: card.title })}
         data-testid={`board-card-${card.identifier}`}
+        // `data-tilt` opts the kanban card into the 3D / Immersive pointer-tilt
+        // (7.3.39). Inert for every other style + under reduced motion. While
+        // dragging, dnd-kit's inline `transform` (a translate) overrides the
+        // tilt transform, so the two never fight; at rest the tilt applies.
+        data-tilt=""
         // `data-surface` opts the board card into the surface-MATERIAL layer so a
         // surface-material style (glassmorphism frost, aurora glow) reaches the
         // board — not only Card-built settings surfaces. Inert under non-material

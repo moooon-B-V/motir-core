@@ -58,6 +58,10 @@ export function WidgetCard({
       role="group"
       aria-label={t('widget.regionAria', { title })}
       data-testid={`dashboard-widget-${widget.id}`}
+      // `data-tilt` floats the dashboard widget under the 3D / Immersive style
+      // (small widgets tilt toward the cursor; large ones just float). Inert
+      // under every other style + reduced motion.
+      data-tilt=""
       // `data-surface` opts the dashboard/report widget into the surface-MATERIAL
       // layer (glassmorphism frost, aurora glow), like the board card. Inert under
       // non-material styles. 7.3.38.

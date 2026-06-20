@@ -73,6 +73,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       type="button"
+      // `data-variant` is the hook the 3D / Immersive style uses to give FILLED
+      // buttons physical thickness (a solid palette-derived base edge) + a
+      // press-DOWN (7.3.39). Inert under every other style.
+      data-variant={variant ?? 'primary'}
       className={cn(buttonVariants({ variant, size }), className)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

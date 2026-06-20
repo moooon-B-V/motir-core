@@ -453,14 +453,25 @@
      Consumed only by the [data-surface] material layer below; they are the
      "glass recipe": how far to blur, and how much of the palette surface to
      keep opaque (the rest lets the blurred gradient show through). ── */
-  --glass-blur: 16px; /* frosted-panel backdrop blur */
-  --glass-blur-strong: 26px; /* modal / overlay blur — more separation */
-  --glass-surface-alpha: 64%; /* opacity of a frosted card / popover */
-  --glass-modal-alpha: 82%; /* modals stay more opaque for body-text AA */
-  --glass-chrome-alpha: 62%; /* sidebar / chrome translucency */
-  --glass-input-alpha: 58%; /* form-control fill translucency */
-  --glass-border-alpha: 58%; /* light 1px hairline over the blur */
-  --glass-wash: 15%; /* gradient-canvas tint strength over the page bg */
+  --glass-blur: 18px; /* frosted-panel backdrop blur */
+  --glass-blur-strong: 30px; /* modal / overlay blur — more separation */
+  /* Lower opacity than before: real glass is TRANSLUCENT, so the vibrant canvas
+     shows THROUGH the panel (the old 64% read as near-solid white = "flat with a
+     little blur"). */
+  --glass-surface-alpha: 50%; /* opacity of a frosted card / popover */
+  --glass-modal-alpha: 56%; /* the modal panel is GLASS too — translucent enough
+                               that the frosted page shows through it (only a
+                               touch more opaque than a card, for its body text) */
+  --glass-chrome-alpha: 52%; /* sidebar / chrome translucency */
+  --glass-input-alpha: 44%; /* form-control fill translucency */
+  --glass-border-alpha: 72%; /* the glass RIM — a more visible lit edge */
+  --glass-wash: 42%; /* MUCH stronger canvas tint — glass needs vibrant colour
+                        behind it to refract; a near-white canvas looks flat */
+  --glass-saturate: 180%; /* punchier refraction (was a fixed 150%) */
+  /* The specular SHEEN + RIM light — white, palette-agnostic (glass catches
+     light regardless of hue); used by the material layer, never as a fill. */
+  --glass-sheen: rgba(255, 255, 255, 0.22);
+  --glass-rim: rgba(255, 255, 255, 0.55);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -484,19 +495,24 @@
 [data-style='glassmorphism'] body {
   background-image:
     radial-gradient(
-      62% 70% at 12% -5%,
+      85% 80% at 6% -12%,
       color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-      transparent 70%
+      transparent 62%
     ),
     radial-gradient(
-      58% 65% at 105% 6%,
+      80% 75% at 110% 4%,
       color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
-      transparent 68%
+      transparent 60%
     ),
     radial-gradient(
-      72% 78% at 50% 112%,
+      95% 90% at 50% 120%,
       color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
-      transparent 72%
+      transparent 62%
+    ),
+    radial-gradient(
+      60% 60% at 85% 95%,
+      color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+      transparent 60%
     );
   background-attachment: fixed;
 }
@@ -504,32 +520,57 @@
 /* Frosted container surfaces — cards & popovers float as translucent sheets. */
 [data-style='glassmorphism'] [data-surface='card'],
 [data-style='glassmorphism'] [data-surface='popover'] {
+  /* The translucent fill lets the vibrant canvas through; the linear sheen is
+     the light raking across the glass (top-left → fading), the inset RIM is the
+     lit glass edge, and the soft drop makes the sheet FLOAT. White light is
+     palette-agnostic; the colour still comes only from the palette-derived
+     fill/border, so the axes stay disjoint. */
   background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
+  background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
   border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-rim),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 8px 32px -8px rgba(15, 15, 15, 0.18);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
 [data-style='glassmorphism'] [data-surface='modal'] {
   background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
+  background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
   border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-rim),
+    0 28px 70px -16px rgba(15, 15, 15, 0.34);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
 }
 
 /* The sidebar rail — frosted chrome over the canvas. */
 [data-style='glassmorphism'] [data-surface='sidebar'] {
   background-color: color-mix(in srgb, var(--el-sidebar-bg) var(--glass-chrome-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* Form controls — a translucent fill so inputs read as glass too. */
 [data-style='glassmorphism'] [data-surface='input'] {
   background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* The MODAL / command-palette BACKDROP — the most important glass surface, since
+   a modal floats over real page content. Under glass it is NOT a dark scrim: a
+   light, palette-derived veil + a page BLUR, so the whole page behind frosts and
+   the (also-frosted) modal panel refracts it — the proper glass-modal look.
+   Overrides the primitives' `bg-black/40` utility. Palette-derived (no hue). */
+[data-style='glassmorphism'] [data-surface='overlay'] {
+  background-color: color-mix(in srgb, var(--el-page-bg) 24%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(8px) saturate(var(--glass-saturate));
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -889,6 +930,367 @@
     color-mix(in srgb, var(--el-accent) var(--aurora-sheen), transparent),
     transparent 30%
   );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3D / Immersive — the depth + perspective style (7.3.39, DEFERRED follow-up).
+   EXPERIMENTAL. The identity is DEPTH + the standard "3D card" interaction:
+   deep, multi-layer shadows (specular highlight + contact + ambient + far key
+   light) float every surface dramatically off the canvas, and the ImmersiveTilt
+   shell engine tips `[data-tilt]` tiles TOWARD THE CURSOR (rotateX/rotateY over a
+   perspective — the vanilla-tilt effect; see the @media block below).
+   Overrides ONLY shape/feel tokens — never a colour token (that is the
+   data-palette axis; this style wears whatever palette is active, so the active
+   palette's AA contrast is preserved by construction). The shadow light/ink is
+   literal rgba (white specular highlight + near-ink shadow), NOT a palette token,
+   so the colour axis stays untouched. The differentiator vs Glassmorphism: glass
+   is a translucent MATERIAL over a gradient; 3D is OPAQUE depth — real layered
+   light + a cursor-tracking tilt, no blur, no tint. "Performance + accessibility
+   heavy" (the card's caveat), so the tilt is gated behind `prefers-reduced-motion`
+   (BOTH the engine and the @media block below) — reduced-motion users keep the
+   static deep-shadow depth. See docs/styles/3d-immersive.md. ────────────────── */
+[data-style='3d-immersive'] {
+  /* Silhouette — generously rounded dimensional tiles. --radius-pill is left
+     untouched so genuinely-circular affordances (avatars, status dots, the
+     spinner) stay round. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 14px;
+  --radius-input: 14px;
+  --radius-card: 20px;
+  --radius-modal: 28px;
+  --radius-badge: 9999px; /* soft, dimensional status pills */
+  --radius-control: 12px;
+  --radius-kbd: 8px;
+
+  /* Elevation — THE signature. Every shadow token becomes a DEEP, multi-layer
+     drop: a top specular highlight (inset, a lit edge where light catches the
+     raised tile) + a tight contact shadow + a mid ambient + a wide, soft key
+     light far below, so each tile floats dramatically off the canvas and reads
+     as a physical object — not the timid lift a single shadow gives. Scales from
+     --shadow-subtle up to --shadow-hero-mockup. Pure rgba light/ink (white
+     highlight + near-ink shadow), no palette token — the colour axis is
+     untouched (a white specular highlight reads as "lit" on any palette). */
+  --shadow-subtle:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(15, 15, 15, 0.06),
+    0 5px 12px -2px rgba(15, 15, 15, 0.13);
+  --shadow-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6), 0 2px 4px rgba(15, 15, 15, 0.05),
+    0 12px 24px -6px rgba(15, 15, 15, 0.16), 0 28px 56px -12px rgba(15, 15, 15, 0.3);
+  --shadow-elevated:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.65), 0 4px 8px rgba(15, 15, 15, 0.06),
+    0 20px 40px -8px rgba(15, 15, 15, 0.22), 0 44px 80px -16px rgba(15, 15, 15, 0.38);
+  --shadow-modal:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 8px 16px rgba(15, 15, 15, 0.08),
+    0 32px 64px -12px rgba(15, 15, 15, 0.28), 0 72px 120px -24px rgba(15, 15, 15, 0.46);
+  --shadow-hero-mockup:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 16px 32px rgba(15, 15, 15, 0.1),
+    0 96px 160px -32px rgba(15, 15, 15, 0.5);
+
+  /* Typography is the data-type axis now — 3D / Immersive ships
+     `defaultTypeId: 'motir'` (the base editorial pairing); the personality is
+     depth + light, not type. A [data-style] block sets NO --font-* token. */
+
+  /* Density — roomy and immersive; depth wants air around each tile. */
+  --spacing-btn-x: 22px;
+  --spacing-btn-y: 12px;
+  --spacing-input-x: 18px;
+  --spacing-input-y: 13px;
+  --spacing-card-padding: 28px;
+  --spacing-control-x: 14px;
+  --spacing-control-y: 8px;
+  --height-control: 40px;
+  --height-input: 46px;
+
+  /* Motion — smooth and floaty. A slower ease for the depth to feel weighty.
+     The signature INTERACTION is the pointer-parallax TILT below (the standard
+     "3D card" effect — cards tip toward the cursor), driven by the
+     ImmersiveTilt shell engine. */
+  --transition-duration: 260ms;
+  --transition-fast: 180ms;
+  --transition-slow: 360ms;
+  --active-scale: 0.98;
+}
+
+/* 3D / Immersive — the IMMERSIVE BACKGROUND (depth atmosphere on EVERY page,
+   not just card surfaces) + the resting FLOAT (every tile lifts off that
+   canvas). Both are STATIC depth, so they sit OUTSIDE the reduced-motion gate —
+   a reduced-motion user still gets the full immersive depth, only the tilt is
+   suppressed. The background is palette-DERIVED (color-mix over --el tokens,
+   never a raw hue), so the style/palette axes stay disjoint and the material-
+   rule test passes: a palette swap re-tints the atmosphere, a style swap leaves
+   hues alone. This is what makes the table/list/board pages (no card surfaces of
+   their own) read as immersive too. */
+[data-style='3d-immersive'] body {
+  background-image:
+    radial-gradient(
+      130% 85% at 50% -15%,
+      color-mix(in srgb, var(--el-accent) 9%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      95% 75% at 108% 112%,
+      color-mix(in srgb, var(--el-link) 8%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      150% 130% at 50% 42%,
+      transparent 52%,
+      color-mix(in srgb, var(--el-text) 8%, transparent)
+    );
+  background-attachment: fixed;
+}
+
+/* EVERY PANEL FLOATS — systematic depth across the WHOLE app, not just the
+   handful of surfaces that use the <Card> primitive. A "panel" is any element
+   with the card radius (`rounded-(--radius-card)` → the compiled class
+   `.rounded-\(--radius-card\)`): cards, popovers, callouts, list/table panels,
+   widgets, the hand-rolled `<div className="rounded-(--radius-card) border …">`
+   surfaces every screen builds. They all get the deep resting float shadow so no
+   screen is left flat. This is the same global-utility-targeting approach
+   neo-brutalism uses for `.border`. Static depth (NOT motion-gated). box-shadow
+   is not a colour-painting property, so the material-rule test skips it.
+   Per-surface exceptions (the board column's clip-safe shadow, modals) override
+   below by source order. Modals carry their own deeper shadow via the modal
+   radius (next rule). */
+[data-style='3d-immersive'] .rounded-\(--radius-card\) {
+  box-shadow: var(--shadow-card);
+}
+[data-style='3d-immersive'] .rounded-\(--radius-modal\) {
+  box-shadow: var(--shadow-modal);
+}
+
+/* 3D / Immersive — the POINTER-PARALLAX TILT (the standard "3D card" effect,
+   the interactive half of the identity). The ImmersiveTilt shell engine
+   (components/theme/ImmersiveTilt.tsx) — active ONLY when data-style is this
+   style and the user has NOT requested reduced motion — reads the cursor
+   position over a `[data-tilt]` tile and writes per-tile `--tilt-rx` / `--tilt-ry`
+   rotation vars, so the tile tips toward the pointer (rotateX/rotateY over a
+   perspective) and lifts; on leave the engine zeroes the vars and the tile eases
+   back flat. The whole block is GATED behind `prefers-reduced-motion:
+   no-preference` (the card flags this style accessibility-heavy) — a
+   reduced-motion user gets NO transform at all and keeps the static deep-shadow
+   depth. It sets NO colour (transform + box-shadow only; box-shadow draws the
+   existing near-ink token), so the style/palette axes stay disjoint and
+   styleRegistry.test.ts's material-rule check (which inspects only
+   colour-painting rules) skips it. Tiles opt in with the `data-tilt` hook
+   (Card, BoardCard). */
+@media (prefers-reduced-motion: no-preference) {
+  /* The transition lives on the resting tile so BOTH the tilt-in and the
+     settle-back-flat animate. Crucially, NO `transform` is set at rest — only
+     the actively-hovered tile (data-tilt-active) gets one, so a resting card
+     never establishes a transform stacking context that could reposition a
+     non-portaled fixed/absolute descendant. On leave the engine drops the
+     attribute and the transform eases back to none over 400ms. */
+  [data-style='3d-immersive'] [data-tilt] {
+    transition:
+      transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 260ms ease-out;
+  }
+  /* While the pointer is over the tile the engine sets data-tilt-active='1':
+     tip it toward the cursor (the per-tile --tilt-rx/ry the engine writes),
+     drop the transform transition so it tracks the cursor in real time, deepen
+     the shadow so the lifted tile casts further, and — the proper-3D bit —
+     establish a 3D context (`preserve-3d`) so the card's slots can sit on
+     separate translateZ planes and PARALLAX (a flat-plane tilt without this is
+     the "halfway / flat-3D mix" tell). `position: relative` anchors the glare. */
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] {
+    transform: perspective(var(--tilt-perspective, 900px)) rotateX(var(--tilt-rx, 0deg))
+      rotateY(var(--tilt-ry, 0deg));
+    transform-style: preserve-3d;
+    transition:
+      transform 80ms linear,
+      box-shadow 260ms ease-out;
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* DEPTH PLANES — the card's slots lift onto different translateZ planes so
+     they parallax above the card face as it tilts (the title/header pops most,
+     the footer sits nearer the face; the body stays ON the face so arbitrary
+     content never renders skewed). Only while actively tilting, so a resting
+     card is perfectly flat. This is the standard layered-parallax technique
+     (vanilla-tilt / Atropos): perspective + preserve-3d + per-layer translateZ. */
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] [data-tilt-layer='front'] {
+    transform: translateZ(42px);
+    transition: transform 80ms linear;
+  }
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1'] [data-tilt-layer='back'] {
+    transform: translateZ(14px);
+    transition: transform 80ms linear;
+  }
+
+  /* GLARE — a cursor-tracked specular sweep across the face (the light catching
+     a tilted surface). Palette-DERIVED (color-mix over --el-page-bg, never a raw
+     hue → passes the material-rule test; a palette swap re-tints the sheen). It
+     rides a high translateZ so it reads as light on the front glass, fades in
+     only while active, and never eats pointer events. */
+  [data-style='3d-immersive'] [data-tilt]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      circle at var(--tilt-glare-x, 50%) var(--tilt-glare-y, 50%),
+      color-mix(in srgb, var(--el-page-bg) 65%, transparent),
+      transparent 55%
+    );
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+    pointer-events: none;
+  }
+  [data-style='3d-immersive'] [data-tilt][data-tilt-active='1']::after {
+    opacity: 0.45;
+    /* Just above the card FACE but BELOW the popped header/footer planes, so it
+       lights the surface without washing the floating title. */
+    transform: translateZ(2px);
+  }
+}
+
+/* `position: relative` anchors the glare ::after to each tile. Static (outside
+   the motion gate) so the anchor is stable; the glare itself only shows while
+   tilting (above). */
+[data-style='3d-immersive'] [data-tilt] {
+  position: relative;
+}
+
+/* ── 3D / Immersive — BOARD COLUMNS ─────────────────────────────────────────
+   A board column is a TALL panel inside an `overflow-x-auto` scroll row, which
+   forces overflow-y to clip — so the wide --shadow-card gets cut off at the
+   bottom and adjacent opaque columns occlude each other's side shadows, making
+   the board read as one backing slab. Instead each column gets a TIGHTER,
+   clip/occlusion-safe float shadow (small horizontal bleed, modest drop), and
+   the scroll row widens its gap + adds bottom room so the shadow shows. Result:
+   each column floats as its own distinct card. */
+[data-style='3d-immersive'] [data-board-col-panel] {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
+    0 1px 3px rgba(15, 15, 15, 0.08),
+    0 8px 18px -8px rgba(15, 15, 15, 0.22);
+  /* The column is `h-[calc(100dvh-12rem)]` — sized to fill the board area. In
+     the `overflow-x-auto` row that exactly-filling height means the column's
+     rounded BOTTOM corner + its drop shadow sit at the overflow-clip boundary
+     and get sheared flat (the reported "sharp bottom corner"). Trim the height
+     so the rounded corner + shadow clear the clip and the column reads as a
+     fully-rounded floating card. Also clip the column's OWN children to its
+     radius so a flush inner surface can't square a corner — the board cards pop
+     on hover but the DragOverlay clone is portaled, so nothing 3D is lost. */
+  height: calc(100dvh - 14.5rem);
+  overflow: hidden;
+}
+[data-style='3d-immersive'] [data-board-scroll] {
+  gap: 1.5rem;
+  padding-bottom: 2.25rem;
+  padding-top: 0.25rem;
+}
+
+/* ── 3D / Immersive — PHYSICAL BUTTONS ──────────────────────────────────────
+   In a 3D design a button is not flat: it has visible THICKNESS (a solid base
+   edge) and presses DOWN onto it on click (translateY + the base compresses) —
+   the standard 3D/skeuomorphic button. This must cover EVERY button, not just
+   the <Button> primitive: the ~35 hand-rolled `rounded-(--radius-btn)` <button>s
+   (the /issues toolbar triggers — Filter / Advanced / Saved / the Tree-List
+   switcher — links-styled-as-buttons, etc.) were flat. So the GLOBAL rule on the
+   button-radius class is the baseline (a neutral `--el-border-strong` edge, which
+   suits the outline/toolbar buttons); FILLED variants override it with a
+   colour-matched edge (primary → `--el-accent-pressed`, danger → a darkened
+   `--el-danger` — palette-derived, so the axes stay disjoint); ghost stays flat
+   (the quiet button). box-shadow is not a colour-painting property, so the
+   material-rule test skips these. The press overrides the base `active:scale`
+   with a more physical translateY. */
+/* `button.rounded-(--radius-input)` catches DROPDOWN-TRIGGER buttons styled as an
+   input (the board switcher, combobox / picker triggers) so they're physical
+   keys too — scoped to `button` so a real <input>/<textarea> text field (same
+   radius) is NEVER raised. */
+[data-style='3d-immersive'] .rounded-\(--radius-btn\),
+[data-style='3d-immersive'] button.rounded-\(--radius-input\) {
+  box-shadow:
+    0 3px 0 0 var(--el-border-strong),
+    0 5px 10px -3px rgba(15, 15, 15, 0.18);
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out,
+    background-color var(--transition-duration);
+}
+[data-style='3d-immersive'] [data-variant='primary'] {
+  box-shadow:
+    0 4px 0 0 var(--el-accent-pressed),
+    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+}
+[data-style='3d-immersive'] [data-variant='danger'] {
+  box-shadow:
+    0 4px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+    0 7px 12px -3px rgba(15, 15, 15, 0.32);
+}
+/* Ghost — the deliberately-flat quiet button; no thickness. */
+[data-style='3d-immersive'] [data-variant='ghost'] {
+  box-shadow: none;
+}
+/* Press DOWN onto the base — the button drops by its thickness and the base
+   edge compresses, like a real key. Overrides the base `active:scale`. */
+[data-style='3d-immersive'] .rounded-\(--radius-btn\):active:not(:disabled),
+[data-style='3d-immersive'] button.rounded-\(--radius-input\):active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 0 var(--el-border-strong),
+    0 2px 4px rgba(15, 15, 15, 0.14);
+}
+[data-style='3d-immersive'] [data-variant='primary']:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 0 var(--el-accent-pressed),
+    0 2px 5px rgba(15, 15, 15, 0.22);
+}
+[data-style='3d-immersive'] [data-variant='danger']:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--el-danger), black 32%),
+    0 2px 5px rgba(15, 15, 15, 0.22);
+}
+[data-style='3d-immersive'] [data-variant='ghost']:active:not(:disabled) {
+  box-shadow: none;
+}
+
+/* ── 3D / Immersive — DROPDOWNS / POPOVERS / MENUS unfold in 3D ──────────────
+   A flat fade-in is the "still not 3D" tell on overlays. The standard 3D
+   dropdown UNFOLDS: it swings open from its top edge over a perspective
+   (transform-origin top + rotateX, folded → flat). Every floating overlay in the
+   app shares `shadow-(--shadow-elevated)` (popovers, comboboxes, multi-selects,
+   menus, tooltips, toasts), so one global rule on the compiled
+   `.shadow-\(--shadow-elevated\)` class gives them all the 3D open — and restores
+   the deeper elevated shadow (the global card-float rule above would otherwise
+   flatten them to --shadow-card). gated by reduced-motion. */
+@keyframes immersive-menu-open {
+  from {
+    opacity: 0;
+    transform: perspective(900px) rotateX(-26deg) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Restore the deeper ELEVATED shadow on every overlay (the global card-float
+   rule above would otherwise flatten any `shadow-(--shadow-elevated)` surface to
+   --shadow-card). Global + static so menus, tooltips, drag-overlays all keep the
+   right depth. */
+[data-style='3d-immersive'] .shadow-\(--shadow-elevated\) {
+  box-shadow: var(--shadow-elevated);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* The 3D UNFOLD is scoped to actual MENU surfaces (the Popover primitive +
+     the `data-menu-surface` hook on Combobox / MultiSelect / BoardSwitcher
+     menus) — NOT every elevated surface, so a drag-overlay or toast doesn't
+     unexpectedly fold open. */
+  [data-style='3d-immersive'] [data-surface='popover'],
+  [data-style='3d-immersive'] [data-menu-surface] {
+    transform-origin: top center;
+    animation: immersive-menu-open 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* A Radix popover that flips ABOVE its trigger folds from the bottom edge. */
+  [data-style='3d-immersive'] [data-surface='popover'][data-side='top'] {
+    transform-origin: bottom center;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
