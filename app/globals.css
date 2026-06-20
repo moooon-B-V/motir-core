@@ -1294,6 +1294,192 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Neumorphism — the soft-extruded "soft UI" style (7.3.42, DEFERRED follow-up).
+   EXPERIMENTAL. The identity is a SINGLE MONOCHROME FIELD out of which every
+   surface is moulded by a DUAL soft shadow — a light highlight (top-left) paired
+   with a palette-derived dark shadow (bottom-right) — so a card swells OUT of the
+   canvas (raised) and a form field sinks INTO it (an inset well). No translucency,
+   no gradient, no glow: just continuous opaque material + paired soft shadows.
+   Ships in two parts, like the other surface-material styles (glass / aurora):
+     1. This [data-style] TOKEN BLOCK — shape/feel tokens ONLY (soft radii, soft
+        NEUTRAL shadows, gentle motion, roomy density) PLUS palette-AGNOSTIC
+        material SCALARS (the extrusion distance + blur, the white highlight, and
+        the dark-shadow strength %). No hue lives here, so it stays disjoint from
+        the palette axis — enforced by the token-block test in styleRegistry.test.ts.
+     2. A palette-DERIVED MATERIAL LAYER (the rules below) that paints the
+        monochrome field + the dual raised/inset shadows. The dark shadow is
+        color-mix() over the active palette's `--el-text` ink (NO new hue); the
+        light highlight is palette-AGNOSTIC white (like glass's --glass-rim), so a
+        palette swap re-tones the moulded surface and a style swap leaves hues be.
+   ── Accessibility (the card's "accessibility-hard, gate carefully" caveat) ──
+   Soft-UI's classic failure is low contrast — borderless same-colour surfaces and
+   text that washes out. Gated by construction here: surfaces stay OPAQUE at the
+   palette's own AA-tuned `--el-surface` (text contrast preserved, like aurora), a
+   faint hairline border is KEPT (not removed) so structure never relies on shadow
+   alone, and a `prefers-contrast: more` / `forced-colors: active` fallback below
+   restores a solid border and flattens the shadow for users who need it.
+   See docs/styles/neumorphism.md. ──────────────────────────────────────────── */
+[data-style='neumorphism'] {
+  /* Silhouette — soft, generously rounded pebbles; the rounding lets the paired
+     shadow wrap each surface. --radius-pill / circular affordances untouched. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+  --radius-card: 18px;
+  --radius-modal: 22px;
+  --radius-badge: 9999px; /* chips stay pills — soft is the neumorphic register */
+  --radius-control: 10px;
+  --radius-kbd: 6px;
+
+  /* Elevation — soft, diffuse NEUTRAL base lift for any non-data-surface elevated
+     element (tooltips, bare dropdowns). The dual raised/inset MATERIAL shadow is
+     palette-derived and lives in the material layer below (not here, where no hue
+     may appear). rgba literals are neutral shadow ink, not a palette hue. */
+  --shadow-subtle: 0 1px 2px rgba(20, 20, 30, 0.05);
+  --shadow-card: 0 6px 18px -10px rgba(20, 20, 30, 0.14);
+  --shadow-elevated: 0 12px 30px -14px rgba(20, 20, 30, 0.18);
+  --shadow-modal: 0 22px 50px -18px rgba(20, 20, 30, 0.24);
+  --shadow-hero-mockup: 0 26px 60px -18px rgba(20, 20, 30, 0.28);
+
+  /* Density — comfortable, roomy; the soft shadows need air to read as extruded. */
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 11px;
+  --spacing-card-padding: 26px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+
+  /* Motion — gentle; a soft press-scale, nothing snaps. */
+  --transition-duration: 200ms;
+  --transition-slow: 300ms;
+  --active-scale: 0.98;
+
+  /* ── Material SCALARS — palette-AGNOSTIC (no hue, so no colour token here).
+     Consumed only by the [data-style='neumorphism'] material rules below: how far
+     the paired shadow is offset, how soft it blurs, and the two shadow inks (the
+     top-left highlight + the bottom-right dark). Both inks are NEUTRAL rgba (white
+     light + near-black shade) — like glass's --glass-rim / aurora's --shadow-*:
+     they are shadow ink, not a palette hue, so the token block stays colour-free.
+     A neumorphic mould needs a CONSTANT light/dark pairing (highlight always
+     lighter, shadow always darker than the surface) — deriving the dark ink from
+     a palette text token would INVERT it in dark mode (the ink goes light), so the
+     ink stays neutral and the [data-theme='dark'] block below re-balances it. ── */
+  --neu-distance: 6px; /* offset of the paired shadow on a card / panel */
+  --neu-blur: 16px; /* how soft the paired shadow blurs (the "swell") */
+  --neu-distance-sm: 3px; /* tighter offset for an inset input well */
+  --neu-blur-sm: 8px; /* tighter blur for the inset well */
+  --neu-light: rgba(255, 255, 255, 0.6); /* top-left raised HIGHLIGHT (light ink) */
+  --neu-shadow: rgba(20, 20, 30, 0.16); /* bottom-right dark shadow (shade ink) */
+}
+
+/* Dark theme re-balances the two inks: on a dark surface a 0.6 white halo is far
+   too loud and a 0.16 near-black shade barely shows, so the highlight drops to a
+   faint lighten and the shade deepens to a real black — keeping the constant
+   light-above / dark-below mould readable in both themes. Scoped to BOTH axis
+   attributes on <html> (NOT a bare [data-style] token block, so the disjoint-axis
+   test does not read it); sets only neutral rgba scalars, no hue. */
+[data-style='neumorphism'][data-theme='dark'] {
+  --neu-light: rgba(255, 255, 255, 0.05);
+  --neu-shadow: rgba(0, 0, 0, 0.44);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Neumorphism MATERIAL LAYER — palette-DERIVED surface treatment (7.3.42).
+   The same style-contract extension glass / aurora use: a style may own its
+   surface material in STYLE-SCOPED component rules as long as every colour is
+   DERIVED from the active palette via color-mix()/var() (the dark shadow + the
+   monochrome field) — never a raw hue (the white highlight is palette-agnostic
+   light, not a hue). These descendant-scoped selectors are NOT the bare token
+   block, so they never trip the colour-free token-block test; they ARE read as
+   material rules and are palette-derived (enforced by the "surface-material
+   layer" test in styleRegistry.test.ts). ──────────────────────────────────── */
+
+/* The monochrome field: the page canvas adopts the palette's opaque surface so
+   panels look MOULDED OUT OF the same material rather than placed on top. Both
+   the canvas and the surfaces below share `var(--el-surface)`, which is the whole
+   neumorphic illusion. Palette-derived (no hue of its own). */
+[data-style='neumorphism'] body {
+  background-color: var(--el-surface);
+}
+
+/* Raised container surfaces — cards & popovers swell OUT of the field on a paired
+   soft shadow: a light highlight top-left + a dark shadow bottom-right. Both inks
+   are neutral (palette-agnostic) shadow ink; the SURFACE + border are
+   palette-derived, so the mould re-tones per palette and the style stays disjoint
+   from hue. The faint hairline is kept as the accessibility fallback so structure
+   doesn't depend on the shadow alone. Opaque `--el-surface` keeps text on the
+   palette's AA-tuned surface. */
+[data-style='neumorphism'] [data-surface='card'],
+[data-style='neumorphism'] [data-surface='popover'] {
+  background-color: var(--el-surface);
+  border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+  box-shadow:
+    var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+    calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) var(--neu-blur) var(--neu-light);
+}
+
+/* Modal panel — the same raised mould, a touch deeper so the dialog separates
+   from the field behind it (body text stays on the opaque surface). */
+[data-style='neumorphism'] [data-surface='modal'] {
+  background-color: var(--el-surface);
+  border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+  box-shadow:
+    calc(var(--neu-distance) + 2px) calc(var(--neu-distance) + 2px) calc(var(--neu-blur) + 8px)
+      var(--neu-shadow),
+    calc(-1 * var(--neu-distance)) calc(-1 * var(--neu-distance)) calc(var(--neu-blur) + 4px)
+      var(--neu-light);
+}
+
+/* The sidebar rail — moulded from the same field as the chrome, gently raised so
+   it reads as part of the one continuous surface. */
+[data-style='neumorphism'] [data-surface='sidebar'] {
+  background-color: var(--el-surface);
+  box-shadow:
+    var(--neu-distance) 0 var(--neu-blur) var(--neu-shadow),
+    calc(-1 * var(--neu-distance)) 0 var(--neu-blur) var(--neu-light);
+}
+
+/* Form controls — the inverse mould: a CONCAVE INSET well pressed INTO the field
+   (the soft-UI input look), the paired shadow flipped to `inset`. */
+[data-style='neumorphism'] [data-surface='input'] {
+  background-color: var(--el-surface);
+  border-color: color-mix(in srgb, var(--el-border) 45%, transparent);
+  box-shadow:
+    inset var(--neu-distance-sm) var(--neu-distance-sm) var(--neu-blur-sm) var(--neu-shadow),
+    inset calc(-1 * var(--neu-distance-sm)) calc(-1 * var(--neu-distance-sm)) var(--neu-blur-sm)
+      var(--neu-light);
+}
+
+/* Accessibility fallback — when a user asks for more contrast (or forced colours),
+   structure must NOT rest on the soft shadow. Restore a solid hairline on every
+   moulded surface and flatten the paired shadow to a single readable lift.
+   Palette-derived (var(--el-border)); no hue. */
+@media (prefers-contrast: more) {
+  [data-style='neumorphism'] [data-surface='card'],
+  [data-style='neumorphism'] [data-surface='popover'],
+  [data-style='neumorphism'] [data-surface='modal'],
+  [data-style='neumorphism'] [data-surface='input'],
+  [data-style='neumorphism'] [data-surface='sidebar'] {
+    border-color: var(--el-border-strong);
+    box-shadow: var(--shadow-card);
+  }
+}
+@media (forced-colors: active) {
+  [data-style='neumorphism'] [data-surface='card'],
+  [data-style='neumorphism'] [data-surface='popover'],
+  [data-style='neumorphism'] [data-surface='modal'],
+  [data-style='neumorphism'] [data-surface='input'],
+  [data-style='neumorphism'] [data-surface='sidebar'] {
+    border-color: var(--el-border-strong);
+    box-shadow: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
    The StyleVignette preview specimen carries its OWN axis attribute on a
    nested wrapper (`.style-vignette[data-style='…']`), so it cannot lean on the
