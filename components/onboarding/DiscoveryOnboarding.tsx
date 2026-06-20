@@ -2,12 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowRight, Check, Sparkles } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Pill } from '@/components/ui/Pill';
 import { DiscoveryChatRail } from './DiscoveryChatRail';
 import { TierReviewGate } from './TierReviewGate';
-import { clearPendingIdeaAction } from '@/app/(authed)/onboarding/actions';
+import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
 import { useDiscoveryChat } from '@/lib/hooks/useDiscoveryChat';
 import { activeDoc, isTiersComplete } from '@/lib/onboarding/discoveryLoop';
 import {
@@ -17,19 +16,20 @@ import {
 } from '@/lib/onboarding/directionDoc';
 
 // The authed discovery onboarding root (Subtask 7.3.5 / MOTIR-833) — the client
-// island that drives the FORWARD gated review loop: a HUB (a pre-plan progress
-// rail on the left + the chat rail on the right) that switches to a FULL-SCREEN
-// read-only review gate when a tier is up for review. Conversation is the only
-// input; Continue is navigation, not sign-off (nothing locks until generation).
+// island that drives the FORWARD gated review loop. It is a FULL-SCREEN, two-pane
+// surface (it renders OUTSIDE the app shell, via the `(onboarding)` route group):
+// the canvas roadmap on the LEFT, the chat rail on the RIGHT — nothing else. When
+// a tier is up for review the read-only gate takes the whole screen. Conversation
+// is the only input; Continue is navigation, not sign-off (nothing locks until
+// generation).
 //
-// SCOPE BOUNDARY: the polished two-pane SHELL — the rich canvas ROADMAP (stations
-// with captured findings, "you are here"), the full-screen step HOST, and the
-// post-plan epic/story canvas — is the onboarding shell, Subtask 7.3.11 /
-// MOTIR-840, which is `blocked_by` this card and COMPOSES the pieces here (the
-// chat rail + the review gate). So the left rail below is a DELIBERATELY MINIMAL
-// pre-plan progress strip that 840 supersedes with the designed canvas. The "Go
-// to plan phase" exit is Subtask 7.3.28 / MOTIR-1041 (it sits on top of this
-// card); we draw the disabled slot and leave its wiring to 1041.
+// SCOPE BOUNDARY: the RICH canvas roadmap (stations with captured findings, the
+// idea node + connectors, "you are here", the post-plan epic/story canvas) is the
+// onboarding shell, Subtask 7.3.11 / MOTIR-840, which COMPOSES the pieces here.
+// So the left pane below is a DELIBERATELY MINIMAL roadmap that 840 enriches — it
+// is the canvas slot, not an extra component. The "Go to plan phase" exit is
+// Subtask 7.3.28 / MOTIR-1041; we draw the disabled slot and leave its wiring
+// to 1041.
 
 export interface DiscoveryOnboardingProps {
   /** The idea preserved across the auth redirect (the 7.3.14 cookie), seeded as
@@ -65,7 +65,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
 
   if (reviewing) {
     return (
-      <div className="h-[calc(100dvh-var(--app-header-height,3.5rem))]">
+      <div className="h-dvh w-full">
         <TierReviewGate
           doc={reviewing}
           availableKinds={state.producedKinds}
@@ -78,42 +78,35 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     );
   }
 
+  // The hub: full-screen, two panes only — canvas roadmap (left) + chat (right).
   return (
-    <div className="flex h-[calc(100dvh-var(--app-header-height,3.5rem))] min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-(--el-border) px-4 py-3">
-        <span className="flex size-6 items-center justify-center rounded-(--radius-control) bg-(--el-accent) text-(--el-accent-text)">
-          <Sparkles className="size-3.5" aria-hidden="true" />
-        </span>
-        <span className="font-mono text-xs font-semibold uppercase tracking-wide text-(--el-text-faint)">
-          {t('stepHeader')}
-        </span>
-      </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[1fr_22rem]">
-        <ProgressRail
-          producedKinds={state.producedKinds}
-          activeKind={state.activeKind}
-          complete={complete}
-          empty={state.turns.length === 0 && state.producedKinds.length === 0}
-          onOpen={openTier}
-        />
-        <DiscoveryChatRail
-          turns={state.turns}
-          working={state.working}
-          isStreaming={state.isStreaming}
-          pendingAsk={state.pendingAsk}
-          canSkip={canSkip}
-          error={state.error}
-          onSend={send}
-          onDismissError={dismissError}
-        />
-      </div>
+    <div className="grid h-dvh w-full grid-cols-1 md:grid-cols-[1fr_22rem]">
+      <RoadmapCanvas
+        producedKinds={state.producedKinds}
+        activeKind={state.activeKind}
+        complete={complete}
+        empty={state.turns.length === 0 && state.producedKinds.length === 0}
+        onOpen={openTier}
+      />
+      <DiscoveryChatRail
+        turns={state.turns}
+        working={state.working}
+        isStreaming={state.isStreaming}
+        pendingAsk={state.pendingAsk}
+        canSkip={canSkip}
+        error={state.error}
+        onSend={send}
+        onDismissError={dismissError}
+      />
     </div>
   );
 }
 
-// The minimal pre-plan progress strip (840 replaces this with the canvas roadmap).
-function ProgressRail({
+// The LEFT pane — the pre-plan canvas roadmap, in minimal form (840 enriches it
+// with captured findings + the post-plan epic/story tree). A vertical pipeline of
+// the pre-plan stations; a produced tier is clickable to re-open its read-only
+// review.
+function RoadmapCanvas({
   producedKinds,
   activeKind,
   complete,
@@ -129,8 +122,8 @@ function ProgressRail({
   const t = useTranslations('onboarding.chat');
 
   return (
-    <section className="min-h-0 overflow-y-auto px-5 py-5" aria-label={t('progressTitle')}>
-      <header className="mb-4 flex items-baseline justify-between gap-2">
+    <section className="min-h-0 overflow-y-auto px-6 py-6" aria-label={t('progressTitle')}>
+      <header className="mb-5">
         <h2 className="font-serif text-lg font-semibold text-(--el-text)">{t('progressTitle')}</h2>
         <span className="font-mono text-xs text-(--el-text-faint)">{t('progressCaption')}</span>
       </header>
@@ -141,37 +134,52 @@ function ProgressRail({
           <p className="mt-1 text-sm text-(--el-text-muted)">{t('emptyBody')}</p>
         </div>
       ) : (
-        <ol className="flex flex-col gap-1.5">
-          {DIRECTION_DOC_ORDER.map((kind) => {
+        <ol className="flex flex-col">
+          {DIRECTION_DOC_ORDER.map((kind, i) => {
             const produced = producedKinds.includes(kind);
             const isActive = activeKind === kind;
             const meta = TIER_META[kind];
+            const last = i === DIRECTION_DOC_ORDER.length - 1;
             return (
-              <li key={kind}>
+              <li key={kind} className="flex gap-3">
+                {/* the pipeline rail: a state node + the connector line down */}
+                <div className="flex flex-col items-center">
+                  <span
+                    className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-full ${
+                      produced
+                        ? 'bg-(--el-success) text-(--el-accent-text)'
+                        : isActive
+                          ? 'bg-(--el-accent) text-(--el-accent-text)'
+                          : 'bg-(--el-muted) text-(--el-text-faint)'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {produced ? (
+                      <Check className="size-3" />
+                    ) : (
+                      <span className="size-1.5 rounded-full bg-current" />
+                    )}
+                  </span>
+                  {!last && <span className="my-1 w-px grow bg-(--el-border)" />}
+                </div>
+                {/* the station */}
                 <button
                   type="button"
                   disabled={!produced}
                   onClick={() => onOpen(kind)}
-                  className={`flex w-full items-center gap-3 rounded-(--radius-control) border px-(--spacing-control-x) py-(--spacing-control-y) text-left transition-colors ${
+                  className={`mb-2 min-w-0 flex-1 rounded-(--radius-control) border px-(--spacing-control-x) py-(--spacing-control-y) text-left transition-colors ${
                     isActive
                       ? 'border-(--el-accent) bg-(--el-surface-soft)'
                       : 'border-(--el-border-soft) bg-(--el-surface)'
                   } ${produced ? 'hover:bg-(--el-surface-soft)' : 'opacity-60'}`}
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-(--el-text)">
-                      {meta.label}
-                    </span>
-                    <span className="block truncate text-xs text-(--el-text-muted)">
-                      {meta.kicker}
-                      {meta.optional ? ` · ${t('skipLabel')}` : ''}
-                    </span>
+                  <span className="block truncate text-sm font-medium text-(--el-text)">
+                    {meta.label}
                   </span>
-                  {produced && (
-                    <Pill status="done">
-                      <Check className="size-3" aria-hidden="true" /> {/* reviewed */}
-                    </Pill>
-                  )}
+                  <span className="block truncate text-xs text-(--el-text-muted)">
+                    {meta.kicker}
+                    {meta.optional ? ` · ${t('skipLabel')}` : ''}
+                  </span>
                 </button>
               </li>
             );
