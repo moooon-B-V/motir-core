@@ -7,11 +7,11 @@ grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                    |
-| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)     | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                    |
-| **Appearance pane**       | **`appearance.mock.html`** (HTML mock)       | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route). |
+| Surface                   | Asset                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Account settings area** | **`account-settings.mock.html`** (HTML mock) | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                                                                                    |
+| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)     | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                                                                                                                                                    |
+| **Appearance pane**       | **`appearance.mock.html`** (HTML mock)       | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. **Setting \| example two-column** (8.8.14 / MOTIR-1196): axis controls LEFT, the live example RIGHT — the example mirrors the **shipped `StyleVignette`** and re-skins instantly; collapses to a single stacked column below a tablet width. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark · collapsed). **Gates 7.3.58 / MOTIR-1198** (the pane + route). |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -485,22 +485,50 @@ rail shows it as "Soon" (the 7.8.2 state).
   will. Component CSS references ONLY `--el-*` colour + element-semantic shape
   tokens (the colour + shape rules).
 
-## Layout — the page IS the preview (no separate "live preview" widget)
+## Layout — setting | example, two-column (8.8.14 / MOTIR-1196)
 
-**Key decision (Yue, 2026-06-19).** The three axes apply to **Motir itself**, and
-they apply **instantly** (`localStorage` → `<html>`, the inline-edit-no-refresh
-preference contract — like every theme toggle: Linear / GitHub / Notion all switch
-immediately, the mirror-product standard). So the moment you pick, **the whole page
-re-skins — this page included.** A separate "live preview" card would be redundant:
-it would show "Motir in this selection" while you are already looking at exactly
-that. The earlier v1 had such a preview rail; it was **removed**.
+**Reversed decision (Yue, 2026-06-20; supersedes the 7.3.57 "page IS the preview"
+call below).** The pane now pairs the **setting and the example side by side — the
+axis controls on the LEFT, the live example on the RIGHT** — replacing the earlier
+stacked arrangement (controls, then a full-width showcase band below). The original
+7.3.57 rationale was that the page itself re-skins live, so a separate preview was
+redundant ("the page IS the preview — there is NO separate live-preview widget").
+This subtask **reverses that toward an explicit setting↔example pairing** per the
+user's dogfooding directive: pairing the control with a focused example beside it
+makes the cause→effect of each pick legible without scanning the whole page, and
+reads as the familiar "settings on the left, preview on the right" pattern. The
+instant-apply model is unchanged — picking still re-skins the whole app live
+(`localStorage` → `<html>`, the inline-edit-no-refresh contract); there is still
+nothing to save. (We design to the new directive and do not re-argue the old one.)
 
-Instead the page is deliberately **design-rich** so that picking ANY axis visibly
-transforms it — the Appearance page doubles as the **design-system showcase**
-(which is the meta concept: showcase Motir's design ability on Motir itself). Single
-column, two regions:
+**The two-column grid** (`.appearance-grid`, `grid-template-columns: minmax(0, 1fr)
+minmax(330px, 380px)`, 24px gap, `align-items: start`) sits under the page-head:
 
-**1 — The controls** (one `Card`, "Theme & design"), four hairline-separated
+- **Left = the SETTING** — the existing controls `Card` ("Theme & design"), the four
+  `.axis-field`s, unchanged in content.
+- **Right = the EXAMPLE** — the live specimen (`.showcase`, in LIVE mode: no pinned
+  `data-*` axis, so it inherits the active `<html>` selection and re-skins on every
+  pick). In the narrower right column the showcase's own internal `.sc-grid` stacks
+  to a single column (`.example .sc-grid { grid-template-columns: minmax(0, 1fr) }`)
+  so the work-item card and the side stack (search / swatches / type specimen) sit
+  vertically — nothing is crushed.
+- **Sticky example** — the right column is `position: sticky; top: 20px`
+  (`.example`), so the example stays in view while the longer controls column
+  scrolls.
+- **Responsive collapse** — below a tablet width (`@media (max-width: 900px)`, and
+  the `.is-stacked` modifier the mock uses to show it statically) the grid folds to
+  one column: the example becomes `position: static` and drops **below** the
+  controls, reclaiming the roomy `minmax(0, 1fr) 248px` internal grid (the example
+  is never squeezed into an unreadable sliver). **Panel 4** demonstrates this state.
+- **Widened container** — the in-app page container goes from the single-column
+  `max-w-[42rem]` to a wider two-column container (≈ `max-w-[64rem]`) so both columns
+  read with clean gutters; in the mock the two-column grid fills the content width.
+
+For the implementation (MOTIR-1198) the right column reuses the shipped
+`<StyleVignette />` in LIVE mode (no axis props) — and the mock's example mirrors
+that exact shipped component (see "The example" below), not a stand-in.
+
+**The controls** (one `Card`, "Theme & design"), four hairline-separated
 `.axis-field`s (name + helper + control + a live registry `.axis-note`):
 
 - **Theme** — a **segmented control** (`.segmented` / `.seg`): Light (`sun`) · Dark
@@ -523,24 +551,41 @@ column, two regions:
   so the UI says **Typography** (unambiguous, matches `typography.ts`). The
   `data-type` attribute / registry id stay `type`.
 
-The card sub-copy + the page-head ("the whole app re-skins live… there's nothing to
-save") state the instant-apply, no-Save model.
+The card sub-copy + the page-head ("set the axes on the left; the live example on
+the right re-skins the instant you choose… there's nothing to save") state the
+instant-apply, no-Save model.
 
-**2 — The showcase band** (`.showcase`, eyebrow "Your look — live across Motir") — a
-real Motir slice that exercises EVERY axis, so each pick ripples visibly:
+**The example** (the right column, eyebrow "Your look — live across Motir") **is the
+SHIPPED `StyleVignette`, mirrored 1:1 — not a bespoke showcase.** This is the
+MOTIR-1196 correction: the pane renders `<StyleVignette />` (LIVE mode) as its
+preview, so the mock's example reproduces that component's **exact** shipped
+structure (`components/theme/StyleVignette.tsx`, 7.3.37 / MOTIR-1050), translated
+from its Tailwind into the same `--el-*` / shape tokens — so the asset shows the
+**real** preview the user will see, never a prettier stand-in that drifts from the
+implementation. The earlier asset redrew a different `.sc-item` + side-stack
+composition; that was the "designed-from-source, never-rendered" miss
+(`notes.html` #73). The mirrored vignette is a composed mini-surface that exercises
+every axis:
 
-- a **work-item card** (`.sc-item`) — a `square-check` kind + `PROD-128` (mono), an
-  **accent status `Pill`** ("In review"), a **serif/headline title** ("Rebuild the
-  billing flow"), body copy (body face), a **label row of tinted `Pill`s**
-  (`--el-tint-sky` / `-peach` / `-rose`, AA `--el-text-strong`), mono meta, and a
-  **primary `Button`** ("Comment") + secondary ("Assign") + ghost icon-button;
-- a **side stack** — a `Card` with a search `Input` + list rows (accent dots +
-  muted bars), the **palette-role swatch strip**, and a **type specimen** ("Ag" +
-  serif headline + body + mono meta).
+- a **nav rail** (`data-surface="sidebar"`) — accent dot, serif "Acme", an accent
+  "Board" chip, muted "Backlog" / "Reports", an avatar;
+- a **work-item card** (`Card`, `data-surface="card"`) — a `square-check` story-hue
+  icon (`--el-type-story`), a **serif title** ("Ship the billing flow"), an **accent
+  status `Pill`** ("In progress"), three status rows (success / warning / info dots +
+  labels + chips), and two progress bars (one accent);
+- a **floating modal** (`data-surface="modal"`, `--radius-modal` + `--shadow-modal` +
+  a scrim) — "New invoice", two bars, a **primary `Button`** ("Create") + ghost
+  ("Cancel");
+- a **search input** (`data-surface="input"`) and a **button row** — primary "New
+  work item" + ghost "Filter" (sliders icon).
 
-So colour shows in the accent pill/button/dots + the tinted labels; shape shows in
-the card/button/input/pill radii + elevation; type shows in the title, body, mono
-meta and the "Ag" specimen — all token-driven, all re-rendering on every pick.
+So colour shows in the accent dot / Board chip / pill / bar + the status-dot hues;
+shape shows in the nav / card / modal / input / button radii + elevation; type shows
+in the serif titles and the row/meta faces — all token-driven, all re-rendering on
+every pick. Every surface carries its `data-surface` tag, so material styles
+(glassmorphism / cybercore) frost it exactly as in the running app. In the narrow
+right column the vignette's internal `card | modal` grid stacks to one column; when
+the layout collapses (Panel 4) it reclaims the side-by-side `1.4fr 1fr`.
 
 ## The access path (mistake-#31 — DRAW the door)
 
@@ -553,21 +598,26 @@ Appearance), drawn, not just named.
 
 ## Panels
 
-- **Panel 1 — Default / factory.** Theme **System** · Style **Warm Editorial** ·
-  Palette **Motir** · Type **Motir** — the base look. Shows the four controls, the
-  showcase band, and the access path (rail Appearance active). The "empty/default"
-  state.
-- **Panel 2 — A changed state (light).** Theme **Light** · **Swiss / Minimal-Flat**
-  · **Cobalt** · **Grotesk**. The **dogfooding moment**: because the choice applies
-  to Motir _itself_, the WHOLE page — rail, cards, chips, buttons, pills AND the
-  showcase — re-skins (cool Cobalt), re-shapes (flatter, sharper Swiss geometry) and
-  re-types (Space Grotesk headlines) live. `data-style` / `data-palette` /
-  `data-type` sit on the `.stage` (whole shell), exactly as they sit on `<html>`
-  in-app.
-- **Panel 3 — Dark + a changed state.** Theme **Dark** · **Soft / Playful** ·
-  **Evergreen** · **Editorial**. Dark-mode parity across the whole area; rounded
-  Soft/Playful geometry, an emerald Evergreen palette, Fraunces display headlines.
-  Confirms light + dark both hold AA via the token layer.
+- **Panel 1 — Default / factory (two-column).** Theme **System** · Style **Warm
+  Editorial** · Palette **Motir** · Type **Motir** — the base look. Shows the
+  setting | example two-column layout (controls LEFT, live example RIGHT, the example
+  sticky) and the access path (rail Appearance active). The "empty/default" state.
+- **Panel 2 — A changed state (light, two-column).** Theme **Light** · **Swiss /
+  Minimal-Flat** · **Cobalt** · **Grotesk**. The **dogfooding moment**: because the
+  choice applies to Motir _itself_, the WHOLE page — rail, cards, chips, buttons,
+  pills AND the example — re-skins (cool Cobalt), re-shapes (flatter, sharper Swiss
+  geometry) and re-types (Space Grotesk headlines) live. `data-style` /
+  `data-palette` / `data-type` sit on the `.stage` (whole shell), exactly as they
+  sit on `<html>` in-app.
+- **Panel 3 — Dark + a changed state (two-column).** Theme **Dark** · **Soft /
+  Playful** · **Evergreen** · **Editorial**. Dark-mode parity across the whole area;
+  rounded Soft/Playful geometry, an emerald Evergreen palette, Fraunces display
+  headlines. Confirms light + dark both hold AA via the token layer.
+- **Panel 4 — Responsive collapse (single column).** The default look at a tablet /
+  narrow-window content width (`.panel.narrow` + `.appearance-grid.is-stacked`): the
+  grid folds to one column, the controls first and the **live example below** them,
+  reclaiming the roomy internal grid. Demonstrates the breakpoint behaviour the
+  `@media (max-width: 900px)` rule drives in the running app.
 
 ## Token / a11y rules honoured
 
@@ -585,21 +635,27 @@ Appearance), drawn, not just named.
   row is a `role="radiogroup"` with an `aria-label`. Every icon-only `<svg use>`
   carries `viewBox="0 0 24 24"` (no clipping). The "Soon" → active flip is a real
   navigable row, not a disabled one.
+- **Layout vs. shape** — the two-column `.appearance-grid` (track sizing, the 24px
+  gap), the `.example` sticky offset (`top: 20px`), and the responsive breakpoint are
+  **layout-only** spacing/positioning between siblings, which the shape rule
+  explicitly allows to stay raw (only a surface's OWN box radius/padding/height is
+  shape, and those still route through the element-semantic tokens above). The grid
+  changes where the controls and example sit; it does not introduce a Tier-0 token.
 - **Dark mode** confirmed (Panel 3): rail, cards, chips, segmented, the showcase
   card / pills / buttons / type specimen and swatches all flip via the token layer
   and stay AA.
 
 ## Primitives composed (no hand-rolling)
 
-| Element                          | Source                                                                                |
-| -------------------------------- | ------------------------------------------------------------------------------------- |
-| area shell (rail + content)      | `account-settings.mock.html` (7.8.2) — `Card` / settings-row / nav grammar            |
-| axis chips (`.pick`)             | the onboarding design-wizard chip language (7.3.44)                                   |
-| showcase card / type / swatches  | the onboarding live specimens (`.vg-*` / `.type-spec` / `.pal-swatches`, 7.3.37)      |
-| status / label pills             | `components/ui/Pill.tsx` (accent + tinted tones, AA `--el-text-strong`)               |
-| buttons + search input           | `components/ui/Button.tsx` · the `Input` / `Combobox` trigger grammar                 |
-| Theme segmented control          | a token-driven segmented toggle (the `ThemeToggle` pattern) — the one new composition |
-| option sets (style/palette/type) | the shipped registries `lib/theme/{styles,palettes,typography}.ts`                    |
+| Element                          | Source                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------- |
+| area shell (rail + content)      | `account-settings.mock.html` (7.8.2) — `Card` / settings-row / nav grammar               |
+| axis chips (`.pick`)             | the onboarding design-wizard chip language (7.3.44)                                      |
+| live example (right column)      | the **shipped** `components/theme/StyleVignette.tsx` (7.3.37 / MOTIR-1050), mirrored 1:1 |
+| status / label pills             | `components/ui/Pill.tsx` (accent + tinted tones, AA `--el-text-strong`)                  |
+| buttons + search input           | `components/ui/Button.tsx` · the `Input` / `Combobox` trigger grammar                    |
+| Theme segmented control          | a token-driven segmented toggle (the `ThemeToggle` pattern) — the one new composition    |
+| option sets (style/palette/type) | the shipped registries `lib/theme/{styles,palettes,typography}.ts`                       |
 
 The only new composition is the **Theme segmented control**; everything else reuses
 the area shell, the onboarding picker chips + specimens, and the shipped `Pill` /
@@ -616,3 +672,13 @@ the registries + the showcase slice, and flipping the `accountSettingsNav`
 `appearance` entry from a placeholder to a real route (which keeps the
 route↔registry totality test green by construction). No new colour/shape primitive
 is required.
+
+**Update (8.8.14 / MOTIR-1196) — two-column layout, implemented by MOTIR-1198.** The
+setting | example two-column layout above (controls left, sticky live example right,
+responsive single-column collapse below the tablet breakpoint, widened page
+container) is a **layout-only** change to the shipped `AppearanceCard` /
+`appearance/page.tsx`: wrap the controls `Card` + the `<StyleVignette />` (kept in
+LIVE mode) in the two-column grid, make the example column sticky, collapse it at the
+breakpoint, and widen the page container from `max-w-[42rem]`. No axis content, no
+registry, and no colour/shape token changes — `StyleVignette` and the four pickers
+are reused as-is.
