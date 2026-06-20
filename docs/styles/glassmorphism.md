@@ -64,13 +64,23 @@ the block (the disjoint-axis acceptance criterion; enforced by
 26px`, `--spacing-control-x/y: 12/7`, `--height-control: 38px`.
 - **Motion:** `--transition-duration: 220ms` (`--transition-slow: 320ms`) and a
   light `--active-scale: 0.98` — smooth, never springy or snappy.
-- **Material scalars (palette-agnostic):** `--glass-blur: 16px`,
-  `--glass-blur-strong: 26px` (modals), the surface/chrome/input/border opacity
-  fractions (`--glass-surface-alpha: 64%`, `--glass-modal-alpha: 82%`,
-  `--glass-chrome-alpha: 62%`, `--glass-input-alpha: 58%`,
-  `--glass-border-alpha: 58%`), and `--glass-wash: 15%` (gradient-canvas tint
-  strength). These carry no hue, so they live here; the material layer consumes
-  them.
+- **Material scalars (palette-agnostic):** `--glass-blur: 18px`,
+  `--glass-blur-strong: 30px` (modals), the surface/chrome/input/border opacity
+  fractions — kept **low so the canvas shows THROUGH** the glass
+  (`--glass-surface-alpha: 50%`, `--glass-modal-alpha: 70%`,
+  `--glass-chrome-alpha: 52%`, `--glass-input-alpha: 44%`,
+  `--glass-border-alpha: 72%` the lit rim), `--glass-wash: 42%` (a **vibrant**
+  gradient-canvas tint — glass needs real colour behind it to refract; a
+  near-white canvas reads "flat with a little blur"), `--glass-saturate: 180%`
+  (punchier refraction), and the white specular `--glass-sheen` / `--glass-rim`
+  (light is palette-agnostic). These carry no hue, so they live here; the
+  material layer consumes them.
+
+**The three things that make it read as glass (not a flat blurred box):** a
+**vibrant canvas** to refract (high `--glass-wash`), **genuine translucency**
+(low surface alpha, so the colour shows through), and a **lit edge** — the
+`linear-gradient` sheen raking across the panel + the inset `--glass-rim`
+highlight + a soft drop shadow so the sheet floats.
 
 ## The material layer (palette-derived)
 

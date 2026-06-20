@@ -453,14 +453,23 @@
      Consumed only by the [data-surface] material layer below; they are the
      "glass recipe": how far to blur, and how much of the palette surface to
      keep opaque (the rest lets the blurred gradient show through). ── */
-  --glass-blur: 16px; /* frosted-panel backdrop blur */
-  --glass-blur-strong: 26px; /* modal / overlay blur — more separation */
-  --glass-surface-alpha: 64%; /* opacity of a frosted card / popover */
-  --glass-modal-alpha: 82%; /* modals stay more opaque for body-text AA */
-  --glass-chrome-alpha: 62%; /* sidebar / chrome translucency */
-  --glass-input-alpha: 58%; /* form-control fill translucency */
-  --glass-border-alpha: 58%; /* light 1px hairline over the blur */
-  --glass-wash: 15%; /* gradient-canvas tint strength over the page bg */
+  --glass-blur: 18px; /* frosted-panel backdrop blur */
+  --glass-blur-strong: 30px; /* modal / overlay blur — more separation */
+  /* Lower opacity than before: real glass is TRANSLUCENT, so the vibrant canvas
+     shows THROUGH the panel (the old 64% read as near-solid white = "flat with a
+     little blur"). */
+  --glass-surface-alpha: 50%; /* opacity of a frosted card / popover */
+  --glass-modal-alpha: 70%; /* modals stay more opaque for body-text AA */
+  --glass-chrome-alpha: 52%; /* sidebar / chrome translucency */
+  --glass-input-alpha: 44%; /* form-control fill translucency */
+  --glass-border-alpha: 72%; /* the glass RIM — a more visible lit edge */
+  --glass-wash: 42%; /* MUCH stronger canvas tint — glass needs vibrant colour
+                        behind it to refract; a near-white canvas looks flat */
+  --glass-saturate: 180%; /* punchier refraction (was a fixed 150%) */
+  /* The specular SHEEN + RIM light — white, palette-agnostic (glass catches
+     light regardless of hue); used by the material layer, never as a fill. */
+  --glass-sheen: rgba(255, 255, 255, 0.22);
+  --glass-rim: rgba(255, 255, 255, 0.55);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -484,19 +493,24 @@
 [data-style='glassmorphism'] body {
   background-image:
     radial-gradient(
-      62% 70% at 12% -5%,
+      85% 80% at 6% -12%,
       color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-      transparent 70%
+      transparent 62%
     ),
     radial-gradient(
-      58% 65% at 105% 6%,
+      80% 75% at 110% 4%,
       color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
-      transparent 68%
+      transparent 60%
     ),
     radial-gradient(
-      72% 78% at 50% 112%,
+      95% 90% at 50% 120%,
       color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
-      transparent 72%
+      transparent 62%
+    ),
+    radial-gradient(
+      60% 60% at 85% 95%,
+      color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+      transparent 60%
     );
   background-attachment: fixed;
 }
@@ -504,32 +518,46 @@
 /* Frosted container surfaces — cards & popovers float as translucent sheets. */
 [data-style='glassmorphism'] [data-surface='card'],
 [data-style='glassmorphism'] [data-surface='popover'] {
+  /* The translucent fill lets the vibrant canvas through; the linear sheen is
+     the light raking across the glass (top-left → fading), the inset RIM is the
+     lit glass edge, and the soft drop makes the sheet FLOAT. White light is
+     palette-agnostic; the colour still comes only from the palette-derived
+     fill/border, so the axes stay disjoint. */
   background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-surface-alpha), transparent);
+  background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
   border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-rim),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 8px 32px -8px rgba(15, 15, 15, 0.18);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* Modal panel — a touch more opaque + a stronger blur (body-text AA + lift). */
 [data-style='glassmorphism'] [data-surface='modal'] {
   background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-modal-alpha), transparent);
+  background-image: linear-gradient(150deg, var(--glass-sheen), transparent 55%);
   border-color: color-mix(in srgb, var(--el-border) var(--glass-border-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur-strong)) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-rim),
+    0 28px 70px -16px rgba(15, 15, 15, 0.34);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
 }
 
 /* The sidebar rail — frosted chrome over the canvas. */
 [data-style='glassmorphism'] [data-surface='sidebar'] {
   background-color: color-mix(in srgb, var(--el-sidebar-bg) var(--glass-chrome-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* Form controls — a translucent fill so inputs read as glass too. */
 [data-style='glassmorphism'] [data-surface='input'] {
   background-color: color-mix(in srgb, var(--el-page-bg) var(--glass-input-alpha), transparent);
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
