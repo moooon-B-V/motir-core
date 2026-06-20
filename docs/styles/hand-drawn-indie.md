@@ -99,38 +99,34 @@ from two pieces:
   active**. The filter is `feTurbulence` (fractal noise) → `feDisplacementMap`,
   which warps whatever it is applied to.
 
-- **The pseudo-border rule** in `app/globals.css`:
+- **The pseudo-line rules** in `app/globals.css` (see the section there). The
+  wavy ink line is drawn on a `::after` **overlay**, never on the surface itself,
+  so the displacement warps only the OUTLINE — **the surface's text and content
+  stay perfectly crisp** (filtering the whole element smears the text, which is
+  why this style does NOT filter surfaces). The real border is KEPT (2px) as a
+  structural fallback. The overlay ink is **palette-derived**
+  (`var(--el-border-strong)`), so the colour axis stays disjoint and the line
+  adapts to dark mode; as a descendant rule (not a bare `[data-style] { … }` token
+  block) it doesn't trip the disjoint-token guard.
 
-  ```css
-  [data-style='hand-drawn-indie'] .border {
-    position: relative;
-    border-width: 2px;
-  }
-  [data-style='hand-drawn-indie'] .border::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    pointer-events: none;
-    border: 2px solid var(--el-border-strong);
-    border-radius: inherit;
-    filter: url(#hd-rough);
-  }
-  ```
+  **Two line kinds are roughened, so the frame and the inner grid match.** A first
+  pass roughened only the full-box `.border` — which left a _straight_ grid inside
+  a _wavy_ card (a visible mismatch: rough table frame, ruler-straight row
+  dividers). So the single-side dividers (`.border-b` / `.border-t` — table rows,
+  section rules) get the same wavy `::after`, scoped **inside `[data-surface]`
+  panels** to bound the count to real surfaces (whose rows are virtualised, so
+  only ~viewport-many overlays ever render). `:not(.border)` avoids double-handling
+  and `:not(:last-child)` mirrors the common `last:border-b-0` strip.
 
-  The wavy ink line is drawn on a `::after` **overlay**, not on the surface
-  itself, so the displacement warps only the outline — **the surface's text and
-  content stay perfectly crisp** (filtering the whole element would distort the
-  text). The real `.border` is KEPT (thickened to 2px) as the structural
-  fallback: if the filter cannot render, or an `overflow: hidden` ancestor clips
-  the overlay, the straight 2px border still frames the surface. The overlay ink
-  is **palette-derived** (`var(--el-border-strong)`), so the colour axis stays
-  disjoint and the line adapts to dark mode; because it is a descendant rule (not
-  a bare `[data-style] { … }` token block) it does not trip the disjoint-token
-  guard, and it satisfies the palette-derivation material rule.
-
-  Coverage is the full `.border` utility, so every framed surface — cards,
-  inputs, modals, popovers, pills, outlined buttons — gets the rough line; FILLED
-  buttons (no border) keep just the wonky radius.
+- **Why the overlay needs care with positioning.** The `::after` needs a
+  positioned host, so static surfaces get `position: relative`. But a centred
+  modal / command palette is `fixed .border` and a sticky header is `sticky` —
+  each is ALREADY a containing block, and overriding its `position` would break
+  it. (The first pass set `position: relative` on every `.border`, which beat the
+  modal's `fixed` on specificity and knocked the create / command-search modals
+  off-centre.) So the position override is excluded from
+  `:not(.fixed):not(.absolute):not(.sticky)` — those keep their own positioning
+  and still receive the rough overlay (they're already containing blocks).
 
 ## Typography — via the type axis, not this block
 

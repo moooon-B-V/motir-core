@@ -1378,20 +1378,31 @@ and
   --active-scale: 0.97;
 }
 
-/* The ROUGH, hand-inked edge. Every framed surface (`.border`) gets a wavy ink
-   outline drawn on a `::after` overlay and warped by the `#hd-rough` turbulence
-   filter — the move that makes the lines look DRAWN, not machine-straight. The
-   pseudo-element is positioned over the surface and `pointer-events: none`, so
-   only the outline is displaced; the surface's own text/content is untouched
-   (crisp). The real `.border` is KEPT (thickened) as the structural fallback if
-   the filter can't render, and the overlay sits on top — where the wave pulls
-   in, a sliver of the straight border shows through, reading as a drawn-twice
-   sketch. The overlay ink is palette-DERIVED (var(--el-border-strong)) so the
-   colour axis stays disjoint and it adapts to dark mode (it is a descendant
-   rule, not a bare [data-style] token block). */
+/* The ROUGH, hand-inked edge. A wavy ink line is drawn on a `::after` overlay
+   warped by the `#hd-rough` turbulence filter — the move that makes lines look
+   DRAWN, not machine-straight. The overlay is `pointer-events: none` and only it
+   is filtered, so the surface's own text/content stays CRISP (filtering the
+   element itself would smear the text). The real border is KEPT (2px) as the
+   structural fallback. The ink is palette-DERIVED (var(--el-border-strong)), so
+   the colour axis stays disjoint and it adapts to dark mode.
+
+   The overlay needs a positioned host. We add `position: relative` ONLY to
+   STATIC elements: a `fixed`/`absolute` element (a centered modal / command
+   palette — both `.fixed .border`) or a `sticky` header is ALREADY a containing
+   block, so overriding its position would break it (overriding `.fixed` is what
+   knocked the modals off-centre). Those positioned elements still get the `::after`
+   overlay (they're already a containing block), just not the position override.
+
+   Two line kinds are roughened so the frame AND the inner grid match (no straight
+   dividers inside a wavy card): the full-box `.border`, and the single-side
+   dividers `.border-b` / `.border-t` (table rows, section rules) — the latter
+   scoped INSIDE `[data-surface]` panels to bound the count to real surfaces (and
+   their rows are virtualised, so only ~viewport-many overlays ever render). */
 [data-style='hand-drawn-indie'] .border {
-  position: relative;
   border-width: 2px;
+}
+[data-style='hand-drawn-indie'] .border:not(.fixed):not(.absolute):not(.sticky) {
+  position: relative;
 }
 [data-style='hand-drawn-indie'] .border::after {
   content: '';
@@ -1400,6 +1411,38 @@ and
   pointer-events: none;
   border: 2px solid var(--el-border-strong);
   border-radius: inherit;
+  filter: url(#hd-rough);
+}
+
+/* Internal grid dividers — make the inner rules as rough as the frame. Scoped
+   inside framed surfaces; `:not(.border)` so a full-box element isn't handled
+   twice; `:not(:last-child)` mirrors the common `last:border-b-0` strip so the
+   final row gets no phantom line. */
+[data-style='hand-drawn-indie']
+  [data-surface]
+  :is(.border-b, .border-t):not(.border):not(.fixed):not(.absolute):not(.sticky) {
+  position: relative;
+}
+[data-style='hand-drawn-indie'] [data-surface] .border-b:not(.border):not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 0;
+  pointer-events: none;
+  border-bottom: 2px solid var(--el-border-strong);
+  filter: url(#hd-rough);
+}
+[data-style='hand-drawn-indie'] [data-surface] .border-t:not(.border)::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 0;
+  pointer-events: none;
+  border-top: 2px solid var(--el-border-strong);
   filter: url(#hd-rough);
 }
 
