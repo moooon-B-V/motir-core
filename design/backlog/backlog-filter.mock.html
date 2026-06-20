@@ -1,0 +1,2749 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Backlog filtering — wire the disabled backlog [Filter] seam (Story 8.8 · 8.8.16)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the BACKLOG-FILTER surface — Subtask 8.8.16.
+
+      Wires the backlog page-head's permanently-DISABLED [Filter] seam
+      (app/(authed)/backlog/page.tsx:83-90 — a disabled Button, leftIcon
+      <Filter/>, title filterComingSoon, no onClick, comment "Filter is a
+      disabled seam here — Epic 6 wires backlog filtering") into a working
+      backlog filter. Epic 6 only ever wired the BOARD filter (Story 6.15 →
+      design/boards/board-filter.mock.html); the backlog's equivalent was
+      deferred to Epic 6 (design/backlog/design-notes.md "Out of scope") and
+      never scheduled — an orphaned deferral. BOTH mirror products ship a
+      working backlog filter (Jira Scrum backlog quick-filter bar + saved JQL;
+      Linear Backlog = a fully filterable view, single Filter button, URL-
+      addressable, persistent, saveable Custom View), so the answer is YES,
+      wire it — copy Linear's model, which is exactly what Motir's shipped
+      /issues + board filter already are.
+
+      REUSE, don't redraw: the filter UI is the SAME quick-filter popover
+      (IssueFilterBar — text · Kind · WORK TYPE · Status · Assignee), the SAME
+      [Advanced] builder trigger (IssueAdvancedFilter / FilterConditionBuilder),
+      and the SAME [Saved] dropdown picker + applied name-chip
+      (SavedFilterDropdown / IssueAppliedFilterBar) the /issues navigator and
+      the board already ship. This mock shows them ANCHORED ON THE BACKLOG
+      page-head toolbar — it is CHROME over the reused backlog, exactly like
+      board-filter.mock.html is chrome over the board: it does NOT redraw the
+      sprint-planning containers / ranked rows / drag / multi-select / seams.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape
+      tokens), and every surface references --el-* (colour) + element-semantic
+      shape tokens (radius/spacing/sizing) — NEVER Tier-0 --color-* or raw
+      rounded-*/p-*/h-*.
+
+      The backlog re-projects server-side via the 8.8.18 read (a compiled 6.1
+      predicate threaded into getBacklog/getSprintIssues), so the sprint
+      containers AND the backlog region show only matching rows; a container
+      with no match shows its dashed empty placeholder. State is URL-driven
+      (?filter= AST + saved-filter id) — shareable + reload-safe — and the
+      "View all issues" link carries the active filter into /issues (the Jira
+      "View in Issue Navigator with filter applied" behaviour the backlog
+      design-notes already anticipated). The backlog filter AND-composes WITH a
+      sprint's scope; it narrows WITHIN, never widens.
+
+      Covers (multi-panel — review EACH, not just the first):
+        (0) CLOSED — the enabled Filter affordance in the backlog toolbar beside
+            [View all issues] + [Advanced] + [Saved] + [New issue]; full sprint
+            containers + backlog region, full counts.
+        (1) OPEN — the quick Filter popover (IssueFilterBar) anchored on the
+            backlog toolbar: text · Kind · Work type · Status · Assignee + Clear.
+        (2) OPEN — the [Saved] dropdown picker (SavedFilterDropdown).
+        (3) ACTIVE — the applied-filter summary row (name-chip + condition chips
+            + match count + Clear); the [Filter] trigger carries the active-count
+            badge; "View all issues" carries ?filter=; the sprint containers AND
+            the backlog region RE-PROJECTED to matching rows (an all-filtered-out
+            sprint shows its empty placeholder).
+        (4) FILTERED-EMPTY — no item in any region matches → an EmptyState
+            distinct from the 4.2 brand-new-backlog empty (this one offers
+            "Clear filter"); the summary + active toolbar stay.
+        (5) LOADING — the backlog skeleton while the filtered read is in flight.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-accent-orange: #dd5b00;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-icon-btn: 4px;
+        --spacing-tooltip-x: 10px;
+        --spacing-tooltip-y: 7px;
+        --spacing-btn-x-sm: 14px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        /* Work-type hues (the 2.7.1 taxonomy — WORK_ITEM_TYPE_META) — the
+           AI-native execution field, distinct from the issue KIND above. */
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-accent-orange: #f0742a;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1240px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 880px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 40px auto 10px;
+        padding-left: 2px;
+        max-width: 1240px;
+        line-height: 1.6;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      /* Popover/dropdown panels: the open Filter popover / Saved menu floats
+         BELOW the toolbar, so the stage must NOT clip it. Overflow visible +
+         a min-height so the floating surface has room within the panel. */
+      .stage.is-pop {
+        overflow: visible;
+      }
+      .stage.is-pop .work {
+        min-height: 560px;
+      }
+
+      /* ── Page shell — header + toolbar (mirrors app/(authed)/backlog/page.tsx) ── */
+      .work {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 24px;
+        background: var(--el-page-bg);
+      }
+      .page-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head .sub {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+      }
+      /* Toolbar button — the shipped backlog/board ToolbarButton shape (h-control) */
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        text-decoration: none;
+        position: relative;
+      }
+      .tb-btn .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn .ic svg {
+        width: 100%;
+        height: 100%;
+      }
+      .tb-btn .caret {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .tb-btn.primary {
+        background: var(--el-accent);
+        border-color: transparent;
+        color: var(--el-accent-text);
+      }
+      .tb-btn.primary .ic {
+        color: var(--el-accent-text);
+      }
+      /* Filter / Advanced / Saved trigger, ACTIVE — a faint accent ring + accent
+         icon while a filter applies, plus the count badge. AA: text stays
+         --el-text on the lavender tint. (Identical to the /issues + board toolbar.) */
+      .tb-btn.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .tb-btn.is-active .ic {
+        color: var(--el-accent);
+      }
+      /* active-filter COUNT badge — the number of active filter values */
+      .tb-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Quick-filter popover — Popover anchored under the [Filter] trigger ── */
+      /* IDENTICAL chrome to the /issues IssueFilterBar popover (filter.mock.html)
+         and the board-filter popover: card radius, hairline border, elevated
+         shadow, scrolling body. */
+      .filter-pop {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .fp-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .fp-head .fp-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .fp-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .fp-clear:hover {
+        text-decoration: underline;
+      }
+      .fp-clear .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .fp-body {
+        /* The popover SCROLLS at a fixed cap — it does NOT grow to show every
+           facet at once. Text + Kind + the start of the Work type facet are in
+           view; Status / Assignee (and the rest of Work type) are below the fold. */
+        max-height: 440px;
+        overflow-y: auto;
+        padding: 6px;
+      }
+      .fp-search {
+        position: relative;
+        margin: 6px 4px 8px;
+      }
+      .fp-search .si {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fp-search input {
+        width: 100%;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 32px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .fp-search input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .fp-search input:focus-visible {
+        outline: 2px solid var(--focus-ring-color);
+        outline-offset: 1px;
+      }
+      .fp-group {
+        padding: 6px 0;
+      }
+      .fp-group + .fp-group {
+        border-top: 1px solid var(--el-border);
+      }
+      .fp-group-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 4px 8px;
+      }
+      .fp-subsearch {
+        position: relative;
+        margin: 2px 4px 4px;
+      }
+      .fp-subsearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .fp-subsearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .fp-subsearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+
+      /* Option row — the Combobox option vocabulary, multi-select */
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .opt:hover,
+      .opt.is-active {
+        background: var(--el-surface);
+      }
+      .opt[aria-selected='true'] {
+        background: var(--el-surface);
+      }
+      .opt .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .opt .sec {
+        flex: none;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .opt .sec .vg {
+        width: 12px;
+        height: 12px;
+        vertical-align: -1.5px;
+      }
+      .opt .check {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-accent);
+        opacity: 0;
+      }
+      .opt[aria-selected='true'] .check {
+        opacity: 1;
+      }
+      .opt .og {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* Leading glyphs */
+      .type-icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .type-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .t-epic {
+        color: var(--el-type-epic);
+      }
+      .t-story {
+        color: var(--el-type-story);
+      }
+      .t-task {
+        color: var(--el-type-task);
+      }
+      .t-bug {
+        color: var(--el-type-bug);
+      }
+      .t-subtask {
+        color: var(--el-type-subtask);
+      }
+      /* Work-type glyph hues (WORK_ITEM_TYPE_META) */
+      .wt-code {
+        color: var(--el-type-code);
+      }
+      .wt-design {
+        color: var(--el-type-design);
+      }
+      .wt-test {
+        color: var(--el-type-test);
+      }
+      .wt-content {
+        color: var(--el-type-content);
+      }
+      .wt-research {
+        color: var(--el-type-research);
+      }
+      .wt-review {
+        color: var(--el-type-review);
+      }
+      .wt-deploy {
+        color: var(--el-type-deploy);
+      }
+      .wt-decision {
+        color: var(--el-type-decision);
+      }
+      .wt-manual {
+        color: var(--el-type-manual);
+      }
+      .wt-chore {
+        color: var(--el-type-chore);
+      }
+      .wt-untyped {
+        color: var(--el-text-faint);
+      }
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 9999px;
+        border: 1px solid var(--el-border);
+      }
+      .sd-todo {
+        background: var(--el-text-faint);
+      }
+      .sd-inprogress {
+        background: var(--el-info);
+      }
+      .sd-review {
+        background: var(--el-accent);
+      }
+      .sd-done {
+        background: var(--el-success);
+      }
+      .avatar {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .avatar.unassigned {
+        background: transparent;
+        border: 1px dashed var(--el-border);
+        color: var(--el-text-muted);
+      }
+      .avatar.unassigned svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* ── [Saved] dropdown — the SavedFilterDropdown menu (saved-filters.mock) ── */
+      .menu {
+        position: absolute;
+        top: calc(var(--height-control) + 6px);
+        left: 0;
+        z-index: 20;
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu .msearch {
+        position: relative;
+        margin: 2px 2px 4px;
+      }
+      .menu .msearch .si {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+        pointer-events: none;
+      }
+      .menu .msearch input {
+        width: 100%;
+        height: 32px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 10px 0 30px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .menu .msearch input::placeholder {
+        color: var(--el-text-muted);
+      }
+      .menu .mgroup {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 6px 8px 2px;
+      }
+      .star-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: none;
+        color: var(--el-text-faint);
+        cursor: pointer;
+        flex: none;
+      }
+      .star-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .star-btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .star-btn.starred {
+        color: var(--el-warning);
+      }
+      .star-btn.starred svg {
+        fill: currentColor;
+      }
+      .menu .mfoot {
+        border-top: 1px solid var(--el-border);
+        margin-top: 4px;
+        padding: 8px 10px 6px;
+      }
+      .link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 4px;
+        margin: -2px -4px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .link-btn:hover {
+        text-decoration: underline;
+      }
+      .link-btn .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+
+      /* ── Applied-filter summary row (the 6.1.3 grammar) + the NAME CHIP ────── */
+      /* On the backlog this row sits between the toolbar and the regions — the
+         IssueAppliedFilterBar, reused verbatim. */
+      .summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+      .sum-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .sum-chip strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .name-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid transparent;
+        background: var(--el-tint-lavender);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .name-chip .ng {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-accent);
+      }
+      .name-chip .vg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .sum-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: none;
+        border: 0;
+        padding: 2px 6px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-link);
+        cursor: pointer;
+      }
+      .sum-clear:hover {
+        text-decoration: underline;
+      }
+      .sum-clear .ic {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .sum-count {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+        margin-left: 2px;
+      }
+
+      /* ── The two stacked regions (sprint containers + backlog) ──────────── */
+      .regions {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        max-width: 1180px;
+      }
+      .region {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .region-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .chev {
+        width: 18px;
+        height: 18px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .region-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        letter-spacing: 0.01em;
+      }
+      .region-dates {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .region-dates svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+      }
+      .count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      /* a filtered count badge — accent tint so "2 of 5" reads as filtered */
+      .count-badge.filtered {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .region-head .spacer {
+        flex: 1;
+      }
+
+      /* ── The SEAM slots (reserved, filled by later stories — review tags) ── */
+      .seam {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface-soft);
+        white-space: nowrap;
+      }
+      .seam svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        border: 0;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .icon-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .icon-btn:hover {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .btn-sec {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-sec svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The issue row — reuses the work-items list-row vocabulary ──────── */
+      .rows {
+        display: flex;
+        flex-direction: column;
+      }
+      .brow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        background: var(--el-page-bg);
+        position: relative;
+      }
+      .brow + .brow {
+        border-top: 1px solid var(--el-border);
+      }
+      .grip {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+        flex: none;
+        cursor: grab;
+        opacity: 0.55;
+      }
+      .row-check {
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-control);
+        border: 1.5px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        flex: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+        padding: 0;
+      }
+      .brow-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .brow-title {
+        font-size: 13.5px;
+        color: var(--el-text);
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .epic-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 168px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .epic-chip .ec-ic {
+        width: 11px;
+        height: 11px;
+        color: var(--el-type-epic);
+        flex: none;
+      }
+      .epic-chip .ec-key {
+        font-family: var(--font-mono);
+      }
+      .epic-chip .ec-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* the per-row work-type glyph (the facet the user can now filter on) */
+      .wt-glyph {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .wt-glyph svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      /* Pill (components/ui/Pill.tsx): hue in tint background, strong text */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        flex: none;
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .pill--todo {
+        background: var(--el-tint-lavender);
+      }
+      .pill--todo .dot {
+        background: var(--el-text-faint);
+      }
+      .pill--prog {
+        background: var(--el-tint-sky);
+      }
+      .pill--prog .dot {
+        background: var(--el-info);
+      }
+      .pill--done {
+        background: var(--el-tint-mint);
+      }
+      .pill--done .dot {
+        background: var(--el-success);
+      }
+
+      /* inline "+ Create issue" row + empty sprint placeholder ───────────── */
+      .create-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 14px;
+        color: var(--el-link);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border-top: 1px solid var(--el-border);
+      }
+      .create-row svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .sprint-empty {
+        margin: 12px 14px;
+        padding: 16px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Filtered-EMPTY backlog — the EmptyState (distinct from new-backlog) ── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 56px 24px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .empty .ic-wrap {
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+        margin-bottom: 14px;
+      }
+      .empty .ic-wrap svg {
+        width: 24px;
+        height: 24px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 400px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+
+      /* ── Loading skeleton (the 3.2.2/4.2 scaffold idiom) ─────────────────── */
+      .sk {
+        background: linear-gradient(
+          90deg,
+          var(--el-muted) 0%,
+          var(--el-surface) 50%,
+          var(--el-muted) 100%
+        );
+        border-radius: var(--radius-badge);
+        height: 12px;
+      }
+      .sk-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 14px;
+      }
+      .sk-row + .sk-row {
+        border-top: 1px solid var(--el-border);
+      }
+      .sk-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 9999px;
+        flex: none;
+        background: var(--el-muted);
+      }
+
+      .legend {
+        max-width: 1180px;
+        margin: 12px auto 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.7;
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Backlog filtering — wire the disabled backlog [Filter] seam</h1>
+        <p>
+          Subtask 8.8.16 · CHROME over the reused backlog — the enabled Filter affordance + the
+          reused IssueFilterBar / [Advanced] / SavedFilterDropdown anchored on the backlog page-head
+          toolbar, the applied-filter summary row, the filtered + filtered-empty states, coexistence
+          with the sprint-planning containers, and "View all issues" carrying the active filter into
+          /issues. Mirrors design/boards/board-filter.mock.html (same primitives), backlog-scoped.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ═══════════ Icon symbol defs (lucide, stroke=currentColor) ═══════════ -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-task"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9.344" />
+          <path d="m9 11 3 3L22 4" />
+        </g>
+        <g
+          id="i-bug"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m8 2 1.88 1.88" />
+          <path d="M14.12 3.88 16 2" />
+          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+          <path d="M12 20v-9" />
+          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+          <path d="M6 13H2" />
+          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+          <path d="M22 13h-4" />
+          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+        </g>
+        <g
+          id="i-subtask"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+          <path d="M13 6h8" />
+          <path d="M13 12h8" />
+          <path d="M13 18h8" />
+        </g>
+        <!-- the WORK-TYPE glyphs used in this mock (WORK_ITEM_TYPE_META) + untyped -->
+        <g
+          id="wt-code"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
+        </g>
+        <g
+          id="wt-design"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+          <path d="m15 5 4 4" />
+        </g>
+        <g
+          id="wt-test"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"
+          />
+          <path d="M6.453 15h11.094M8.5 2h7" />
+        </g>
+        <g
+          id="wt-content"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8M10 9H8" />
+        </g>
+        <g
+          id="wt-research"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6M10 22h4" />
+        </g>
+        <g
+          id="wt-review"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="8" y="2" width="8" height="4" rx="1" />
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+          <path d="m9 14 2 2 4-4" />
+        </g>
+        <g
+          id="wt-deploy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
+          />
+          <path
+            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"
+          />
+          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+        </g>
+        <g
+          id="wt-decision"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1zM2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"
+          />
+          <path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
+        </g>
+        <g
+          id="wt-manual"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2" />
+          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8" />
+          <path
+            d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          />
+        </g>
+        <g
+          id="wt-chore"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+          />
+        </g>
+        <g
+          id="wt-untyped"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-dasharray="3 3"
+        >
+          <circle cx="12" cy="12" r="9" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <g
+          id="i-hash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="4" x2="20" y1="9" y2="9" />
+          <line x1="4" x2="20" y1="15" y2="15" />
+          <line x1="10" x2="8" y1="3" y2="21" />
+          <line x1="16" x2="14" y1="3" y2="21" />
+        </g>
+        <g
+          id="i-gauge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </g>
+        <g
+          id="i-play"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="6 3 20 12 6 21 6 3" />
+        </g>
+        <g
+          id="i-more"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-grip"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="9" cy="6" r="1" />
+          <circle cx="9" cy="12" r="1" />
+          <circle cx="9" cy="18" r="1" />
+          <circle cx="15" cy="6" r="1" />
+          <circle cx="15" cy="12" r="1" />
+          <circle cx="15" cy="18" r="1" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-funnel-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M13.354 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l1.218-1.348"
+          />
+          <path d="M16 6h6" />
+          <path d="M19 3v6" />
+        </g>
+        <g
+          id="i-bookmark"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+        </g>
+        <g
+          id="i-filter"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-search-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m13.5 8.5-5 5" />
+          <path d="m8.5 8.5 5 5" />
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-star"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon
+            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+          />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-user-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M14.5 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="7.5" cy="7" r="4" />
+          <line x1="17" x2="22" y1="8" y2="13" />
+          <line x1="22" x2="17" y1="8" y2="13" />
+        </g>
+      </defs>
+    </svg>
+
+    <!-- ════════════════ PANEL 0 — CLOSED, no filter ════════════════ -->
+    <div class="panel-label">
+      0 · CLOSED — the backlog page-head toolbar carries [View all issues] + the now-ENABLED
+      [Filter] (was the disabled `filterComingSoon` seam) + [Advanced] + [Saved] + [New issue]. No
+      filter applied, so every sprint container + the backlog show their full counts.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="work">
+          <div class="page-head">
+            <div>
+              <h2>Backlog</h2>
+              <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
+            </div>
+            <div class="toolbar">
+              <a
+                class="tb-btn"
+                href="/issues"
+                title="View all issues in the issue navigator (/issues)"
+              >
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
+                >View all issues
+              </a>
+              <!-- ENABLED quick-filter trigger — replaces the disabled seam -->
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg></span
+                >Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg></span
+                >Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bookmark" /></svg></span
+                >Saved<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New issue
+              </button>
+            </div>
+          </div>
+
+          <div class="regions">
+            <!-- ACTIVE sprint container -->
+            <section class="region" aria-label="Sprint 24, active, 5 issues">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Sprint 24</span>
+                <span class="pill pill--prog"><span class="dot"></span>Active</span>
+                <span class="region-dates">
+                  <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 2 – Jun 16
+                </span>
+                <span class="count-badge">5</span>
+                <span class="spacer"></span>
+                <span class="seam" title="Committed points — Story 4.3">
+                  <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>— pts
+                </span>
+                <button class="icon-btn" aria-label="Sprint actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="rows">
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-118"></button>
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-118</span>
+                  <span class="brow-title">Org-switcher in the top bar with keyboard nav</span>
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-9</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                  <span class="pill pill--prog"><span class="dot"></span>In progress</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-121"></button>
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-121</span>
+                  <span class="brow-title">Avatar initials wrong for single-word names</span>
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-9</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Ana Ruiz">AR</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-126"></button>
+                  <span class="type-icon t-subtask"
+                    ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-126</span>
+                  <span class="brow-title">Backlog-filter mock — design the toolbar chrome</span>
+                  <span class="wt-glyph wt-design" title="Work type: Design"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-design" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-31</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar unassigned" title="Unassigned"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg
+                  ></span>
+                  <span class="pill pill--done"><span class="dot"></span>Done</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="create-row">
+                <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create issue
+              </div>
+            </section>
+
+            <!-- BACKLOG container (unassigned, ranked) -->
+            <section class="region" aria-label="Backlog, 12 issues">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Backlog</span>
+                <span class="count-badge">12 issues</span>
+                <span class="spacer"></span>
+              </div>
+              <div class="rows">
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-150"></button>
+                  <span class="type-icon t-story"
+                    ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-150</span>
+                  <span class="brow-title">Bulk-assign issues to a sprint in one transaction</span>
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-31</span>
+                    <span class="ec-title">Agile planning</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-153"></button>
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-153</span>
+                  <span class="brow-title">Snap-back animation drops a frame on slow networks</span>
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-9</span>
+                    <span class="ec-title">Workspaces</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Odie King">OK</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-158"></button>
+                  <span class="type-icon t-task"
+                    ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-158</span>
+                  <span class="brow-title">Document the backlog filter for the help centre</span>
+                  <span class="wt-glyph wt-content" title="Work type: Content"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-content" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-31</span>
+                    <span class="ec-title">Agile planning</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Julian Vo">JV</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="create-row">
+                <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create issue
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — quick Filter popover OPEN ════════════════ -->
+    <div class="panel-label">
+      1 · OPEN — the quick-filter popover (the reused IssueFilterBar) anchored under [Filter] on the
+      BACKLOG toolbar: text · Kind · Work type · Status · Assignee, each a multi-select listbox with
+      a trailing Check. Identical to the /issues + board popover — backlog-scoped, not a new
+      control. The popover SCROLLS at a fixed max-height (Status / Assignee below the fold).
+    </div>
+    <div class="panel">
+      <div class="stage is-pop">
+        <div class="work" style="padding-bottom: 24px">
+          <div class="page-head">
+            <div>
+              <h2>Backlog</h2>
+              <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
+            </div>
+            <div class="toolbar">
+              <a class="tb-btn" href="/issues" title="View all issues">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
+                >View all issues
+              </a>
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="true">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg></span
+                >Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg></span
+                >Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bookmark" /></svg></span
+                >Saved<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New issue
+              </button>
+
+              <!-- the open quick-filter popover, anchored under [Filter] -->
+              <div
+                class="filter-pop"
+                role="dialog"
+                aria-label="Filter the backlog"
+                style="left: 134px"
+              >
+                <div class="fp-head">
+                  <span class="fp-title">Filter</span>
+                  <button class="fp-clear">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filters
+                  </button>
+                </div>
+                <div class="fp-body">
+                  <div class="fp-search">
+                    <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                    <input type="text" value="drag" aria-label="Filter by text" />
+                  </div>
+                  <div class="fp-group" role="group" aria-label="Kind">
+                    <div class="fp-group-label">Kind</div>
+                    <div role="listbox" aria-label="Kind" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon t-story"
+                          ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg></span
+                        ><span class="lbl">Story</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon t-task"
+                          ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+                        ><span class="lbl">Task</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="type-icon t-bug"
+                          ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg></span
+                        ><span class="lbl">Bug</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon t-subtask"
+                          ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+                        ><span class="lbl">Sub-task</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- WORK TYPE — the shared facet (6.15.5 added it to IssueFilterBar;
+                       the backlog inherits it because the bar is SHARED). 10 types +
+                       the nullable "Untyped" bucket; glyph + hue per WORK_ITEM_TYPE_META. -->
+                  <div class="fp-group" role="group" aria-label="Work type">
+                    <div class="fp-group-label">Work type</div>
+                    <div role="listbox" aria-label="Work type" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="true">
+                        <span class="type-icon wt-code"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg></span
+                        ><span class="lbl">Code</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-design"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-design" /></svg></span
+                        ><span class="lbl">Design</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-test"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-test" /></svg></span
+                        ><span class="lbl">Test</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-content"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-content" /></svg></span
+                        ><span class="lbl">Content</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-research"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-research" /></svg></span
+                        ><span class="lbl">Research</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-review"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-review" /></svg></span
+                        ><span class="lbl">Review</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-decision"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-decision" /></svg></span
+                        ><span class="lbl">Decision</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-deploy"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-deploy" /></svg></span
+                        ><span class="lbl">Deploy</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-manual"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-manual" /></svg></span
+                        ><span class="lbl">Manual</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-chore"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-chore" /></svg></span
+                        ><span class="lbl">Chore</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="type-icon wt-untyped"
+                          ><svg viewBox="0 0 24 24"><use href="#wt-untyped" /></svg></span
+                        ><span class="lbl">Untyped</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="fp-group" role="group" aria-label="Status">
+                    <div class="fp-group-label">Status</div>
+                    <div role="listbox" aria-label="Status" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-todo"></span><span class="lbl">To Do</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-inprogress"></span
+                        ><span class="lbl">In Progress</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-review"></span><span class="lbl">In Review</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="status-dot sd-done"></span><span class="lbl">Done</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="fp-group" role="group" aria-label="Assignee">
+                    <div class="fp-group-label">Assignee</div>
+                    <div class="fp-subsearch">
+                      <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                      <input
+                        type="text"
+                        placeholder="Search members…"
+                        aria-label="Search members"
+                      />
+                    </div>
+                    <div role="listbox" aria-label="Assignee" aria-multiselectable="true">
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="avatar unassigned"
+                          ><svg viewBox="0 0 24 24"><use href="#i-user-x" /></svg></span
+                        ><span class="lbl">Unassigned</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="avatar">OK</span><span class="lbl">Odie King</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                      <div class="opt" role="option" aria-selected="false">
+                        <span class="avatar">YZ</span><span class="lbl">Yue Zhu</span
+                        ><svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — [Saved] dropdown OPEN ════════════════ -->
+    <div class="panel-label">
+      2 · OPEN — the [Saved] dropdown (the reused SavedFilterDropdown) anchored under [Saved] on the
+      backlog toolbar: Starred → My filters → Project filters → Defaults; per-row star toggle (a
+      SIBLING button, never nested in the option), owner/visibility hint, "View all filters" foot.
+    </div>
+    <div class="panel">
+      <div class="stage is-pop">
+        <div class="work" style="padding-bottom: 24px">
+          <div class="page-head">
+            <div>
+              <h2>Backlog</h2>
+              <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
+            </div>
+            <div class="toolbar">
+              <a class="tb-btn" href="/issues" title="View all issues">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
+                >View all issues
+              </a>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg></span
+                >Filter
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg></span
+                >Advanced
+              </button>
+              <button class="tb-btn is-active" aria-haspopup="listbox" aria-expanded="true">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bookmark" /></svg></span
+                >Saved<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New issue
+              </button>
+
+              <!-- the open Saved dropdown, anchored under [Saved] (offset to align) -->
+              <div class="menu" role="listbox" aria-label="Saved filters" style="left: 330px">
+                <div class="msearch">
+                  <svg class="si" viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                  <input type="text" placeholder="Find filters…" aria-label="Find filters" />
+                </div>
+                <div class="mgroup">Starred</div>
+                <div class="opt" role="option" aria-selected="true">
+                  <button
+                    class="star-btn starred"
+                    aria-label="Unstar Ready to groom"
+                    aria-pressed="true"
+                  >
+                    <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </button>
+                  <span class="lbl">Ready to groom</span>
+                  <span class="sec"
+                    ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-users" />
+                    </svg>
+                    Zhu Yue</span
+                  >
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mgroup">My filters</div>
+                <div class="opt" role="option" aria-selected="false">
+                  <button class="star-btn" aria-label="Star My open bugs" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </button>
+                  <span class="lbl">My open bugs</span>
+                  <span class="sec"
+                    ><svg class="vg" viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-lock" />
+                    </svg>
+                    Private</span
+                  >
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mgroup">Project filters</div>
+                <div class="opt" role="option" aria-selected="false">
+                  <button class="star-btn" aria-label="Star Design backlog" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-star" /></svg>
+                  </button>
+                  <span class="lbl">Design backlog</span>
+                  <span class="sec">Bo Philips</span>
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mgroup">Defaults</div>
+                <div class="opt" role="option" aria-selected="false">
+                  <span class="og" style="width: 24px" aria-hidden="true"></span>
+                  <span class="lbl">My open issues</span>
+                  <span class="sec">Built-in</span>
+                  <svg class="check" viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mfoot">
+                  <button class="link-btn">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>View all
+                    filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — ACTIVE filter, backlog re-projected ════════════════ -->
+    <div class="panel-label">
+      3 · ACTIVE — a saved filter ("Ready to groom") is applied: the [Filter] trigger carries the
+      active-count badge, the applied-filter summary row (reused IssueAppliedFilterBar — the
+      lavender name-chip + condition chips + match count + Clear) sits above the regions, "View all
+      issues" now carries the active <code>?filter=</code>, and BOTH the sprint container AND the
+      backlog are RE-PROJECTED to matching rows (filtered counts; an all-filtered-out sprint shows
+      its dashed empty placeholder).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="work">
+          <div class="page-head">
+            <div>
+              <h2>Backlog</h2>
+              <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
+            </div>
+            <div class="toolbar">
+              <a
+                class="tb-btn"
+                href="/issues?filter=eyJraW5kIjpbImJ1ZyJdfQ"
+                title="View all matching issues in the issue navigator (filter carried)"
+              >
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
+                >View all issues
+              </a>
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg></span
+                >Filter<span class="tb-count" aria-label="3 filters active">3</span>
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg></span
+                >Advanced
+              </button>
+              <button class="tb-btn is-active" aria-haspopup="listbox" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bookmark" /></svg></span
+                >Saved<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New issue
+              </button>
+            </div>
+          </div>
+
+          <!-- applied-filter summary row (IssueAppliedFilterBar) -->
+          <div class="summary">
+            <button
+              class="name-chip"
+              aria-haspopup="listbox"
+              aria-label="Applied filter: Ready to groom (starred) — open saved filters"
+            >
+              <svg class="ng" viewBox="0 0 24 24"><use href="#i-bookmark" /></svg>Ready to groom<svg
+                class="vg"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <use href="#i-users" />
+              </svg>
+            </button>
+            <span class="sum-chip"><strong>Kind</strong>&nbsp;is&nbsp;Bug</span>
+            <span class="sum-chip"><strong>Work type</strong>&nbsp;is&nbsp;Code</span>
+            <span class="sum-chip"
+              ><strong>Status</strong>&nbsp;is any of&nbsp;To do, In progress</span
+            >
+            <button class="sum-clear">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+            </button>
+            <span class="sum-count" role="status">3 of 17 items match</span>
+          </div>
+
+          <div class="regions">
+            <!-- ACTIVE sprint container — re-projected to the 1 matching row -->
+            <section class="region" aria-label="Sprint 24, active, 1 matching issue">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Sprint 24</span>
+                <span class="pill pill--prog"><span class="dot"></span>Active</span>
+                <span class="region-dates">
+                  <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Jun 2 – Jun 16
+                </span>
+                <span class="count-badge filtered" title="1 match of 5 in this sprint">1 of 5</span>
+                <span class="spacer"></span>
+                <span class="seam" title="Committed points — Story 4.3">
+                  <svg viewBox="0 0 24 24"><use href="#i-hash" /></svg>— pts
+                </span>
+                <button class="icon-btn" aria-label="Sprint actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="rows">
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-121"></button>
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-121</span>
+                  <span class="brow-title">Avatar initials wrong for single-word names</span>
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-9</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Ana Ruiz">AR</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- PLANNED sprint container — NO match → dashed empty placeholder -->
+            <section class="region" aria-label="Sprint 25, planned, 0 matching issues">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Sprint 25</span>
+                <span class="pill pill--todo"><span class="dot"></span>Planned</span>
+                <span class="region-dates">
+                  <svg viewBox="0 0 24 24"><use href="#i-calendar" /></svg>Not started
+                </span>
+                <span class="count-badge filtered" title="0 matches of 4 in this sprint"
+                  >0 of 4</span
+                >
+                <span class="spacer"></span>
+                <button class="btn-sec" title="Start sprint — Story 4.4">
+                  <svg viewBox="0 0 24 24"><use href="#i-play" /></svg>Start sprint
+                </button>
+                <button class="icon-btn" aria-label="Sprint actions">
+                  <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="sprint-empty">No item in this sprint matches the active filter.</div>
+            </section>
+
+            <!-- BACKLOG container — re-projected to the 2 matching rows -->
+            <section class="region" aria-label="Backlog, 2 matching issues">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Backlog</span>
+                <span class="count-badge filtered" title="2 matches of 12 in the backlog"
+                  >2 of 12 items</span
+                >
+                <span class="spacer"></span>
+              </div>
+              <div class="rows">
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-153"></button>
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-153</span>
+                  <span class="brow-title">Snap-back animation drops a frame on slow networks</span>
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-9</span>
+                    <span class="ec-title">Workspaces</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Odie King">OK</span>
+                  <span class="pill pill--todo"><span class="dot"></span>To do</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="brow" role="row">
+                  <svg class="grip" viewBox="0 0 24 24"><use href="#i-grip" /></svg>
+                  <button class="row-check" aria-label="Select PROD-161"></button>
+                  <span class="type-icon t-bug"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bug" /></svg
+                  ></span>
+                  <span class="brow-id">PROD-161</span>
+                  <span class="brow-title"
+                    >Keyboard drag drops into the wrong region near the fold</span
+                  >
+                  <span class="wt-glyph wt-code" title="Work type: Code"
+                    ><svg viewBox="0 0 24 24"><use href="#wt-code" /></svg
+                  ></span>
+                  <span class="epic-chip">
+                    <svg class="ec-ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                    <span class="ec-key">PROD-31</span>
+                    <span class="ec-title">Agile planning</span>
+                  </span>
+                  <span
+                    class="seam"
+                    style="font-size: 11.5px; padding: 1px 7px"
+                    title="Estimate — Story 4.3"
+                    >—</span
+                  >
+                  <span class="avatar" title="Yue Zhu">YZ</span>
+                  <span class="pill pill--prog"><span class="dot"></span>In progress</span>
+                  <button class="icon-btn" aria-label="Row actions">
+                    <svg viewBox="0 0 24 24"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — FILTERED-EMPTY backlog ════════════════ -->
+    <div class="panel-label">
+      4 · FILTERED-EMPTY — the filter matches NO item in any region. This is a DISTINCT EmptyState
+      from the 4.2 brand-new-backlog empty (which says "Backlog is clear — create one"): it names
+      the filter as the cause and offers "Clear filter", not "New issue". The summary row + active
+      toolbar stay so the user can see + edit what they filtered on.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="work">
+          <div class="page-head">
+            <div>
+              <h2>Backlog</h2>
+              <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
+            </div>
+            <div class="toolbar">
+              <a
+                class="tb-btn"
+                href="/issues?filter=eyJ0eXBlIjpbImRlcGxveSJdfQ"
+                title="View all matching issues (filter carried)"
+              >
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
+                >View all issues
+              </a>
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg></span
+                >Filter<span class="tb-count" aria-label="2 filters active">2</span>
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg></span
+                >Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bookmark" /></svg></span
+                >Saved<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New issue
+              </button>
+            </div>
+          </div>
+
+          <div class="summary">
+            <span class="sum-chip"><strong>Work type</strong>&nbsp;is&nbsp;Deploy</span>
+            <span class="sum-chip"><strong>Assignee</strong>&nbsp;is&nbsp;Unassigned</span>
+            <button class="sum-clear">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear
+            </button>
+            <span class="sum-count" role="status">0 of 17 items match</span>
+          </div>
+
+          <div class="empty" role="status">
+            <span class="ic-wrap"
+              ><svg viewBox="0 0 24 24"><use href="#i-search-x" /></svg
+            ></span>
+            <h3>No work items match this filter</h3>
+            <p>
+              No item in the backlog or any sprint matches the active filter. Adjust or clear it to
+              see the backlog again.
+            </p>
+            <button class="btn">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>Clear filter
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — LOADING (filtered read in flight) ════════════════ -->
+    <div class="panel-label">
+      5 · LOADING — the backlog skeleton (the 3.2.2 / 4.2 scaffold idiom) while the filtered read is
+      in flight: applying / changing the filter re-fetches the re-projected regions, and the rows
+      are replaced by pulsing skeleton rows until the response lands. The toolbar + summary stay so
+      the surface never collapses.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="work">
+          <div class="page-head">
+            <div>
+              <h2>Backlog</h2>
+              <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
+            </div>
+            <div class="toolbar">
+              <a class="tb-btn" href="/issues?filter=…" title="View all issues">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
+                >View all issues
+              </a>
+              <button class="tb-btn is-active" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg></span
+                >Filter<span class="tb-count">2</span>
+              </button>
+              <button class="tb-btn" aria-haspopup="dialog" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-funnel-plus" /></svg></span
+                >Advanced
+              </button>
+              <button class="tb-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bookmark" /></svg></span
+                >Saved<svg class="caret" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </button>
+              <button class="tb-btn primary">
+                <span class="ic"
+                  ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg></span
+                >New issue
+              </button>
+            </div>
+          </div>
+
+          <div class="regions" aria-busy="true">
+            <section class="region" aria-label="Sprint 24, loading">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Sprint 24</span>
+                <span class="pill pill--prog"><span class="dot"></span>Active</span>
+                <span class="sk" style="width: 64px"></span>
+                <span class="spacer"></span>
+              </div>
+              <div class="rows">
+                <div class="sk-row">
+                  <span class="sk-dot"></span><span class="sk-dot"></span
+                  ><span class="sk" style="width: 56px"></span
+                  ><span class="sk" style="flex: 1"></span
+                  ><span class="sk" style="width: 72px"></span>
+                </div>
+                <div class="sk-row">
+                  <span class="sk-dot"></span><span class="sk-dot"></span
+                  ><span class="sk" style="width: 56px"></span
+                  ><span class="sk" style="flex: 1"></span
+                  ><span class="sk" style="width: 72px"></span>
+                </div>
+              </div>
+            </section>
+            <section class="region" aria-label="Backlog, loading">
+              <div class="region-head">
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <span class="region-title">Backlog</span>
+                <span class="sk" style="width: 80px"></span>
+                <span class="spacer"></span>
+              </div>
+              <div class="rows">
+                <div class="sk-row">
+                  <span class="sk-dot"></span><span class="sk-dot"></span
+                  ><span class="sk" style="width: 56px"></span
+                  ><span class="sk" style="flex: 1"></span
+                  ><span class="sk" style="width: 72px"></span>
+                </div>
+                <div class="sk-row">
+                  <span class="sk-dot"></span><span class="sk-dot"></span
+                  ><span class="sk" style="width: 56px"></span
+                  ><span class="sk" style="flex: 1"></span
+                  ><span class="sk" style="width: 72px"></span>
+                </div>
+                <div class="sk-row">
+                  <span class="sk-dot"></span><span class="sk-dot"></span
+                  ><span class="sk" style="width: 56px"></span
+                  ><span class="sk" style="flex: 1"></span
+                  ><span class="sk" style="width: 72px"></span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <p class="legend">
+        The backlog filter REUSES the shipped /issues filter primitives verbatim —
+        <code>IssueFilterBar</code> (quick popover, incl. the shared Work type facet),
+        <code>IssueAdvancedFilter</code> / <code>FilterConditionBuilder</code> (the [Advanced]
+        builder), <code>SavedFilterDropdown</code> + <code>IssueAppliedFilterBar</code> (the [Saved]
+        picker + applied name-chip) — anchored on the backlog page-head toolbar, exactly as the
+        board did (6.15). No hand-rolled backlog-specific filter UI. State is URL-driven (<code
+          >?filter=</code
+        >
+        AST + saved-filter id), shareable + reload-safe; the read goes through 8.8.18 (<code
+          >getBacklog</code
+        >
+        + <code>getSprintIssues</code> threaded with the 6.1 compiled predicate), so BOTH the sprint
+        containers AND the backlog re-project; the filter AND-composes WITH a sprint's scope. The
+        <b>View all issues</b> link carries the active <code>?filter=</code> into the /issues
+        navigator. Colour via <code>--el-*</code>, shape via element-semantic tokens.
+      </p>
+    </div>
+  </body>
+</html>
