@@ -10,5 +10,6 @@ export function toUserProfileDto(user: User): UserProfileDto {
     id: user.id,
     name: user.name ?? '',
     email: user.email,
+    image: user.image ?? null,
   };
 }
