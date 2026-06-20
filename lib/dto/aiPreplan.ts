@@ -1,0 +1,59 @@
+// The pre-plan read DTO (Subtask 7.3.70) — what `GET /api/ai/pre-plan` returns to
+// the browser so the discovery UI (7.3.5) can RESUME the onboarding loop and
+// render each artifact's forward revision diffs at the gate. Built by
+// aiPreplanService from the motir-ai `GET /v1/preplan` body (the 7.3.25 read
+// surface), which motir-core reaches ONLY through the `server-only` client
+// (`getPreplanState`) — there is no pre-plan table in motir-core (the open-core
+// invariant). motir-ai owns the project→AiProject resolution (keyed by the core
+// workspace+project ids), so this side never holds an `aiProjectId`; the DTO
+// drops that motir-ai-internal identity rather than leak it to the browser.
+
+// One forward revision of a pre-plan artifact. `version` 1 is the created
+// baseline (`diff` null); each later version carries the structured doc diff the
+// resume gate renders. Forward-only — there is no rollback. `diff` is the
+// motir-ai docDiff shape, opaque to motir-core and passed through verbatim for
+// the gate to render.
+export interface PreplanRevisionDTO {
+  version: number;
+  changeReason: string | null;
+  changeKind: string | null;
+  diff: unknown;
+  createdAt: string; // ISO
+}
+
+// The four pre-plan artifacts the onboarding loop produces, in journey order.
+export type PreplanArtifactKind = 'discovery' | 'vision' | 'feasibility' | 'validation';
+
+// One artifact's full forward revision LOG (its ordered version history).
+export interface PreplanArtifactLogDTO {
+  kind: PreplanArtifactKind;
+  versions: PreplanRevisionDTO[];
+}
+
+// The session-persistent pre-plan state (one per project) — the strategy
+// decisions + where the loop is + the transcript essentials the UI replays.
+export interface PreplanSessionDTO {
+  // The 5 strategy decisions captured across the onboarding interview.
+  classification: string | null;
+  platform: string | null;
+  designStarter: string | null;
+  validationTiming: string | null;
+  docSkipSet: string[];
+  // Where the loop currently sits (the gate the UI resumes at) + lifecycle.
+  currentGate: string | null;
+  status: string;
+  // Transcript essentials — the conversation the UI replays on resume. Opaque to
+  // motir-core (motir-ai owns its shape); passed through verbatim.
+  conversation: unknown;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+}
+
+// The full pre-plan read for the active project. `session` is null and `docs` is
+// empty for a project that never started a pre-plan — a LEGITIMATE empty resume
+// state, NOT an error (motir-ai returns it, never a 404). A motir-ai transport /
+// upstream failure surfaces as the route's 502, never a misleading empty here.
+export interface PreplanStateDTO {
+  session: PreplanSessionDTO | null;
+  docs: PreplanArtifactLogDTO[];
+}
