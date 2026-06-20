@@ -393,6 +393,33 @@ export const STYLE_REGISTRY = {
         'Wonky-cornered buttons/inputs/cards/modals, irregular (non-pill) status chips, rough wavy-ink-bordered surfaces with soft hand-placed shadows.',
     },
   },
+  retrofuturism: {
+    id: 'retrofuturism',
+    name: 'Retrofuturism',
+    tagline: 'Chrome, gradient sweeps and a synthwave horizon — 70s/80s sci-fi.',
+    inspiration:
+      'Retrofuturism / Outrun — 70s–80s sci-fi: chrome lettering, synthwave sunset gradients, airbrushed sci-fi paperbacks, and wide geometric display type.',
+    designDoc: 'docs/styles/retrofuturism.md',
+    defaultTypeId: 'grotesk',
+    dimensions: {
+      silhouette:
+        'Streamlined chrome capsules — fully-rounded pill buttons + chips, 16px cards, 22px modals. Aerodynamic 70s/80s curves, never sharp.',
+      stroke:
+        'A lit chrome edge — a bright inset highlight + a dark base line over a faint hairline, reading as a polished metal rim rather than a drawn border.',
+      elevation:
+        'Chrome bevels + a diagonal SPECULAR streak + a palette-derived glow — a bright top highlight fading to a dark base with a swept light-bar across each panel, so surfaces read as polished reflective metal, not flat cards.',
+      surface:
+        'The identity axis: a synthwave SKY + a bright HORIZON GLOW band + a receding neon perspective GRID floor (all palette-derived) behind chrome-bevelled, specular-streaked surfaces. Dark-first — the neon horizon + grid read strongest on a dark palette.',
+      density:
+        'Confident and roomy — 22×11 chrome-capsule buttons, 24px card padding, 38px controls; the chrome wants room to catch the light.',
+      motion:
+        'Smooth and gliding — 200ms eased transitions and a confident press-scale; the synthwave horizon + grid are a STATIC backdrop (no motion to distract the work surface).',
+      typography:
+        'Wide geometric grotesque display (the `grotesk` type pairing) — the retro-futurist sci-fi headline read; body stays a legible sans.',
+      components:
+        'Chrome-capsule buttons with a metallic glint, specular-streaked bevelled cards / popovers / modals / sidebar / inputs (the data-surface material layer), pill status chips — a synthwave horizon + neon grid behind it all.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

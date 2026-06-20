@@ -9,9 +9,11 @@ import { cn } from '@/lib/utils/cn';
 // showing at a glance (the board group-by, Subtask 3.3.5; reusable beyond it).
 //
 // Built FROM the design system per `design/boards/swimlanes-wip.mock.html` (the
-// `.seg` block): an `--el-surface` track with a 2px inset, each option a
-// `--radius-control` button; the pressed option gets the `--el-page-bg` raised
-// fill + `--shadow-subtle` and its leading glyph takes the `--el-accent` hue.
+// `.seg` block): an `--el-surface` track (`--radius-btn`) with a 2px inset, each
+// option a `calc(--radius-btn - 2px)` button so it NESTS in the track at any style
+// (a fixed `--radius-control` floats wrong when a style pills `--radius-btn`); the
+// pressed option gets the `--el-page-bg` raised fill + `--shadow-subtle` and its
+// leading glyph takes the `--el-accent` hue.
 // Colour via `--el-*`, shape via element-semantic tokens (the colour + shape
 // swap rules). A11y: a labelled `role="group"`; each option is a real `<button>`
 // carrying `aria-pressed`, so it is keyboard-operable and announced as a toggle.
@@ -71,7 +73,13 @@ export function Segmented<T extends string>({
               if (!active) onChange(opt.value);
             }}
             className={cn(
-              'inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[13px] font-medium transition-colors',
+              // The segment radius nests inside the track: the track is
+              // `rounded-(--radius-btn)` with a 2px (`p-0.5`) inset, so a segment
+              // fits the shell only at `--radius-btn - 2px`. Using a fixed
+              // `--radius-control` breaks when a style makes `--radius-btn` a full
+              // pill (soft-playful / retrofuturism: pill track, but a small-radius
+              // chip floating inside it). Mirrors AppearancePickers' option radius.
+              'inline-flex h-(--height-control) items-center gap-1.5 rounded-[calc(var(--radius-btn)-2px)] px-(--spacing-control-x) text-[13px] font-medium transition-colors',
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active

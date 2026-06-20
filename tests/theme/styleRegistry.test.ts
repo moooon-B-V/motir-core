@@ -22,7 +22,7 @@ import { isTypeId } from '@/lib/theme/typography';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
@@ -34,6 +34,7 @@ describe('style registry', () => {
       '3d-immersive',
       'neumorphism',
       'hand-drawn-indie',
+      'retrofuturism',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
@@ -45,6 +46,7 @@ describe('style registry', () => {
     expect(STYLE_REGISTRY['3d-immersive'].name).toBe('3D / Immersive');
     expect(STYLE_REGISTRY['neumorphism'].name).toBe('Neumorphism');
     expect(STYLE_REGISTRY['hand-drawn-indie'].name).toBe('Hand-Drawn / Indie');
+    expect(STYLE_REGISTRY['retrofuturism'].name).toBe('Retrofuturism');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {
@@ -143,6 +145,8 @@ describe('style → type axis integration (7.3.53)', () => {
     expect(STYLE_REGISTRY['swiss-minimal-flat'].defaultTypeId).toBe('motir-sans');
     expect(STYLE_REGISTRY['neo-brutalism'].defaultTypeId).toBe('motir-mono');
     expect(STYLE_REGISTRY['cybercore-y2k'].defaultTypeId).toBe('motir-mono');
+    // Retrofuturism ships the wide geometric grotesque as its retro-display read.
+    expect(STYLE_REGISTRY['retrofuturism'].defaultTypeId).toBe('grotesk');
     // Styles that never overrode type stay on the base pairing.
     expect(STYLE_REGISTRY['warm-editorial'].defaultTypeId).toBe('motir');
     expect(STYLE_REGISTRY['glassmorphism'].defaultTypeId).toBe('motir');
