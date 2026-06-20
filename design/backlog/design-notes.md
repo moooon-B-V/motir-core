@@ -7,10 +7,11 @@ UI subtask in Story 4.2 (4.2.3 / 4.2.4 / 4.2.5), which each carry **4.2.1** in
 shape tokens + the shipped `components/ui/*` and issue-list primitives), so the
 code subtasks compose the same primitives — no Pencil→code gap.
 
-| Surface                              | Asset                                       | Notes                                                                                                                                                                                                                       |
-| ------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Backlog / sprint-planning screen** | **`backlog.mock.html`** (HTML mockup)       | The whole net-new surface — `design/` had no `backlog/` area; the 4.2.1 design gate produces this. Multi-panel: layout+nav · sprint container · issue row · drag · multi-select · context menu · states. Gates 4.2.3–4.2.5. |
-| **Backlog at scale**                 | **`backlog-scale.mock.html`** (HTML mockup) | The large-backlog shape (finding #57) — bounded count header + virtualized window + lazy-load on scroll. NEVER load-all. Gates 4.2.3's scale AC + the 4.2.6 at-scale E2E.                                                   |
+| Surface                                | Asset                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Backlog / sprint-planning screen**   | **`backlog.mock.html`** (HTML mockup)        | The whole net-new surface — `design/` had no `backlog/` area; the 4.2.1 design gate produces this. Multi-panel: layout+nav · sprint container · issue row · drag · multi-select · context menu · states. Gates 4.2.3–4.2.5.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Backlog at scale**                   | **`backlog-scale.mock.html`** (HTML mockup)  | The large-backlog shape (finding #57) — bounded count header + virtualized window + lazy-load on scroll. NEVER load-all. Gates 4.2.3's scale AC + the 4.2.6 at-scale E2E.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Backlog filtering (toolbar Filter)** | **`backlog-filter.mock.html`** (HTML mockup) | EXTENDS the backlog surface — wires the permanently-DISABLED `[Filter]` seam (`page.tsx:83-90`, tooltip `filterComingSoon`) into a working backlog filter. The backlog's filter was deferred to Epic 6, but Epic 6 only ever wired the BOARD filter (Story 6.15) — an orphaned deferral, so Subtask 8.8.16 picks it up. REUSES the shipped /issues filter primitives verbatim (`IssueFilterBar` quick popover incl. the shared Work type facet · `IssueAdvancedFilter`/`FilterConditionBuilder` builder · `SavedFilterDropdown` + `IssueAppliedFilterBar` picker + applied name-chip) — anchored on the backlog page-head toolbar, backlog-scoped + URL-addressable + saved-filter capable, exactly as the board did. CHROME over the reused backlog — does NOT redraw the sprint containers / ranked rows / drag / seams. Multi-panel: closed · quick-Filter popover open (incl. Work type) · Saved dropdown open · active (re-projected sprint containers AND backlog, an all-filtered-out sprint showing its empty placeholder) · filtered-EMPTY · loading. "View all issues" carries the active filter into /issues. Gates the 8.8.18 frontend wiring. See "Backlog filtering (Subtask 8.8.16)" below. |
 
 The Backlog is a NEW nav destination (`/backlog`, project-scoped) and a NEW
 design area (`design/backlog/`). It is **almost pure frontend**: the data
@@ -294,6 +295,189 @@ card, would be prototype-thinking — forbidden (finding #57).
 - The sprint entity / association / rank writes / bounded reads themselves —
   **Story 4.1** (consumed, not built).
 - Rich backlog filtering / quick filters / the filter builder / saved filters —
-  **Epic 6** (the backlog ships its data-bound list; the disabled `[Filter]` seam
-  reserves it). Cross-project backlogs (the backlog is single-project by 4.1's
-  `sprint.projectId` model).
+  was deferred to **Epic 6** (the backlog ships its data-bound list; the disabled
+  `[Filter]` seam reserves it). **NOW wired by Subtask 8.8.16 / 8.8.18** — Epic 6
+  only ever delivered the BOARD filter (Story 6.15), so the backlog's equivalent
+  was an orphaned deferral; see "Backlog filtering (Subtask 8.8.16)" below.
+  Cross-project backlogs (the backlog is single-project by 4.1's `sprint.projectId`
+  model).
+
+---
+
+# Backlog filtering (Subtask 8.8.16) — `backlog-filter.mock.html`
+
+Wires the backlog page-head's permanently-**disabled `[Filter]` seam**
+(`app/(authed)/backlog/page.tsx:83-90` — a `disabled` `Button`, `leftIcon`
+`<Filter/>`, `title={t('filterComingSoon')}`, no `onClick`, comment _"Filter is a
+disabled seam here — Epic 6 wires backlog filtering"_) into a working backlog
+filter. The original backlog mocks draw `[Filter]` ONLY as a disabled seam; the
+COMPOSITION on the backlog — the enabled affordance, the builder + saved-picker
+anchored in the page-head toolbar, the active-filter summary, the filtered +
+filtered-EMPTY states, the loading state, and coexistence with the
+sprint-planning containers — is net-new backlog chrome no backlog mock depicts.
+Per the design gate (an element a mockup does not depict == NO design → add a
+`type: design` subtask, never improvise), the 8.8.16 gate produces this; the UI
+code subtask **8.8.18** `blocked_by` it.
+
+## Why YES, wire it (the orphaned-deferral triage)
+
+The backlog `[Filter]` is a **deliberate seam, not a stale flag and not a
+defect** — but its owning work was deferred to Epic 6 and never picked up. Epic 6
+only ever wired the **board** filter (Story 6.15 → `design/boards/board-filter.mock.html`,
+reusing the `/issues` primitives board-scoped). The backlog's equivalent was
+documented as deferred (this file's "Out of scope": _"Rich backlog filtering …
+Epic 6; the disabled `[Filter]` seam reserves it"_) and **never scheduled** — an
+orphaned deferral. So the answer to _"do we still need it?"_ is **YES — wire it**,
+do NOT remove it.
+
+**Mirror products (rung 1 — verified via docs, 2026-06-20).** BOTH ship working
+filters on the backlog:
+
+- **Jira** Scrum backlog has a quick-filter bar (assignee · epic · label · type ·
+  custom JQL) plus saved JQL filters the board/backlog are built on.
+- **Linear** Backlog is a fully filterable view like every other: one **Filter**
+  button (F) → property → values → operators, URL-encoded, **persists across
+  reload**, saveable as a named Custom View.
+
+A backlog with a non-working/absent filter is a regression against both. Copy
+**Linear's** model (single Filter entry, URL-addressable, persistent, saveable) —
+which is exactly what Motir's shipped `/issues` + board filter already are.
+
+## This is CHROME over the reused backlog
+
+Exactly like `board-filter.mock.html` is chrome over the board: it does NOT
+redraw the sprint-planning containers / ranked rows / drag / multi-select /
+reserved seams — it adds the filter affordances to the page-head toolbar + a
+summary row above the regions, and shows the regions re-projected.
+
+## Where it lives
+
+The `/backlog` route (`app/(authed)/backlog/page.tsx` + `BacklogContainer`).
+8.8.18 drops `disabled` + the `filterComingSoon` tooltip from the existing
+`[Filter]` `Button`, mounts the reused filter UI in the page-head toolbar beside
+the existing **[View all issues]** link + **[+ New issue]**, and the read goes
+through the 6.1 compiled predicate threaded into `getBacklog` / `getSprintIssues`.
+**No new navigation wiring; no schema change.** The page-head toolbar already
+exists — the design notes that, it does not draw a new entry (access path
+unchanged).
+
+## REUSE, do not redraw — the primitives this composes (8.8.18 builds with)
+
+Every filter affordance is the SAME shipped /issues component the board already
+reuses — there is **no hand-rolled backlog-specific filter UI**:
+
+- **`IssueFilterBar`** — the quick-filter popover (`[Filter]` trigger →
+  `Popover`/`role="dialog"`): a text quick-filter + the **Kind / Work type /
+  Status / Assignee** multi-select listboxes (`role="listbox"
+aria-multiselectable`, each option a `role="option"` row with a leading glyph —
+  `IssueTypeIcon` in the kind hue / `WorkItemTypeIcon` in the work-type hue /
+  status dot / `Avatar` — and a trailing accent `Check`), plus the header
+  **Clear filters**. The **Work type** facet is the one 6.15.5 added to the
+  SHARED bar, so the backlog inherits it for free (no net-new facet here — unlike
+  6.15). The popover SCROLLS at a fixed `max-height`; Status / Assignee sit below
+  the fold. (See `design/work-items/filter.mock.html`.)
+- **`IssueAdvancedFilter` / `FilterConditionBuilder`** — the `[Advanced]` builder
+  trigger (`i-funnel-plus`), for the structured 6.1 condition builder. (See
+  `design/work-items/filter-builder.mock.html`.)
+- **`SavedFilterDropdown`** — the `[Saved]` dropdown picker (`role="listbox"`):
+  **Starred → My filters → Project filters → Defaults**, server-backed search, a
+  per-row **star toggle** (a SIBLING `<button>` in the option row — never nested
+  inside the option), owner/visibility hint (`i-users` shared · `i-lock` private ·
+  "Built-in"), and a "View all filters" foot. (See
+  `design/work-items/saved-filters.mock.html`.)
+- **`IssueAppliedFilterBar`** — the applied-filter **summary row** between the
+  toolbar and the regions: the lavender **name-chip** (`i-bookmark` + visibility
+  glyph; clicking it reopens `[Saved]`) + the condition **`sum-chip`s**
+  (`<strong>` field + operator + value) + **Clear** + a match-count
+  (`role="status"`).
+
+## The trigger states (identical to /issues + board)
+
+- **Inactive** — plain toolbar `Button` (the seam's label/icon, now enabled).
+- **Active** — `--el-accent` border + `--el-tint-lavender` fill + accent icon +
+  the **count badge** (`.tb-count`, `--el-accent` fill, `--el-accent-text`) = the
+  number of active filter values. AA: the badge text is `--el-accent-text` on
+  `--el-accent`; the button label stays `--el-text`.
+- **Open** — `aria-expanded="true"` on the trigger; the popover/menu is an
+  elevated `--shadow-elevated` card anchored under it.
+
+## URL-driven, backlog-scoped state (8.8.18)
+
+The active filter lives in the **URL** — a `?filter=` AST param and/or a
+saved-filter id — so it is shareable + reload-safe (the Linear behaviour). The
+regions re-project server-side; the UI waits on the read response before
+asserting rows (never races the optimistic UI — CLAUDE.md). The filter
+**AND-composes WITH** a sprint's scope — it narrows WITHIN each region, never
+widens (a sprint container shows only its matching rows; the backlog region only
+its matching rows).
+
+## "View all issues" carries the active filter (the Jira behaviour)
+
+The existing **View all issues** link (Jira's "View in Issue Navigator")
+**carries the active filter query** into `/issues` when a filter is applied
+(`/issues?filter=…`). The backlog design-notes already anticipated this: _"when
+Epic-6 board/saved filters land, the link can carry the active filter query (the
+Jira behaviour)"_ — 8.8.16 realizes it.
+
+## Panels (review EACH, not just the first)
+
+0. **Closed** — toolbar = `[View all issues]` + enabled `[Filter]` + `[Advanced]`
+   - `[Saved]` + `[New issue]`; full sprint container + backlog region, full
+     counts. Per-row **work-type glyph** shown (the new facet's field, visible on
+     the row).
+1. **Quick-filter popover open** — `IssueFilterBar` anchored under `[Filter]`:
+   text + Kind / **Work type** / Status / Assignee listboxes + Clear; scrolls at
+   the fixed max-height.
+2. **Saved dropdown open** — `SavedFilterDropdown` anchored under `[Saved]`:
+   Starred/My/Project/Defaults groups + star toggles + "View all filters".
+3. **Active** — the `[Filter]` count badge, the `IssueAppliedFilterBar` summary
+   row (name-chip + condition chips + Clear + "3 of 17 items match"), "View all
+   issues" carrying `?filter=`, and BOTH the sprint container AND the backlog
+   **re-projected** (filtered count badges `1 of 5` / `2 of 12`). A sprint with
+   **no match** shows its dashed `No item in this sprint matches the active
+filter.` placeholder (coexistence with the sprint sections — the backlog's
+   analogue of the board's `col-empty`).
+4. **Filtered-EMPTY** — no item in any region matches → a **distinct
+   `EmptyState`** ("No work items match this filter" + `i-search-x` glyph + a
+   **Clear filter** CTA), NOT the 4.2 brand-new-backlog empty (which offers a
+   create CTA). The summary + active toolbar stay so the user can see/edit what
+   they filtered on.
+5. **Loading** — while the filtered read is in flight, the regions show pulsing
+   skeleton rows (the 3.2.2 / 4.2 scaffold idiom; `aria-busy`); the toolbar +
+   summary stay so the surface never collapses.
+
+## Scope (out of scope here)
+
+The filter **grammar/compiler** (6.1 owns it — no change); the **Work type
+facet** itself (6.15.5 already added it to the shared `IssueFilterBar`; the
+backlog inherits it); the **4.5 Scrum** sprint-scope filter (the backlog filter
+`AND`-composes WITH a sprint's scope, narrowing WITHIN it, never widening);
+**cross-project** backlogs (single-project by 4.1's `sprint.projectId`).
+
+## Token / a11y rules honoured
+
+- **Colour** strictly via `--el-*` (finding #54): the active-trigger
+  `--el-tint-lavender` fill + `--el-accent` border/icon, the count badge
+  `--el-accent` / `--el-accent-text`, the name-chip `--el-tint-lavender` +
+  `--el-text-strong`, the reused type hues (`--el-type-*`) + work-type hues
+  (`--el-type-{code…chore}`) + status `Pill` tones. Tints carry the hue in the
+  BACKGROUND with `--el-text-strong` text (finding #35 AA — never a tinted page
+  surface).
+- **Shape** via element-semantic tokens (`--radius-card` popover/menu/containers ·
+  `--radius-btn` triggers/CTA · `--radius-input` search fields · `--radius-badge`
+  chips/count/pills · `--radius-control` option rows/star/icon buttons),
+  `--shadow-elevated` for the open popover/menu, `--spacing-control-*` / `-chip-*`
+  / `-icon-btn` / `-card-padding` for box padding, `--height-control` / `-btn-md`
+  for sizing. `rounded-full` only on the genuinely-circular status dot + avatar.
+- **No nested buttons** (axe `nested-interactive`) — the `[Saved]` option row is
+  a `role="option"` div whose star toggle is a SIBLING `<button>`; the applied
+  name-chip / Clear / Clear-filter CTAs are standalone `<button>`s; the issue rows
+  stay `role="row"` with sibling controls (the 4.2 contract). Every icon `<svg>`
+  carries a 24×24 `viewBox`.
+- **Listbox a11y** — the quick-filter facets are `role="listbox"
+aria-multiselectable="true"` with `role="option" aria-selected`; the filtered-
+  empty backlog uses `EmptyState`/`role="status"`, not an empty listbox
+  (combobox-empty-listbox a11y). Keyboard-operable throughout.
+- **next-intl en + zh** — every new string (the summary copy, the filtered-empty
+  EmptyState, the match-count) is keyed; the `filterComingSoon` key is dropped
+  when the seam is enabled (8.8.18).
