@@ -968,7 +968,12 @@
    (the quiet button). box-shadow is not a colour-painting property, so the
    material-rule test skips these. The press overrides the base `active:scale`
    with a more physical translateY. */
-[data-style='3d-immersive'] .rounded-\(--radius-btn\) {
+/* `button.rounded-(--radius-input)` catches DROPDOWN-TRIGGER buttons styled as an
+   input (the board switcher, combobox / picker triggers) so they're physical
+   keys too — scoped to `button` so a real <input>/<textarea> text field (same
+   radius) is NEVER raised. */
+[data-style='3d-immersive'] .rounded-\(--radius-btn\),
+[data-style='3d-immersive'] button.rounded-\(--radius-input\) {
   box-shadow:
     0 3px 0 0 var(--el-border-strong),
     0 5px 10px -3px rgba(15, 15, 15, 0.18);
@@ -993,7 +998,8 @@
 }
 /* Press DOWN onto the base — the button drops by its thickness and the base
    edge compresses, like a real key. Overrides the base `active:scale`. */
-[data-style='3d-immersive'] .rounded-\(--radius-btn\):active:not(:disabled) {
+[data-style='3d-immersive'] .rounded-\(--radius-btn\):active:not(:disabled),
+[data-style='3d-immersive'] button.rounded-\(--radius-input\):active:not(:disabled) {
   transform: translateY(3px);
   box-shadow:
     0 1px 0 0 var(--el-border-strong),
