@@ -6,6 +6,7 @@ import { ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DiscoveryChatRail } from './DiscoveryChatRail';
 import { TierReviewGate } from './TierReviewGate';
+import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
 import { useDiscoveryChat } from '@/lib/hooks/useDiscoveryChat';
 import { activeDoc, isTiersComplete } from '@/lib/onboarding/discoveryLoop';
@@ -78,27 +79,34 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     );
   }
 
-  // The hub: full-screen, two panes only — canvas roadmap (left) + chat (right).
+  // The hub: the reusable full-screen two-pane workspace — canvas (left) + chat
+  // (right). Onboarding fills the panes with its own (specialized) canvas + chat;
+  // the SHELL is shared (PlanningWorkspace), so generation / re-planning /
+  // contextual planning reuse the identical frame.
   return (
-    <div className="grid h-dvh w-full grid-cols-1 md:grid-cols-[1fr_22rem]">
-      <RoadmapCanvas
-        producedKinds={state.producedKinds}
-        activeKind={state.activeKind}
-        complete={complete}
-        empty={state.turns.length === 0 && state.producedKinds.length === 0}
-        onOpen={openTier}
-      />
-      <DiscoveryChatRail
-        turns={state.turns}
-        working={state.working}
-        isStreaming={state.isStreaming}
-        pendingAsk={state.pendingAsk}
-        canSkip={canSkip}
-        error={state.error}
-        onSend={send}
-        onDismissError={dismissError}
-      />
-    </div>
+    <PlanningWorkspace
+      canvas={
+        <RoadmapCanvas
+          producedKinds={state.producedKinds}
+          activeKind={state.activeKind}
+          complete={complete}
+          empty={state.turns.length === 0 && state.producedKinds.length === 0}
+          onOpen={openTier}
+        />
+      }
+      chat={
+        <DiscoveryChatRail
+          turns={state.turns}
+          working={state.working}
+          isStreaming={state.isStreaming}
+          pendingAsk={state.pendingAsk}
+          canSkip={canSkip}
+          error={state.error}
+          onSend={send}
+          onDismissError={dismissError}
+        />
+      }
+    />
   );
 }
 
