@@ -154,7 +154,7 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full">
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider initialPreference={applied}>
+          <ThemeProvider initialPreference={applied} signedIn={Boolean(session)}>
             <ToastProvider>{children}</ToastProvider>
           </ThemeProvider>
         </NextIntlClientProvider>

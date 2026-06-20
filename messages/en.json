@@ -1535,10 +1535,13 @@
     },
     "appearance": {
       "heading": "Appearance",
-      "subtitle": "Theme Motir to your taste — its colour, type and shape. Everything applies live across the whole app, on this device. There's nothing to save.",
+      "subtitle": "Theme Motir to your taste — its colour, type and shape. Everything applies live across the whole app, and saves to your account so it follows you to every device.",
       "card": {
         "title": "Theme & design",
         "subtitle": "Pick a theme, style, palette and type pairing. The whole app re-skins instantly — this page included."
+      },
+      "sync": {
+        "error": "Couldn't sync to your account — your changes are saved on this device."
       },
       "theme": {
         "name": "Theme",
