@@ -113,10 +113,12 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     <PlanningWorkspace
       canvas={
         <div className="relative h-full min-h-0 w-full">
-          <OnboardingCanvas state={state} idea={idea} onOpen={openTier} />
-          {/* The door to the web-only design step (MOTIR-1040). The conductor
-              also offers it in chat (cross-repo, MOTIR-1099) — this is the always
-              -visible affordance so the step is reachable on its own. */}
+          {/* The design step (MOTIR-1040) is reached from the `design` station on
+              the canvas (click the node or its "Design your look" button); the
+              conductor also offers it in chat (cross-repo, MOTIR-1099). A
+              top-right shortcut keeps it reachable even when the station is panned
+              out of view. */}
+          <OnboardingCanvas state={state} idea={idea} onOpen={openTier} onOpenDesign={openDesign} />
           <Button
             variant="secondary"
             size="sm"

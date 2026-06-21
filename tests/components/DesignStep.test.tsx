@@ -1,89 +1,87 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { NextIntlClientProvider } from 'next-intl';
-import type { ReactNode } from 'react';
-import enMessages from '@/messages/en.json';
-import { defaultLocale } from '@/lib/i18n/locales';
-import { ThemeProvider } from '@/lib/contexts/theme-context';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { renderWithIntl } from '../helpers/renderWithIntl';
 import { DesignStep } from '@/components/onboarding/DesignStep';
 import { DEFAULT_STYLE_ID, STYLE_IDS, STYLE_REGISTRY } from '@/lib/theme/styles';
 
-// The onboarding design step (Subtask 7.3.27 / MOTIR-1040). It composes the
-// shipped three-axis runtime: picking an axis flips the live `<html>` attribute
-// through `useTheme()` (the page IS the example). No jest-dom (project
-// convention) — assertions read DOM attributes / text / spy calls directly.
+// The onboarding design step (Subtask 7.3.27 / MOTIR-1040). It designs the USER'S
+// PROJECT: the picks scope to THIS PAGE (the section's data-* attributes) — the
+// whole wizard page restyles — but NEVER touch Motir's `<html>`. Local state, no
+// global `useTheme`. No jest-dom (project convention) — assertions read DOM
+// attributes / text / spy calls directly.
 
-// A non-default style to exercise the live flip (default is warm-editorial).
 const OTHER_STYLE = STYLE_IDS.find((id) => id !== DEFAULT_STYLE_ID)!;
 
 function renderStep(props: { onBack?: () => void; onUseDesign?: () => void } = {}) {
   const onBack = props.onBack ?? vi.fn();
   const onUseDesign = props.onUseDesign ?? vi.fn();
-  function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <NextIntlClientProvider locale={defaultLocale} messages={enMessages}>
-        <ThemeProvider signedIn={false}>{children}</ThemeProvider>
-      </NextIntlClientProvider>
-    );
-  }
-  render(<DesignStep onBack={onBack} onUseDesign={onUseDesign} />, { wrapper: Wrapper });
-  return { onBack, onUseDesign };
+  const { container } = renderWithIntl(<DesignStep onBack={onBack} onUseDesign={onUseDesign} />);
+  const page = () => container.querySelector('[data-testid="design-page"]')!;
+  return { onBack, onUseDesign, page };
 }
 
 beforeEach(() => {
-  localStorage.clear();
   document.documentElement.removeAttribute('data-style');
+  document.documentElement.removeAttribute('data-theme');
 });
 
 afterEach(() => cleanup());
 
 describe('DesignStep (MOTIR-1040)', () => {
-  it('renders the title and all three axis pickers', () => {
+  it('renders the title and all four controls', () => {
     renderStep();
-    expect(screen.getByText("Design your product's look")).toBeTruthy();
+    expect(screen.getByText("Design your project's look")).toBeTruthy();
+    expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeTruthy();
     expect(screen.getByRole('radiogroup', { name: 'Style' })).toBeTruthy();
     expect(screen.getByRole('radiogroup', { name: 'Palette' })).toBeTruthy();
     expect(screen.getByRole('radiogroup', { name: 'Typography' })).toBeTruthy();
   });
 
-  it('flips the live <html> style attribute when a style chip is picked', () => {
-    renderStep();
-    // The provider applies the default on mount.
-    expect(document.documentElement.getAttribute('data-style')).toBe(DEFAULT_STYLE_ID);
-
-    fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
-
-    // The whole page restyles live — the page IS the example.
-    expect(document.documentElement.getAttribute('data-style')).toBe(OTHER_STYLE);
-    expect(localStorage.getItem('motir.theme.style')).toBe(OTHER_STYLE);
+  it('defaults the project preview to light + the default axes', () => {
+    const { page } = renderStep();
+    expect(page().getAttribute('data-theme')).toBe('light');
+    expect(page().getAttribute('data-style')).toBe(DEFAULT_STYLE_ID);
   });
 
-  it('Skip resets the axes to default and returns to the hub', () => {
-    const { onBack } = renderStep();
+  it('scopes a style pick to THIS PAGE — Motir (<html>) is never touched', () => {
+    const { page } = renderStep();
     fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
-    expect(document.documentElement.getAttribute('data-style')).toBe(OTHER_STYLE);
 
-    fireEvent.click(screen.getByRole('button', { name: /Skip/ }));
+    // The wizard page restyles…
+    expect(page().getAttribute('data-style')).toBe(OTHER_STYLE);
+    // …but Motir's own look (the document root) is untouched.
+    expect(document.documentElement.getAttribute('data-style')).toBeNull();
+  });
 
-    expect(document.documentElement.getAttribute('data-style')).toBe(DEFAULT_STYLE_ID);
+  it('the theme control restyles only the page (dark → section, not <html>)', () => {
+    const { page } = renderStep();
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    expect(page().getAttribute('data-theme')).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+  });
+
+  it('Reset returns the project design to its defaults', () => {
+    const { page } = renderStep();
+    fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Reset/ }));
+
+    expect(page().getAttribute('data-style')).toBe(DEFAULT_STYLE_ID);
+    expect(page().getAttribute('data-theme')).toBe('light');
+  });
+
+  it('Use this design + Back call their callbacks', () => {
+    const { onBack, onUseDesign } = renderStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Use this design' }));
+    expect(onUseDesign).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
-  it('"Use this design" confirms and moves on, keeping the chosen look', () => {
-    const { onUseDesign } = renderStep();
-    fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use this design' }));
-
-    expect(onUseDesign).toHaveBeenCalledTimes(1);
-    // The look is NOT reset — confirming keeps the pick applied.
-    expect(document.documentElement.getAttribute('data-style')).toBe(OTHER_STYLE);
-  });
-
-  it('draws the Fine-tune knobs affordance disabled (its panel is MOTIR-1246/1247)', () => {
+  it('shows no Fine-tune control (that is a separate subtask)', () => {
     renderStep();
-    const fineTune = screen.getByRole('button', { name: /Fine-tune/ }) as HTMLButtonElement;
-    expect(fineTune.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /Fine-tune/ })).toBeNull();
   });
 });

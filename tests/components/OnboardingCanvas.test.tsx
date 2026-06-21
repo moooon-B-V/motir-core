@@ -42,7 +42,12 @@ function hubState(over: Partial<DiscoveryState> = {}): DiscoveryState {
 describe('OnboardingCanvas', () => {
   it('renders the stations + the idea node on the spatial canvas', () => {
     renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea="An invoicing tool" onOpen={vi.fn()} />,
+      <OnboardingCanvas
+        state={hubState()}
+        idea="An invoicing tool"
+        onOpen={vi.fn()}
+        onOpenDesign={vi.fn()}
+      />,
     );
     expect(screen.getByText('Understanding your idea')).toBeTruthy();
     expect(screen.getByText("What we'll build")).toBeTruthy();
@@ -54,20 +59,26 @@ describe('OnboardingCanvas', () => {
   });
 
   it('draws the read-only dependency chain as edges', () => {
-    renderWithIntl(<OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} />);
+    renderWithIntl(
+      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
+    );
     // idea→discovery→vision→feasibility→validation→design→plan = 6 edges
     expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(6);
   });
 
   it('omits the idea node + its edge when there is no idea (resume)', () => {
-    renderWithIntl(<OnboardingCanvas state={hubState()} idea={null} onOpen={vi.fn()} />);
+    renderWithIntl(
+      <OnboardingCanvas state={hubState()} idea={null} onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
+    );
     expect(screen.queryByText('Your idea')).toBeNull();
     expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(5);
   });
 
   it('activating a produced tier opens its review; an upcoming station does not', () => {
     const onOpen = vi.fn();
-    renderWithIntl(<OnboardingCanvas state={hubState()} idea={null} onOpen={onOpen} />);
+    renderWithIntl(
+      <OnboardingCanvas state={hubState()} idea={null} onOpen={onOpen} onOpenDesign={vi.fn()} />,
+    );
     fireEvent.keyDown(document.querySelector('[data-node-id="discovery"]')!, { key: 'Enter' });
     expect(onOpen).toHaveBeenCalledWith('discovery');
     onOpen.mockClear();

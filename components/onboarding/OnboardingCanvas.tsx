@@ -35,9 +35,11 @@ export interface OnboardingCanvasProps {
   idea: string | null;
   /** Re-open a produced tier's read-only review. */
   onOpen: (kind: DirectionDocKind) => void;
+  /** Open the web-only design step (MOTIR-1040) — the `design` station's action. */
+  onOpenDesign: () => void;
 }
 
-export function OnboardingCanvas({ state, idea, onOpen }: OnboardingCanvasProps) {
+export function OnboardingCanvas({ state, idea, onOpen, onOpenDesign }: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
   const { positions, savePosition } = useCanvasLayout();
 
@@ -57,10 +59,23 @@ export function OnboardingCanvas({ state, idea, onOpen }: OnboardingCanvasProps)
     if (node.id === 'idea') return <IdeaCard idea={idea!.trim()} />;
     const station = stationByKind.get(node.id as StationKind);
     if (!station) return null;
-    return <StationCard station={station} doc={state.docs[node.id]} session={state.session} />;
+    return (
+      <StationCard
+        station={station}
+        doc={state.docs[node.id]}
+        session={state.session}
+        onOpenDesign={station.kind === 'design' ? onOpenDesign : undefined}
+      />
+    );
   }
 
   function onNodeActivate(id: string) {
+    // The design station opens the web-only design step (MOTIR-1040); a produced
+    // tier re-opens its read-only review.
+    if (id === 'design') {
+      onOpenDesign();
+      return;
+    }
     const station = stationByKind.get(id as StationKind);
     if (station?.openable) onOpen(id as DirectionDocKind);
   }

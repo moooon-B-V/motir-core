@@ -3722,7 +3722,8 @@
           },
           "design": {
             "title": "Design the look",
-            "subtitle": "up next · web only"
+            "subtitle": "up next · web only",
+            "cta": "Design your look"
           },
           "plan": {
             "title": "Plan → your epics",
@@ -3740,8 +3741,20 @@
     "design": {
       "header": "Pre-plan · design · web only",
       "back": "Back",
-      "title": "Design your product's look",
-      "lead": "Pick a style, palette and type. This whole page is the example — every control, button and card is rendered in your choice. Change a pick and it all restyles.",
+      "title": "Design your project's look",
+      "lead": "Pick a theme, style, palette and type for your new project. This whole page previews your choice — and only this page. The rest of Motir stays exactly as it is.",
+      "theme": {
+        "name": "Theme",
+        "help": "Light, dark, or match the device.",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System",
+        "note": {
+          "light": "Your project starts in light.",
+          "dark": "Your project starts in dark.",
+          "system": "Your project follows the device's light / dark setting."
+        }
+      },
       "style": {
         "name": "Style",
         "help": "The shape and feel — silhouette, elevation, density."
@@ -3754,14 +3767,12 @@
         "name": "Typography",
         "help": "The typeface pairing for headings and body."
       },
-      "fineTune": "Fine-tune",
-      "fineTuneSoon": "In-style knobs (density, radius, motion) — coming next",
       "example": {
-        "eyebrow": "Your look — live",
-        "label": "Live preview of the chosen style, palette and type"
+        "eyebrow": "Your project — live preview",
+        "label": "Live preview of your project in the chosen theme, style, palette and type"
       },
-      "footerNote": "Nothing locks — you can change your look any time.",
-      "skip": "Skip — use default",
+      "footerNote": "This styles your project, not Motir — nothing locks, change it any time.",
+      "reset": "Reset to default",
       "use": "Use this design"
     }
   }
