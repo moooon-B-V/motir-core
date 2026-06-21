@@ -195,10 +195,11 @@ coding). Three billing consequences:
   difference is **theirs**, paid in credits, surfaced transparently — never hidden
   in a blended bill.
 - **Motir's margin per credit is therefore uniform across models** (no involuntary
-  model-mix exposure — full numbers in `motir-meta/margin-analysis.md`): Motir
-  isn't picking the model and isn't absorbing its cost, so a pricier model depletes
-  the **user's** pool faster without thinning Motir's margin. The fixed-dollar pool
-  COGS in §2 (`credits × ~$0.00116`) holds regardless of which model the org runs.
+  model-mix exposure): Motir isn't picking the model and isn't absorbing its cost,
+  so a pricier model depletes the **user's** pool faster without thinning Motir's
+  margin. A tier's pool COGS is a fixed dollar amount set by its credit count,
+  model-independent. **The COGS / margin figures live only in the private
+  `motir-meta/margin-analysis.md`, never in this open-source repo.**
 - **Gate:** a model is **selectable only once its `ModelCreditRate` is seeded**
   (the §2 reconciliation rule) — an unpriced model can't meter (the shipped guard
   refuses it). The **default planner is DeepSeek** (cheapest); whether planning
