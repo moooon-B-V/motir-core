@@ -88,7 +88,7 @@ export function StationCard({
   return (
     <div
       className={[
-        'w-[248px] rounded-(--radius-card) border p-(--spacing-card-padding)',
+        'w-[300px] rounded-(--radius-card) border p-(--spacing-card-padding)',
         active
           ? 'border-(--el-accent) bg-(--el-surface-soft) shadow-(--shadow-card)'
           : station.state === 'upcoming'
@@ -96,7 +96,7 @@ export function StationCard({
             : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)',
       ].join(' ')}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2.5">
         <span
           className={`flex size-8 shrink-0 items-center justify-center rounded-(--radius-control) ${
             tierKind ? TIER_TINT[tierKind] : 'bg-(--el-muted)'
@@ -111,15 +111,16 @@ export function StationCard({
           <Icon className={tierKind ? 'size-4.5' : 'size-4 text-(--el-text-faint)'} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-(--el-text)">{title}</span>
+          {/* The title wraps in full (no truncation) — step names must read whole. */}
+          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            <span className="text-sm leading-snug font-semibold text-(--el-text)">{title}</span>
             {station.optional && station.state === 'upcoming' && (
-              <span className="shrink-0 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
+              <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
                 {t('canSkip')}
               </span>
             )}
           </div>
-          <span className="block truncate text-xs text-(--el-text-muted)">{subtitle}</span>
+          <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
         </div>
         <StatePill state={station.state} />
       </div>

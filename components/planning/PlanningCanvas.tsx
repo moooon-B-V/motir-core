@@ -63,7 +63,7 @@ export interface PlanningCanvasProps {
   className?: string;
 }
 
-const FALLBACK = { w: 220, h: 96 }; // edge anchoring before a node is measured
+const FALLBACK = { w: 300, h: 120 }; // edge anchoring before a node is measured
 const ACTIVATE_SLOP = 4; // px of movement that turns a click into a drag
 const ZOOM_STEP = 1.2; // the −/+ buttons (one decisive step)
 // Per wheel/trackpad EVENT — kept gentle so a trackpad (which fires many events)
