@@ -84,3 +84,40 @@ export function extractReferencedBlobUrlsFromBodies(
   }
   return urls;
 }
+
+/**
+ * The per-USER avatar prefix an avatar upload writes under (Story 8.8 ·
+ * Subtask 8.8.21) — `avatars/<userId>/…`. The personal analogue of the
+ * `attachments/<workspaceId>/` attachment prefix above: an avatar is account
+ * substrate (the account-settings area has no workspace/access axis), so it is
+ * keyed by the owning USER, not a workspace. The avatar UPLOAD route writes the
+ * blob here; `usersService.updateProfile` accepts an `image` URL only if it
+ * lands here for THAT user (so user A can never point their avatar at user B's
+ * — or any foreign — blob).
+ */
+export function avatarBlobPrefix(userId: string): string {
+  return `avatars/${userId}/`;
+}
+
+/**
+ * True iff `url` is one of OUR Vercel-Blob uploads under the calling user's own
+ * avatar prefix — the same host-suffix + pathname-prefix shape
+ * {@link extractReferencedBlobUrls} uses, scoped to a single owner instead of a
+ * Markdown body. Used to (a) GATE an `image` update to a real own-avatar URL,
+ * and (b) decide whether a REPLACED/removed prior `image` is ours to `del` — a
+ * provider URL from an OAuth signup (e.g. a Google avatar) is NOT ours and must
+ * never be deleted. A malformed / non-`https` / foreign-host / wrong-prefix URL
+ * returns false (never throws).
+ */
+export function isOwnAvatarBlobUrl(url: string | null | undefined, userId: string): boolean {
+  if (!url) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  if (!parsed.hostname.toLowerCase().endsWith(BLOB_PUBLIC_HOST_SUFFIX)) return false;
+  return parsed.pathname.startsWith(`/${avatarBlobPrefix(userId)}`);
+}

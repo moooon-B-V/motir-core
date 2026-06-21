@@ -3,7 +3,9 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { workItemsService } from '@/lib/services/workItemsService';
+import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
+import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
+import type { FilterAst } from '@/lib/filters/ast';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import { toWorkItemDto, toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
@@ -364,20 +366,28 @@ export const backlogService = {
    */
   async getBacklog(
     projectId: string,
-    options: { cursor?: string; limit?: number },
+    options: { cursor?: string; limit?: number; filterAst?: FilterAst },
     ctx: ServiceContext,
   ): Promise<RankedIssuePageDto> {
     const take = clampLimit(options.limit);
     const excludeStatusKeys = await this.backlogExcludedStatusKeys(projectId, ctx.workspaceId);
+    // Resolve the inbound filter the SAME way the board does (the 6.15.2
+    // `resolveBoardFilter` precedent): load the bounded referents + validate the
+    // AST against the registry (an invalid field/operator/value → a typed
+    // `FilterValidationError` the route maps to 422). `undefined` when nothing
+    // narrows, so both reads take the byte-for-byte unfiltered path.
+    const filter = await resolveBacklogFilter(projectId, options.filterAst, ctx);
     const rows = await workItemRepository.findBacklogPage(projectId, ctx.workspaceId, {
       take,
       cursor: options.cursor,
       excludeStatusKeys,
+      filter,
     });
     const totalCount = await workItemRepository.countBacklog(
       projectId,
       ctx.workspaceId,
       excludeStatusKeys,
+      filter,
     );
     return buildPage(rows, take, totalCount);
   },
@@ -498,6 +508,31 @@ async function resolveRank(
  */
 function dedupe(ids: string[]): string[] {
   return [...new Set(ids)];
+}
+
+/**
+ * Resolve an inbound backlog filter AST to `{ ast, referents }` — the thin
+ * `resolveBacklogFilter` the 8.8.17 card sanctions, wrapping the SHARED
+ * `loadFilterReferents` + `resolveFilterAst` (NOT a second resolver/compiler;
+ * the SQL compiler stays `compileFilterConditionsSql` in the repo). Mirrors the
+ * tail of `boardsService`'s `resolveBoardFilter`: an empty / absent AST narrows
+ * nothing → `undefined` (the unfiltered read); a non-empty AST loads the bounded
+ * Epic-5 referents (finding #57 — never load-all) and is validated against the
+ * registry, so an unknown field/operator or a bad value throws a typed
+ * `FilterValidationError` the route maps to 422. The route folds the quick
+ * facets (`kind`/`type`/`status`/`assignee`/`q`) into the AST before this, so a
+ * single predicate covers facets + the advanced builder (the board's
+ * `upgradeFacetsIntoAst` merge).
+ */
+async function resolveBacklogFilter(
+  projectId: string,
+  ast: FilterAst | undefined,
+  ctx: ServiceContext,
+): Promise<{ ast: FilterAst; referents?: ProjectFilterReferents } | undefined> {
+  if (!ast || ast.conditions.length === 0) return undefined;
+  const referents = await loadFilterReferents(projectId, ctx.workspaceId, ast);
+  resolveFilterAst(ast, referents);
+  return { ast, referents };
 }
 
 /** Clamp a requested page size to [1, MAX]; default when absent/NaN. */

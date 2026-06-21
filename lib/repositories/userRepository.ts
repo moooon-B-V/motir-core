@@ -148,4 +148,20 @@ export const userRepository = {
       data: { email: normalizeEmail(email), emailVerified: true },
     });
   },
+
+  /**
+   * Update a user's own personal details (Story 8.8 · Subtask 8.8.21) — the
+   * write behind the Account › Profile pane. A single Prisma `update`; the
+   * caller (`usersService.updateProfile`) owns validation, the transaction, and
+   * the old-blob cleanup. Only the keys PRESENT in `data` are written, so the
+   * caller updates `name` and `image` independently (and passes `image: null`
+   * to remove an avatar). Required `tx` per CLAUDE.md (write method).
+   */
+  async updateProfile(
+    tx: Prisma.TransactionClient,
+    id: string,
+    data: { name?: string; image?: string | null },
+  ): Promise<User> {
+    return tx.user.update({ where: { id }, data });
+  },
 };

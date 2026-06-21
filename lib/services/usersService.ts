@@ -2,7 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { Prisma, type User } from '@prisma/client';
 import { db } from '@/lib/db';
 import { hash, verify } from '@/lib/auth/passwords';
+import { assertPasswordStrength } from '@/lib/auth/passwordPolicy';
 import { accountRepository } from '@/lib/repositories/accountRepository';
+import { sessionRepository } from '@/lib/repositories/sessionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { emailChangeRequestRepository } from '@/lib/repositories/emailChangeRequestRepository';
 import { toUserProfileDto } from '@/lib/mappers/userMappers';
@@ -10,15 +12,34 @@ import {
   DuplicateEmailError,
   EmailChangeRateLimitedError,
   EmailTakenError,
+  InvalidAvatarUrlError,
   InvalidEmailChangeTokenError,
   InvalidEmailError,
+  InvalidProfileNameError,
+  NoCredentialPasswordError,
   SameEmailError,
   UserNotFoundError,
+  WrongCurrentPasswordError,
 } from '@/lib/users/errors';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { currentLocale } from '@/lib/i18n/serverLocale';
-import type { UserProfileDto } from '@/lib/dto/users';
+import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
+import { avatarBlobPrefix, isOwnAvatarBlobUrl } from '@/lib/blob/referencedUrls';
+import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
+import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
+import type { PasswordCapabilityDto, UserProfileDto } from '@/lib/dto/users';
+
+/** Upper bound on a profile display name (Subtask 8.8.21). Generous enough for
+ *  real names + handles, short enough to keep a row label sane. */
+export const MAX_PROFILE_NAME_LENGTH = 80;
+
+/** What `updateProfile` accepts. An OMITTED key (`undefined`) leaves that field
+ *  unchanged; `image: null` REMOVES the avatar; `image: <url>` sets it. */
+export interface UpdateProfileInput {
+  name?: string;
+  image?: string | null;
+}
 
 // Verified-email-change flow (Subtask 8.8.22) — tunables, mirrored on the
 // password-reset flow (1h token, 3/hour). The expiry copy in
@@ -68,6 +89,159 @@ export const usersService = {
   async getProfile(userId: string): Promise<UserProfileDto | null> {
     const user = await userRepository.findById(userId);
     return user ? toUserProfileDto(user) : null;
+  },
+
+  /**
+   * Whether the user can CHANGE a password (true) or must SET one via the
+   * reset-link path (false). True iff a credential Account row with a stored
+   * hash exists; OAuth-only users (Google sign-in, no credential row) are
+   * false. The Account › Profile security pane (Subtask 8.8.24) branches on
+   * this; the profile read (8.8.21) may surface it alongside name/email.
+   */
+  async getPasswordCapability(userId: string): Promise<PasswordCapabilityDto> {
+    const credential = await accountRepository.findCredentialByUserId(userId);
+    return { hasPassword: Boolean(credential?.password) };
+  },
+
+  /**
+   * Change a credential user's password: verify the current password, then
+   * store an argon2id hash of the new one. Wired for the in-app "Change
+   * password" setting (Subtask 8.8.23).
+   *
+   *   - Strength-validates the new password FIRST (typed WeakPasswordError)
+   *     and hashes it before opening the transaction, so the row lock is held
+   *     only for the verify + write, not the (CPU-heavy) argon2 hash.
+   *   - Locks the credential Account row `FOR UPDATE` and re-reads inside the
+   *     tx (lock-before-read-derived-update): two concurrent changes serialize
+   *     instead of one clobbering the other.
+   *   - OAuth-only users (no credential row) → NoCredentialPasswordError; the
+   *     UI should have routed them to the set-password path via `hasPassword`.
+   *   - Wrong current password → WrongCurrentPasswordError (never a raw
+   *     argon2/Prisma error).
+   *   - `revokeOtherSessions` (optional) deletes every OTHER session, keeping
+   *     the caller's current one (`currentSessionToken`) signed in — no cookie
+   *     rotation needed. Returns the number of sessions revoked.
+   *
+   * Hashing uses lib/auth/passwords.ts (the single argon2id primitive), so the
+   * stored hash is byte-compatible with the sign-in verify path.
+   */
+  async changePassword(input: {
+    userId: string;
+    currentPassword: string;
+    newPassword: string;
+    currentSessionToken?: string | null;
+    revokeOtherSessions?: boolean;
+  }): Promise<{ revokedSessions: number }> {
+    assertPasswordStrength(input.newPassword);
+    const newPasswordHash = await hash(input.newPassword);
+
+    return db.$transaction(async (tx) => {
+      const credential = await accountRepository.lockCredentialByUserId(input.userId, tx);
+      if (!credential?.password) {
+        throw new NoCredentialPasswordError();
+      }
+
+      const currentOk = await verify(input.currentPassword, credential.password);
+      if (!currentOk) {
+        throw new WrongCurrentPasswordError();
+      }
+
+      await accountRepository.updatePassword(credential.id, newPasswordHash, tx);
+
+      let revokedSessions = 0;
+      if (input.revokeOtherSessions && input.currentSessionToken) {
+        revokedSessions = await sessionRepository.deleteOthersForUser(
+          input.userId,
+          input.currentSessionToken,
+          tx,
+        );
+      }
+      return { revokedSessions };
+    });
+  },
+
+  /**
+   * Update the session user's OWN personal details — name and/or avatar (Story
+   * 8.8 · Subtask 8.8.21, behind the Account › Profile pane 8.8.24). Both fields
+   * are independently optional: an omitted key is untouched; `image: null`
+   * removes the avatar; `image: <url>` sets it.
+   *
+   * Validation: a present `name` must be non-empty (trimmed) and within
+   * {@link MAX_PROFILE_NAME_LENGTH}; a present non-null `image` must be one of
+   * OUR Vercel-Blob uploads under THIS user's `avatars/<userId>/` prefix
+   * (`isOwnAvatarBlobUrl`), so a foreign/arbitrary URL is rejected rather than
+   * stored. Name + avatar are keyed by the session user id and set to absolute
+   * values (not read-derived), so there is no lost-update hazard and no
+   * `FOR UPDATE` is needed (email uniqueness, which DOES race, is handled
+   * separately in 8.8.22). The single write runs in one `$transaction`.
+   *
+   * Avatar GC: when the update REPLACES or REMOVES a prior avatar that was our
+   * own-avatar blob, the old blob is `del`'d — but ONLY after the row commits
+   * (external I/O outside the tx), and ONLY when it is ours: a provider URL from
+   * an OAuth signup (e.g. a Google avatar) is never deleted.
+   */
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<UserProfileDto> {
+    const before = await userRepository.findById(userId);
+    if (!before) throw new UserNotFoundError(userId);
+
+    const data: { name?: string; image?: string | null } = {};
+
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (name.length === 0) {
+        throw new InvalidProfileNameError('Name is required.');
+      }
+      if (name.length > MAX_PROFILE_NAME_LENGTH) {
+        throw new InvalidProfileNameError(
+          `Name must be ${MAX_PROFILE_NAME_LENGTH} characters or fewer.`,
+        );
+      }
+      data.name = name;
+    }
+
+    let oldAvatarToDelete: string | null = null;
+    if (input.image !== undefined) {
+      const image = input.image; // string (set) | null (remove)
+      if (image !== null && !isOwnAvatarBlobUrl(image, userId)) {
+        throw new InvalidAvatarUrlError();
+      }
+      data.image = image;
+      // The prior avatar is ours to garbage-collect iff it's actually changing
+      // AND it's one of our own-avatar blobs (never a foreign/OAuth provider URL).
+      if (before.image && before.image !== image && isOwnAvatarBlobUrl(before.image, userId)) {
+        oldAvatarToDelete = before.image;
+      }
+    }
+
+    const updated = await db.$transaction((tx) => userRepository.updateProfile(tx, userId, data));
+
+    // Delete the replaced/removed blob AFTER the row commits (CLAUDE.md: external
+    // side-effects live outside the transaction), so a rolled-back update can
+    // never orphan a still-referenced avatar.
+    if (oldAvatarToDelete) {
+      await deleteAttachmentBlob(oldAvatarToDelete);
+    }
+
+    return toUserProfileDto(updated);
+  },
+
+  /**
+   * Store an uploaded avatar image and return its public URL (Story 8.8 ·
+   * Subtask 8.8.21) — the backend the Profile pane's `AvatarField` (8.8.24)
+   * POSTs a file to. Gates size + image-only MIME (the shared upload allowlist),
+   * then writes to the per-user `avatars/<userId>/` prefix so the URL passes
+   * `updateProfile`'s `isOwnAvatarBlobUrl` gate. Unlike an attachment upload
+   * this keeps NO audit row — an avatar is transient personal substrate, its
+   * lifecycle owned entirely by the user row's `image` column (and its GC by
+   * `updateProfile`). The caller then PATCHes the returned URL as `image`.
+   */
+  async uploadAvatar(file: File, userId: string): Promise<{ url: string }> {
+    if (file.size > MAX_UPLOAD_BYTES) throw new FileTooLargeError(MAX_UPLOAD_BYTES);
+    if (!isImageType(file.type)) throw new UnsupportedFileTypeError(file.type);
+
+    const pathname = `${avatarBlobPrefix(userId)}${file.name}`;
+    const { url } = await putAttachment(pathname, file, file.type);
+    return { url };
   },
 
   /**
