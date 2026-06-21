@@ -151,7 +151,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
         if (docsAnnounced && mountedRef.current) {
           const dto = await fetchPreplan(controller.signal);
           if (dto && mountedRef.current) {
-            dispatch({ type: 'docsLoaded', docs: mapDocs(dto) });
+            dispatch({ type: 'docsLoaded', docs: mapDocs(dto), catalog: dto.catalog });
             if (openKind) dispatch({ type: 'openReview', kind: openKind });
           }
         }
@@ -181,7 +181,12 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
       const dto = await fetchPreplan(controller.signal).catch(() => null);
       if (!mountedRef.current) return;
       if (dto) {
-        dispatch({ type: 'hydrate', session: dto.session, docs: mapDocs(dto) });
+        dispatch({
+          type: 'hydrate',
+          session: dto.session,
+          docs: mapDocs(dto),
+          catalog: dto.catalog,
+        });
       }
       const fresh = !dto || dto.session === null;
       if (fresh && initialIdea && initialIdea.trim()) {

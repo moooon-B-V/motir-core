@@ -95,6 +95,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
         <TierReviewGate
           doc={reviewing}
           availableKinds={state.producedKinds}
+          catalog={state.catalog}
           validateDecision={validateDecision}
           onNavigate={openTier}
           onBack={back}
