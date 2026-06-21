@@ -1549,6 +1549,26 @@
         "title": "Profile",
         "subtitle": "How you appear to your team."
       },
+      "photo": {
+        "label": "Photo",
+        "desc": "PNG or JPG, up to 2 MB. Shown on your avatar, comments and mentions.",
+        "alt": "Your avatar",
+        "change": "Change",
+        "remove": "Remove",
+        "uploaded": "Photo updated",
+        "removed": "Photo removed",
+        "removeConfirm": {
+          "title": "Remove photo?",
+          "body": "Your avatar will revert to your initials.",
+          "confirm": "Remove",
+          "cancel": "Cancel"
+        },
+        "errors": {
+          "invalidType": "Choose a PNG or JPG image.",
+          "tooLarge": "Image must be 2 MB or smaller.",
+          "failed": "Couldn't update your photo. Try again."
+        }
+      },
       "name": {
         "label": "Name",
         "desc": "Shown on your work, comments and mentions.",

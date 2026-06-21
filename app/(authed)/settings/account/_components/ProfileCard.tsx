@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
+import { AvatarField } from './AvatarField';
 import { updateProfileNameAction } from '../profile/actions';
 
 // The "Profile" card on the Account › Profile pane (Story 8.8 · Subtask 8.8.24,
@@ -15,9 +16,10 @@ import { updateProfileNameAction } from '../profile/actions';
 // (label + description left, control right, hairline-separated) per
 // `design/settings/profile.mock.html`. This scaffold owns the NAME row (inline
 // edit, wired to usersService.updateProfile via updateProfileNameAction) and the
-// EMAIL row (display). The sibling slices compose INTO this card: the Photo row
-// (AvatarField, 8.8.24a) above Name, the "Change email" control (8.8.24b) on the
-// Email row, and the "Password & security" card (8.8.24c) below this one.
+// EMAIL row (display). The Photo row (AvatarField, 8.8.24a) composes in ABOVE
+// Name; the remaining sibling slices compose INTO this card too: the "Change
+// email" control (8.8.24b) on the Email row, and the "Password & security" card
+// (8.8.24c) below this one.
 //
 // Page-state contract (CLAUDE.md): the name cell is a client island holding its
 // own optimistic state, so on save we KEEP the returned value here (no revert)
@@ -27,10 +29,11 @@ import { updateProfileNameAction } from '../profile/actions';
 
 export interface ProfileCardProps {
   initialName: string;
+  initialImage: string | null;
   email: string;
 }
 
-export function ProfileCard({ initialName, email }: ProfileCardProps) {
+export function ProfileCard({ initialName, initialImage, email }: ProfileCardProps) {
   const t = useTranslations('settings.profile');
   const router = useRouter();
   const { toast } = useToast();
@@ -97,8 +100,11 @@ export function ProfileCard({ initialName, email }: ProfileCardProps) {
         </div>
       }
     >
+      {/* Photo row — avatar upload + remove (slice 8.8.24a). */}
+      <AvatarField initialImage={initialImage} name={name} />
+
       {/* Name row — display value + inline edit. */}
-      <div className="flex items-start justify-between gap-4 pb-4">
+      <div className="flex items-start justify-between gap-4 border-t border-(--el-border-soft) pb-4 pt-4">
         <div className="min-w-0">
           <div className="font-sans text-sm font-medium text-(--el-text)">{t('name.label')}</div>
           <div className="mt-0.5 font-sans text-xs leading-snug text-(--el-text-muted)">

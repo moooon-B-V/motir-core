@@ -22,11 +22,16 @@ vi.mock('@/app/(authed)/settings/account/profile/actions', () => ({
 
 import { ProfileCard } from '@/app/(authed)/settings/account/_components/ProfileCard';
 
-function renderCard(props?: { initialName?: string; email?: string }) {
+function renderCard(props?: {
+  initialName?: string;
+  initialImage?: string | null;
+  email?: string;
+}) {
   return render(
     <ToastProvider>
       <ProfileCard
         initialName={props?.initialName ?? 'Zhu Yue'}
+        initialImage={props?.initialImage ?? null}
         email={props?.email ?? 'zhuyue@motir.co'}
       />
     </ToastProvider>,
