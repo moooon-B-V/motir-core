@@ -644,22 +644,38 @@
           sub: 'the roadmap continues →',
         },
       ];
+      // Epics are a DAG of the REAL plan dependencies (rendered, not designed):
+      // Foundation blocks the implementation epics; the Marketing-site epic is
+      // independent, so it runs parallel to Foundation (both straight off Plan).
       const epics = [
         {
           id: 'e1',
-          x: 410,
-          y: 640,
+          x: 380,
+          y: 620,
           title: 'Epic 1 · Foundation',
           stories: ['Auth', 'Schema', 'CI'],
         },
         {
           id: 'e2',
-          x: 410,
-          y: 820,
+          x: 700,
+          y: 540,
           title: 'Epic 2 · Invoices',
           stories: ['Create', 'Send', 'PDF'],
         },
-        { id: 'e3', x: 410, y: 1000, title: 'Epic 3 · Reminders', stories: ['Schedule', 'Email'] },
+        {
+          id: 'e3',
+          x: 700,
+          y: 740,
+          title: 'Epic 3 · Reminders',
+          stories: ['Schedule', 'Email'],
+        },
+        {
+          id: 'e4',
+          x: 380,
+          y: 900,
+          title: 'Epic 4 · Marketing site',
+          stories: ['Landing', 'Waitlist'],
+        },
       ];
 
       const world = document.getElementById('world');
@@ -769,9 +785,10 @@
       edge('feas', 'val', '#5645d4'); // into the active frontier
       edge('val', 'design', '#cfcac2', 1);
       edge('design', 'plan', '#cfcac2', 1);
-      edge('plan', 'e1', '#cfcac2', 1);
-      edge('plan', 'e2', '#cfcac2', 1);
-      edge('plan', 'e3', '#cfcac2', 1);
+      edge('plan', 'e1', '#cfcac2', 1); // → Foundation
+      edge('plan', 'e4', '#cfcac2', 1); // → Marketing site (independent → parallel to Foundation)
+      edge('e1', 'e2', '#cfcac2', 1); // Foundation blocks Invoices
+      edge('e1', 'e3', '#cfcac2', 1); // Foundation blocks Reminders
 
       // ── pan + zoom ──
       let scale = 1,

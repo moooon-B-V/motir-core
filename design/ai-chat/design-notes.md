@@ -279,6 +279,13 @@ list — it is a genuine **2D spatial canvas** (Miro / tldraw feel). Asset:
 `canvas-spatial.png` (zoomed-in detail) + `canvas-spatial-overview.png` (zoomed-out,
 the whole-project map). Approved direction (Yue, 2026-06-21):
 
+- **Render the REALITY — the canvas never invents structure.** It is a live VIEW of
+  the actual work-item tree + its actual dependencies: every node is a real station /
+  epic / story, every edge is a **real dependency edge from the plan**, and the picture
+  reflects what IS, not a designed diagram. The illustrative content in the mock
+  (PayFlow, the named epics/stories) stands in for whatever the real project is — the
+  BUILD reads the nodes + edges from the work-item graph (the pre-plan tier chain + the
+  epic/story DAG) and renders them; it never hardcodes a layout or a link.
 - **Pan** anywhere (drag the surface), **zoom in / out** (wheel / trackpad +
   `−` / `+` / `fit` controls, bounded ~30–200%). A subtle dot-grid backdrop reads
   as an infinite canvas.
@@ -293,10 +300,16 @@ the whole-project map). Approved direction (Yue, 2026-06-21):
   on the canvas** (the canvas arranges and reads; it never restructures the plan). The
   pre-plan edges are the real tier dependency **chain** — each tier builds on the one
   before it: **idea → discovery → vision → feasibility → validation → design → plan**,
-  then `plan` fans out to the **epics** (and each epic to its stories). So
-  &ldquo;What we&rsquo;ll build&rdquo; (vision) links from &ldquo;Understanding your
+  so &ldquo;What we&rsquo;ll build&rdquo; (vision) links from &ldquo;Understanding your
   idea&rdquo; (discovery), matching the conductor&rsquo;s downstream-only re-derivation
-  order (`DIRECTION_DOC_ORDER`) — NOT a free 2D branch.
+  order (`DIRECTION_DOC_ORDER`) — NOT a free 2D branch. **The post-plan epics are a
+  DAG of their REAL dependencies**, not a flat fan off `plan`: earlier epics usually
+  block later ones — **Foundation blocks the implementation epics** (`Foundation →
+Invoices`, `Foundation → Reminders`) — but it is **not a hard rule**, so independent
+  epics run in **parallel** (e.g. the app `Foundation` and a `Marketing-site` epic both
+  come straight off `plan`). Each epic fans to its stories. These edges are whatever
+  the plan&rsquo;s real dependency graph says — the canvas renders them, it doesn&rsquo;t
+  decide them.
 - **One surface, whole journey.** The pre-plan stations (idea → the 4 tiers →
   design / plan slots) live on the same canvas that later carries the **post-plan
   epic → story clusters** (zoom out → the whole-project map). The post-plan RENDER is
