@@ -57,24 +57,37 @@ export interface PlanningCanvasProps {
   renderNode: (node: CanvasNode) => ReactNode;
   /** A node was dragged to (x, y) in world coords. Omit → nodes are not draggable. */
   onNodeMove?: (id: string, x: number, y: number) => void;
+  /** A node was clicked/tapped (a press that did NOT become a drag). */
+  onNodeActivate?: (id: string) => void;
   ariaLabel?: string;
   className?: string;
 }
 
 const FALLBACK = { w: 220, h: 96 }; // edge anchoring before a node is measured
+const ACTIVATE_SLOP = 4; // px of movement that turns a click into a drag
 const ZOOM_STEP = 1.2;
 const WHEEL_STEP = 1.1;
 const PAN_KEY_STEP = 64;
 
 type Gesture =
   | { kind: 'pan'; sx: number; sy: number; tx: number; ty: number }
-  | { kind: 'node'; id: string; sx: number; sy: number; ox: number; oy: number; scale: number };
+  | {
+      kind: 'node';
+      id: string;
+      sx: number;
+      sy: number;
+      ox: number;
+      oy: number;
+      scale: number;
+      moved: boolean;
+    };
 
 export function PlanningCanvas({
   nodes,
   edges,
   renderNode,
   onNodeMove,
+  onNodeActivate,
   ariaLabel,
   className,
 }: PlanningCanvasProps) {
@@ -162,7 +175,9 @@ export function PlanningCanvas({
     const id = nodeEl?.dataset.nodeId;
     const n = id ? nodeById.get(id) : undefined;
     vp.setPointerCapture(e.pointerId);
-    if (n && onNodeMove) {
+    // A press on a node starts a node gesture when it can drag OR activate; the
+    // pointerup decides which (a press that didn't move is a click → activate).
+    if (n && (onNodeMove || onNodeActivate)) {
       gesture.current = {
         kind: 'node',
         id: n.id,
@@ -171,6 +186,7 @@ export function PlanningCanvas({
         ox: n.x,
         oy: n.y,
         scale: view.scale,
+        moved: false,
       };
     } else {
       gesture.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty };
@@ -182,11 +198,18 @@ export function PlanningCanvas({
     if (g.kind === 'pan') {
       setView((v) => ({ ...v, tx: g.tx + (e.clientX - g.sx), ty: g.ty + (e.clientY - g.sy) }));
     } else {
+      if (
+        Math.abs(e.clientX - g.sx) > ACTIVATE_SLOP ||
+        Math.abs(e.clientY - g.sy) > ACTIVATE_SLOP
+      ) {
+        g.moved = true;
+      }
+      if (!onNodeMove) return; // activate-only node: don't move it
       const d = screenDeltaToWorld(e.clientX - g.sx, e.clientY - g.sy, g.scale);
       const nx = g.ox + d.dx;
       const ny = g.oy + d.dy;
       setDragPos((p) => ({ ...p, [g.id]: { x: nx, y: ny } }));
-      onNodeMove?.(g.id, nx, ny);
+      onNodeMove(g.id, nx, ny);
     }
   }
   function endGesture(e: RPointerEvent<HTMLDivElement>) {
@@ -199,6 +222,8 @@ export function PlanningCanvas({
         delete next[g.id];
         return next;
       });
+      // A press that never moved is a click → activate the node.
+      if (!g.moved) onNodeActivate?.(g.id);
     }
   }
 
@@ -289,6 +314,16 @@ export function PlanningCanvas({
                 key={n.id}
                 data-node-id={n.id}
                 tabIndex={0}
+                onKeyDown={
+                  onNodeActivate
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onNodeActivate(n.id);
+                        }
+                      }
+                    : undefined
+                }
                 ref={(el) => {
                   if (el) nodeEls.current.set(n.id, el);
                   else nodeEls.current.delete(n.id);

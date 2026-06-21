@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import {
@@ -74,6 +74,20 @@ describe('PlanningCanvas', () => {
     expect(scaleOf(world)).toBeCloseTo(1.2);
     fireEvent.keyDown(region, { key: '0' }); // fit — does not throw (0-size viewport in jsdom)
     expect(world).toBeTruthy();
+  });
+
+  it('activates a node via the keyboard (Enter) when onNodeActivate is given', () => {
+    const onNodeActivate = vi.fn();
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={edges}
+        renderNode={renderNode}
+        onNodeActivate={onNodeActivate}
+      />,
+    );
+    fireEvent.keyDown(document.querySelector('[data-node-id="b"]')!, { key: 'Enter' });
+    expect(onNodeActivate).toHaveBeenCalledWith('b');
   });
 
   it('exposes ONLY zoom controls — no link create / edit / delete affordance', () => {
