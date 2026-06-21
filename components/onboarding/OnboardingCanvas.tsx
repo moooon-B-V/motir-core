@@ -35,11 +35,23 @@ export interface OnboardingCanvasProps {
   idea: string | null;
   /** Re-open a produced tier's read-only review. */
   onOpen: (kind: DirectionDocKind) => void;
+  /** The tier the conductor sent the user BACK to re-review (G3, MOTIR-1179) —
+   *  its station shows the "Revisiting" state. */
+  revisitingKind?: DirectionDocKind | null;
+  /** Downstream tiers re-deriving in the active cascade — "Will refresh". */
+  willRefresh?: DirectionDocKind[];
 }
 
-export function OnboardingCanvas({ state, idea, onOpen }: OnboardingCanvasProps) {
+export function OnboardingCanvas({
+  state,
+  idea,
+  onOpen,
+  revisitingKind = null,
+  willRefresh = [],
+}: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
   const { positions, savePosition } = useCanvasLayout();
+  const willRefreshSet = new Set<string>(willRefresh);
 
   const stations = buildStations(state);
   const stationByKind = new Map<StationKind, StationView>(stations.map((s) => [s.kind, s]));
@@ -57,7 +69,15 @@ export function OnboardingCanvas({ state, idea, onOpen }: OnboardingCanvasProps)
     if (node.id === 'idea') return <IdeaCard idea={idea!.trim()} />;
     const station = stationByKind.get(node.id as StationKind);
     if (!station) return null;
-    return <StationCard station={station} doc={state.docs[node.id]} session={state.session} />;
+    return (
+      <StationCard
+        station={station}
+        doc={state.docs[node.id]}
+        session={state.session}
+        revisiting={revisitingKind === node.id}
+        refreshing={willRefreshSet.has(node.id)}
+      />
+    );
   }
 
   function onNodeActivate(id: string) {

@@ -74,4 +74,18 @@ describe('OnboardingCanvas', () => {
     fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
     expect(onOpen).not.toHaveBeenCalled();
   });
+
+  it('shows the cascade-back canvas states — Revisiting + Will refresh (1179)', () => {
+    renderWithIntl(
+      <OnboardingCanvas
+        state={hubState()}
+        idea={null}
+        onOpen={vi.fn()}
+        revisitingKind="discovery"
+        willRefresh={['vision']}
+      />,
+    );
+    expect(screen.getByText('Revisiting')).toBeTruthy();
+    expect(screen.getByText('Will refresh')).toBeTruthy();
+  });
 });

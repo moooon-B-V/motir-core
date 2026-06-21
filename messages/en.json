@@ -3734,6 +3734,28 @@
         "title": "One call before we plan",
         "body": "The market check found real demand, but it's unproven for your exact take. Prove demand first — launch a small marketing site with a waitlist before building — or build straight away?",
         "blockedNote": "Pick an option to continue — Motir waits here until you choose"
+      },
+      "revisions": {
+        "historyTitle": "Revision history",
+        "historyHint": "Motir only moves forward — earlier versions stay in the log, and there's no undo. To change something, just tell Motir in the chat.",
+        "whatChangedTitle": "What changed",
+        "noChange": "Nothing changed in this revision.",
+        "currentTag": "Current",
+        "kindBaseline": "First draft",
+        "kindDirect": "Revised",
+        "kindCascade": "Auto-updated",
+        "kindOther": "Updated",
+        "whyLabel": "Why",
+        "showChanges": "Show what changed",
+        "hideChanges": "Hide changes",
+        "diffAdded": "Added",
+        "diffRemoved": "Removed",
+        "diffChanged": "Changed",
+        "cascadeBackTitle": "Going back to revisit this step",
+        "cascadeBackBody": "Your note changes something here — an earlier part of your direction. Take a look, then continue; Motir refreshes the later steps to match.",
+        "cascadeNothingLocked": "Nothing's locked — going back is always safe.",
+        "willRefreshLabel": "Will refresh",
+        "revisitingLabel": "Revisiting"
       }
     }
   }

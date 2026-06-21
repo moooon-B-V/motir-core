@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import { toDirectionDocView, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import { mapRevisions } from '@/lib/onboarding/revisions';
 import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
 import {
   type DiscoveryState,
@@ -149,7 +150,11 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
         if (docsAnnounced && mountedRef.current) {
           const dto = await fetchPreplan(controller.signal);
           if (dto && mountedRef.current) {
-            dispatch({ type: 'docsLoaded', docs: mapDocs(dto) });
+            // Thread the bodies AND the per-artifact forward revision logs + diffs
+            // (7.3.71): the gate renders the diffs from the seam, never recomputes.
+            dispatch({ type: 'docsLoaded', docs: mapDocs(dto), revisions: mapRevisions(dto) });
+            // A freshly-drafted tier opens its gate; a `revisions` cascade already
+            // routed to its attributed tier in the reducer, so don't override it.
             if (openKind) dispatch({ type: 'openReview', kind: openKind });
           }
         }
@@ -179,7 +184,12 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
       const dto = await fetchPreplan(controller.signal).catch(() => null);
       if (!mountedRef.current) return;
       if (dto) {
-        dispatch({ type: 'hydrate', session: dto.session, docs: mapDocs(dto) });
+        dispatch({
+          type: 'hydrate',
+          session: dto.session,
+          docs: mapDocs(dto),
+          revisions: mapRevisions(dto),
+        });
       }
       const fresh = !dto || dto.session === null;
       if (fresh && initialIdea && initialIdea.trim()) {

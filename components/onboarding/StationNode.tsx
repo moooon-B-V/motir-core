@@ -5,12 +5,14 @@ import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   Check,
+  CornerUpLeft,
   Lightbulb,
   ListChecks,
   type LucideIcon,
   MapPin,
   Network,
   Palette,
+  RotateCw,
   Search,
   Shapes,
   Shield,
@@ -72,12 +74,19 @@ export function StationCard({
   station,
   doc,
   session,
+  revisiting = false,
+  refreshing = false,
 }: {
   station: StationView;
   doc: DirectionDocView | undefined;
   session: DiscoverySession;
+  /** This tier is the cascade-back target (G3, MOTIR-1179) — "Revisiting". */
+  revisiting?: boolean;
+  /** This tier re-derives downstream of the cascade — "Will refresh". */
+  refreshing?: boolean;
 }) {
   const t = useTranslations('onboarding.chat.canvas');
+  const tr = useTranslations('onboarding.chat.revisions');
   const Icon = ICON[station.kind];
   const tierKind: DirectionDocKind | null = isTierKind(station.kind) ? station.kind : null;
   const active = station.state === 'active' || station.state === 'deciding';
@@ -89,13 +98,30 @@ export function StationCard({
     <div
       className={[
         'w-[300px] rounded-(--radius-card) border p-(--spacing-card-padding)',
-        active
-          ? 'border-(--el-accent) bg-(--el-surface-soft) shadow-(--shadow-card)'
-          : station.state === 'upcoming'
-            ? 'border-(--el-border-soft) bg-(--el-surface) opacity-80'
-            : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)',
+        revisiting
+          ? 'border-(--el-border-strong) bg-(--el-tint-peach) shadow-(--shadow-card)'
+          : active
+            ? 'border-(--el-accent) bg-(--el-surface-soft) shadow-(--shadow-card)'
+            : station.state === 'upcoming'
+              ? 'border-(--el-border-soft) bg-(--el-surface) opacity-80'
+              : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)',
       ].join(' ')}
     >
+      {(revisiting || refreshing) && (
+        <div
+          className={`mb-2 inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong) ${
+            revisiting ? 'bg-(--el-surface)' : 'bg-(--el-tint-sky)'
+          }`}
+        >
+          {revisiting ? (
+            <CornerUpLeft className="size-3.5" aria-hidden="true" />
+          ) : (
+            <RotateCw className="size-3.5" aria-hidden="true" />
+          )}
+          {revisiting ? tr('revisitingLabel') : tr('willRefreshLabel')}
+        </div>
+      )}
+
       <div className="flex items-start gap-2.5">
         <span
           className={`flex size-8 shrink-0 items-center justify-center rounded-(--radius-control) ${

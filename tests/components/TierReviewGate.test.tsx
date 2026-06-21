@@ -5,6 +5,7 @@ import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { TierReviewGate } from '@/components/onboarding/TierReviewGate';
 import type { DirectionDocView } from '@/lib/onboarding/directionDoc';
+import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 
 afterEach(() => cleanup());
 
@@ -20,14 +21,13 @@ describe('TierReviewGate', () => {
       <TierReviewGate
         doc={doc}
         availableKinds={['vision']}
+        revisions={[]}
         onBack={vi.fn()}
         onContinue={vi.fn()}
       />,
     );
-    // the step header + the doc body (834's DirectionDocView, embedded)
     expect(screen.getByText('Pre-plan · building your direction')).toBeTruthy();
     expect(screen.getByText(/A focused invoicing tool/)).toBeTruthy();
-    // the gate note makes "Continue = navigation, nothing locks" explicit
     expect(screen.getByText(/nothing locks until your plan generates/)).toBeTruthy();
   });
 
@@ -35,7 +35,13 @@ describe('TierReviewGate', () => {
     const onContinue = vi.fn();
     const onBack = vi.fn();
     renderWithIntl(
-      <TierReviewGate doc={doc} availableKinds={[]} onBack={onBack} onContinue={onContinue} />,
+      <TierReviewGate
+        doc={doc}
+        availableKinds={[]}
+        revisions={[]}
+        onBack={onBack}
+        onContinue={onContinue}
+      />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Looks good — continue/ }));
     expect(onContinue).toHaveBeenCalledTimes(1);
@@ -45,7 +51,14 @@ describe('TierReviewGate', () => {
 
   it('disables Continue while a turn is in flight', () => {
     renderWithIntl(
-      <TierReviewGate doc={doc} availableKinds={[]} onBack={vi.fn()} onContinue={vi.fn()} busy />,
+      <TierReviewGate
+        doc={doc}
+        availableKinds={[]}
+        revisions={[]}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+        busy
+      />,
     );
     const cont = screen.getByRole('button', { name: /Looks good — continue/ }) as HTMLButtonElement;
     expect(cont.disabled).toBe(true);
@@ -63,19 +76,53 @@ describe('TierReviewGate', () => {
       <TierReviewGate
         doc={validationDoc}
         availableKinds={[]}
+        revisions={[]}
         validateDecision={{ onProveDemand, onBuildItAll }}
         onBack={vi.fn()}
         onContinue={vi.fn()}
       />,
     );
-    // The decision block is on the page, and Continue is blocked.
     expect(screen.getByText('One call before we plan')).toBeTruthy();
     const cont = screen.getByRole('button', { name: /Looks good — continue/ }) as HTMLButtonElement;
     expect(cont.disabled).toBe(true);
-    // Choosing an option fires the decision.
     fireEvent.click(screen.getByRole('button', { name: /Prove demand first/ }));
     expect(onProveDemand).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: /No — build it all/ }));
     expect(onBuildItAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the revise / diff / cascade-back layer when the tier was revised (1179)', () => {
+    const revisedDoc: DirectionDocView = { ...doc, version: 2 };
+    const revisions: PreplanRevisionDTO[] = [
+      {
+        version: 2,
+        changeReason: 'you broadened the audience',
+        changeKind: 'direct',
+        diff: [{ path: 'pitch.headline', kind: 'changed', before: 'Freelancers', after: 'SMBs' }],
+        createdAt: '2026-06-21T00:00:00.000Z',
+      },
+      {
+        version: 1,
+        changeReason: null,
+        changeKind: 'created',
+        diff: null,
+        createdAt: '2026-06-20T00:00:00.000Z',
+      },
+    ];
+    renderWithIntl(
+      <TierReviewGate
+        doc={revisedDoc}
+        availableKinds={[]}
+        revisions={revisions}
+        cascadeActive
+        willRefresh={['vision']}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Going back to revisit this step')).toBeTruthy(); // G3 banner
+    expect(screen.getByText('What changed')).toBeTruthy(); // latest-revision diff
+    expect(screen.getByText('Pitch › Headline')).toBeTruthy();
+    expect(screen.getByText('Revision history')).toBeTruthy(); // the log viewer
   });
 });
