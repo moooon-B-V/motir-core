@@ -83,8 +83,9 @@ is not a durable commercial shape: a free account could farm unlimited free
 tenants and run an unbounded project at zero cost, and there would be no growth
 lever pulling a scaling team toward a paid plan. Yue's decision: **the cloud free
 tier is bounded** — one organization, one (default) workspace, and a **cap on the
-number of work items** (plus the secondary Linear-shaped caps: a small project
-limit and a per-file upload-size limit) — and **creating additional organizations
+number of work items** (plus the secondary caps: a small project limit, a per-file
+upload-size limit, and a per-org total-storage cap) — and **creating additional
+organizations
 requires a paid org**, precisely because the org is the charging entity (an
 ungated free-org-create loophole would defeat every per-org cap). **All these
 counts are measured at the `Organization`, the billing entity** (§4).
@@ -128,10 +129,10 @@ scope, with the self-managed/self-host build uncapped — §6.)
 Motir monetizes along **two** axes, not one. Conflating them was the gap in the
 earlier framing.
 
-| Axis                                                                       | What it gates                                                                                | Mechanism                                                                                                        | Free                                                                                                      | Paid                                                                                      |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **A. AI usage** (planning + hosted coding)                                 | every call crossing the `motir-core → motir-ai` boundary                                     | the shipped **credit** ledger (`monthlyCreditAllotment` + `topUp` overage); `out_of_credits` 402 at the boundary | small monthly allotment, **no top-ups**                                                                   | larger allotment **+ metered top-ups**                                                    |
-| **B. PM-core scale** (work items / projects / uploads / workspaces / orgs) | per-**org** counts: non-archived work items, projects, upload size, workspaces, org-creation | **entitlement caps** keyed off the org's `PlanTier`, measured at the org                                         | 1 org · 1 workspace · ≤ 3 projects · ≤ 250 non-archived work items · ≤ 10 MB/file · **unlimited members** | lifted (unlimited work items/projects, 100 MB uploads, multi-workspace, create more orgs) |
+| Axis                                                                       | What it gates                                                                                             | Mechanism                                                                                                        | Free                                                                                                                     | Paid                                                                                                 |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| **A. AI usage** (planning + hosted coding)                                 | every call crossing the `motir-core → motir-ai` boundary                                                  | the shipped **credit** ledger (`monthlyCreditAllotment` + `topUp` overage); `out_of_credits` 402 at the boundary | small monthly allotment, **no top-ups**                                                                                  | larger allotment **+ metered top-ups**                                                               |
+| **B. PM-core scale** (work items / projects / storage / workspaces / orgs) | per-**org** counts: non-archived work items, projects, per-file + total storage, workspaces, org-creation | **entitlement caps** keyed off the org's `PlanTier`, measured at the org                                         | 1 org · 1 workspace · ≤ 3 projects · ≤ 250 non-archived work items · ≤ 10 MB/file · ≤ 2 GB total · **unlimited members** | lifted (unlimited work items/projects, 100 MB/file, 100 GB total, multi-workspace, create more orgs) |
 
 - **Axis A is the open-core thesis** — the AI layers are the paid product, metered
   by credits, gated at the boundary. Confirmed to map onto the **shipped
@@ -152,14 +153,16 @@ Three tiers. Keys are the canonical `PlanTier.key` values every downstream
 subtask references. **The scale caps are measured at the `Organization`** (the
 billing entity) — see §4 for why and how each is counted.
 
-| Tier           | `PlanTier.key` | Stripe Price                          | Monthly AI allotment (v1 seed) | Credit top-ups | Non-archived work items (per org) | Projects (per org) | Max upload / file | Orgs you can create          | Workspaces / org | Members / org           |
-| -------------- | -------------- | ------------------------------------- | ------------------------------ | -------------- | --------------------------------- | ------------------ | ----------------- | ---------------------------- | ---------------- | ----------------------- |
-| **Free**       | `free`         | **none**                              | 200 credits                    | ✗              | **≤ 250**                         | **≤ 3**            | **10 MB**         | 1 (the auto-provisioned one) | 1                | unlimited               |
-| **Pro**        | `pro`          | per-seat recurring (monthly + annual) | 2 000 credits / seat           | ✓ (metered)    | unlimited                         | unlimited          | 100 MB            | unlimited                    | unlimited        | unlimited (seat-billed) |
-| **Enterprise** | `enterprise`   | none in Stripe (sales-invoiced)       | custom (contract)              | ✓              | unlimited                         | unlimited          | custom            | unlimited                    | unlimited        | unlimited               |
+| Tier           | `PlanTier.key` | Stripe Price                          | Monthly AI allotment (v1 seed) | Credit top-ups | Non-archived work items (per org) | Projects (per org) | Max upload / file | Total storage (per org) | Orgs you can create          | Workspaces / org | Members / org           |
+| -------------- | -------------- | ------------------------------------- | ------------------------------ | -------------- | --------------------------------- | ------------------ | ----------------- | ----------------------- | ---------------------------- | ---------------- | ----------------------- |
+| **Free**       | `free`         | **none**                              | 200 credits                    | ✗              | **≤ 250**                         | **≤ 3**            | **10 MB**         | **2 GB**                | 1 (the auto-provisioned one) | 1                | unlimited               |
+| **Pro**        | `pro`          | per-seat recurring (monthly + annual) | 2 000 credits / seat           | ✓ (metered)    | unlimited                         | unlimited          | 100 MB            | 100 GB                  | unlimited                    | unlimited        | unlimited (seat-billed) |
+| **Enterprise** | `enterprise`   | none in Stripe (sales-invoiced)       | custom (contract)              | ✓              | unlimited                         | unlimited          | custom            | custom                  | unlimited                    | unlimited        | unlimited               |
 
-(Upload sizes and the project/work-item caps are **v1 seed policy, tunable**, like
-the allotments — §Context.)
+(Upload sizes, total storage, and the project/work-item caps are **v1 seed
+policy, tunable**, like the allotments — §Context. Free's **2 GB** mirrors Jira's
+free tier; without a total cap, 250 items × 10 MB ≈ 2.5 GB could slip through, so
+the per-file limit alone is not enough.)
 
 **Reconciliation with shipped `motir-ai` (binding on 8.1.4 / MOTIR-1230).** The
 shipped default-assignment constant is `BASIC_TIER_KEY = 'basic'`. **Rename it to
@@ -229,15 +232,24 @@ work item`; the **org is the billing entity**, so every entitlement is measured
    allows a slightly more generous 3 because it folds the extra workspace tier away
    on free. The 250-item cap is the real wall; this is the belt-and-suspenders
    Linear-parity lever. `pro`/`enterprise`: unlimited. Gate `createProject`.
-3. **Upload size per file (tier the SHIPPED limit).** motir-core **already**
-   enforces a global **`MAX_UPLOAD_BYTES = 10 MB`** (`lib/blob/allowlist.ts`,
-   raising `FileTooLargeError`) — which is exactly Linear's free 10 MB. Make that
-   limit **tier-derived**: `free` keeps **10 MB**, `pro` raises it to **100 MB**,
-   `enterprise` custom (all tunable). The attachment upload path
-   (`attachmentsService`, `Attachment.sizeBytes`/`workspaceId`) resolves the org
-   tier and checks against the tier's limit instead of the hard-coded constant. (A
-   total-storage cap — Jira's free 2 GB shape — is a possible later addition;
-   v1 caps per-file size only.)
+3. **Uploads — TWO limits: per-file size AND total org storage.**
+   - **Per-file size (tier the SHIPPED limit).** motir-core **already** enforces a
+     global **`MAX_UPLOAD_BYTES = 10 MB`** (`lib/blob/allowlist.ts`, raising
+     `FileTooLargeError`; checked in `attachmentsService` + `usersService`) — exactly
+     Linear's free 10 MB. Make it **tier-derived**: `free` **10 MB** / `pro`
+     **100 MB** / `enterprise` custom.
+   - **Total storage per org (NEW — there is none today).** The shipped code caps
+     only per-file; nothing sums usage, so free storage is currently unbounded (250
+     × 10 MB ≈ 2.5 GB slips through). Add a **per-org total-storage cap**: `free`
+     **2 GB** (mirrors Jira's free tier) / `pro` **100 GB** / `enterprise` custom.
+     Computed as the **`SUM(Attachment.sizeBytes)` across the org's workspaces**
+     (`Attachment.workspaceId → Workspace → Organization`; blobs live in Vercel
+     Blob); checked at the upload path: reject when `currentOrgBytes + file.size`
+     exceeds the tier limit. v1 computes the sum on upload (cheap at free scale,
+     bounded by the item cap); a cached running counter is a later optimization. A
+     single-file overage from a concurrent race is benign (storage, not money), so
+     a strict `FOR UPDATE` is optional here.
+   - All four numbers are tunable seed policy.
 4. **Workspaces per org.** `free` org: **exactly 1** (the auto-provisioned default
    workspace; the "new workspace" affordance is gated). `pro`/`enterprise`:
    unlimited. (The data model already carries the tier — `organization-tier.md` §6
@@ -264,7 +276,9 @@ drops from paid to `free` (cancellation/non-payment, §5), over-cap data is
   re-upgrades. Nothing is deleted (Linear's exact behaviour).
 - Projects beyond 3 / workspaces beyond the first → **read-only / locked**; the
   user picks which to keep active (or re-upgrades). No data is removed.
-- Existing files over 10 MB stay; only NEW uploads are held to the free limit.
+- All existing files stay; only NEW uploads are held to the free per-file (10 MB)
+  and total-storage (2 GB) limits — an over-2 GB org cannot upload until it's
+  back under (delete files) or re-upgrades. Nothing is deleted automatically.
 - AI allotment → drops to the `free` allotment; top-ups disabled.
 
 ### 5. Trial, proration, dunning (subscription lifecycle → tier state)
@@ -356,9 +370,10 @@ gates the mutations. Self-host: N/A (no billing surface).
   single tier-aware entitlement helper the work-item-create / project-create /
   workspace-create / org-create services + the attachment-upload path call, behind
   `MOTIR_CLOUD`; all caps measured at the `Organization`, the work-item count
-  reuses the shipped non-archived state, and the upload gate turns the
-  already-shipped `MAX_UPLOAD_BYTES` (`lib/blob/allowlist.ts`) into a tier-derived
-  limit instead of a global constant).
+  reuses the shipped non-archived state, the per-file gate turns the already-shipped
+  `MAX_UPLOAD_BYTES` (`lib/blob/allowlist.ts`) into a tier-derived limit, and the
+  **total-storage gate is net-new** — `SUM(Attachment.sizeBytes)` per org checked
+  at upload, which nothing does today).
 - **Self-host stays GPL-3.0 and uncapped** — the caps + billing live behind
   `MOTIR_CLOUD`; the open-core PM tracker a self-hoster runs is unbounded and
   shows no checkout. The cross-story audit stays clean: 8.1 takes no dependency on
