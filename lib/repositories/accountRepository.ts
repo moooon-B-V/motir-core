@@ -63,6 +63,27 @@ export const accountRepository = {
   },
 
   /**
+   * Re-key a user's CREDENTIAL account to a new email (Subtask 8.8.22). At
+   * sign-up the credential row's `accountId` is set to the user's email; the
+   * `@@unique([providerId, accountId])` constraint then means that if a verified
+   * email change leaves `accountId` at the OLD address, a future sign-up reusing
+   * the freed address would collide on it. So the confirm flow updates this in
+   * the same transaction as the `User.email` swap. OAuth-only users have no
+   * credential row → 0 rows updated (a no-op). Returns the rows changed.
+   */
+  async updateCredentialAccountId(
+    userId: string,
+    accountId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const r = await tx.account.updateMany({
+      where: { userId, providerId: 'credential' },
+      data: { accountId },
+    });
+    return r.count;
+  },
+
+  /**
    * The user's credential (`providerId="credential"`) Account row, if any.
    * Read-only path (the `hasPassword` capability check) — no `tx`. A user has
    * at most one credential row (one per email/password identity).

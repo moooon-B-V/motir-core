@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Prisma, type User } from '@prisma/client';
 import { db } from '@/lib/db';
 import { hash, verify } from '@/lib/auth/passwords';
@@ -5,15 +6,24 @@ import { assertPasswordStrength } from '@/lib/auth/passwordPolicy';
 import { accountRepository } from '@/lib/repositories/accountRepository';
 import { sessionRepository } from '@/lib/repositories/sessionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { emailChangeRequestRepository } from '@/lib/repositories/emailChangeRequestRepository';
 import { toUserProfileDto } from '@/lib/mappers/userMappers';
 import {
   DuplicateEmailError,
+  EmailChangeRateLimitedError,
+  EmailTakenError,
   InvalidAvatarUrlError,
+  InvalidEmailChangeTokenError,
+  InvalidEmailError,
   InvalidProfileNameError,
   NoCredentialPasswordError,
+  SameEmailError,
   UserNotFoundError,
   WrongCurrentPasswordError,
 } from '@/lib/users/errors';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { currentLocale } from '@/lib/i18n/serverLocale';
 import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
 import { avatarBlobPrefix, isOwnAvatarBlobUrl } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
@@ -30,6 +40,19 @@ export interface UpdateProfileInput {
   name?: string;
   image?: string | null;
 }
+
+// Verified-email-change flow (Subtask 8.8.22) — tunables, mirrored on the
+// password-reset flow (1h token, 3/hour). The expiry copy in
+// `emailChange.tsx` MUST match `EMAIL_CHANGE_TOKEN_TTL_MS`.
+const EMAIL_CHANGE_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_CHANGE_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_CHANGE_RATE_MAX = 3; // requests per user per window
+
+// Pragmatic email shape check — the same intent as Better-Auth's signup
+// validation: a single `@` with non-empty, whitespace-free local and domain
+// parts and a dot in the domain. The real authority is delivery + the confirm
+// click; this just rejects obvious garbage before issuing a token.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Users service — business logic for the User entity.
 //
@@ -368,5 +391,183 @@ export const usersService = {
         tx,
       );
     });
+  },
+
+  /**
+   * Step 1 of a verified email change (Subtask 8.8.22): record a pending request
+   * and email a confirm link to the NEW address. Returns the result of the DB
+   * step so the caller / tests can assert it; the confirmation email is enqueued
+   * AFTER the transaction commits (see below). The email swap itself happens in
+   * `confirmEmailChange` when the link is clicked.
+   *
+   * THE CONTENDED WRITE. `User.email` is `@unique`, so a naive "is it free? →
+   * write it" races. The race is closed by the DB, not by app-level checks: the
+   * insert into `email_change_request` carries `new_email @unique`, so two
+   * concurrent requests for the SAME new address can't both succeed — the loser
+   * gets `P2002`, which we translate to a typed `EmailTakenError` (the
+   * CLAUDE.md "translate raw DB races to typed errors" contract). The
+   * `lockById` FOR UPDATE serialises a single user's own concurrent submits and
+   * gives the uniqueness re-read a stable snapshot.
+   *
+   * Order inside the transaction: lock self → validate (same-email, rate-limit,
+   * not-already-taken) → clear our own / expired stale claims on this address →
+   * insert (the guarded write). The confirmation email is a post-commit
+   * side-effect (CLAUDE.md "side-effects outside the tx"): a send failure must
+   * NOT roll back the request, so the enqueue runs after the `$transaction`
+   * resolves and rides the best-effort `sendEvent` (which swallows transport
+   * errors — the durable `email.send` job owns retries).
+   */
+  async requestEmailChange(
+    userId: string,
+    newEmail: string,
+  ): Promise<{ token: string; newEmail: string; recipientName: string }> {
+    const normalized = normalizeEmail(newEmail);
+    if (!EMAIL_RE.test(normalized)) {
+      throw new InvalidEmailError(newEmail);
+    }
+
+    const now = new Date();
+    const result = await db.$transaction(async (tx) => {
+      const user = await userRepository.lockById(userId, tx);
+      if (!user) throw new UserNotFoundError(userId);
+
+      // Resolve the locked user's current email for the same-email guard +
+      // the email recipient name (lockById returns only the id). Read inside
+      // the locked transaction for a consistent snapshot.
+      const self = await userRepository.findById(userId, tx);
+      if (!self) throw new UserNotFoundError(userId);
+      if (self.email === normalized) throw new SameEmailError();
+
+      const recent = await emailChangeRequestRepository.countRecentForUser(
+        userId,
+        new Date(now.getTime() - EMAIL_CHANGE_RATE_WINDOW_MS),
+        tx,
+      );
+      if (recent >= EMAIL_CHANGE_RATE_MAX) throw new EmailChangeRateLimitedError();
+
+      // Fast, friendly reject when the address is ALREADY owned by a confirmed
+      // user (the common, non-racy case). The DB unique index below is what
+      // actually closes the concurrent race.
+      const owner = await userRepository.findByEmail(normalized, tx);
+      if (owner) throw new EmailTakenError(normalized);
+
+      // Don't let our own prior claim, or an expired abandoned one, make this
+      // request spuriously lose the unique race.
+      await emailChangeRequestRepository.clearReusableForEmail(
+        { userId, newEmail: normalized, now },
+        tx,
+      );
+
+      const token = randomBytes(32).toString('hex');
+      try {
+        await emailChangeRequestRepository.create(
+          {
+            userId,
+            newEmail: normalized,
+            token,
+            expiresAt: new Date(now.getTime() + EMAIL_CHANGE_TOKEN_TTL_MS),
+          },
+          tx,
+        );
+      } catch (err) {
+        // Lost the concurrent race for this address → typed error, not raw P2002.
+        if (isUniqueViolation(err)) throw new EmailTakenError(normalized);
+        throw err;
+      }
+
+      return { token, newEmail: normalized, recipientName: self.name };
+    });
+
+    // Post-commit side-effect: enqueue the confirmation email. Best-effort —
+    // `sendEvent` swallows transport failures, and delivery runs in the durable
+    // `email.send` job — so a mail outage never fails an already-committed
+    // request.
+    await sendEvent('email.send', {
+      workspaceId: null,
+      idempotencyKey: result.token,
+      to: result.newEmail,
+      template: 'email-change',
+      data: {
+        recipientName: result.recipientName,
+        newEmail: result.newEmail,
+        confirmUrl: `${resolveBaseUrlTrimmed()}/api/account/confirm-email-change?token=${result.token}`,
+        locale: await currentLocale(),
+      },
+    });
+
+    return result;
+  },
+
+  /**
+   * Step 2 of a verified email change (Subtask 8.8.22): the user clicked the
+   * emailed link. Validates the single-use token, then swaps `User.email` (and
+   * re-keys the credential account's `accountId` so a freed address can be
+   * reused at signup — see `accountRepository.updateCredentialAccountId`).
+   *
+   * The token is consumed (deleted) whether or not it's still valid in time, so
+   * a leaked link can't be replayed. A second guard against the `User.email`
+   * unique index catches the narrow window where a FRESH signup grabbed the
+   * address between request and confirm → `EmailTakenError`. Unknown / used /
+   * expired tokens all surface as one `InvalidEmailChangeTokenError` (no
+   * token-probing oracle).
+   */
+  async confirmEmailChange(token: string): Promise<{ userId: string; newEmail: string }> {
+    const now = new Date();
+
+    // We must throw AFTER the transaction, not inside it: throwing inside the
+    // `$transaction` rolls back the single-use `deleteByToken`, so an
+    // invalid/expired token would survive and be replayable. So the tx returns a
+    // tagged OUTCOME (committing the consume for every terminal case) and we map
+    // it to a result/throw once it has committed.
+    type Outcome =
+      | { kind: 'invalid' }
+      | { kind: 'expired' }
+      | { kind: 'taken'; newEmail: string }
+      | { kind: 'ok'; userId: string; newEmail: string };
+
+    const outcome = await db.$transaction(async (tx): Promise<Outcome> => {
+      const request = await emailChangeRequestRepository.findByToken(token, tx);
+      if (!request) return { kind: 'invalid' };
+
+      // Single-use: consume the token now. Because we RETURN (never throw) for
+      // the terminal cases below, this delete commits with the transaction.
+      await emailChangeRequestRepository.deleteByToken(token, tx);
+      if (request.expiresAt.getTime() < now.getTime()) return { kind: 'expired' };
+
+      // Serialise against a concurrent confirm by the same user + give the
+      // uniqueness re-read a stable snapshot.
+      await userRepository.lockById(request.userId, tx);
+
+      // Re-read uniqueness to handle the common "address taken since request"
+      // case WITHOUT provoking a P2002 — a constraint violation would abort the
+      // Postgres transaction and roll back the consume above.
+      const owner = await userRepository.findByEmail(request.newEmail, tx);
+      if (owner && owner.id !== request.userId) {
+        return { kind: 'taken', newEmail: request.newEmail };
+      }
+
+      try {
+        await userRepository.updateEmail(request.userId, request.newEmail, tx);
+        await accountRepository.updateCredentialAccountId(request.userId, request.newEmail, tx);
+      } catch (err) {
+        // Backstop for the narrow race where a fresh signup claimed the address
+        // between the re-read and the swap. The tx aborts here, so the consume
+        // rolls back too — acceptable: the address is genuinely gone.
+        if (isUniqueViolation(err)) return { kind: 'taken', newEmail: request.newEmail };
+        throw err;
+      }
+
+      return { kind: 'ok', userId: request.userId, newEmail: request.newEmail };
+    });
+
+    switch (outcome.kind) {
+      case 'invalid':
+      case 'expired':
+        throw new InvalidEmailChangeTokenError();
+      case 'taken':
+        throw new EmailTakenError(outcome.newEmail);
+      case 'ok':
+        return { userId: outcome.userId, newEmail: outcome.newEmail };
+    }
   },
 };

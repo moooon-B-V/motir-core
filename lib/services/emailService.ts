@@ -3,6 +3,7 @@ import {
   passwordResetEmail,
   type PasswordResetEmailProps,
 } from '@/lib/emailTemplates/passwordReset';
+import { emailChangeEmail, type EmailChangeEmailProps } from '@/lib/emailTemplates/emailChange';
 import {
   workspaceInviteEmail,
   type WorkspaceInviteEmailProps,
@@ -52,6 +53,7 @@ import {
  */
 export type TransactionalEmail =
   | { to: string; template: 'password-reset'; data: PasswordResetEmailProps }
+  | { to: string; template: 'email-change'; data: EmailChangeEmailProps }
   | { to: string; template: 'workspace-invite'; data: WorkspaceInviteEmailProps }
   | { to: string; template: 'mention-notification'; data: MentionNotificationEmailProps }
   | {
@@ -91,6 +93,8 @@ async function renderTemplate(message: TransactionalEmail) {
   switch (message.template) {
     case 'password-reset':
       return passwordResetEmail(message.data);
+    case 'email-change':
+      return emailChangeEmail(message.data);
     case 'workspace-invite':
       return workspaceInviteEmail(message.data);
     case 'mention-notification':

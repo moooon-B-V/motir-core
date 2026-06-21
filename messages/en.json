@@ -201,6 +201,15 @@
       "fallback": "Or copy this link into your browser:",
       "expires": "This link expires in 1 hour. If you didn't request this, you can ignore this email."
     },
+    "emailChange": {
+      "subject": "Confirm your new Motir email",
+      "preview": "Confirm your new Motir email address",
+      "greeting": "Hi {name},",
+      "lede": "Confirm {email} as the new email address for your Motir account.",
+      "confirm": "Confirm new email",
+      "fallback": "Or copy this link into your browser:",
+      "expires": "This link expires in 1 hour. If you didn't request this, you can ignore this email and your address stays unchanged."
+    },
     "mentionNotification": {
       "subject": "{author} mentioned you on {identifier}: {title}",
       "preview": "{author} mentioned you on {identifier}",

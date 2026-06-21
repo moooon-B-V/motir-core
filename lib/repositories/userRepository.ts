@@ -10,8 +10,9 @@ function normalizeEmail(email: string): string {
 }
 
 export const userRepository = {
-  async findById(id: string): Promise<User | null> {
-    return db.user.findUnique({ where: { id } });
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<User | null> {
+    const client = tx ?? db;
+    return client.user.findUnique({ where: { id } });
   },
 
   /**
@@ -44,8 +45,14 @@ export const userRepository = {
     return rows[0] ?? null;
   },
 
-  async findByEmail(email: string): Promise<User | null> {
-    return db.user.findUnique({ where: { email: normalizeEmail(email) } });
+  /**
+   * Resolve a user by email. Takes an optional `tx` so the change-email flow can
+   * re-read uniqueness INSIDE its transaction (the snapshot that gates the swap);
+   * pure read-only callers omit it and use the `db` singleton.
+   */
+  async findByEmail(email: string, tx?: Prisma.TransactionClient): Promise<User | null> {
+    const client = tx ?? db;
+    return client.user.findUnique({ where: { email: normalizeEmail(email) } });
   },
 
   async findByEmailWithCredentialAccount(email: string) {
@@ -125,6 +132,20 @@ export const userRepository = {
     return tx.user.update({
       where: { id },
       data: { emailVerified: verified },
+    });
+  },
+
+  /**
+   * Swap a user's email (the confirm half of the verified-email-change flow,
+   * Subtask 8.8.22). The address has been verified by clicking the emailed link,
+   * so `emailVerified` is set true alongside. Can throw `P2002` on the
+   * `User.email` unique index if the address was claimed between request and
+   * confirm — the service catches it and rethrows `EmailTakenError`.
+   */
+  async updateEmail(id: string, email: string, tx: Prisma.TransactionClient): Promise<User> {
+    return tx.user.update({
+      where: { id },
+      data: { email: normalizeEmail(email), emailVerified: true },
     });
   },
 

@@ -63,6 +63,11 @@ model User {
 
   accounts                  Account[]
   sessions                  Session[]
+  // Back-relation for EmailChangeRequest (Subtask 8.8.22). A user may have
+  // pending verified-email-change requests (Cascade on the FK: deleting a user
+  // removes their pending change tokens — they are short-lived auth substrate,
+  // not audit, mirroring the session/account lifecycle).
+  emailChangeRequests       EmailChangeRequest[]
   workspaceMemberships      WorkspaceMembership[]
   // Back-relation for OrganizationMembership (Story 6.10). A user belongs to
   // many organizations (the root tenancy tier) — Cascade on the FK: deleting a
@@ -230,6 +235,36 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+/// Pending email-change request (Subtask 8.8.22). Changing a verified email is a
+/// two-step flow: `usersService.requestEmailChange` writes a row here and emails
+/// an opaque token; the confirm route validates the token and swaps
+/// `User.email`. We do NOT reuse the Better-Auth `Verification` table because
+/// its `identifier` is only `@@index`ed, not `@unique` — so it cannot enforce
+/// the request-time uniqueness race this feature requires. `newEmail @unique`
+/// here makes "two users cannot both claim the same new address" a DB invariant:
+/// the loser of a concurrent request hits `P2002`, which the service translates
+/// to a typed `EmailTakenError` (the same constraint-backed pattern as
+/// `User.email @unique`). The row is single-use (deleted on confirm) and carries
+/// a 1-hour expiry, mirroring the password-reset token shape. Identity-scoped
+/// and read pre-auth at confirm time (the user clicking the email link may not
+/// have a session), so — like `verification` — it carries NO RLS.
+model EmailChangeRequest {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  /// The requested new address, normalised to lowercase. `@unique` is the
+  /// race guard — a second concurrent request for the same address fails P2002.
+  newEmail  String   @unique @map("new_email")
+  /// Opaque single-use token emailed to the new address; the confirm lookup key.
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_change_request")
 }
 
 /// The ROOT tenancy tier (Story 6.10) — the account a customer signs up as, the
