@@ -25,6 +25,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createFirstProject, createWorkspace } from './_helpers/shell-session';
+// Services seed the multi-org TOPOLOGY for the last-active-project journeys
+// (Subtask 8.8.30): a single-org account has NO UI path to create org #2 — the
+// org menu's "Create organization" reveals only at >=2 orgs (progressive
+// disclosure, OrgControl `multiOrg`) — so the second org / its workspaces /
+// projects are stood up server-side, the same pattern the other at-scale seed
+// helpers use (backlog-seed, estimation-seed). The TESTED interaction (the 8.8.28
+// switch points that RECORD the pointer + the 8.8.27 re-login landing that reads
+// it) is still driven entirely through the real switchers in the UI.
+import { organizationsService } from '@/lib/services/organizationsService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
 
 // The shell's useShortcut resolves `Mod` to ⌘ on Apple platforms and Ctrl
 // elsewhere, keyed off the BROWSER's navigator.platform. Read the same signal
@@ -43,6 +54,59 @@ async function openPalette(page: Page, mod: 'Meta' | 'Control', needle: string) 
   await expect(palette).toBeVisible();
   if (needle) await page.keyboard.type(needle);
   return palette;
+}
+
+// ── Last-active-project restoration helpers (Subtask 8.8.30) ──────────────
+// The two per-device tier cookies: lib/workspaces/middleware.ts:24
+// (WORKSPACE_COOKIE_NAME) + lib/organizations/cookie.ts:12
+// (ORGANIZATION_COOKIE_NAME). A fresh login / new device carries NEITHER; the
+// account-keyed `User.lastActiveProjectId` pointer is what restores the context.
+const WORKSPACE_COOKIE = 'workspace_id';
+const ORG_COOKIE = 'motir.org';
+
+// Simulate a fresh login / new device: drop ONLY the two per-device tier cookies
+// while keeping the session (the account stays signed in). Version-agnostic — read
+// every cookie, clear, re-add all but the two — so it doesn't depend on a filtered
+// clearCookies() overload.
+async function clearDeviceTierCookies(page: Page) {
+  const remaining = (await page.context().cookies()).filter(
+    (c) => c.name !== WORKSPACE_COOKIE && c.name !== ORG_COOKIE,
+  );
+  await page.context().clearCookies();
+  if (remaining.length) await page.context().addCookies(remaining);
+}
+
+// Switch the active ORGANIZATION through the org control's "Switch organization"
+// list (revealed only at >=2 orgs). switchOrganizationAction re-points the active
+// workspace into the target org AND records that workspace's active project as the
+// global last-active pointer (8.8.28). The org-control trigger reflecting the new
+// name is the settle signal. The org rows are buttons named by org name; the
+// trigger's accessible name is its aria-label ("Organization menu"), so a
+// name-match resolves only the row.
+async function switchOrganization(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Organization menu' }).click();
+  await page.getByRole('button', { name, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Organization menu' })).toContainText(name);
+}
+
+// Switch the active WORKSPACE through the sidebar workspace switcher (revealed
+// only at >=2 workspaces in the active org). switchWorkspaceAction records the
+// destination workspace's active project as the global pointer (8.8.28).
+// NB: a workspace row's accessible name is `${name} ${role}` (it carries a role
+// pill — "Crew member"), so match the name START-anchored, not exact. (The org +
+// project rows have no pill, so those helpers can stay exact.)
+async function switchWorkspace(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Switch workspace' }).click();
+  await page.getByRole('button', { name: new RegExp(`^${name}\\b`) }).click();
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(name);
+}
+
+// Switch the active PROJECT through the sidebar project switcher.
+// setActiveProjectAction records it as the global last-active pointer (8.8.28).
+async function switchProject(page: Page, name: string) {
+  await page.getByRole('button', { name: 'Switch project' }).click();
+  await page.getByRole('button', { name, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(name);
 }
 
 // Each journey signs up a fresh user (argon2) and often creates a project or a
@@ -327,5 +391,194 @@ test.describe('@smoke shell journeys', () => {
     await expect(rail.getByRole('link', { name: 'Reports' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Docs' })).toBeVisible();
+  });
+
+  // ── 10. Re-login lands on the LAST working project (+ its workspace/org) ───
+  // The user-visible promise of Story 8.8 (8.8.27 resolver + 8.8.28 recording):
+  // log back in / open on a fresh device and land where you LEFT OFF — the last
+  // project you worked in, with its workspace and org active — not the first.
+  test('re-login restores the last working project (and its workspace + org), not the first', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const email = 'e2e-shell-flows-last-active@example.com';
+
+    // The DEFAULT (first-by-createdAt) tier-context: the auto-workspace from
+    // sign-up + a project in it. This is what a NULL pointer would fall back to,
+    // so landing here later would mean restoration FAILED.
+    await signUp(page, email);
+    await createFirstProject(page, 'Aurora');
+    await page.goto('/dashboard');
+
+    // Seed a SECOND org with two workspaces (so the workspace switcher reveals)
+    // and the target workspace with two projects (so "switch the active project"
+    // is a real choice, not the only option) — server-side, since a single-org
+    // account can't create org #2 in the UI.
+    const user = await db.user.findFirstOrThrow({ where: { email } });
+    const beacon = await organizationsService.createOrganization({
+      name: 'Beacon',
+      actorUserId: user.id,
+    });
+    const { workspace: crew } = await workspacesService.createWorkspace({
+      name: 'Crew',
+      ownerUserId: user.id,
+      organizationId: beacon.id,
+    });
+    await workspacesService.createWorkspace({
+      name: 'Depot',
+      ownerUserId: user.id,
+      organizationId: beacon.id,
+    });
+    await projectsService.createProject({
+      workspaceId: crew.id,
+      actorUserId: user.id,
+      name: 'Pinnacle',
+    });
+    await projectsService.createProject({
+      workspaceId: crew.id,
+      actorUserId: user.id,
+      name: 'Quartz',
+    });
+    const pinnacle = await db.project.findFirstOrThrow({
+      where: { name: 'Pinnacle', workspaceId: crew.id },
+    });
+
+    // The account now spans two orgs → the org switcher reveals. Drive the REAL
+    // switch points (org → workspace → project), each of which 8.8.28 wired to
+    // record the global last-active pointer. Ending on project Pinnacle makes IT
+    // the last-worked project.
+    await page.reload();
+    await switchOrganization(page, 'Beacon');
+    await switchWorkspace(page, 'Crew');
+    await switchProject(page, 'Pinnacle');
+
+    // The pointer 8.8.27 reads is the authoritative committed signal that the
+    // switches recorded — assert it before simulating the fresh session.
+    await expect
+      .poll(
+        async () =>
+          (await db.user.findUniqueOrThrow({ where: { id: user.id } })).lastActiveProjectId,
+      )
+      .toBe(pinnacle.id);
+
+    // Fresh login / new device: drop the per-device tier cookies, keep the
+    // session, reload the authed shell.
+    await clearDeviceTierCookies(page);
+    await page.goto('/dashboard');
+
+    // Restored to the LAST WORKING context — project Pinnacle, workspace Crew,
+    // org Beacon — NOT the first-by-createdAt workspace/org (Aurora in the
+    // auto-workspace). Authoritative signals: the resolved names the switchers
+    // render.
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Organization menu' })).toContainText('Beacon');
+    await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText('Crew');
+    const projectSwitcher = page.getByRole('button', { name: 'Switch project' });
+    await expect(projectSwitcher).toContainText('Pinnacle');
+    await expect(projectSwitcher).not.toContainText('Aurora');
+  });
+
+  // ── 11. Edge: a never-switched account lands on its first project ──────────
+  test('a brand-new account that never switched lands on its first workspace + project', async ({
+    page,
+  }) => {
+    const email = 'e2e-shell-flows-last-active-newuser@example.com';
+    await signUp(page, email);
+    await createFirstProject(page, 'Homestead');
+    await page.goto('/dashboard');
+
+    // A genuinely never-switched account: null the pointer the create-project
+    // flow set, so the resolver takes its NO-HISTORY branch (returns null →
+    // first-by-createdAt default) — the new-device path for a single-tenant user.
+    const user = await db.user.findFirstOrThrow({ where: { email } });
+    await db.user.update({ where: { id: user.id }, data: { lastActiveProjectId: null } });
+
+    await clearDeviceTierCookies(page);
+    await page.goto('/dashboard');
+
+    // No regression: lands on the sole workspace + its sole project. (One
+    // workspace → the workspace switcher stays hidden by progressive disclosure,
+    // so the project switcher is the load-bearing signal.)
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Homestead');
+  });
+
+  // ── 12. Edge: an archived last-active project falls back cleanly ───────────
+  // SHIPPED REALITY (not the card's "pointer clears" prose): the 8.8.27 resolver
+  // reads the project by id WITHOUT filtering archived, so the WORKSPACE + ORG
+  // still resolve from the (soft-archived, never hard-deleted) row. The real
+  // archiveProject service NULLS the membership's active-project pointer when the
+  // archived project was active, so getActiveProject then RECOVERS to a live
+  // sibling project. Net: re-login still restores the workspace/org and lands on
+  // a working project — a clean, crash-free fallback.
+  test('an archived last-active project still restores its workspace/org and recovers a live project', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const email = 'e2e-shell-flows-last-active-archived@example.com';
+    await signUp(page, email);
+    await createFirstProject(page, 'Origin');
+    await page.goto('/dashboard');
+
+    const user = await db.user.findFirstOrThrow({ where: { email } });
+    const lighthouse = await organizationsService.createOrganization({
+      name: 'Lighthouse',
+      actorUserId: user.id,
+    });
+    const { workspace: vanguard } = await workspacesService.createWorkspace({
+      name: 'Vanguard',
+      ownerUserId: user.id,
+      organizationId: lighthouse.id,
+    });
+    // Two projects so that, once the last-active one is archived, a live sibling
+    // remains for getActiveProject to recover to.
+    await projectsService.createProject({
+      workspaceId: vanguard.id,
+      actorUserId: user.id,
+      name: 'Keystone',
+    });
+    await projectsService.createProject({
+      workspaceId: vanguard.id,
+      actorUserId: user.id,
+      name: 'Relay',
+    });
+    const keystone = await db.project.findFirstOrThrow({
+      where: { name: 'Keystone', workspaceId: vanguard.id },
+    });
+
+    // Work last in Vanguard/Lighthouse; end on Keystone so it's the pointer.
+    // (switchProject('Relay') first guarantees the final switch to Keystone is a
+    // real transition that records — not a no-op same-project click.)
+    await page.reload();
+    await switchOrganization(page, 'Lighthouse');
+    await switchProject(page, 'Relay');
+    await switchProject(page, 'Keystone');
+    await expect
+      .poll(
+        async () =>
+          (await db.user.findUniqueOrThrow({ where: { id: user.id } })).lastActiveProjectId,
+      )
+      .toBe(keystone.id);
+
+    // Archive the last-active project out-of-band (between sessions) through the
+    // REAL service — it stamps archivedAt AND nulls Vanguard's active pointer.
+    await projectsService.archiveProject({
+      projectId: keystone.id,
+      workspaceId: vanguard.id,
+      actorUserId: user.id,
+    });
+
+    await clearDeviceTierCookies(page);
+    await page.goto('/dashboard');
+
+    // Workspace/org still restored (Lighthouse); the project area recovers to the
+    // live sibling (Relay) and never surfaces the archived Keystone — no crash.
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Organization menu' })).toContainText(
+      'Lighthouse',
+    );
+    const projectSwitcher = page.getByRole('button', { name: 'Switch project' });
+    await expect(projectSwitcher).toContainText('Relay');
+    await expect(projectSwitcher).not.toContainText('Keystone');
   });
 });
