@@ -41,11 +41,14 @@ export default async function AccountProfilePage() {
 async function ProfilePane({ userId }: { userId: string }) {
   const profile = await usersService.getProfile(userId);
   if (!profile) redirect('/sign-in');
-  return <ProfileCard initialName={profile.name} email={profile.email} />;
+  return (
+    <ProfileCard initialName={profile.name} initialImage={profile.image} email={profile.email} />
+  );
 }
 
-/** The loading state — a titled Card with two shimmer rows mirroring the Name +
- *  Email rows (the design's skeleton panel). */
+/** The loading state — a titled Card with shimmer rows mirroring the Photo +
+ *  Name + Email rows (the design's skeleton panel: a circular avatar
+ *  placeholder over two text rows). */
 function ProfilePaneSkeleton({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <Card
@@ -58,6 +61,13 @@ function ProfilePaneSkeleton({ title, subtitle }: { title: string; subtitle: str
       }
     >
       <div className="flex items-center justify-between gap-4 pb-4">
+        <div className="flex flex-col gap-1.5">
+          <span className="h-3.5 w-16 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
+          <span className="h-3 w-72 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
+        </div>
+        <span className="h-[52px] w-[52px] shrink-0 animate-pulse rounded-full bg-(--el-muted)" />
+      </div>
+      <div className="flex items-center justify-between gap-4 border-t border-(--el-border-soft) pb-4 pt-4">
         <div className="flex flex-col gap-1.5">
           <span className="h-3.5 w-16 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
           <span className="h-3 w-56 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />

@@ -1549,6 +1549,26 @@
         "title": "个人资料",
         "subtitle": "你在团队中的呈现方式。"
       },
+      "photo": {
+        "label": "头像",
+        "desc": "PNG 或 JPG，最大 2 MB。显示在你的头像、评论和提及中。",
+        "alt": "你的头像",
+        "change": "更换",
+        "remove": "移除",
+        "uploaded": "头像已更新",
+        "removed": "头像已移除",
+        "removeConfirm": {
+          "title": "移除头像？",
+          "body": "你的头像将恢复为姓名首字母。",
+          "confirm": "移除",
+          "cancel": "取消"
+        },
+        "errors": {
+          "invalidType": "请选择 PNG 或 JPG 图片。",
+          "tooLarge": "图片必须不超过 2 MB。",
+          "failed": "无法更新头像，请重试。"
+        }
+      },
       "name": {
         "label": "名字",
         "desc": "显示在你的工作项、评论和提及中。",
