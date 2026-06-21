@@ -1,0 +1,103 @@
+'use client';
+
+import { useCallback } from 'react';
+import { DEFAULT_SORT } from '@/lib/issues/issueListView';
+import type { IssueFilter } from '@/lib/issues/issueListFilter';
+import type { FilterAst } from '@/lib/filters/ast';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { SprintDto } from '@/lib/dto/sprints';
+import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
+import type { ComponentDto } from '@/lib/dto/components';
+import type { LabelDto } from '@/lib/dto/labels';
+import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
+import { buildBacklogFilterHref } from '@/lib/backlog/backlogFilterHref';
+import { IssueFilterBar } from '../../issues/_components/IssueFilterBar';
+import { IssueAdvancedFilter } from '../../issues/_components/IssueAdvancedFilter';
+import { SavedFilterDropdown } from '../../issues/_components/SavedFilterDropdown';
+
+// The backlog toolbar's filter affordances (Story 8.8 · Subtask 8.8.18), per
+// design/backlog/backlog-filter.mock.html panels 0–2: the enabled `[Filter]`
+// quick popover + `[Advanced]` builder + `[Saved]` picker, mounted on the BACKLOG
+// page-head toolbar in place of the formerly-disabled `[Filter]` seam. These are
+// the SAME shipped /issues components, verbatim — NO hand-rolled backlog-specific
+// filter UI — re-pointed at the backlog via the injected `buildHref`
+// (backlog-scoped URL: the filter params appended to `/backlog`, no
+// view/sort/page) so the state is shareable + reload-safe. The reused
+// `IssueFilterBar` already carries the 6.15.5 Work type facet, so the backlog
+// exposes it automatically. This is the board's 6.15.3 pattern, board → backlog.
+//
+// `view`/`sort` are inert here (the backlog has neither): with `buildHref`
+// injected, the components never reach their `buildIssueListHref` fallback that
+// would consume them — they're passed as the canonical defaults purely to satisfy
+// the shared prop contract. Unlike the board there is no over-cap "Refine filter"
+// CTA (the backlog is cursor-paginated, not capped), so the quick `[Filter]`
+// popover keeps its own internal open state, exactly as on /issues.
+
+export interface BacklogFilterControlsProps {
+  filter: IssueFilter;
+  ast: FilterAst | null;
+  statuses: WorkflowStatusDto[];
+  members: WorkspaceMemberDTO[];
+  sprints: SprintDto[];
+  customFields: CustomFieldDefinitionDTO[];
+  components: ComponentDto[];
+  referencedLabels: LabelDto[];
+  projectKey: string;
+  viewer: Viewer;
+}
+
+export function BacklogFilterControls({
+  filter,
+  ast,
+  statuses,
+  members,
+  sprints,
+  customFields,
+  components,
+  referencedLabels,
+  projectKey,
+  viewer,
+}: BacklogFilterControlsProps) {
+  const buildHref = useCallback(
+    (next: IssueFilter) => buildBacklogFilterHref({ filter: next }),
+    [],
+  );
+
+  return (
+    <>
+      <IssueFilterBar
+        filter={filter}
+        statuses={statuses}
+        members={members}
+        view="tree"
+        sort={DEFAULT_SORT}
+        ast={ast}
+        buildHref={buildHref}
+      />
+      <IssueAdvancedFilter
+        filter={filter}
+        ast={ast}
+        view="tree"
+        sort={DEFAULT_SORT}
+        statuses={statuses}
+        members={members}
+        sprints={sprints}
+        customFields={customFields}
+        components={components}
+        referencedLabels={referencedLabels}
+        projectKey={projectKey}
+        buildHref={buildHref}
+      />
+      <SavedFilterDropdown
+        projectKey={projectKey}
+        viewer={viewer}
+        view="tree"
+        sort={DEFAULT_SORT}
+        filter={filter}
+        ast={ast}
+        buildHref={buildHref}
+      />
+    </>
+  );
+}

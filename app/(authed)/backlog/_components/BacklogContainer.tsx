@@ -13,6 +13,7 @@ import { NewIssueButton } from '../../issues/_components/NewIssueButton';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { BacklogDndProvider } from './BacklogDndProvider';
 import { BacklogSkeleton } from './BacklogSkeleton';
+import { BacklogFilteredEmptyState } from './BacklogFilteredEmptyState';
 import { CreateIssueRow } from './CreateIssueRow';
 import { SprintContainer } from './SprintContainer';
 import { BACKLOG_REGION_ID } from './backlogDnd';
@@ -48,12 +49,27 @@ export function BacklogContainer({
   workflow,
   members,
   projectName,
+  filterQuery = '',
+  filterActive = false,
 }: {
   workflow: WorkflowDto;
   members: WorkspaceMemberDTO[];
   /** The active project's name — threaded to the start-sprint dialog's
    *  friendly one-active-sprint message (Subtask 4.4.5). */
   projectName: string;
+  /** The serialized active-filter querystring (Subtask 8.8.18) — appended to
+   *  every region's `/api/backlog` / `/api/sprints/[id]/issues` fetch so BOTH
+   *  regions re-project to the matching set (8.8.17/8.8.20 made the reads
+   *  filter-aware). '' when no filter narrows → the byte-for-byte unfiltered
+   *  reads. URL-driven: a filter change re-navigates the page, this prop
+   *  changes, and each region's `useRankedIssues` endpoint dep refetches (no
+   *  `router.refresh()` — the inline-edit-no-refresh contract). Optional (default
+   *  '') so the unfiltered render — and existing tests — need not pass it. */
+  filterQuery?: string;
+  /** Whether a filter is active (Subtask 8.8.18) — selects each region's
+   *  FILTERED-empty state ("nothing matches", Clear CTA / dashed placeholder)
+   *  over its brand-new-empty state (which offers create). */
+  filterActive?: boolean;
 }) {
   const t = useTranslations('backlog');
   const statusByKey = useMemo(() => buildStatusByKey(workflow.statuses), [workflow.statuses]);
@@ -161,6 +177,8 @@ export function BacklogContainer({
             onStarted={refetchSprints}
             onCompleted={handleSprintCompleted}
             issuesRefreshKey={issuesRefreshKey}
+            filterQuery={filterQuery}
+            filterActive={filterActive}
           />
         ))}
 
@@ -173,6 +191,8 @@ export function BacklogContainer({
           assigneeNameById={assigneeNameById}
           regionOrder={planning.length}
           issuesRefreshKey={issuesRefreshKey}
+          filterQuery={filterQuery}
+          filterActive={filterActive}
         />
       </div>
     </BacklogDndProvider>
@@ -187,16 +207,26 @@ function BacklogRegion({
   assigneeNameById,
   regionOrder,
   issuesRefreshKey,
+  filterQuery,
+  filterActive,
 }: {
   statusByKey: ReturnType<typeof buildStatusByKey>;
   assigneeNameById: Map<string, string>;
   regionOrder: number;
   /** Bumped when a sprint completes with carry-over to the backlog (bug 11). */
   issuesRefreshKey: number;
+  /** Active-filter querystring appended to the `/api/backlog` fetch (8.8.18). */
+  filterQuery: string;
+  filterActive: boolean;
 }) {
   const t = useTranslations('backlog');
   const [collapsed, setCollapsed] = useState(false);
-  const state = useRankedIssues('/api/backlog', issuesRefreshKey);
+  // The filter rides the fetch query so the read returns only matching rows +
+  // the FILTERED total (8.8.17). A change re-navigates the page → new
+  // `filterQuery` prop → new endpoint → `useRankedIssues` refetches (no
+  // router.refresh). The hook's lazy-load already appends `&cursor=` after a `?`.
+  const endpoint = filterQuery ? `/api/backlog?${filterQuery}` : '/api/backlog';
+  const state = useRankedIssues(endpoint, issuesRefreshKey);
 
   return (
     <section
@@ -245,12 +275,19 @@ function BacklogRegion({
             regionOrder={regionOrder}
             createRow={<CreateIssueRow sprintId={null} />}
             emptyState={
-              <EmptyState
-                icon={<Inbox className="h-12 w-12" aria-hidden />}
-                title={t('emptyTitle')}
-                description={t('emptyDescription')}
-                action={<NewIssueButton />}
-              />
+              filterActive ? (
+                // Filter active + no match → the distinct filtered-empty state
+                // (search-x + Clear filter), NOT the brand-new-backlog create
+                // prompt (the backlog isn't empty, the filter is over-narrow).
+                <BacklogFilteredEmptyState />
+              ) : (
+                <EmptyState
+                  icon={<Inbox className="h-12 w-12" aria-hidden />}
+                  title={t('emptyTitle')}
+                  description={t('emptyDescription')}
+                  action={<NewIssueButton />}
+                />
+              )
             }
           />
         </div>
