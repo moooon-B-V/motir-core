@@ -112,12 +112,12 @@ items is the better, less hostile growth lever than capping seats: a free team c
 be any size (collaboration is the product's whole point), but a free _project_
 stays small. This supersedes the earlier "no unlimited members" instinct — once
 the work-item count is the binding cap, a separate seat cap is redundant friction.
-The fit with shipped reality is exact: **Motir already has soft-archive**
-(`workitem-archive` — a non-cascading archive/unarchive), so the cap is on
-**non-archived** work items — archived items don't count, mirroring Linear's "250
-_non-archived_ issues" precisely and giving free users a built-in escape valve
-(archive to make room) instead of a hard delete. Members stay **unlimited** on
-free. (This is also GitLab/Plane-shaped: a real, permanent free plan capped by
+Motir takes Linear's **scope cap** but counts it **more strictly: ALL work items
+count — archived AND active** (Yue). Linear caps only _non-archived_ issues, which
+lets a user archive old items to stay under the cap forever; Motir closes that
+loophole by counting **every** work item in the org, so 250 is a real **total**
+ceiling (stricter than Linear's 250-active — the number is tunable). Members stay
+**unlimited** on free. (This is also GitLab/Plane-shaped: a real, permanent free plan capped by
 scope, with the self-managed/self-host build uncapped — §6.)
 
 ---
@@ -129,10 +129,10 @@ scope, with the self-managed/self-host build uncapped — §6.)
 Motir's free/paid line is gated on **two axes**, and what a paid org **pays for**
 is **two decoupled dimensions**. Keeping them separate is the core of this model.
 
-| Axis                                                                       | What it gates                                                                                             | Mechanism                                                                                                        | Free                                                                                                                     | Paid                                                                                                 |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **A. AI usage** (planning + hosted coding)                                 | every call crossing the `motir-core → motir-ai` boundary                                                  | the shipped **credit** ledger (`monthlyCreditAllotment` + `topUp` overage); `out_of_credits` 402 at the boundary | a **one-time** trial grant (signup), **no top-ups**                                                                      | an **org-level** monthly credit pool **+ metered top-ups**                                           |
-| **B. PM-core scale** (work items / projects / storage / workspaces / orgs) | per-**org** counts: non-archived work items, projects, per-file + total storage, workspaces, org-creation | **entitlement caps** measured at the org; exceeding one starts the $4/seat scaled tracker                        | 1 org · 1 workspace · ≤ 3 projects · ≤ 250 non-archived work items · ≤ 10 MB/file · ≤ 2 GB total · **unlimited members** | lifted (unlimited work items/projects, 100 MB/file, 100 GB total, multi-workspace, create more orgs) |
+| Axis                                                                       | What it gates                                                                                                    | Mechanism                                                                                                        | Free                                                                                                                         | Paid                                                                                                 |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **A. AI usage** (planning + hosted coding)                                 | every call crossing the `motir-core → motir-ai` boundary                                                         | the shipped **credit** ledger (`monthlyCreditAllotment` + `topUp` overage); `out_of_credits` 402 at the boundary | a **one-time** trial grant (signup), **no top-ups**                                                                          | an **org-level** monthly credit pool **+ metered top-ups**                                           |
+| **B. PM-core scale** (work items / projects / storage / workspaces / orgs) | per-**org** counts: work items (archived + active), projects, per-file + total storage, workspaces, org-creation | **entitlement caps** measured at the org; exceeding one starts the $4/seat scaled tracker                        | 1 org · 1 workspace · ≤ 3 projects · ≤ 250 work items (archived incl.) · ≤ 10 MB/file · ≤ 2 GB total · **unlimited members** | lifted (unlimited work items/projects, 100 MB/file, 100 GB total, multi-workspace, create more orgs) |
 
 - **Axis A is the open-core thesis** — the AI layers are the paid product, metered
   by credits, gated at the boundary. Confirmed to map onto the **shipped
@@ -142,7 +142,7 @@ is **two decoupled dimensions**. Keeping them separate is the core of this model
   is uncapped** (§6).
 - **The PM tracker itself stays free and fully-featured** — work items, boards,
   sprints, reports, search, MCP, custom fields, automation. The free tier is
-  bounded by **scale** (how many non-archived work items / workspaces / orgs),
+  bounded by **scale** (how many work items / workspaces / orgs),
   never by **feature removal** or a seat cap inside the one workspace it gives
   you. (This preserves "the PM substrate is real, not a veneer", Principle #8,
   while still giving growth a price.)
@@ -324,14 +324,15 @@ work item`; the **org is the billing entity**, so every entitlement is measured
 > the org **up** from the entity being created (work item → its project → its
 > workspace → its org) and counts there.
 
-1. **Work items (the headline cap — Linear's model).** `free` org: **≤ 250
-   non-archived work items across the whole org** (summed over every project in
-   every workspace it owns). Creating the 251st is blocked with an upgrade prompt
-   (the user can **archive** items to free room — archived items don't count,
-   mirroring Linear's "250 non-archived issues"). the **scaled tracker** lifts this (unlimited).
-   Counted via the existing soft-archive state (`workItem` `archivedAt: null`,
-   already a repository pattern), so the cap reuses shipped data — no new "deleted
-   vs active" concept. **Members are NOT seat-capped on free** — the work-item
+1. **Work items (the headline cap — Linear's scope idea, stricter).** `free` org:
+   **≤ 250 work items across the whole org — archived AND active** (summed over
+   every project in every workspace). Creating the 251st is blocked with an upgrade
+   prompt. **Archived items still count — archiving does NOT free room** (this is a
+   deliberate divergence from Linear's _non-archived_ cap; it closes the archive
+   loophole, making 250 a true total ceiling — stricter than Linear's 250-active,
+   and tunable). The **scaled tracker** lifts this (unlimited). Counted as **ALL
+   work items in the org** (a plain row count, no archive filter) — simpler than a
+   non-archived filter and ungameable. **Members are NOT seat-capped on free** — the work-item
    count is the binding lever, so a free team can be any size (collaboration is the
    point); they hit the wall on _project size_, not _headcount_. (Mirror: Linear's
    scope cap, chosen over Jira's seat cap — §Context.)
@@ -380,8 +381,9 @@ drops from paid to `free` (cancellation/non-payment, §5), over-cap data is
 **locked, never deleted**:
 
 - Work items beyond 250 → **all retained and readable; creating NEW items is
-  blocked** until the count is back under cap (archive to free room) or the org
-  re-upgrades. Nothing is deleted (Linear's exact behaviour).
+  blocked** until the org re-upgrades (or removes items to get back under 250 —
+  **archiving does NOT help, archived items still count**). Nothing is deleted
+  automatically.
 - Projects beyond 3 / workspaces beyond the first → **read-only / locked**; the
   user picks which to keep active (or re-upgrades). No data is removed.
 - All existing files stay; only NEW uploads are held to the free per-file (10 MB)
@@ -493,7 +495,7 @@ gates the mutations. Self-host: N/A (no billing surface).
   `MOTIR_CLOUD`. **Crossing any cap requires the scaled-tracker subscription (a
   motir-core org flag) to be active — the AI `PlanTier` is independent and never
   lifts a cap.** All caps measured at the `Organization`, the work-item count
-  reuses the shipped non-archived state, the per-file gate turns the already-shipped
+  counts ALL work items in the org (a plain row count, no archive filter), the per-file gate turns the already-shipped
   `MAX_UPLOAD_BYTES` (`lib/blob/allowlist.ts`) into a tier-derived limit, and the
   **total-storage gate is net-new** — `SUM(Attachment.sizeBytes)` per org checked
   at upload, which nothing does today).
