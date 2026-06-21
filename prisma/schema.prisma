@@ -58,6 +58,19 @@ model User {
   emailVerified Boolean  @default(false)
   name          String
   image         String?
+  /// The user's GLOBAL last-active project pointer (Subtask 8.8.27) — the
+  /// landing target on a fresh session/device. On login the active workspace
+  /// + org are DERIVED from this project (project → workspace → org), so the
+  /// user lands back where they last worked, cross-device. Distinct from the
+  /// per-workspace `WorkspaceMembership.activeProjectId` (which project shows
+  /// when you switch INTO a workspace); the two stay in sync because both are
+  /// written together at the switch points (Subtask 8.8.28). A single column
+  /// overwritten on each switch = last-writer-wins = "most recent", so no
+  /// timestamp column is needed. onDelete: SetNull — archiving/deleting the
+  /// project auto-clears the pointer (mirroring `activeProjectId`), so
+  /// resolution degrades to the first-by-createdAt fallback rather than
+  /// dangling at a dead project.
+  lastActiveProjectId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -177,7 +190,14 @@ model User {
   // (the appearancePreference pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
   canvasNodePositions       CanvasNodePosition[]
+  // Forward relation for the GLOBAL last-active project pointer (Subtask
+  // 8.8.27). SetNull on the FK: archiving/deleting the named project clears the
+  // pointer, never blocks the delete (the `WorkspaceMembership.activeProject`
+  // semantics). Modelled on both sides per the FK-`@relation` rule so
+  // `migrate dev` reports no drift.
+  lastActiveProject         Project?                  @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
 
+  @@index([lastActiveProjectId])
   @@map("user")
 }
 
@@ -497,6 +517,13 @@ model Project {
   // ONE relation between Project and WorkspaceMembership (the active-project
   // pointer), and both sides carry the same @relation("ActiveProject") name.
   members                WorkspaceMembership[]   @relation("ActiveProject")
+  // Back-relation for `User.lastActiveProject` (Subtask 8.8.27) — the users
+  // whose GLOBAL last-active landing pointer names this project. SetNull on the
+  // FK: archiving/deleting the project clears each user's pointer (never
+  // blocks), mirroring the `WorkspaceMembership.activeProject` pointer above.
+  // Modelled on both sides per the FK-`@relation` rule so `migrate dev` reports
+  // no drift.
+  lastActiveForUsers     User[]                  @relation("LastActiveProject")
   workItems              WorkItem[]
   workflowStatuses       WorkflowStatus[]
   workflowTransitions    WorkflowTransition[]

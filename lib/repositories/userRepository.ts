@@ -164,4 +164,20 @@ export const userRepository = {
   ): Promise<User> {
     return tx.user.update({ where: { id }, data });
   },
+
+  /**
+   * Overwrite the user's GLOBAL last-active project pointer (Subtask 8.8.27) —
+   * the landing target on a fresh session/device. A single-row UPDATE keyed by
+   * the user's own id: last-writer-wins, no read-then-write, so NO `FOR UPDATE`
+   * (concurrent switches just settle on whichever commits last, which is the
+   * intended "most recent"). Required `tx` per CLAUDE.md (write method). The
+   * `projectId` FK is validated by Postgres; an invalid id raises `P2003`.
+   */
+  async setLastActiveProject(
+    id: string,
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<User> {
+    return tx.user.update({ where: { id }, data: { lastActiveProjectId: projectId } });
+  },
 };

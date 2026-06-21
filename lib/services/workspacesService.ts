@@ -2,6 +2,7 @@ import { type MemberRole, Prisma, type Workspace, type WorkspaceMembership } fro
 import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -155,6 +156,20 @@ export interface CreateWorkspaceResult {
 export interface EnsureDefaultWorkspaceInput {
   userId: string;
   userName: string;
+}
+
+/**
+ * The resolved GLOBAL last-active context (Subtask 8.8.27) — the project the
+ * user last worked in plus the workspace + org it lives under (project →
+ * workspace → org). `resolveLastActiveContext` returns this when the pointer is
+ * set AND the project still exists AND the user still passes the workspace
+ * access gate; otherwise `null` (so the caller falls through to the
+ * first-by-createdAt default).
+ */
+export interface LastActiveContext {
+  projectId: string;
+  workspaceId: string;
+  organizationId: string;
 }
 
 export const workspacesService = {
@@ -356,6 +371,15 @@ export const workspacesService = {
           return pinned.workspaceId;
         }
       }
+      // No valid cookie pin. Before the first-by-createdAt default, try the
+      // user's GLOBAL last-active project (Subtask 8.8.27): land them back in
+      // the workspace of the project they last worked in (cross-device,
+      // account-keyed — the Linear "last visited context" standard). The
+      // resolver re-checks the access gate, so a since-revoked membership or an
+      // archived/deleted project falls through cleanly to the default below.
+      const lastActive = await this.resolveLastActiveContext(userId, tx);
+      if (lastActive) return lastActive.workspaceId;
+
       const first = await workspaceMembershipRepository.findFirstByUserWithWorkspace(userId, tx);
       if (
         first &&
@@ -371,6 +395,59 @@ export const workspacesService = {
     const name = userName ?? (await userRepository.findById(userId))?.name ?? 'My';
     const { workspace } = await this.ensureDefaultWorkspace({ userId, userName: name });
     return workspace.id;
+  },
+
+  /**
+   * Record the user's GLOBAL last-active project (Subtask 8.8.27) — the landing
+   * target a fresh session/device resolves to. A single-row last-writer-wins
+   * overwrite of `User.lastActiveProjectId`: no read-then-write and no external
+   * side effects, so it needs no `FOR UPDATE` (concurrent switches simply settle
+   * on whichever commits last — the intended "most recent"). Wrapped in a plain
+   * transaction per the one-method-one-transaction rule (no tenant GUC needed —
+   * the write is keyed by the user's own id, mirroring `usersService.updateProfile`).
+   *
+   * The write call sites (the project / workspace / org switch points) are wired
+   * in Subtask 8.8.28; this slice ships the method + its unit coverage.
+   */
+  async recordLastActiveProject(userId: string, projectId: string): Promise<void> {
+    await db.$transaction((tx) => userRepository.setLastActiveProject(userId, projectId, tx));
+  },
+
+  /**
+   * Resolve the user's GLOBAL last-active context (Subtask 8.8.27): the project
+   * pointer plus the workspace + org it derives (project → workspace → org).
+   * Returns `null` — so the caller falls through to its default — when the
+   * pointer is unset, the project no longer exists, or the user no longer passes
+   * the workspace access gate (a revoked membership, a cross-org move). A pure
+   * read: no writes, no side effects.
+   *
+   * Takes `tx` because the canonical caller (`resolveActiveWorkspace`) already
+   * runs under `withUserContext`, and the access-gate re-check
+   * (`organizationsService.resolveWorkspaceAccess`) reuses that bound
+   * transaction so the membership rows are RLS-visible in the same snapshot.
+   */
+  async resolveLastActiveContext(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LastActiveContext | null> {
+    const user = await userRepository.findById(userId, tx);
+    if (!user?.lastActiveProjectId) return null;
+
+    const project = await projectRepository.findById(user.lastActiveProjectId, tx);
+    if (!project) return null;
+
+    const access = await organizationsService.resolveWorkspaceAccess(
+      userId,
+      project.workspaceId,
+      tx,
+    );
+    if (!access) return null;
+
+    return {
+      projectId: project.id,
+      workspaceId: project.workspaceId,
+      organizationId: access.organizationId,
+    };
   },
 
   async findMembership(userId: string, workspaceId: string): Promise<WorkspaceMembership | null> {
