@@ -284,8 +284,10 @@ the whole-project map). Approved direction (Yue, 2026-06-21):
   as an infinite canvas.
 - **Nodes are draggable.** Each station is a node the user can **drag to rearrange**;
   the arrangement **PERSISTS per user, per project** (a drag survives reload — the
-  user shows the roadmap the way they want). Nodes **auto-initialise top-to-down**
-  (a sensible default layout); the user takes it from there.
+  user shows the roadmap the way they want). Nodes **auto-initialise in a
+  space-filling 2D FLOW** — a serpentine that uses the canvas WIDTH (the chain runs
+  across the top, drops, and reverses; plan fans to the epics), NOT a single
+  top-to-down column — so the space is utilised; the user takes it from there.
 - **Links are PRE-DEFINED and READ-ONLY.** Edges are the work-item / pre-plan
   dependencies, drawn as curved connectors — there is **no link create / edit / delete
   on the canvas** (the canvas arranges and reads; it never restructures the plan). The
