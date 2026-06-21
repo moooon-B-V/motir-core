@@ -161,52 +161,67 @@ is **two decoupled dimensions**. Keeping them separate is the core of this model
   top-ups or go Enterprise for more). This is **exactly the shipped shape** —
   `AiOrganization` already holds **ONE balance + ONE flat `monthlyCreditAllotment`
   per org**, never a per-seat figure (`credit-model.md` §4).
+- **Credits are funded by a per-ORG fee, NEVER by the seat fee (the margin rule).**
+  Credits cost real money to serve, so a cheap per-seat fee **cannot** subsidize
+  them: a 1-seat $4/seat org would owe more in inference than it pays. Therefore
+  each tier's AI pool carries its **own flat per-org price** set to cover that
+  pool's credit COGS + margin, **separate from** the seat fee. A 1-seat org pays
+  `$4 (tracker) + (its tier's per-org AI fee)`, and the AI fee — not the $4 — funds
+  the pool. **No margin hole at any seat count.** (This is the resolution of the
+  1-seat-floor caveat raised last revision.)
 
 So an org's bill = **(a flat low per-seat tracker fee) + (the tier's org-level AI
 credit pool)** — two Stripe line items on one subscription, moving independently.
-The **per-seat tracker fee is the SAME across every paid tier** (Starter / Pro /
-Max all unlock the identical, cap-lifted tracker — there is no reason the same
-tracker costs more on a higher tier), and **the tier you pick sets the size of the
-org AI pool**. That is what makes the tiers a clean ladder of _AI capacity_:
-Starter (planning) → Pro (planning + coding) → Max (planning + heavy agent: design,
-docs, coding at volume) → Enterprise (custom). Seats scale your tracker cost; the
-tier scales your org's AI.
+The **per-seat tracker fee is the SAME across every paid tier** (Starter /
+Standard / Pro / Max all unlock the identical, cap-lifted tracker — there is no
+reason the same tracker costs more on a higher tier), and **the tier you pick sets
+the size of the org AI pool** (funded by that tier's per-org AI fee, §2). That is what makes the tiers a clean ladder of _AI capacity_:
+**Starter** (a taste of planning) → **Standard** (everyday planning for a project)
+→ **Pro** (+ hosted coding agent) → **Max** (+ heavy agent: design, docs, coding) →
+**Enterprise** (custom). Seats scale your tracker cost; the tier scales your org's
+AI.
 
-### 2. The tier catalog — FIVE tiers (what 8.1.2 provisions, what 8.1.4 stores)
+### 2. The tier catalog — SIX tiers (what 8.1.2 provisions, what 8.1.4 stores)
 
-Five tiers; the keys are the canonical `PlanTier.key` values every downstream
-subtask references. Per the decoupling (§1), an org's bill has **two components**:
-a **flat per-seat tracker fee** (the same on every paid tier) and the **tier's
-org-level monthly AI credit pool** (what actually differs between Starter / Pro /
-Max).
+Six tiers for distinct use cases. Per §1, an org's bill = a **per-seat tracker fee**
+(cheap — covers the tracker, beats Jira/Linear) **+ a per-org AI fee** (covers the
+tier's credit pool — the margin rule). The two are independent: the **tier sets the
+credit pool and its per-org fee**; seats only scale the tracker.
 
-**Pricing — the two components:**
+**Pricing** (illustrative `$` — the STRUCTURE is fixed; exact `$` awaits the Epic-8
+credit→`$` peg):
 
-| Tier           | `PlanTier.key` | Per-seat tracker / mo | Org AI pool / mo | Grant cadence         | Top-ups | What the AI pool is for                           |
-| -------------- | -------------- | --------------------- | ---------------- | --------------------- | ------- | ------------------------------------------------- |
-| **Free**       | `free`         | $0 (capped tracker)   | 300 credits      | **ONE-TIME** (signup) | ✗       | try AI planning once                              |
-| **Starter**    | `starter`      | **$4**                | **2,000**        | monthly               | ✓       | **planning** (passes + iteration)                 |
-| **Pro**        | `pro`          | **$4**                | **8,000**        | monthly               | ✓       | **planning + coding**                             |
-| **Max**        | `max`          | **$4**                | **30,000**       | monthly               | ✓       | **planning + heavy agent** (design, docs, coding) |
-| **Enterprise** | `enterprise`   | custom                | custom           | monthly               | ✓       | custom / contract                                 |
+| Tier           | `PlanTier.key` | Use case                                      | Per-seat tracker / mo | Org AI pool / mo | Per-org AI fee / mo | Cadence      | Top-ups |
+| -------------- | -------------- | --------------------------------------------- | --------------------- | ---------------- | ------------------- | ------------ | ------- |
+| **Free**       | `free`         | register & try                                | $0 (capped)           | 300              | $0 (loss-leader)    | **ONE-TIME** | ✗       |
+| **Starter**    | `starter`      | a cheaper Jira/Linear + try planning monthly  | **$4**                | 300              | ~$5                 | monthly      | ✓       |
+| **Standard**   | `standard`     | everyday planning for one project             | **$4**                | 2,000            | ~$20                | monthly      | ✓       |
+| **Pro**        | `pro`          | planning + hosted coding agent                | **$4**                | 8,000            | ~$70                | monthly      | ✓       |
+| **Max**        | `max`          | planning + heavy agent (design, docs, coding) | **$4**                | 30,000           | ~$250               | monthly      | ✓       |
+| **Enterprise** | `enterprise`   | customized                                    | custom                | custom           | custom              | monthly      | ✓       |
 
-The **per-seat tracker fee is flat $4** across Starter/Pro/Max (≈ half of Jira's
-$8.15 / Linear's $10 — Motir wins on tracker price); the **org AI pool is the tier
-differentiator**, priced as a flat per-org line item (illustratively ~$20 / ~$80 /
-~$300 per month — pending the credit→`$` peg + the COGS check below). A 3-seat and
-a 30-seat org on the same tier get the **same** AI pool.
+**The 1-seat margin is safe by construction.** A 1-seat Starter org pays **$4 +
+~$5 = ~$9/mo**, and the **~$5 (not the $4) funds its 300 credits** — never
+underwater. A 10-seat Starter org pays **$40 + ~$5 = ~$45/mo** for the _same_ single
+AI pool. The **$4 tracker seat is the Jira/Linear competitor** (~half their price);
+the per-org AI fee scales with the **pool**, not the team.
 
-**PM-core scale caps (measured at the `Organization` — §4). Every PAID tier lifts
-them identically; only Free is capped:**
+**Free vs Starter — what the monthly fee buys.** Free gives 300 credits **once** (a
+$0 trial); Starter gives 300 credits **every month** + lifts the scale caps + the
+cheap paid tracker. Starter = "Motir as my (cheap) tracker, with a recurring taste
+of planning."
 
-| Tier                    | Non-archived work items | Projects  | Upload / file | Total storage | Workspaces | Orgs you can create | Members   |
-| ----------------------- | ----------------------- | --------- | ------------- | ------------- | ---------- | ------------------- | --------- |
-| **Free**                | **≤ 250**               | **≤ 3**   | **10 MB**     | **2 GB**      | **1**      | 1 (auto)            | unlimited |
-| **Starter / Pro / Max** | unlimited               | unlimited | 100 MB        | 100 GB        | unlimited  | unlimited           | unlimited |
-| **Enterprise**          | unlimited               | unlimited | custom        | custom        | unlimited  | unlimited           | unlimited |
+**PM-core scale caps (measured at the `Organization` — §4). Free is capped; every
+PAID tier lifts them identically:**
 
-All numbers are v1 seed policy, tunable. (Free's 2 GB mirrors Jira's free tier; the
-per-file limit alone is not enough — 250 × 10 MB ≈ 2.5 GB.)
+| Tier              | Non-archived work items | Projects  | Upload / file | Total storage | Workspaces | Orgs you can create | Members   |
+| ----------------- | ----------------------- | --------- | ------------- | ------------- | ---------- | ------------------- | --------- |
+| **Free**          | **≤ 250**               | **≤ 3**   | **10 MB**     | **2 GB**      | **1**      | 1 (auto)            | unlimited |
+| **Starter → Max** | unlimited               | unlimited | 100 MB        | 100 GB        | unlimited  | unlimited           | unlimited |
+| **Enterprise**    | unlimited               | unlimited | custom        | custom        | unlimited  | unlimited           | unlimited |
+
+The tiers differ **only by AI capacity**, never by tracker features. All numbers
+are v1 seed policy, tunable. (Free's 2 GB mirrors Jira's free tier.)
 
 **Reconciliation with shipped `motir-ai` (binding on 8.1.4 / MOTIR-1230).** The
 shipped default tier is **`basic` ("Basic"), 1,000 credits/MONTHLY**, seeded in the
@@ -214,56 +229,39 @@ shipped default tier is **`basic` ("Basic"), 1,000 credits/MONTHLY**, seeded in 
 'basic'`; `credit-model.md` §4). Changes:
 
 1. **Rename `basic` → `free`** (constant + the seeded row) and **make its grant
-   ONE-TIME** — 300 credits granted **once at provisioning**, never refreshed (Yue:
-   free AI is a trial, not a monthly allowance). Add a **cadence field on
-   `PlanTier`** (e.g. `allotmentCadence: 'one_time' | 'monthly'`, default
-   `monthly`) so the grant logic is data-driven.
-2. **Add `starter` (2,000), `pro` (8,000), `max` (30,000), `enterprise` (custom)**
-   tier rows, all `monthly` cadence.
-3. **The monthly allotment scheduler** (8.1.4b / ops) grants only **`monthly`
-   tiers with allotment > 0** — so `free` (one-time, already granted) gets no
-   refresh; the four paid tiers do.
+   ONE-TIME** — 300 credits at provisioning, never refreshed. Add a **cadence field
+   on `PlanTier`** (`allotmentCadence: 'one_time' | 'monthly'`, default `monthly`).
+2. **Add `starter` (300), `standard` (2,000), `pro` (8,000), `max` (30,000),
+   `enterprise` (custom)** rows, all `monthly` cadence.
+3. **The monthly allotment scheduler** (8.1.4b / ops) grants only **`monthly` tiers
+   with allotment > 0** — `free` (one-time) never refreshes; the five paid tiers do.
 
-A one-row update + four inserts + a nullable column add — NOT a user-data
-migration; existing `AiOrganization.planTierId` FKs (by id) stay valid. The org AI
-pool stays the shipped **flat per-org `monthlyCreditAllotment`** (NOT × seats),
-which is exactly what "AI is org-level" needs — no change to the grant shape beyond
-the cadence field.
+A one-row update + five inserts + a nullable column — NOT a user-data migration;
+existing `AiOrganization.planTierId` FKs (by id) stay valid. The pool stays the
+shipped **flat per-org `monthlyCreditAllotment`** (NOT × seats).
 
 **AI pool sizing** (off the shipped credit math — `credit-model.md`: default
 `deepseek-v4-pro` = 1.0/1k in · 2.0/1k out · ×1.5 → a representative 8k-in/1.2k-out
 turn = **16 credits**; one onboarding planning pass ≈ 150–250 credits):
 
-- **Free = 300, ONE-TIME** — ≈ one onboarding planning pass; try it once, then
-  upgrade. No top-ups.
-- **Starter = 2,000 / mo** — **planning**: ~10 planning passes / month of active
-  planning + iteration, for a team that mostly wants the cheap tracker.
-- **Pro = 8,000 / mo** — **planning + coding**: planning plus a run of hosted
-  coding subtasks (coding turns burn more than planning turns).
-- **Max = 30,000 / mo** — **planning + heavy agent**: sustained design + doc-writing
-  - coding agent work across whole epics.
-- **Enterprise = custom.**
+- **Free = 300, ONE-TIME** — try planning once.
+- **Starter = 300 / mo** — a recurring taste (~1–2 passes/mo); the cheap-tracker tier.
+- **Standard = 2,000 / mo** — everyday planning for one project (~10 passes/mo).
+- **Pro = 8,000 / mo** — planning + a run of hosted coding subtasks.
+- **Max = 30,000 / mo** — heavy agent: sustained design + docs + coding across epics.
+- **Enterprise = custom.** All paid tiers add metered **top-ups** for overage.
 
-All four paid tiers add **metered top-ups** (`creditService.topUp()`) for overage
-beyond the pool.
+**Prices (for 8.1.2; Yue to finalize with the peg):** tracker **$4/seat/mo**
+(**$40/yr**); per-org AI fees illustratively **~$5 / ~$20 / ~$70 / ~$250** for
+Starter / Standard / Pro / Max; **credit top-up $10 / 1,000**.
 
-**Per-seat + pool prices (for 8.1.2 to create; Yue to finalize before launch):**
-
-- **Tracker seat** — **$4 / seat / month**, **$40 / seat / year** (all paid tiers).
-- **AI pool (flat / org / month)** — Starter ~**$20**, Pro ~**$80**, Max ~**$300**
-  (illustrative — set with the credit→`$` peg + COGS below).
-- **Credit top-up** — metered / one-time, **$10 per 1,000 credits**, via
-  `creditService.topUp()`.
-
-> **COGS caveat (binding — the pools are flat per-org, so check the 1-seat floor).**
-> 7.2 fixes no `$`-value for a credit (`credit-model.md` §5) — Epic 8 sets the
-> credit→`$` peg. Because each tier's AI pool is a **flat per-org** amount, the
-> worst margin case is a **1-seat org** ($4 tracker + the pool fee) consuming the
-> **entire** pool: the pool's `$`-price MUST exceed the provider `$`-cost of its
-credits with margin to spare. Set each pool's price from the peg so it is never
-underwater at one seat; if a pool can't be priced profitably as flat-per-org,
-scale it with seats or raise its price (the `notes.html` #10 lesson: never ship an
-> unsustainable per-unit AI cost).
+> **COGS — resolved by construction (the margin rule, §1).** Because every tier's
+> credits are funded by its **per-org AI fee** (not the seat fee), margin holds at
+> **any** seat count, including 1. The remaining binding rule for Epic 8: when the
+> credit→`$` peg is set, fix each tier's per-org AI fee **≥ (pool credits × `$`/credit)
+> × margin**, and **never let the seat fee fund credits** (the `notes.html` #10
+> lesson). If a pool can't be priced profitably as a flat per-org fee, raise the fee
+> — do not absorb it into the seat.
 
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
@@ -271,13 +269,13 @@ A paid org's subscription carries **two recurring items**: one **shared per-seat
 tracker** price (`quantity` = seats) + one **flat per-org AI-pool** price for its
 tier (`quantity` 1). Provision:
 
-| Stripe Product                     | Prices                                                      | Billing model                                | Notes                                                                                       |
-| ---------------------------------- | ----------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Motir Tracker** (seat)           | `tracker_monthly`, `tracker_annual`                         | **recurring, per-seat** (`quantity` = seats) | the **same** item on every paid tier ($4/seat); lifts the caps                              |
-| **Motir AI — Starter / Pro / Max** | `starter_pool_{monthly,annual}`, `pro_pool_*`, `max_pool_*` | **recurring, flat per-org** (`quantity` 1)   | the tier's monthly AI credit pool; an org has **exactly one**                               |
-| **Motir Credits** (top-up)         | `credit_topup`                                              | **metered / one-time**                       | pay-as-you-go overage beyond the pool; writes via `topUp()`                                 |
-| — (Free)                           | —                                                           | —                                            | **no Stripe object** — free = no subscription (the one-time 300 is granted at provisioning) |
-| — (Enterprise)                     | —                                                           | —                                            | **no public Stripe object** — invoiced/custom; tier set by platform staff                   |
+| Stripe Product                                | Prices                                                                         | Billing model                                | Notes                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Motir Tracker** (seat)                      | `tracker_monthly`, `tracker_annual`                                            | **recurring, per-seat** (`quantity` = seats) | the **same** item on every paid tier ($4/seat); lifts the caps                              |
+| **Motir AI — Starter / Standard / Pro / Max** | `starter_pool_{monthly,annual}`, `standard_pool_*`, `pro_pool_*`, `max_pool_*` | **recurring, flat per-org** (`quantity` 1)   | the tier's monthly AI fee that **funds** its credit pool; an org has **exactly one**        |
+| **Motir Credits** (top-up)                    | `credit_topup`                                                                 | **metered / one-time**                       | pay-as-you-go overage beyond the pool; writes via `topUp()`                                 |
+| — (Free)                                      | —                                                                              | —                                            | **no Stripe object** — free = no subscription (the one-time 300 is granted at provisioning) |
+| — (Enterprise)                                | —                                                                              | —                                            | **no public Stripe object** — invoiced/custom; tier set by platform staff                   |
 
 So a 5-seat Pro org = `5 × tracker_monthly` + `1 × pro_pool_monthly`. The org's
 `PlanTier` is determined by **which pool price** sits on the subscription (8.1.4b
@@ -306,7 +304,7 @@ work item`; the **org is the billing entity**, so every entitlement is measured
    non-archived work items across the whole org** (summed over every project in
    every workspace it owns). Creating the 251st is blocked with an upgrade prompt
    (the user can **archive** items to free room — archived items don't count,
-   mirroring Linear's "250 non-archived issues"). `starter`/`pro`/`max`/`enterprise`: unlimited.
+   mirroring Linear's "250 non-archived issues"). `starter`/`standard`/`pro`/`max`/`enterprise`: unlimited.
    Counted via the existing soft-archive state (`workItem` `archivedAt: null`,
    already a repository pattern), so the cap reuses shipped data — no new "deleted
    vs active" concept. **Members are NOT seat-capped on free** — the work-item
@@ -318,7 +316,7 @@ work item`; the **org is the billing entity**, so every entitlement is measured
    analogue of a Linear **team**, and Linear's free plan caps **teams at 2**; Motir
    allows a slightly more generous 3 because it folds the extra workspace tier away
    on free. The 250-item cap is the real wall; this is the belt-and-suspenders
-   Linear-parity lever. `starter`/`pro`/`max`/`enterprise`: unlimited. Gate `createProject`.
+   Linear-parity lever. `starter`/`standard`/`pro`/`max`/`enterprise`: unlimited. Gate `createProject`.
 3. **Uploads — TWO limits: per-file size AND total org storage.**
    - **Per-file size (tier the SHIPPED limit).** motir-core **already** enforces a
      global **`MAX_UPLOAD_BYTES = 10 MB`** (`lib/blob/allowlist.ts`, raising
@@ -344,7 +342,7 @@ work item`; the **org is the billing entity**, so every entitlement is measured
 5. **Org creation.** A user may create their **first** org for free (it is
    auto-provisioned at signup — every account is an org-of-one from day one). To
    create **any additional** organization, the user MUST be **owner/admin of at
-   least one organization whose `PlanTier` is paid** (`starter`/`pro`/`max`/`enterprise`). A
+   least one organization whose `PlanTier` is paid** (`starter`/`standard`/`pro`/`max`/`enterprise`). A
    free-only account cannot spin up a second org.
    - **Rationale.** The org is the charging entity. If free-org creation were
      ungated, a user could create N free orgs and dodge the per-org work-item cap
@@ -435,17 +433,17 @@ gates the mutations. Self-host: N/A (no billing surface).
 
 - **8.1.2 (MOTIR-1141)** provisions exactly the §3 catalog: Product "Motir
   Tracker" (`tracker_monthly` + `tracker_annual`, per-seat), Product "Motir AI"
-  with the three pool Prices (`starter_pool_*` / `pro_pool_*` / `max_pool_*`, flat
-  per-org), Product "Motir Credits" (`credit_topup`, metered/one-time), the webhook
-  endpoint, the Customer Portal, and **Stripe Tax on**. No Stripe object for
-  `free`/`enterprise`.
+  with the **four** flat-per-org pool Prices (`starter_pool_*` / `standard_pool_*` /
+  `pro_pool_*` / `max_pool_*`), Product "Motir Credits" (`credit_topup`,
+  metered/one-time), the webhook endpoint, the Customer Portal, and **Stripe Tax
+  on**. No Stripe object for `free`/`enterprise`.
 - **8.1.4 (MOTIR-1145)** stores the Stripe customer/subscription against the
   `AiOrganization` (one Customer ↔ one org), **renames `BASIC_TIER_KEY` `'basic'`
   → `'free'`**, **adds a `PlanTier.allotmentCadence` (`one_time` | `monthly`)
   column**, **converts the seeded tier to `free` (300, `one_time`)**, and **adds the
-  `starter` (2,000), `pro` (8,000), `max` (30,000), `enterprise` (custom) rows**
-  (all `monthly`) — a one-row update + four inserts + a nullable column, not a
-  user-data migration.
+  `starter` (300), `standard` (2,000), `pro` (8,000), `max` (30,000), `enterprise`
+  (custom) rows** (all `monthly`) — a one-row update + five inserts + a nullable
+  column, not a user-data migration.
 - **8.1.4b (MOTIR-1230)** wires Stripe webhook events to tier/credit state
   idempotently: maps the subscription's `*_pool_*` price → `PlanTier`, applies the
   §5 status→tier map via the existing `creditService.setOrgTier()`, and grants the
