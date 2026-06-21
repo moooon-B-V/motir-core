@@ -181,6 +181,31 @@ the size of the org AI pool** (funded by that tier's per-org AI fee, §2). That 
 **Enterprise** (custom). Seats scale your tracker cost; the tier scales your org's
 AI.
 
+**AI model choice is the USER's — transparent, per-model-priced (no black box).**
+Motir does **not** silently route AI work to a model of its own choosing. The user
+**selects which model runs each kind of work** — planning, and each hosted-agent
+task type (design, docs, coding, …) — **per project** (the model catalog + the
+per-project model config live in the AI layers: Epic 7 planning, Epic 9 hosted
+coding). Three billing consequences:
+
+- **Each model carries its own cost-plus `ModelCreditRate`** (`credit-model.md`
+  §2), so the **credits a task burns reflect the chosen model's real cost** — a
+  Claude turn burns ~3.9× (Opus) to ~7.7× (Fable) the credits of a DeepSeek turn
+  for the same work. The user **sees** that and chooses with eyes open; the cost
+  difference is **theirs**, paid in credits, surfaced transparently — never hidden
+  in a blended bill.
+- **Motir's margin per credit is therefore uniform across models** (no involuntary
+  model-mix exposure — full numbers in `motir-meta/margin-analysis.md`): Motir
+  isn't picking the model and isn't absorbing its cost, so a pricier model depletes
+  the **user's** pool faster without thinning Motir's margin. The fixed-dollar pool
+  COGS in §2 (`credits × ~$0.00116`) holds regardless of which model the org runs.
+- **Gate:** a model is **selectable only once its `ModelCreditRate` is seeded**
+  (the §2 reconciliation rule) — an unpriced model can't meter (the shipped guard
+  refuses it). The **default planner is DeepSeek** (cheapest); whether planning
+  quality on the cheaper model matches Claude is a **product question to test**, and
+  the per-project override lets a user pick a pricier model for planning if they
+  want it.
+
 ### 2. The tier catalog — SIX tiers (what 8.1.2 provisions, what 8.1.4 stores)
 
 Six tiers for distinct use cases. Per §1, an org's bill = a **per-seat tracker fee**
