@@ -171,6 +171,12 @@ model User {
   // notificationPreferences / apiTokens pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
   appearancePreference      UserAppearancePreference? @relation("UserAppearancePreference")
+  // Per-user canvas node arrangements (Story 7.3 · Subtask 7.3.77) — where the
+  // user dragged each node on a project's planning canvas, persisted so a drag
+  // survives reload. Cascade: personal layout substrate, it dies with the user
+  // (the appearancePreference pattern). Modelled on both sides per the
+  // FK-`@relation` rule so `migrate dev` reports no drift.
+  canvasNodePositions       CanvasNodePosition[]
 
   @@map("user")
 }
@@ -498,6 +504,8 @@ model Project {
   boardColumns           BoardColumn[]
   boardColumnStatuses    BoardColumnStatus[]
   sprints                Sprint[]
+  // Per-user canvas node arrangements for this project (Subtask 7.3.77).
+  canvasNodePositions    CanvasNodePosition[]
   // Explicit project membership (Story 6.4). Cascades: deleting a project
   // removes its membership rows.
   memberships            ProjectMembership[]
@@ -608,6 +616,32 @@ model ProjectMembership {
   @@index([projectId])
   @@index([userId])
   @@map("project_membership")
+}
+
+/// Where a user dragged each node on a project's planning canvas (Subtask 7.3.77
+/// / MOTIR-1237). One row per (user × project × node); the canvas restores the
+/// user's arrangement on load and upserts on drag. PRIVATE per-user data (like
+/// the appearance / notification preferences — no RLS): the project is resolved
+/// server-side via getActiveProject (the user's own workspace) and every query is
+/// scoped `where userId AND projectId`. `nodeKey` is the consumer's stable id for
+/// a node (a work-item id or a pre-plan station key) — opaque to this layer.
+model CanvasNodePosition {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  projectId String   @map("project_id")
+  nodeKey   String   @map("node_key")
+  x         Float
+  y         Float
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId, nodeKey])
+  @@index([userId, projectId])
+  @@index([projectId])
+  @@map("canvas_node_position")
 }
 
 /// A retired project key (Story 6.8) — when a project's `identifier` changes
