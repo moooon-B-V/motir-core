@@ -3734,7 +3734,35 @@
         "title": "One call before we plan",
         "body": "The market check found real demand, but it's unproven for your exact take. Prove demand first — launch a small marketing site with a waitlist before building — or build straight away?",
         "blockedNote": "Pick an option to continue — Motir waits here until you choose"
-      }
+      },
+      "designLook": "Design your look"
+    },
+    "design": {
+      "header": "Pre-plan · design · web only",
+      "back": "Back",
+      "title": "Design your product's look",
+      "lead": "Pick a style, palette and type. This whole page is the example — every control, button and card is rendered in your choice. Change a pick and it all restyles.",
+      "style": {
+        "name": "Style",
+        "help": "The shape and feel — silhouette, elevation, density."
+      },
+      "palette": {
+        "name": "Palette",
+        "help": "The colour scheme the interface wears."
+      },
+      "type": {
+        "name": "Typography",
+        "help": "The typeface pairing for headings and body."
+      },
+      "fineTune": "Fine-tune",
+      "fineTuneSoon": "In-style knobs (density, radius, motion) — coming next",
+      "example": {
+        "eyebrow": "Your look — live",
+        "label": "Live preview of the chosen style, palette and type"
+      },
+      "footerNote": "Nothing locks — you can change your look any time.",
+      "skip": "Skip — use default",
+      "use": "Use this design"
     }
   }
 }

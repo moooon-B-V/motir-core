@@ -169,7 +169,9 @@ export interface ValidateEarlyAsk {
   recommendation: string;
 }
 
-export type DiscoveryView = 'hub' | 'review';
+// 'design' is the web-only full-page design step (Subtask 7.3.27 / MOTIR-1040) —
+// reached from the hub, styling its WHOLE self via the shipped three-axis runtime.
+export type DiscoveryView = 'hub' | 'review' | 'design';
 
 export interface DiscoveryState {
   turns: ChatTurn[];
@@ -235,6 +237,7 @@ export type DiscoveryAction =
   | { type: 'streamEnd' }
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
+  | { type: 'openDesign' }
   | { type: 'backToHub' }
   | { type: 'dismissError' };
 
@@ -334,6 +337,9 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
     case 'openReview':
       if (!(action.kind in state.docs)) return state;
       return { ...state, activeKind: action.kind, view: 'review' };
+
+    case 'openDesign':
+      return { ...state, view: 'design' };
 
     case 'backToHub':
       return { ...state, view: 'hub' };

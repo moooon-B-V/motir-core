@@ -2,10 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DiscoveryChatRail } from './DiscoveryChatRail';
 import { TierReviewGate } from './TierReviewGate';
+import { DesignStep } from './DesignStep';
 import { OnboardingCanvas } from './OnboardingCanvas';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
@@ -34,8 +35,16 @@ export interface DiscoveryOnboardingProps {
 
 export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
   const t = useTranslations('onboarding.chat');
-  const { state, send, continueTier, decideValidateEarly, openTier, back, dismissError } =
-    useDiscoveryChat({ initialIdea });
+  const {
+    state,
+    send,
+    continueTier,
+    decideValidateEarly,
+    openTier,
+    openDesign,
+    back,
+    dismissError,
+  } = useDiscoveryChat({ initialIdea });
 
   // The loop seeds the first turn from the preserved idea (the 7.3.14 cookie);
   // clear that cookie once, on mount, so it can't re-seed a later visit.
@@ -59,6 +68,17 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
   // The seed idea for the canvas idea node: the preserved cookie on a fresh visit,
   // else the first user turn (the idea is opaque inside a resumed session).
   const idea = initialIdea ?? state.turns.find((turn) => turn.role === 'user')?.text ?? null;
+
+  // The web-only full-page design step (MOTIR-1040) — styles its whole self via
+  // the shipped three-axis runtime; "Use this design" returns to the hub with the
+  // look applied (the plan exit is MOTIR-1041).
+  if (state.view === 'design') {
+    return (
+      <div className="h-dvh w-full">
+        <DesignStep onBack={back} onUseDesign={back} />
+      </div>
+    );
+  }
 
   if (reviewing) {
     // The blocking validate-demand-first decision (MOTIR-1064) appears ON the
@@ -93,6 +113,18 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
       canvas={
         <div className="relative h-full min-h-0 w-full">
           <OnboardingCanvas state={state} idea={idea} onOpen={openTier} />
+          {/* The door to the web-only design step (MOTIR-1040). The conductor
+              also offers it in chat (cross-repo, MOTIR-1099) — this is the always
+              -visible affordance so the step is reachable on its own. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            className="absolute top-4 right-4 bg-(--el-page-bg)"
+            leftIcon={<Palette className="size-4" />}
+            onClick={openDesign}
+          >
+            {t('designLook')}
+          </Button>
           {complete && (
             <div className="absolute right-4 bottom-4 max-w-[20rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-mint) px-4 py-4 shadow-(--shadow-card)">
               <p className="font-medium text-(--el-text-strong)">{t('completeTitle')}</p>
