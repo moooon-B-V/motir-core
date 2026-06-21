@@ -445,8 +445,8 @@
   <body>
     <div class="frame">
       <div class="viewport" id="vp">
-        <svg class="world edges" id="edges" width="1100" height="2000"></svg>
-        <div class="world" id="world" style="width: 1100px; height: 2000px"></div>
+        <svg class="world edges" id="edges" width="1080" height="1180"></svg>
+        <div class="world" id="world" style="width: 1080px; height: 1180px"></div>
 
         <!-- fixed canvas chrome -->
         <div class="overlay-top">
@@ -548,8 +548,8 @@
       const nodes = [
         {
           id: 'idea',
-          x: 330,
-          y: 40,
+          x: 70,
+          y: 60,
           cls: 'compact',
           tile: '#5645d4',
           tileBg: '#ece9fb',
@@ -559,8 +559,8 @@
         },
         {
           id: 'disc',
-          x: 300,
-          y: 240,
+          x: 410,
+          y: 50,
           tileBg: 'var(--sky)',
           tile: '#0075de',
           icon: 'search',
@@ -575,8 +575,8 @@
         },
         {
           id: 'vis',
-          x: 300,
-          y: 530,
+          x: 760,
+          y: 50,
           tileBg: 'var(--lavender)',
           tile: '#5645d4',
           icon: 'shapes',
@@ -590,8 +590,8 @@
         },
         {
           id: 'feas',
-          x: 300,
-          y: 800,
+          x: 760,
+          y: 400,
           tileBg: 'var(--mint)',
           tile: '#1aae39',
           icon: 'shield',
@@ -606,8 +606,8 @@
         },
         {
           id: 'val',
-          x: 300,
-          y: 1070,
+          x: 410,
+          y: 400,
           tileBg: 'var(--peach)',
           tile: '#dd5b00',
           icon: 'list',
@@ -622,8 +622,8 @@
         },
         {
           id: 'design',
-          x: 330,
-          y: 1360,
+          x: 70,
+          y: 420,
           cls: 'compact upcoming',
           tileBg: 'var(--mutedfill)',
           tile: '#a4a097',
@@ -634,8 +634,8 @@
         },
         {
           id: 'plan',
-          x: 330,
-          y: 1550,
+          x: 70,
+          y: 720,
           cls: 'compact upcoming',
           tileBg: 'var(--mutedfill)',
           tile: '#a4a097',
@@ -647,19 +647,19 @@
       const epics = [
         {
           id: 'e1',
-          x: 680,
-          y: 1440,
+          x: 410,
+          y: 640,
           title: 'Epic 1 · Foundation',
           stories: ['Auth', 'Schema', 'CI'],
         },
         {
           id: 'e2',
-          x: 680,
-          y: 1610,
+          x: 410,
+          y: 820,
           title: 'Epic 2 · Invoices',
           stories: ['Create', 'Send', 'PDF'],
         },
-        { id: 'e3', x: 680, y: 1780, title: 'Epic 3 · Reminders', stories: ['Schedule', 'Email'] },
+        { id: 'e3', x: 410, y: 1000, title: 'Epic 3 · Reminders', stories: ['Schedule', 'Email'] },
       ];
 
       const world = document.getElementById('world');
@@ -713,8 +713,8 @@
       }
       // group labels
       for (const [x, y, txt] of [
-        [110, 8, 'Pre-plan'],
-        [600, 1400, 'After planning · your epics'],
+        [60, 20, 'Pre-plan'],
+        [408, 588, 'After planning · your epics'],
       ]) {
         const l = document.createElement('div');
         l.className = 'grouplabel';
@@ -731,12 +731,31 @@
         const A = pos[a],
           B = pos[b];
         if (!A || !B) return;
-        const ax = A.x + A.w / 2,
-          ay = A.y + A.h,
-          bx = B.x + B.w / 2,
-          by = B.y;
-        const my = (ay + by) / 2;
-        const path = `M${ax},${ay} C${ax},${my} ${bx},${my} ${bx},${by}`;
+        const acx = A.x + A.w / 2,
+          acy = A.y + A.h / 2,
+          bcx = B.x + B.w / 2,
+          bcy = B.y + B.h / 2;
+        const dx = bcx - acx,
+          dy = bcy - acy;
+        let ax, ay, bx, by, c1x, c1y, c2x, c2y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          // horizontal-dominant: leave A's near side, enter B's near side
+          ax = dx > 0 ? A.x + A.w : A.x;
+          bx = dx > 0 ? B.x : B.x + B.w;
+          ay = acy;
+          by = bcy;
+          const mx = (ax + bx) / 2;
+          ((c1x = mx), (c1y = ay), (c2x = mx), (c2y = by));
+        } else {
+          // vertical-dominant: bottom/top anchors
+          ay = dy > 0 ? A.y + A.h : A.y;
+          by = dy > 0 ? B.y : B.y + B.h;
+          ax = acx;
+          bx = bcx;
+          const my = (ay + by) / 2;
+          ((c1x = ax), (c1y = my), (c2x = bx), (c2y = my));
+        }
+        const path = `M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}`;
         edges.insertAdjacentHTML(
           'beforeend',
           `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" ${dash ? 'stroke-dasharray="2 7" stroke-linecap="round"' : ''}/>`,
@@ -781,7 +800,7 @@
         apply();
       }
       function fit() {
-        setView(0.37, 140, 24); // the whole roadmap: pre-plan spine + epic fan
+        setView(0.6, 80, 24); // the whole roadmap fits — pre-plan flow + epic cluster
       }
       const vp = document.getElementById('vp');
       vp.addEventListener(
@@ -806,7 +825,7 @@
       // initial view from ?z= (detail | overview), for the review screenshots
       const z = new URLSearchParams(location.search).get('z');
       if (z === 'overview') fit();
-      else setView(0.92, 80, 24); // detail: the top of the chain (idea → discovery → vision → feasibility)
+      else setView(0.82, 30, 26); // detail: the chain across 2D space (idea → discovery → vision → feasibility → validation → design)
     </script>
   </body>
 </html>
