@@ -379,10 +379,11 @@ gates the mutations. Self-host: N/A (no billing surface).
   (`credit_topup` metered/one-time), the webhook endpoint, the Customer Portal,
   and **Stripe Tax on**. No Stripe object for `free`/`enterprise`.
 - **8.1.4 (MOTIR-1145)** stores the Stripe customer/subscription against the
-  `AiOrganization` (one Customer ↔ one org), and **renames `BASIC_TIER_KEY`
-  `'basic'` → `'free'`** (constant + provisioning reference; no seeded rows yet).
-  Seeds the three `PlanTier` rows (`free`/`pro`/`enterprise`) with the §2 v1
-  allotments.
+  `AiOrganization` (one Customer ↔ one org), **renames `BASIC_TIER_KEY` `'basic'`
+  → `'free'`** (constant + the seeded tier row), **updates the seeded tier's
+  allotment 1,000 → 300**, and **adds the `pro` (2,000) + `enterprise` `PlanTier`
+  rows** with the §2 v1 allotments — a one-row update + two inserts, not a user-data
+  migration.
 - **8.1.4b (MOTIR-1230)** wires Stripe webhook events to tier/credit state
   idempotently, applying the §5 status→tier map via the existing
   `creditService.setOrgTier()` + `grantAllotment()`.
