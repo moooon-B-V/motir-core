@@ -32,6 +32,7 @@ import { toProjectDTO } from '@/lib/mappers/projectMappers';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workspacesService } from '@/lib/services/workspacesService';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Projects service — business logic for the Project entity. Owns all
@@ -176,6 +177,24 @@ export interface CreateProjectInput {
   actorUserId: string;
   name: string;
   identifier?: string;
+}
+
+// 8.8.28 — best-effort mirror of a KNOWN project id onto the user's global
+// last-active pointer (`User.lastActiveProjectId`). The pointer is a
+// cross-device landing convenience read by 8.8.27's resolver; it is a
+// post-commit side-effect of an active-project change, so a failure here must
+// NEVER propagate into the switch that triggered it (notes.html: a post-commit
+// side-effect is fire-and-forget — swallow + log, don't fail the main op).
+async function recordLastActiveProjectBestEffort(userId: string, projectId: string): Promise<void> {
+  try {
+    await workspacesService.recordLastActiveProject(userId, projectId);
+  } catch (err) {
+    console.warn('[projectsService] failed to record global last-active pointer; ignoring', {
+      userId,
+      projectId,
+      error: err instanceof Error ? err.message : err,
+    });
+  }
 }
 
 export const projectsService = {
@@ -387,6 +406,12 @@ export const projectsService = {
    * Set the user's active project within a workspace (or clear it with
    * null). Asserts membership and that the project belongs to the
    * workspace, then updates the membership row in a transaction.
+   *
+   * 8.8.28 — the primary active-project switch point: after the per-membership
+   * pointer commits, also mirror the choice onto the user's GLOBAL last-active
+   * pointer so a fresh session/device lands back here (8.8.27's resolver). The
+   * mirror is best-effort and runs only for a real selection (skipped on a
+   * `null` clear — there is no project to land on).
    */
   async setActiveProject(input: {
     userId: string;
@@ -412,6 +437,35 @@ export const projectsService = {
         );
       },
     );
+
+    if (input.projectId !== null) {
+      await recordLastActiveProjectBestEffort(input.userId, input.projectId);
+    }
+  },
+
+  /**
+   * 8.8.28 — record the user's GLOBAL last-active project from a WORKSPACE they
+   * just switched into: a direct workspace switch, the workspace an org switch
+   * re-points to, or a freshly-created workspace once it has a project. Resolves
+   * the destination workspace's active project via `getActiveProject` and
+   * mirrors it onto `User.lastActiveProjectId`. Entirely best-effort: a
+   * workspace with no resolvable project (e.g. brand-new, still empty) is a
+   * silent no-op, and any failure — resolution or the pointer write — is
+   * swallowed, because recording the landing target must never fail the switch
+   * that triggered it.
+   */
+  async recordLastActiveProjectForWorkspace(userId: string, workspaceId: string): Promise<void> {
+    try {
+      const active = await projectsService.getActiveProject(userId, workspaceId);
+      if (active) {
+        await recordLastActiveProjectBestEffort(userId, active.id);
+      }
+    } catch (err) {
+      console.warn(
+        '[projectsService.recordLastActiveProjectForWorkspace] failed to resolve/record global last-active pointer; ignoring',
+        { userId, workspaceId, error: err instanceof Error ? err.message : err },
+      );
+    }
   },
 
   /**
