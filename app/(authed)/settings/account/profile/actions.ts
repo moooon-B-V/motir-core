@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth, getSession } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 import {
+  InvalidAvatarUrlError,
   InvalidProfileNameError,
   NoCredentialPasswordError,
   WeakPasswordError,
@@ -70,6 +71,38 @@ export async function updateProfileNameAction(name: string): Promise<UpdateProfi
   } catch (err) {
     if (err instanceof InvalidProfileNameError) {
       return { ok: false, code: 'INVALID_NAME', message: err.message };
+    }
+    throw err;
+  }
+}
+
+// ── Update avatar (the Profile card's Photo row, 8.8.24a) ──────────────────
+
+export type UpdateProfileAvatarResult =
+  | { ok: true; image: string | null }
+  | { ok: false; code: 'INVALID_AVATAR' };
+
+/**
+ * Persist (or clear) the session user's avatar from the Profile card's Photo
+ * row. `AvatarField` uploads the file to `POST /api/upload/avatar` first (which
+ * returns the stored blob URL), then calls this with that URL to set it — or
+ * with `null` to remove it. Delegates the own-upload-URL validation and the
+ * old-blob GC to `usersService.updateProfile`, mapping its typed
+ * `InvalidAvatarUrlError` to a result the field surfaces as a toast. Returns the
+ * canonical stored value so the optimistic avatar shows exactly what persisted.
+ * No rate limit: setting your own avatar is a benign, idempotent own-account
+ * write (the upload route itself gates size + MIME).
+ */
+export async function updateProfileAvatarAction(
+  image: string | null,
+): Promise<UpdateProfileAvatarResult> {
+  const session = await requireSession();
+  try {
+    const profile = await usersService.updateProfile(session.user.id, { image });
+    return { ok: true, image: profile.image };
+  } catch (err) {
+    if (err instanceof InvalidAvatarUrlError) {
+      return { ok: false, code: 'INVALID_AVATAR' };
     }
     throw err;
   }

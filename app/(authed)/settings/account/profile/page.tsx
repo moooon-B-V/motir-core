@@ -5,13 +5,15 @@ import { getSession } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 import { Card } from '@/components/ui/Card';
 import { ProfileCard } from '../_components/ProfileCard';
+import { PasswordSecurityCard } from '../_components/PasswordSecurityCard';
 
 // The Profile pane of the account-settings area (Story 8.8 · Subtask 8.8.24, the
 // scaffold). Flips the reserved `General › Profile` "Soon" slot into a real route
 // and renders the personal-details card (name inline-edit + email display) per
-// `design/settings/profile.mock.html`. Avatar upload (8.8.24a), email-change
-// (8.8.24b), and password/security (8.8.24c) are sibling slices that compose into
-// this pane. A server component: the session gate here, the data read behind a
+// `design/settings/profile.mock.html`, plus the avatar (8.8.24a) and the
+// Password & security card (8.8.24c, branched on `hasPassword`). Email-change
+// (8.8.24b) is the remaining sibling slice that composes into this pane. A server
+// component: the session gate here, the data read behind a
 // Suspense boundary so the pane streams in with a skeleton (the design's loading
 // state); ProfileCard is the client island that owns the inline-edit state.
 export default async function AccountProfilePage() {
@@ -39,13 +41,22 @@ export default async function AccountProfilePage() {
 /** Reads the session user's profile and renders the editable card. Split out so
  *  it suspends behind the boundary above (the DB read is the only async work). */
 async function ProfilePane({ userId }: { userId: string }) {
-  const profile = await usersService.getProfile(userId);
+  const [profile, { hasPassword }] = await Promise.all([
+    usersService.getProfile(userId),
+    usersService.getPasswordCapability(userId),
+  ]);
   if (!profile) redirect('/sign-in');
-  return <ProfileCard initialName={profile.name} email={profile.email} />;
+  return (
+    <>
+      <ProfileCard initialName={profile.name} initialImage={profile.image} email={profile.email} />
+      <PasswordSecurityCard hasPassword={hasPassword} />
+    </>
+  );
 }
 
-/** The loading state — a titled Card with two shimmer rows mirroring the Name +
- *  Email rows (the design's skeleton panel). */
+/** The loading state — a titled Card with shimmer rows mirroring the Photo +
+ *  Name + Email rows (the design's skeleton panel: a circular avatar
+ *  placeholder over two text rows). */
 function ProfilePaneSkeleton({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <Card
@@ -58,6 +69,13 @@ function ProfilePaneSkeleton({ title, subtitle }: { title: string; subtitle: str
       }
     >
       <div className="flex items-center justify-between gap-4 pb-4">
+        <div className="flex flex-col gap-1.5">
+          <span className="h-3.5 w-16 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
+          <span className="h-3 w-72 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
+        </div>
+        <span className="h-[52px] w-[52px] shrink-0 animate-pulse rounded-full bg-(--el-muted)" />
+      </div>
+      <div className="flex items-center justify-between gap-4 border-t border-(--el-border-soft) pb-4 pt-4">
         <div className="flex flex-col gap-1.5">
           <span className="h-3.5 w-16 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
           <span className="h-3 w-56 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />

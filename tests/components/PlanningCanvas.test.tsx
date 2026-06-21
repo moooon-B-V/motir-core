@@ -1,0 +1,90 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { fireEvent } from '@testing-library/dom';
+import {
+  PlanningCanvas,
+  type CanvasEdge,
+  type CanvasNode,
+} from '@/components/planning/PlanningCanvas';
+
+afterEach(() => cleanup());
+
+const nodes: CanvasNode[] = [
+  { id: 'a', x: 0, y: 0 },
+  { id: 'b', x: 300, y: 0 },
+  { id: 'c', x: 300, y: 300 },
+];
+const edges: CanvasEdge[] = [
+  { from: 'a', to: 'b' },
+  { from: 'b', to: 'c', variant: 'pending' },
+];
+const renderNode = (n: CanvasNode) => <div>Node {n.id}</div>;
+
+const scaleOf = (el: HTMLElement) => Number(/scale\(([\d.]+)\)/.exec(el.style.transform)?.[1]);
+
+describe('PlanningCanvas', () => {
+  it('renders the caller-supplied node content', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    expect(screen.getByText('Node a')).toBeTruthy();
+    expect(screen.getByText('Node b')).toBeTruthy();
+    expect(screen.getByText('Node c')).toBeTruthy();
+  });
+
+  it('draws one read-only edge path per resolvable edge, skipping dangling ones', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
+    cleanup();
+    render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={[...edges, { from: 'a', to: 'ghost' }]}
+        renderNode={renderNode}
+      />,
+    );
+    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2); // ghost edge skipped, no crash
+  });
+
+  it('is a labelled, focusable region with focusable nodes', () => {
+    render(
+      <PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} ariaLabel="Roadmap" />,
+    );
+    const region = screen.getByRole('application', { name: 'Roadmap' });
+    expect(region.getAttribute('tabindex')).toBe('0');
+    const nodeEls = document.querySelectorAll('[data-node-id]');
+    expect(nodeEls).toHaveLength(3);
+    nodeEls.forEach((el) => expect(el.getAttribute('tabindex')).toBe('0'));
+  });
+
+  it('zoom controls change the view scale', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    const world = screen.getByTestId('canvas-world');
+    expect(scaleOf(world)).toBeCloseTo(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(scaleOf(world)).toBeCloseTo(1.2);
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    expect(scaleOf(world)).toBeCloseTo(1);
+  });
+
+  it('the + / - / 0 keys zoom and fit', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    const region = screen.getByRole('application');
+    const world = screen.getByTestId('canvas-world');
+    fireEvent.keyDown(region, { key: '+' });
+    expect(scaleOf(world)).toBeCloseTo(1.2);
+    fireEvent.keyDown(region, { key: '0' }); // fit — does not throw (0-size viewport in jsdom)
+    expect(world).toBeTruthy();
+  });
+
+  it('exposes ONLY zoom controls — no link create / edit / delete affordance', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    const labels = screen
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('aria-label'))
+      .sort();
+    expect(labels).toEqual(['Fit to view', 'Zoom in', 'Zoom out']);
+    expect(
+      screen.queryByRole('button', { name: /add|edit|delete|link|connect|remove/i }),
+    ).toBeNull();
+  });
+});

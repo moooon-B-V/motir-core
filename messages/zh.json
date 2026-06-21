@@ -1549,6 +1549,26 @@
         "title": "个人资料",
         "subtitle": "你在团队中的呈现方式。"
       },
+      "photo": {
+        "label": "头像",
+        "desc": "PNG 或 JPG，最大 2 MB。显示在你的头像、评论和提及中。",
+        "alt": "你的头像",
+        "change": "更换",
+        "remove": "移除",
+        "uploaded": "头像已更新",
+        "removed": "头像已移除",
+        "removeConfirm": {
+          "title": "移除头像？",
+          "body": "你的头像将恢复为姓名首字母。",
+          "confirm": "移除",
+          "cancel": "取消"
+        },
+        "errors": {
+          "invalidType": "请选择 PNG 或 JPG 图片。",
+          "tooLarge": "图片必须不超过 2 MB。",
+          "failed": "无法更新头像，请重试。"
+        }
+      },
       "name": {
         "label": "名字",
         "desc": "显示在你的工作项、评论和提及中。",
@@ -1588,6 +1608,58 @@
           "title": "确认链接已发送",
           "body": "请前往 {email} 确认你的新地址。",
           "errorTitle": "无法发送确认链接"
+        }
+      },
+      "security": {
+        "card": {
+          "title": "密码与安全",
+          "subtitle": "你用邮箱登录时使用的密码。",
+          "oauthSubtitle": "登录方式。"
+        },
+        "password": {
+          "label": "密码",
+          "desc": "用于通过邮箱地址登录。"
+        },
+        "changePassword": "修改密码",
+        "modal": {
+          "title": "修改密码",
+          "desc": "请输入当前密码，然后设置新密码。",
+          "cancel": "取消",
+          "submit": "更新密码",
+          "saving": "更新中…"
+        },
+        "fields": {
+          "current": "当前密码",
+          "new": "新密码",
+          "newHelper": "至少 8 个字符。",
+          "confirm": "确认新密码",
+          "show": "显示密码",
+          "hide": "隐藏密码"
+        },
+        "errors": {
+          "currentRequired": "请输入当前密码。",
+          "tooShort": "新密码至少需要 8 个字符。",
+          "mismatch": "两次输入的密码不一致。",
+          "wrongCurrent": "当前密码不正确。",
+          "rateLimited": "尝试次数过多。请稍候再试。",
+          "noCredential": "该账户通过 Google 登录，没有可修改的密码。",
+          "alreadyHasPassword": "该账户已设置密码。请改用修改密码。"
+        },
+        "toast": {
+          "changed": {
+            "title": "密码已更新",
+            "desc": "下次登录时请使用新密码。"
+          },
+          "linkSent": {
+            "title": "重置链接已发送",
+            "desc": "请查收邮箱中用于设置密码的链接。"
+          }
+        },
+        "oauth": {
+          "body": "你通过 <b>Google</b> 登录。给自己发送一个重置链接，即可设置密码，也可以使用邮箱登录。",
+          "sent": "重置链接已发送——请查收邮箱以设置密码。",
+          "sendLink": "发送密码重置链接",
+          "sending": "发送中…"
         }
       }
     },
