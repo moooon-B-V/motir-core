@@ -13,13 +13,13 @@ const { push, listRootIssuesAction, listChildIssuesAction } = vi.hoisted(() => (
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('@/app/(authed)/issues/actions', () => ({ listRootIssuesAction, listChildIssuesAction }));
+vi.mock('@/app/(authed)/items/actions', () => ({ listRootIssuesAction, listChildIssuesAction }));
 // The rows are inline-editable (Subtask 2.5.5), so the cells import the detail
 // page's edit Server Actions — stub them so this client test stays DB-free.
-vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: vi.fn(),
   changeStatusAction: vi.fn(),
 }));
@@ -40,7 +40,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
   useNotifyIssuesChanged: () => () => {},
 }));
 
-import { IssueTreeTable } from '@/app/(authed)/issues/_components/IssueTreeTable';
+import { IssueTreeTable } from '@/app/(authed)/items/_components/IssueTreeTable';
 import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -204,7 +204,7 @@ describe('IssueTreeTable — lazy + sortable', () => {
 
   it('refetches the roots when a create bumps issuesChangedAt (bug-issue-list-not-refreshed-after-create)', async () => {
     // The unfiltered lazy tree seeds `levels[ROOTS]` from `initialLevel` in a
-    // mount-only useState initializer, so a create from the /issues toolbar
+    // mount-only useState initializer, so a create from the /items toolbar
     // (which commits through CreateIssueProvider + calls router.refresh()) can't
     // reach it — router.refresh() re-runs the Server Component but this client
     // state is stale, so the new row stayed invisible until a full reload. The

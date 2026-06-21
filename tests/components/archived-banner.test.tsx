@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
-import { ArchivedBanner } from '@/app/(authed)/issues/[key]/_components/ArchivedBanner';
+import { ArchivedBanner } from '@/app/(authed)/items/[key]/_components/ArchivedBanner';
 
 // The archived banner on the work-item detail page (Story 2.9 · Subtask 2.9.6)
 // under happy-dom — the banner's archived-vs-active render is decided by the

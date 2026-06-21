@@ -13,12 +13,12 @@ const { updateSpy, changeStatusSpy, refresh } = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
-vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: updateSpy,
   changeStatusAction: changeStatusSpy,
 }));
 // ParentPicker fetches candidates on mount.
-vi.mock('@/app/(authed)/issues/actions', () => ({
+vi.mock('@/app/(authed)/items/actions', () => ({
   listCandidateParentsAction: vi.fn(async () => ({ ok: true, candidates: [] })),
 }));
 // The MarkdownEditor/View are client-only (Tiptap WYSIWYG) — stub them.
@@ -31,7 +31,7 @@ vi.mock('@/components/ui/MarkdownView', () => ({
   MarkdownView: ({ value }: { value: string }) => <div>{value}</div>,
 }));
 
-import { EditIssueForm } from '@/app/(authed)/issues/[key]/edit/_components/EditIssueForm';
+import { EditIssueForm } from '@/app/(authed)/items/[key]/edit/_components/EditIssueForm';
 
 const issue: WorkItemDto = {
   id: 'wi_1',

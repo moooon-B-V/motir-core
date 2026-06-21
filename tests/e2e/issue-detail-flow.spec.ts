@@ -132,7 +132,7 @@ test('@smoke renders the canonical detail page (header · rendered Markdown · c
     descriptionMd: 'Bold **important** and a [docs](https://example.com/guide) and `run()` code.',
   });
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
 
   // Header: identifier + title h1.
   await expect(page.getByRole('heading', { name: 'Wire the dashboard', level: 1 })).toBeVisible();
@@ -165,7 +165,7 @@ test('@smoke tree navigation: breadcrumb walks up, child list walks down', async
   });
 
   // On the subtask, the breadcrumb shows the Story → Task lineage.
-  await page.goto(`/issues/${sub.identifier}`);
+  await page.goto(`/items/${sub.identifier}`);
   const breadcrumb = page.getByRole('navigation', { name: 'Parent work items' });
   await expect(breadcrumb.getByRole('link', { name: /The Story/ })).toBeVisible();
   const taskCrumb = breadcrumb.getByRole('link', { name: /The Task/ });
@@ -173,14 +173,14 @@ test('@smoke tree navigation: breadcrumb walks up, child list walks down', async
 
   // A breadcrumb link navigates UP to the ancestor's detail page.
   await taskCrumb.click();
-  await page.waitForURL(`**/issues/${task.identifier}`);
+  await page.waitForURL(`**/items/${task.identifier}`);
   await expect(page.getByRole('heading', { name: 'The Task', level: 1 })).toBeVisible();
 
   // The Task's child list links DOWN to the subtask.
   const childLink = page.getByRole('link', { name: /The Subtask/ });
   await expect(childLink).toBeVisible();
   await childLink.click();
-  await page.waitForURL(`**/issues/${sub.identifier}`);
+  await page.waitForURL(`**/items/${sub.identifier}`);
   await expect(page.getByRole('heading', { name: 'The Subtask', level: 1 })).toBeVisible();
 });
 
@@ -231,7 +231,7 @@ test('@smoke long ancestor chain + wide content never overflow the viewport (bug
 
   // The bug reproduces at typical laptop widths; pin 1280 per the AC.
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`/issues/${sub.identifier}`);
+  await page.goto(`/items/${sub.identifier}`);
 
   // The long ancestor chain is present (and so the bug's trigger is live)...
   const breadcrumb = page.getByRole('navigation', { name: 'Parent work items' });
@@ -266,7 +266,7 @@ test('@smoke inline status: a legal transition persists; illegal targets are not
   const projectId = await seedActiveProject(email, 'STA');
   const item = await mk(page, projectId, { title: 'Status me' });
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
   // Reveal the inline Status control, then open its picker.
   await page.getByRole('button', { name: 'Edit Status' }).click();
   await page.getByRole('combobox', { name: 'Status' }).click();
@@ -295,7 +295,7 @@ test('@smoke inline assignee: assign then unassign, both persist across reload',
   const projectId = await seedActiveProject(email, 'ASG');
   const item = await mk(page, projectId, { title: 'Assign me' });
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
   await page.getByRole('button', { name: 'Edit Assignee' }).click();
   await page.getByRole('combobox', { name: 'Assignee' }).click();
   // The member option's accessible name is `${name} ${email}` (label +
@@ -331,7 +331,7 @@ test('@smoke readiness: blocked item reads "Blocked", flips to "Ready" when the 
   const blocker = await mk(page, projectId, { title: 'Infra task' });
   await linkBlockedBy(page, item.id, blocker.id);
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
   await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
   await expect(page.getByText(/Waiting on 1 work item/)).toBeVisible();
 
@@ -350,7 +350,7 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   const a = await mk(page, projectId, { title: 'Needs a blocker' });
   const b = await mk(page, projectId, { title: 'The blocker issue' });
 
-  await page.goto(`/issues/${a.identifier}`);
+  await page.goto(`/items/${a.identifier}`);
   // A fresh todo item with no blockers is the most ready it can be — it reads
   // "Ready to start" before any dependency exists (bug-ready-banner-no-deps).
   await expect(page.getByText('Ready to start')).toBeVisible();
@@ -384,7 +384,7 @@ test('@smoke link management — remove a blocked-by link (confirm) flips back t
   await linkBlockedBy(page, a.id, resolved.id);
   await driveToDone(page, resolved.id); // terminal → not an OPEN blocker
 
-  await page.goto(`/issues/${a.identifier}`);
+  await page.goto(`/items/${a.identifier}`);
   await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
 
   // Remove the OPEN blocker via the per-row × → confirm popover → Remove link.
@@ -408,7 +408,7 @@ test('@smoke link management — removing a relates_to link drops both reciproca
   const d = await mk(page, projectId, { title: 'Issue Delta' });
 
   // Add a relates_to link A → D through the panel.
-  await page.goto(`/issues/${a.identifier}`);
+  await page.goto(`/items/${a.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Relationship' }).click();
   await page.getByRole('option', { name: 'Relates to' }).click();
@@ -419,16 +419,16 @@ test('@smoke link management — removing a relates_to link drops both reciproca
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toBeVisible();
 
   // The reciprocal row shows on D's page.
-  await page.goto(`/issues/${d.identifier}`);
+  await page.goto(`/items/${d.identifier}`);
   await expect(page.getByRole('link', { name: /Issue Alpha/ })).toBeVisible();
 
   // Remove it from A → both halves drop.
-  await page.goto(`/issues/${a.identifier}`);
+  await page.goto(`/items/${a.identifier}`);
   await page.getByRole('button', { name: `Remove Relates to link to ${d.identifier}` }).click();
   await page.getByRole('button', { name: 'Remove link' }).click();
   await expect(page.getByRole('link', { name: /Issue Delta/ })).toHaveCount(0);
 
-  await page.goto(`/issues/${d.identifier}`);
+  await page.goto(`/items/${d.identifier}`);
   await expect(page.getByRole('link', { name: /Issue Alpha/ })).toHaveCount(0);
 });
 
@@ -443,7 +443,7 @@ test('@smoke link management — a cycle attempt surfaces an inline error and pe
   await linkBlockedBy(page, a.id, b.id); // A is_blocked_by B
 
   // On B, try to add "Blocked by" → A: B is_blocked_by A would close A→B→A.
-  await page.goto(`/issues/${b.identifier}`);
+  await page.goto(`/items/${b.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await searchLinkPicker(page, 'Alpha cyc');
@@ -463,7 +463,7 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
   const projectId = await seedActiveProject(email, 'CRL');
   const target = await mk(page, projectId, { title: 'Pre-existing target' });
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('Created with a link');
 
@@ -484,7 +484,7 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
   expect(identifier).toMatch(/^CRL-\d+$/);
 
   // The new issue's detail panel shows the link, written with the issue.
-  await page.goto(`/issues/${identifier}`);
+  await page.goto(`/items/${identifier}`);
   await expect(page.getByRole('link', { name: /Pre-existing target/ })).toBeVisible();
   await expect(page.getByText('Blocked', { exact: true })).toBeVisible();
 });
@@ -497,7 +497,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
   const projectId = await seedActiveProject(email, 'CRD');
   const target = await mk(page, projectId, { title: 'Not actually linked' });
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('No links after all');
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
@@ -518,7 +518,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
   await expect(toast).toBeVisible();
   const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
 
-  await page.goto(`/issues/${identifier}`);
+  await page.goto(`/items/${identifier}`);
   // No relationships were written — the panel shows its empty state.
   await expect(page.getByText('No linked work items yet.')).toBeVisible();
 });
@@ -536,13 +536,13 @@ test('@smoke cross-workspace isolation: a foreign identifier 404s; the link pick
   const emailB = 'e2e-detail-tenant-b@example.com';
   await signUp(page, emailB);
   const projectIdB = await seedActiveProject(emailB, 'BBB');
-  const res = await page.goto(`/issues/${aItem.identifier}`);
+  const res = await page.goto(`/items/${aItem.identifier}`);
   expect(res?.status(), "A's detail route 404s for B").toBe(404);
 
   // B's link picker surfaces only B's own items, never A's.
   const bItem = await mk(page, projectIdB, { title: 'B home issue' });
   await mk(page, projectIdB, { title: 'B candidate issue' });
-  await page.goto(`/issues/${bItem.identifier}`);
+  await page.goto(`/items/${bItem.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   // "issue" matches every title across BOTH workspaces — only the workspace scope

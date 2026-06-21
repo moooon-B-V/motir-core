@@ -296,7 +296,7 @@ export const workItemRevisionRepository = {
    * optional compiled FilterAST (the 6.1.1 compiler over the joined
    * `work_item` alias `w`; stale referents → match-nothing per 6.1.2)
    * narrows to the saved-filter scope; archived items are excluded (matching
-   * the created series + the /issues parity basis). `workspaceId` gates the
+   * the created series + the /items parity basis). `workspaceId` gates the
    * read (finding #26). Buckets with no events return no row (the service
    * fills the axis). Read-only path → `db` singleton.
    */

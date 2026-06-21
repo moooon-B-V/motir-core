@@ -5,7 +5,7 @@
 // the axe sweeps across CI legs. These are the HEAVY a11y specs: each seeds a
 // real fixture server-side through the services (the sanctioned test
 // cross-layer reach) so the swept DOM is exactly what Motir renders — the
-// populated /issues tree+list, a mention-bearing comment thread, the activity
+// populated /items tree+list, a mention-bearing comment thread, the activity
 // history, and the attachments panel + lightbox.
 //
 // Companion files: shell-a11y.spec.ts (shell routes + core CRUD + aria) and
@@ -34,7 +34,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-// The POPULATED /issues route — BOTH views (Subtask 2.5.6). The empty /issues
+// The POPULATED /items route — BOTH views (Subtask 2.5.6). The empty /items
 // is already in the SHELL_ROUTES sweep (shell-a11y.spec.ts); this seeds a real
 // multi-level tree (so the treegrid carries nested rows with aria-level/expanded
 // + status Pills + the inline-edit cell controls) and sweeps the Tree AND the
@@ -71,10 +71,10 @@ async function seedIssueTree(page: Page, email: string) {
 }
 
 test.describe('@a11y populated issue surfaces', () => {
-  test('the populated /issues TREE view is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
+  test('the populated /items TREE view is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
     const { epic, story } = await seedIssueTree(page, 'e2e-issues-tree-a11y@example.com');
 
-    await page.goto('/issues');
+    await page.goto('/items');
     const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
     await expect(grid).toBeVisible();
     // Expand a node so a NESTED level (aria-level 2 row + its gridcells + the
@@ -87,14 +87,14 @@ test.describe('@a11y populated issue surfaces', () => {
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
       results.violations,
-      formatViolations('/issues (tree, populated)', results.violations as AxeViolation[]),
+      formatViolations('/items (tree, populated)', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 
-  test('the populated /issues LIST view is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
+  test('the populated /items LIST view is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
     await seedIssueTree(page, 'e2e-issues-list-a11y@example.com');
 
-    await page.goto('/issues?view=list');
+    await page.goto('/items?view=list');
     await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
     // The sortable headers carry aria-sort and the inline-edit cell triggers
     // (labelled buttons) are present — all held to full AA here.
@@ -106,7 +106,7 @@ test.describe('@a11y populated issue surfaces', () => {
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
       results.violations,
-      formatViolations('/issues (list, populated)', results.violations as AxeViolation[]),
+      formatViolations('/items (list, populated)', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 
@@ -178,7 +178,7 @@ test.describe('@a11y populated issue surfaces', () => {
       })),
     });
 
-    await page.goto(`/issues/${issue.identifier}`);
+    await page.goto(`/items/${issue.identifier}`);
     await expect(page.getByRole('heading', { name: 'Commented task', level: 1 })).toBeVisible();
     const list = page.getByRole('list', { name: 'Comments' });
     await expect(list.locator('.mention-chip')).toBeVisible();
@@ -189,10 +189,7 @@ test.describe('@a11y populated issue surfaces', () => {
     const threadResults = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
       threadResults.violations,
-      formatViolations(
-        '/issues/[key] (comment thread)',
-        threadResults.violations as AxeViolation[],
-      ),
+      formatViolations('/items/[key] (comment thread)', threadResults.violations as AxeViolation[]),
     ).toEqual([]);
 
     // 2. The delete-confirm popover open — scoped to the dialog (see above).
@@ -205,7 +202,7 @@ test.describe('@a11y populated issue surfaces', () => {
     expect(
       confirmResults.violations,
       formatViolations(
-        '/issues/[key] (delete-comment confirm)',
+        '/items/[key] (delete-comment confirm)',
         confirmResults.violations as AxeViolation[],
       ),
     ).toEqual([]);
@@ -225,7 +222,7 @@ test.describe('@a11y populated issue surfaces', () => {
     expect(
       pickerResults.violations,
       formatViolations(
-        '/issues/[key] (mention picker open)',
+        '/items/[key] (mention picker open)',
         pickerResults.violations as AxeViolation[],
       ),
     ).toEqual([]);
@@ -313,7 +310,7 @@ test.describe('@a11y populated issue surfaces', () => {
     });
 
     // 1. The History tab, populated — strict, zero exclusions.
-    await page.goto(`/issues/${issue.identifier}?activity=history`);
+    await page.goto(`/items/${issue.identifier}?activity=history`);
     await expect(page.getByRole('heading', { name: 'Audited task', level: 1 })).toBeVisible();
     const history = page.getByRole('list', { name: 'History' });
     await expect(history).toBeVisible();
@@ -324,13 +321,13 @@ test.describe('@a11y populated issue surfaces', () => {
     expect(
       historyResults.violations,
       formatViolations(
-        '/issues/[key]?activity=history (populated)',
+        '/items/[key]?activity=history (populated)',
         historyResults.violations as AxeViolation[],
       ),
     ).toEqual([]);
 
     // 2. The All tab, interleaved, composer at rest — strict, zero exclusions.
-    await page.goto(`/issues/${issue.identifier}?activity=all`);
+    await page.goto(`/items/${issue.identifier}?activity=all`);
     const all = page.getByRole('list', { name: 'All activity' });
     await expect(all).toBeVisible();
     await expect(all.getByText('a live comment among the history rows')).toBeVisible();
@@ -340,7 +337,7 @@ test.describe('@a11y populated issue surfaces', () => {
     expect(
       allResults.violations,
       formatViolations(
-        '/issues/[key]?activity=all (populated)',
+        '/items/[key]?activity=all (populated)',
         allResults.violations as AxeViolation[],
       ),
     ).toEqual([]);
@@ -407,7 +404,7 @@ test.describe('@a11y populated issue surfaces', () => {
       }),
     );
 
-    await page.goto(`/issues/${issue.identifier}`);
+    await page.goto(`/items/${issue.identifier}`);
     await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
     const list = page.getByRole('list', { name: 'Attachments' });
     await expect(list.getByRole('listitem')).toHaveCount(3);
@@ -418,7 +415,7 @@ test.describe('@a11y populated issue surfaces', () => {
     expect(
       panelResults.violations,
       formatViolations(
-        '/issues/[key] (attachments panel)',
+        '/items/[key] (attachments panel)',
         panelResults.violations as AxeViolation[],
       ),
     ).toEqual([]);
@@ -435,7 +432,7 @@ test.describe('@a11y populated issue surfaces', () => {
     expect(
       lightboxResults.violations,
       formatViolations(
-        '/issues/[key] (attachment lightbox)',
+        '/items/[key] (attachment lightbox)',
         lightboxResults.violations as AxeViolation[],
       ),
     ).toEqual([]);

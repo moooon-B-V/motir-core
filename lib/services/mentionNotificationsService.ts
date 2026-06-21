@@ -129,7 +129,7 @@ export const mentionNotificationsService = {
     const [author] = await userRepository.findByIds([input.authorId]);
     const recipients = await userRepository.findByIds(emailEnabledIds);
     const excerpt = mentionExcerpt(bodyMd);
-    const issueUrl = `${resolveBaseUrlTrimmed()}/issues/${encodeURIComponent(item.identifier)}`;
+    const issueUrl = `${resolveBaseUrlTrimmed()}/items/${encodeURIComponent(item.identifier)}`;
 
     const notifiedUserIds: string[] = [];
     for (const recipient of recipients) {

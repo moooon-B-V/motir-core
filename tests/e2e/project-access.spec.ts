@@ -12,7 +12,7 @@
 //
 //   1. a PRIVATE project denies a non-member — absent from the switcher's
 //      switch-target list AND the no-access state (not a crash) on direct nav to
-//      its board/issues — then GRANTING a project membership lets them in;
+//      its board/items — then GRANTING a project membership lets them in;
 //   2. a project VIEWER can browse but cannot edit (the "New work item"
 //      affordance is disabled), while a MEMBER on the same project can;
 //   3. a project ADMIN can manage members + access from the settings UI (add a
@@ -86,7 +86,7 @@ async function grantProjectRole(
 }
 
 // Pin a project as the user's active project so the active-project-scoped routes
-// (/boards, /issues, /settings/project/*) resolve it on every render — the same
+// (/boards, /items, /settings/project/*) resolve it on every render — the same
 // direct membership write board-at-scale uses.
 async function pinActiveProject(userId: string, tenant: Tenant): Promise<void> {
   await db.workspaceMembership.update({
@@ -141,7 +141,7 @@ async function openSwitcher(page: Page): Promise<void> {
   await expect(switcherPopover(page)).toBeVisible();
 }
 
-// The board/issues toolbar's "New work item" button — rendered ONLY in the
+// The board/items toolbar's "New work item" button — rendered ONLY in the
 // can-browse branch (the no-access branch renders the NoAccessState with no
 // toolbar), so its mere presence proves browse succeeded; its disabled state
 // reflects canEdit. Both the toolbar AND the empty-state CTA render it, so scope
@@ -189,7 +189,7 @@ test.describe('project-access — gating end-to-end', () => {
     await expect(page.getByTestId('board')).toHaveCount(0);
 
     // ── Denied: the issue list also renders the no-access state ──────────────
-    await page.goto('/issues');
+    await page.goto('/items');
     await expect(page.getByText(/access to this project/i)).toBeVisible();
 
     // ── Hidden: the private project is not a switch target ────────────────────

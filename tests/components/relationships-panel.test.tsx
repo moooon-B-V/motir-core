@@ -15,14 +15,14 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 // tests render the panel READ-ONLY (editable unset), so the add/remove islands
 // aren't instantiated; the interactive add control is tested in
 // add-link-control.test.tsx.
-vi.mock('@/app/(authed)/issues/[key]/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/actions', () => ({
   createLinkAction: vi.fn(),
   removeLinkAction: vi.fn(),
   listLinkCandidatesAction: vi.fn(),
 }));
 
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
-import { RelationshipsPanel } from '@/app/(authed)/issues/[key]/_components/RelationshipsPanel';
+import { RelationshipsPanel } from '@/app/(authed)/items/[key]/_components/RelationshipsPanel';
 
 afterEach(cleanup);
 
@@ -101,23 +101,20 @@ describe('ReadinessBadge (2.4.5)', () => {
       <ReadinessBadge
         ready={false}
         blockers={[
-          { identifier: 'PROD-3', href: '/issues/PROD-3' },
-          { identifier: 'PROD-12', href: '/issues/PROD-12' },
+          { identifier: 'PROD-3', href: '/items/PROD-3' },
+          { identifier: 'PROD-12', href: '/items/PROD-12' },
         ]}
       />,
     );
     screen.getByText('Blocked');
     screen.getByText(/Waiting on 2 work items/);
     const lnk = screen.getByRole('link', { name: 'PROD-3' });
-    expect(lnk.getAttribute('href')).toBe('/issues/PROD-3');
+    expect(lnk.getAttribute('href')).toBe('/items/PROD-3');
   });
 
   it('singularizes "issue" for a single blocker', () => {
     render(
-      <ReadinessBadge
-        ready={false}
-        blockers={[{ identifier: 'PROD-3', href: '/issues/PROD-3' }]}
-      />,
+      <ReadinessBadge ready={false} blockers={[{ identifier: 'PROD-3', href: '/items/PROD-3' }]} />,
     );
     screen.getByText(/Waiting on 1 work item —/);
   });
@@ -168,7 +165,7 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
 
     // The blocked-by ROW (named by its title — the banner also links PROD-3).
     const blocker = screen.getByRole('link', { name: /Upstream/ });
-    expect(blocker.getAttribute('href')).toBe('/issues/PROD-3');
+    expect(blocker.getAttribute('href')).toBe('/items/PROD-3');
     expect(blocker.textContent).toContain('PROD-3');
     expect(blocker.textContent).toContain('To Do');
 

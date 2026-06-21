@@ -5,9 +5,9 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
-import type { ArchivedRowData } from '@/app/(authed)/issues/archived/_components/archivedRows';
-import { toArchivedRows } from '@/app/(authed)/issues/archived/_components/archivedRows';
-import { ArchivedWorkItemsList } from '@/app/(authed)/issues/archived/_components/ArchivedWorkItemsList';
+import type { ArchivedRowData } from '@/app/(authed)/items/archived/_components/archivedRows';
+import { toArchivedRows } from '@/app/(authed)/items/archived/_components/archivedRows';
+import { ArchivedWorkItemsList } from '@/app/(authed)/items/archived/_components/ArchivedWorkItemsList';
 import type { ArchivedWorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 
@@ -23,7 +23,7 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues/archived',
+  usePathname: () => '/items/archived',
 }));
 
 // `canManage` is read from the provider (the WorkItemRowActions pattern), so

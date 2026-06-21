@@ -20,7 +20,7 @@
 //      BOTH the reversible Archive AND the danger Delete… (archive-vs-delete both
 //      offered); the confirm dialog NAMES the cascade ("Delete 3 items" for a
 //      story + 2 subtasks) and carries the "Archive instead" escape hatch. After
-//      confirming, the page REDIRECTS to /issues and the whole subtree is gone
+//      confirming, the page REDIRECTS to /items and the whole subtree is gone
 //      while the ANCESTOR survives — asserted authoritatively through the `_test`
 //      service route (404 on each deleted id, 200 on the epic), never a timeout.
 //   2. A NON-PERMITTED member (workspace member, no project-admin / manage
@@ -33,7 +33,7 @@
 // the real UI (auto-workspace → /dashboard), the project + the 3-level subtree +
 // the second member are minted SERVER-SIDE through the shipped services (the one
 // sanctioned cross-layer reach for tests — the surface under test is the delete
-// UI, not creation), and the project is pinned active so the /issues/[key] route
+// UI, not creation), and the project is pinned active so the /items/[key] route
 // resolves it. Every wait is on an AUTHORITATIVE signal (the redirect URL, a
 // menuitem's visibility, the service-route status) per CLAUDE.md "E2E waits on
 // the AUTHORITATIVE signal" — no `waitForTimeout`.
@@ -73,7 +73,7 @@ const MEMBER_EMAIL = 'e2e-wi-delete-member@example.com';
  * active), a 3-level tree epic → story → [sub1, sub2], and a second workspace
  * MEMBER (a plain member: canEdit on an `open` project, but NOT the project-admin
  * "manage" capability delete requires) with the project pinned active so they can
- * sign in and reach /issues/[key]. Leaves the page signed in as the admin.
+ * sign in and reach /items/[key]. Leaves the page signed in as the admin.
  */
 async function seed(page: Page): Promise<Seed> {
   await signUp(page, ADMIN_EMAIL);
@@ -110,7 +110,7 @@ async function seed(page: Page): Promise<Seed> {
     adminCtx,
   );
 
-  // Pin the project active for the admin so /issues/[key] resolves it.
+  // Pin the project active for the admin so /items/[key] resolves it.
   await db.workspaceMembership.update({
     where: { userId_workspaceId: { userId: admin!.id, workspaceId: ws!.id } },
     data: { activeProjectId: project.id },
@@ -172,7 +172,7 @@ test('@smoke Story 2.8: admin deletes a subtree from detail → cascade gone, an
   // The story still exists, with its two subtasks, before we delete.
   expect(await itemStatus(page, s.story.id), 'story exists pre-delete').toBe(200);
 
-  await page.goto(`/issues/${s.story.identifier}`);
+  await page.goto(`/items/${s.story.identifier}`);
   await expect(page.getByRole('heading', { name: 'Doomed story', level: 1 })).toBeVisible();
 
   // ── Open the ⋯ actions menu — archive-vs-delete are BOTH offered ────────────
@@ -203,9 +203,9 @@ test('@smoke Story 2.8: admin deletes a subtree from detail → cascade gone, an
   await expect(dialog).toContainText('2 subtasks');
   await expect(dialog.getByRole('button', { name: 'Archive instead' })).toBeVisible();
 
-  // ── Confirm → the surface redirects to /issues (the authoritative signal) ───
+  // ── Confirm → the surface redirects to /items (the authoritative signal) ───
   await confirm.click();
-  await page.waitForURL('**/issues', { timeout: 30_000 });
+  await page.waitForURL('**/items', { timeout: 30_000 });
 
   // ── The whole subtree is gone; the ancestor epic survives ───────────────────
   await expect(async () => {
@@ -216,7 +216,7 @@ test('@smoke Story 2.8: admin deletes a subtree from detail → cascade gone, an
   }).toPass();
 
   // The deleted item's detail route now 404s for the user too (no stale page).
-  await page.goto(`/issues/${s.story.identifier}`);
+  await page.goto(`/items/${s.story.identifier}`);
   await expect(page.getByText('Doomed story', { exact: true })).toHaveCount(0);
 });
 
@@ -232,7 +232,7 @@ test('Story 2.8: a non-admin member sees Archive but NOT Delete (the manage gate
   await signIn(page, MEMBER_EMAIL, SHELL_PASSWORD);
   await pinWorkspaceCookie(page, s.workspaceId);
 
-  await page.goto(`/issues/${s.epic.identifier}`);
+  await page.goto(`/items/${s.epic.identifier}`);
   await expect(page.getByRole('heading', { name: 'Parent epic', level: 1 })).toBeVisible();
 
   await page.getByRole('button', { name: `Actions for ${s.epic.identifier}` }).click();

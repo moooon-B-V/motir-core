@@ -11,7 +11,7 @@ import {
   type IssueSort,
 } from '@/lib/issues/issueListView';
 
-// The /issues view + sort URL contract (Subtask 2.5.8) — the pure parse/serialize
+// The /items view + sort URL contract (Subtask 2.5.8) — the pure parse/serialize
 // + header-click transition the Server Component, the switcher, and the List
 // headers all share. Whitelisting matters: a bad column must clamp to the default
 // (it maps straight to a SQL ORDER BY), so these pin the fallback behaviour.
@@ -73,31 +73,31 @@ describe('nextSort', () => {
 
 describe('buildIssueListHref', () => {
   it('the default-sorted Tree URL is the bare pathname (no view, no sort param)', () => {
-    expect(buildIssueListHref('/issues', { view: 'tree' })).toBe('/issues');
-    expect(buildIssueListHref('/issues', { view: 'tree', sort: DEFAULT_SORT })).toBe('/issues');
+    expect(buildIssueListHref('/items', { view: 'tree' })).toBe('/items');
+    expect(buildIssueListHref('/items', { view: 'tree', sort: DEFAULT_SORT })).toBe('/items');
   });
 
   it('the Tree carries a non-default sort too (sortable since 2.5.14)', () => {
     // Pre-2.5.14 the Tree ignored sort; now sorting re-orders siblings, so the
     // sort param must persist for the Tree view as well as the List.
     expect(
-      buildIssueListHref('/issues', {
+      buildIssueListHref('/items', {
         view: 'tree',
         sort: { column: 'priority', direction: 'desc' },
       }),
-    ).toBe('/issues?sort=priority%3Adesc');
+    ).toBe('/items?sort=priority%3Adesc');
   });
 
   it('adds view=list, and the sort param only when it is non-default', () => {
-    expect(buildIssueListHref('/issues', { view: 'list', sort: DEFAULT_SORT })).toBe(
-      '/issues?view=list',
+    expect(buildIssueListHref('/items', { view: 'list', sort: DEFAULT_SORT })).toBe(
+      '/items?view=list',
     );
     expect(
-      buildIssueListHref('/issues', {
+      buildIssueListHref('/items', {
         view: 'list',
         sort: { column: 'priority', direction: 'desc' },
       }),
-    ).toBe('/issues?view=list&sort=priority%3Adesc');
+    ).toBe('/items?view=list&sort=priority%3Adesc');
   });
 });
 
@@ -137,19 +137,17 @@ describe('pageItems (Subtask 2.5.12)', () => {
 
 describe('buildIssueListHref — page param (Subtask 2.5.12)', () => {
   it('sets ?page only on the List, past page 1, preserving sort + filter', () => {
-    expect(buildIssueListHref('/issues', { view: 'list', page: 3 })).toBe(
-      '/issues?view=list&page=3',
-    );
+    expect(buildIssueListHref('/items', { view: 'list', page: 3 })).toBe('/items?view=list&page=3');
     // page 1 is the clean canonical URL (so a sort/filter change resets it)
-    expect(buildIssueListHref('/issues', { view: 'list', page: 1 })).toBe('/issues?view=list');
+    expect(buildIssueListHref('/items', { view: 'list', page: 1 })).toBe('/items?view=list');
     // the Tree never paginates
-    expect(buildIssueListHref('/issues', { view: 'tree', page: 5 })).toBe('/issues');
+    expect(buildIssueListHref('/items', { view: 'tree', page: 5 })).toBe('/items');
     expect(
-      buildIssueListHref('/issues', {
+      buildIssueListHref('/items', {
         view: 'list',
         sort: { column: 'priority', direction: 'desc' },
         page: 2,
       }),
-    ).toBe('/issues?view=list&sort=priority%3Adesc&page=2');
+    ).toBe('/items?view=list&sort=priority%3Adesc&page=2');
   });
 });

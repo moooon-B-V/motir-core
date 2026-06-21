@@ -201,7 +201,7 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
 
         {execution.triggerItem ? (
           <Link
-            href={`/issues/${execution.triggerItem.key}`}
+            href={`/items/${execution.triggerItem.key}`}
             aria-label={t('viewItemAria', { key: execution.triggerItem.key })}
             className="inline-flex items-center gap-1 font-sans text-sm font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >

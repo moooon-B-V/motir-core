@@ -16,7 +16,7 @@ const { toggleWatchSpy, addWatcherSpy, removeWatcherSpy } = vi.hoisted(() => ({
   addWatcherSpy: vi.fn(),
   removeWatcherSpy: vi.fn(),
 }));
-vi.mock('@/app/(authed)/issues/[key]/watcherActions', () => ({
+vi.mock('@/app/(authed)/items/[key]/watcherActions', () => ({
   toggleWatchAction: toggleWatchSpy,
   addWatcherAction: addWatcherSpy,
   removeWatcherAction: removeWatcherSpy,
@@ -25,7 +25,7 @@ vi.mock('@/app/(authed)/issues/[key]/watcherActions', () => ({
 import {
   WatchControl,
   type WatchCandidate,
-} from '@/app/(authed)/issues/[key]/_components/WatchControl';
+} from '@/app/(authed)/items/[key]/_components/WatchControl';
 
 afterEach(() => {
   cleanup();

@@ -21,7 +21,7 @@ import type { BoardFilterInput } from '@/lib/dto/boards';
 // transaction here (CLAUDE.md).
 //
 // Active-project routing (NOT /api/projects/[key]/board): the app is single-
-// active-project — the /boards and /issues pages both resolve getActiveProject()
+// active-project — the /boards and /items pages both resolve getActiveProject()
 // and there is no project-by-key route tree to mirror. The project + workspace
 // come from the active-project context (NEVER the client).
 //
@@ -36,7 +36,7 @@ import type { BoardFilterInput } from '@/lib/dto/boards';
 // param carries the COMPILED filter AST (the board page merges the toolbar's
 // facets + advanced `?filter=` into one AST via `upgradeFacetsIntoAst`, then
 // encodes it here). It's decoded with the SAME `decodeFilterParam` codec the
-// /issues navigator uses (one codec, two carriers) and threaded to
+// /items navigator uses (one codec, two carriers) and threaded to
 // `getBoard` as a `BoardFilterInput.ast`, which narrows every column + the
 // cap/`truncated` count + swimlane lanes and composes with the Scrum sprint
 // scope. A malformed/forged param decodes to `!ok` → treated as NO filter (the

@@ -66,7 +66,7 @@ import {
   useFilterConditionModel,
   workingFromAst,
   type WorkingState,
-} from '@/app/(authed)/issues/_components/FilterConditionBuilder';
+} from '@/app/(authed)/items/_components/FilterConditionBuilder';
 import { isAutoDisabled } from './AutomationRuleList';
 import {
   AutoDisabledBanner,

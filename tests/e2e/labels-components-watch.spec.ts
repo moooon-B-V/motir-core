@@ -220,7 +220,7 @@ test('@smoke the PM type-creates labels, reuses them case-insensitively, and the
   await signIn(page, tenant.owner.email, PWD);
 
   // ── Type-create on issue A ─────────────────────────────────────────────────
-  await page.goto(`/issues/${issueA.identifier}`);
+  await page.goto(`/items/${issueA.identifier}`);
   await expect(page.getByRole('heading', { name: 'Label holder' })).toBeVisible();
   await expect(page.getByText('No labels')).toBeVisible();
 
@@ -240,7 +240,7 @@ test('@smoke the PM type-creates labels, reuses them case-insensitively, and the
 
   // ── Case-insensitive reuse on issue B: PERF-Q3 offers the SAME label,
   // original casing displayed (the JRACLOUD-24907 wart-fix) ─────────────────
-  await page.goto(`/issues/${issueB.identifier}`);
+  await page.goto(`/items/${issueB.identifier}`);
   await editToggle(page, 'Labels').click();
   await page.getByRole('combobox', { name: 'Labels' }).fill('PERF-Q3');
   const reuseOption = page.getByRole('option', { name: 'perf-q3', exact: true });
@@ -278,7 +278,7 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
   await expect(componentRows.nth(1)).toContainText('Web');
 
   // ── Assign both to the issue via the rail card ─────────────────────────────
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await editToggle(page, 'Components').click();
   const compInput = page.getByRole('combobox', { name: 'Components' });
   await compInput.click();
@@ -292,7 +292,7 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
   // create — see the header note); the OUTCOME is asserted in the UI. ───────
   const api = (await db.component.findFirst({ where: { name: 'API' } }))!;
   const fresh = await seedIssue(tenant, 'Fresh defaulted issue', { componentIds: [api.id] });
-  await page.goto(`/issues/${fresh.identifier}`);
+  await page.goto(`/items/${fresh.identifier}`);
   await expect(page.getByRole('heading', { name: 'Fresh defaulted issue' })).toBeVisible();
   // The component chip rendered, and the assignee auto-filled to Bo.
   await expect(page.getByText('API', { exact: true })).toBeVisible();
@@ -330,7 +330,7 @@ test('@smoke the PM admin-creates components, assigns them, a defaulted create a
   await expect(componentRows.nth(0)).toContainText('Web');
 
   // Both issues survived with Web exactly once.
-  await page.goto(`/issues/${fresh.identifier}`);
+  await page.goto(`/items/${fresh.identifier}`);
   await expect(page.getByText('Web', { exact: true })).toBeVisible();
   const joins = await db.workItemComponent.findMany({
     where: { workItemId: { in: [issue.id, fresh.id] } },
@@ -353,7 +353,7 @@ test('@smoke watching: auto-watch on create, the W shortcut + typing guard, the 
 
   // ── Auto-watch on create surfaces on first paint: the PM created the
   // issue, so the eye arrives PRESSED with count 1 ───────────────────────────
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Watched task' })).toBeVisible();
   const watch = watchButton(page);
   await expect(watch).toHaveAttribute('aria-pressed', 'true');
@@ -406,7 +406,7 @@ test('@smoke watching: auto-watch on create, the W shortcut + typing guard, the 
   // reaches Odie and the PM, never Bo (the actor) ────────────────────────────
   const boPage = await (await page.context().browser()!.newContext()).newPage();
   await signIn(boPage, bo.email, PWD);
-  await boPage.goto(`/issues/${issue.identifier}`);
+  await boPage.goto(`/items/${issue.identifier}`);
   await boPage.getByRole('button', { name: 'Add a comment…' }).click();
   await boPage.locator('.ProseMirror').click();
   await boPage.keyboard.type('A comment from Bo');
@@ -416,7 +416,7 @@ test('@smoke watching: auto-watch on create, the W shortcut + typing guard, the 
   const odieEmail = await waitForEmail(odie.email, { timeoutMs: 30_000 });
   expect(odieEmail.subject).toBe(`Bo Philips commented on ${issue.identifier}: Watched task`);
   // Deep link unredacted in the plain text — the dev-console grep contract.
-  expect(odieEmail.text).toContain(`/issues/${issue.identifier}`);
+  expect(odieEmail.text).toContain(`/items/${issue.identifier}`);
   // The actor is never notified — Bo auto-watched by commenting, yet gets
   // nothing about their own comment.
   expect((await emailsTo(bo.email)).filter((e) => e.subject.includes('commented on'))).toEqual([]);
@@ -464,7 +464,7 @@ test('a viewer gets read-only chips but CAN watch; a non-admin member gets the r
   const viewerCtx = await browser.newContext();
   const viewerPage = await viewerCtx.newPage();
   await signIn(viewerPage, viewer.email, PWD);
-  await viewerPage.goto(`/issues/${issue.identifier}`);
+  await viewerPage.goto(`/items/${issue.identifier}`);
   await expect(viewerPage.getByText('perf-q3')).toBeVisible();
   await expect(viewerPage.getByText('Web', { exact: true })).toBeVisible();
   await expect(viewerPage.getByRole('button', { name: 'Edit Labels' })).toHaveCount(0);
@@ -513,7 +513,7 @@ test('the detail route is axe-clean with the chip picker and the watchers popove
   await componentsService.addComponent(issue.id, web.id, ownerCtx(tenant));
 
   await signIn(page, tenant.owner.email, PWD);
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'A11y holder' })).toBeVisible();
 
   // The Labels picker open (combobox + listbox + chips). The sweep scopes to

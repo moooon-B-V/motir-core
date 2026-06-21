@@ -18,7 +18,7 @@ import { FilterValidationError } from '@/lib/filters/errors';
 // Query: ?cursor=<last id> (omit for page 1) · ?limit=<1..100> (default 50).
 //
 // FILTER (Story 8.8 · Subtask 8.8.20): the sprint read takes the SAME filter
-// params as `/api/backlog` + `/issues` + the board — the quick facets `?kind` ·
+// params as `/api/backlog` + `/items` + the board — the quick facets `?kind` ·
 // `?type` · `?status` · `?assignee` · `?q` and the advanced builder's `?filter=v1:`
 // AST — so a filtered backlog re-projects its sprint containers too (the 8.8.16
 // design). Parsed exactly as `/api/backlog` (`parseIssueFilter`) + decoded

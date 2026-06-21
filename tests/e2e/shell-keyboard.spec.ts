@@ -3,7 +3,7 @@
 // Drives the entire shell with the keyboard alone — NO page.click / page.tap —
 // proving every global affordance is reachable and operable without a pointer:
 //   load /dashboard → Tab to the skip-link → activate it → Tab into <main> →
-//   ⌘K opens the palette → type "iss" → ↓ → ↵ navigates to /issues →
+//   ⌘K opens the palette → type "iss" → ↓ → ↵ navigates to /items →
 //   ⌘\ collapses the rail → ? opens the cheatsheet → Esc closes it.
 //
 // Pairs with shell-a11y.spec.ts (axe sweep + structural aria invariants).
@@ -70,10 +70,10 @@ test.describe('@a11y shell keyboard navigation', () => {
     await page.keyboard.type('work');
     await expect(palette.getByRole('option', { name: 'Go to Work Items' })).toBeVisible();
 
-    // 6. ↓ highlights the match, ↵ invokes it → client-navigates to /issues.
+    // 6. ↓ highlights the match, ↵ invokes it → client-navigates to /items.
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
-    await page.waitForURL('**/issues');
+    await page.waitForURL('**/items');
     await expect(palette).toBeHidden();
     await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
 

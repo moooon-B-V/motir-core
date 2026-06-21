@@ -8,7 +8,7 @@ import type {
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 
 // The quick-view (peek) payload (Subtask 2.5.19; bug 8.8.2). A serializable,
-// already-shaped slice of the detail read that the /api/issues/peek route
+// already-shaped slice of the detail read that the /api/work-items/peek route
 // returns and the client IssueQuickViewController fetches — so the peek modal
 // opens its frame + skeleton INSTANTLY (client-driven by `?peek`) and streams
 // the fields in over the wire, instead of being server-rendered behind the host
@@ -72,7 +72,7 @@ export interface QuickViewData {
    * `blockers` names the OPEN (non-terminal) blockers; the panel maps each to a
    * `?peek=` swap-peek href (so a blocker link swaps the peeked item in-list,
    * never leaving the surface — the 2.5.20 design's justified deviation from the
-   * detail-page badge, which links to `/issues/[key]`). The panel suppresses the
+   * detail-page badge, which links to `/items/[key]`). The panel suppresses the
    * banner once the item leaves the `todo` category (see `statusCategory`):
    * "can I start this?" is moot for an item already in progress or done. `null`
    * only when the read carried no readiness verdict at all.

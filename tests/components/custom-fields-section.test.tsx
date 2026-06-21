@@ -12,11 +12,11 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 const { setSpy } = vi.hoisted(() => ({
   setSpy: vi.fn(),
 }));
-vi.mock('@/app/(authed)/issues/[key]/customFieldActions', () => ({
+vi.mock('@/app/(authed)/items/[key]/customFieldActions', () => ({
   setCustomFieldValueAction: setSpy,
 }));
 
-import { CustomFieldsSection } from '@/app/(authed)/issues/[key]/_components/CustomFieldsSection';
+import { CustomFieldsSection } from '@/app/(authed)/items/[key]/_components/CustomFieldsSection';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 
 afterEach(() => {

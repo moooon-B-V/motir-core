@@ -23,10 +23,10 @@ const refresh = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, refresh }),
-  usePathname: () => '/issues/PROD-7',
+  usePathname: () => '/items/PROD-7',
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('@/app/(authed)/issues/[key]/commentActions', () => ({
+vi.mock('@/app/(authed)/items/[key]/commentActions', () => ({
   addCommentAction: vi.fn(),
   editCommentAction: vi.fn(),
   deleteCommentAction: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@/components/ui/MarkdownEditor', () => ({
   }) => <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
 }));
 
-import { ActivitySection } from '@/app/(authed)/issues/[key]/_components/ActivitySection';
+import { ActivitySection } from '@/app/(authed)/items/[key]/_components/ActivitySection';
 import { resetCommentsSortForTests } from '@/lib/hooks/useCommentsSort';
 
 const BO = { userId: 'u-bo', name: 'Bo Philips', image: null };
@@ -391,11 +391,11 @@ describe('ActivitySection (5.5.4)', () => {
     const filter = () => screen.getByRole('group', { name: 'Activity filter' });
 
     fireEvent.click(within(filter()).getByRole('button', { name: 'All' }));
-    expect(replace).toHaveBeenCalledWith('/issues/PROD-7?activity=all', { scroll: false });
+    expect(replace).toHaveBeenCalledWith('/items/PROD-7?activity=all', { scroll: false });
 
     // The section re-renders (the transition skeleton) — re-query the control.
     fireEvent.click(within(filter()).getByRole('button', { name: 'Comments' }));
-    expect(replace).toHaveBeenCalledWith('/issues/PROD-7', { scroll: false });
+    expect(replace).toHaveBeenCalledWith('/items/PROD-7', { scroll: false });
   });
 
   it('the default Comments tab renders the 5.1.5 surface with the live filter', () => {

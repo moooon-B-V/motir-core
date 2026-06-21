@@ -16,7 +16,7 @@ import {
   type IssueFilter,
 } from '@/lib/issues/issueListFilter';
 
-// The /issues filter URL contract (Subtask 2.5.4) — pure parse / serialize /
+// The /items filter URL contract (Subtask 2.5.4) — pure parse / serialize /
 // count / map logic, unit-tested in isolation (no React, no DB). The filter is
 // multi-select and lives in the URL; these lock the canonical round-trip the
 // Server Component (read) and the client bar both depend on.

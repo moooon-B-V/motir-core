@@ -109,7 +109,7 @@ export function WorkItemActionsMenu({
   const [restoring, setRestoring] = useState(false);
   const [addingToSprint, setAddingToSprint] = useState(false);
 
-  const href = editHref ?? `/issues/${identifier}/edit`;
+  const href = editHref ?? `/items/${identifier}/edit`;
   const menuLabel = t('menuLabel', { key: identifier });
 
   async function copyLink() {

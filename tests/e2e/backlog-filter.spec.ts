@@ -1,7 +1,7 @@
 // E2E: backlog filtering — the Story-8.8 closing journey (Subtask 8.8.18).
 //
 // @smoke — proves the backlog's once-dead `[Filter]` seam is now the SAME shipped
-// /issues filter primitives, backlog-scoped (exactly as the board did, 6.15.3). A
+// /items filter primitives, backlog-scoped (exactly as the board did, 6.15.3). A
 // signed-in user on `/backlog` opens the toolbar Filter, narrows by a quick KIND
 // facet, and BOTH regions re-project: the backlog region AND the sprint container
 // (the sprint read became filter-aware in 8.8.20). The active filter rides the

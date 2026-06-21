@@ -149,7 +149,7 @@ test('@smoke #98 regression — an EARLY work item, outside any newest-50 window
   // The picker is opened on the NEWEST item.
   const subject = await mk(page, projectId, 'the subject of the search');
 
-  await page.goto(`/issues/${subject.identifier}`);
+  await page.goto(`/items/${subject.identifier}`);
   await expect(
     page.getByRole('heading', { name: 'the subject of the search', level: 1 }),
   ).toBeVisible();
@@ -196,7 +196,7 @@ test('@smoke the link picker shows the type-to-search prompt then the no-results
   // A second item exists, but it won't match the non-matching query below.
   await mk(page, projectId, 'an unrelated candidate');
 
-  await page.goto(`/issues/${host.identifier}`);
+  await page.goto(`/items/${host.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
 
   // Empty state: the open picker prompts to type before anything is fetched.
@@ -217,7 +217,7 @@ test('@smoke the create-modal link control searches server-side and persists the
   const projectId = await seedActiveProject(email, 'LCR');
   const target = await mk(page, projectId, 'the create-modal blocker');
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('item created with a link');
 
@@ -255,7 +255,7 @@ test('@a11y the link form passes a strict axe sweep across its states (empty / t
   const host = await mk(page, projectId, 'the a11y host work item');
   await mk(page, projectId, 'a linkable candidate alpha');
 
-  await page.goto(`/issues/${host.identifier}`);
+  await page.goto(`/items/${host.identifier}`);
 
   // Whole-page sweep: the Combobox PORTALS its open dropdown to document.body on
   // a non-dialog surface, so the open listbox lives outside the relationships

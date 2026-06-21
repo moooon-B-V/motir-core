@@ -40,7 +40,7 @@ export default async function UnsubscribeFilterSubscriptionPage({
         title={t('done.title')}
         body={t('done.body')}
       >
-        <Link href="/issues" className={buttonVariants({ variant: 'secondary' })}>
+        <Link href="/items" className={buttonVariants({ variant: 'secondary' })}>
           {t('done.action')}
         </Link>
       </Panel>
@@ -56,7 +56,7 @@ export default async function UnsubscribeFilterSubscriptionPage({
         title={t('invalid.title')}
         body={t('invalid.body')}
       >
-        <Link href="/issues" className={buttonVariants({ variant: 'secondary' })}>
+        <Link href="/items" className={buttonVariants({ variant: 'secondary' })}>
           {t('invalid.action')}
         </Link>
       </Panel>

@@ -22,7 +22,7 @@ import {
 // compact 2.5-row vocabulary (key · type glyph + summary · priority Pill ·
 // assignee) + a pager, capped at the widget's configured page size (≤50, the
 // verified gadget cap). Rides the 6.3.2 `/api/reports/filter-results` read —
-// a widget page exactly matches the /issues List for the same source.
+// a widget page exactly matches the /items List for the same source.
 
 function PriorityCell({ priority }: { priority: WorkItemListItemDto['priority'] }) {
   const tp = useTranslations('labels.priority');

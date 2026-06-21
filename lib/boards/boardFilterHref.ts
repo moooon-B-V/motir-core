@@ -1,5 +1,5 @@
 // The board-scoped filter URL contract (Story 6.15 · Subtask 6.15.3). The board
-// REUSES the /issues filter components verbatim (`IssueFilterBar` quick popover ·
+// REUSES the /items filter components verbatim (`IssueFilterBar` quick popover ·
 // `IssueAdvancedFilter` builder · `SavedFilterDropdown` picker · the applied
 // summary bar) — but those components serialize their state with
 // `buildIssueListHref`, which builds a FRESH querystring carrying `view`/`sort`/
@@ -21,7 +21,7 @@ const BOARD_PATH = '/boards';
  * selection. The filter params (`kind`/`type`/`status`/`assignee`/`q` facets +
  * the advanced `?filter=v1:` param) are appended in the same canonical order
  * `buildIssueListHref` uses, so a board filter URL round-trips identically to an
- * /issues one (only the route + the `?board=` companion differ). The `?peek=`
+ * /items one (only the route + the `?board=` companion differ). The `?peek=`
  * quick-view param is intentionally NOT carried: a filter edit happens from the
  * toolbar, not while a card peek modal traps focus, and the re-projected board
  * is what the user is acting on.

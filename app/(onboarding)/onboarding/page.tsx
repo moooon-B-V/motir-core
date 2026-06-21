@@ -9,7 +9,7 @@ import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding
 // The authed discovery onboarding route (Subtask 7.3.5 / MOTIR-833) — where the
 // public front door (7.3.14) lands the visitor after auth (`ONBOARDING_ENTRY_PATH
 // = /onboarding`). A Server Component that gates on session + active project (the
-// established getSession + getActiveProject pattern, mirroring /ready + /issues),
+// established getSession + getActiveProject pattern, mirroring /ready + /items),
 // READS the preserved idea (7.3.14 cookie) to seed the loop's first turn, and
 // hands off to the client island that drives the FORWARD gated review loop.
 //

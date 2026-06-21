@@ -78,7 +78,7 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   await signUp(page, email);
   const projectId = await seedActiveProject(email);
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
 
   // Default type (Task) keeps it top-level-legal; fill title + a PLAIN-PROSE
@@ -101,7 +101,7 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
 
   // The edit route opens for that identifier and rehydrates BOTH fields — the
   // stored Markdown parses back into the WYSIWYG editor's rendered document.
-  await page.goto(`/issues/${created!.identifier}/edit`);
+  await page.goto(`/items/${created!.identifier}/edit`);
   await expect(page.getByLabel('Title')).toHaveValue('Wire the dashboard');
   await expect(page.getByLabel('Description')).toContainText(
     'A short requirement for the dashboard view.',
@@ -125,7 +125,7 @@ test('@smoke the type+parent picker filters candidates inline (2.3.4)', async ({
   const storyId = await mk('story', 'The Story', epicId);
   await mk('task', 'The Task', storyId);
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
 
   // Type = Sub-task → parent candidates are Story/Task/Bug, never the Epic.
@@ -158,7 +158,7 @@ test('@smoke edit non-status fields persists + writes a revision', async ({ page
   const id = ((await create.json()) as { id: string; identifier: string }).id;
   const identifier = ((await getItem(page, id)).identifier as string) ?? '';
 
-  await page.goto(`/issues/${identifier}/edit`);
+  await page.goto(`/items/${identifier}/edit`);
   await page.getByLabel('Title').fill('Edited title');
   // Priority is the shared Combobox picker now (not a native <select>) — open it
   // and pick High (exact: 'High' would otherwise also match 'Highest').
@@ -188,7 +188,7 @@ test('@smoke status change goes through the gated path; illegal targets are not 
   const id = ((await create.json()) as { id: string }).id;
   const identifier = (await getItem(page, id)).identifier as string;
 
-  await page.goto(`/issues/${identifier}/edit`);
+  await page.goto(`/items/${identifier}/edit`);
   // The default-workflow item starts at todo. The Status picker offers the legal
   // next statuses (todo → in_progress is a default edge) but NOT unreachable ones.
   await page.getByRole('combobox', { name: 'Status' }).click();
@@ -212,7 +212,7 @@ test('@smoke a stale edit (the row changed since load) surfaces the refresh bann
   const id = ((await create.json()) as { id: string }).id;
   const identifier = (await getItem(page, id)).identifier as string;
 
-  await page.goto(`/issues/${identifier}/edit`);
+  await page.goto(`/items/${identifier}/edit`);
   await expect(page.getByLabel('Title')).toHaveValue('Concurrent');
 
   // Externally mutate the row (bumps updatedAt) AFTER the form captured the old one.
@@ -244,6 +244,6 @@ test('@smoke cross-workspace isolation: another workspace’s issue 404s', async
   const emailB = 'e2e-issue-tenant-b@example.com';
   await signUp(page, emailB);
   await seedActiveProject(emailB, 'BBB');
-  const res = await page.goto(`/issues/${aIdentifier}/edit`);
+  const res = await page.goto(`/items/${aIdentifier}/edit`);
   expect(res?.status(), 'cross-workspace issue 404s').toBe(404);
 });

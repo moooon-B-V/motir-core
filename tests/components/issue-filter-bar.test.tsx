@@ -8,7 +8,7 @@ import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import zhMessages from '@/messages/zh.json';
 
-// The /issues FILTER bar (Subtask 2.5.4) under happy-dom — the card's component
+// The /items FILTER bar (Subtask 2.5.4) under happy-dom — the card's component
 // AC: "toggling a filter updates the query + calls back; clear resets." Filters
 // live in the URL, so the bar just NAVIGATES: each facet toggle calls
 // router.push with the canonical buildIssueListHref, preserving the active view
@@ -17,10 +17,10 @@ import zhMessages from '@/messages/zh.json';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
 }));
 
-import { IssueFilterBar } from '@/app/(authed)/issues/_components/IssueFilterBar';
+import { IssueFilterBar } from '@/app/(authed)/items/_components/IssueFilterBar';
 
 beforeAll(() => {
   const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
@@ -136,7 +136,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const kindList = screen.getByRole('listbox', { name: 'Kind' });
     fireEvent.click(within(kindList).getByRole('option', { name: 'Bug' }));
-    expect(push).toHaveBeenCalledWith('/issues?kind=bug');
+    expect(push).toHaveBeenCalledWith('/items?kind=bug');
   });
 
   it('toggling a work type pushes ?type=<key> (the 6.15.5 facet)', () => {
@@ -144,7 +144,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const typeList = screen.getByRole('listbox', { name: 'Work type' });
     fireEvent.click(within(typeList).getByRole('option', { name: 'Design' }));
-    expect(push).toHaveBeenCalledWith('/issues?type=design');
+    expect(push).toHaveBeenCalledWith('/items?type=design');
   });
 
   it('toggling Untyped pushes the ?type=untyped token', () => {
@@ -152,7 +152,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const typeList = screen.getByRole('listbox', { name: 'Work type' });
     fireEvent.click(within(typeList).getByRole('option', { name: 'Untyped' }));
-    expect(push).toHaveBeenCalledWith('/issues?type=untyped');
+    expect(push).toHaveBeenCalledWith('/items?type=untyped');
   });
 
   it('un-checking an already-selected work type removes it', () => {
@@ -162,7 +162,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     const code = within(typeList).getByRole('option', { name: 'Code' });
     expect(code.getAttribute('aria-selected')).toBe('true');
     fireEvent.click(code);
-    expect(push).toHaveBeenCalledWith('/issues');
+    expect(push).toHaveBeenCalledWith('/items');
   });
 
   it('toggling a status pushes ?status=<key>', () => {
@@ -170,7 +170,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const statusList = screen.getByRole('listbox', { name: 'Status' });
     fireEvent.click(within(statusList).getByRole('option', { name: 'In Progress' }));
-    expect(push).toHaveBeenCalledWith('/issues?status=in_progress');
+    expect(push).toHaveBeenCalledWith('/items?status=in_progress');
   });
 
   it('toggling a member pushes ?assignee=<id>', () => {
@@ -178,7 +178,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const list = screen.getByRole('listbox', { name: 'Assignee' });
     fireEvent.click(within(list).getByRole('option', { name: /Dana Kim/ }));
-    expect(push).toHaveBeenCalledWith('/issues?assignee=u-dana');
+    expect(push).toHaveBeenCalledWith('/items?assignee=u-dana');
   });
 
   it('toggling Unassigned pushes the token', () => {
@@ -190,7 +190,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const list = screen.getByRole('listbox', { name: 'Assignee' });
     fireEvent.click(within(list).getByRole('option', { name: 'Unassigned' }));
-    expect(push).toHaveBeenCalledWith('/issues?assignee=unassigned');
+    expect(push).toHaveBeenCalledWith('/items?assignee=unassigned');
   });
 
   it('un-checking an already-selected facet removes it from the URL', () => {
@@ -200,7 +200,7 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     const bug = within(kindList).getByRole('option', { name: 'Bug' });
     expect(bug.getAttribute('aria-selected')).toBe('true');
     fireEvent.click(bug);
-    expect(push).toHaveBeenCalledWith('/issues'); // back to the unfiltered tree
+    expect(push).toHaveBeenCalledWith('/items'); // back to the unfiltered tree
   });
 
   it('preserves the active view + sort when a facet changes', () => {
@@ -216,16 +216,16 @@ describe('IssueFilterBar — facet toggles navigate (URL-driven)', () => {
     open();
     const kindList = screen.getByRole('listbox', { name: 'Kind' });
     fireEvent.click(within(kindList).getByRole('option', { name: 'Bug' }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Adesc&kind=bug');
+    expect(push).toHaveBeenCalledWith('/items?view=list&sort=priority%3Adesc&kind=bug');
   });
 });
 
 describe('IssueFilterBar — clear', () => {
-  it('"Clear filters" resets to the bare /issues', () => {
+  it('"Clear filters" resets to the bare /items', () => {
     renderBar({ ...EMPTY_FILTER, kinds: ['bug'], includeUnassigned: true });
     open();
     fireEvent.click(screen.getByRole('button', { name: /Clear filters/ }));
-    expect(push).toHaveBeenCalledWith('/issues');
+    expect(push).toHaveBeenCalledWith('/items');
   });
 
   it('Clear is disabled when nothing is selected', () => {
@@ -258,7 +258,7 @@ describe('IssueFilterBar — optimistic selection (finding #58)', () => {
     // no rerender with a new prop — the optimistic mirror drives the UI
     expect(blocked.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('button', { name: 'Filter — 1 active' })).toBeTruthy();
-    expect(push).toHaveBeenCalledWith('/issues?status=blocked');
+    expect(push).toHaveBeenCalledWith('/items?status=blocked');
   });
 
   it('reconciles to the server filter when the navigation lands', () => {
@@ -302,9 +302,9 @@ describe('IssueFilterBar — rapid multi-select (finding #58 regression)', () =>
     fireEvent.click(within(statusList).getByRole('option', { name: 'Done' }));
 
     expect(push).toHaveBeenCalledTimes(2);
-    expect(push).toHaveBeenNthCalledWith(1, '/issues?status=in_progress');
+    expect(push).toHaveBeenNthCalledWith(1, '/items?status=in_progress');
     // both keys survive — appended in the reducer's sorted order (done, in_progress)
-    expect(push).toHaveBeenLastCalledWith('/issues?status=done&status=in_progress');
+    expect(push).toHaveBeenLastCalledWith('/items?status=done&status=in_progress');
   });
 
   it('accumulates across facets toggled back-to-back (kind then status)', () => {
@@ -316,7 +316,7 @@ describe('IssueFilterBar — rapid multi-select (finding #58 regression)', () =>
     fireEvent.click(
       within(screen.getByRole('listbox', { name: 'Status' })).getByRole('option', { name: 'Done' }),
     );
-    expect(push).toHaveBeenLastCalledWith('/issues?kind=bug&status=done');
+    expect(push).toHaveBeenLastCalledWith('/items?kind=bug&status=done');
   });
 });
 
@@ -331,7 +331,7 @@ describe('IssueFilterBar — text quick-filter (debounced)', () => {
       });
       expect(push).not.toHaveBeenCalled(); // debounced, not yet
       vi.advanceTimersByTime(300);
-      expect(push).toHaveBeenCalledWith('/issues?q=oauth');
+      expect(push).toHaveBeenCalledWith('/items?q=oauth');
     } finally {
       vi.useRealTimers();
     }

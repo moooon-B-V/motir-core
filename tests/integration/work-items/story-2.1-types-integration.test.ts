@@ -14,8 +14,8 @@ import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 //   • the full 30-cell kind-parent matrix (service path) ....... kind-parent-matrix.test.ts (1.4.7)
 //   • the direct-repo DB-trigger rejection (2 cells) ........... repository.test.ts (1.4.2)
 //   • the 8- and 20-wide concurrent key-allocation stress ...... service.test.ts (1.4.4 / 1.4.7)
-//   • the pure type-metadata + canParent predicates ........... tests/issues/issueTypes.test.ts (2.1.1)
-//   • the pure assertValidParent gate + single-source guard ... tests/issues/parentValidation.test.ts (2.1.2)
+//   • the pure type-metadata + canParent predicates ........... tests/items/issueTypes.test.ts (2.1.1)
+//   • the pure assertValidParent gate + single-source guard ... tests/items/parentValidation.test.ts (2.1.2)
 //   • no-key-recycle-after-archive ............................ service.test.ts (2.1.3)
 //
 // What this file adds is the *integration-level coherence* none of those prove
@@ -28,7 +28,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 //
 // Placement note (2.1.4): this is a DB-backed integration test, so it lives
 // with its siblings under tests/integration/work-items/ — the repo's
-// unit-vs-integration split keeps tests/issues/ pure-unit. The shared fixtures
+// unit-vs-integration split keeps tests/items/ pure-unit. The shared fixtures
 // (makeWorkItemFixture / createTestWorkItem, 1.4.7) are the same primitives
 // the matrix/service/repository suites build on.
 

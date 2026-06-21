@@ -17,7 +17,7 @@ import { MAX_UPLOAD_BYTES } from '@/lib/blob/allowlist';
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
-import { AttachmentsPanel } from '@/app/(authed)/issues/[key]/_components/AttachmentsPanel';
+import { AttachmentsPanel } from '@/app/(authed)/items/[key]/_components/AttachmentsPanel';
 import { resetAttachmentsViewForTests } from '@/lib/hooks/useAttachmentsView';
 
 const ME = { id: 'user-me', name: 'Zhu Yue', image: null };

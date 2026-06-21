@@ -309,7 +309,7 @@ export interface ProjectTreeFilter {
 
 /**
  * A node of the project issue-tree (Subtask 2.5.1) — the wire shape backing
- * the `/issues` list view's tree-table (Story 2.5). Unlike the flat
+ * the `/items` list view's tree-table (Story 2.5). Unlike the flat
  * `WorkItemSubtreeDto`, this nests: each node carries its `children` (same
  * `key`-asc order as the roots). Per-row render fields the tree-table shows —
  * `kind` (its type icon hue), `identifier`, `title`, `status` (the status

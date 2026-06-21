@@ -12,7 +12,7 @@ import type { ComboboxOption } from '@/components/ui/Combobox';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
-import { listCreateLinkCandidatesAction } from '../issues/actions';
+import { listCreateLinkCandidatesAction } from '../items/actions';
 
 // The create-modal "Linked issues" section (Subtask 2.4.10), per
 // `design/work-items/links.mock.html` panel 5. Reuses the SHARED LinkAddForm

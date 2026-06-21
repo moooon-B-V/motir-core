@@ -9,7 +9,7 @@ import type { QuickViewData } from '@/lib/dto/quickView';
 //   1. Opening renders the modal FRAME + skeleton INSTANTLY, before the item
 //      data resolves (here: the fetch is still pending). "Open full page" is live
 //      throughout the loading state.
-//   2. The fields stream in via a CLIENT fetch of /api/issues/peek; a 404 (stale
+//   2. The fields stream in via a CLIENT fetch of /api/work-items/peek; a 404 (stale
 //      / deleted / cross-workspace / forbidden — the no-leak contract) lands on
 //      the not-found panel, never a crash.
 // The peek is URL-driven: the controller reads `?peek` from useSearchParams, so
@@ -25,11 +25,11 @@ import type { QuickViewData } from '@/lib/dto/quickView';
 let searchParamsString = 'peek=PROD-7';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(searchParamsString),
 }));
 
-import { IssueQuickViewController } from '@/app/(authed)/issues/_components/IssueQuickViewController';
+import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 
 const DATA: QuickViewData = {
   identifier: 'PROD-7',
@@ -74,13 +74,13 @@ describe('IssueQuickViewController — frame + skeleton render before the data',
     expect(screen.getByRole('dialog')).toBeTruthy();
     // …with the loading skeleton (its aria-live status region)…
     expect(screen.getByRole('status')).toBeTruthy();
-    // …and "Open full page" live throughout the load (→ /issues/PROD-7).
-    expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/issues/PROD-7');
+    // …and "Open full page" live throughout the load (→ /items/PROD-7).
+    expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/items/PROD-7');
     // …but the item's own fields have NOT resolved yet.
     expect(screen.queryByText(DATA.title)).toBeNull();
     // The fetch was fired client-side for the peeked key.
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/api/issues/peek?key=PROD-7',
+      '/api/work-items/peek?key=PROD-7',
       expect.objectContaining({ signal: expect.anything() }),
     );
   });

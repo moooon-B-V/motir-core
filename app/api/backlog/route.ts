@@ -30,7 +30,7 @@ const MAX_TITLE_LENGTH = 200;
 //
 // Active-project routing (NOT /api/projects/[id]/backlog, which the 4.1.4 card
 // sketches): the app is single-active-project — `/api/board`, `/api/sprints`,
-// and the `/boards` / `/issues` pages all resolve getActiveProject() and there
+// and the `/boards` / `/items` pages all resolve getActiveProject() and there
 // is NO project-by-key route tree to mirror. The card's path-param shape loses
 // to the shipped active-project pattern (decision ladder: rung 2 shipped code >
 // rung 3 card prose). The 4.2 backlog UI binds here against the active project.
@@ -38,9 +38,9 @@ const MAX_TITLE_LENGTH = 200;
 // Query: ?cursor=<last id> (omit for page 1) · ?limit=<1..100> (default 50).
 //
 // FILTER (Story 8.8 · Subtask 8.8.17): the backlog read takes the SAME filter
-// params as `/issues` + the board — the quick facets `?kind` · `?type` ·
+// params as `/items` + the board — the quick facets `?kind` · `?type` ·
 // `?status` · `?assignee` · `?q` and the advanced builder's `?filter=v1:` AST.
-// They're parsed exactly as `/issues` (`parseIssueFilter`) + decoded
+// They're parsed exactly as `/items` (`parseIssueFilter`) + decoded
 // (`decodeFilterParam`), then merged into ONE predicate via the board's lossless
 // `upgradeFacetsIntoAst` AND-merge and threaded to the service, which resolves +
 // validates it (an invalid field/operator/value → `FilterValidationError` → 422

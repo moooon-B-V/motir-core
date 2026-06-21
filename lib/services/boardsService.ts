@@ -1288,7 +1288,7 @@ type ResolvedBoardFilter = { ast: FilterAst; referents?: ProjectFilterReferents 
  *
  * REUSE, not rebuild: a `savedFilterId` (a row id or a `builtin:<slug>`)
  * resolves through `savedFiltersService.resolve` — the SAME 6.2 read the
- * `/issues` navigator uses, with its access gate (an unknown / unauthorized id
+ * `/items` navigator uses, with its access gate (an unknown / unauthorized id
  * throws `SavedFilterNotFoundError`, which the 6.15.3 route maps to 404; a
  * stored envelope gone stale resolves to `ast: null`, which degrades to "no
  * filter" exactly like the navigator's read, leaving the degraded-state notice

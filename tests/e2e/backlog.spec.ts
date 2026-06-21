@@ -121,7 +121,7 @@ test.describe('backlog — grooming session (4.2.6)', () => {
     // (Jira "View in Issue Navigator") — NOT a flat list rebuilt here.
     await expect(page.getByRole('link', { name: 'View all work items' })).toHaveAttribute(
       'href',
-      /\/issues/,
+      /\/items/,
     );
   });
 

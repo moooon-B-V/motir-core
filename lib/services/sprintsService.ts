@@ -548,7 +548,7 @@ export const sprintsService = {
    *   • the completed/incomplete COUNTS — grouped aggregates over the sprint
    *     (`countSprintIssuesByDoneMembership`), NOT page sums;
    *   • the completed/incomplete LISTS — one bounded cursor page each (the UI
-   *     shows the page + a "view all" deep-link to `/issues` filtered to the
+   *     shows the page + a "view all" deep-link to `/items` filtered to the
    *     sprint, built from `sprintId`);
    *   • `addedAfterStart` — the issues associated with the sprint after
    *     `startDate`, from the 1.4.6 revision trail (0 when the sprint has no

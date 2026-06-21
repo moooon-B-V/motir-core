@@ -1,5 +1,5 @@
 // The `search_work_items` page cursor (Story 7.8 · Subtask 7.8.6). The tool
-// wraps the SAME read the `/issues` List view rides
+// wraps the SAME read the `/items` List view rides
 // (`workItemsService.getProjectIssuesList`), which is LIMIT/OFFSET-paged by a
 // 1-based page number (Subtask 2.5.12). To present the cursor surface the
 // sibling read tools (`list_ready`, 7.8.4) and the AC use — `cursor` in,

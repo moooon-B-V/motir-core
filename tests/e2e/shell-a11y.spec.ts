@@ -31,7 +31,7 @@ import { WCAG_TAGS, formatViolations, type AxeViolation } from './_helpers/a11y'
 
 const USER_EMAIL = 'e2e-shell-a11y@example.com';
 
-// The shell-bearing routes. /dashboard, /issues, /boards, /reports are
+// The shell-bearing routes. /dashboard, /items, /boards, /reports are
 // project-scoped (need an active project for the sidebar project-nav to
 // render); the two settings routes render under the same shell. `ready` is a
 // per-route settle anchor so axe analyses a fully-painted DOM, not a mid-render
@@ -42,12 +42,12 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     ready: async (page) => expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible(),
   },
   {
-    path: '/issues',
+    path: '/items',
     // The sweep's user has a project but no issues → the real route renders its
     // empty state inside a Suspense boundary. Wait for BOTH the page h1 (level:1
     // — the empty-state h2 "No issues yet" substring-matches a bare name:'Work Items')
     // AND the resolved empty state, so axe analyses the settled DOM, not a
-    // mid-stream frame. (2.5.6 adds the POPULATED /issues sweep with a fixture.)
+    // mid-stream frame. (2.5.6 adds the POPULATED /items sweep with a fixture.)
     ready: async (page) => {
       await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
@@ -143,7 +143,7 @@ test.describe('@a11y shell accessibility', () => {
   }) => {
     await signUp(page, 'e2e-create-issue-a11y@example.com');
     await createFirstProject(page, 'Mobile App');
-    await page.goto('/issues');
+    await page.goto('/items');
 
     await page.getByRole('button', { name: 'Create work item' }).click();
     await expect(page.getByRole('heading', { name: 'Create work item' })).toBeVisible();
@@ -158,7 +158,7 @@ test.describe('@a11y shell accessibility', () => {
       .analyze();
     expect(
       modalResults.violations,
-      formatViolations('/issues (create-issue modal)', modalResults.violations as AxeViolation[]),
+      formatViolations('/items (create-issue modal)', modalResults.violations as AxeViolation[]),
     ).toEqual([]);
 
     // Open the Type picker so the expanded listbox is in the swept DOM.
@@ -173,13 +173,13 @@ test.describe('@a11y shell accessibility', () => {
       .analyze();
     expect(
       listboxResults.violations,
-      formatViolations('/issues (type picker open)', listboxResults.violations as AxeViolation[]),
+      formatViolations('/items (type picker open)', listboxResults.violations as AxeViolation[]),
     ).toEqual([]);
   });
 
   // The issue edit route (Subtask 2.3.6). Creates a project + an issue (via the
   // create modal, reading its identifier off the success toast), then sweeps the
-  // /issues/[key]/edit page. STRICT — only the third-party `.ProseMirror`
+  // /items/[key]/edit page. STRICT — only the third-party `.ProseMirror`
   // contenteditable is excluded; the editor's own toolbar + the form's controls
   // + the Status/Parent/Assignee comboboxes are held to full AA.
   test('the issue edit route has zero axe violations (WCAG 2.1 AA; third-party editor chrome excluded)', async ({
@@ -188,7 +188,7 @@ test.describe('@a11y shell accessibility', () => {
     await signUp(page, 'e2e-edit-issue-a11y@example.com');
     await createFirstProject(page, 'Mobile App');
 
-    await page.goto('/issues');
+    await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
     await page.getByLabel('Title').fill('Editable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -198,7 +198,7 @@ test.describe('@a11y shell accessibility', () => {
     const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
 
-    await page.goto(`/issues/${identifier}/edit`);
+    await page.goto(`/items/${identifier}/edit`);
     await expect(page.getByRole('heading', { name: 'Edit work item' })).toBeVisible();
     // Wait for the Tiptap editor's contenteditable to mount before sweeping.
     await expect(page.locator('.ProseMirror').first()).toBeVisible();
@@ -209,7 +209,7 @@ test.describe('@a11y shell accessibility', () => {
       .analyze();
     expect(
       results.violations,
-      formatViolations('/issues/[key]/edit', results.violations as AxeViolation[]),
+      formatViolations('/items/[key]/edit', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 
@@ -224,7 +224,7 @@ test.describe('@a11y shell accessibility', () => {
     await signUp(page, 'e2e-detail-issue-a11y@example.com');
     await createFirstProject(page, 'Mobile App');
 
-    await page.goto('/issues');
+    await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
     await page.getByLabel('Title').fill('Detail-view issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -234,7 +234,7 @@ test.describe('@a11y shell accessibility', () => {
     const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
 
-    await page.goto(`/issues/${identifier}`);
+    await page.goto(`/items/${identifier}`);
     await expect(page.getByRole('heading', { name: 'Detail-view issue' })).toBeVisible();
     // The metadata rail (its field boxes) is part of the populated content the
     // sweep must cover — wait for a field label to confirm it has rendered.
@@ -243,13 +243,13 @@ test.describe('@a11y shell accessibility', () => {
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
       results.violations,
-      formatViolations('/issues/[key]', results.violations as AxeViolation[]),
+      formatViolations('/items/[key]', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 
   // The issue detail route with the LINK-MANAGEMENT add form open (Subtask
   // 2.4.9, swept here as part of the 2.4.6 Story closer). The card's AC: the
-  // /issues/[key] route stays in the STRICT sweep "INCLUDING the open add-link
+  // /items/[key] route stays in the STRICT sweep "INCLUDING the open add-link
   // combobox/dialog". STRICT — zero exclusions (no third-party editor on the
   // detail page). Opens the "+ Link issue" form, then expands the Relationship
   // listbox so the WAI-ARIA listbox-combobox (role="combobox" → role="listbox"
@@ -261,7 +261,7 @@ test.describe('@a11y shell accessibility', () => {
     await signUp(page, 'e2e-detail-addlink-a11y@example.com');
     await createFirstProject(page, 'Mobile App');
 
-    await page.goto('/issues');
+    await page.goto('/items');
     await page.getByRole('button', { name: 'Create work item' }).click();
     await page.getByLabel('Title').fill('Linkable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
@@ -271,7 +271,7 @@ test.describe('@a11y shell accessibility', () => {
     const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
 
-    await page.goto(`/issues/${identifier}`);
+    await page.goto(`/items/${identifier}`);
     await expect(page.getByRole('heading', { name: 'Linkable issue', level: 1 })).toBeVisible();
 
     // Open the add-link form, then expand the Relationship listbox.
@@ -283,7 +283,7 @@ test.describe('@a11y shell accessibility', () => {
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(
       results.violations,
-      formatViolations('/issues/[key] (add-link form open)', results.violations as AxeViolation[]),
+      formatViolations('/items/[key] (add-link form open)', results.violations as AxeViolation[]),
     ).toEqual([]);
   });
 
@@ -293,7 +293,7 @@ test.describe('@a11y shell accessibility', () => {
   test('shell landmarks + aria states are correctly wired', async ({ page }) => {
     await signUp(page, 'e2e-shell-a11y-aria@example.com');
     await createFirstProject(page, 'Mobile App');
-    await page.goto('/issues');
+    await page.goto('/items');
 
     // Two distinctly-named nav landmarks: the global top bar + the primary rail.
     await expect(page.getByRole('navigation', { name: 'Global' })).toBeVisible();

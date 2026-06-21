@@ -2,7 +2,7 @@ import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import type { ResolvedSavedFilterDto } from '@/lib/dto/savedFilters';
 
 // The applied-saved-filter session model (Story 6.2 · Subtask 6.2.3) — the pure
-// half of the /issues "a saved filter is applied" state, kept here so the dirty
+// half of the /items "a saved filter is applied" state, kept here so the dirty
 // check is unit-testable without the DOM.
 //
 // A saved filter, once applied, lives ENTIRELY in the `?filter=v1:` URL param
@@ -21,7 +21,7 @@ import type { ResolvedSavedFilterDto } from '@/lib/dto/savedFilters';
 // preserves), so a builder edit, a URL navigation, or an apply all recompute it
 // the same way.
 
-/** The saved (or built-in) filter currently applied on /issues. `builtin` and
+/** The saved (or built-in) filter currently applied on /items. `builtin` and
  * non-owned filters carry `canOverwrite: false` (Save-as forks a fresh row).
  * `visibility` is null for a built-in (no row to carry one). */
 export interface AppliedSavedFilter {

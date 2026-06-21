@@ -185,7 +185,7 @@ describe('Story 6.3 recipe — dashboard + three widgets, shared, read end-to-en
     );
     expect(page.state).toBe('ok');
     if (page.state !== 'ok') throw new Error('unreachable');
-    // Filter-results is the EXISTING /issues list read for the same filter
+    // Filter-results is the EXISTING /items list read for the same filter
     // (the verified ≤50/page gadget cap holds — 25 here, never exceeded).
     expect(page.data.pageSize).toBeLessThanOrEqual(50);
   });

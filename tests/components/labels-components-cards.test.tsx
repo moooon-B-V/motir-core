@@ -19,15 +19,15 @@ const { addLabelSpy, removeLabelSpy, addComponentSpy, removeComponentSpy } = vi.
   addComponentSpy: vi.fn(),
   removeComponentSpy: vi.fn(),
 }));
-vi.mock('@/app/(authed)/issues/[key]/labelComponentActions', () => ({
+vi.mock('@/app/(authed)/items/[key]/labelComponentActions', () => ({
   addLabelAction: addLabelSpy,
   removeLabelAction: removeLabelSpy,
   addComponentAction: addComponentSpy,
   removeComponentAction: removeComponentSpy,
 }));
 
-import { LabelsCard } from '@/app/(authed)/issues/[key]/_components/LabelsCard';
-import { ComponentsCard } from '@/app/(authed)/issues/[key]/_components/ComponentsCard';
+import { LabelsCard } from '@/app/(authed)/items/[key]/_components/LabelsCard';
+import { ComponentsCard } from '@/app/(authed)/items/[key]/_components/ComponentsCard';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 
 afterEach(() => {

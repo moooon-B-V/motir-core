@@ -22,10 +22,10 @@ import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
 import { labelsService } from '@/lib/services/labelsService';
 import { NoAccessState } from '@/components/projects/NoAccessState';
-import { AdvancedFilterProvider } from '../issues/_components/AdvancedFilterContext';
-import { SavedFilterSessionProvider } from '../issues/_components/SavedFilterContext';
-import { NewIssueButton } from '../issues/_components/NewIssueButton';
-import { IssueQuickViewController } from '../issues/_components/IssueQuickViewController';
+import { AdvancedFilterProvider } from '../items/_components/AdvancedFilterContext';
+import { SavedFilterSessionProvider } from '../items/_components/SavedFilterContext';
+import { NewIssueButton } from '../items/_components/NewIssueButton';
+import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { BoardContainer } from './_components/BoardContainer';
 import { BoardSwitcher } from './_components/BoardSwitcher';
 import { BoardFilterControls } from './_components/BoardFilterControls';
@@ -42,7 +42,7 @@ import { BoardFilterUiProvider } from './_components/BoardFilterUiContext';
 // board (it's a pure consumer) — the only reads here are the workspace members
 // for the quick-view peek + cards, and the filter facet data (Subtask 6.15.3).
 //
-// Quick-view peek (mirrors /issues, Subtask 2.5.19): a board card click pushes
+// Quick-view peek (mirrors /items, Subtask 2.5.19): a board card click pushes
 // `?peek=<identifier>` (via the shared usePeekOpen hook in BoardContainer); when
 // that param is present this page mounts the SAME IssueQuickView modal the issue
 // list uses — reused, not rebuilt — with the item's fields streamed behind a
@@ -50,7 +50,7 @@ import { BoardFilterUiProvider } from './_components/BoardFilterUiContext';
 // project → a hint.
 //
 // Board filtering (Story 6.15 · Subtask 6.15.3): the toolbar's `[Filter]` seam is
-// now the working board filter — the SAME shipped /issues primitives
+// now the working board filter — the SAME shipped /items primitives
 // (IssueFilterBar quick popover · IssueAdvancedFilter builder · SavedFilterDropdown
 // picker · the applied summary bar), re-pointed at the board via a board-scoped
 // `buildHref` (BoardFilterControls / BoardAppliedFilterBar). The active filter
@@ -58,7 +58,7 @@ import { BoardFilterUiProvider } from './_components/BoardFilterUiContext';
 // advanced `?filter=v1:` AST) composing with `?board=`, so it's shareable,
 // reload-safe, and per board. This page parses that filter, MERGES the facets +
 // advanced into one AST (the board read takes a single predicate, unlike the
-// /issues read which threads facets + AST separately), and passes the encoded
+// /items read which threads facets + AST separately), and passes the encoded
 // param + an `isActive` flag to BoardContainer, whose `/api/board` fetch carries
 // it so the server (6.15.2) re-projects to the matching set.
 
@@ -118,10 +118,10 @@ export default async function BoardsPage({
   // to a 404 board-not-found, surfaced as the board error state.
   const selectedBoardId = sp.board?.trim() || undefined;
 
-  // The board FILTER (Story 6.15.3) — parsed from the URL exactly as /issues:
+  // The board FILTER (Story 6.15.3) — parsed from the URL exactly as /items:
   // the facets (`kind`/`type`/`status`/`assignee`/`q`) + the advanced `?filter=v1:`
   // AST. A malformed/forged advanced param is the recoverable state — it's nulled
-  // before threading so no navigation re-carries it (mirrors /issues), and the
+  // before threading so no navigation re-carries it (mirrors /items), and the
   // board reads facets-only / unfiltered.
   let filter = parseIssueFilter(sp);
   const advanced = parseAdvancedFilterParam(filter.advanced);
@@ -139,7 +139,7 @@ export default async function BoardsPage({
   // Members resolve assignee / reporter ids to display names — for the board
   // cards' assignee avatars (the projection carries only `assigneeId`, Story
   // 3.1.4) AND for the quick-view panel when a peek is open. The filter facet
-  // data (Subtask 6.15.3) mirrors the /issues toolbar reads: the workflow's
+  // data (Subtask 6.15.3) mirrors the /items toolbar reads: the workflow's
   // statuses (the Status facet), the project's sprints + custom-field defs +
   // components (the advanced builder's value editors), and — for a shared/saved
   // URL — the advanced AST's referenced labels resolved to names (the only ids
@@ -169,14 +169,14 @@ export default async function BoardsPage({
       labelsService.resolveByIds(ctx.project.identifier, referencedLabelIds, wsCtx),
       // The saved-filter tier (Subtask 6.2.3) — { canBrowse, canShare, isAdmin },
       // distinct from the drag-edit `caps` above. Powers the [Saved] dropdown +
-      // the applied bar's save dialog (the same `Viewer` shape /issues uses).
+      // the applied bar's save dialog (the same `Viewer` shape /items uses).
       projectAccessService.getSavedFilterCapabilities(ctx.projectId, wsCtx),
     ]);
 
   const viewer = { userId: ctx.userId, ...savedFilterCaps };
 
   return (
-    // The filter UI providers (shared with /issues): the advanced-popover open
+    // The filter UI providers (shared with /items): the advanced-popover open
     // state, the saved-filter session (applied chip + dropdown open), and the
     // board's quick-filter open state (the over-cap "Refine" CTA). They wrap BOTH
     // the header controls AND the body's applied bar + over-cap banner so those
@@ -205,7 +205,7 @@ export default async function BoardsPage({
                     with the board projection. `display:contents` so the portaled
                     control is a direct flex child. */}
                 <div id="board-toolbar-groupby-slot" className="contents" />
-                {/* The board filter (Subtask 6.15.3) — the SAME shipped /issues
+                {/* The board filter (Subtask 6.15.3) — the SAME shipped /items
                     [Filter] · [Advanced] · [Saved] primitives, re-pointed at the
                     board via a board-scoped buildHref. Replaces the old disabled
                     [Filter] seam. */}
@@ -256,7 +256,7 @@ export default async function BoardsPage({
 
             {/* Quick-view peek (Subtask 2.5.19; bug 8.8.2) — a client island that
                 watches `?peek` and renders the modal frame + skeleton instantly,
-                then client-fetches the item from /api/issues/peek. Decoupled from
+                then client-fetches the item from /api/work-items/peek. Decoupled from
                 this page's server render, so opening/closing is a pure shallow URL
                 change with no board refetch. */}
             <IssueQuickViewController />

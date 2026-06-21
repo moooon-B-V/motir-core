@@ -61,7 +61,7 @@ interface Seed {
 }
 
 /** Sign-up auto-creates the workspace; create a project server-side + pin it
- *  active so the project-scoped /issues route resolves it. Returns the service
+ *  active so the project-scoped /items route resolves it. Returns the service
  *  context (for seeding the parent candidates) + the project id. Mirrors the
  *  per-feature specs' seedActiveProject/seedProject. */
 async function seedActiveProject(page: Page, email: string, identifier: string): Promise<Seed> {
@@ -122,7 +122,7 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
   await mk(seed, 'epic', 'Unparentable epic');
 
   // ── 1. CREATE via the modal — the type-parent rule, surfaced in the UI ──────
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('Acceptance subtask');
 
@@ -154,7 +154,7 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
   expect(subId, 'the created subtask is listed').toBeTruthy();
 
   // ── 2. DETAIL — render + assign to the member ───────────────────────────────
-  await page.goto(`/issues/${identifier}`);
+  await page.goto(`/items/${identifier}`);
   // Header + body: title (h1), identifier, kind, initial status, parent breadcrumb.
   await expect(page.getByRole('heading', { name: 'Acceptance subtask', level: 1 })).toBeVisible();
   await expect(page.getByText(identifier, { exact: true })).toBeVisible();
@@ -210,7 +210,7 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
 
   // ── 4. REFLECTION in both read surfaces ─────────────────────────────────────
   // List (flat): the subtask row shows with its final status.
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
   const listRow = page.getByTestId(`issue-row-${identifier}`);
   await expect(listRow).toBeVisible();
@@ -219,7 +219,7 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
   // Tree: the subtask is nested under its parent Task. It is LAZY — not in the
   // DOM until the parent row is expanded (ArrowRight via the WAI-ARIA treegrid
   // keyboard model, robust vs a coordinate click on the chevron).
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('treegrid', { name: 'Work Items' })).toBeVisible();
   await expect(page.getByTestId(`issue-row-${identifier}`)).toHaveCount(0);
   const taskRow = page.getByTestId(`issue-row-${parentTask.identifier}`);

@@ -14,7 +14,7 @@ import { truncateAuthTables } from '../helpers/db';
 
 // `search_work_items` (Subtask 7.8.6) over real Postgres. The tool rides the
 // SAME 6.1.1 FilterAST envelope + the SAME `getProjectIssuesList` read the
-// /issues List view uses, so the headline test proves IDENTICAL result sets
+// /items List view uses, so the headline test proves IDENTICAL result sets
 // across the two carriers (URL param vs MCP envelope). The rest cover the
 // codec/registry error mapping (foreign version, unknown field), the
 // parameterized-compiler injection contract, cursor pagination, and the
@@ -56,7 +56,7 @@ function envelopeArg(ast: FilterAst) {
   };
 }
 
-describe('search_work_items — FilterAST parity with the /issues read', () => {
+describe('search_work_items — FilterAST parity with the /items read', () => {
   it('tools/list advertises the search tool with an input schema', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
@@ -67,7 +67,7 @@ describe('search_work_items — FilterAST parity with the /issues read', () => {
     await client.close();
   });
 
-  it('a v1 AST returns the IDENTICAL result set through the tool and the /issues URL carrier', async () => {
+  it('a v1 AST returns the IDENTICAL result set through the tool and the /items URL carrier', async () => {
     const fx = await makeWorkItemFixture();
     await make(fx, 'task', 'Wire the dispatch');
     await make(fx, 'task', 'Wire the board');
@@ -79,7 +79,7 @@ describe('search_work_items — FilterAST parity with the /issues read', () => {
       conditions: [{ field: 'kind', operator: 'is_any_of', value: ['task'] }],
     };
 
-    // The /issues URL carrier: encode → decode the param exactly as the page
+    // The /items URL carrier: encode → decode the param exactly as the page
     // boundary does, then run the same read the List view calls.
     const parsed = parseAdvancedFilterParam(encodeFilterParam(ast));
     expect(parsed.state).toBe('active');

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { listCreateLinkCandidatesAction } from '@/app/(authed)/issues/actions';
+import { listCreateLinkCandidatesAction } from '@/app/(authed)/items/actions';
 
 // The Mark-duplicate / Merge picker (Subtask 6.11.6, design panel 1c) — a
 // query-driven Combobox over the project's work items (the 6.9.1 quick-search

@@ -5,8 +5,8 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { ParentBreadcrumb } from '@/app/(authed)/issues/[key]/_components/ParentBreadcrumb';
-import { ChildList } from '@/app/(authed)/issues/[key]/_components/ChildList';
+import { ParentBreadcrumb } from '@/app/(authed)/items/[key]/_components/ParentBreadcrumb';
+import { ChildList } from '@/app/(authed)/items/[key]/_components/ChildList';
 
 // Pure presentational tree-navigation surfaces for the issue detail page
 // (Subtask 2.4.3): the parent breadcrumb (ancestor chain, root→self) and the
@@ -83,9 +83,9 @@ describe('ParentBreadcrumb (2.4.3)', () => {
     // Order is root→self: Epic first, immediate parent (Story) last.
     expect(links).toHaveLength(2);
     expect(links[0]?.textContent).toContain('Epic: Q3 launch');
-    expect(links[0]?.getAttribute('href')).toBe('/issues/PROD-12');
+    expect(links[0]?.getAttribute('href')).toBe('/items/PROD-12');
     expect(links[1]?.textContent).toContain('Story: OAuth sign-in');
-    expect(links[1]?.getAttribute('href')).toBe('/issues/PROD-31');
+    expect(links[1]?.getAttribute('href')).toBe('/items/PROD-31');
   });
 });
 
@@ -113,7 +113,7 @@ describe('ChildList (2.4.3)', () => {
     screen.getByText('2');
 
     const first = screen.getByRole('link', { name: /PROD-41/ });
-    expect(first.getAttribute('href')).toBe('/issues/PROD-41');
+    expect(first.getAttribute('href')).toBe('/items/PROD-41');
     expect(first.textContent).toContain('Set up OAuth credentials');
     // Status renders the workflow label, not the raw key.
     expect(first.textContent).toContain('In Progress');
@@ -121,7 +121,7 @@ describe('ChildList (2.4.3)', () => {
     expect(within(first).getByTitle('Dana Kim').textContent).toBe('D');
 
     const second = screen.getByRole('link', { name: /PROD-49/ });
-    expect(second.getAttribute('href')).toBe('/issues/PROD-49');
+    expect(second.getAttribute('href')).toBe('/items/PROD-49');
     expect(second.textContent).toContain('To Do');
     expect(within(second).queryByTitle(/.+/)).toBeNull(); // unassigned → no avatar
   });

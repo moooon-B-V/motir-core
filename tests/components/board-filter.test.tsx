@@ -9,7 +9,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
 // The board filter UI (Story 6.15 · Subtask 6.15.3) under happy-dom. It REUSES
-// the /issues filter components verbatim — the value this suite adds over
+// the /items filter components verbatim — the value this suite adds over
 // issue-filter-bar.test.tsx is the BOARD wiring: the injected board-scoped
 // buildHref (every facet toggle preserves `?board=`, never drops it), the
 // over-cap "Refine filter" → open-the-filter context path, and the
@@ -97,7 +97,7 @@ function renderControls(opts: { boardId?: string; filter?: IssueFilter; withUi?:
   return renderWithIntl(<ToastProvider>{tree}</ToastProvider>);
 }
 
-describe('BoardFilterControls — reuses the /issues primitives on the board toolbar', () => {
+describe('BoardFilterControls — reuses the /items primitives on the board toolbar', () => {
   it('renders the Filter, Advanced and Saved triggers (the builder + saved picker)', () => {
     renderControls();
     expect(screen.getByRole('button', { name: 'Filter' })).toBeTruthy();

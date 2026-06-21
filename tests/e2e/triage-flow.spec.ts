@@ -54,7 +54,7 @@ interface Seed {
 }
 
 /** Sign up through the real UI (auto-workspace), create a project server-side,
- *  and pin it active so the project-scoped routes (/issues, /boards, /triage)
+ *  and pin it active so the project-scoped routes (/items, /boards, /triage)
  *  and the shell "Report" affordance resolve it. */
 async function seedProject(page: Page, email: string, identifier: string): Promise<Seed> {
   await signUp(page, email);
@@ -148,7 +148,7 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
   const bugTitle = 'aardvark triage exclusion beacon';
 
   // ── submit via the in-app report widget ────────────────────────────────────
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('treegrid', { name: 'Work Items', exact: true })).toBeVisible();
   await expect(page.getByTestId(`issue-row-${host.identifier}`)).toBeVisible();
 
@@ -160,12 +160,12 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
 
   // ── and is EXCLUDED from every normal read (before promotion) ──────────────
   // Tree: the host root is present (the tree loaded); the triage item is not.
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByTestId(`issue-row-${host.identifier}`)).toBeVisible();
   await expect(page.getByTestId(`issue-row-${submitted.identifier}`)).toHaveCount(0);
 
   // List view: same exclusion on the flat list read.
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByTestId(`issue-row-${host.identifier}`)).toBeVisible();
   await expect(page.getByTestId(`issue-row-${submitted.identifier}`)).toHaveCount(0);
 
@@ -176,7 +176,7 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
 
   // Search: the FilterAST-backed work-item search (the link-candidate picker)
   // does not surface a triage item — it is not a linkable candidate.
-  await page.goto(`/issues/${host.identifier}`);
+  await page.goto(`/items/${host.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('combobox', { name: /Search by identifier or title/ }).fill('aardvark');
@@ -205,11 +205,11 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
 
   // ── and now PRESENT in every normal read ───────────────────────────────────
   // Tree: a backlog (unparented) item is a top-level root.
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByTestId(`issue-row-${submitted.identifier}`)).toBeVisible();
 
   // List view.
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByTestId(`issue-row-${submitted.identifier}`)).toBeVisible();
 
   // Board: default status → the first column.
@@ -218,7 +218,7 @@ test('@smoke a submitted bug lands in triage, is excluded from tree/list/board/s
   await expect(page.getByTestId(`board-card-${submitted.identifier}`)).toBeVisible();
 
   // Search: now a normal item, it is a search candidate.
-  await page.goto(`/issues/${host.identifier}`);
+  await page.goto(`/items/${host.identifier}`);
   await page.getByRole('button', { name: 'Link work item' }).click();
   await page.getByRole('combobox', { name: 'Work item to link' }).click();
   await page.getByRole('combobox', { name: /Search by identifier or title/ }).fill('aardvark');
@@ -229,13 +229,13 @@ test('@smoke a declined submission leaves the queue and never enters the tree', 
   page,
 }) => {
   const seed = await seedProject(page, 'e2e-triage-decline@example.com', 'TDC');
-  // A control root so /issues renders the treegrid (an empty project would show
+  // A control root so /items renders the treegrid (an empty project would show
   // the empty state instead) — the loaded-tree signal for the absence check.
   const host = await mk(seed, 'host work item always visible');
   const declineTitle = 'wombat decline beacon';
 
   // Submit a bug, then decline it from the inbox.
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('treegrid', { name: 'Work Items', exact: true })).toBeVisible();
   await expect(page.getByTestId(`issue-row-${host.identifier}`)).toBeVisible();
   const submitted = await submitBug(page, declineTitle);
@@ -265,7 +265,7 @@ test('@smoke a declined submission leaves the queue and never enters the tree', 
   await expect(page.getByText(declineTitle)).toHaveCount(0);
 
   // … and never appears in the tree (a declined item is canceled, not promoted).
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByTestId(`issue-row-${host.identifier}`)).toBeVisible();
   await expect(page.getByTestId(`issue-row-${submitted.identifier}`)).toHaveCount(0);
 });

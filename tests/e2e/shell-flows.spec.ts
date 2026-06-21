@@ -99,7 +99,7 @@ test.describe('@smoke shell journeys', () => {
 
     // Each tuple: rail link → URL it routes to → the placeholder heading there.
     const stops: { link: string; url: string; heading: string }[] = [
-      { link: 'Work Items', url: '**/issues', heading: 'Work Items' },
+      { link: 'Work Items', url: '**/items', heading: 'Work Items' },
       { link: 'Boards', url: '**/boards', heading: 'Boards' },
       { link: 'Reports', url: '**/reports', heading: 'Reports' },
     ];
@@ -107,7 +107,7 @@ test.describe('@smoke shell journeys', () => {
     for (const stop of stops) {
       await rail.getByRole('link', { name: stop.link }).click();
       await page.waitForURL(stop.url);
-      // exact:true — the /issues empty state also renders an h2 "No issues yet",
+      // exact:true — the /items empty state also renders an h2 "No issues yet",
       // and a non-exact name:'Work Items' substring-matches it, so a bare match is a
       // strict-mode violation once both headings have painted. Every stop's
       // heading text is exact, so this disambiguates without losing coverage.
@@ -260,7 +260,7 @@ test.describe('@smoke shell journeys', () => {
 
     // Navigate via a drawer nav item → route changes → drawer auto-closes.
     await drawer.getByRole('link', { name: 'Work Items' }).click();
-    await page.waitForURL('**/issues');
+    await page.waitForURL('**/items');
     await expect(page.getByRole('heading', { name: 'Work Items', level: 1 })).toBeVisible();
     await expect(drawer).toBeHidden();
 
@@ -270,7 +270,7 @@ test.describe('@smoke shell journeys', () => {
     await expect(drawer).toBeVisible();
     await page.mouse.click(355, 400);
     await expect(drawer).toBeHidden();
-    await expect(page).toHaveURL(/\/issues$/);
+    await expect(page).toHaveURL(/\/items$/);
   });
 
   // ── 7. Sign out via the command palette ───────────────────────────────

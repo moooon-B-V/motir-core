@@ -17,7 +17,7 @@
 //      in place).
 //   3. LEAF-ONLY — open a create, switch kind to Story: the Work type control is
 //      ABSENT (type is carried only on task/subtask/bug, never epic/story).
-//   4. FILTER — on /issues build a `type is any of [Code]` condition over the
+//   4. FILTER — on /items build a `type is any of [Code]` condition over the
 //      6.1.x Advanced filter: the code item is present, the manual item absent;
 //      flip the value to [Manual] and assert the inverse.
 //
@@ -68,7 +68,7 @@ const CODE_TITLE = 'Build the auth API';
 const MANUAL_TITLE = 'Provision the blob store';
 
 /** Sign up (auto-workspace), create a project server-side + pin it active so the
- *  project-scoped /issues route resolves it. Mirrors epic2-acceptance's
+ *  project-scoped /items route resolves it. Mirrors epic2-acceptance's
  *  seedActiveProject. */
 async function seedActiveProject(page: Page, email: string, identifier: string): Promise<Seed> {
   await signUp(page, email);
@@ -142,7 +142,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
 }) => {
   const email = 'e2e-work-item-type@example.com';
   const seed = await seedActiveProject(page, email, 'WIT');
-  await page.goto('/issues');
+  await page.goto('/items');
 
   // ── 1a. CREATE a `code` task — executor DEFAULT-SEEDS to "Coding agent" ──────
   await createTypedTask(page, {
@@ -193,7 +193,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
   }).toPass();
 
   // ── 2. DETAIL rail — hued chip + executor indicator render + inline-edit ─────
-  await page.goto(`/issues/${codeItem.identifier}`);
+  await page.goto(`/items/${codeItem.identifier}`);
   await expect(page.getByRole('heading', { name: CODE_TITLE, level: 1 })).toBeVisible();
   // The type chip and executor indicator render the labels (glyphs aria-hidden).
   await expect(page.getByText('Code', { exact: true })).toBeVisible();
@@ -207,7 +207,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
   await expect(page.getByRole('button', { name: 'Edit Executor' })).toBeVisible();
 
   // ── 3. LEAF-ONLY — the Work type control is ABSENT for a container kind ──────
-  await page.goto('/issues');
+  await page.goto('/items');
   await page.getByRole('button', { name: 'Create work item' }).click();
   await page.getByLabel('Title').fill('A story has no work type');
   await page.getByRole('combobox', { name: 'Type', exact: true }).click();
@@ -220,7 +220,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
   await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeHidden();
 
   // ── 4. FILTER by type over the Advanced filter builder (2.7.6) ──────────────
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByRole('row').filter({ hasText: CODE_TITLE })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: MANUAL_TITLE })).toBeVisible();
 

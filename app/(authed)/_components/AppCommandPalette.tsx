@@ -153,7 +153,7 @@ export function AppCommandPalette({
         id: 'nav-issues',
         label: t('commandPalette.goToIssues'),
         icon: <CircleDot />,
-        onSelect: () => go('/issues'),
+        onSelect: () => go('/items'),
       },
       {
         id: 'nav-boards',

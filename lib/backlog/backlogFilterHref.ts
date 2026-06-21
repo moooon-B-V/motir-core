@@ -1,7 +1,7 @@
 import { appendFilterParams, type IssueFilter } from '@/lib/issues/issueListFilter';
 
 // The backlog-scoped filter URL contract (Story 8.8 · Subtask 8.8.18). The
-// backlog REUSES the /issues filter components verbatim (`IssueFilterBar` quick
+// backlog REUSES the /items filter components verbatim (`IssueFilterBar` quick
 // popover · `IssueAdvancedFilter` builder · `SavedFilterDropdown` picker · the
 // applied summary bar) — exactly as the board did (6.15.3) — but those components
 // serialize their state with `buildIssueListHref`, which builds a FRESH
@@ -21,7 +21,7 @@ const BACKLOG_PATH = '/backlog';
  * Build the canonical `/backlog` href for a filter. The filter params
  * (`kind`/`type`/`status`/`assignee`/`q` facets + the advanced `?filter=v1:`
  * param) are appended in the same canonical order `buildIssueListHref` uses, so a
- * backlog filter URL round-trips identically to an /issues one (only the route +
+ * backlog filter URL round-trips identically to an /items one (only the route +
  * the absent view/sort differ). An empty filter → the bare `/backlog`.
  */
 export function buildBacklogFilterHref(opts: { filter: IssueFilter }): string {

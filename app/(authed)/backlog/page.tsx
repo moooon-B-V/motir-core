@@ -23,9 +23,9 @@ import { customFieldsService } from '@/lib/services/customFieldsService';
 import { componentsService } from '@/lib/services/componentsService';
 import { labelsService } from '@/lib/services/labelsService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
-import { AdvancedFilterProvider } from '../issues/_components/AdvancedFilterContext';
-import { SavedFilterSessionProvider } from '../issues/_components/SavedFilterContext';
-import { NewIssueButton } from '../issues/_components/NewIssueButton';
+import { AdvancedFilterProvider } from '../items/_components/AdvancedFilterContext';
+import { SavedFilterSessionProvider } from '../items/_components/SavedFilterContext';
+import { NewIssueButton } from '../items/_components/NewIssueButton';
 import { BacklogContainer } from './_components/BacklogContainer';
 import { BacklogFilterControls } from './_components/BacklogFilterControls';
 import { BacklogAppliedFilterBar } from './_components/BacklogAppliedFilterBar';
@@ -43,18 +43,18 @@ import { BacklogAppliedFilterBar } from './_components/BacklogAppliedFilterBar';
 // bound `WorkItemSummaryDto` rows carry only the keys.
 //
 // FILTER (Story 8.8 · Subtask 8.8.18): the formerly-disabled `[Filter]` seam is
-// now wired to the SAME shipped /issues filter UI the board reuses (6.15.3) —
+// now wired to the SAME shipped /items filter UI the board reuses (6.15.3) —
 // quick popover + advanced builder + saved picker + applied summary — re-pointed
 // at `/backlog` via `buildBacklogFilterHref`. The active filter lives in the URL
 // (reload-safe), and its serialized params ride the client's `/api/backlog` +
 // `/api/sprints/[id]/issues` fetches so BOTH regions re-project to the matching
 // set (the 8.8.16 design; the sprint read became filter-aware in 8.8.20). The
-// page parses the filter exactly as /issues + the board and resolves the bounded
+// page parses the filter exactly as /items + the board and resolves the bounded
 // filter referents (statuses · members · sprints · custom fields · components ·
 // the AST's referenced labels) for the toolbar's value editors.
 //
 // Toolbar: a **View all issues** link deep-linking to the project's issue
-// navigator (`/issues`, Story 2.5), now CARRYING the active filter (Jira's "View
+// navigator (`/items`, Story 2.5), now CARRYING the active filter (Jira's "View
 // in Issue Navigator" with the board's filter applied); the enabled `[Filter]`
 // cluster; and `[+ New issue]`.
 
@@ -80,7 +80,7 @@ export default async function BacklogPage({
     );
   }
 
-  // Parse the URL filter exactly as /issues + the board (6.15.3): the quick
+  // Parse the URL filter exactly as /items + the board (6.15.3): the quick
   // facets + the decoded advanced AST. A malformed/forged `?filter=` degrades to
   // facets-only (the page never emits a bad param).
   const sp = await searchParams;
@@ -100,8 +100,8 @@ export default async function BacklogPage({
 
   // "View all issues" carries the active filter into the navigator (the Jira
   // "View in Issue Navigator with the filter applied" behaviour the backlog
-  // design-notes anticipated): /issues parses the same params.
-  const viewAllHref = filterQuery ? `/issues?${filterQuery}` : '/issues';
+  // design-notes anticipated): /items parses the same params.
+  const viewAllHref = filterQuery ? `/items?${filterQuery}` : '/items';
 
   const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const referencedLabelIds = ast ? collectFilterReferentIds(ast).labelIds : [];
@@ -123,7 +123,7 @@ export default async function BacklogPage({
     // every inline EstimateBadge on the backlog shares them (no per-row fetch).
     estimationService.getEstimationConfig(ctx.projectId, accessCtx),
     projectAccessService.getCapabilities(ctx.projectId, accessCtx),
-    // The filter referents (Subtask 8.8.18) — the SAME bounded reads the /issues
+    // The filter referents (Subtask 8.8.18) — the SAME bounded reads the /items
     // + board toolbars resolve (finding #57: never load-all). Assignable users
     // are access-scoped (6.4.6): a private project lists only its members.
     assignableMembersService.list({
@@ -157,7 +157,7 @@ export default async function BacklogPage({
             </div>
             <div className="flex items-center gap-2">
               {/* View all issues — Jira's "View in Issue Navigator": deep-links to
-                  the project's /issues List/Tree (every issue across the backlog
+                  the project's /items List/Tree (every issue across the backlog
                   AND all sprints), CARRYING the active filter (8.8.18). */}
               <Link
                 href={viewAllHref}
@@ -168,7 +168,7 @@ export default async function BacklogPage({
               </Link>
               {/* The backlog filter cluster (Subtask 8.8.18) — the enabled
                   `[Filter]` quick popover + `[Advanced]` builder + `[Saved]`
-                  picker, the SAME /issues components the board reuses (6.15.3). */}
+                  picker, the SAME /items components the board reuses (6.15.3). */}
               <BacklogFilterControls
                 filter={filter}
                 ast={ast}

@@ -321,7 +321,7 @@ export interface BoardProjectionDto {
  * The optional board FILTER input (Story 6.15.2) — what the 6.15.3 board
  * toolbar passes to `boardsService.getBoard` to narrow the board. Either an
  * **inline** `ast` (the quick-filter builder's compiled `FilterAst`, the same
- * one the `/issues` navigator threads) OR a **`savedFilterId`** (a row id or a
+ * one the `/items` navigator threads) OR a **`savedFilterId`** (a row id or a
  * `builtin:<slug>`) resolved through the 6.2 saved-filter access gate — never
  * both (the service prefers `savedFilterId` when both are present). Absent (or
  * an empty AST) leaves the board unfiltered — byte-for-byte the prior

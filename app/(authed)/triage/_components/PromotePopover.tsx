@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { listCandidateParentsAction } from '@/app/(authed)/issues/actions';
+import { listCandidateParentsAction } from '@/app/(authed)/items/actions';
 import type { SprintDto } from '@/lib/dto/sprints';
 
 // The Promote picker (Subtask 6.11.6, design panel 1b) — a Popover offering the

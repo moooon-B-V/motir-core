@@ -104,7 +104,7 @@ describe('mentionNotificationsService.fanOut — comment mentions', () => {
     expect(evt.data.workItemIdentifier).toBe(s.issueIdentifier);
     expect(evt.data.workItemTitle).toBe('Mentioned task');
     expect(evt.data.source).toBe('comment');
-    expect(evt.data.issueUrl).toBe(`${resolveBaseUrlTrimmed()}/issues/${s.issueIdentifier}`);
+    expect(evt.data.issueUrl).toBe(`${resolveBaseUrlTrimmed()}/items/${s.issueIdentifier}`);
     // The excerpt is plain text: the mention token reads @Name, Markdown is
     // stripped, and the raw `mention:` scheme never leaks.
     expect(evt.data.excerpt).toBe('Heads up @Mention Target — please review.');
@@ -314,7 +314,7 @@ describe('mentionNotification template', () => {
     workItemTitle: 'Ship comments',
     source: 'comment' as const,
     excerpt: 'Heads up @Mention Target — please review.',
-    issueUrl: 'http://localhost:3000/issues/PROD-7',
+    issueUrl: 'http://localhost:3000/items/PROD-7',
   };
 
   it('renders subject, lede, excerpt, and the UNREDACTED deep link in plain text', async () => {

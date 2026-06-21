@@ -1,4 +1,4 @@
-// The /issues FILTER URL contract (Subtask 2.5.4). The `[Filter]` bar narrows
+// The /items FILTER URL contract (Subtask 2.5.4). The `[Filter]` bar narrows
 // the issue tree (and the flat List) by four facets — kind · status · assignee ·
 // text — and, like the view + sort (issueListView.ts), the whole filter lives in
 // the URL: shareable, bookmarkable, reload-safe, and the SAME serialization
@@ -80,7 +80,7 @@ export const EMPTY_FILTER: IssueFilter = {
 /** Next.js hands each searchParams key as `string | string[] | undefined`. */
 export type RawParam = string | string[] | undefined;
 
-/** The filter slice of the `/issues` searchParams. */
+/** The filter slice of the `/items` searchParams. */
 export interface IssueFilterParams {
   kind?: RawParam;
   type?: RawParam;

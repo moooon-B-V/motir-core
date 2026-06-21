@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { AttachmentGlyph } from '@/app/(authed)/issues/[key]/_components/AttachmentGlyph';
+import { AttachmentGlyph } from '@/app/(authed)/items/[key]/_components/AttachmentGlyph';
 import type { TriageItemDetailDto } from '@/lib/dto/triage';
 import type { CommentDTO } from '@/lib/dto/comments';
 import { TriageAvatar } from './TriageAvatar';

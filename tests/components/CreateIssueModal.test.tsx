@@ -26,7 +26,7 @@ const { refresh, createIssueActionSpy, listCreateLinkCandidatesSpy } = vi.hoiste
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
-vi.mock('@/app/(authed)/issues/actions', () => ({
+vi.mock('@/app/(authed)/items/actions', () => ({
   createIssueAction: createIssueActionSpy,
   // The modal now renders ParentPicker, which fetches candidates on mount.
   listCandidateParentsAction: vi.fn(async () => ({ ok: true, candidates: [] })),

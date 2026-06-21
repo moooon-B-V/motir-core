@@ -133,7 +133,7 @@ export function FiltersDirectory({ projectKey, viewer }: { projectKey: string; v
     setPageIndex((i) => Math.max(0, i - 1));
   }
 
-  // Apply a saved (or built-in) filter on /issues: resolve it to its AST and
+  // Apply a saved (or built-in) filter on /items: resolve it to its AST and
   // navigate with the `?filter=v1:` URL the 6.1 builder reads — the saved
   // filter IS the URL once applied (reload/share keep working, no new state
   // channel). A degraded (stale/malformed) envelope can't be applied.
@@ -146,7 +146,7 @@ export function FiltersDirectory({ projectKey, viewer }: { projectKey: string; v
         return;
       }
       const param = encodeFilterParam(resolved.ast);
-      router.push(`/issues?${FILTER_PARAM}=${encodeURIComponent(param)}`);
+      router.push(`/items?${FILTER_PARAM}=${encodeURIComponent(param)}`);
     } catch {
       toast({ variant: 'error', title: t('applyError') });
     } finally {
@@ -224,7 +224,7 @@ export function FiltersDirectory({ projectKey, viewer }: { projectKey: string; v
             title={t('empty.title')}
             description={t('empty.description')}
             action={
-              <Button variant="secondary" onClick={() => router.push('/issues')}>
+              <Button variant="secondary" onClick={() => router.push('/items')}>
                 {t('empty.action')}
               </Button>
             }

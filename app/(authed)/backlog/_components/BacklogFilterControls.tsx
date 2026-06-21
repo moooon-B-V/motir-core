@@ -12,15 +12,15 @@ import type { ComponentDto } from '@/lib/dto/components';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { buildBacklogFilterHref } from '@/lib/backlog/backlogFilterHref';
-import { IssueFilterBar } from '../../issues/_components/IssueFilterBar';
-import { IssueAdvancedFilter } from '../../issues/_components/IssueAdvancedFilter';
-import { SavedFilterDropdown } from '../../issues/_components/SavedFilterDropdown';
+import { IssueFilterBar } from '../../items/_components/IssueFilterBar';
+import { IssueAdvancedFilter } from '../../items/_components/IssueAdvancedFilter';
+import { SavedFilterDropdown } from '../../items/_components/SavedFilterDropdown';
 
 // The backlog toolbar's filter affordances (Story 8.8 · Subtask 8.8.18), per
 // design/backlog/backlog-filter.mock.html panels 0–2: the enabled `[Filter]`
 // quick popover + `[Advanced]` builder + `[Saved]` picker, mounted on the BACKLOG
 // page-head toolbar in place of the formerly-disabled `[Filter]` seam. These are
-// the SAME shipped /issues components, verbatim — NO hand-rolled backlog-specific
+// the SAME shipped /items components, verbatim — NO hand-rolled backlog-specific
 // filter UI — re-pointed at the backlog via the injected `buildHref`
 // (backlog-scoped URL: the filter params appended to `/backlog`, no
 // view/sort/page) so the state is shareable + reload-safe. The reused
@@ -32,7 +32,7 @@ import { SavedFilterDropdown } from '../../issues/_components/SavedFilterDropdow
 // would consume them — they're passed as the canonical defaults purely to satisfy
 // the shared prop contract. Unlike the board there is no over-cap "Refine filter"
 // CTA (the backlog is cursor-paginated, not capped), so the quick `[Filter]`
-// popover keeps its own internal open state, exactly as on /issues.
+// popover keeps its own internal open state, exactly as on /items.
 
 export interface BacklogFilterControlsProps {
   filter: IssueFilter;

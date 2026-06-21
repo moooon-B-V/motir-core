@@ -103,7 +103,7 @@ export async function seedViewer(fx: CommentsFixture, email: string): Promise<vo
     role: 'viewer',
   });
   // Pin the project active for the viewer so the project-scoped shell (and
-  // the /issues/[key] route's sidebar) resolves on first navigation.
+  // the /items/[key] route's sidebar) resolves on first navigation.
   await db.workspaceMembership.update({
     where: { userId_workspaceId: { userId: viewer.id, workspaceId: fx.workspaceId } },
     data: { activeProjectId: fx.projectId },

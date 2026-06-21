@@ -109,10 +109,10 @@ describe('SprintReport (4.4.6)', () => {
     // Both lists render their rows with the work-items row vocabulary.
     expect(screen.getByTestId('report-row-PROD-241')).toBeTruthy();
     expect(screen.getByTestId('report-row-PROD-244')).toBeTruthy();
-    // Bounded — each section deep-links to the /issues navigator filtered to the sprint.
+    // Bounded — each section deep-links to the /items navigator filtered to the sprint.
     const viewAll = screen.getAllByRole('link', { name: /View all in Work Items/ });
     expect(viewAll.length).toBe(2);
-    expect(viewAll[0]!.getAttribute('href')).toBe('/issues?sprint=sp6');
+    expect(viewAll[0]!.getAttribute('href')).toBe('/items?sprint=sp6');
     // The Story-4.6 burndown section (4.6.5): with no server-fed series, the
     // slot client-fetches and shows the loading skeleton first.
     expect(screen.getByText('Burndown')).toBeTruthy();
