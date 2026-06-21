@@ -83,6 +83,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
           revisions={activeRevisions(state)}
           cascadeActive={state.cascade?.directTier === reviewing.kind}
           willRefresh={willRefreshKinds(state)}
+          catalog={state.catalog}
           validateDecision={validateDecision}
           onNavigate={openTier}
           onBack={back}

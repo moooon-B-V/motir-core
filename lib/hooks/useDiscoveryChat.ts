@@ -151,8 +151,14 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
           const dto = await fetchPreplan(controller.signal);
           if (dto && mountedRef.current) {
             // Thread the bodies AND the per-artifact forward revision logs + diffs
-            // (7.3.71): the gate renders the diffs from the seam, never recomputes.
-            dispatch({ type: 'docsLoaded', docs: mapDocs(dto), revisions: mapRevisions(dto) });
+            // (7.3.71) AND the feature catalog (7.3.79): the gate renders the diffs
+            // from the seam (never recomputes) + the catalog in the vision review.
+            dispatch({
+              type: 'docsLoaded',
+              docs: mapDocs(dto),
+              revisions: mapRevisions(dto),
+              catalog: dto.catalog,
+            });
             // A freshly-drafted tier opens its gate; a `revisions` cascade already
             // routed to its attributed tier in the reducer, so don't override it.
             if (openKind) dispatch({ type: 'openReview', kind: openKind });
@@ -189,6 +195,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
           session: dto.session,
           docs: mapDocs(dto),
           revisions: mapRevisions(dto),
+          catalog: dto.catalog,
         });
       }
       const fresh = !dto || dto.session === null;

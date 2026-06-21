@@ -1,3 +1,5 @@
+import type { FeatureCatalogView } from '@/lib/onboarding/directionDoc';
+
 // The pre-plan read DTO (Subtask 7.3.70) — what `GET /api/ai/pre-plan` returns to
 // the browser so the discovery UI (7.3.5) can RESUME the onboarding loop and
 // render each artifact's forward revision diffs at the gate. Built by
@@ -65,4 +67,11 @@ export interface PreplanSessionDTO {
 export interface PreplanStateDTO {
   session: PreplanSessionDTO | null;
   docs: PreplanArtifactLogDTO[];
+  // The structured feature catalog (7.3.78), FOLDED INTO the vision tier on the
+  // consumer side — so it is a sibling field, not a `docs[]` entry. Reuses 834's
+  // `FeatureCatalogView` (the motir-core catalog shape that mirrors motir-ai's
+  // `FeatureCatalogDto`), so the gate's `DirectionDocView` consumes it directly.
+  // Null until the vision step drafts it (the same empty-resume shape as a null
+  // session / empty docs).
+  catalog: FeatureCatalogView | null;
 }

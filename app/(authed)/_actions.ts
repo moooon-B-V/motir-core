@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getSession } from '@/lib/auth';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { projectsService } from '@/lib/services/projectsService';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
@@ -39,6 +40,11 @@ export async function switchWorkspaceAction(workspaceId: string): Promise<void> 
 
   const cookieStore = await cookies();
   cookieStore.set(WORKSPACE_COOKIE_NAME, workspaceId, COOKIE_OPTIONS);
+
+  // 8.8.28 — switching to W means you start working in W's active project;
+  // mirror it onto the global last-active pointer so re-login lands here. After
+  // the cookie write, best-effort (never fails the switch).
+  await projectsService.recordLastActiveProjectForWorkspace(session.user.id, workspaceId);
 }
 
 /**
@@ -74,6 +80,14 @@ export async function createWorkspaceAction(name: string): Promise<WorkspaceSumm
   });
 
   cookieStore.set(WORKSPACE_COOKIE_NAME, workspace.id, COOKIE_OPTIONS);
+
+  // 8.8.28 — a newly created workspace becomes active; record its active project
+  // for the global last-active pointer. A brand-new workspace has no project
+  // yet, so this is a no-op until one exists (recordLastActiveProjectForWorkspace
+  // resolves null → skips); the first-project create then records via
+  // setActiveProject (createProjectAction).
+  await projectsService.recordLastActiveProjectForWorkspace(session.user.id, workspace.id);
+
   return toWorkspaceSummaryDTO(workspace);
 }
 
@@ -107,6 +121,11 @@ export async function switchOrganizationAction(organizationId: string): Promise<
   const firstInOrg = workspaces.find((w) => w.organizationId === organizationId);
   if (firstInOrg) {
     cookieStore.set(WORKSPACE_COOKIE_NAME, firstInOrg.id, COOKIE_OPTIONS);
+
+    // 8.8.28 — the org switch re-points the active workspace; record THAT
+    // workspace's active project as the global last-active pointer. Best-effort;
+    // skipped implicitly when the org has no workspace (no firstInOrg).
+    await projectsService.recordLastActiveProjectForWorkspace(session.user.id, firstInOrg.id);
   }
 }
 

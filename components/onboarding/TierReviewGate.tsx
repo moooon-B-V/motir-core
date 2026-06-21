@@ -10,6 +10,7 @@ import { RevisionLog } from './RevisionLog';
 import type {
   DirectionDocKind,
   DirectionDocView as DirectionDocModel,
+  FeatureCatalogView,
 } from '@/lib/onboarding/directionDoc';
 import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 import { latestRevision } from '@/lib/onboarding/revisions';
@@ -45,6 +46,9 @@ export interface TierReviewGateProps {
   cascadeActive?: boolean;
   /** The downstream tiers re-deriving in the active cascade ("will refresh"). */
   willRefresh?: DirectionDocKind[];
+  /** The structured feature catalog — folded into the VISION tier's review by
+   *  `DirectionDocView` (ignored for every other tier). Null when undrafted. */
+  catalog?: FeatureCatalogView | null;
   /** Re-open another produced tier (cross-link / hub navigation). */
   onNavigate?: (kind: DirectionDocKind) => void;
   /** Present on the validation tier with the blocking ask parked — renders the
@@ -62,6 +66,7 @@ export function TierReviewGate({
   revisions,
   cascadeActive = false,
   willRefresh = [],
+  catalog = null,
   validateDecision,
   onBack,
   onContinue,
@@ -102,7 +107,7 @@ export function TierReviewGate({
 
           <DirectionDocView
             doc={doc}
-            catalog={null}
+            catalog={catalog}
             availableDocs={availableKinds}
             onNavigate={onNavigate}
           />

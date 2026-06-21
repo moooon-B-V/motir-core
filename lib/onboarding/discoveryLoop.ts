@@ -18,7 +18,12 @@
 // tiers "will refresh", and threads each artifact's forward revision log + diffs
 // (from the 7.3.70 read seam) into state for the gate to render.
 
-import { type DirectionDocKind, type DirectionDocView, DIRECTION_DOC_ORDER } from './directionDoc';
+import {
+  type DirectionDocKind,
+  type DirectionDocView,
+  type FeatureCatalogView,
+  DIRECTION_DOC_ORDER,
+} from './directionDoc';
 import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 import type { RevisionsByKind } from './revisions';
 
@@ -214,6 +219,9 @@ export interface DiscoveryState {
   /** Each artifact's forward revision LOG + diffs, newest-first (the read seam's
    *  `versions`). What the gate's revision viewer + per-revision diff render. */
   revisions: RevisionsByKind;
+  /** The structured feature catalog, folded into the vision tier's review
+   *  (fetched from /api/ai/pre-plan; null until the vision step drafts it). */
+  catalog: FeatureCatalogView | null;
   /** The tier currently up for review (drives the full-screen gate). */
   activeKind: DirectionDocKind | null;
   view: DiscoveryView;
@@ -244,6 +252,7 @@ export function initialDiscoveryState(): DiscoveryState {
     producedKinds: [],
     docs: {},
     revisions: {},
+    catalog: null,
     activeKind: null,
     view: 'hub',
     pendingAsk: null,
@@ -270,10 +279,16 @@ export type DiscoveryAction =
       session: HydrateSession | null;
       docs: DirectionDocView[];
       revisions?: RevisionsByKind;
+      catalog?: FeatureCatalogView | null;
     }
   | { type: 'userTurn'; text: string }
   | { type: 'frame'; frame: DiscoveryFrame }
-  | { type: 'docsLoaded'; docs: DirectionDocView[]; revisions?: RevisionsByKind }
+  | {
+      type: 'docsLoaded';
+      docs: DirectionDocView[];
+      revisions?: RevisionsByKind;
+      catalog?: FeatureCatalogView | null;
+    }
   | { type: 'streamEnd' }
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
@@ -331,6 +346,7 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         session,
         docs,
         revisions: action.revisions ?? {},
+        catalog: action.catalog ?? null,
         producedKinds: produced,
         activeKind: active ?? (produced.length ? produced[produced.length - 1]! : null),
         // Resume INTO the review gate when the session parks at a tier; otherwise
@@ -365,6 +381,9 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         // Thread the freshly-read forward revision logs + diffs (newest-first) so
         // the gate's revision viewer + per-revision diff update with the bodies.
         revisions: action.revisions ? { ...state.revisions, ...action.revisions } : state.revisions,
+        // A pre-plan re-read carries the CURRENT catalog (the vision step may have
+        // just (re)drafted it); refresh from the authoritative read when provided.
+        catalog: action.catalog !== undefined ? action.catalog : state.catalog,
         staleKinds: state.staleKinds.filter((k) => !loaded.has(k)),
       };
     }

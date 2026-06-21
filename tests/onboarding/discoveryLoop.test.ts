@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DirectionDocView } from '@/lib/onboarding/directionDoc';
+import type { DirectionDocView, FeatureCatalogView } from '@/lib/onboarding/directionDoc';
 import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 import {
   type DiscoveryState,
@@ -26,6 +26,19 @@ const revDto = (version: number, changeKind: string): PreplanRevisionDTO => ({
   diff:
     version === 1 ? null : [{ path: 'pitch.headline', kind: 'changed', before: 'a', after: 'b' }],
   createdAt: `2026-06-2${version}T00:00:00.000Z`,
+});
+
+const catalog = (title = 'Work Items'): FeatureCatalogView => ({
+  categories: [
+    {
+      id: 'cat_1',
+      title,
+      features: [
+        { id: 'f1', name: 'Boards', descriptionMd: 'Kanban', phase: 'mvp', status: 'todo' },
+      ],
+    },
+  ],
+  glossary: [],
 });
 
 // Drive a sequence of actions from the initial (or given) state.
@@ -138,7 +151,7 @@ describe('reduceDiscovery — forward loop', () => {
         type: 'frame',
         frame: { event: 'docs', data: { docs: [{ id: 'd', kind: 'discovery', version: 1 }] } },
       },
-      { type: 'docsLoaded', docs: [doc('discovery')] },
+      { type: 'docsLoaded', docs: [doc('discovery')], catalog: null },
       { type: 'openReview', kind: 'discovery' },
     ]);
     expect(s.staleKinds).toEqual([]);
@@ -154,7 +167,7 @@ describe('reduceDiscovery — forward loop', () => {
 
   it('Back returns to the hub without dropping the doc', () => {
     const s = run([
-      { type: 'docsLoaded', docs: [doc('discovery')] },
+      { type: 'docsLoaded', docs: [doc('discovery')], catalog: null },
       { type: 'openReview', kind: 'discovery' },
       { type: 'backToHub' },
     ]);
@@ -268,7 +281,7 @@ describe('reduceDiscovery — revisions route the downstream cascade-back (1179)
 
   it('docsLoaded threads the new revision logs + diffs and clears "will refresh"', () => {
     const s = run([
-      { type: 'docsLoaded', docs: [doc('discovery'), doc('vision')] },
+      { type: 'docsLoaded', docs: [doc('discovery'), doc('vision')], catalog: null },
       { type: 'openReview', kind: 'vision' },
       {
         type: 'frame',
@@ -368,7 +381,7 @@ describe('reduceDiscovery — errors', () => {
 
 describe('reduceDiscovery — hydrate (resume across visits)', () => {
   it('a fresh project hydrates to an empty hub', () => {
-    const s = run([{ type: 'hydrate', session: null, docs: [] }]);
+    const s = run([{ type: 'hydrate', session: null, docs: [], catalog: null }]);
     expect(s.view).toBe('hub');
     expect(s.producedKinds).toEqual([]);
     expect(s.activeKind).toBeNull();
@@ -386,6 +399,7 @@ describe('reduceDiscovery — hydrate (resume across visits)', () => {
           status: 'active',
         },
         docs: [doc('discovery'), doc('vision')],
+        catalog: null,
       },
     ]);
     expect(s.view).toBe('review');
@@ -405,6 +419,7 @@ describe('reduceDiscovery — hydrate (resume across visits)', () => {
           status: 'active',
         },
         docs: [doc('discovery'), doc('vision'), doc('feasibility'), doc('validation')],
+        catalog: null,
       },
     ]);
     expect(s.activeKind).toBe('validation');
@@ -424,10 +439,53 @@ describe('reduceDiscovery — hydrate (resume across visits)', () => {
           status: 'tiers_complete',
         },
         docs: [doc('discovery'), doc('vision')],
+        catalog: null,
       },
     ]);
     expect(s.view).toBe('hub');
     expect(s.pendingAsk).toBeNull();
     expect(isTiersComplete(s)).toBe(true);
+  });
+});
+
+describe('reduceDiscovery — feature catalog (folded into vision, 7.3.79)', () => {
+  it('initial state has a null catalog', () => {
+    expect(initialDiscoveryState().catalog).toBeNull();
+  });
+
+  it('hydrate installs the catalog from the resumed pre-plan read', () => {
+    const s = run([
+      {
+        type: 'hydrate',
+        session: {
+          classification: 'startup',
+          platform: 'web',
+          validationTiming: null,
+          currentGate: 'vision',
+          status: 'active',
+        },
+        docs: [doc('discovery'), doc('vision')],
+        catalog: catalog(),
+      },
+    ]);
+    expect(s.catalog?.categories[0]?.title).toBe('Work Items');
+  });
+
+  it('docsLoaded refreshes the catalog from the authoritative re-read (vision (re)drafted it)', () => {
+    const s = run([
+      { type: 'docsLoaded', docs: [doc('discovery')], catalog: null },
+      { type: 'docsLoaded', docs: [doc('vision')], catalog: catalog('Updated') },
+    ]);
+    expect(s.catalog?.categories[0]?.title).toBe('Updated');
+  });
+
+  it('a null catalog on re-read clears a stale one (forward-truthful)', () => {
+    const seeded = run([{ type: 'docsLoaded', docs: [doc('vision')], catalog: catalog() }]);
+    const cleared = reduceDiscovery(seeded, {
+      type: 'docsLoaded',
+      docs: [doc('vision')],
+      catalog: null,
+    });
+    expect(cleared.catalog).toBeNull();
   });
 });

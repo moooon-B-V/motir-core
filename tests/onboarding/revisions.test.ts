@@ -97,6 +97,7 @@ describe('mapRevisions', () => {
   it('projects the DTO logs by kind, newest-first', () => {
     const dto: PreplanStateDTO = {
       session: null,
+      catalog: null,
       docs: [
         { kind: 'discovery', currentBody: '', currentVersion: 2, versions: [rev(1), rev(2)] },
         { kind: 'vision', currentBody: '', currentVersion: 1, versions: [rev(1)] },

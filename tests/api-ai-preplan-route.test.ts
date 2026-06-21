@@ -101,6 +101,18 @@ describe('GET /api/ai/pre-plan', () => {
           ],
         },
       ],
+      catalog: {
+        categories: [
+          {
+            id: 'cat_1',
+            title: 'Work Items',
+            features: [
+              { id: 'f1', name: 'Boards', descriptionMd: 'Kanban', phase: 'mvp', status: 'todo' },
+            ],
+          },
+        ],
+        glossary: [],
+      },
     });
 
     const res = await GET();
@@ -127,17 +139,20 @@ describe('GET /api/ai/pre-plan', () => {
         ],
       },
     ]);
+    // The folded-into-vision feature catalog reaches the browser too (7.3.79).
+    expect(body.catalog.categories[0].title).toBe('Work Items');
+    expect(body.catalog.categories[0].features[0].name).toBe('Boards');
   });
 
   it('200s the empty state for a project that never started a pre-plan (not an error)', async () => {
     signIn();
     withActiveProject();
-    getPreplanStateMock.mockResolvedValue({ session: null, docs: [] });
+    getPreplanStateMock.mockResolvedValue({ session: null, docs: [], catalog: null });
 
     const res = await GET();
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ session: null, docs: [] });
+    await expect(res.json()).resolves.toEqual({ session: null, docs: [], catalog: null });
   });
 
   it('502s when motir-ai is unavailable (never a misleading empty)', async () => {
