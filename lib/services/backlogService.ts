@@ -414,18 +414,30 @@ export const backlogService = {
    */
   async getSprintIssues(
     sprintId: string,
-    options: { cursor?: string; limit?: number },
+    options: { cursor?: string; limit?: number; filterAst?: FilterAst },
     ctx: ServiceContext,
   ): Promise<RankedIssuePageDto> {
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
 
     const take = clampLimit(options.limit);
+    // Resolve the inbound filter the SAME way `getBacklog` does — the shared
+    // `resolveBacklogFilter` keyed on the sprint's own project (an invalid
+    // field/operator/value → a typed `FilterValidationError` the route maps to
+    // 422). `undefined` when nothing narrows → both reads take the byte-for-byte
+    // unfiltered path. This makes a filtered backlog re-project its sprint
+    // containers too (Subtask 8.8.20, the 8.8.16 design).
+    const filter = await resolveBacklogFilter(sprint.projectId, options.filterAst, ctx);
     const rows = await workItemRepository.findSprintIssues(sprintId, ctx.workspaceId, {
       take,
       cursor: options.cursor,
+      filter,
     });
-    const totalCount = await workItemRepository.countSprintIssues(sprintId, ctx.workspaceId);
+    const totalCount = await workItemRepository.countSprintIssues(
+      sprintId,
+      ctx.workspaceId,
+      filter,
+    );
     return buildPage(rows, take, totalCount);
   },
 

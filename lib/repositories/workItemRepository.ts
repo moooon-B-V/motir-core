@@ -2578,11 +2578,56 @@ export const workItemRepository = {
   async findSprintIssues(
     sprintId: string,
     workspaceId: string,
-    options: { take: number; cursor?: string },
+    options: {
+      take: number;
+      cursor?: string;
+      // The shared backlog filter (Story 8.8 · Subtask 8.8.20) — a compiled
+      // FilterAST AND-ed into the sprint page read so a filtered backlog
+      // re-projects its sprint containers too (the 8.8.16 design). Omitted on the
+      // unfiltered read (the byte-for-byte 4.1.4 builder read below). Resolved by
+      // `backlogService.resolveBacklogFilter`, exactly as `findBacklogPage`.
+      filter?: { ast: FilterAst; referents?: ProjectFilterReferents };
+    },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     const client = tx ?? db;
-    const { take, cursor } = options;
+    const { take, cursor, filter } = options;
+
+    // Advanced filter active (Subtask 8.8.20): AND the compiled FilterAST (alias
+    // `w`) into the page read — the SAME raw-id-then-hydrate shape `findBacklogPage`
+    // uses (the 6.15.2 `findColumnCards` precedent). The sprint base predicate
+    // differs from the backlog's: `sprintId = X` (not `IS NULL`), and a sprint
+    // KEEPS its done + triage-free issues (no `excludeStatusKeys` / `notInTriage`
+    // — a sprint shows its whole committed set, matching the unfiltered read
+    // below; `getSprintIssues` keeps done issues). No filter → the existing
+    // builder read, byte-for-byte the 4.1.4 projection (no regression).
+    if (filter && filter.ast.conditions.length > 0) {
+      // Same seek predicate as `findBacklogPage`: continue STRICTLY AFTER the
+      // cursor row in (backlogRank, id) order (replicates Prisma `cursor/skip:1`).
+      const cursorSql = cursor
+        ? Prisma.sql`AND (w."backlogRank", w."id") > (
+            SELECT c."backlogRank", c."id" FROM "work_item" c WHERE c."id" = ${cursor}
+          )`
+        : Prisma.empty;
+      const idRows = await client.$queryRaw<Array<{ id: string }>>`
+        SELECT w."id"
+          FROM "work_item" w
+          WHERE w."sprintId" = ${sprintId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            ${cursorSql}
+            AND (${compileFilterConditionsSql(filter.ast, filter.referents)})
+          ORDER BY w."backlogRank" ASC, w."id" ASC
+          LIMIT ${take + 1}`;
+      const ids = idRows.map((r) => r.id);
+      if (ids.length === 0) return [];
+      const rows = await client.workItem.findMany({ where: { id: { in: ids } } });
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      // `findMany({ id: { in } })` does not preserve id-list order — restore the
+      // raw query's (backlogRank, id) seek order + window.
+      return ids.map((id) => byId.get(id)).filter((r): r is WorkItem => r !== undefined);
+    }
+
     return client.workItem.findMany({
       where: { sprintId, workspaceId, archivedAt: null },
       orderBy: [{ backlogRank: 'asc' }, { id: 'asc' }],
@@ -2591,13 +2636,34 @@ export const workItemRepository = {
     });
   },
 
-  /** Count of a sprint's non-archived issues (the committed-issue count). */
+  /**
+   * Count of a sprint's non-archived issues (the committed-issue count). With a
+   * `filter` (Subtask 8.8.20) the count is the FILTERED total — the numerator of
+   * the design's "1 of 5" sprint badge; the unfiltered "of 5" denominator is the
+   * separate `/api/sprints` metadata count (`sprintsService`), which never passes
+   * a filter. Omitted → the byte-for-byte 4.1.4 Prisma count.
+   */
   async countSprintIssues(
     sprintId: string,
     workspaceId: string,
+    filter?: { ast: FilterAst; referents?: ProjectFilterReferents },
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const client = tx ?? db;
+
+    // Filtered total (Subtask 8.8.20): COUNT over the SAME base predicates as
+    // `findSprintIssues`'s raw read with the compiled FilterAST AND-ed in.
+    if (filter && filter.ast.conditions.length > 0) {
+      const rows = await client.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*)::int AS "count"
+          FROM "work_item" w
+          WHERE w."sprintId" = ${sprintId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND (${compileFilterConditionsSql(filter.ast, filter.referents)})`;
+      return rows[0]?.count ?? 0;
+    }
+
     return client.workItem.count({ where: { sprintId, workspaceId, archivedAt: null } });
   },
 
