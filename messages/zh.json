@@ -1580,7 +1580,35 @@
       },
       "email": {
         "label": "邮箱",
-        "desc": "用于登录并向你发送通知。"
+        "desc": "用于登录并向你发送通知。",
+        "change": "更改邮箱",
+        "modal": {
+          "title": "更改邮箱",
+          "description": "我们会向新地址发送一封确认链接。只有当你在新邮箱中确认后，邮箱才会更改。",
+          "newLabel": "新邮箱",
+          "placeholder": "you@example.com",
+          "cancel": "取消",
+          "submit": "发送确认",
+          "errors": {
+            "empty": "请输入新的邮箱地址。",
+            "invalid": "请输入有效的邮箱地址。",
+            "same": "这已经是你当前的邮箱地址。",
+            "taken": "该邮箱已被其他账户使用。",
+            "rateLimited": "请求过于频繁，请稍后再试。",
+            "generic": "出了点问题，请重试。"
+          }
+        },
+        "pending": {
+          "badge": "待确认 → {email}",
+          "helper": "确认链接已发送。确认后即生效。",
+          "resend": "重新发送",
+          "cancel": "取消"
+        },
+        "toast": {
+          "title": "确认链接已发送",
+          "body": "请前往 {email} 确认你的新地址。",
+          "errorTitle": "无法发送确认链接"
+        }
       },
       "security": {
         "card": {

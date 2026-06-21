@@ -1580,7 +1580,35 @@
       },
       "email": {
         "label": "Email",
-        "desc": "Used to sign in and to send you notifications."
+        "desc": "Used to sign in and to send you notifications.",
+        "change": "Change email",
+        "modal": {
+          "title": "Change email",
+          "description": "We'll send a confirmation link to the new address. Your email changes only after you confirm from that inbox.",
+          "newLabel": "New email",
+          "placeholder": "you@example.com",
+          "cancel": "Cancel",
+          "submit": "Send confirmation",
+          "errors": {
+            "empty": "Enter a new email address.",
+            "invalid": "Enter a valid email address.",
+            "same": "That's already your email address.",
+            "taken": "That email is already in use by another account.",
+            "rateLimited": "Too many requests. Please try again in a little while.",
+            "generic": "Something went wrong. Please try again."
+          }
+        },
+        "pending": {
+          "badge": "Pending → {email}",
+          "helper": "Confirmation sent. Applies once confirmed.",
+          "resend": "Resend",
+          "cancel": "Cancel"
+        },
+        "toast": {
+          "title": "Confirmation sent",
+          "body": "Check {email} to confirm your new address.",
+          "errorTitle": "Couldn't send confirmation"
+        }
       },
       "security": {
         "card": {
