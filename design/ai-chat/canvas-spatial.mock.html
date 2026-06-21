@@ -1,0 +1,848 @@
+<!doctype html>
+<!--
+  SPATIAL onboarding canvas — interaction PROTOTYPE (MOTIR-840 redesign, 2026-06-21).
+  Not the shipped component: a design artifact to pin the zoomable/pannable 2D
+  canvas before the production build. Pan = drag; zoom = wheel; the [-/+/fit]
+  controls + the ?z= param drive the two review screenshots (detail vs overview).
+  Colours are the real Motir light palette (globals.css --el-* values, inlined).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spatial onboarding canvas — prototype</title>
+    <style>
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --accent: #5645d4;
+        --accent-text: #ffffff;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --info: #0075de;
+        --sky: #dcecfa;
+        --lavender: #e6e0f5;
+        --mint: #d9f3e1;
+        --peach: #ffe8d4;
+        --pink: #ff64c8;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--hub);
+        color: var(--text);
+      }
+      .frame {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        height: 100vh;
+      }
+
+      /* ── the canvas viewport ── */
+      .viewport {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
+          var(--hub);
+        cursor: grab;
+      }
+      .viewport:active {
+        cursor: grabbing;
+      }
+      .world {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+      }
+      .edges {
+        position: absolute;
+        top: 0;
+        left: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      /* ── canvas overlay chrome (fixed, doesn't pan/zoom) ── */
+      .overlay-top {
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        right: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        pointer-events: none;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .crumb .dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+      }
+      .zoomwrap {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .zoom {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .zoom button {
+        width: 38px;
+        height: 36px;
+        border: 0;
+        background: transparent;
+        font-size: 18px;
+        color: var(--strong);
+        cursor: pointer;
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--hair);
+      }
+      .zoomlevel {
+        font:
+          600 12px ui-monospace,
+          monospace;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 8px 10px;
+      }
+      .legend {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        display: flex;
+        gap: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 8px 12px;
+        font-size: 11px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .legend i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+        vertical-align: middle;
+      }
+
+      /* ── nodes ── */
+      .node {
+        position: absolute;
+        width: 248px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 12px 13px;
+        box-shadow: 0 2px 6px #0000000f;
+      }
+      .node.upcoming {
+        opacity: 0.66;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .node.active {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px #5645d426,
+          0 4px 12px #5645d41f;
+      }
+      .node.compact {
+        width: 190px;
+        padding: 10px 11px;
+      }
+      .nhead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .tile {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile svg {
+        width: 18px;
+        height: 18px;
+      }
+      .ntitle {
+        font-size: 13.5px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.15;
+      }
+      .nsub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .pill {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.reviewed {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.here {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.deciding {
+        background: var(--peach);
+        color: #8a3d00;
+      }
+      .capt {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .capt div {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        font-size: 11.5px;
+        color: #54514b;
+      }
+      .capt svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .capt .warn {
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .canskip {
+        font:
+          600 10px ui-monospace,
+          monospace;
+        color: var(--muted);
+        background: var(--mutedfill);
+        padding: 2px 6px;
+        border-radius: 6px;
+        margin-left: 6px;
+      }
+
+      /* epic cluster */
+      .epic {
+        width: 168px;
+      }
+      .epic .ntitle {
+        font-size: 12.5px;
+      }
+      .stories {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .story {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 11px;
+        color: var(--muted);
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 7px;
+        padding: 4px 7px;
+      }
+      .story i {
+        width: 7px;
+        height: 7px;
+        border-radius: 2px;
+        flex: none;
+      }
+
+      .grouplabel {
+        position: absolute;
+        font:
+          600 11px ui-monospace,
+          monospace;
+        color: var(--faint);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      /* ── chat rail ── */
+      .rail {
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .railhead .g {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+      .railhead span {
+        font:
+          600 12px ui-monospace,
+          monospace;
+        letter-spacing: 0.04em;
+        color: #54514b;
+        text-transform: uppercase;
+      }
+      .railbody {
+        flex: 1;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        overflow: auto;
+      }
+      .msg {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .av {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        font: 700 12px sans-serif;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .bubble {
+        background: var(--hub);
+        border-radius: 13px;
+        padding: 9px 12px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--text);
+      }
+      .decide {
+        padding: 12px 16px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 9px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn.secondary {
+        background: var(--mutedfill);
+        color: var(--text);
+      }
+      .composer {
+        padding: 12px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+      }
+      .composer input {
+        flex: 1;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 9px 11px;
+        font-size: 13px;
+      }
+      .composer .send {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: 10px;
+        width: 38px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="viewport" id="vp">
+        <svg class="world edges" id="edges" width="1080" height="1180"></svg>
+        <div class="world" id="world" style="width: 1080px; height: 1180px"></div>
+
+        <!-- fixed canvas chrome -->
+        <div class="overlay-top">
+          <span class="crumb"
+            ><span class="dot">
+              <svg
+                viewBox="0 0 24 24"
+                width="11"
+                height="11"
+                fill="none"
+                stroke="#fff"
+                stroke-width="2.4"
+              >
+                <path
+                  d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"
+                /></svg></span
+            >PayFlow · your project</span
+          >
+          <span class="crumb" style="font-weight: 500; color: var(--muted)"
+            >Pre-plan · building your direction</span
+          >
+        </div>
+        <div class="zoomwrap">
+          <div class="zoom">
+            <button onclick="zoomBy(0.83)">−</button><button onclick="zoomBy(1.2)">+</button
+            ><button onclick="fit()" title="Fit" style="font-size: 13px">⤢</button>
+          </div>
+          <span class="zoomlevel" id="zl">100%</span>
+        </div>
+        <div class="legend">
+          <span><i style="background: var(--success)"></i>reviewed</span>
+          <span><i style="background: var(--accent)"></i>you are here</span>
+          <span><i style="background: var(--faint)"></i>upcoming</span>
+        </div>
+      </div>
+
+      <!-- chat rail (the right pane of the hub) -->
+      <aside class="rail">
+        <div class="railhead"><span class="g"></span><span>Chat</span></div>
+        <div class="railbody">
+          <div class="msg">
+            <span class="av">M</span>
+            <div class="bubble">
+              Your whole project is on the canvas — pan around, or zoom out to see it all at a
+              glance.
+            </div>
+          </div>
+          <div class="msg">
+            <span class="av">M</span>
+            <div class="bubble">
+              One call before we plan. The market check found <b>real demand, but unproven</b> for
+              your exact take.
+            </div>
+          </div>
+          <div class="msg">
+            <span class="av">M</span>
+            <div class="bubble">
+              I'd <b>prove demand first</b> — a small marketing site + waitlist, launched before the
+              build. Do that, or build straight away?
+            </div>
+          </div>
+        </div>
+        <div class="decide">
+          <button class="btn primary">✓ Prove demand first</button>
+          <button class="btn secondary">No — build it all</button>
+        </div>
+        <div class="composer">
+          <input placeholder="Reply, or ask a question…" /><button class="send">→</button>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      // ── icons (inline, lucide-ish) ──
+      const I = {
+        search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+        shapes: '<path d="M8.3 10 4 17h8.6L8.3 10Z"/><circle cx="17" cy="7" r="3"/>',
+        shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+        list: '<path d="m3 7 2 2 3-3"/><path d="m3 16 2 2 3-3"/><path d="M13 7h8M13 17h8"/>',
+        palette:
+          '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 1 0 0 20c1.1 0 1.5-1 1-1.8-.6-1 .2-2.2 1.4-2.2H17a5 5 0 0 0 5-5c0-5.5-4.5-9-10-9Z"/>',
+        net: '<rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4M12 12H5v4M12 12h7v4"/>',
+        check: '<path d="M20 6 9 17l-5-5"/>',
+        spark:
+          '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+        pin: '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+        alert:
+          '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
+      };
+      const svg = (p, stroke) =>
+        `<svg viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+      const dot = (p, c) =>
+        `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+      // ── nodes (world coords). Initial layout is TOP-TO-DOWN along the real
+      // pre-plan dependency chain (idea → discovery → vision → feasibility →
+      // validation → design → plan); the user can drag any node and the position
+      // persists. The edges below are the PRE-DEFINED dependencies (read-only). ──
+      const nodes = [
+        {
+          id: 'idea',
+          x: 70,
+          y: 60,
+          cls: 'compact',
+          tile: '#5645d4',
+          tileBg: '#ece9fb',
+          icon: 'pin',
+          title: 'Your idea',
+          sub: '“invoicing + chase late payers”',
+        },
+        {
+          id: 'disc',
+          x: 410,
+          y: 50,
+          tileBg: 'var(--sky)',
+          tile: '#0075de',
+          icon: 'search',
+          state: 'done',
+          title: 'Understanding your idea',
+          sub: 'what · who · competitors',
+          capt: [
+            ['What — send & track invoices', 1],
+            ['Who — solo freelancers', 1],
+            ['Closest — FreshBooks · Wave', 1],
+          ],
+        },
+        {
+          id: 'vis',
+          x: 760,
+          y: 50,
+          tileBg: 'var(--lavender)',
+          tile: '#5645d4',
+          icon: 'shapes',
+          state: 'done',
+          title: "What we'll build",
+          sub: 'scope · key decisions',
+          capt: [
+            ['In v1 — invoices, reminders, Stripe', 1],
+            ['Out — teams, accounting, mobile', 0],
+          ],
+        },
+        {
+          id: 'feas',
+          x: 760,
+          y: 400,
+          tileBg: 'var(--mint)',
+          tile: '#1aae39',
+          icon: 'shield',
+          state: 'done',
+          optional: 1,
+          title: 'Is it worth building?',
+          sub: 'market · build risk',
+          capt: [
+            ['Market — ~59M freelancers', 1],
+            ['Build risk — low', 1],
+          ],
+        },
+        {
+          id: 'val',
+          x: 410,
+          y: 400,
+          tileBg: 'var(--peach)',
+          tile: '#dd5b00',
+          icon: 'list',
+          state: 'active',
+          optional: 1,
+          title: 'Will people want it?',
+          sub: 'demand · competition',
+          capt: [
+            ['Demand — real & loud', 1],
+            ['Unproven for your take — validate first?', 2],
+          ],
+        },
+        {
+          id: 'design',
+          x: 70,
+          y: 420,
+          cls: 'compact upcoming',
+          tileBg: 'var(--mutedfill)',
+          tile: '#a4a097',
+          icon: 'palette',
+          title: 'Design the look',
+          sub: 'up next · web only',
+          skip: 1,
+        },
+        {
+          id: 'plan',
+          x: 70,
+          y: 720,
+          cls: 'compact upcoming',
+          tileBg: 'var(--mutedfill)',
+          tile: '#a4a097',
+          icon: 'net',
+          title: 'Plan → your epics',
+          sub: 'the roadmap continues →',
+        },
+      ];
+      // Epics are a DAG of the REAL plan dependencies (rendered, not designed):
+      // Foundation blocks the implementation epics; the Marketing-site epic is
+      // independent, so it runs parallel to Foundation (both straight off Plan).
+      const epics = [
+        {
+          id: 'e1',
+          x: 380,
+          y: 620,
+          title: 'Epic 1 · Foundation',
+          stories: ['Auth', 'Schema', 'CI'],
+        },
+        {
+          id: 'e2',
+          x: 700,
+          y: 540,
+          title: 'Epic 2 · Invoices',
+          stories: ['Create', 'Send', 'PDF'],
+        },
+        {
+          id: 'e3',
+          x: 700,
+          y: 740,
+          title: 'Epic 3 · Reminders',
+          stories: ['Schedule', 'Email'],
+        },
+        {
+          id: 'e4',
+          x: 380,
+          y: 900,
+          title: 'Epic 4 · Marketing site',
+          stories: ['Landing', 'Waitlist'],
+        },
+      ];
+
+      const world = document.getElementById('world');
+      const edges = document.getElementById('edges');
+      const pos = {}; // id -> {x,y,w,h}
+
+      function pill(state) {
+        if (state === 'done')
+          return `<span class="pill reviewed">${dot(I.check, '#0f5e29')}Reviewed</span>`;
+        if (state === 'active')
+          return `<span class="pill deciding">${dot(I.spark, '#8a3d00')}Deciding</span>`;
+        return '';
+      }
+      for (const n of nodes) {
+        const w = n.cls && n.cls.includes('compact') ? 190 : 248;
+        pos[n.id] = { x: n.x, y: n.y, w, h: 0 };
+        const capt = (n.capt || [])
+          .map(([txt, kind]) => {
+            const ic =
+              kind === 2 ? dot(I.alert, '#dd5b00') : dot(I.check, kind ? '#1aae39' : '#a4a097');
+            return `<div class="${kind === 2 ? 'warn' : ''}">${ic}<span>${txt}</span></div>`;
+          })
+          .join('');
+        const el = document.createElement('div');
+        el.className = 'node ' + (n.state === 'active' ? 'active ' : '') + (n.cls || '');
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        el.innerHTML =
+          `<div class="nhead"><span class="tile" style="background:${n.tileBg}">${svg(I[n.icon], n.tile)}</span>` +
+          `<div><div class="ntitle">${n.title}${n.skip ? '<span class="canskip">can skip</span>' : ''}</div><div class="nsub">${n.sub}</div></div>` +
+          pill(n.state) +
+          `</div>` +
+          (n.state === 'active' || (n.optional && n.id === 'val')
+            ? `<span class="pill here" style="position:absolute;top:-10px;left:14px">${dot(I.pin, '#3a2d8a')}You are here</span>`
+            : '') +
+          (capt ? `<div class="capt">${capt}</div>` : '');
+        world.appendChild(el);
+        pos[n.id].h = el.offsetHeight; // measured height → edges anchor bottom→top
+      }
+      for (const e of epics) {
+        pos[e.id] = { x: e.x, y: e.y, w: 168, h: 0 };
+        const el = document.createElement('div');
+        el.className = 'node epic upcoming compact';
+        el.style.left = e.x + 'px';
+        el.style.top = e.y + 'px';
+        el.innerHTML =
+          `<div class="nhead"><span class="tile" style="background:var(--mutedfill)">${svg(I.net, '#a4a097')}</span><div class="ntitle">${e.title}</div></div>` +
+          `<div class="stories">${e.stories.map((s) => `<div class="story"><i style="background:#a4a097"></i>${s}</div>`).join('')}</div>`;
+        world.appendChild(el);
+        pos[e.id].h = el.offsetHeight;
+      }
+      // group labels
+      for (const [x, y, txt] of [
+        [60, 20, 'Pre-plan'],
+        [408, 588, 'After planning · your epics'],
+      ]) {
+        const l = document.createElement('div');
+        l.className = 'grouplabel';
+        l.style.left = x + 'px';
+        l.style.top = y + 'px';
+        l.textContent = txt;
+        world.appendChild(l);
+      }
+
+      // ── edges = the PRE-DEFINED dependency links (read-only). Drawn bottom-of-A
+      // → top-of-B as a vertical bezier, so the top-to-down chain reads cleanly
+      // and the plan → epics fan curves out to the right. ──
+      function edge(a, b, color, dash) {
+        const A = pos[a],
+          B = pos[b];
+        if (!A || !B) return;
+        const acx = A.x + A.w / 2,
+          acy = A.y + A.h / 2,
+          bcx = B.x + B.w / 2,
+          bcy = B.y + B.h / 2;
+        const dx = bcx - acx,
+          dy = bcy - acy;
+        let ax, ay, bx, by, c1x, c1y, c2x, c2y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          // horizontal-dominant: leave A's near side, enter B's near side
+          ax = dx > 0 ? A.x + A.w : A.x;
+          bx = dx > 0 ? B.x : B.x + B.w;
+          ay = acy;
+          by = bcy;
+          const mx = (ax + bx) / 2;
+          ((c1x = mx), (c1y = ay), (c2x = mx), (c2y = by));
+        } else {
+          // vertical-dominant: bottom/top anchors
+          ay = dy > 0 ? A.y + A.h : A.y;
+          by = dy > 0 ? B.y : B.y + B.h;
+          ax = acx;
+          bx = bcx;
+          const my = (ay + by) / 2;
+          ((c1x = ax), (c1y = my), (c2x = bx), (c2y = my));
+        }
+        const path = `M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}`;
+        edges.insertAdjacentHTML(
+          'beforeend',
+          `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" ${dash ? 'stroke-dasharray="2 7" stroke-linecap="round"' : ''}/>`,
+        );
+      }
+      // The linear pre-plan chain (each tier builds on the previous), then plan
+      // fans out to the epics. discovery → vision is the link the design needs.
+      edge('idea', 'disc', '#1aae39');
+      edge('disc', 'vis', '#1aae39');
+      edge('vis', 'feas', '#1aae39');
+      edge('feas', 'val', '#5645d4'); // into the active frontier
+      edge('val', 'design', '#cfcac2', 1);
+      edge('design', 'plan', '#cfcac2', 1);
+      edge('plan', 'e1', '#cfcac2', 1); // → Foundation
+      edge('plan', 'e4', '#cfcac2', 1); // → Marketing site (independent → parallel to Foundation)
+      edge('e1', 'e2', '#cfcac2', 1); // Foundation blocks Invoices
+      edge('e1', 'e3', '#cfcac2', 1); // Foundation blocks Reminders
+
+      // ── pan + zoom ──
+      let scale = 1,
+        tx = 0,
+        ty = 0;
+      function apply() {
+        const t = `translate(${tx}px,${ty}px) scale(${scale})`;
+        world.style.transform = t;
+        edges.style.transform = t;
+        document.getElementById('zl').textContent = Math.round(scale * 100) + '%';
+      }
+      function zoomBy(f) {
+        const vp = document.getElementById('vp').getBoundingClientRect();
+        const cx = vp.width / 2,
+          cy = vp.height / 2;
+        const ns = Math.min(2, Math.max(0.3, scale * f));
+        tx = cx - ((cx - tx) * ns) / scale;
+        ty = cy - ((cy - ty) * ns) / scale;
+        scale = ns;
+        apply();
+      }
+      function setView(s, x, y) {
+        scale = s;
+        tx = x;
+        ty = y;
+        apply();
+      }
+      function fit() {
+        setView(0.6, 80, 24); // the whole roadmap fits — pre-plan flow + epic cluster
+      }
+      const vp = document.getElementById('vp');
+      vp.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          zoomBy(e.deltaY < 0 ? 1.1 : 0.91);
+        },
+        { passive: false },
+      );
+      let drag = null;
+      vp.addEventListener('pointerdown', (e) => (drag = { x: e.clientX - tx, y: e.clientY - ty }));
+      addEventListener('pointermove', (e) => {
+        if (drag) {
+          tx = e.clientX - drag.x;
+          ty = e.clientY - drag.y;
+          apply();
+        }
+      });
+      addEventListener('pointerup', () => (drag = null));
+
+      // initial view from ?z= (detail | overview), for the review screenshots
+      const z = new URLSearchParams(location.search).get('z');
+      if (z === 'overview') fit();
+      else setView(0.82, 30, 26); // detail: the chain across 2D space (idea → discovery → vision → feasibility → validation → design)
+    </script>
+  </body>
+</html>

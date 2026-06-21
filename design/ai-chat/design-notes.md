@@ -268,3 +268,61 @@ file) · `onboarding.mock.html` (the HTML mockup — source of truth, screens B�
 the new G2 gate-rhythm + G3 cascade panels) · `onboarding.png` (the full-page
 export). Rendered with Playwright chromium (full-page, light theme,
 `deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean.
+
+---
+
+## ⭐ The canvas is a SPATIAL canvas — Miro-style (2026-06-21 redesign, MOTIR-1235)
+
+**Supersedes screen C's "vertical pipeline (down)".** The hub's left pane is not a
+list — it is a genuine **2D spatial canvas** (Miro / tldraw feel). Asset:
+`canvas-spatial.mock.html` (interactive: drag to pan, wheel to zoom) +
+`canvas-spatial.png` (zoomed-in detail) + `canvas-spatial-overview.png` (zoomed-out,
+the whole-project map). Approved direction (Yue, 2026-06-21):
+
+- **Render the REALITY — the canvas never invents structure.** It is a live VIEW of
+  the actual work-item tree + its actual dependencies: every node is a real station /
+  epic / story, every edge is a **real dependency edge from the plan**, and the picture
+  reflects what IS, not a designed diagram. The illustrative content in the mock
+  (PayFlow, the named epics/stories) stands in for whatever the real project is — the
+  BUILD reads the nodes + edges from the work-item graph (the pre-plan tier chain + the
+  epic/story DAG) and renders them; it never hardcodes a layout or a link.
+- **Pan** anywhere (drag the surface), **zoom in / out** (wheel / trackpad +
+  `−` / `+` / `fit` controls, bounded ~30–200%). A subtle dot-grid backdrop reads
+  as an infinite canvas.
+- **Nodes are draggable.** Each station is a node the user can **drag to rearrange**;
+  the arrangement **PERSISTS per user, per project** (a drag survives reload — the
+  user shows the roadmap the way they want). Nodes **auto-initialise in a
+  space-filling 2D FLOW** — a serpentine that uses the canvas WIDTH (the chain runs
+  across the top, drops, and reverses; plan fans to the epics), NOT a single
+  top-to-down column — so the space is utilised; the user takes it from there.
+- **Links are PRE-DEFINED and READ-ONLY.** Edges are the work-item / pre-plan
+  dependencies, drawn as curved connectors — there is **no link create / edit / delete
+  on the canvas** (the canvas arranges and reads; it never restructures the plan). The
+  pre-plan edges are the real tier dependency **chain** — each tier builds on the one
+  before it: **idea → discovery → vision → feasibility → validation → design → plan**,
+  so &ldquo;What we&rsquo;ll build&rdquo; (vision) links from &ldquo;Understanding your
+  idea&rdquo; (discovery), matching the conductor&rsquo;s downstream-only re-derivation
+  order (`DIRECTION_DOC_ORDER`) — NOT a free 2D branch. **The post-plan epics are a
+  DAG of their REAL dependencies**, not a flat fan off `plan`: earlier epics usually
+  block later ones — **Foundation blocks the implementation epics** (`Foundation →
+Invoices`, `Foundation → Reminders`) — but it is **not a hard rule**, so independent
+  epics run in **parallel** (e.g. the app `Foundation` and a `Marketing-site` epic both
+  come straight off `plan`). Each epic fans to its stories. These edges are whatever
+  the plan&rsquo;s real dependency graph says — the canvas renders them, it doesn&rsquo;t
+  decide them.
+- **One surface, whole journey.** The pre-plan stations (idea → the 4 tiers →
+  design / plan slots) live on the same canvas that later carries the **post-plan
+  epic → story clusters** (zoom out → the whole-project map). The post-plan RENDER is
+  a separate Epic-7 story; the canvas is designed to accommodate it.
+- **Node states** carry over from screen C — done (Reviewed ✓) · active/frontier
+  (`map-pin` + ring + `aria-current`) · deciding (validation + the blocking ask) ·
+  upcoming (ghosted, dashed) — each pairs an icon + label + tint (finding #35), with
+  captured-findings rows on the produced tiers.
+- **Tokens + a11y:** colour via `--el-*`, shape via element-semantic tokens; the
+  canvas + chat are labelled regions; nodes are keyboard-focusable; zoom/pan have
+  keyboard equivalents.
+
+**Build split (the canvas is a FOUNDATION):** a reusable `PlanningCanvas` component
+(pan/zoom/drag/fit + node + read-only edge rendering — MOTIR-1236), per-user layout
+persistence (MOTIR-1237), composed by the onboarding shell (MOTIR-840) and reused by
+generation review (7.4) and the persistent roadmap (7.19).
