@@ -289,6 +289,7 @@ export const sprintsService = {
         const committedIssueCount = await workItemRepository.countSprintIssues(
           id,
           ctx.workspaceId,
+          undefined,
           tx,
         );
         const committedPoints = await workItemRepository.sumStoryPointsForSprint(
@@ -504,7 +505,12 @@ export const sprintsService = {
           tx,
         );
         // The DONE issues that stayed are the completed sprint's remaining count.
-        const issueCount = await workItemRepository.countSprintIssues(id, ctx.workspaceId, tx);
+        const issueCount = await workItemRepository.countSprintIssues(
+          id,
+          ctx.workspaceId,
+          undefined,
+          tx,
+        );
         return { row, issueCount };
       },
     );
