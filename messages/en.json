@@ -3691,7 +3691,50 @@
         "buildItAll": "No — let's build the product straight away."
       },
       "noProjectTitle": "No active project",
-      "noProjectBody": "Pick or create a project first, then Motir can plan it with you."
+      "noProjectBody": "Pick or create a project first, then Motir can plan it with you.",
+      "canvas": {
+        "title": "Your project",
+        "caption": "idea → checks → design → plan",
+        "ideaLabel": "Your idea",
+        "canSkip": "can skip",
+        "validateFirstHint": "Unproven for your exact take — validate first? (in the chat)",
+        "facts": {
+          "type": "Type",
+          "platform": "Platform"
+        },
+        "pills": {
+          "reviewed": "Reviewed",
+          "deciding": "Deciding",
+          "here": "You are here"
+        },
+        "stations": {
+          "discovery": {
+            "subtitle": "what · who · competitors"
+          },
+          "vision": {
+            "subtitle": "scope · key decisions"
+          },
+          "feasibility": {
+            "subtitle": "market · build risk"
+          },
+          "validation": {
+            "subtitle": "demand · competition"
+          },
+          "design": {
+            "title": "Design the look",
+            "subtitle": "up next · web only"
+          },
+          "plan": {
+            "title": "Plan → your epics",
+            "subtitle": "the roadmap continues here"
+          }
+        }
+      },
+      "validate": {
+        "title": "One call before we plan",
+        "body": "The market check found real demand, but it's unproven for your exact take. Prove demand first — launch a small marketing site with a waitlist before building — or build straight away?",
+        "blockedNote": "Pick an option to continue — Motir waits here until you choose"
+      }
     }
   }
 }

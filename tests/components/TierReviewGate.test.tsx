@@ -50,4 +50,32 @@ describe('TierReviewGate', () => {
     const cont = screen.getByRole('button', { name: /Looks good — continue/ }) as HTMLButtonElement;
     expect(cont.disabled).toBe(true);
   });
+
+  it('shows the on-page validate-early decision and BLOCKS Continue until chosen', () => {
+    const onProveDemand = vi.fn();
+    const onBuildItAll = vi.fn();
+    const validationDoc: DirectionDocView = {
+      kind: 'validation',
+      contentMd: '# Validation (Tier 4)\n\nReal demand, but unproven for this take.',
+      version: 1,
+    };
+    renderWithIntl(
+      <TierReviewGate
+        doc={validationDoc}
+        availableKinds={[]}
+        validateDecision={{ onProveDemand, onBuildItAll }}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+      />,
+    );
+    // The decision block is on the page, and Continue is blocked.
+    expect(screen.getByText('One call before we plan')).toBeTruthy();
+    const cont = screen.getByRole('button', { name: /Looks good — continue/ }) as HTMLButtonElement;
+    expect(cont.disabled).toBe(true);
+    // Choosing an option fires the decision.
+    fireEvent.click(screen.getByRole('button', { name: /Prove demand first/ }));
+    expect(onProveDemand).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /No — build it all/ }));
+    expect(onBuildItAll).toHaveBeenCalledTimes(1);
+  });
 });

@@ -3691,7 +3691,50 @@
         "buildItAll": "不用，直接开始做产品吧。"
       },
       "noProjectTitle": "没有进行中的项目",
-      "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。"
+      "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。",
+      "canvas": {
+        "title": "你的项目",
+        "caption": "想法 → 核查 → 设计 → 计划",
+        "ideaLabel": "你的想法",
+        "canSkip": "可跳过",
+        "validateFirstHint": "尚未验证你的具体设想——先验证需求？（在对话里）",
+        "facts": {
+          "type": "类型",
+          "platform": "平台"
+        },
+        "pills": {
+          "reviewed": "已审阅",
+          "deciding": "决定中",
+          "here": "当前位置"
+        },
+        "stations": {
+          "discovery": {
+            "subtitle": "做什么 · 给谁 · 竞品"
+          },
+          "vision": {
+            "subtitle": "范围 · 关键决策"
+          },
+          "feasibility": {
+            "subtitle": "市场 · 构建风险"
+          },
+          "validation": {
+            "subtitle": "需求 · 竞争"
+          },
+          "design": {
+            "title": "设计外观",
+            "subtitle": "接下来 · 仅网页"
+          },
+          "plan": {
+            "title": "计划 → 你的篇章",
+            "subtitle": "路线图从这里继续"
+          }
+        }
+      },
+      "validate": {
+        "title": "规划前的一个决定",
+        "body": "市场核查发现需求真实存在，但你的具体设想尚未得到验证。先验证需求——在构建前先上线一个带等候名单的小型营销站点——还是直接开始构建？",
+        "blockedNote": "选择一项以继续——Motir 会在此等你决定"
+      }
     }
   }
 }
