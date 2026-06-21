@@ -445,8 +445,8 @@
   <body>
     <div class="frame">
       <div class="viewport" id="vp">
-        <svg class="world edges" id="edges" width="2200" height="900"></svg>
-        <div class="world" id="world" style="width: 2200px; height: 900px"></div>
+        <svg class="world edges" id="edges" width="1100" height="2000"></svg>
+        <div class="world" id="world" style="width: 1100px; height: 2000px"></div>
 
         <!-- fixed canvas chrome -->
         <div class="overlay-top">
@@ -541,12 +541,15 @@
       const dot = (p, c) =>
         `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 
-      // ── nodes (world coords) ──
+      // ── nodes (world coords). Initial layout is TOP-TO-DOWN along the real
+      // pre-plan dependency chain (idea → discovery → vision → feasibility →
+      // validation → design → plan); the user can drag any node and the position
+      // persists. The edges below are the PRE-DEFINED dependencies (read-only). ──
       const nodes = [
         {
           id: 'idea',
-          x: 60,
-          y: 360,
+          x: 330,
+          y: 40,
           cls: 'compact',
           tile: '#5645d4',
           tileBg: '#ece9fb',
@@ -556,8 +559,8 @@
         },
         {
           id: 'disc',
-          x: 350,
-          y: 250,
+          x: 300,
+          y: 240,
           tileBg: 'var(--sky)',
           tile: '#0075de',
           icon: 'search',
@@ -572,8 +575,8 @@
         },
         {
           id: 'vis',
-          x: 350,
-          y: 540,
+          x: 300,
+          y: 530,
           tileBg: 'var(--lavender)',
           tile: '#5645d4',
           icon: 'shapes',
@@ -587,8 +590,8 @@
         },
         {
           id: 'feas',
-          x: 680,
-          y: 250,
+          x: 300,
+          y: 800,
           tileBg: 'var(--mint)',
           tile: '#1aae39',
           icon: 'shield',
@@ -603,8 +606,8 @@
         },
         {
           id: 'val',
-          x: 680,
-          y: 540,
+          x: 300,
+          y: 1070,
           tileBg: 'var(--peach)',
           tile: '#dd5b00',
           icon: 'list',
@@ -619,8 +622,8 @@
         },
         {
           id: 'design',
-          x: 1010,
-          y: 395,
+          x: 330,
+          y: 1360,
           cls: 'compact upcoming',
           tileBg: 'var(--mutedfill)',
           tile: '#a4a097',
@@ -631,8 +634,8 @@
         },
         {
           id: 'plan',
-          x: 1010,
-          y: 250,
+          x: 330,
+          y: 1550,
           cls: 'compact upcoming',
           tileBg: 'var(--mutedfill)',
           tile: '#a4a097',
@@ -644,19 +647,19 @@
       const epics = [
         {
           id: 'e1',
-          x: 1290,
-          y: 120,
+          x: 680,
+          y: 1440,
           title: 'Epic 1 · Foundation',
           stories: ['Auth', 'Schema', 'CI'],
         },
         {
           id: 'e2',
-          x: 1290,
-          y: 360,
+          x: 680,
+          y: 1610,
           title: 'Epic 2 · Invoices',
           stories: ['Create', 'Send', 'PDF'],
         },
-        { id: 'e3', x: 1290, y: 600, title: 'Epic 3 · Reminders', stories: ['Schedule', 'Email'] },
+        { id: 'e3', x: 680, y: 1780, title: 'Epic 3 · Reminders', stories: ['Schedule', 'Email'] },
       ];
 
       const world = document.getElementById('world');
@@ -694,6 +697,7 @@
             : '') +
           (capt ? `<div class="capt">${capt}</div>` : '');
         world.appendChild(el);
+        pos[n.id].h = el.offsetHeight; // measured height → edges anchor bottom→top
       }
       for (const e of epics) {
         pos[e.id] = { x: e.x, y: e.y, w: 168, h: 0 };
@@ -705,11 +709,12 @@
           `<div class="nhead"><span class="tile" style="background:var(--mutedfill)">${svg(I.net, '#a4a097')}</span><div class="ntitle">${e.title}</div></div>` +
           `<div class="stories">${e.stories.map((s) => `<div class="story"><i style="background:#a4a097"></i>${s}</div>`).join('')}</div>`;
         world.appendChild(el);
+        pos[e.id].h = el.offsetHeight;
       }
       // group labels
       for (const [x, y, txt] of [
-        [60, 200, 'Pre-plan'],
-        [1290, 60, 'After planning · your epics'],
+        [110, 8, 'Pre-plan'],
+        [600, 1400, 'After planning · your epics'],
       ]) {
         const l = document.createElement('div');
         l.className = 'grouplabel';
@@ -719,29 +724,32 @@
         world.appendChild(l);
       }
 
-      // ── edges (curved connectors) ──
+      // ── edges = the PRE-DEFINED dependency links (read-only). Drawn bottom-of-A
+      // → top-of-B as a vertical bezier, so the top-to-down chain reads cleanly
+      // and the plan → epics fan curves out to the right. ──
       function edge(a, b, color, dash) {
         const A = pos[a],
           B = pos[b];
         if (!A || !B) return;
-        const ax = A.x + A.w,
-          ay = A.y + 40,
-          bx = B.x,
-          by = B.y + 40;
-        const mx = (ax + bx) / 2;
-        const path = `M${ax},${ay} C${mx},${ay} ${mx},${by} ${bx},${by}`;
+        const ax = A.x + A.w / 2,
+          ay = A.y + A.h,
+          bx = B.x + B.w / 2,
+          by = B.y;
+        const my = (ay + by) / 2;
+        const path = `M${ax},${ay} C${ax},${my} ${bx},${my} ${bx},${by}`;
         edges.insertAdjacentHTML(
           'beforeend',
           `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" ${dash ? 'stroke-dasharray="2 7" stroke-linecap="round"' : ''}/>`,
         );
       }
+      // The linear pre-plan chain (each tier builds on the previous), then plan
+      // fans out to the epics. discovery → vision is the link the design needs.
       edge('idea', 'disc', '#1aae39');
-      edge('idea', 'vis', '#1aae39');
-      edge('disc', 'feas', '#1aae39');
-      edge('vis', 'val', '#5645d4');
-      edge('feas', 'val', '#1aae39');
-      edge('val', 'plan', '#cfcac2', 1);
+      edge('disc', 'vis', '#1aae39');
+      edge('vis', 'feas', '#1aae39');
+      edge('feas', 'val', '#5645d4'); // into the active frontier
       edge('val', 'design', '#cfcac2', 1);
+      edge('design', 'plan', '#cfcac2', 1);
       edge('plan', 'e1', '#cfcac2', 1);
       edge('plan', 'e2', '#cfcac2', 1);
       edge('plan', 'e3', '#cfcac2', 1);
@@ -773,7 +781,7 @@
         apply();
       }
       function fit() {
-        setView(0.46, 90, 120);
+        setView(0.37, 140, 24); // the whole roadmap: pre-plan spine + epic fan
       }
       const vp = document.getElementById('vp');
       vp.addEventListener(
@@ -798,7 +806,7 @@
       // initial view from ?z= (detail | overview), for the review screenshots
       const z = new URLSearchParams(location.search).get('z');
       if (z === 'overview') fit();
-      else setView(0.92, 20, 40); // detail: the active pre-plan region
+      else setView(0.92, 80, 24); // detail: the top of the chain (idea → discovery → vision → feasibility)
     </script>
   </body>
 </html>

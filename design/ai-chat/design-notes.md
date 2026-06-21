@@ -288,7 +288,13 @@ the whole-project map). Approved direction (Yue, 2026-06-21):
   (a sensible default layout); the user takes it from there.
 - **Links are PRE-DEFINED and READ-ONLY.** Edges are the work-item / pre-plan
   dependencies, drawn as curved connectors — there is **no link create / edit / delete
-  on the canvas** (the canvas arranges and reads; it never restructures the plan).
+  on the canvas** (the canvas arranges and reads; it never restructures the plan). The
+  pre-plan edges are the real tier dependency **chain** — each tier builds on the one
+  before it: **idea → discovery → vision → feasibility → validation → design → plan**,
+  then `plan` fans out to the **epics** (and each epic to its stories). So
+  &ldquo;What we&rsquo;ll build&rdquo; (vision) links from &ldquo;Understanding your
+  idea&rdquo; (discovery), matching the conductor&rsquo;s downstream-only re-derivation
+  order (`DIRECTION_DOC_ORDER`) — NOT a free 2D branch.
 - **One surface, whole journey.** The pre-plan stations (idea → the 4 tiers →
   design / plan slots) live on the same canvas that later carries the **post-plan
   epic → story clusters** (zoom out → the whole-project map). The post-plan RENDER is
