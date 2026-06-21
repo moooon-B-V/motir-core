@@ -153,11 +153,11 @@ Three tiers. Keys are the canonical `PlanTier.key` values every downstream
 subtask references. **The scale caps are measured at the `Organization`** (the
 billing entity) — see §4 for why and how each is counted.
 
-| Tier           | `PlanTier.key` | Stripe Price                          | Monthly AI allotment (v1 seed) | Credit top-ups | Non-archived work items (per org) | Projects (per org) | Max upload / file | Total storage (per org) | Orgs you can create          | Workspaces / org | Members / org           |
-| -------------- | -------------- | ------------------------------------- | ------------------------------ | -------------- | --------------------------------- | ------------------ | ----------------- | ----------------------- | ---------------------------- | ---------------- | ----------------------- |
-| **Free**       | `free`         | **none**                              | 200 credits                    | ✗              | **≤ 250**                         | **≤ 3**            | **10 MB**         | **2 GB**                | 1 (the auto-provisioned one) | 1                | unlimited               |
-| **Pro**        | `pro`          | per-seat recurring (monthly + annual) | 2 000 credits / seat           | ✓ (metered)    | unlimited                         | unlimited          | 100 MB            | 100 GB                  | unlimited                    | unlimited        | unlimited (seat-billed) |
-| **Enterprise** | `enterprise`   | none in Stripe (sales-invoiced)       | custom (contract)              | ✓              | unlimited                         | unlimited          | custom            | custom                  | unlimited                    | unlimited        | unlimited               |
+| Tier           | `PlanTier.key` | Stripe Price                    | Monthly AI allotment (v1 seed) | Credit top-ups | Non-archived work items (per org) | Projects (per org) | Max upload / file | Total storage (per org) | Orgs you can create          | Workspaces / org | Members / org           |
+| -------------- | -------------- | ------------------------------- | ------------------------------ | -------------- | --------------------------------- | ------------------ | ----------------- | ----------------------- | ---------------------------- | ---------------- | ----------------------- |
+| **Free**       | `free`         | **none**                        | 300 credits (per org)          | ✗              | **≤ 250**                         | **≤ 3**            | **10 MB**         | **2 GB**                | 1 (the auto-provisioned one) | 1                | unlimited               |
+| **Pro**        | `pro`          | $12/seat/mo · $120/seat/yr      | 2 000 credits / seat (pooled)  | ✓ (metered)    | unlimited                         | unlimited          | 100 MB            | 100 GB                  | unlimited                    | unlimited        | unlimited (seat-billed) |
+| **Enterprise** | `enterprise`   | none in Stripe (sales-invoiced) | custom (contract)              | ✓              | unlimited                         | unlimited          | custom            | custom                  | unlimited                    | unlimited        | unlimited               |
 
 (Upload sizes, total storage, and the project/work-item caps are **v1 seed
 policy, tunable**, like the allotments — §Context. Free's **2 GB** mirrors Jira's
@@ -165,23 +165,54 @@ free tier; without a total cap, 250 items × 10 MB ≈ 2.5 GB could slip through
 the per-file limit alone is not enough.)
 
 **Reconciliation with shipped `motir-ai` (binding on 8.1.4 / MOTIR-1230).** The
-shipped default-assignment constant is `BASIC_TIER_KEY = 'basic'`. **Rename it to
-`free`** (the constant + the one `provisionLedger` reference; **no seeded
-`PlanTier` rows exist yet**, so churn is a constant rename, not a data migration)
-so the key matches the product name and the three keys above are the single source
-of truth. The auto-assign-on-provision behaviour is unchanged: a new org lands on
+shipped default tier is **`basic` ("Basic"), 1,000 credits/month**, seeded in the
+`credit_ledger` migration and auto-assigned by `creditService` (`BASIC_TIER_KEY =
+'basic'`; `credit-model.md` §4). **Rename it `basic` → `free`, lower its allotment
+to 300 (below), and add the two paid rows** (`pro`/`enterprise`) — a one-row
+update to the seeded tier plus two inserts (and the constant rename), NOT a
+migration of user data; existing `AiOrganization.planTierId` FKs (by id) stay
+valid. The auto-assign-on-provision behaviour is unchanged: a new org lands on
 `free` until a paid subscription moves it.
 
-**Allotment / price numbers are v1 seed policy, not constants** (the
-`ModelCreditRate` stance, §Context). They live as seeded `PlanTier` rows / Stripe
-Prices and are tunable without a code change. Provisional prices for 8.1.2 to
-create, **for Yue to finalize before launch** (bracketed by Jira $8.15 and Linear
-$10–16/seat):
+**Allotment + price numbers are v1 seed policy, not constants** (the
+`ModelCreditRate` stance, §Context). The AI allotments are sized off the **shipped
+credit math** (`credit-model.md`: default `deepseek-v4-pro` = 1.0/1k in · 2.0/1k
+out · ×1.5 margin → a representative 8k-in/1.2k-out turn = **16 credits**):
 
-- **Pro monthly** — ~**$12 / seat / month**.
-- **Pro annual** — ~**$120 / seat / year** (~2 months free).
-- **Credit top-up** — a metered or one-time Price, ~**$10 per 1 000 credits**,
-  charged via `creditService.topUp()`.
+- **Free = 300 credits / month (per org), refreshed monthly, no top-ups.** Sized
+  to **≈ one onboarding planning pass** — generating the 4 pre-plan docs
+  (discovery / feasibility / validation / plan) + the epic tree runs ~150–250
+  credits as context grows turn-over-turn, so 300 covers one full "see the value"
+  pass with light headroom. It is **deliberately NOT** enough to iterate
+  endlessly, decompose every epic to subtasks repeatedly, or drive hosted coding —
+  those are what Pro buys. (This **lowers** the shipped `basic` 1,000 to match
+  Yue's "just enough to plan once" intent.)
+- **Pro = 2,000 credits / seat / month, POOLED at the org.** The monthly grant is
+  `2,000 × active seats` posted to the org's single `CreditLedger` balance — so a
+  5-seat Pro org gets 10,000 credits/month in one shared pool. (This makes the
+  allotment **per-seat**, where shipped `grantAllotment` grants a flat
+  `tier.monthlyCreditAllotment`; 8.1.4b multiplies it by the seat count.) Metered
+  **top-ups** (`creditService.topUp()`) cover overage beyond the pooled allotment.
+- **Enterprise = custom** (contract).
+
+Provisional Stripe prices for 8.1.2 to create, **for Yue to finalize before
+launch** (bracketed by Jira $8.15 and Linear $10–16/seat; Motir can sit at the top
+of that band because the per-seat AI allotment is **bundled**, which neither
+competitor includes):
+
+- **Pro monthly** — **$12 / seat / month**.
+- **Pro annual** — **$120 / seat / year** ($10/seat effective, ~2 months free).
+- **Credit top-up** — a metered / one-time Price, **$10 per 1,000 credits**, via
+  `creditService.topUp()`.
+
+> **COGS caveat (binding sanity check before launch).** 7.2 deliberately fixes no
+> `$`-value for a credit (`credit-model.md` §5) — Epic 8 sets the credit→`$` peg.
+> Once it is set, **verify the bundle is not underwater**: the provider `$`-cost of
+> the 2,000-credit/seat Pro allotment must sit comfortably under $12. If the peg
+> makes 2,000 credits cost more than the margin allows, lower the per-seat
+> allotment or raise the price — do not ship a bundle that loses money per seat
+> (the `notes.html` #10 lesson: a business model that carries unsustainable
+> per-unit AI cost).
 
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
