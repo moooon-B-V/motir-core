@@ -62,10 +62,16 @@ describe('accountSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('reserves Profile as the designed-for "Soon" placeholder (API tokens went live in 7.8.3, Appearance in 7.3.58)', () => {
+  it('has no reserved "Soon" placeholders — every slot is now a real route (API tokens 7.8.3, Appearance 7.3.58, Profile 8.8.24)', () => {
     const placeholders = ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder).map((e) => e.id);
-    expect(placeholders).toEqual(['profile']);
-    // A placeholder carries no route, so it never enters the real-route set.
+    expect(placeholders).toEqual([]);
+    // Every entry is a real route with a non-empty href in the real-route set.
+    for (const entry of ACCOUNT_SETTINGS_NAV) {
+      expect(entry.href).not.toBe('');
+      expect(ACCOUNT_SETTINGS_ROUTES).toContainEqual(entry);
+    }
+    // A placeholder, were one re-added, must still carry no route (the contract
+    // the totality guard relies on).
     for (const entry of ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder)) {
       expect(entry.href).toBe('');
       expect(ACCOUNT_SETTINGS_ROUTES).not.toContainEqual(entry);
@@ -104,10 +110,18 @@ describe('accountSettingsNav registry — active detection', () => {
     expect(isAccountSettingsEntryActive(language, '/settings/account/notifications')).toBe(false);
   });
 
-  it('a placeholder (no href) is never active', () => {
+  it('the Profile entry (live since 8.8.24) is active on its route, not on a sibling', () => {
     const profile = ACCOUNT_SETTINGS_NAV.find((e) => e.id === 'profile')!;
-    expect(isAccountSettingsEntryActive(profile, '/settings/account')).toBe(false);
+    expect(isAccountSettingsEntryActive(profile, '/settings/account/profile')).toBe(true);
     expect(isAccountSettingsEntryActive(profile, '/settings/account/language')).toBe(false);
+    expect(isAccountSettingsEntryActive(profile, '/settings/account')).toBe(false);
+  });
+
+  it('an entry with no href (a future placeholder) is never active', () => {
+    const base = ACCOUNT_SETTINGS_NAV.find((e) => e.id === 'profile')!;
+    const placeholder = { ...base, href: '', placeholder: true };
+    expect(isAccountSettingsEntryActive(placeholder, '/settings/account')).toBe(false);
+    expect(isAccountSettingsEntryActive(placeholder, '/settings/account/profile')).toBe(false);
   });
 });
 

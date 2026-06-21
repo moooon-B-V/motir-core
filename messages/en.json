@@ -1542,6 +1542,27 @@
         "desc": "Menus, labels and dates use this language."
       }
     },
+    "profile": {
+      "heading": "Profile",
+      "subtitle": "Your personal details — the name and photo teammates see across Motir, and the email and password you sign in with. Changes apply to your account everywhere you're signed in.",
+      "card": {
+        "title": "Profile",
+        "subtitle": "How you appear to your team."
+      },
+      "name": {
+        "label": "Name",
+        "desc": "Shown on your work, comments and mentions.",
+        "edit": "Edit",
+        "save": "Save",
+        "cancel": "Cancel",
+        "empty": "Name can't be empty.",
+        "saved": "Name updated"
+      },
+      "email": {
+        "label": "Email",
+        "desc": "Used to sign in and to send you notifications."
+      }
+    },
     "appearance": {
       "heading": "Appearance",
       "subtitle": "Theme Motir to your taste — its colour, type and shape. Everything applies live across the whole app, and saves to your account so it follows you to every device.",

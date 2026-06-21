@@ -35,7 +35,7 @@ vi.mock('next/headers', () => ({
 const { auth } = await import('@/lib/auth');
 const requestPasswordReset = vi.mocked(auth.api.requestPasswordReset);
 
-const { changePasswordAction, sendSetPasswordLinkAction } =
+const { changePasswordAction, sendSetPasswordLinkAction, updateProfileNameAction } =
   await import('@/app/(authed)/settings/account/profile/actions');
 
 const CURRENT = 'current-password-1';
@@ -57,6 +57,42 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+});
+
+describe('updateProfileNameAction', () => {
+  it('persists a new display name and returns the trimmed value', async () => {
+    const user = await usersService.createUser({
+      email: 'name@example.com',
+      password: CURRENT,
+      name: 'Old Name',
+    });
+    actAs({ id: user.id, email: user.email });
+
+    const result = await updateProfileNameAction('  New Name  ');
+    expect(result).toEqual({ ok: true, name: 'New Name' });
+
+    const profile = await usersService.getProfile(user.id);
+    expect(profile?.name).toBe('New Name');
+  });
+
+  it('maps an empty name to INVALID_NAME with a message, leaving the name unchanged', async () => {
+    const user = await usersService.createUser({
+      email: 'name@example.com',
+      password: CURRENT,
+      name: 'Keep Me',
+    });
+    actAs({ id: user.id, email: user.email });
+
+    const result = await updateProfileNameAction('   ');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('INVALID_NAME');
+      expect(result.message.length).toBeGreaterThan(0);
+    }
+
+    const profile = await usersService.getProfile(user.id);
+    expect(profile?.name).toBe('Keep Me');
+  });
 });
 
 describe('changePasswordAction', () => {

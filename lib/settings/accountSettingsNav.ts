@@ -13,9 +13,10 @@ import type { LucideIcon } from 'lucide-react';
 //      filesystem). The area-ROOT redirect page is excluded (see that test).
 //
 // A later story mounts its page by ADDING an entry (or flipping a placeholder to
-// a real one): 7.8.3 lit up the API-tokens slot and 7.3.58 the Appearance slot
-// below; the Profile slot still waits on its own future story. The asset of
-// record is `design/settings/account-settings.mock.html` (7.8.2).
+// a real one): 7.8.3 lit up the API-tokens slot, 7.3.58 the Appearance slot, and
+// 8.8.24 the Profile slot below — every reserved slot is now a real route. The
+// area asset of record is `design/settings/account-settings.mock.html` (7.8.2);
+// the Profile pane's own asset is `design/settings/profile.mock.html` (8.8.20).
 //
 // DELIBERATE DEVIATION from `projectSettingsNav`: there is **no `access`
 // predicate / capabilities axis** here. Account settings are the signed-in
@@ -58,10 +59,11 @@ export interface AccountSettingsNavEntry {
   /**
    * A designed-for, not-yet-built slot — rendered as a disabled "Soon" row so the
    * area's shape is legible from day one, but NOT a real route (excluded from the
-   * route↔registry totality assertion and from the command palette). The reserved
-   * slot: Profile (a future personal-details story). (API tokens WAS such a slot
-   * until Story 7.8.3, and Appearance until Story 7.3.58, each shipped its pane +
-   * route and flipped it to a real entry.)
+   * route↔registry totality assertion and from the command palette). No slot is
+   * reserved today: API tokens (7.8.3), Appearance (7.3.58), and Profile (8.8.24)
+   * each shipped its pane + route and flipped to a real entry. The field stays for
+   * the NEXT designed-for-but-unbuilt account pane (shape-parity with
+   * `projectSettingsNav`).
    */
   placeholder?: boolean;
 }
@@ -78,12 +80,15 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
   {
     id: 'profile',
     group: 'general',
-    href: '',
+    href: '/settings/account/profile',
     icon: User,
     labelKey: 'profile',
-    // Reserved "Soon": name / avatar / password land in a future personal-details
-    // story (like the project area's Automation slot before 6.6).
-    placeholder: true,
+    // Lit up by Story 8.8.24 (the Profile pane + its route): personal details —
+    // name (inline edit) + email, with avatar / email-change / password as the
+    // sibling slices (8.8.24a/b/c) composing in. 7.8.2 reserved this as a "Soon"
+    // placeholder; flipping it to a real entry keeps the route↔registry totality
+    // test green by construction (the new pane has an on-disk route now), exactly
+    // as 7.8.3 did for API tokens and 7.3.58 for Appearance.
   },
   {
     id: 'language',
