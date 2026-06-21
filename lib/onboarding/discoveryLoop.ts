@@ -17,7 +17,12 @@
 // explicitly OUT of this card → Subtask 7.3.71 / MOTIR-1179; here a `revisions`
 // frame only marks the affected tiers stale so their read-only body re-fetches.
 
-import { type DirectionDocKind, type DirectionDocView, DIRECTION_DOC_ORDER } from './directionDoc';
+import {
+  type DirectionDocKind,
+  type DirectionDocView,
+  type FeatureCatalogView,
+  DIRECTION_DOC_ORDER,
+} from './directionDoc';
 
 // ── The conductor SSE frames (relayed verbatim from motir-ai) ────────────────
 
@@ -181,6 +186,9 @@ export interface DiscoveryState {
   producedKinds: DirectionDocKind[];
   /** The read-only bodies, by kind (fetched from /api/ai/pre-plan). */
   docs: Record<string, DirectionDocView>;
+  /** The structured feature catalog, folded into the vision tier's review
+   *  (fetched from /api/ai/pre-plan; null until the vision step drafts it). */
+  catalog: FeatureCatalogView | null;
   /** The tier currently up for review (drives the full-screen gate). */
   activeKind: DirectionDocKind | null;
   view: DiscoveryView;
@@ -208,6 +216,7 @@ export function initialDiscoveryState(): DiscoveryState {
     session: { ...EMPTY_SESSION },
     producedKinds: [],
     docs: {},
+    catalog: null,
     activeKind: null,
     view: 'hub',
     pendingAsk: null,
@@ -228,10 +237,15 @@ export interface HydrateSession {
 
 export type DiscoveryAction =
   | { type: 'reset' }
-  | { type: 'hydrate'; session: HydrateSession | null; docs: DirectionDocView[] }
+  | {
+      type: 'hydrate';
+      session: HydrateSession | null;
+      docs: DirectionDocView[];
+      catalog: FeatureCatalogView | null;
+    }
   | { type: 'userTurn'; text: string }
   | { type: 'frame'; frame: DiscoveryFrame }
-  | { type: 'docsLoaded'; docs: DirectionDocView[] }
+  | { type: 'docsLoaded'; docs: DirectionDocView[]; catalog: FeatureCatalogView | null }
   | { type: 'streamEnd' }
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
@@ -288,6 +302,7 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         ...initialDiscoveryState(),
         session,
         docs,
+        catalog: action.catalog,
         producedKinds: produced,
         activeKind: active ?? (produced.length ? produced[produced.length - 1]! : null),
         // Resume INTO the review gate when the session parks at a tier; otherwise
@@ -316,6 +331,9 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
       return {
         ...state,
         docs,
+        // A pre-plan re-read carries the CURRENT catalog (the vision step may have
+        // just (re)drafted it); refresh from the authoritative read.
+        catalog: action.catalog,
         staleKinds: state.staleKinds.filter((k) => !loaded.has(k)),
       };
     }

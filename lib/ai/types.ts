@@ -192,9 +192,53 @@ export interface RawPreplanArtifactLog {
   versions: RawPreplanRevisionEntry[];
 }
 
-// The raw GET /v1/preplan wire body. Both halves are empty/null for a project
-// that never started a pre-plan (a fresh resume, not an error).
+// The structured feature catalog as it crosses the wire (mirrors motir-ai's
+// `FeatureCatalogDto`, the fields 7.3.78/MOTIR-1243 added to GET /v1/preplan).
+// A phased feature universe (categories → features) + a concept glossary
+// (groups → concepts). `phase`/`status` are the motir-ai enum literals; the
+// per-node `id`s are kept (the consumer keys its list render on them). The
+// catalog is FOLDED INTO the vision tier on the consumer side, so it rides as a
+// sibling field, NOT a `docs[]` entry.
+export interface RawPreplanCatalogFeature {
+  id: string;
+  name: string;
+  descriptionMd: string;
+  phase: 'mvp' | 'v1' | 'v2' | 'ai';
+  status: 'todo' | 'in_progress' | 'done';
+}
+
+export interface RawPreplanCatalogCategory {
+  id: string;
+  title: string;
+  features: RawPreplanCatalogFeature[];
+}
+
+export interface RawPreplanGlossaryConcept {
+  id: string;
+  term: string;
+  aka: string | null;
+  descriptionMd: string;
+  example: string | null;
+}
+
+export interface RawPreplanGlossaryGroup {
+  id: string;
+  title: string;
+  concepts: RawPreplanGlossaryConcept[];
+}
+
+export interface RawPreplanCatalog {
+  // motir-ai-internal identity (`id` / `aiProjectId`) + timestamps also ride the
+  // wire; the mapper drops them (never leaked to the browser), so they are not
+  // typed as consumed fields here.
+  categories: RawPreplanCatalogCategory[];
+  glossary: RawPreplanGlossaryGroup[];
+}
+
+// The raw GET /v1/preplan wire body. All three are empty/null for a project that
+// never started a pre-plan (a fresh resume, not an error).
 export interface RawPreplanStateResponse {
   session: RawPreplanSession | null;
   docs: RawPreplanArtifactLog[];
+  catalog: RawPreplanCatalog | null;
 }

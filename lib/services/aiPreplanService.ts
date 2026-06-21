@@ -67,5 +67,35 @@ function mapPreplanState(raw: RawPreplanStateResponse): PreplanStateDTO {
         createdAt: v.createdAt,
       })),
     })),
+    // The structured feature catalog (7.3.78), folded into the vision tier by the
+    // gate. Mapped onto 834's `FeatureCatalogView` — keeping the per-node ids the
+    // list render keys on, dropping the motir-ai-internal catalog id/aiProjectId/
+    // timestamps (never leaked to the browser). Null until the vision step drafts it.
+    catalog: raw.catalog
+      ? {
+          categories: raw.catalog.categories.map((cat) => ({
+            id: cat.id,
+            title: cat.title,
+            features: cat.features.map((f) => ({
+              id: f.id,
+              name: f.name,
+              descriptionMd: f.descriptionMd,
+              phase: f.phase,
+              status: f.status,
+            })),
+          })),
+          glossary: raw.catalog.glossary.map((group) => ({
+            id: group.id,
+            title: group.title,
+            concepts: group.concepts.map((concept) => ({
+              id: concept.id,
+              term: concept.term,
+              aka: concept.aka,
+              descriptionMd: concept.descriptionMd,
+              example: concept.example,
+            })),
+          })),
+        }
+      : null,
   };
 }
