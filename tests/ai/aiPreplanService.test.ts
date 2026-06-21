@@ -71,13 +71,52 @@ const fullRaw: RawPreplanStateResponse = {
       ],
     },
   ],
+  catalog: {
+    categories: [
+      {
+        id: 'cat_1',
+        title: 'Work Items',
+        features: [
+          {
+            id: 'feat_1',
+            name: 'Boards',
+            descriptionMd: 'Kanban + Scrum',
+            phase: 'mvp',
+            status: 'todo',
+          },
+          {
+            id: 'feat_2',
+            name: 'Reports',
+            descriptionMd: 'Charts',
+            phase: 'v1',
+            status: 'in_progress',
+          },
+        ],
+      },
+    ],
+    glossary: [
+      {
+        id: 'grp_1',
+        title: 'Core',
+        concepts: [
+          {
+            id: 'con_1',
+            term: 'Work item',
+            aka: 'issue',
+            descriptionMd: 'A tracked unit',
+            example: 'A bug',
+          },
+        ],
+      },
+    ],
+  },
 };
 
 beforeEach(() => vi.clearAllMocks());
 
 describe('aiPreplanService.getPreplanState', () => {
   it('forwards ONLY the core (workspace, project) ids to the client — never an aiProject id', async () => {
-    vi.mocked(getPreplanState).mockResolvedValue({ session: null, docs: [] });
+    vi.mocked(getPreplanState).mockResolvedValue({ session: null, docs: [], catalog: null });
 
     await aiPreplanService.getPreplanState(ctx);
 
@@ -172,12 +211,72 @@ describe('aiPreplanService.getPreplanState', () => {
     });
   });
 
-  it('passes the empty resume state through as session: null / docs: [] (a not-yet-started project, not an error)', async () => {
-    vi.mocked(getPreplanState).mockResolvedValue({ session: null, docs: [] });
+  it('maps the structured feature catalog (7.3.78) onto the FeatureCatalogView, keeping per-node ids, dropping motir-ai internals', async () => {
+    vi.mocked(getPreplanState).mockResolvedValue(fullRaw);
 
     const dto = await aiPreplanService.getPreplanState(ctx);
 
-    expect(dto).toEqual({ session: null, docs: [] });
+    // Folded-into-vision catalog: categories/features (order + phase + status +
+    // ids the render keys on) and the glossary map straight through; the
+    // motir-ai-internal catalog id/aiProjectId/timestamps are NOT present.
+    expect(dto.catalog).toEqual({
+      categories: [
+        {
+          id: 'cat_1',
+          title: 'Work Items',
+          features: [
+            {
+              id: 'feat_1',
+              name: 'Boards',
+              descriptionMd: 'Kanban + Scrum',
+              phase: 'mvp',
+              status: 'todo',
+            },
+            {
+              id: 'feat_2',
+              name: 'Reports',
+              descriptionMd: 'Charts',
+              phase: 'v1',
+              status: 'in_progress',
+            },
+          ],
+        },
+      ],
+      glossary: [
+        {
+          id: 'grp_1',
+          title: 'Core',
+          concepts: [
+            {
+              id: 'con_1',
+              term: 'Work item',
+              aka: 'issue',
+              descriptionMd: 'A tracked unit',
+              example: 'A bug',
+            },
+          ],
+        },
+      ],
+    });
+    expect(dto.catalog).not.toHaveProperty('aiProjectId');
+    expect(dto.catalog).not.toHaveProperty('id');
+  });
+
+  it('passes the empty resume state through as session: null / docs: [] / catalog: null (a not-yet-started project, not an error)', async () => {
+    vi.mocked(getPreplanState).mockResolvedValue({ session: null, docs: [], catalog: null });
+
+    const dto = await aiPreplanService.getPreplanState(ctx);
+
+    expect(dto).toEqual({ session: null, docs: [], catalog: null });
+  });
+
+  it('passes a null catalog through (tiers produced before the vision step drafts the catalog)', async () => {
+    vi.mocked(getPreplanState).mockResolvedValue({ ...fullRaw, catalog: null });
+
+    const dto = await aiPreplanService.getPreplanState(ctx);
+
+    expect(dto.catalog).toBeNull();
+    expect(dto.docs).toHaveLength(2); // docs still threaded
   });
 
   it('propagates a client transport error (the route maps it to 502)', async () => {

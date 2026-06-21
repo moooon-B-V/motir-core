@@ -4,7 +4,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { TierReviewGate } from '@/components/onboarding/TierReviewGate';
-import type { DirectionDocView } from '@/lib/onboarding/directionDoc';
+import type { DirectionDocView, FeatureCatalogView } from '@/lib/onboarding/directionDoc';
 
 afterEach(() => cleanup());
 
@@ -12,6 +12,25 @@ const doc: DirectionDocView = {
   kind: 'discovery',
   contentMd: '# Discovery (Tier 1)\n\nA focused invoicing tool for freelancers.',
   version: 1,
+};
+
+const visionDoc: DirectionDocView = {
+  kind: 'vision',
+  contentMd: '# Vision (Tier 2)\n\nA calm invoicing workspace for freelancers.',
+  version: 1,
+};
+
+const catalog: FeatureCatalogView = {
+  categories: [
+    {
+      id: 'cat_1',
+      title: 'Work Items',
+      features: [
+        { id: 'f1', name: 'Boards', descriptionMd: 'Kanban + Scrum', phase: 'mvp', status: 'todo' },
+      ],
+    },
+  ],
+  glossary: [],
 };
 
 describe('TierReviewGate', () => {
@@ -29,6 +48,43 @@ describe('TierReviewGate', () => {
     expect(screen.getByText(/A focused invoicing tool/)).toBeTruthy();
     // the gate note makes "Continue = navigation, nothing locks" explicit
     expect(screen.getByText(/nothing locks until your plan generates/)).toBeTruthy();
+  });
+
+  it('folds the feature catalog into the VISION tier review (7.3.79)', () => {
+    renderWithIntl(
+      <TierReviewGate
+        doc={visionDoc}
+        availableKinds={['discovery']}
+        catalog={catalog}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+      />,
+    );
+    // the catalog renders inside the vision review
+    expect(screen.getByText('The feature catalog')).toBeTruthy();
+    expect(screen.getByText('Work Items')).toBeTruthy();
+    expect(screen.getByText('Boards')).toBeTruthy();
+  });
+
+  it('does NOT render the catalog on a non-vision tier even when one is passed', () => {
+    renderWithIntl(
+      <TierReviewGate
+        doc={doc} // discovery
+        availableKinds={['vision']}
+        catalog={catalog}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('The feature catalog')).toBeNull();
+  });
+
+  it('renders the vision tier with no catalog section when none is drafted', () => {
+    renderWithIntl(
+      <TierReviewGate doc={visionDoc} availableKinds={[]} onBack={vi.fn()} onContinue={vi.fn()} />,
+    );
+    expect(screen.queryByText('The feature catalog')).toBeNull();
+    expect(screen.getByText(/A calm invoicing workspace/)).toBeTruthy();
   });
 
   it('fires Continue and Back', () => {

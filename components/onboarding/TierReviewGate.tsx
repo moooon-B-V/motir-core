@@ -7,6 +7,7 @@ import { DirectionDocView } from './DirectionDocView';
 import type {
   DirectionDocKind,
   DirectionDocView as DirectionDocModel,
+  FeatureCatalogView,
 } from '@/lib/onboarding/directionDoc';
 
 /** The on-page validate-demand-first decision (MOTIR-1064) shown on the validation
@@ -32,6 +33,9 @@ export interface TierReviewGateProps {
   doc: DirectionDocModel;
   /** The other produced tiers, for the doc's cross-link footer. */
   availableKinds: DirectionDocKind[];
+  /** The structured feature catalog — folded into the VISION tier's review by
+   *  `DirectionDocView` (ignored for every other tier). Null when undrafted. */
+  catalog?: FeatureCatalogView | null;
   /** Re-open another produced tier (cross-link / hub navigation). */
   onNavigate?: (kind: DirectionDocKind) => void;
   /** Present on the validation tier with the blocking ask parked — renders the
@@ -46,6 +50,7 @@ export interface TierReviewGateProps {
 export function TierReviewGate({
   doc,
   availableKinds,
+  catalog = null,
   validateDecision,
   onBack,
   onContinue,
@@ -80,7 +85,7 @@ export function TierReviewGate({
         <div className="mx-auto max-w-[48rem]">
           <DirectionDocView
             doc={doc}
-            catalog={null}
+            catalog={catalog}
             availableDocs={availableKinds}
             onNavigate={onNavigate}
           />
