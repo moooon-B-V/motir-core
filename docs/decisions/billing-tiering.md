@@ -174,13 +174,13 @@ line**. An org subscribes to either, both, or neither.
 
 **Your bill = ① + ②, and they don't gate each other:**
 
-| Org                                           | Tracker        | AI               | **Total / mo**        |
-| --------------------------------------------- | -------------- | ---------------- | --------------------- |
-| Solo, < 250 items, no AI                      | free           | 300 trial (once) | **$0**                |
-| **Solo, < 250 items, wants planning**         | **free**       | Starter $5       | **$5** ← no seat fee  |
-| 5-person team, < 250 items, everyday planning | free           | Standard $25     | **$25**               |
-| 8-person team, 2,000 items (scaled) + coding  | $5 × 8 = $40   | Pro $75          | **$115**              |
-| 20-person team, scaled, tracker-only (no AI)  | $5 × 20 = $100 | none             | **$100**              |
+| Org                                           | Tracker        | AI               | **Total / mo**       |
+| --------------------------------------------- | -------------- | ---------------- | -------------------- |
+| Solo, < 250 items, no AI                      | free           | 300 trial (once) | **$0**               |
+| **Solo, < 250 items, wants planning**         | **free**       | Starter $5       | **$5** ← no seat fee |
+| 5-person team, < 250 items, everyday planning | free           | Standard $25     | **$25**              |
+| 8-person team, 2,000 items (scaled) + coding  | $5 × 8 = $40   | Pro $75          | **$115**             |
+| 20-person team, scaled, tracker-only (no AI)  | $5 × 20 = $100 | none             | **$100**             |
 
 So the **seat fee appears ONLY when the org outgrows the free caps**; a small org
 pays only for the AI it opts into. The named plans (**Starter → Standard → Pro →
@@ -222,9 +222,9 @@ tier list.
 
 **① Tracker (the PM tool) — free ↔ scaled:**
 
-| State      | When                         | Price                       | Entitlement                                                                                            |
-| ---------- | ---------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Free**   | the org is within ALL caps   | **$0**                      | ≤ 250 work items · ≤ 3 projects · 1 workspace · 1 org · 10 MB/file · 2 GB · **unlimited members**      |
+| State      | When                         | Price                                                  | Entitlement                                                                                            |
+| ---------- | ---------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| **Free**   | the org is within ALL caps   | **$0**                                                 | ≤ 250 work items · ≤ 3 projects · 1 workspace · 1 org · 10 MB/file · 2 GB · **unlimited members**      |
 | **Scaled** | the org exceeds ANY free cap | **$5 / seat / mo** ($40/yr — annual default; ~33% off) | all caps lifted: unlimited work items/projects, multi-workspace, create more orgs, 100 MB/file, 100 GB |
 
 The **scaled-tracker subscription** is what lifts the §4 caps — a **motir-core
@@ -235,13 +235,13 @@ scaled tracker (start the $5/seat subscription); until then the create is blocke
 
 **② AI (planning + agents) — an independent monthly plan (the motir-ai `PlanTier`):**
 
-| Plan           | `PlanTier.key` | Credits / mo (per org) | Per-org fee | Cadence               | Top-ups | For                                           |
-| -------------- | -------------- | ---------------------- | ----------- | --------------------- | ------- | --------------------------------------------- |
-| **Free**       | `free`         | 300                    | $0          | **ONE-TIME** (signup) | ✗       | try AI once                                   |
-| **Starter**    | `starter`      | 300                    | $5          | monthly ($40/yr)      | ✓       | a recurring taste of planning                 |
-| **Standard**   | `standard`     | 2,000                  | $25         | monthly ($200/yr)     | ✓       | everyday planning, one project                |
-| **Pro**        | `pro`          | 8,000                  | $75         | monthly ($600/yr)     | ✓       | planning + hosted coding                      |
-| **Max**        | `max`          | 30,000                 | $150        | monthly ($1,200/yr)   | ✓       | planning + heavy agent (design, docs, coding) |
+| Plan           | `PlanTier.key` | Credits / mo (per org) | Per-org fee | Cadence               | Top-ups | For                                                  |
+| -------------- | -------------- | ---------------------- | ----------- | --------------------- | ------- | ---------------------------------------------------- |
+| **Free**       | `free`         | 300                    | $0          | **ONE-TIME** (signup) | ✗       | try AI once                                          |
+| **Starter**    | `starter`      | 300                    | $5          | monthly ($40/yr)      | ✓       | a recurring taste of planning                        |
+| **Standard**   | `standard`     | 2,000                  | $25         | monthly ($200/yr)     | ✓       | everyday planning, one project                       |
+| **Pro**        | `pro`          | 8,000                  | $75         | monthly ($600/yr)     | ✓       | planning + hosted coding                             |
+| **Max**        | `max`          | 30,000                 | $150        | monthly ($1,200/yr)   | ✓       | planning + heavy agent (design, docs, coding)        |
 | **Enterprise** | `enterprise`   | custom                 | custom      | monthly               | ✓       | custom (no Stripe object — platform staff sets tier) |
 
 **Any org — free-tracker or scaled — can hold an AI plan**; it does not require a
@@ -304,13 +304,13 @@ A paid org's subscription carries **two recurring items**: one **shared per-seat
 tracker** price (`quantity` = seats) + one **flat per-org AI-pool** price for its
 tier (`quantity` 1). Provision:
 
-| Stripe Product                                | Prices                                                                         | Billing model                                | Notes                                                                                       |
-| --------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Motir** (seat; the project-management tool) | `tracker_monthly` ($5), `tracker_annual` ($40 — default)                       | **recurring, per-seat** (`quantity` = seats) | present ONLY when the org is scaled; lifts the §4 caps. Customer-facing name is just "Motir" (not "Motir Tracker") — the tracker IS the namesake product |
+| Stripe Product                                | Prices                                                                                                                                | Billing model                                | Notes                                                                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Motir** (seat; the project-management tool) | `tracker_monthly` ($5), `tracker_annual` ($40 — default)                                                                              | **recurring, per-seat** (`quantity` = seats) | present ONLY when the org is scaled; lifts the §4 caps. Customer-facing name is just "Motir" (not "Motir Tracker") — the tracker IS the namesake product             |
 | **Motir AI — Starter / Standard / Pro / Max** | `starter_pool_{monthly,annual}` ($5/$40), `standard_pool_*` ($25/$200), `pro_pool_*` ($75/$600 — default), `max_pool_*` ($150/$1,200) | **recurring, flat per-org** (`quantity` 1)   | the tier's monthly AI fee that **funds** its credit pool; an org has **exactly one**. `pro_pool_annual` is the Product's default Price (the recommended/anchor tier) |
-| **Motir Credits** (top-up)                    | `credit_topup` ($10 unit price; customer chooses quantity at Checkout)         | **one-time** (`mode: 'payment'` at Checkout) | pay-as-you-go overage beyond the pool; writes via `creditService.topUp(N × 1,000)`. Not metered — discrete purchase per click |
-| — (Free)                                      | —                                                                              | —                                            | **no Stripe object** — free = no subscription (the one-time 300 is granted at provisioning) |
-| — (Enterprise)                                | —                                                                              | —                                            | **no public Stripe object** — invoiced/custom; tier set by platform staff                   |
+| **Motir Credits** (top-up)                    | `credit_topup` ($10 unit price; customer chooses quantity at Checkout)                                                                | **one-time** (`mode: 'payment'` at Checkout) | pay-as-you-go overage beyond the pool; writes via `creditService.topUp(N × 1,000)`. Not metered — discrete purchase per click                                        |
+| — (Free)                                      | —                                                                                                                                     | —                                            | **no Stripe object** — free = no subscription (the one-time 300 is granted at provisioning)                                                                          |
+| — (Enterprise)                                | —                                                                                                                                     | —                                            | **no public Stripe object** — invoiced/custom; tier set by platform staff                                                                                            |
 
 The two subscription items are **independent**. A **scaled** org carries `N × tracker_monthly` (seat item); an org with an **AI plan** carries `1 × <plan>_pool_monthly` (pool item). So a **small AI-only org has ONLY the pool item**
 (no seat fee — it's within the free tracker caps); a **scaled tracker-only org has
@@ -326,12 +326,12 @@ to membership (Stripe proration, §5), the pool item stays `quantity` 1.
 The shape locked above became, in practice:
 
 - **Stripe account:** sandbox, legal entity **moooon B.V.** (NL), business type
-  *vennootschap met rechtspersoonlijkheid* (B.V.), MCC SaaS, public business name
+  _vennootschap met rechtspersoonlijkheid_ (B.V.), MCC SaaS, public business name
   **Motir**, statement descriptor **MOTIR**, brand color **#5645d4** (the Motir
   primary purple from `globals.css`), business website `https://motir.co`. Logo
   deferred (no asset yet; placeholder-free is cleaner than throwaway-placeholder).
 - **Catalog:** 3 Products / 11 Prices per the §3 table. All Prices USD. The
-  per-Product *default* Price is `tracker_annual` (Motir) and `pro_pool_annual`
+  per-Product _default_ Price is `tracker_annual` (Motir) and `pro_pool_annual`
   (Motir AI) — annual-first presentation, the larger headline number anchors
   better and the implied 33% discount feels like a deal. 8.1.7's billing settings
   UI should mirror this annual-first order.
@@ -500,11 +500,11 @@ drops from paid to `free` (cancellation/non-payment, §5), over-cap data is
   webhook), PER subscription line.** Stripe Smart Retries + dunning emails. A lapse
   affects **only the line that lapsed**:
 
-  | Stripe status (per line)                     | If the **AI-plan** line                                        | If the **scaled-tracker** line                              |
-  | -------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
-  | `active` / `trialing`                        | plan active                                                    | caps lifted                                                 |
+  | Stripe status (per line)                     | If the **AI-plan** line                                                                    | If the **scaled-tracker** line                              |
+  | -------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+  | `active` / `trialing`                        | plan active                                                                                | caps lifted                                                 |
   | `past_due`                                   | **keep the pool through grace** (Smart Retries default: ~8 attempts over ~2 weeks); banner | **keep caps lifted through grace**; banner                  |
-  | `canceled` / `unpaid` / `incomplete_expired` | AI plan → **`free`** (no monthly grant, top-ups off)           | tracker → **free: re-apply §4 caps** (non-destructive lock) |
+  | `canceled` / `unpaid` / `incomplete_expired` | AI plan → **`free`** (no monthly grant, top-ups off)                                       | tracker → **free: re-apply §4 caps** (non-destructive lock) |
 
   The AI-line lapse flips `AiOrganization.planTierId` via the shipped
   `creditService.setOrgTier()`; the tracker-line lapse flips the motir-core
@@ -521,15 +521,15 @@ drops from paid to `free` (cancellation/non-payment, §5), over-cap data is
     business website (`motir.co`) to be reachable** — checked by Stripe's
     activation wizard even in sandbox. Since `motir.co` does not yet resolve,
     Stripe Tax setup is **deferred to live-cutover** (bundled with motir.co launch
-    + live activation). Concretely deferred: enabling Stripe Tax, setting every
-    Price's `tax_behavior` to `exclusive` (the 11 Prices provisioned today are
-    `tax_behavior: unspecified` — the field only appears once Tax is on), and
-    turning on Customer-Portal VAT-ID collection. **Code-side (8.1.4 / 8.1.5 /
-    8.1.4b) is NOT blocked** — Checkout/Portal endpoints + webhook handler
-    consume the catalog regardless of Tax state; tax calculation is an automatic
-    Stripe behavior at Checkout time. **Sandbox testing of tax-calculated
-    flows is blocked**; 8.1.9 / 8.1.10 either stub tax in tests or wait for
-    motir.co to resolve.
+    - live activation). Concretely deferred: enabling Stripe Tax, setting every
+      Price's `tax_behavior` to `exclusive` (the 11 Prices provisioned today are
+      `tax_behavior: unspecified` — the field only appears once Tax is on), and
+      turning on Customer-Portal VAT-ID collection. **Code-side (8.1.4 / 8.1.5 /
+      8.1.4b) is NOT blocked** — Checkout/Portal endpoints + webhook handler
+      consume the catalog regardless of Tax state; tax calculation is an automatic
+      Stripe behavior at Checkout time. **Sandbox testing of tax-calculated
+      flows is blocked**; 8.1.9 / 8.1.10 either stub tax in tests or wait for
+      motir.co to resolve.
 - **Self-host = cloud-only billing, uncapped.** Billing **and** the §4 caps exist
   **only on cloud**. A single explicit flag distinguishes the builds: **`MOTIR_CLOUD`
   env (default `false`)**.
