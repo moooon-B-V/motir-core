@@ -196,3 +196,130 @@ describe('resolveActiveWorkspace precedence (cookie → last-active → first)',
     expect(await workspacesService.resolveActiveWorkspace(member.id, null)).toBe(wsA.id);
   });
 });
+
+// Subtask 8.8.28 — the WRITE call sites that feed 8.8.27's resolver. Each point
+// where the active project changes (directly, or as a consequence of switching
+// workspace/org, or creating a workspace) must mirror the current active project
+// onto `User.lastActiveProjectId`. These lock the two service seams the four
+// switch actions call: setActiveProject (the direct switch) and
+// recordLastActiveProjectForWorkspace (the workspace-derived switches). The full
+// action→resolve stamp is asserted in 8.8.29's seam + 8.8.30's E2E.
+describe('8.8.28 — recording the global pointer at the switch points', () => {
+  describe('setActiveProject (the primary project-switch point)', () => {
+    it('mirrors the selected project onto User.lastActiveProjectId', async () => {
+      const owner = await createTestUser();
+      const { workspace } = await workspacesService.createWorkspace({
+        name: 'Acme',
+        ownerUserId: owner.id,
+      });
+      const project = await makeProject(owner.id, workspace.id, 'Acme Project');
+
+      await projectsService.setActiveProject({
+        userId: owner.id,
+        workspaceId: workspace.id,
+        projectId: project.id,
+      });
+
+      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      expect(row.lastActiveProjectId).toBe(project.id);
+    });
+
+    it('records the NEW project when switching between two projects', async () => {
+      const owner = await createTestUser();
+      const { workspace } = await workspacesService.createWorkspace({
+        name: 'Acme',
+        ownerUserId: owner.id,
+      });
+      const p1 = await makeProject(owner.id, workspace.id, 'First Project');
+      const p2 = await makeProject(owner.id, workspace.id, 'Second Project');
+
+      await projectsService.setActiveProject({
+        userId: owner.id,
+        workspaceId: workspace.id,
+        projectId: p1.id,
+      });
+      await projectsService.setActiveProject({
+        userId: owner.id,
+        workspaceId: workspace.id,
+        projectId: p2.id,
+      });
+
+      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      expect(row.lastActiveProjectId).toBe(p2.id);
+    });
+
+    it('does NOT touch the global pointer when CLEARING the active project (null)', async () => {
+      const owner = await createTestUser();
+      const { workspace } = await workspacesService.createWorkspace({
+        name: 'Acme',
+        ownerUserId: owner.id,
+      });
+      const project = await makeProject(owner.id, workspace.id, 'Acme Project');
+      await projectsService.setActiveProject({
+        userId: owner.id,
+        workspaceId: workspace.id,
+        projectId: project.id,
+      });
+
+      // Clearing the per-membership pointer must NOT wipe the global landing
+      // pointer — there is no project to land on, so we leave the last one.
+      await projectsService.setActiveProject({
+        userId: owner.id,
+        workspaceId: workspace.id,
+        projectId: null,
+      });
+
+      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      expect(row.lastActiveProjectId).toBe(project.id);
+    });
+  });
+
+  describe('recordLastActiveProjectForWorkspace (workspace / org switch + workspace create)', () => {
+    it('records the destination workspace’s active project', async () => {
+      const { member, wsB, projectB } = await twoWorkspaceMember();
+
+      await projectsService.recordLastActiveProjectForWorkspace(member.id, wsB.id);
+
+      const row = await db.user.findUniqueOrThrow({ where: { id: member.id } });
+      expect(row.lastActiveProjectId).toBe(projectB.id);
+    });
+
+    it('is a silent no-op for a freshly-created workspace with no project yet', async () => {
+      const owner = await createTestUser();
+      const { workspace } = await workspacesService.createWorkspace({
+        name: 'Empty',
+        ownerUserId: owner.id,
+      });
+
+      await projectsService.recordLastActiveProjectForWorkspace(owner.id, workspace.id);
+
+      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      expect(row.lastActiveProjectId).toBeNull();
+    });
+
+    it('never throws and leaves the pointer intact for a workspace the user cannot access', async () => {
+      const { member, wsA, projectA } = await twoWorkspaceMember();
+      // Establish a valid pointer from a workspace the member IS in.
+      await projectsService.recordLastActiveProjectForWorkspace(member.id, wsA.id);
+      const before = await db.user.findUniqueOrThrow({ where: { id: member.id } });
+      expect(before.lastActiveProjectId).toBe(projectA.id);
+
+      // A workspace the member is NOT a member of (a forged/stale id at a switch
+      // point): getActiveProject resolves null → best-effort no-op, no throw,
+      // pointer unchanged.
+      const stranger = await createTestUser();
+      const { workspace: foreign } = await workspacesService.createWorkspace({
+        name: 'Foreign',
+        ownerUserId: stranger.id,
+      });
+      await makeProject(stranger.id, foreign.id, 'Foreign Project');
+
+      await expect(
+        projectsService.recordLastActiveProjectForWorkspace(member.id, foreign.id),
+      ).resolves.toBeUndefined();
+
+      const after = await db.user.findUniqueOrThrow({ where: { id: member.id } });
+      expect(after.lastActiveProjectId).toBe(projectA.id);
+    });
+  });
+});
