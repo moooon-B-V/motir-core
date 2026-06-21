@@ -83,9 +83,11 @@ is not a durable commercial shape: a free account could farm unlimited free
 tenants and run an unbounded project at zero cost, and there would be no growth
 lever pulling a scaling team toward a paid plan. Yue's decision: **the cloud free
 tier is bounded** — one organization, one (default) workspace, and a **cap on the
-number of work items** — and **creating additional organizations requires a paid
-org**, precisely because the org is the charging entity (an ungated
-free-org-create loophole would defeat every per-org cap).
+number of work items** (plus the secondary Linear-shaped caps: a small project
+limit and a per-file upload-size limit) — and **creating additional organizations
+requires a paid org**, precisely because the org is the charging entity (an
+ungated free-org-create loophole would defeat every per-org cap). **All these
+counts are measured at the `Organization`, the billing entity** (§4).
 
 ### The verified mirror (rung 1 — cited, not asserted)
 
@@ -126,10 +128,10 @@ scope, with the self-managed/self-host build uncapped — §6.)
 Motir monetizes along **two** axes, not one. Conflating them was the gap in the
 earlier framing.
 
-| Axis                                                  | What it gates                                                    | Mechanism                                                                                                        | Free                                                                        | Paid                                                             |
-| ----------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **A. AI usage** (planning + hosted coding)            | every call crossing the `motir-core → motir-ai` boundary         | the shipped **credit** ledger (`monthlyCreditAllotment` + `topUp` overage); `out_of_credits` 402 at the boundary | small monthly allotment, **no top-ups**                                     | larger allotment **+ metered top-ups**                           |
-| **B. PM-core scale** (work items / workspaces / orgs) | non-archived work-item, workspace, and org counts in the tracker | **entitlement caps** keyed off the org's `PlanTier`                                                              | 1 org · 1 workspace · ≤ 250 non-archived work items · **unlimited members** | lifted (unlimited work items, multi-workspace, create more orgs) |
+| Axis                                                                       | What it gates                                                                                | Mechanism                                                                                                        | Free                                                                                                      | Paid                                                                                      |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **A. AI usage** (planning + hosted coding)                                 | every call crossing the `motir-core → motir-ai` boundary                                     | the shipped **credit** ledger (`monthlyCreditAllotment` + `topUp` overage); `out_of_credits` 402 at the boundary | small monthly allotment, **no top-ups**                                                                   | larger allotment **+ metered top-ups**                                                    |
+| **B. PM-core scale** (work items / projects / uploads / workspaces / orgs) | per-**org** counts: non-archived work items, projects, upload size, workspaces, org-creation | **entitlement caps** keyed off the org's `PlanTier`, measured at the org                                         | 1 org · 1 workspace · ≤ 3 projects · ≤ 250 non-archived work items · ≤ 10 MB/file · **unlimited members** | lifted (unlimited work items/projects, 100 MB uploads, multi-workspace, create more orgs) |
 
 - **Axis A is the open-core thesis** — the AI layers are the paid product, metered
   by credits, gated at the boundary. Confirmed to map onto the **shipped
@@ -147,13 +149,17 @@ earlier framing.
 ### 2. The tier catalog (what 8.1.2 provisions, what 8.1.4 stores)
 
 Three tiers. Keys are the canonical `PlanTier.key` values every downstream
-subtask references.
+subtask references. **The scale caps are measured at the `Organization`** (the
+billing entity) — see §4 for why and how each is counted.
 
-| Tier           | `PlanTier.key` | Stripe Price                          | Monthly AI allotment (v1 seed) | Credit top-ups | Non-archived work items / org | Orgs you can create          | Workspaces / org | Members / org           |
-| -------------- | -------------- | ------------------------------------- | ------------------------------ | -------------- | ----------------------------- | ---------------------------- | ---------------- | ----------------------- |
-| **Free**       | `free`         | **none**                              | 200 credits                    | ✗              | **≤ 250**                     | 1 (the auto-provisioned one) | 1                | unlimited               |
-| **Pro**        | `pro`          | per-seat recurring (monthly + annual) | 2 000 credits / seat           | ✓ (metered)    | unlimited                     | unlimited                    | unlimited        | unlimited (seat-billed) |
-| **Enterprise** | `enterprise`   | none in Stripe (sales-invoiced)       | custom (contract)              | ✓              | unlimited                     | unlimited                    | unlimited        | unlimited               |
+| Tier           | `PlanTier.key` | Stripe Price                          | Monthly AI allotment (v1 seed) | Credit top-ups | Non-archived work items (per org) | Projects (per org) | Max upload / file | Orgs you can create          | Workspaces / org | Members / org           |
+| -------------- | -------------- | ------------------------------------- | ------------------------------ | -------------- | --------------------------------- | ------------------ | ----------------- | ---------------------------- | ---------------- | ----------------------- |
+| **Free**       | `free`         | **none**                              | 200 credits                    | ✗              | **≤ 250**                         | **≤ 3**            | **10 MB**         | 1 (the auto-provisioned one) | 1                | unlimited               |
+| **Pro**        | `pro`          | per-seat recurring (monthly + annual) | 2 000 credits / seat           | ✓ (metered)    | unlimited                         | unlimited          | 100 MB            | unlimited                    | unlimited        | unlimited (seat-billed) |
+| **Enterprise** | `enterprise`   | none in Stripe (sales-invoiced)       | custom (contract)              | ✓              | unlimited                         | unlimited          | custom            | unlimited                    | unlimited        | unlimited               |
+
+(Upload sizes and the project/work-item caps are **v1 seed policy, tunable**, like
+the allotments — §Context.)
 
 **Reconciliation with shipped `motir-ai` (binding on 8.1.4 / MOTIR-1230).** The
 shipped default-assignment constant is `BASIC_TIER_KEY = 'basic'`. **Rename it to
@@ -195,21 +201,48 @@ quantity (Stripe proration, §5).
 The caps from §2, stated as enforceable rules (the enforcement home is the new
 8.1.11 — see Consequences):
 
-1. **Work items per org (the headline cap — Linear's model).** `free` org: **≤ 250
-   non-archived work items** across the org. Creating the 251st is blocked with an
-   upgrade prompt (the user can **archive** items to free room — archived items
-   don't count, mirroring Linear's "250 non-archived issues"). `pro`/`enterprise`:
-   unlimited. Counted via the existing soft-archive state (`workitem-archive`), so
-   the cap reuses shipped data — no new "deleted vs active" concept. **Members are
-   NOT seat-capped on free** — the work-item count is the binding lever, so a free
-   team can be any size (collaboration is the point); they hit the wall on
-   _project size_, not _headcount_. (Mirror: Linear's scope cap, chosen over
-   Jira's seat cap — §Context.)
-2. **Workspaces per org.** `free` org: **exactly 1** (the auto-provisioned default
+> **All scale caps are counted at the `Organization`, not the workspace or
+> project (binding).** The hierarchy is `Organization → Workspace → Project →
+work item`; the **org is the billing entity**, so every entitlement is measured
+> at that boundary. Counting at the org is also **ungameable** — a user can't
+> split work across projects/workspaces to dodge a cap — and matches Linear, which
+> counts at its workspace-root (= Motir's org). On `free` the question is moot
+> anyway (one workspace), but the org-level definition is the one that stays
+> coherent when a paid org has many workspaces. The entitlement helper resolves
+> the org **up** from the entity being created (work item → its project → its
+> workspace → its org) and counts there.
+
+1. **Work items (the headline cap — Linear's model).** `free` org: **≤ 250
+   non-archived work items across the whole org** (summed over every project in
+   every workspace it owns). Creating the 251st is blocked with an upgrade prompt
+   (the user can **archive** items to free room — archived items don't count,
+   mirroring Linear's "250 non-archived issues"). `pro`/`enterprise`: unlimited.
+   Counted via the existing soft-archive state (`workItem` `archivedAt: null`,
+   already a repository pattern), so the cap reuses shipped data — no new "deleted
+   vs active" concept. **Members are NOT seat-capped on free** — the work-item
+   count is the binding lever, so a free team can be any size (collaboration is the
+   point); they hit the wall on _project size_, not _headcount_. (Mirror: Linear's
+   scope cap, chosen over Jira's seat cap — §Context.)
+2. **Projects (the secondary Linear lever).** `free` org: **≤ 3 projects** across
+   its org. A Motir `Project` (the issue container, under a workspace) is the
+   analogue of a Linear **team**, and Linear's free plan caps **teams at 2**; Motir
+   allows a slightly more generous 3 because it folds the extra workspace tier away
+   on free. The 250-item cap is the real wall; this is the belt-and-suspenders
+   Linear-parity lever. `pro`/`enterprise`: unlimited. Gate `createProject`.
+3. **Upload size per file (tier the SHIPPED limit).** motir-core **already**
+   enforces a global **`MAX_UPLOAD_BYTES = 10 MB`** (`lib/blob/allowlist.ts`,
+   raising `FileTooLargeError`) — which is exactly Linear's free 10 MB. Make that
+   limit **tier-derived**: `free` keeps **10 MB**, `pro` raises it to **100 MB**,
+   `enterprise` custom (all tunable). The attachment upload path
+   (`attachmentsService`, `Attachment.sizeBytes`/`workspaceId`) resolves the org
+   tier and checks against the tier's limit instead of the hard-coded constant. (A
+   total-storage cap — Jira's free 2 GB shape — is a possible later addition;
+   v1 caps per-file size only.)
+4. **Workspaces per org.** `free` org: **exactly 1** (the auto-provisioned default
    workspace; the "new workspace" affordance is gated). `pro`/`enterprise`:
    unlimited. (The data model already carries the tier — `organization-tier.md` §6
    — so there is **never a migration** as a team grows; only the cap lifts.)
-3. **Org creation.** A user may create their **first** org for free (it is
+5. **Org creation.** A user may create their **first** org for free (it is
    auto-provisioned at signup — every account is an org-of-one from day one). To
    create **any additional** organization, the user MUST be **owner/admin of at
    least one organization whose `PlanTier` is paid** (`pro`/`enterprise`). A
@@ -229,8 +262,9 @@ drops from paid to `free` (cancellation/non-payment, §5), over-cap data is
 - Work items beyond 250 → **all retained and readable; creating NEW items is
   blocked** until the count is back under cap (archive to free room) or the org
   re-upgrades. Nothing is deleted (Linear's exact behaviour).
-- Workspaces beyond the first → **read-only / locked**; the user picks which one
-  stays active (or re-upgrades). No data is removed.
+- Projects beyond 3 / workspaces beyond the first → **read-only / locked**; the
+  user picks which to keep active (or re-upgrades). No data is removed.
+- Existing files over 10 MB stay; only NEW uploads are held to the free limit.
 - AI allotment → drops to the `free` allotment; top-ups disabled.
 
 ### 5. Trial, proration, dunning (subscription lifecycle → tier state)
@@ -312,15 +346,19 @@ gates the mutations. Self-host: N/A (no billing surface).
   top-up is allowed on `free`).
 - **⚠️ Planning gap surfaced — Axis-B caps have no owner → new subtask 8.1.11.**
   None of the existing 8.1 subtasks enforces the §4 **PM-core scale caps** (the
-  work-item / workspace / org-creation gates + the paid-org-to-create-orgs rule +
-  the non-destructive downgrade-lock). 8.1.6/8.1.7 build the billing _boundary +
-  settings_; 8.1.8 is the _AI_ paywall; none gates work-item creation,
-  `createWorkspace`, or `createOrganization` by tier. This ADR adds **8.1.11 —
-  "motir-core: PM-core entitlement/cap enforcement (work-item / workspace / org
-  gates by tier, cloud-only)"**, `blocked_by` this decision, to own that contract
-  (a single tier-aware entitlement helper the work-item-create / workspace-create
-  / org-create services call, behind `MOTIR_CLOUD`; the work-item count reuses the
-  shipped non-archived state).
+  work-item / project / upload / workspace / org-creation gates + the
+  paid-org-to-create-orgs rule + the non-destructive downgrade-lock). 8.1.6/8.1.7
+  build the billing _boundary + settings_; 8.1.8 is the _AI_ paywall; none gates
+  work-item creation, `createProject`, the attachment upload, `createWorkspace`, or
+  `createOrganization` by tier. This ADR adds **8.1.11 — "motir-core: PM-core
+  entitlement/cap enforcement (work-item / project / upload / workspace / org gates
+  by tier, cloud-only)"**, `blocked_by` this decision, to own that contract (a
+  single tier-aware entitlement helper the work-item-create / project-create /
+  workspace-create / org-create services + the attachment-upload path call, behind
+  `MOTIR_CLOUD`; all caps measured at the `Organization`, the work-item count
+  reuses the shipped non-archived state, and the upload gate turns the
+  already-shipped `MAX_UPLOAD_BYTES` (`lib/blob/allowlist.ts`) into a tier-derived
+  limit instead of a global constant).
 - **Self-host stays GPL-3.0 and uncapped** — the caps + billing live behind
   `MOTIR_CLOUD`; the open-core PM tracker a self-hoster runs is unbounded and
   shows no checkout. The cross-story audit stays clean: 8.1 takes no dependency on
