@@ -20,7 +20,7 @@ export default async function AccountAppearancePage() {
   const t = await getTranslations('settings.appearance');
 
   return (
-    <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h2 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h2>
         <p className="max-w-[34rem] font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
