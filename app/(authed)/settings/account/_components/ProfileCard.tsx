@@ -9,15 +9,16 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { updateProfileNameAction } from '../profile/actions';
+import { EmailField } from './EmailField';
 
 // The "Profile" card on the Account › Profile pane (Story 8.8 · Subtask 8.8.24,
 // the scaffold). Renders the personal-details rows in the settings-row grammar
 // (label + description left, control right, hairline-separated) per
 // `design/settings/profile.mock.html`. This scaffold owns the NAME row (inline
-// edit, wired to usersService.updateProfile via updateProfileNameAction) and the
-// EMAIL row (display). The sibling slices compose INTO this card: the Photo row
-// (AvatarField, 8.8.24a) above Name, the "Change email" control (8.8.24b) on the
-// Email row, and the "Password & security" card (8.8.24c) below this one.
+// edit, wired to usersService.updateProfile via updateProfileNameAction); the
+// EMAIL row is the EmailField slice (8.8.24b — change-with-confirmation). The
+// remaining sibling slices compose INTO this card: the Photo row (AvatarField,
+// 8.8.24a) above Name, and the "Password & security" card (8.8.24c) below.
 //
 // Page-state contract (CLAUDE.md): the name cell is a client island holding its
 // own optimistic state, so on save we KEEP the returned value here (no revert)
@@ -143,16 +144,9 @@ export function ProfileCard({ initialName, email }: ProfileCardProps) {
         )}
       </div>
 
-      {/* Email row — display only; the "Change email" control is slice 8.8.24b. */}
-      <div className="flex items-center justify-between gap-4 border-t border-(--el-border-soft) pt-4">
-        <div className="min-w-0">
-          <div className="font-sans text-sm font-medium text-(--el-text)">{t('email.label')}</div>
-          <div className="mt-0.5 font-sans text-xs leading-snug text-(--el-text-muted)">
-            {t('email.desc')}
-          </div>
-        </div>
-        <span className="shrink-0 font-sans text-sm text-(--el-text)">{email}</span>
-      </div>
+      {/* Email row — the "Change email" control + confirmation-pending banner
+          (slice 8.8.24b), wired to the 8.8.22 verified-change endpoint. */}
+      <EmailField email={email} />
     </Card>
   );
 }
