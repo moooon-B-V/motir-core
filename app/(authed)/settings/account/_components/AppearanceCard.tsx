@@ -61,8 +61,20 @@ export function AppearanceCard() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    // Two-column at the desktop breakpoint — controls on the LEFT, the live
+    // example on the RIGHT (8.8.15 / MOTIR-1198). The controls are the bulk of
+    // the content (four axes, the Style axis alone is 12 chips), so they take
+    // the FLEXIBLE `1fr` track: the wider that column, the fewer rows the chips
+    // wrap into, so every option stays visible without vertical scrolling. The
+    // example is the product vignette — it only needs enough room to show its
+    // nav rail + work-item card + modal in full, so it takes a fixed `30rem`
+    // track. `minmax(0,…)` on both tracks is the grid analogue of `min-w-0` so
+    // neither column overflows sideways. Below `lg:` it collapses to a single
+    // column, so the example stacks BELOW the controls (source order). Neither
+    // piece's own design changed.
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start">
       <Card
+        className="min-w-0"
         header={
           <div>
             <h3 className="font-sans text-base font-semibold text-(--el-text)">
@@ -139,7 +151,8 @@ export function AppearanceCard() {
         </div>
       </Card>
 
-      <section className="flex flex-col gap-2.5">
+      {/* The example column sticks in view (desktop) while the controls scroll. */}
+      <section className="flex min-w-0 flex-col gap-2.5 lg:sticky lg:top-6">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-faint)">
           {t('showcase.eyebrow')}
         </p>
