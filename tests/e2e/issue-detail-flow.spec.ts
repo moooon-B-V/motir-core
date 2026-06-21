@@ -371,6 +371,52 @@ test('@smoke link management — add a blocked-by link via the panel; persists +
   expect((await blockersOf(page, a.id)).map((x) => x.id)).toContain(b.id);
 });
 
+test('@smoke relationships: a plain click on a linked row opens the quick-view peek, not a navigation (8.8.31)', async ({
+  page,
+}) => {
+  const email = 'e2e-detail-relationship-peek@example.com';
+  await signUp(page, email);
+  const projectId = await seedActiveProject(email, 'RPEEK');
+  const a = await mk(page, projectId, { title: 'The item being read' });
+  const b = await mk(page, projectId, { title: 'The peeked blocker' });
+  await linkBlockedBy(page, a.id, b.id);
+
+  await page.goto(`/items/${a.identifier}`);
+  const row = page.getByRole('link', { name: /The peeked blocker/ });
+  await expect(row).toBeVisible();
+  // The anchor still carries the real detail-page href (shareable + ⌘/middle-
+  // click → new tab); a plain click is intercepted to open the peek instead.
+  await expect(row).toHaveAttribute('href', `/items/${b.identifier}`);
+
+  // Arm the authoritative signal BEFORE the click: the peek controller fetches
+  // the linked item's fields from /api/work-items/peek. Wait on its 200.
+  const peekResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/work-items/peek?key=${b.identifier}`) &&
+      r.request().method() === 'GET',
+  );
+  await row.click();
+  expect((await peekResponse).status()).toBe(200);
+
+  // The shared quick-view modal opens for B WITHOUT leaving A's page: the URL
+  // gains ?peek=<B> (we never navigated to /items/<B>) and the dialog shows B.
+  await expect(page).toHaveURL(new RegExp(`/items/${a.identifier}\\?peek=${b.identifier}`));
+  const dialog = page.getByRole('dialog', { name: new RegExp(`Quick view: ${b.identifier}`) });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('The peeked blocker')).toBeVisible();
+  // The peek's own "Open full page" link targets B's detail page.
+  await expect(dialog.getByTestId('quick-view-open-full')).toHaveAttribute(
+    'href',
+    `/items/${b.identifier}`,
+  );
+
+  // Closing the peek (Esc) clears ?peek and returns to A's detail page intact.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/items/${a.identifier}$`));
+  await expect(page.getByRole('heading', { level: 1, name: 'The item being read' })).toBeVisible();
+});
+
 test('@smoke link management — remove a blocked-by link (confirm) flips back to Ready', async ({
   page,
 }) => {
