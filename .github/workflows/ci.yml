@@ -104,14 +104,15 @@ jobs:
   test:
     name: Vitest (integration + coverage)
     runs-on: ubuntu-latest
-    # Skip the integration suite on plan-seed and design PRs, same as E2E
+    # Skip the integration suite on plan-seed, design, and docs PRs, same as E2E
     # below. A `seed/*` PR only edits scripts/plan-seed/** and a `design/*` PR
-    # only edits design/** — neither touches app code, services, or
+    # only edits design/**, and a `docs/*` PR only edits docs/** + *.md —
+    # none touch app code, services, or
     # repositories, so the integration tests (which run against a real Postgres
     # to exercise that code) have nothing new to cover. lint/typecheck/build
     # still run. github.head_ref is the PR source branch (empty on
     # push-to-main, where the suite runs normally).
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') }}
+    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -194,14 +195,15 @@ jobs:
     # at-scale cap or it would skew the ordinary board specs.
     name: Playwright E2E (${{ matrix.id }})
     runs-on: ubuntu-latest
-    # Skip E2E on plan-seed and design PRs. A `seed/*` PR only edits
+    # Skip E2E on plan-seed, design, and docs PRs. A `seed/*` PR only edits
     # scripts/plan-seed/** (the plan data the seed loads — see MOTIR.md "Plan
     # seed"); a `design/*` PR only edits design/** (mockups / .pen / PNG /
-    # design-notes.md from a `type: design` subtask). Neither touches app code in
+    # design-notes.md from a `type: design` subtask); a `docs/*` PR only edits
+    # docs/** + *.md (ADRs / decision records). None touch app code in
     # the Next bundle, so the Playwright suite has nothing new to exercise.
     # lint/typecheck/build/test still run. github.head_ref is the PR source branch
     # (empty on push-to-main, where E2E runs normally).
-    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') }}
+    if: ${{ !startsWith(github.head_ref, 'seed/') && !startsWith(github.head_ref, 'design/') && !startsWith(github.head_ref, 'docs/') }}
     # Wait for the build job — E2E is more expensive than a build failure
     # surfaces and there's no point burning Playwright minutes if `next
     # build` is red.
