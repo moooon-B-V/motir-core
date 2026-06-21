@@ -268,3 +268,40 @@ file) · `onboarding.mock.html` (the HTML mockup — source of truth, screens B�
 the new G2 gate-rhythm + G3 cascade panels) · `onboarding.png` (the full-page
 export). Rendered with Playwright chromium (full-page, light theme,
 `deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean.
+
+---
+
+## ⭐ The canvas is a SPATIAL canvas — Miro-style (2026-06-21 redesign, MOTIR-1235)
+
+**Supersedes screen C's "vertical pipeline (down)".** The hub's left pane is not a
+list — it is a genuine **2D spatial canvas** (Miro / tldraw feel). Asset:
+`canvas-spatial.mock.html` (interactive: drag to pan, wheel to zoom) +
+`canvas-spatial.png` (zoomed-in detail) + `canvas-spatial-overview.png` (zoomed-out,
+the whole-project map). Approved direction (Yue, 2026-06-21):
+
+- **Pan** anywhere (drag the surface), **zoom in / out** (wheel / trackpad +
+  `−` / `+` / `fit` controls, bounded ~30–200%). A subtle dot-grid backdrop reads
+  as an infinite canvas.
+- **Nodes are draggable.** Each station is a node the user can **drag to rearrange**;
+  the arrangement **PERSISTS per user, per project** (a drag survives reload — the
+  user shows the roadmap the way they want). Nodes **auto-initialise top-to-down**
+  (a sensible default layout); the user takes it from there.
+- **Links are PRE-DEFINED and READ-ONLY.** Edges are the work-item / pre-plan
+  dependencies, drawn as curved connectors — there is **no link create / edit / delete
+  on the canvas** (the canvas arranges and reads; it never restructures the plan).
+- **One surface, whole journey.** The pre-plan stations (idea → the 4 tiers →
+  design / plan slots) live on the same canvas that later carries the **post-plan
+  epic → story clusters** (zoom out → the whole-project map). The post-plan RENDER is
+  a separate Epic-7 story; the canvas is designed to accommodate it.
+- **Node states** carry over from screen C — done (Reviewed ✓) · active/frontier
+  (`map-pin` + ring + `aria-current`) · deciding (validation + the blocking ask) ·
+  upcoming (ghosted, dashed) — each pairs an icon + label + tint (finding #35), with
+  captured-findings rows on the produced tiers.
+- **Tokens + a11y:** colour via `--el-*`, shape via element-semantic tokens; the
+  canvas + chat are labelled regions; nodes are keyboard-focusable; zoom/pan have
+  keyboard equivalents.
+
+**Build split (the canvas is a FOUNDATION):** a reusable `PlanningCanvas` component
+(pan/zoom/drag/fit + node + read-only edge rendering — MOTIR-1236), per-user layout
+persistence (MOTIR-1237), composed by the onboarding shell (MOTIR-840) and reused by
+generation review (7.4) and the persistent roadmap (7.19).
