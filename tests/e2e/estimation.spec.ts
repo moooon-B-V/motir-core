@@ -152,7 +152,7 @@ test.describe('estimation — estimate & roll-up session (4.3.7)', () => {
     // dedicated agile field, DISTINCT from the time "Estimate" field below it.
     // The child is a leaf (no header roll-up), so the story-points badge is the
     // page's only "story points" control.
-    await page.goto(`/issues/${seed.childStory.identifier}`);
+    await page.goto(`/items/${seed.childStory.identifier}`);
     await expect(page.getByText('Story points', { exact: true })).toBeVisible();
     await estimateVia(page, page, 8);
     await expect(estimateBadge(page)).toHaveAccessibleName(/Story points: 8/, {
@@ -162,12 +162,12 @@ test.describe('estimation — estimate & roll-up session (4.3.7)', () => {
     // The epic's header roll-up badge is the SUBTREE sum (one bounded recursive
     // aggregate, server-computed) — labelled so it never reads as the epic's own
     // estimate.
-    await page.goto(`/issues/${seed.epic.identifier}`);
+    await page.goto(`/items/${seed.epic.identifier}`);
     await expect(page.getByLabel('Rolled-up Story points: 8')).toBeVisible({ timeout: 10_000 });
 
     // …and the same roll-up decorates the epic's row in the issues tree (the
     // compact variant lazily fetches GET /api/work-items/[id]/rollup per parent).
-    await page.goto('/issues');
+    await page.goto('/items');
     await expect(page.getByLabel('Rolled-up Story points: 8').first()).toBeVisible({
       timeout: 15_000,
     });
@@ -258,7 +258,7 @@ test.describe('estimation — at scale (finding #57)', () => {
     expect(rollup).toMatchObject({ total: seed.epicTotal });
 
     // And it renders on the epic header (server-computed, no flash).
-    await page.goto(`/issues/${seed.epic.identifier}`);
+    await page.goto(`/items/${seed.epic.identifier}`);
     await expect(page.getByLabel(`Rolled-up Story points: ${seed.epicTotal}`)).toBeVisible({
       timeout: 10_000,
     });

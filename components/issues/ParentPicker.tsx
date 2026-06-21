@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { allowedParentKinds, type IssueType } from '@/lib/issues/parentRules';
-import { listCandidateParentsAction } from '@/app/(authed)/issues/actions';
+import { listCandidateParentsAction } from '@/app/(authed)/items/actions';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 

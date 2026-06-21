@@ -40,7 +40,7 @@ export interface FilterSubscriptionEmailProps {
   totalCount: number;
   /** The per-email row cap (50) — drives the "showing first N of M" line. */
   resultCap: number;
-  /** Deep link to the applied filter on /issues (the `?filter=v1:` URL). */
+  /** Deep link to the applied filter on /items (the `?filter=v1:` URL). */
   filterUrl: string;
   /** Token-authenticated one-click unsubscribe link. */
   unsubscribeUrl: string;

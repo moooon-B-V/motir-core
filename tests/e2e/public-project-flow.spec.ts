@@ -79,7 +79,7 @@ interface AdminSeed {
  *  UI in the test), a couple of public-projection work items including the
  *  existing request the dedupe surfaces, and a SECOND non-public project in the
  *  same org for the cross-org exclusion leg. Pins the public project active so
- *  the project-scoped routes (/settings/project, /issues, /triage) resolve it. */
+ *  the project-scoped routes (/settings/project, /items, /triage) resolve it. */
 async function seedAdmin(page: Page): Promise<AdminSeed> {
   await signUp(page, ADMIN_EMAIL);
   const local = ADMIN_EMAIL.split('@')[0]!;
@@ -289,7 +289,7 @@ test('@smoke a public project: admin makes it public, anyone reads it logged-out
 
   // It is excluded from the normal tree (the seeded request is the loaded-tree
   // control; the triage item is absent until promoted).
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('treegrid', { name: 'Work Items', exact: true })).toBeVisible();
   await expect(page.getByTestId(`issue-row-${seed.existing.identifier}`)).toBeVisible();
   await expect(page.getByTestId(`issue-row-${newReq.identifier}`)).toHaveCount(0);

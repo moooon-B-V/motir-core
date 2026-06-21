@@ -75,7 +75,7 @@ test('@smoke comment → mention → email → reply → edit → delete, end to
     'e2e-comments-pm@example.com',
     'e2e-comments-bo@example.com',
   );
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task' })).toBeVisible();
 
   // The Activity slot renders the comments surface, starting inviting-empty.
@@ -112,7 +112,7 @@ test('@smoke comment → mention → email → reply → edit → delete, end to
     `${fx.pm.name} mentioned you on ${fx.issue.identifier}: Commented task`,
   );
   // Deep link unredacted in the plain text — the dev-console grep contract.
-  expect(email.text).toContain(`/issues/${fx.issue.identifier}`);
+  expect(email.text).toContain(`/items/${fx.issue.identifier}`);
   const selfEmails = await emailsTo(fx.pm.email);
   expect(selfEmails.filter((e) => e.subject.includes('mentioned you'))).toEqual([]);
 
@@ -193,7 +193,7 @@ test('at scale the read stays cursor-paged: 20 + "Show more", sort flips without
       .catch(() => {});
   });
 
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task' })).toBeVisible();
   await expect(page.getByText(/—\s*105 comments$/)).toBeVisible();
 
@@ -251,7 +251,7 @@ test('a project viewer gets the read-only surface: thread visible, no composer, 
   // Fresh session as the viewer.
   await page.context().clearCookies();
   await signIn(page, 'e2e-comments-viewer@example.com', COMMENTS_PASSWORD);
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task' })).toBeVisible();
 
   const list = threadList(page);

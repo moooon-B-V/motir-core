@@ -8,7 +8,7 @@ import type { IssueType } from '@/lib/issues/parentRules';
 // The ParentPicker fetches candidates through the create-issue Server Action;
 // stub it so the spec drives the component in isolation (no DB).
 const { listSpy } = vi.hoisted(() => ({ listSpy: vi.fn() }));
-vi.mock('@/app/(authed)/issues/actions', () => ({ listCandidateParentsAction: listSpy }));
+vi.mock('@/app/(authed)/items/actions', () => ({ listCandidateParentsAction: listSpy }));
 
 import { TypePicker } from '@/components/issues/TypePicker';
 import { ParentPicker } from '@/components/issues/ParentPicker';

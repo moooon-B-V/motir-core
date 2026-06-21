@@ -96,7 +96,7 @@ test('build a beyond-facet filter → live results + count + URL round-trip + Tr
 
   // ── Build in the LIST view: Kind any of (Bug) AND Priority none of (Lowest)
   //    AND Text contains "oauth" — negation = beyond facet expressiveness.
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await page.getByRole('button', { name: 'Advanced' }).click();
   const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
   await expect(dialog).toBeVisible();
@@ -274,7 +274,7 @@ test('the recipe: a custom-field + label + negation + relative-date filter → o
   const email = 'recipe@e2e.test';
   await seedRecipe(page, email);
 
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await page.getByRole('button', { name: 'Advanced' }).click();
   const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
   await expect(dialog).toBeVisible();
@@ -379,7 +379,7 @@ test('the combinator flip widens the set; the zero-results + Clear all states re
 }) => {
   await seedRecipe(page, 'combinator@e2e.test');
 
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await page.getByRole('button', { name: 'Advanced' }).click();
   const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
   await expect(dialog).toBeVisible();
@@ -425,7 +425,7 @@ test('the facet state upgrades losslessly into builder rows (one-way "Edit in Ad
 }) => {
   await seedRecipe(page, 'upgrade@e2e.test');
 
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   // Build a quick FACET first: Kind = Bug → the 3 bugs render (the count-line
   // status is an ADVANCED-filter element, so it isn't shown for facets alone).
   await page.getByRole('button', { name: 'Filter', exact: true }).click();

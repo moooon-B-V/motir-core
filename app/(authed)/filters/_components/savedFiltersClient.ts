@@ -99,7 +99,7 @@ export interface CreateFilterInput {
   filter: string;
 }
 
-/** Create a saved filter from the current builder AST (the /issues-side
+/** Create a saved filter from the current builder AST (the /items-side
  * Save / Save-as — Subtask 6.2.3). */
 export async function createFilter(
   projectKey: string,

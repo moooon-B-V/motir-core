@@ -5,7 +5,7 @@ import type { SidebarSection } from '@/components/ui/Sidebar';
 
 // SidebarDrawer reads usePathname; stub it with a mutable pathname so the
 // route-change auto-close can be driven from the test.
-const nav = vi.hoisted(() => ({ pathname: '/issues' }));
+const nav = vi.hoisted(() => ({ pathname: '/items' }));
 vi.mock('next/navigation', () => ({ usePathname: () => nav.pathname }));
 
 const SECTIONS: SidebarSection[] = [
@@ -13,7 +13,7 @@ const SECTIONS: SidebarSection[] = [
     id: 'primary',
     items: [
       { icon: <span />, label: 'Dashboard', href: '/dashboard' },
-      { icon: <span />, label: 'Work Items', href: '/issues', active: true },
+      { icon: <span />, label: 'Work Items', href: '/items', active: true },
       { icon: <span />, label: 'Boards', href: '/boards' },
     ],
   },
@@ -24,7 +24,7 @@ const SECTIONS: SidebarSection[] = [
 ];
 
 beforeEach(() => {
-  nav.pathname = '/issues';
+  nav.pathname = '/items';
   localStorage.clear();
   vi.resetModules();
 });
@@ -97,7 +97,7 @@ describe('SidebarDrawer', () => {
   }
 
   it('opens on the hamburger trigger and closes on route change', async () => {
-    nav.pathname = '/issues';
+    nav.pathname = '/items';
     const { Harness } = await loadDrawer();
     const { rerender } = render(<Harness />);
 

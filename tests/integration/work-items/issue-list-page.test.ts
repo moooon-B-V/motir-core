@@ -3,14 +3,14 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { toIssueRows } from '@/app/(authed)/issues/_components/issueRows';
+import { toIssueRows } from '@/app/(authed)/items/_components/issueRows';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
   createTestWorkItem as createWorkItem,
 } from '../../fixtures';
 
-// The /issues route's data shaping (Subtask 2.5.3), against a REAL Postgres
+// The /items route's data shaping (Subtask 2.5.3), against a REAL Postgres
 // (Yue's no-mocks rule). The page itself is a thin Server Component; the
 // load-bearing logic is the pure `toIssueRows` mapping over the SAME three
 // service reads the page performs — getProjectTree (2.5.1) + the workflow +

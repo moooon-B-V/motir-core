@@ -213,8 +213,8 @@ export function SidebarNav({
         {
           icon: <CircleDot />,
           label: t('nav.issues'),
-          href: '/issues',
-          active: isActive(pathname, '/issues'),
+          href: '/items',
+          active: isActive(pathname, '/items'),
         },
         {
           // The AI dispatch surface (Subtask 7.0.6) — sits BETWEEN Issues and

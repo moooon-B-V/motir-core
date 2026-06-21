@@ -1,5 +1,5 @@
 // E2E: the Story-2.5 issue-list surface (Subtask 2.5.6) — the Story closer that
-// drives the REAL stack (Next + Postgres) through the whole /issues surface:
+// drives the REAL stack (Next + Postgres) through the whole /items surface:
 // nested render · expand/collapse · filter · inline edit · the Tree↔List
 // view-switcher · cross-workspace isolation, plus the finding-#57 SCALE checks
 // (List pagination + Tree lazy-load/virtualization on a large seeded project).
@@ -39,7 +39,7 @@ interface Seed {
 }
 
 /** Sign-up auto-creates the workspace; create a project server-side + pin it
- *  active so the project-scoped /issues route resolves it. Returns the service
+ *  active so the project-scoped /items route resolves it. Returns the service
  *  context (for seeding work items) + the project id. */
 async function seedProject(page: Page, email: string, identifier: string): Promise<Seed> {
   await signUp(page, email);
@@ -109,7 +109,7 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
   const sub = await mk(seed, 'subtask', 'Wire the form', task.id);
   const bug = await mk(seed, 'bug', 'Crash on submit');
 
-  await page.goto('/issues');
+  await page.goto('/items');
 
   // The treegrid renders, project-scoped: the two ROOTS (epic + bug) are present,
   // the descendants are NOT yet in the DOM (lazy — only the first level loads).
@@ -154,7 +154,7 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
 
   // Activating the row (Enter) follows the whole-row link to the issue detail.
   await page.getByTestId(`issue-row-${bug.identifier}`).press('Enter');
-  await page.waitForURL(`**/issues/${bug.identifier}`);
+  await page.waitForURL(`**/items/${bug.identifier}`);
   await expect(page.getByRole('heading', { name: bug.title, level: 1 })).toBeVisible();
 });
 
@@ -162,7 +162,7 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
 
 // Bug 8.8.2 — the quick-view (peek) modal opens its frame INSTANTLY (a client
 // island driven by `?peek`, no server round-trip) and closing is a pure shallow
-// URL clear that stays on /issues with the list intact (no underlying-list
+// URL clear that stays on /items with the list intact (no underlying-list
 // refetch / navigation away). Frame-before-content is pinned deterministically
 // at the unit level (issue-quick-view-controller.test.tsx — a pending fetch);
 // this is the real-stack open→stream→close round-trip on the primary surface.
@@ -172,30 +172,30 @@ test('@smoke quick-view peek opens over the list and closes back to it (bug 8.8.
   const seed = await seedProject(page, 'e2e-issue-list-peek@example.com', 'PEK');
   const epic = await mk(seed, 'epic', 'Peekable epic');
 
-  await page.goto('/issues');
+  await page.goto('/items');
   const row = page.getByTestId(`issue-row-${epic.identifier}`);
   await expect(row).toBeVisible();
 
   // Open the peek: the modal frame appears, "Open full page" is live, and the
-  // item's fields stream in (client fetch of /api/issues/peek). The URL gains
-  // ?peek WITHOUT leaving /issues.
+  // item's fields stream in (client fetch of /api/work-items/peek). The URL gains
+  // ?peek WITHOUT leaving /items.
   await row.getByRole('button', { name: `Quick view ${epic.identifier}: ${epic.title}` }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('quick-view-open-full')).toHaveAttribute(
     'href',
-    `/issues/${epic.identifier}`,
+    `/items/${epic.identifier}`,
   );
   await expect(dialog.getByRole('heading', { name: epic.title })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`[?&]peek=${epic.identifier}`));
-  expect(new URL(page.url()).pathname).toBe('/issues');
+  expect(new URL(page.url()).pathname).toBe('/items');
 
-  // Close (Esc): dismisses immediately, clears ?peek, stays on /issues with the
+  // Close (Esc): dismisses immediately, clears ?peek, stays on /items with the
   // list still rendered (the close is a shallow URL change — no nav, no refetch).
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page).not.toHaveURL(/[?&]peek=/);
-  expect(new URL(page.url()).pathname).toBe('/issues');
+  expect(new URL(page.url()).pathname).toBe('/items');
   await expect(row).toBeVisible();
 });
 
@@ -203,7 +203,7 @@ test('@smoke quick-view peek opens over the list and closes back to it (bug 8.8.
 
 test('@smoke a project with no work items renders the empty state', async ({ page }) => {
   await seedProject(page, 'e2e-issue-list-empty@example.com', 'EMP');
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('heading', { name: 'No work items yet' })).toBeVisible();
   await expect(page.getByText('Create your first work item to start tracking work.')).toBeVisible();
 });
@@ -227,7 +227,7 @@ test('@smoke a toolbar create appears in the Tree + List without a manual reload
   const existing = await mk(seed, 'task', 'Pre-existing root');
 
   // ── Tree view (the default + the lazy surface that had the bug) ─────────────
-  await page.goto('/issues');
+  await page.goto('/items');
   const grid = page.getByRole('treegrid', { name: 'Work Items', exact: true });
   await expect(grid).toBeVisible();
   await expect(page.getByTestId(`issue-row-${existing.identifier}`)).toBeVisible();
@@ -273,7 +273,7 @@ test('@smoke filtering narrows the tree while keeping matched nodes’ ancestors
   const epicC = await mk(seed, 'epic', 'Epic Charlie');
   await mk(seed, 'task', 'Task Charlie One', epicC.id);
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('treegrid', { name: 'Work Items' })).toBeVisible();
 
   // ── kind facet: keep ancestors, prune non-matching branches ────────────────
@@ -293,7 +293,7 @@ test('@smoke filtering narrows the tree while keeping matched nodes’ ancestors
 
   // Clear → the full tree is back (and the trigger drops its active count).
   await page.getByRole('button', { name: 'Clear filters' }).click();
-  await page.waitForURL((url) => url.pathname.endsWith('/issues') && url.search === '');
+  await page.waitForURL((url) => url.pathname.endsWith('/items') && url.search === '');
   await expect(page.getByTestId(`issue-row-${epicC.identifier}`)).toBeVisible();
 
   // ── text facet: by ID/title, ancestor retained ─────────────────────────────
@@ -316,7 +316,7 @@ test('@smoke status + assignee facets narrow the list and serialize to the URL',
   // default-workflow edge).
   await workItemsService.updateStatus(a.id, 'in_progress', seed.ctx);
 
-  await page.goto('/issues');
+  await page.goto('/items');
 
   // status=in_progress → only `a` survives (the todo sibling is pruned).
   await page.getByRole('button', { name: 'Filter', exact: true }).click();
@@ -347,7 +347,7 @@ test('@smoke inline status edit: a legal transition persists; illegal targets ar
   const seed = await seedProject(page, 'e2e-issue-list-status@example.com', 'IST');
   const task = await mk(seed, 'task', 'Inline status target'); // root task → todo
 
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   const row = page.getByTestId(`issue-row-${task.identifier}`);
   await row.getByRole('button', { name: 'Edit Status' }).click();
 
@@ -369,7 +369,7 @@ test('@smoke inline assignee edit: reassign then unassign both persist', async (
   const seed = await seedProject(page, email, 'IAS');
   const task = await mk(seed, 'task', 'Inline assignee target');
 
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   const row = page.getByTestId(`issue-row-${task.identifier}`);
 
   // Reassign: open the picker, search the member by email, pick it.
@@ -397,7 +397,7 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
   await mk(seed, 'task', 'Low priority task', undefined, { priority: 'low' });
   const urgent = await mk(seed, 'bug', 'Urgent bug', undefined, { priority: 'highest' });
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByRole('treegrid', { name: 'Work Items' })).toBeVisible();
 
   // Switch Tree → List: the tree flattens (no treegrid) into the role=table List.
@@ -428,7 +428,7 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
 
   // The whole-row link still navigates in List.
   await page.getByRole('link', { name: `${urgent.identifier} ${urgent.title}` }).click();
-  await page.waitForURL(`**/issues/${urgent.identifier}`);
+  await page.waitForURL(`**/items/${urgent.identifier}`);
 
   // Switch back to Tree → the view param drops to its canonical form.
   await page.goBack();
@@ -440,7 +440,7 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
 
 // ───────────────────────────── cross-workspace isolation ──────────────────────
 
-test('@smoke cross-workspace isolation: /issues never shows another workspace’s items', async ({
+test('@smoke cross-workspace isolation: /items never shows another workspace’s items', async ({
   page,
 }) => {
   // Workspace A owns an issue.
@@ -451,7 +451,7 @@ test('@smoke cross-workspace isolation: /issues never shows another workspace’
   const seedB = await seedProject(page, 'e2e-issue-list-tenant-b@example.com', 'BBB');
   const bItem = await mk(seedB, 'task', 'B-only task');
 
-  await page.goto('/issues');
+  await page.goto('/items');
   await expect(page.getByTestId(`issue-row-${bItem.identifier}`)).toBeVisible();
   await expect(page.getByTestId(`issue-row-${aItem.identifier}`)).toHaveCount(0);
 });
@@ -494,7 +494,7 @@ test('@smoke SCALE — the List paginates (page size, range, Next/Prev/page-jump
 }) => {
   await seedLarge(page);
 
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByRole('table', { name: 'Work Items' })).toBeVisible();
 
   // Page 1 shows the page size (50), NOT all 65 rows, with the honest range.
@@ -518,7 +518,7 @@ test('@smoke SCALE — the Tree lazy-loads children and virtualizes (DOM stays b
 }) => {
   const { bigEpic, firstChild, lastLoadedChild } = await seedLarge(page);
 
-  await page.goto('/issues');
+  await page.goto('/items');
   const grid = page.getByRole('treegrid', { name: 'Work Items' });
   await expect(grid).toBeVisible();
 

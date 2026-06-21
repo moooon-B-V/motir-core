@@ -13,8 +13,8 @@ import { Modal } from '@/components/ui/Modal';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
-import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
-import { usePeekOpen } from '../../issues/_components/IssueQuickView';
+import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
+import { usePeekOpen } from '../../items/_components/IssueQuickView';
 import { loadMoreReadyAction } from '../_actions';
 
 // The /ready dispatch list (Subtask 7.0.6, design/ready panel 1). A NEW

@@ -2,11 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { QuickViewData } from '@/app/(authed)/issues/_components/IssueQuickViewPanel';
+import type { QuickViewData } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 
-// The /issues QUICK-VIEW peek (Subtask 2.5.19) under happy-dom — the client
+// The /items QUICK-VIEW peek (Subtask 2.5.19) under happy-dom — the client
 // pieces of the card's "trigger sets ?peek + the modal renders the item + Open
-// full page href is /issues/[key] + close clears the param" AC. The peek is
+// full page href is /items/[key] + close clears the param" AC. The peek is
 // URL-driven, so the trigger and the close affordances just NAVIGATE; we stub
 // next/navigation (no real router under happy-dom) and assert the pushed URLs.
 // The populated panel is presentational (data in), so it renders directly. The
@@ -17,13 +17,13 @@ const push = vi.fn();
 let searchParamsString = '';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(searchParamsString),
 }));
 
-import { QuickViewTrigger } from '@/app/(authed)/issues/_components/QuickViewTrigger';
-import { QuickViewCloseButton } from '@/app/(authed)/issues/_components/QuickViewCloseButton';
-import { IssueQuickViewPanel } from '@/app/(authed)/issues/_components/IssueQuickViewPanel';
+import { QuickViewTrigger } from '@/app/(authed)/items/_components/QuickViewTrigger';
+import { QuickViewCloseButton } from '@/app/(authed)/items/_components/QuickViewCloseButton';
+import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 
 // Opening / closing the peek updates the URL via SHALLOW routing (bug 8.8.2) —
 // `window.history.pushState`, NOT `router.push` — so it's a pure URL change that
@@ -71,14 +71,14 @@ describe('QuickViewTrigger — opens the peek via ?peek', () => {
     expect(historyPush).toHaveBeenCalledWith(
       null,
       '',
-      '/issues?view=list&sort=key%3Aasc&peek=PROD-7',
+      '/items?view=list&sort=key%3Aasc&peek=PROD-7',
     );
   });
 
-  it('adds ?peek to a bare /issues URL', () => {
+  it('adds ?peek to a bare /items URL', () => {
     render(<QuickViewTrigger identifier="PROD-7" title="X" />);
     fireEvent.click(screen.getByRole('button', { name: /Quick view PROD-7/ }));
-    expect(historyPush).toHaveBeenCalledWith(null, '', '/issues?peek=PROD-7');
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/items?peek=PROD-7');
   });
 });
 
@@ -90,12 +90,10 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
     expect(screen.getByText('Marco Ortiz')).toBeTruthy();
   });
 
-  it('"Open full page" + the header identifier both link to /issues/[key]', () => {
+  it('"Open full page" + the header identifier both link to /items/[key]', () => {
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
-    expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/issues/PROD-7');
-    expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe(
-      '/issues/PROD-7',
-    );
+    expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/items/PROD-7');
+    expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe('/items/PROD-7');
   });
 });
 
@@ -183,10 +181,10 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     expect(screen.getByText(/Waiting on 2 work items/)).toBeTruthy();
     // A blocker link SWAPS the peek (preserves view, swaps peek), staying in-list.
     expect(screen.getByRole('link', { name: 'PROD-3' }).getAttribute('href')).toBe(
-      '/issues?view=list&peek=PROD-3',
+      '/items?view=list&peek=PROD-3',
     );
     expect(screen.getByRole('link', { name: 'PROD-8' }).getAttribute('href')).toBe(
-      '/issues?view=list&peek=PROD-8',
+      '/items?view=list&peek=PROD-8',
     );
   });
 
@@ -241,13 +239,13 @@ describe('QuickViewCloseButton — clears ?peek', () => {
     searchParamsString = 'view=list&peek=PROD-7';
     render(<QuickViewCloseButton variant="icon" />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(historyPush).toHaveBeenCalledWith(null, '', '/issues?view=list');
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/items?view=list');
   });
 
-  it('navigates to the clean /issues when peek was the only param', () => {
+  it('navigates to the clean /items when peek was the only param', () => {
     searchParamsString = 'peek=PROD-7';
     render(<QuickViewCloseButton variant="button" />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(historyPush).toHaveBeenCalledWith(null, '', '/issues');
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/items');
   });
 });

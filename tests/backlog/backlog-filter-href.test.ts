@@ -3,7 +3,7 @@ import { buildBacklogFilterHref } from '@/lib/backlog/backlogFilterHref';
 import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
 
 // The backlog-scoped filter URL contract (Story 8.8 · Subtask 8.8.18). The
-// backlog reuses the /issues filter components (exactly as the board did,
+// backlog reuses the /items filter components (exactly as the board did,
 // 6.15.3) but serializes their state onto `/backlog` with NO view/sort/page
 // (the backlog is cursor-paginated). These assert the backlog href: the facets +
 // advanced param appended in canonical order, empty → clean `/backlog`.

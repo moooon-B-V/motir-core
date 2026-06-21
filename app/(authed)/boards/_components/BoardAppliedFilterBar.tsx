@@ -12,16 +12,16 @@ import type { ComponentDto } from '@/lib/dto/components';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
-import { IssueAppliedFilterBar } from '../../issues/_components/IssueAppliedFilterBar';
-import { AdvancedFilterSummary } from '../../issues/_components/AdvancedFilterSummary';
+import { IssueAppliedFilterBar } from '../../items/_components/IssueAppliedFilterBar';
+import { AdvancedFilterSummary } from '../../items/_components/AdvancedFilterSummary';
 
 // The board's applied-filter SUMMARY row (Story 6.15 · Subtask 6.15.3), per
-// design/boards/board-filter.mock.html panel 3: the SAME shipped /issues
+// design/boards/board-filter.mock.html panel 3: the SAME shipped /items
 // `IssueAppliedFilterBar` (the saved-filter name chip + dirty state +
 // Save/Save-as/Discard) prepended to the 6.1.3 condition-chip readout
 // (AdvancedFilterSummary), mounted ABOVE the board columns. Re-pointed at the
 // board via the injected board-scoped `buildHref` so Discard returns to the
-// board (not /issues). Renders nothing when no filter is applied (the bar's own
+// board (not /items). Renders nothing when no filter is applied (the bar's own
 // guard), so an unfiltered board shows no summary row.
 //
 // `view`/`sort` are inert (the board has neither); with `buildHref` injected the

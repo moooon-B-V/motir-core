@@ -11,7 +11,7 @@
 //      is spelled out verbatim ("every issue identifier becomes NIF-…", "old PROD
 //      links keep working"); after confirm the Details key + Previous-keys row
 //      update;
-//   4. an OLD issue link `/issues/PROD-1` 308-redirects to `/issues/NIF-1` (the
+//   4. an OLD issue link `/items/PROD-1` 308-redirects to `/items/NIF-1` (the
 //      canonical URL lands in the bar);
 //   5. REVERT (reclaim the own previous key) NIF → PROD — Previous-keys now lists
 //      NIF and old NIF links redirect to PROD;
@@ -128,7 +128,7 @@ test.describe('project-details — the editable Details + change-key journey', (
     // toBeDisabled would race ahead of the commit — don't use it as the signal.)
     await expect(page.getByText('Saved', { exact: true })).toBeVisible();
 
-    await page.goto('/issues');
+    await page.goto('/items');
     await expect(switcher(page)).toContainText('Details E2E Renamed');
     // No avatar yet → the mono key-letters chip ("PR") is present in the trigger.
     await expect(switcher(page).getByText('PR', { exact: true })).toBeVisible();
@@ -157,7 +157,7 @@ test.describe('project-details — the editable Details + change-key journey', (
     await page.keyboard.press('Escape');
 
     // The switcher chip now shows the preset (the mono "PR" letters are gone).
-    await page.goto('/issues');
+    await page.goto('/items');
     await expect(switcher(page).getByText('PR', { exact: true })).toHaveCount(0);
     await expect(switcher(page)).toContainText('Details E2E Renamed');
 
@@ -184,9 +184,9 @@ test.describe('project-details — the editable Details + change-key journey', (
     await expect(prodPrevRow).toContainText('PROD');
 
     // ── 4. An old issue link 308-redirects to its canonical NIF identifier ───
-    await page.goto('/issues/PROD-1');
-    await page.waitForURL('**/issues/NIF-1');
-    expect(new URL(page.url()).pathname).toBe('/issues/NIF-1');
+    await page.goto('/items/PROD-1');
+    await page.waitForURL('**/items/NIF-1');
+    expect(new URL(page.url()).pathname).toBe('/items/NIF-1');
     await expect(page.getByText('NIF-1', { exact: true })).toBeVisible();
 
     // ── 5. Reclaim the own previous key (revert): NIF → PROD ─────────────────

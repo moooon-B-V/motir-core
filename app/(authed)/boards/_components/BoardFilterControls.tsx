@@ -12,15 +12,15 @@ import type { ComponentDto } from '@/lib/dto/components';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
-import { IssueFilterBar } from '../../issues/_components/IssueFilterBar';
-import { IssueAdvancedFilter } from '../../issues/_components/IssueAdvancedFilter';
-import { SavedFilterDropdown } from '../../issues/_components/SavedFilterDropdown';
+import { IssueFilterBar } from '../../items/_components/IssueFilterBar';
+import { IssueAdvancedFilter } from '../../items/_components/IssueAdvancedFilter';
+import { SavedFilterDropdown } from '../../items/_components/SavedFilterDropdown';
 import { useBoardFilterUi } from './BoardFilterUiContext';
 
 // The board toolbar's filter affordances (Story 6.15 · Subtask 6.15.3), per
 // design/boards/board-filter.mock.html panels 0–2: the enabled `[Filter]` quick
 // popover + `[Advanced]` builder + `[Saved]` picker, mounted on the BOARD
-// toolbar beside the 3.3 group-by Segmented. These are the SAME shipped /issues
+// toolbar beside the 3.3 group-by Segmented. These are the SAME shipped /items
 // components, verbatim — NO hand-rolled board-specific filter UI — re-pointed at
 // the board via the injected `buildHref` (board-scoped URL: `?board=` preserved,
 // the filter params appended, no view/sort/page) so the state is shareable,
@@ -35,7 +35,7 @@ import { useBoardFilterUi } from './BoardFilterUiContext';
 // The quick `[Filter]` popover's open state is lifted to BoardFilterUiContext so
 // the over-cap banner's "Refine filter" CTA (rendered inside BoardContainer) can
 // open it; the `[Advanced]` + `[Saved]` popovers keep their own open state
-// (AdvancedFilterProvider / the saved-filter session), exactly as on /issues.
+// (AdvancedFilterProvider / the saved-filter session), exactly as on /items.
 
 export interface BoardFilterControlsProps {
   /** The selected board id (`?board=`) — preserved by every filter navigation

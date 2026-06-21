@@ -17,7 +17,7 @@ import {
   type AdvancedBuilderRow,
 } from '@/lib/issues/issueListAdvancedFilter';
 
-// The /issues advanced-filter URL plumbing (Subtask 6.1.4) — pure parse /
+// The /items advanced-filter URL plumbing (Subtask 6.1.4) — pure parse /
 // expressiveness / upgrade / row-model logic over the 6.1.1 substrate, unit-
 // tested in isolation (no React, no DB). These lock the page-boundary
 // contract: a broken param is RECOVERABLE (never a throw to the page), the

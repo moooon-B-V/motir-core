@@ -10,11 +10,11 @@ import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import { ReadyList } from './_components/ReadyList';
 import { ReadyHelpPopover } from './_components/ReadyHelpPopover';
-import { IssueQuickViewController } from '../issues/_components/IssueQuickViewController';
+import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 
 // The Ready set — the AI dispatch surface (Story 7.0 · Subtask 7.0.6). A Server
 // Component that resolves the active project (the established getActiveProject
-// pattern, mirroring /issues + /dashboard) and reads `workItemsService.listReady`
+// pattern, mirroring /items + /dashboard) and reads `workItemsService.listReady`
 // + `countReady` DIRECTLY — the server-component 4-layer path; the HTTP endpoints
 // (`GET /api/ready` 7.0.4 / `POST /api/ready/next` 7.0.5) are the BYOK CLI /
 // external-agent contract, not this page's read.
@@ -23,7 +23,7 @@ import { IssueQuickViewController } from '../issues/_components/IssueQuickViewCo
 // count chip + project subtitle + the "What is this?" predicate popover), then
 // the flat dispatch list (ReadyList — virtualized + cursor-streamed), or the
 // EmptyState (panel 3) when nothing is ready. The `?peek=<key>` quick-view peek
-// reuses the SAME IssueQuickView surface /issues + the board use (notes.html #7).
+// reuses the SAME IssueQuickView surface /items + the board use (notes.html #7).
 
 export default async function ReadyPage() {
   const session = await getSession();
@@ -75,7 +75,7 @@ export default async function ReadyPage() {
           title={t('empty.title')}
           description={t('empty.body')}
           action={
-            <Link href="/issues" className={buttonVariants({ variant: 'secondary' })}>
+            <Link href="/items" className={buttonVariants({ variant: 'secondary' })}>
               <CircleDot className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
               {t('empty.action')}
             </Link>
@@ -87,7 +87,7 @@ export default async function ReadyPage() {
 
       {/* Quick-view peek (notes.html #7; bug 8.8.2) — a client island that
           watches `?peek` and renders the modal frame + skeleton instantly, then
-          client-fetches the item from /api/issues/peek. Decoupled from this
+          client-fetches the item from /api/work-items/peek. Decoupled from this
           page's server render, so opening/closing is a pure shallow URL change
           with no underlying-list refetch. */}
       <IssueQuickViewController />

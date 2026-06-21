@@ -2,14 +2,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { IssueRowData } from '@/app/(authed)/issues/_components/issueRows';
+import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import type { IssueActionResult } from '@/app/(authed)/issues/[key]/edit/actions';
+import type { IssueActionResult } from '@/app/(authed)/items/[key]/edit/actions';
 
 // Repro for bug-inline-status-revert-on-second-edit: inline-edit item A's
-// status on /issues, then item B's — intermittently A's cell flips back to its
+// status on /items, then item B's — intermittently A's cell flips back to its
 // OLD status although the DB row holds the NEW one (display-only; Yue verified
 // the backend). Root cause: every inline edit refreshed the WHOLE tree
 // (revalidatePath in the action + router.refresh() in the cell), so two rapid
@@ -46,7 +46,7 @@ const { statusCalls, updateCalls, refreshSpy, pushSpy, toastSpy } = vi.hoisted((
   pushSpy: vi.fn(),
   toastSpy: vi.fn(),
 }));
-vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   changeStatusAction: (input: { id: string; toStatusKey: string }) =>
     new Promise((resolve) => statusCalls.push({ input, resolve })),
   updateIssueAction: (input: { id: string; expectedUpdatedAt?: string }) =>
@@ -54,7 +54,7 @@ vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushSpy, refresh: refreshSpy }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
@@ -65,7 +65,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
-import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable';
+import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 
 beforeAll(() => {

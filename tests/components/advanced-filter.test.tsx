@@ -26,13 +26,13 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
 }));
 
-import { IssueAdvancedFilter } from '@/app/(authed)/issues/_components/IssueAdvancedFilter';
-import { IssueFilterBar } from '@/app/(authed)/issues/_components/IssueFilterBar';
-import { AdvancedFilterSummary } from '@/app/(authed)/issues/_components/AdvancedFilterSummary';
-import { InvalidFilterCallout } from '@/app/(authed)/issues/_components/InvalidFilterCallout';
+import { IssueAdvancedFilter } from '@/app/(authed)/items/_components/IssueAdvancedFilter';
+import { IssueFilterBar } from '@/app/(authed)/items/_components/IssueFilterBar';
+import { AdvancedFilterSummary } from '@/app/(authed)/items/_components/AdvancedFilterSummary';
+import { InvalidFilterCallout } from '@/app/(authed)/items/_components/InvalidFilterCallout';
 
 beforeAll(() => {
   const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
@@ -522,7 +522,7 @@ describe('InvalidFilterCallout — the typed recoverable state', () => {
     const alert = screen.getByRole('alert');
     expect(within(alert).getByText('This filter link couldn’t be read')).toBeTruthy();
     fireEvent.click(within(alert).getByRole('button', { name: 'Clear filter' }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list');
+    expect(push).toHaveBeenCalledWith('/items?view=list');
   });
 });
 

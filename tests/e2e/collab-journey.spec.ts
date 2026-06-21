@@ -222,7 +222,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
 
   await serveMockBlobHost(page);
   await signIn(page, tenant.owner.email, PWD);
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(page.getByRole('heading', { name: ISSUE_TITLE, level: 1 })).toBeVisible();
 
   // ── Build-up 1: auto-watch on create surfaces on first paint (PM + Bo +
@@ -282,7 +282,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   expect(boMention.subject).toBe(
     `${tenant.owner.name} mentioned you on ${issue.identifier}: ${ISSUE_TITLE}`,
   );
-  expect(boMention.text).toContain(`/issues/${issue.identifier}`);
+  expect(boMention.text).toContain(`/items/${issue.identifier}`);
   // …and NEVER the watcher "commented on" email — the dedupe's whole point.
   expect((await emailsTo(bo.email)).filter((e) => e.subject.includes('commented on'))).toEqual([]);
 
@@ -322,7 +322,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   await expect(highRow.getByText('Archived', { exact: true })).toBeVisible();
   await editModal.getByRole('button', { name: 'Cancel' }).click();
 
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(fieldCard(page, 'Severity')).toContainText('High (archived)');
 
   // ── Unwind 2: delete the comment — the embed UNLINKS from the panel, the
@@ -379,7 +379,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
 
   // The rail card is gone (the 5.3.8 plain-goto pattern — never the cached
   // `?activity=` route)…
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(editToggle(page, 'Severity')).toHaveCount(0);
   await expect(page.getByText('High (archived)')).toHaveCount(0);
   // …but the History stream still renders PAST the vanished custom-field
@@ -391,7 +391,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   await expect(historyAfter.getByText(/deleted a comment/)).toBeVisible();
 
   // ── Unwind 4: a transition mails BOTH watchers; the actor (PM) is excluded ─
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await page.getByRole('button', { name: 'Edit Status' }).click();
   await page.getByRole('combobox', { name: 'Status' }).click();
   await page.getByRole('option', { name: 'In Progress' }).click();

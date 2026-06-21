@@ -28,7 +28,7 @@ import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Story 6.3 · Subtask 6.3.2 — the per-VIEWER gating matrix (route-level, the
-// AC's home for it), the stale-referent matrix, the filter-results /issues
+// AC's home for it), the stale-referent matrix, the filter-results /items
 // parity + page cap, and the route-level 422s/401. Real Postgres; routes
 // drive the full transport → service → repository chain.
 
@@ -211,7 +211,7 @@ describe('the stale-referent matrix', () => {
   });
 });
 
-describe('filter-results — /issues parity + the 50/page cap', () => {
+describe('filter-results — /items parity + the 50/page cap', () => {
   it('a widget page exactly matches getProjectIssuesList for the same filter (rows, total, order)', async () => {
     const fx = await makeWorkItemFixture();
     for (let i = 0; i < 8; i++) {

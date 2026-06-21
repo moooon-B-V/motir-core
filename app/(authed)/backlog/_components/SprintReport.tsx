@@ -16,7 +16,7 @@ import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 import type { BurndownSeriesDto, VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
-import { StatusValue } from '../../issues/_components/issueCellPrimitives';
+import { StatusValue } from '../../items/_components/issueCellPrimitives';
 import type { StatusByKey } from './backlogShared';
 import { ReportBurndownSection } from './ReportBurndownSection';
 import { VelocityChart } from './VelocityChart';
@@ -258,11 +258,11 @@ function ReportSection({
           </span>
         </span>
         {count > 0 ? (
-          // Deep-link to the /issues navigator filtered to this sprint (Story 2.5).
+          // Deep-link to the /items navigator filtered to this sprint (Story 2.5).
           // The ?sprint= param is forward-compatible — see PRODECT_FINDINGS (the
-          // navigator does not honour it yet); the link still lands on /issues.
+          // navigator does not honour it yet); the link still lands on /items.
           <Link
-            href={`/issues?sprint=${sprintId}`}
+            href={`/items?sprint=${sprintId}`}
             className="inline-flex items-center gap-1 text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           >
             {viewAllLabel}

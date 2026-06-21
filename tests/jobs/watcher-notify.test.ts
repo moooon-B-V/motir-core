@@ -128,7 +128,7 @@ describe('watcherNotificationsService.fanOut — comment events', () => {
     expect(evt.data.workItemIdentifier).toBe(s.issueIdentifier);
     expect(evt.data.workItemTitle).toBe('Watched task');
     expect(evt.data.excerpt).toBe('A note.');
-    expect(evt.data.issueUrl).toBe(`${resolveBaseUrlTrimmed()}/issues/${s.issueIdentifier}`);
+    expect(evt.data.issueUrl).toBe(`${resolveBaseUrlTrimmed()}/items/${s.issueIdentifier}`);
   });
 
   it('skips the mentioned users — they get the mention email instead (one email per person)', async () => {
@@ -705,7 +705,7 @@ describe('watcherCommentNotification template', () => {
     workItemIdentifier: 'PROD-7',
     workItemTitle: 'Ship watchers',
     excerpt: 'A note.',
-    issueUrl: 'http://localhost:3000/issues/PROD-7',
+    issueUrl: 'http://localhost:3000/items/PROD-7',
   };
 
   it('renders subject, lede, excerpt, the UNREDACTED deep link, and the watch reason', async () => {
@@ -738,7 +738,7 @@ describe('watcherTransitionNotification template', () => {
     workItemIdentifier: 'PROD-7',
     workItemTitle: 'Ship watchers',
     statusName: 'In progress',
-    issueUrl: 'http://localhost:3000/issues/PROD-7',
+    issueUrl: 'http://localhost:3000/items/PROD-7',
   };
 
   it('renders subject, lede, the UNREDACTED deep link, and the watch reason', async () => {

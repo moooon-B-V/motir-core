@@ -102,7 +102,7 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   const made = await manufactureServerSideHistory(fx);
 
   // ── The browser half of the history: rail edits + link + comments ───────
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task', level: 1 })).toBeVisible();
 
   // The DEFAULT tab is Comments (the Jira default): the composer invitation
@@ -146,7 +146,7 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   await expect(page.getByText('Second note gets deleted')).toHaveCount(0);
 
   // ── The History tab: every manufactured change as its designed sentence ──
-  await page.goto(`/issues/${fx.issue.identifier}?activity=history`);
+  await page.goto(`/items/${fx.issue.identifier}?activity=history`);
   const feed = historyFeed(page);
   await expect(feed).toBeVisible();
 
@@ -259,7 +259,7 @@ test('at scale each tab stays cursor-paged: one page + "Show more", bounded read
   });
 
   // ── History: 221 changes (220 + created), first paint ONE page ──────────
-  await page.goto(`/issues/${fx.issue.identifier}?activity=history`);
+  await page.goto(`/items/${fx.issue.identifier}?activity=history`);
   const feed = historyFeed(page);
   await expect(feed).toBeVisible();
   await expect(page.getByText('221 changes')).toBeVisible();
@@ -275,7 +275,7 @@ test('at scale each tab stays cursor-paged: one page + "Show more", bounded read
   await expect(feed.getByText('pass 182', { exact: true }).first()).toBeVisible();
 
   // ── All: both sources interleave on page ONE, paging the composite cursor ──
-  await page.goto(`/issues/${fx.issue.identifier}?activity=all`);
+  await page.goto(`/items/${fx.issue.identifier}?activity=all`);
   const all = allFeed(page);
   await expect(all).toBeVisible();
   await expect(page.getByText('50 comments · 221 changes')).toBeVisible();

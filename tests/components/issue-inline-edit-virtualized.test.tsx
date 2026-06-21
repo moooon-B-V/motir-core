@@ -32,11 +32,11 @@ const { push, listRootIssuesAction, listChildIssuesAction, changeStatusAction } 
 );
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh: vi.fn() }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('@/app/(authed)/issues/actions', () => ({ listRootIssuesAction, listChildIssuesAction }));
-vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+vi.mock('@/app/(authed)/items/actions', () => ({ listRootIssuesAction, listChildIssuesAction }));
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: vi.fn(),
   changeStatusAction,
 }));
@@ -53,7 +53,7 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
   useNotifyIssuesChanged: () => () => {},
 }));
 
-import { IssueTreeTable } from '@/app/(authed)/issues/_components/IssueTreeTable';
+import { IssueTreeTable } from '@/app/(authed)/items/_components/IssueTreeTable';
 import type { TreeLevelDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -150,7 +150,7 @@ describe('inline edits survive row unmounts (virtualization scroll-out)', () => 
       };
     }
     // The scroll parent findScrollParent() resolves — standing in for the real
-    // /issues page's scrolling main column. Inline overflow-y makes
+    // /items page's scrolling main column. Inline overflow-y makes
     // getComputedStyle see it; clientHeight/scrollTop are stubbed (no layout).
     viewport = document.createElement('div');
     viewport.style.overflowY = 'auto';

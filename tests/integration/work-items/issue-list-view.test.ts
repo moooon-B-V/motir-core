@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { toIssueListRows } from '@/app/(authed)/issues/_components/issueRows';
+import { toIssueListRows } from '@/app/(authed)/items/_components/issueRows';
 import { DEFAULT_SORT, type IssueSort } from '@/lib/issues/issueListView';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { truncateAuthTables } from '../../helpers/db';

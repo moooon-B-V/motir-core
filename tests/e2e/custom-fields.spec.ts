@@ -237,7 +237,7 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await expect(rows.nth(4)).toContainText('Stakeholder');
 
   // ── Set each type inline on the rail (the 5.3.5 mockup) ───────────────────
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Field holder' })).toBeVisible();
 
   // All five are empty → all sit behind the disclosure.
@@ -343,7 +343,7 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await expect(highRow.getByRole('button', { name: 'Delete High', exact: true })).toBeDisabled();
   await editModal.getByRole('button', { name: 'Cancel' }).click();
 
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   // Still rendered on the holding issue, with the archived mark…
   await expect(fieldCard(page, 'Severity')).toContainText('High (archived)');
   // …but excluded from new selection in the picker.
@@ -380,7 +380,7 @@ test('the PM defines the five field types, sets each on an issue inline, and the
   await fieldDeleted;
   await expect(page.locator('[data-testid^="field-row-"]')).toHaveCount(4);
 
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(fieldCard(page, 'Customer')).toContainText('Acme Corp');
   await expect(editToggle(page, 'Severity')).toHaveCount(0);
   await expect(page.getByText('High (archived)')).toHaveCount(0);
@@ -433,7 +433,7 @@ test('a non-admin member gets the read-only Fields page; a project viewer gets t
   const viewerCtx = await browser.newContext();
   const viewerPage = await viewerCtx.newPage();
   await signIn(viewerPage, viewer.email, PWD);
-  await viewerPage.goto(`/issues/${issue.identifier}`);
+  await viewerPage.goto(`/items/${issue.identifier}`);
   await expect(viewerPage.getByText('Acme Corp')).toBeVisible();
   await expect(viewerPage.getByRole('button', { name: 'Edit Customer' })).toHaveCount(0);
   await viewerCtx.close();
@@ -507,7 +507,7 @@ test('the detail rail with custom-field editors open is axe-clean (WCAG 2.1 AA; 
   );
 
   await signIn(page, tenant.owner.email, PWD);
-  await page.goto(`/issues/${issue.identifier}`);
+  await page.goto(`/items/${issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Field holder' })).toBeVisible();
 
   // The disclosure expanded + the text editor open. The sweep scopes to the

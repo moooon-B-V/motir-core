@@ -37,7 +37,7 @@ export interface NotificationActorDTO {
  * fan in via the registry seam — `mentioned` ships now (the 5.1.6 events); the
  * `transitioned` arm is the documented Story 5.4 slot (no producer yet, no
  * forward dep). `issueKey` is the deep-link target the drawer routes to
- * (`/issues/[key]`, per `design/notifications/drawer.mock.html`).
+ * (`/items/[key]`, per `design/notifications/drawer.mock.html`).
  */
 export type NotificationData = NotificationMentionedData | NotificationTransitionedData;
 

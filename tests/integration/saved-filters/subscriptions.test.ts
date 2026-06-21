@@ -371,7 +371,7 @@ describe('deliver — resolves AS the subscriber', () => {
     };
     expect(payload.totalCount).toBe(3);
     expect(payload.items).toHaveLength(3);
-    expect(payload.filterUrl).toContain('/issues?filter=');
+    expect(payload.filterUrl).toContain('/items?filter=');
     expect(payload.unsubscribeUrl).toContain('/unsubscribe/filter-subscription?token=');
   });
 

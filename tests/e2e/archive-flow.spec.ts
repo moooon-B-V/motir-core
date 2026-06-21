@@ -2,7 +2,7 @@
 // (Story 2.9 · Subtask 2.9.4) — the end-to-end composition proof that the 2.9
 // archive-management surface works for a real signed-in user against the real
 // shell (Next + Postgres). Story 2.9 ships the durable archive surface that
-// replaces the transient Undo toast: a dedicated `/issues/archived` view (2.9.3)
+// replaces the transient Undo toast: a dedicated `/items/archived` view (2.9.3)
 // over the service's `listArchivedWorkItems` page read, a per-item Restore that
 // calls the existing unarchive route (`DELETE /api/work-items/[id]/archive`), and
 // the `canBrowse`/`canEdit` access split (2.9.1 — a viewer sees the list but not
@@ -93,8 +93,8 @@ function ownerCtx(t: Tenant) {
   return { userId: t.ownerId, workspaceId: t.workspaceId };
 }
 
-/** Pin a project active for a user so the active-project routes (/issues,
- *  /issues/archived) resolve it on every render — the sanctioned direct write
+/** Pin a project active for a user so the active-project routes (/items,
+ *  /items/archived) resolve it on every render — the sanctioned direct write
  *  board-at-scale / project-access use. */
 async function pinActiveProject(userId: string, t: Tenant): Promise<void> {
   await db.workspaceMembership.update({
@@ -138,11 +138,11 @@ test('@smoke Story 2.9: editor archives → archived view → restore → back i
   await pinWorkspaceCookie(page, t.workspaceId);
 
   // ── The item starts in the active issues list ───────────────────────────────
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByTestId(`issue-row-${target.identifier}`)).toBeVisible();
 
   // ── Archive it from the ⋯ actions menu on its detail page ───────────────────
-  await page.goto(`/issues/${target.identifier}`);
+  await page.goto(`/items/${target.identifier}`);
   await expect(page.getByRole('heading', { name: 'Archivable epic', level: 1 })).toBeVisible();
 
   // Arm the archive-POST wait BEFORE the action (CLAUDE.md "E2E waits on the
@@ -155,16 +155,16 @@ test('@smoke Story 2.9: editor archives → archived view → restore → back i
   const menu = page.getByRole('menu', { name: `Actions for ${target.identifier}` });
   await menu.getByRole('menuitem', { name: 'Archive' }).click();
   expect((await archiveResp).status()).toBe(200);
-  // The detail surface navigates back to /issues on archive (onArchived → leave).
-  await page.waitForURL('**/issues');
+  // The detail surface navigates back to /items on archive (onArchived → leave).
+  await page.waitForURL('**/items');
 
   // ── It left the active issues list ──────────────────────────────────────────
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByTestId(`issue-row-${target.identifier}`)).toHaveCount(0);
 
   // ── Open the archived view via the toolbar [Archived] entry-point ───────────
   await page.getByRole('link', { name: /Archived/ }).click();
-  await page.waitForURL('**/issues/archived');
+  await page.waitForURL('**/items/archived');
   await expect(page.getByRole('heading', { name: 'Archived work items', level: 1 })).toBeVisible();
   const archivedRow = page.getByTestId(`archived-row-${target.identifier}`);
   await expect(archivedRow).toBeVisible();
@@ -180,11 +180,11 @@ test('@smoke Story 2.9: editor archives → archived view → restore → back i
   await expect(archivedRow).toHaveCount(0);
 
   // ── It is back in the active issues list ────────────────────────────────────
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await expect(page.getByTestId(`issue-row-${target.identifier}`)).toBeVisible();
 
   // ── Its detail History feed shows the restore (the `unarchived` revision) ───
-  await page.goto(`/issues/${target.identifier}?activity=history`);
+  await page.goto(`/items/${target.identifier}?activity=history`);
   await expect(page.getByRole('list', { name: 'History' })).toContainText('restored the work item');
 });
 
@@ -209,7 +209,7 @@ test('Story 2.9: the archived view paginates — page 1 caps at the page size, p
   await signIn(page, 'e2e-archive-pager@example.com', PWD);
   await pinWorkspaceCookie(page, t.workspaceId);
 
-  await page.goto('/issues/archived');
+  await page.goto('/items/archived');
   await expect(page.getByRole('heading', { name: 'Archived work items', level: 1 })).toBeVisible();
 
   // Page 1: exactly the page size of rows + the server-rendered range/total.
@@ -219,7 +219,7 @@ test('Story 2.9: the archived view paginates — page 1 caps at the page size, p
 
   // Page 2 — the URL drives a server re-read; await the committed URL + the new
   // range the Server Component renders before asserting the tail (never the
-  // optimistic click alone). Mirrors the /issues List pager E2E.
+  // optimistic click alone). Mirrors the /items List pager E2E.
   await page.getByRole('button', { name: 'Next page' }).click();
   await page.waitForURL((url) => url.searchParams.get('page') === '2');
   await expect(page.getByText('Showing 51–51 of 51')).toBeVisible();
@@ -249,7 +249,7 @@ test('Story 2.9: a non-editor (project viewer) sees the archived view + item but
   await signIn(page, 'e2e-archive-viewer@example.com', PWD);
   await pinWorkspaceCookie(page, t.workspaceId);
 
-  await page.goto('/issues/archived');
+  await page.goto('/items/archived');
   // The view renders for a browse-only viewer (NOT the no-access state) — 2.9.1.
   await expect(page.getByRole('heading', { name: 'Archived work items', level: 1 })).toBeVisible();
   await expect(page.getByText(/access to this project/i)).toHaveCount(0);

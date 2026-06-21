@@ -1,6 +1,6 @@
-// The /issues ADVANCED-filter URL plumbing (Story 6.1 · Subtask 6.1.4) — the
+// The /items ADVANCED-filter URL plumbing (Story 6.1 · Subtask 6.1.4) — the
 // thin, UI-free layer between the 6.1.1 FilterAST substrate (codec + registry,
-// `lib/filters/*`) and the /issues surface. It owns:
+// `lib/filters/*`) and the /items surface. It owns:
 //
 //   • parsing the `?filter=v1:…` param at the page boundary into a typed,
 //     RECOVERABLE three-state result (none / invalid / active) — a malformed,

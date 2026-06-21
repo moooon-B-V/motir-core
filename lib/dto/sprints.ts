@@ -124,7 +124,7 @@ export interface SprintReportPointsDto {
  * the counts + point figures are BOUNDED grouped aggregates, and the two issue
  * lists are CURSOR-PAGINATED (`RankedIssuePageDto` — the first bounded page +
  * `nextCursor` + the full `totalCount`), never a load-every-issue dump. The
- * "view all" deep-link the UI renders (`/issues` filtered to the sprint, Story
+ * "view all" deep-link the UI renders (`/items` filtered to the sprint, Story
  * 2.5) is built from `sprintId` — no extra field needed.
  *
  *   • `points` — the committed (baseline) / completed / not-completed summary.

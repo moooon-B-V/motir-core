@@ -27,7 +27,7 @@ import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { CreateIssueLinksField, type PendingLink } from './CreateIssueLinksField';
-import { createIssueAction } from '../issues/actions';
+import { createIssueAction } from '../items/actions';
 import type {
   ExecutorDto,
   WorkItemKindDto,

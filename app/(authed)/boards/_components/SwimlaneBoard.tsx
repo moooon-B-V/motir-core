@@ -10,7 +10,7 @@ import {
   type BoardSwimlaneDto,
 } from '@/lib/dto/boards';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
-import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
+import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
 import { ColumnActionsMenu } from './ColumnActionsMenu';
 import { ColumnPointsBadge } from './ColumnPointsBadge';
 import { ColumnWipBadge } from './ColumnWipBadge';

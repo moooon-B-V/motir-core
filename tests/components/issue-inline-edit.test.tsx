@@ -2,11 +2,11 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { IssueRowData } from '@/app/(authed)/issues/_components/issueRows';
+import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
-// Inline STATUS + ASSIGNEE edits on the /issues rows (Subtask 2.5.5). The cells
+// Inline STATUS + ASSIGNEE edits on the /items rows (Subtask 2.5.5). The cells
 // REUSE the detail page's gated Server Actions + shared pickers, so — exactly
 // like issue-detail-fields.test — we stub those actions, the router, and the
 // toast, then assert that opening a cell reveals the SHARED picker and a pick
@@ -20,18 +20,18 @@ const { updateSpy, statusSpy, refreshSpy, pushSpy, toastSpy } = vi.hoisted(() =>
   pushSpy: vi.fn(),
   toastSpy: vi.fn(),
 }));
-vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: updateSpy,
   changeStatusAction: statusSpy,
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushSpy, refresh: refreshSpy }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
-import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable';
+import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 

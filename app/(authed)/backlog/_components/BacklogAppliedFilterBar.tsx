@@ -12,16 +12,16 @@ import type { ComponentDto } from '@/lib/dto/components';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
 import { buildBacklogFilterHref } from '@/lib/backlog/backlogFilterHref';
-import { IssueAppliedFilterBar } from '../../issues/_components/IssueAppliedFilterBar';
-import { AdvancedFilterSummary } from '../../issues/_components/AdvancedFilterSummary';
+import { IssueAppliedFilterBar } from '../../items/_components/IssueAppliedFilterBar';
+import { AdvancedFilterSummary } from '../../items/_components/AdvancedFilterSummary';
 
 // The backlog's applied-filter SUMMARY row (Story 8.8 · Subtask 8.8.18), per
-// design/backlog/backlog-filter.mock.html panel 3: the SAME shipped /issues
+// design/backlog/backlog-filter.mock.html panel 3: the SAME shipped /items
 // `IssueAppliedFilterBar` (the saved-filter name chip + dirty state +
 // Save/Save-as/Discard) prepended to the 6.1.3 condition-chip readout
 // (AdvancedFilterSummary), mounted ABOVE the backlog + sprint regions. Re-pointed
 // at the backlog via the injected backlog-scoped `buildHref` so Discard returns to
-// `/backlog` (not /issues). Renders nothing when no filter is applied (the bar's
+// `/backlog` (not /items). Renders nothing when no filter is applied (the bar's
 // own guard), so an unfiltered backlog shows no summary row. The board's 6.15.3
 // pattern, board → backlog.
 //

@@ -9,7 +9,7 @@ import {
 // unredacted links in plain text (the 1.1.6 dev-console grep contract), the
 // truncation note, and the zero-result "report, not an alert" branch.
 
-const FILTER_URL = 'https://motir.test/issues?filter=v1%3Aabc';
+const FILTER_URL = 'https://motir.test/items?filter=v1%3Aabc';
 const UNSUB_URL = 'https://motir.test/unsubscribe/filter-subscription?token=sub-1.sig';
 
 function props(over: Partial<FilterSubscriptionEmailProps> = {}): FilterSubscriptionEmailProps {

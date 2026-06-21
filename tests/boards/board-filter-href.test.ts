@@ -3,7 +3,7 @@ import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
 import { EMPTY_FILTER, type IssueFilter } from '@/lib/issues/issueListFilter';
 
 // The board-scoped filter URL contract (Story 6.15 · Subtask 6.15.3). The board
-// reuses the /issues filter components but must serialize their state WITHOUT
+// reuses the /items filter components but must serialize their state WITHOUT
 // dropping the `?board=` selection (which `buildIssueListHref` would). These
 // assert the board href: `?board=` preserved + lead, the facets + advanced param
 // appended in canonical order, `?peek=` never carried, empty → clean `/boards`.

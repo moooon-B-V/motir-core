@@ -143,7 +143,7 @@ export default function TreeTableSpecimenPage() {
           rows={ROWS}
           expandedIds={expanded}
           onExpandedChange={setExpanded}
-          getRowHref={(r) => `/issues/${r.identifier}`}
+          getRowHref={(r) => `/items/${r.identifier}`}
           getRowLabel={(r) => `${r.identifier} ${r.title}`}
           getRowTestId={(r) => `tree-row-${r.identifier}`}
         />

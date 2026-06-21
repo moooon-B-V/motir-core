@@ -13,11 +13,11 @@ import zhMessages from '@/messages/zh.json';
 import { BUILTIN_FILTERS } from '@/lib/savedFilters/builtins';
 import { toBuiltinFilterSummaryDto } from '@/lib/mappers/savedFilterMappers';
 import type { Viewer } from '@/app/(authed)/filters/_components/savedFiltersClient';
-import { SavedFilterSessionProvider } from '@/app/(authed)/issues/_components/SavedFilterContext';
-import { SavedFilterDropdown } from '@/app/(authed)/issues/_components/SavedFilterDropdown';
-import { IssueAppliedFilterBar } from '@/app/(authed)/issues/_components/IssueAppliedFilterBar';
+import { SavedFilterSessionProvider } from '@/app/(authed)/items/_components/SavedFilterContext';
+import { SavedFilterDropdown } from '@/app/(authed)/items/_components/SavedFilterDropdown';
+import { IssueAppliedFilterBar } from '@/app/(authed)/items/_components/IssueAppliedFilterBar';
 
-// The /issues save + apply UI (Story 6.2 · Subtask 6.2.3) under happy-dom. The
+// The /items save + apply UI (Story 6.2 · Subtask 6.2.3) under happy-dom. The
 // dropdown groups the project's filters + built-ins (Starred → My filters →
 // Project filters → Defaults), applies one into the builder URL, and stars in
 // place; the applied bar renders the name chip + dirty state + Save / Save as /
@@ -28,7 +28,7 @@ import { IssueAppliedFilterBar } from '@/app/(authed)/issues/_components/IssueAp
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
 }));
 
 beforeAll(() => {

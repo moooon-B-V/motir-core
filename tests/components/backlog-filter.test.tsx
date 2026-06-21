@@ -9,7 +9,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
 // The backlog filter UI (Story 8.8 · Subtask 8.8.18) under happy-dom. It REUSES
-// the /issues filter components verbatim — exactly as the board did (6.15.3) —
+// the /items filter components verbatim — exactly as the board did (6.15.3) —
 // so the value this suite adds is the BACKLOG wiring: the formerly-disabled
 // `[Filter]` seam is now an ENABLED trigger, and the injected backlog-scoped
 // buildHref makes every facet toggle navigate to `/backlog?…` (NO `?board=`, no
@@ -91,7 +91,7 @@ function renderControls(opts: { filter?: IssueFilter } = {}) {
   );
 }
 
-describe('BacklogFilterControls — the wired seam reuses the /issues primitives', () => {
+describe('BacklogFilterControls — the wired seam reuses the /items primitives', () => {
   it('renders the ENABLED Filter, Advanced and Saved triggers (the seam is wired)', () => {
     renderControls();
     const filter = screen.getByRole('button', { name: 'Filter' }) as HTMLButtonElement;
@@ -106,7 +106,7 @@ describe('BacklogFilterControls — the wired seam reuses the /issues primitives
     fireEvent.click(screen.getByRole('button', { name: 'Filter' }));
     const kindList = screen.getByRole('listbox', { name: 'Kind' });
     fireEvent.click(within(kindList).getByRole('option', { name: 'Bug' }));
-    // The backlog-scoped buildHref navigates to /backlog (NOT /issues, NOT a
+    // The backlog-scoped buildHref navigates to /backlog (NOT /items, NOT a
     // board href) — there is no view/sort/board companion.
     expect(push).toHaveBeenCalledWith('/backlog?kind=bug');
   });

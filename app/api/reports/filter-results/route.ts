@@ -7,7 +7,7 @@ import { reportConfigErrorResponse } from '@/lib/reports/errorResponse';
 // GET /api/reports/filter-results (Story 6.3 · Subtask 6.3.2) — the
 // paginated issue table behind the filter-results widget (6.3.5). Scope =
 // `?projectId=` XOR `?savedFilterId=`; `?page=` / `?pageSize=` ride the
-// EXISTING 2.5.8/2.5.12 list read (a widget page exactly matches the /issues
+// EXISTING 2.5.8/2.5.12 list read (a widget page exactly matches the /items
 // List for the same filter), with the verified ≤ 50/page gadget cap clamped
 // server-side. Returns the `ReportWidgetResultDto` envelope: `ok` with the
 // page, or the typed `no_access` / `stale` widget states.

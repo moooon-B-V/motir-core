@@ -2,9 +2,9 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { IssueRowData } from '@/app/(authed)/issues/_components/issueRows';
+import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 
-// The /issues view-switcher + sortable List headers (Subtask 2.5.8) under
+// The /items view-switcher + sortable List headers (Subtask 2.5.8) under
 // happy-dom — the client interactivity the card's "toggle view + sort updates
 // the URL + re-queries" AC calls for. View + sort live in the URL, so both
 // controls just NAVIGATE: clicking a header / a view option calls router.push
@@ -14,18 +14,18 @@ import type { IssueRowData } from '@/app/(authed)/issues/_components/issueRows';
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
-  usePathname: () => '/issues',
+  usePathname: () => '/items',
   useSearchParams: () => new URLSearchParams(),
 }));
 // The rows are inline-editable (Subtask 2.5.5), so the cells import the detail
 // page's edit Server Actions — stub them so this client test stays DB-free.
-vi.mock('@/app/(authed)/issues/[key]/edit/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   updateIssueAction: vi.fn(),
   changeStatusAction: vi.fn(),
 }));
 
-import { IssueListTable } from '@/app/(authed)/issues/_components/IssueListTable';
-import { IssueViewSwitcher } from '@/app/(authed)/issues/_components/IssueViewSwitcher';
+import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable';
+import { IssueViewSwitcher } from '@/app/(authed)/items/_components/IssueViewSwitcher';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 
 // Radix Popover (the switcher menu) needs a few browser APIs happy-dom lacks.
@@ -106,10 +106,10 @@ describe('IssueListTable — sortable headers', () => {
       />,
     );
     expect(screen.getByRole('link', { name: 'PROD-1 First' }).getAttribute('href')).toBe(
-      '/issues/PROD-1',
+      '/items/PROD-1',
     );
     expect(screen.getByRole('link', { name: 'PROD-2 Second' }).getAttribute('href')).toBe(
-      '/issues/PROD-2',
+      '/items/PROD-2',
     );
   });
 
@@ -123,7 +123,7 @@ describe('IssueListTable — sortable headers', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Aasc');
+    expect(push).toHaveBeenCalledWith('/items?view=list&sort=priority%3Aasc');
   });
 
   it('clicking the active header flips its direction', () => {
@@ -136,7 +136,7 @@ describe('IssueListTable — sortable headers', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Priority/ }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Adesc');
+    expect(push).toHaveBeenCalledWith('/items?view=list&sort=priority%3Adesc');
   });
 
   it('clicking the Title header sorts by key (the default column) descending', () => {
@@ -149,7 +149,7 @@ describe('IssueListTable — sortable headers', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Title/ }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=key%3Adesc');
+    expect(push).toHaveBeenCalledWith('/items?view=list&sort=key%3Adesc');
   });
 });
 
@@ -189,7 +189,7 @@ describe('IssueListTable — work-Type column (Subtask 8.8.9)', () => {
   it('exposes a sortable "Type" column header that navigates to ?sort=type:asc', () => {
     renderRows([row({ identifier: 'PROD-1', type: 'code' })]);
     fireEvent.click(screen.getByRole('button', { name: /Type/ }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=type%3Aasc');
+    expect(push).toHaveBeenCalledWith('/items?view=list&sort=type%3Aasc');
   });
 });
 
@@ -216,7 +216,7 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View: Tree' }));
     const list = screen.getByRole('menuitemradio', { name: /List/ });
     fireEvent.click(list);
-    expect(push).toHaveBeenCalledWith('/issues?view=list&sort=priority%3Adesc');
+    expect(push).toHaveBeenCalledWith('/items?view=list&sort=priority%3Adesc');
   });
 
   it('switching to Tree PRESERVES the sort (the Tree sorts too since 2.5.14)', () => {
@@ -230,9 +230,9 @@ describe('IssueViewSwitcher — Tree ↔ List toggle', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View: List' }));
     const tree = screen.getByRole('menuitemradio', { name: /Tree/ });
     fireEvent.click(tree);
-    // Pre-2.5.14 the Tree ignored sort so this dropped to '/issues'; now the
+    // Pre-2.5.14 the Tree ignored sort so this dropped to '/items'; now the
     // Tree sorts siblings within their parent, so the sort carries over.
-    expect(push).toHaveBeenCalledWith('/issues?sort=priority%3Adesc');
+    expect(push).toHaveBeenCalledWith('/items?sort=priority%3Adesc');
   });
 
   it('the active view option is checked', () => {
@@ -282,11 +282,11 @@ describe('IssueListTable — pagination footer (Subtask 2.5.12)', () => {
   it('Next navigates to ?page=N+1; Prev (to page 1) drops the param', () => {
     renderPaged(2, 120);
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&page=3');
+    expect(push).toHaveBeenCalledWith('/items?view=list&page=3');
 
     push.mockReset();
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list'); // page 1 is the clean URL
+    expect(push).toHaveBeenCalledWith('/items?view=list'); // page 1 is the clean URL
   });
 
   it('a page number navigates to that page; the current page is aria-current', () => {
@@ -295,7 +295,7 @@ describe('IssueListTable — pagination footer (Subtask 2.5.12)', () => {
       'page',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Page 3' }));
-    expect(push).toHaveBeenCalledWith('/issues?view=list&page=3');
+    expect(push).toHaveBeenCalledWith('/items?view=list&page=3');
   });
 
   it('disables Prev on page 1 (no navigation)', () => {

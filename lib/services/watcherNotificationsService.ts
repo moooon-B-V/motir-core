@@ -139,7 +139,7 @@ export const watcherNotificationsService = {
 
     const [actor] = await userRepository.findByIds([input.actorId]);
     const actorName = actor?.name ?? 'Someone';
-    const issueUrl = `${resolveBaseUrlTrimmed()}/issues/${encodeURIComponent(item.identifier)}`;
+    const issueUrl = `${resolveBaseUrlTrimmed()}/items/${encodeURIComponent(item.identifier)}`;
 
     // Walk the watcher roster page by page (finding #57 — bounded reads), and
     // enqueue per surviving recipient as each page resolves.

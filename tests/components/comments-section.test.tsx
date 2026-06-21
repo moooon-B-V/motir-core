@@ -16,7 +16,7 @@ const editCommentAction = vi.fn();
 const deleteCommentAction = vi.fn();
 const refresh = vi.fn();
 
-vi.mock('@/app/(authed)/issues/[key]/commentActions', () => ({
+vi.mock('@/app/(authed)/items/[key]/commentActions', () => ({
   addCommentAction: (...args: unknown[]) => addCommentAction(...args),
   editCommentAction: (...args: unknown[]) => editCommentAction(...args),
   deleteCommentAction: (...args: unknown[]) => deleteCommentAction(...args),
@@ -36,7 +36,7 @@ vi.mock('@/components/ui/MarkdownEditor', () => ({
   }) => <textarea aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} />,
 }));
 
-import { CommentsSection } from '@/app/(authed)/issues/[key]/_components/CommentsSection';
+import { CommentsSection } from '@/app/(authed)/items/[key]/_components/CommentsSection';
 import { resetCommentsSortForTests } from '@/lib/hooks/useCommentsSort';
 
 const ME = { id: 'user-me', name: 'Zhu Yue', image: null };

@@ -30,7 +30,7 @@ import { decodeSearchCursor, encodeSearchCursor } from '../searchCursor';
 // so an agent reading `tools/list` learns the exact grammar — but it maps 1:1
 // to the stored envelope `{ v, c, f }` and is decoded by the SAME
 // `decodeFilterEnvelope` the saved-filter carrier uses. The decoded AST then
-// rides `workItemsService.getProjectIssuesList` — the EXACT read the `/issues`
+// rides `workItemsService.getProjectIssuesList` — the EXACT read the `/items`
 // List view calls — so the agent and the page can never disagree on a result
 // set, and the registry's safe (parameterized-only) compiler is the single
 // place an AST becomes SQL (injection probes bind as parameters → match
@@ -116,7 +116,7 @@ const filterSchema = z
       ),
   })
   .describe(
-    'A versioned FilterAST envelope — the SAME shape the /issues ?filter= URL ' +
+    'A versioned FilterAST envelope — the SAME shape the /items ?filter= URL ' +
       'and saved filters carry. Omit to search the whole project.',
   );
 
@@ -220,7 +220,7 @@ export function registerSearchWorkItems(
       title: 'Search work items',
       description:
         'Search a project’s work items with a versioned FilterAST envelope (the same filter ' +
-        'grammar the /issues advanced filter and saved filters use), as a cursor-paginated page. ' +
+        'grammar the /items advanced filter and saved filters use), as a cursor-paginated page. ' +
         'Omit `filter` to page the whole project. Returns the matching items, the total count, ' +
         'and a nextCursor. Honors the same access checks as the UI.',
       inputSchema,

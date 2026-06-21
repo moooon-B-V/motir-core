@@ -9,9 +9,9 @@ import { FiltersDirectory } from './_components/FiltersDirectory';
 
 // The Filters directory (Story 6.2 · Subtask 6.2.4) — the project-level manage
 // surface for saved filters, per design/work-items/saved-filters.mock.html
-// panel 3. Route `/filters`: a sibling of `/issues` in the authed shell,
+// panel 3. Route `/filters`: a sibling of `/items` in the authed shell,
 // deliberately NOT a primary sidebar item (the design-recorded deviation — in
-// Motir's project-contained filter model the /issues toolbar is the home of
+// Motir's project-contained filter model the /items toolbar is the home of
 // filtering; the directory is reached from the [Saved] dropdown's "View all
 // filters" footer and the command palette).
 //

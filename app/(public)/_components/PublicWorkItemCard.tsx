@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils/cn';
 // (the DTO has no assignee/estimate/storyPoints fields) — not DOM-hidden.
 //
 // Public card links land on the public work-item DETAIL page (6.14.11) via the
-// `href` the caller builds — read-only, never the authed /issues/[key] surface.
+// `href` the caller builds — read-only, never the authed /items/[key] surface.
 
 const PRIORITY_PILL: Record<
   PublicWorkItemListItemDto['priority'],

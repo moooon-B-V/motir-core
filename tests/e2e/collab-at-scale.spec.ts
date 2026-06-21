@@ -205,7 +205,7 @@ async function extendActivityFeed(
 
 /** Open the loaded issue's detail page and wait for its title heading. */
 async function gotoLoadedIssue(page: Page): Promise<void> {
-  await page.goto(`/issues/${fixture.loadedIssue.identifier}`);
+  await page.goto(`/items/${fixture.loadedIssue.identifier}`);
   await expect(
     page.getByRole('heading', { name: SEED_COLLAB_LOADED_TITLE, level: 1 }),
   ).toBeVisible();
@@ -271,7 +271,7 @@ async function warmIssueRoutes(browser: Browser): Promise<void> {
     // leaves it absent).
     for (const suffix of ['', '?activity=history', '?activity=all']) {
       await expect(async () => {
-        await page.goto(`/issues/${fixture.loadedIssue.identifier}${suffix}`);
+        await page.goto(`/items/${fixture.loadedIssue.identifier}${suffix}`);
         await expect(
           page.getByRole('heading', { name: SEED_COLLAB_LOADED_TITLE, level: 1 }),
         ).toBeVisible({ timeout: 10_000 });

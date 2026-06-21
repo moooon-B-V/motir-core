@@ -478,7 +478,7 @@ export const reportsService = {
    * issue table widget. Rides the EXISTING 2.5.8/2.5.12 list read + count
    * (`workItemsService.getProjectIssuesList` with the resolved filter's
    * compiled AST — no second query path, so a widget page exactly matches
-   * the /issues List for the same filter), at the default sort and the
+   * the /items List for the same filter), at the default sort and the
    * verified ≤ 50/page gadget cap (clamped server-side by the list read).
    * Scope and access resolve per-VIEWER like every widget read.
    */

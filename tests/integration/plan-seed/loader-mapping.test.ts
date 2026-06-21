@@ -14,7 +14,7 @@ import { makeWorkItemFixture } from '../../fixtures';
 
 // Subtask 2.7.7 — the SEED-LOADER mapping half of the type/executor lock-down
 // (the gap the other 2.7.7 areas already cover: the default map lives in
-// tests/issues/executorDefaults.test.ts; the schema + leaf-only + executor
+// tests/items/executorDefaults.test.ts; the schema + leaf-only + executor
 // seeding in tests/integration/work-items/work-item-type-executor.test.ts; the
 // FilterAST `type` facet in tests/integration/work-items/filter-builder-matrix
 // .test.ts's CASES). What was UNTESTED until now is the loader bridge (2.7.5):

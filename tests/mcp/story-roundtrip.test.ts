@@ -352,7 +352,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       await client.close();
     });
 
-    it('search family — search_work_items ≡ the /issues list service for the same FilterAST', async () => {
+    it('search family — search_work_items ≡ the /items list service for the same FilterAST', async () => {
       const fx = await makeWorkItemFixture();
       await makeTask(fx, 'a task');
       await workItemsService.createWorkItem(
@@ -361,7 +361,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       );
       const client = await connect(await fullToken(fx));
 
-      // The agent-facing envelope and the decoded AST the /issues service runs.
+      // The agent-facing envelope and the decoded AST the /items service runs.
       const envelope = {
         version: FILTER_PARAM_VERSION,
         combinator: 'and' as const,

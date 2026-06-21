@@ -32,7 +32,7 @@ function Row({ item, identifier }: { item: PublicWorkItemListItemDto; identifier
   const t = useTranslations('publicProjects');
   const pri = PRIORITY_PILL[item.priority];
   // Links to the public work-item DETAIL page (6.14.11) — read-only, never the
-  // authed /issues/[key] surface. The `id` keeps an older `#identifier` deep
+  // authed /items/[key] surface. The `id` keeps an older `#identifier` deep
   // link scrolling to this row.
   return (
     <Link

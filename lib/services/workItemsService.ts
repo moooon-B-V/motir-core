@@ -302,7 +302,7 @@ export interface ListWorkItemsFilter {
 
 /**
  * Nest a flat `findProjectForest` projection into the `WorkItemTreeNodeDto`
- * forest the `/issues` tree-table renders (Subtask 2.5.1). Roots (parentId
+ * forest the `/items` tree-table renders (Subtask 2.5.1). Roots (parentId
  * null) and every sibling set are ordered by `key` asc — the stable PROD-N
  * order. Every non-root row's parent is guaranteed present (the CTE walks DOWN
  * from roots), so there are no dangling parents to drop.
@@ -1810,7 +1810,7 @@ export const workItemsService = {
 
   /**
    * The project's WHOLE non-archived issue forest, nested into the tree the
-   * `/issues` list view renders (Subtask 2.5.1) — one recursive-CTE round-trip
+   * `/items` list view renders (Subtask 2.5.1) — one recursive-CTE round-trip
    * (no N+1), then in-memory nesting. Roots and siblings come back `key`-asc.
    *
    * Tenant gate (finding #26): the project must resolve AND belong to the active
@@ -1946,7 +1946,7 @@ export const workItemsService = {
 
   /**
    * The COUNT of the project's archived items (Story 2.9 · Subtask 2.9.3) — the
-   * lightweight read behind the `/issues` toolbar's `[Archived]` entry-point
+   * lightweight read behind the `/items` toolbar's `[Archived]` entry-point
    * badge (the design's count chip), so the navigator can show "there's
    * something there" without loading a page of rows. Same project + workspace
    * gate and `canBrowse` read gate as {@link listArchivedWorkItems} (a

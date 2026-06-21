@@ -9,7 +9,7 @@
 // through the browser, plus the strict axe sweep over the save dialog, the
 // [Saved] dropdown, the filters directory, and the subscription editor:
 //
-//   A. the AUTHOR builds a filter on /issues → Save as (Project) → the applied
+//   A. the AUTHOR builds a filter on /items → Save as (Project) → the applied
 //      name chip → edits the builder → the dirty state → overwrite-Save; then
 //      applies + stars it from the [Saved] dropdown;
 //   B. a NON-OWNER applies the shared filter and edits it → Save-as ONLY (no
@@ -108,7 +108,7 @@ async function seedTenant(ownerEmail: string): Promise<Tenant> {
 }
 
 // Enroll a persona in the workspace + project with a given project role, and pin
-// the project active so /issues + /filters resolve it on every render.
+// the project active so /items + /filters resolve it on every render.
 async function enroll(
   p: Persona,
   tenant: Tenant,
@@ -193,7 +193,7 @@ test.describe('saved filters', () => {
 
     // ── Build a beyond-facet filter via the URL (the 6.1.4 builder round-trip is
     //    proven in filter-builder.spec; here the filter is the SAVE flow's input).
-    await page.goto(`/issues?view=list&${FILTER_PARAM}=${encodeURIComponent(BASE_PARAM)}`);
+    await page.goto(`/items?view=list&${FILTER_PARAM}=${encodeURIComponent(BASE_PARAM)}`);
 
     // ── Save as (Project): the applied bar's Save-as opens the dialog. ─────────
     await page.getByRole('button', { name: 'Save as' }).click();
@@ -261,7 +261,7 @@ test.describe('saved filters', () => {
     await seedFilter(tenant, author, 'My secret', 'private');
 
     const otherPage = await signInAt(browser, other);
-    await otherPage.goto('/issues?view=list');
+    await otherPage.goto('/items?view=list');
 
     // ── The dropdown shows the shared filter, NOT the private one. ─────────────
     await otherPage.getByRole('button', { name: /^Saved filters/ }).click();
@@ -385,7 +385,7 @@ test.describe('saved filters', () => {
     await enroll(viewer, tenant, 'viewer');
 
     const viewerPage = await signInAt(browser, viewer);
-    await viewerPage.goto(`/issues?view=list&${FILTER_PARAM}=${encodeURIComponent(BASE_PARAM)}`);
+    await viewerPage.goto(`/items?view=list&${FILTER_PARAM}=${encodeURIComponent(BASE_PARAM)}`);
 
     await viewerPage.getByRole('button', { name: 'Save as' }).click();
     const saveDialog = viewerPage.getByRole('dialog', { name: 'Save filter' });

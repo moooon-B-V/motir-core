@@ -125,7 +125,7 @@ test('@smoke attach → cards → preview → download split → editor-sourced 
 }) => {
   const fx = await seedAttachmentsFixture(page, 'e2e-attachments-pm@example.com');
   await serveMockBlobHost(page);
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
 
   // The panel starts inviting-empty.
@@ -184,7 +184,7 @@ test('@smoke attach → cards → preview → download split → editor-sourced 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // ── 5. An editor upload surfaces in the panel as Embedded, delete blocked ─
-  await page.goto(`/issues/${fx.issue.identifier}/edit`);
+  await page.goto(`/items/${fx.issue.identifier}/edit`);
   await expect(page.locator('.ProseMirror').first()).toBeVisible();
   // The Description editor leads the form — its toolbar's Attach file.
   await pickFiles(page, page.getByRole('button', { name: 'Attach file' }).first(), [
@@ -196,7 +196,7 @@ test('@smoke attach → cards → preview → download split → editor-sourced 
   // The edit form stays put on success (toast + refresh) — wait for the save
   // to land, then return to the detail page.
   await expect(page.getByText(`${fx.issue.identifier} saved`, { exact: true })).toBeVisible();
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
   const embedCard = fileList(page).getByRole('listitem').filter({ hasText: 'embed.png' });
   await expect(embedCard.getByText('Embedded')).toBeVisible();
@@ -246,7 +246,7 @@ test('at scale the read stays cursor-paged: 50 + "Show more", view toggle withou
       .catch(() => {});
   });
 
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
 
   // First paint: the newest 50, the rest behind "Show more (70)" — never in
@@ -299,7 +299,7 @@ test('role pass: a member deletes OWN only; a viewer gets the read-only panel', 
   // ── The plain member: uploads, deletes own, can't delete the PM's ────────
   await page.context().clearCookies();
   await signIn(page, memberEmail, ATTACHMENTS_PASSWORD);
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
 
   await pickFiles(page, page.getByRole('button', { name: 'Attach', exact: true }), [
@@ -329,7 +329,7 @@ test('role pass: a member deletes OWN only; a viewer gets the read-only panel', 
   // ── The viewer: panel visible, zero write affordances ────────────────────
   await page.context().clearCookies();
   await signIn(page, viewerEmail, ATTACHMENTS_PASSWORD);
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
 
   const viewerList = fileList(page);

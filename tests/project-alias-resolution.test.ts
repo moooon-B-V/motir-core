@@ -12,7 +12,7 @@ import { truncateAuthTables } from './helpers/db';
 
 // Subtask 6.8.2 — the READ half of the project-key-alias feature: alias-aware
 // central resolution (projectsService.resolveByKey + getByKey delegation), the
-// `/issues/[key]` 308-redirect helper (resolveAliasedIssueKey), and old-key
+// `/items/[key]` 308-redirect helper (resolveAliasedIssueKey), and old-key
 // serving on the route-backing services (projectMembersService). Real Postgres,
 // no DB mocks; the truncate helper CASCADEs workspace → project → work_item /
 // project_key_alias between tests. The atomic rename TX itself is 6.8.1's
@@ -175,7 +175,7 @@ describe('route-backing services serve old keys (one resolution path)', () => {
   });
 });
 
-describe('resolveAliasedIssueKey (the /issues/[key] 308-redirect helper)', () => {
+describe('resolveAliasedIssueKey (the /items/[key] 308-redirect helper)', () => {
   it('maps an old-key issue identifier to its canonical after a rename', async () => {
     const { project, ownerCtx } = await makeFixture('redir');
     const [first] = await seedItems(project.id, ownerCtx, 1); // PROD-1

@@ -9,7 +9,7 @@ import {
 } from '@/lib/issues/savedFilterApplied';
 
 // The applied-saved-filter session model (Story 6.2 · Subtask 6.2.3) — the pure
-// dirty/apply helpers the /issues name chip is built on.
+// dirty/apply helpers the /items name chip is built on.
 
 const AST_A: FilterAst = {
   combinator: 'and',

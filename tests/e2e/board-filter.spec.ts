@@ -1,7 +1,7 @@
 // E2E: board filtering — the Story-6.15 closing journey (Subtask 6.15.4).
 //
 // @smoke — proves the HEADLINE Story 6.15 delivers end-to-end through the real
-// shell: the board's once-dead `[Filter]` seam is now the SAME shipped /issues
+// shell: the board's once-dead `[Filter]` seam is now the SAME shipped /items
 // filter primitives, board-scoped. A user opens the toolbar Filter, narrows the
 // board by a quick KIND facet, by the 6.15.5 WORK TYPE facet, and by a saved
 // filter; Clear restores the full board; and the active filter rides the URL so

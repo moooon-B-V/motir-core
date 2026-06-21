@@ -81,7 +81,7 @@ test.describe('@a11y design-system specimens', () => {
   // The whole `role="treegrid"` (rows with aria-level/expanded/posinset/setsize,
   // the gridcells, the stretched row links, the AA-safe status Pills) is held to
   // full WCAG 2.1 AA, so the treegrid semantics are proven on the real markup
-  // before the /issues route (2.5.3) inherits them.
+  // before the /items route (2.5.3) inherits them.
   test('the /tokens/tree-table specimen is axe-clean (WCAG 2.1 AA; strict)', async ({ page }) => {
     await page.goto('/tokens/tree-table');
     await expect(page.getByRole('heading', { name: 'Tree table', level: 1 })).toBeVisible();

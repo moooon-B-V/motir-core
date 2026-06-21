@@ -181,7 +181,7 @@ describe('getCreatedVsResolved — the bucket matrix', () => {
     expect(data.buckets.reduce((s, x) => s + x.resolved, 0)).toBe(1);
   });
 
-  it('archived items are excluded from both series (the /issues parity basis)', async () => {
+  it('archived items are excluded from both series (the /items parity basis)', async () => {
     const fx = await makeWorkItemFixture();
     const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
     await setCreatedAt(a.id, daysAgo(1));

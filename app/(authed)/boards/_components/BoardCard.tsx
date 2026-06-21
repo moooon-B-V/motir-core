@@ -9,7 +9,7 @@ import { Pill } from '@/components/ui/Pill';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import type { BoardCardDto } from '@/lib/dto/boards';
 import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
-import { Avatar, PriorityValue } from '../../issues/_components/issueCellPrimitives';
+import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import { useNotifyIssuesChanged } from '../../_components/CreateIssueProvider';
 

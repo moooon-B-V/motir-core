@@ -9,14 +9,14 @@ const createLinkAction = vi.fn();
 const listLinkCandidatesAction = vi.fn();
 const refresh = vi.fn();
 
-vi.mock('@/app/(authed)/issues/[key]/actions', () => ({
+vi.mock('@/app/(authed)/items/[key]/actions', () => ({
   createLinkAction: (...args: unknown[]) => createLinkAction(...args),
   removeLinkAction: vi.fn(),
   listLinkCandidatesAction: (...args: unknown[]) => listLinkCandidatesAction(...args),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
-import { AddLinkControl } from '@/app/(authed)/issues/[key]/_components/AddLinkControl';
+import { AddLinkControl } from '@/app/(authed)/items/[key]/_components/AddLinkControl';
 
 const candidate = {
   id: 'cand-1',

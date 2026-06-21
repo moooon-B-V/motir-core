@@ -1241,7 +1241,7 @@ export const workItemRepository = {
    * (`parentId IS NULL`). Each row carries its `depth` (root = 1, for the
    * tree-table's indentation) and the lighter render columns (no Markdown
    * blobs). Backs `workItemsService.getProjectTree` (Subtask 2.5.1) — the read
-   * behind the `/issues` list view.
+   * behind the `/items` list view.
    *
    * `workspaceId` is filtered on BOTH the anchor and the recursive step (plus
    * `projectId` on both), so a cross-workspace/-project row can never enter the
@@ -1428,7 +1428,7 @@ export const workItemRepository = {
    * `findProjectForest` CTE). Same `projectId` + `workspaceId` tenant gate as
    * the active reads (finding #26) and the same triage exclusion (the public
    * submission inbox has its own surface), so this is the literal complement of
-   * the `/issues` list within the management views. Ordered by `archivedAt DESC`
+   * the `/items` list within the management views. Ordered by `archivedAt DESC`
    * (most-recently archived first) with a stable `key ASC` tiebreak so OFFSET
    * paging is deterministic, and windowed by `page` (LIMIT/OFFSET) so it never
    * ships the whole archive. The archiver is resolved in the SAME read via a

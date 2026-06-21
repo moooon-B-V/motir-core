@@ -36,7 +36,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // Filter-subscription service (Story 6.2 · Subtask 6.2.5). Two faces:
 //
 //   * REQUEST side (ctx-bearing): subscribe / unsubscribe / read-mine — the
-//     /issues + directory row actions. Subscribing is a PERSONAL read-layer
+//     /items + directory row actions. Subscribing is a PERSONAL read-layer
 //     action (the starring precedent): anyone who can SEE the filter may
 //     subscribe, viewers and non-owners included. Visibility is the SEE gate
 //     from the 6.2.1 matrix (lib/savedFilters/access); a filter the actor may
@@ -324,7 +324,7 @@ export const savedFilterSubscriptionsService = {
     }));
 
     const base = resolveBaseUrlTrimmed();
-    const filterUrl = `${base}/issues?${FILTER_PARAM}=${encodeURIComponent(encodeFilterParam(resolved.ast))}`;
+    const filterUrl = `${base}/items?${FILTER_PARAM}=${encodeURIComponent(encodeFilterParam(resolved.ast))}`;
     const unsubscribeUrl = `${base}/unsubscribe/filter-subscription?token=${encodeURIComponent(
       signUnsubscribeToken(sub.id),
     )}`;

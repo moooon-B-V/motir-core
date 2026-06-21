@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { NewIssueButton } from '../../issues/_components/NewIssueButton';
+import { NewIssueButton } from '../../items/_components/NewIssueButton';
 import { BacklogRows, useRankedIssues } from './BacklogList';
 import { BacklogDndProvider } from './BacklogDndProvider';
 import { BacklogSkeleton } from './BacklogSkeleton';

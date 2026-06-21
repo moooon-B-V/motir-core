@@ -87,7 +87,7 @@ interface AdminSeed {
  *  side — a public project (left at the default `open`; flipped public via the
  *  UI in the test) holding an EPIC with two children + a standalone control
  *  item. Pins the public project active so the project-scoped routes
- *  (/settings/project, /issues/[key]) resolve it. */
+ *  (/settings/project, /items/[key]) resolve it. */
 async function seedAdmin(page: Page): Promise<AdminSeed> {
   await signUp(page, ADMIN_EMAIL);
   const local = ADMIN_EMAIL.split('@')[0]!;
@@ -183,7 +183,7 @@ test('@smoke epic privacy: admin makes a project public + an epic private, a cro
   expect((await accessSaved).status(), 'set-access → public returns 200').toBe(200);
 
   // ── 1b. admin marks the epic PRIVATE via the 6.14.7 control ─────────────────
-  await page.goto(`/issues/${seed.epic.identifier}`);
+  await page.goto(`/items/${seed.epic.identifier}`);
   // The privacy control names its switch via the visible "Make this epic
   // private" label (`aria-labelledby`), now forwarded by the shared Switch
   // primitive (MOTIR-801) — so target it by its accessible NAME.
@@ -281,7 +281,7 @@ test('@smoke epic privacy: admin makes a project public + an epic private, a cro
   expect(memberIds.has(seed.childB.identifier), 'member payload includes child B').toBe(true);
 
   // ── 4. admin UNSETS privacy → the public viewer now sees the children LIVE ──
-  await page.goto(`/issues/${seed.epic.identifier}`);
+  await page.goto(`/items/${seed.epic.identifier}`);
   const switchAgain = page.getByRole('switch', { name: PRIVACY_LABEL });
   await expect(switchAgain).toHaveAttribute('aria-checked', 'true');
   const madePublic = page.waitForResponse(

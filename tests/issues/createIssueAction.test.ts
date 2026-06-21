@@ -23,7 +23,7 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 // Import AFTER the mocks are registered.
-const { createIssueAction } = await import('@/app/(authed)/issues/actions');
+const { createIssueAction } = await import('@/app/(authed)/items/actions');
 
 beforeEach(async () => {
   await truncateAuthTables();

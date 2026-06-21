@@ -29,11 +29,11 @@ vi.mock('@/app/(authed)/_components/CreateIssueProvider', () => ({
   useNotifyIssuesChanged: () => () => {},
 }));
 
-import { NewIssueButton } from '@/app/(authed)/issues/_components/NewIssueButton';
+import { NewIssueButton } from '@/app/(authed)/items/_components/NewIssueButton';
 import { CreateIssueButton } from '@/app/(authed)/_components/CreateIssueButton';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
-import { ContentSectionCard } from '@/app/(authed)/issues/[key]/_components/ContentSectionCard';
+import { ContentSectionCard } from '@/app/(authed)/items/[key]/_components/ContentSectionCard';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
 function withAccess(ui: ReactElement, canEdit: boolean) {
@@ -105,7 +105,7 @@ describe('Edit affordance is HIDDEN for read-only (6.4.6)', () => {
   // disabled-with-tooltip create button.
   it('renders the section "Edit" link only when an editHref is provided', () => {
     const { rerender } = renderWithIntl(
-      <ContentSectionCard title="Description" editHref="/issues/PROD-7/edit">
+      <ContentSectionCard title="Description" editHref="/items/PROD-7/edit">
         <p>body</p>
       </ContentSectionCard>,
     );

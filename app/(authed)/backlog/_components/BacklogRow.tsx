@@ -7,7 +7,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
-import { Avatar, StatusValue } from '../../issues/_components/issueCellPrimitives';
+import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { useBacklogDnd } from './BacklogDndProvider';

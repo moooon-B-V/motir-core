@@ -154,7 +154,7 @@ test('@smoke mention → bell increment → drawer (seen) → click → read →
   await expect(bell(pageA)).toHaveAccessibleName('Notifications, no unread');
 
   // ── 1. B mentions A AND B in one comment (self-exclusion, deterministically) ─
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task' })).toBeVisible();
   await postMention(page, [BO, selfTarget(fx)]);
 
@@ -194,7 +194,7 @@ test('@smoke mention → bell increment → drawer (seen) → click → read →
   );
   await row.click();
   expect((await read).status()).toBe(200);
-  await pageA.waitForURL(`**/issues/${fx.issue.identifier}`);
+  await pageA.waitForURL(`**/items/${fx.issue.identifier}`);
   // The badge cleared live — no pageA.reload() between the click and this assert.
   await expect(bell(pageA)).toHaveAccessibleName('Notifications, no unread');
 
@@ -232,7 +232,7 @@ test('preference cut — one gate, both channels: in-app off stops the bell (ema
     'e2e-notif-pref-bo@example.com',
   );
   const pageA = await signInMember(browser, fx.bo.email);
-  await page.goto(`/issues/${fx.issue.identifier}`);
+  await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Commented task' })).toBeVisible();
 
   // ── A turns IN-APP off for "Mentioned" on the notifications matrix ───────────

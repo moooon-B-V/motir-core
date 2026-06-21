@@ -150,12 +150,12 @@ describe('TreeTable — keyboard (roving tabindex)', () => {
   it('Enter activates the row link', () => {
     renderTree({
       defaultExpandedIds: ['A'],
-      getRowHref: (r) => `/issues/${r.id}`,
+      getRowHref: (r) => `/items/${r.id}`,
       getRowLabel: (r) => `${r.id} ${r.title}`,
     });
     const root = screen.getByTestId('row-A');
     const link = within(root).getByRole('link', { name: 'A Epic A' });
-    expect(link.getAttribute('href')).toBe('/issues/A');
+    expect(link.getAttribute('href')).toBe('/items/A');
 
     const click = vi.fn((e: Event) => e.preventDefault());
     link.addEventListener('click', click);

@@ -167,7 +167,7 @@ export function NotificationRow({
     <div className="relative border-b border-(--el-border-soft) last:border-b-0">
       {issueKey ? (
         <Link
-          href={`/issues/${issueKey}`}
+          href={`/items/${issueKey}`}
           onClick={() => onActivate(notification)}
           className={rowClass}
         >

@@ -16,7 +16,7 @@ import {
 // Integration tests for the project issue-tree read (Subtask 2.5.1):
 // workItemRepository.findProjectForest (the single recursive-CTE round-trip +
 // explicit workspace gate) and workItemsService.getProjectTree (the nesting +
-// context-preserving filter that backs the /issues list view). Real Postgres,
+// context-preserving filter that backs the /items list view). Real Postgres,
 // no mocks (Yue's rule). Each test builds its own tree; cross-workspace cases
 // build two independent tenants so the tenant gate is exercised, not assumed.
 

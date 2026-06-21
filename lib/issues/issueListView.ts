@@ -1,4 +1,4 @@
-// The /issues view + sort URL contract (Subtask 2.5.8). The `[Tree ▾]`
+// The /items view + sort URL contract (Subtask 2.5.8). The `[Tree ▾]`
 // switcher toggles between the nested Tree view (2.5.2/2.5.3) and a flat,
 // sortable List view; BOTH the chosen view and the List's active sort live in
 // the URL (`?view=list&sort=key:asc`) — shareable, reload-safe, and the same
@@ -147,9 +147,9 @@ export function nextSort(current: IssueSort, column: IssueSortColumn): IssueSort
 }
 
 /**
- * Build the canonical `/issues` href for a (view, sort, filter) triple. Defaults
+ * Build the canonical `/items` href for a (view, sort, filter) triple. Defaults
  * are OMITTED so URLs stay clean: `view=tree` and the default `key:asc` sort
- * never appear (`/issues` is the canonical Tree URL; `/issues?view=list` is the
+ * never appear (`/items` is the canonical Tree URL; `/items?view=list` is the
  * List at its default sort). The optional `filter` (Subtask 2.5.4) is appended
  * regardless of view — filtering applies to BOTH the Tree and the List — so the
  * switcher + the List sort headers PRESERVE the active filter when they

@@ -231,7 +231,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
 
   // ════════════════════════ BUILD-UP (admin) ════════════════════════
   // ── 1. Build the advanced filter: a NEGATION row (6.1) + a CUSTOM-FIELD row ──
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await page.getByRole('button', { name: 'Advanced' }).click();
   const dialog = page.getByRole('dialog', { name: 'Advanced filter' });
   await expect(dialog).toBeVisible();
@@ -361,7 +361,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   // Seam — the saved-filter result set TRACKS the change: re-apply the SAVED
   // filter from the dropdown; the bug now matches too (Highest ∉ {Low,Lowest} AND
   // Severity High), so the live count climbs 1 → 2 (the control + the escalated bug).
-  await page.goto('/issues?view=list');
+  await page.goto('/items?view=list');
   await page.getByRole('button', { name: /^Saved filters/ }).click();
   await expect(page.getByRole('textbox', { name: 'Find filters' })).toBeVisible();
   await page.getByRole('button', { name: new RegExp(`^${FILTER_NAME}`) }).click();
@@ -379,7 +379,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   await expect(page.getByText('Filter missing')).toHaveCount(0);
 
   // Seam — the History feed renders the automation change (5.5), no crash.
-  await page.goto(`/issues/${bug.identifier}`);
+  await page.goto(`/items/${bug.identifier}`);
   await expect(page.getByRole('heading', { name: BUG_TITLE, level: 1 })).toBeVisible();
   await switchActivityTab(page, 'History');
   await expect(page.getByRole('list', { name: 'History' })).toBeVisible();
@@ -463,7 +463,7 @@ test('@smoke the combined Epic-6 journey: build → save → widget → rule →
   // (the revision persists past the vanished rule — the 5.5.1 deleted-referent
   // fallback; the stacked stream doesn't crash) ────────────────────────────────
   await automationRulesService.delete(tenant.key, rule.id, ownerCtx(tenant));
-  await page.goto(`/issues/${bug.identifier}`);
+  await page.goto(`/items/${bug.identifier}`);
   await expect(page.getByRole('heading', { name: BUG_TITLE, level: 1 })).toBeVisible();
   await switchActivityTab(page, 'History');
   const historyAfter = page.getByRole('list', { name: 'History' });

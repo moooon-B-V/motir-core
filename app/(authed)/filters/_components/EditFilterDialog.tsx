@@ -18,7 +18,7 @@ import {
 // Edit-details dialog (Story 6.2 · Subtask 6.2.4) — name / description /
 // visibility, per design/work-items/saved-filters.mock.html panel 1 (reused
 // for the directory's "Edit details" action). The owner-overwrite of the
-// CRITERIA is the /issues-side Save (6.2.3); here we edit metadata only. A
+// CRITERIA is the /items-side Save (6.2.3); here we edit metadata only. A
 // duplicate name surfaces the designed inline error (the 6.2.1 409); flipping
 // Project → Private shows the go-private consequences note.
 

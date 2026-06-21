@@ -94,7 +94,7 @@ test('@smoke inline Sprint field: Backlog → a sprint, persists across reload',
   const item = await mk(page, projectId, 'Schedule me');
   const sprint = await sprintsService.createSprint(projectId, { name: 'Sprint A' }, ctx);
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
   // Starts in the backlog (the muted-italic value, not "None").
   await expect(sprintField(page).getByText('Backlog')).toBeVisible();
 
@@ -124,7 +124,7 @@ test('@smoke ⋯ "Add to active sprint" assigns to the active sprint', async ({ 
   await backlogService.assignToSprint(filler.id, sprint.id, undefined, ctx);
   await sprintsService.startSprint(sprint.id, {}, ctx);
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
   await page.getByRole('button', { name: /Actions for/ }).click();
   const row = page.getByRole('menuitem', { name: 'Add to active sprint' });
   await expect(row).toBeVisible();
@@ -145,7 +145,7 @@ test('⋯ "Add to active sprint" is a DISABLED state-gate when no sprint is acti
   const { projectId } = await seedProject(email, 'SPN');
   const item = await mk(page, projectId, 'No sprint here');
 
-  await page.goto(`/issues/${item.identifier}`);
+  await page.goto(`/items/${item.identifier}`);
   await page.getByRole('button', { name: /Actions for/ }).click();
 
   // Shown (NOT hidden — the transient state-gate deviation) but disabled.
