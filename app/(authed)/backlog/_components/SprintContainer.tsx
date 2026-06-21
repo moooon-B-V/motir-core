@@ -56,6 +56,8 @@ export function SprintContainer({
   onStarted,
   onCompleted,
   issuesRefreshKey,
+  filterQuery,
+  filterActive,
 }: {
   sprint: SprintDto;
   /** Top-to-bottom stack position (sprints precede the backlog) — shift-range order (4.2.5). */
@@ -77,13 +79,24 @@ export function SprintContainer({
   /** Bumped when ANY sprint completes — re-reads this card's issue list so a
    *  carry-over INTO this (planned target) sprint shows the moved rows (bug 11). */
   issuesRefreshKey: number;
+  /** Active-filter querystring appended to the sprint's `/api/sprints/[id]/issues`
+   *  fetch (Subtask 8.8.18) — the read became filter-aware in 8.8.20, so the
+   *  sprint re-projects to its matching rows + filtered count. '' → unfiltered. */
+  filterQuery: string;
+  filterActive: boolean;
 }) {
   const t = useTranslations('backlog');
   const locale = useLocale();
   const [collapsed, setCollapsed] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
-  const state = useRankedIssues(`/api/sprints/${sprint.id}/issues`, issuesRefreshKey);
+  // The filter rides the fetch query (8.8.20) so the sprint shows only matching
+  // rows + the FILTERED total; a change re-navigates the page → new prop → new
+  // endpoint → `useRankedIssues` refetches (no router.refresh).
+  const endpoint = filterQuery
+    ? `/api/sprints/${sprint.id}/issues?${filterQuery}`
+    : `/api/sprints/${sprint.id}/issues`;
+  const state = useRankedIssues(endpoint, issuesRefreshKey);
   // Live committed-points roll-up (Subtask 4.4.9 — finding #69) filling the
   // Story-4.3 seam: a null read or a wholly-unestimated sprint renders "—".
   const points = useSprintPoints(sprint.id);
@@ -133,7 +146,12 @@ export function SprintContainer({
           className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) text-xs font-semibold text-(--el-text-secondary)"
           data-testid={`sprint-count-${sprint.id}`}
         >
-          {sprint.issueCount}
+          {/* Filtered → "X of Y" (the design's "1 of 5" badge): X is the FILTERED
+              total from the sprint read, Y the sprint's full committed count
+              (`/api/sprints` metadata, kept unfiltered). Unfiltered → just Y. */}
+          {filterActive
+            ? t('filteredCount', { matched: state.totalCount, total: sprint.issueCount })
+            : sprint.issueCount}
         </span>
         <span className="flex-1" />
         {/* Committed-points roll-up (Subtask 4.3.5; fills the Story-4.2 seam 4.4.9
@@ -202,10 +220,12 @@ export function SprintContainer({
             regionOrder={order}
             sprintId={sprint.id}
             createRow={<CreateIssueRow sprintId={sprint.id} />}
-            createRowOnEmpty
+            // No create-into-sprint prompt when the empty is filter-driven — the
+            // sprint has issues, none match (the design's dashed placeholder).
+            createRowOnEmpty={!filterActive}
             emptyState={
               <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-4 text-center text-xs text-(--el-text-muted)">
-                {t('sprintEmpty')}
+                {filterActive ? t('sprintFilterEmpty') : t('sprintEmpty')}
               </p>
             }
           />
