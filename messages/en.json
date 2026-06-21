@@ -1581,6 +1581,58 @@
       "email": {
         "label": "Email",
         "desc": "Used to sign in and to send you notifications."
+      },
+      "security": {
+        "card": {
+          "title": "Password & security",
+          "subtitle": "The password you use to sign in with email.",
+          "oauthSubtitle": "Sign-in method."
+        },
+        "password": {
+          "label": "Password",
+          "desc": "Used to sign in with your email address."
+        },
+        "changePassword": "Change password",
+        "modal": {
+          "title": "Change password",
+          "desc": "Enter your current password, then choose a new one.",
+          "cancel": "Cancel",
+          "submit": "Update password",
+          "saving": "Updating…"
+        },
+        "fields": {
+          "current": "Current password",
+          "new": "New password",
+          "newHelper": "At least 8 characters.",
+          "confirm": "Confirm new password",
+          "show": "Show password",
+          "hide": "Hide password"
+        },
+        "errors": {
+          "currentRequired": "Enter your current password.",
+          "tooShort": "New password must be at least 8 characters.",
+          "mismatch": "Those passwords don't match.",
+          "wrongCurrent": "The current password is incorrect.",
+          "rateLimited": "Too many attempts. Please wait a moment and try again.",
+          "noCredential": "This account signs in with Google and has no password to change.",
+          "alreadyHasPassword": "This account already has a password. Use change password instead."
+        },
+        "toast": {
+          "changed": {
+            "title": "Password updated",
+            "desc": "Use your new password next time you sign in."
+          },
+          "linkSent": {
+            "title": "Reset link sent",
+            "desc": "Check your inbox for a link to set a password."
+          }
+        },
+        "oauth": {
+          "body": "You sign in with <b>Google</b>. Send yourself a reset link to set a password and also sign in with email.",
+          "sent": "Reset link sent — check your inbox to set a password.",
+          "sendLink": "Send a password-reset link",
+          "sending": "Sending…"
+        }
       }
     },
     "appearance": {
