@@ -5,17 +5,22 @@ import { redirect } from 'next/navigation';
 import { auth, getSession } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 import {
+  InvalidProfileNameError,
   NoCredentialPasswordError,
   WeakPasswordError,
   WrongCurrentPasswordError,
 } from '@/lib/users/errors';
 import { consumeRateLimit } from '@/lib/rateLimit/fixedWindow';
 
-// Server Actions for the Account › Profile security controls (Story 8.8 ·
-// Subtask 8.8.23). Transport only (per CLAUDE.md, Server Actions are the
-// route-layer equivalent): resolve the session, call ONE service method (or
-// the Better-Auth framework primitive), translate typed errors into the
-// discriminated RESULT the pane (8.8.24) maps to its copy, and rate-limit.
+// Server Actions for the Account › Profile pane (Story 8.8). Transport only (per
+// CLAUDE.md, Server Actions are the route-layer equivalent): resolve the session,
+// call ONE service method (or the Better-Auth framework primitive), translate
+// typed errors into the discriminated RESULT the pane maps to its copy.
+//
+// - updateProfileNameAction (8.8.24, the scaffold) — the name inline-edit on the
+//   Profile card, over usersService.updateProfile.
+// - changePasswordAction / sendSetPasswordLinkAction (8.8.23) — the security
+//   controls, rate-limited and branched by password capability.
 //
 // Two paths, branched by `usersService.getPasswordCapability` on the read side
 // (8.8.21 / the pane SSR):
@@ -41,6 +46,33 @@ async function requireSession() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
   return session;
+}
+
+// ── Update display name (the Profile card's inline edit, 8.8.24) ───────────
+
+export type UpdateProfileNameResult =
+  | { ok: true; name: string }
+  | { ok: false; code: 'INVALID_NAME'; message: string };
+
+/**
+ * Persist the session user's display name from the Profile card's inline edit.
+ * Delegates validation (non-empty, length bound) to `usersService.updateProfile`
+ * and maps its typed `InvalidProfileNameError` to a field-level result the card
+ * renders beside the input. Returns the canonical (trimmed) name so the optimistic
+ * cell shows exactly what was stored. No rate limit: a name edit is a benign,
+ * idempotent own-account write (unlike the password paths).
+ */
+export async function updateProfileNameAction(name: string): Promise<UpdateProfileNameResult> {
+  const session = await requireSession();
+  try {
+    const profile = await usersService.updateProfile(session.user.id, { name });
+    return { ok: true, name: profile.name };
+  } catch (err) {
+    if (err instanceof InvalidProfileNameError) {
+      return { ok: false, code: 'INVALID_NAME', message: err.message };
+    }
+    throw err;
+  }
 }
 
 // ── Change password (credential users) ───────────────────────────────────
