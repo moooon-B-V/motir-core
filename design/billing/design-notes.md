@@ -298,6 +298,17 @@ sub-surfaces:
 > ([Linear — Billing & plans](https://linear.app/docs/billing-and-plans);
 > [Atlassian — manage users & user tiers](https://support.atlassian.com/subscriptions-and-billing/docs/manage-users-and-user-tiers/))
 
+> **Implementation owner (do NOT build it here).** The mechanism behind this
+> proration — keeping the Stripe seat `quantity` in sync with org membership on
+> invite/remove — is **8.1.12 / MOTIR-1256** (a motir-ai `seat-quantity` endpoint
+>
+> - a motir-core membership-change hook, behind `MOTIR_CLOUD`, surfaced as a
+>   planning gap on 2026-06-22). It is NOT in 8.1.7/8.1.8: those render these states
+>   (the panel-6 subscription card + the invite-time seat note); the seat-quantity
+>   write itself is 8.1.12. Inviting a member **does not** pop a Checkout/pay-wall —
+>   the seat count updates and Stripe accrues the prorated delta to the **next
+>   invoice** (auto-charged on the card on file; a monthly true-up for annual).
+
 ### Panel 7 — paywall at the AI boundary (8.1.8)
 
 The in-product upsell. **This ACTIVATES the passive "out of credits" slot the
