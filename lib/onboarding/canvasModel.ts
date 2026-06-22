@@ -24,10 +24,11 @@ import type { DiscoveryState } from './discoveryLoop';
 // idea renders as its own node above these, not as a station.)
 export type StationKind = DirectionDocKind | 'design' | 'plan';
 
-// done = reviewed/captured; active = the current frontier under work; deciding =
-// the validation frontier parked on the blocking validate-early ask; upcoming =
-// not reached yet.
-export type StationState = 'done' | 'active' | 'deciding' | 'upcoming';
+// done = reviewed/captured; active = the current frontier ("you are here");
+// working = the conductor is mid-draft on this tier (a LOADING station —
+// "Drafting now…"); deciding = the validation frontier parked on the blocking
+// validate-early ask; upcoming = not reached yet.
+export type StationState = 'done' | 'active' | 'working' | 'deciding' | 'upcoming';
 
 export interface StationView {
   kind: StationKind;
@@ -45,18 +46,49 @@ export const STATION_ORDER: readonly StationKind[] = [...DIRECTION_DOC_ORDER, 'd
  * Build the ordered station list + each station's visual state from the loop
  * state. The frontier (the active/deciding station) is the validation tier when
  * the blocking validate-early ask is parked, else the tier under review, else the
- * latest produced tier. Earlier produced tiers read "done"; unreached ones
- * "upcoming". Idea is "done" once any tier exists (it has been captured into the
- * discovery write-up), "active" while the very first draft is still forming.
+ * latest produced tier — and, before any tier exists, the first not-done station
+ * (discovery) so there is always a "you are here". Earlier produced tiers read
+ * "done"; unreached ones "upcoming". Idea is "done" once any tier exists (it has
+ * been captured into the discovery write-up), "active" while the very first draft
+ * is still forming.
  */
 export function buildStations(state: DiscoveryState): StationView[] {
   const produced = new Set<DirectionDocKind>(state.producedKinds);
   const deciding = state.pendingAsk !== null;
+  const tiersComplete = state.session.status === 'tiers_complete';
+  // The tier the conductor is actively forming (grounding → drafting). It renders
+  // as a distinct LOADING station ("Drafting now…"), NEVER a settled "you are
+  // here": a mid-draft tier must read as in-progress/loading, mirroring the chat
+  // rail's drafting spinner (the grounding phase, with no tier yet, forms the
+  // first not-done station).
+  const workingKind: DirectionDocKind | null = state.working
+    ? (state.working.tier ?? firstNotDoneTier(produced))
+    : null;
+  // The current-position frontier: the validation tier when the blocking ask is
+  // parked; else the tier being drafted (it IS where you are — keeps the prior
+  // produced tier from also lighting up); else the tier under review; else the
+  // latest produced tier. And when NOTHING has been produced yet and the session
+  // is still going, the FIRST not-done station (discovery) so the canvas always
+  // shows a "you are here" rather than an all-ghosted skeleton (MOTIR-1258 — the
+  // state every never-onboarded project hydrates to). Stays `null` only once the
+  // tiers are complete, where the design slot takes over.
   const frontier: DirectionDocKind | null = deciding
     ? 'validation'
-    : (state.activeKind ??
-      (state.producedKinds.length ? state.producedKinds[state.producedKinds.length - 1]! : null));
-  const tiersComplete = state.session.status === 'tiers_complete';
+    : (workingKind ??
+      state.activeKind ??
+      (state.producedKinds.length
+        ? state.producedKinds[state.producedKinds.length - 1]!
+        : tiersComplete
+          ? null
+          : firstNotDoneTier(produced)));
+
+  // A tier's state: a tier being drafted is "working" (loading) above all; else
+  // the frontier is "deciding"/"active"; else it falls to its base (done/upcoming).
+  const stateFor = (kind: DirectionDocKind, base: StationState): StationState => {
+    if (kind === workingKind) return 'working';
+    if (kind === frontier) return deciding && kind === 'validation' ? 'deciding' : 'active';
+    return base;
+  };
 
   return STATION_ORDER.map((kind): StationView => {
     if (kind === 'design' || kind === 'plan') {
@@ -70,16 +102,28 @@ export function buildStations(state: DiscoveryState): StationView[] {
         openable: false,
       };
     }
-    // A direction tier.
+    // A direction tier. A not-yet-produced tier is "upcoming" unless it is the
+    // frontier/working one; `openable` stays false until a doc is saved.
     if (!produced.has(kind)) {
-      return { kind, state: 'upcoming', optional: TIER_META[kind].optional, openable: false };
+      return {
+        kind,
+        state: stateFor(kind, 'upcoming'),
+        optional: TIER_META[kind].optional,
+        openable: false,
+      };
     }
-    let stationState: StationState = 'done';
-    if (kind === frontier) {
-      stationState = deciding && kind === 'validation' ? 'deciding' : 'active';
-    }
-    return { kind, state: stationState, optional: TIER_META[kind].optional, openable: true };
+    return {
+      kind,
+      state: stateFor(kind, 'done'),
+      optional: TIER_META[kind].optional,
+      openable: true,
+    };
   });
+}
+
+/** The first tier not yet produced, in journey order (discovery when none are). */
+function firstNotDoneTier(produced: Set<DirectionDocKind>): DirectionDocKind | null {
+  return DIRECTION_DOC_ORDER.find((kind) => !produced.has(kind)) ?? null;
 }
 
 /**
