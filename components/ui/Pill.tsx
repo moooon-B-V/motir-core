@@ -78,26 +78,32 @@ const pillVariants = cva(
       },
       // Project membership roles (Story 6.4 · design/projects access-members):
       // admin → lavender, member → sky, viewer → mint — the hue in the tint,
-      // charcoal text (AA-safe, finding #35), same recipe as `status`.
+      // charcoal text (AA-safe, finding #35), same recipe as `status`. Routed
+      // through the DEDICATED `--el-role-*` tokens (MOTIR-1274 · 1266.3) so a
+      // palette can tune roles apart from the other --el-tint-* meanings; each
+      // defaults to its prior tint (zero visual change).
       memberRole: {
-        admin: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
-        member: 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
-        viewer: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
+        admin: 'bg-(--el-role-admin) text-(--el-text-strong) border-transparent',
+        member: 'bg-(--el-role-member) text-(--el-text-strong) border-transparent',
+        viewer: 'bg-(--el-role-viewer) text-(--el-text-strong) border-transparent',
       },
       // Organization roles (Story 6.10 · design/org-admin): owner → lavender
       // (the highest, brand-purple tier), admin → sky, member → mint — the hue
       // in the tint, charcoal text (AA-safe, finding #35), same recipe as above.
+      // Dedicated `--el-org-role-*` tokens (MOTIR-1274 · 1266.3); zero change.
       orgRole: {
-        owner: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
-        admin: 'bg-(--el-tint-sky) text-(--el-text-strong) border-transparent',
-        member: 'bg-(--el-tint-mint) text-(--el-text-strong) border-transparent',
+        owner: 'bg-(--el-org-role-owner) text-(--el-text-strong) border-transparent',
+        admin: 'bg-(--el-org-role-admin) text-(--el-text-strong) border-transparent',
+        member: 'bg-(--el-org-role-member) text-(--el-text-strong) border-transparent',
       },
       tone: {
         neutral: 'bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)',
         // Epic-level privacy "Not public" badge (Story 6.14 · design
         // epic-privacy panels 1/2/6b) — lavender tint, charcoal text, the same
         // AA-safe recipe as `status="planned"` / `memberRole="admin"` (≈9.7:1).
-        private: 'bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent',
+        // Dedicated `--el-privacy-private` token (MOTIR-1274 · 1266.3); the
+        // matching `--el-privacy-public` is defined ahead of a "public" badge.
+        private: 'bg-(--el-privacy-private) text-(--el-text-strong) border-transparent',
       },
     },
     defaultVariants: {},

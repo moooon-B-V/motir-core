@@ -76,14 +76,19 @@ export interface MultiSelectPickerProps {
   className?: string;
 }
 
-// Static class maps — Tailwind needs literal class strings per tint.
+// Static class maps — Tailwind needs literal class strings per tint. The chip
+// background routes through the DEDICATED `--el-label-1..6` ramp (MOTIR-1274 ·
+// 1266.3): the picker's only `tint` consumer is the label chip (lib/labels/
+// labelTint.ts maps a name → one of these six in this exact order), so a palette
+// can tune label hues apart from roles/avatars. Each `--el-label-N` defaults to
+// its prior `--el-tint-*` value, so this is a zero-visual-change rename.
 const TINT_CHIP: Record<MultiSelectTint, string> = {
-  peach: 'bg-(--el-tint-peach)',
-  rose: 'bg-(--el-tint-rose)',
-  mint: 'bg-(--el-tint-mint)',
-  lavender: 'bg-(--el-tint-lavender)',
-  sky: 'bg-(--el-tint-sky)',
-  yellow: 'bg-(--el-tint-yellow)',
+  peach: 'bg-(--el-label-1)',
+  rose: 'bg-(--el-label-2)',
+  mint: 'bg-(--el-label-3)',
+  lavender: 'bg-(--el-label-4)',
+  sky: 'bg-(--el-label-5)',
+  yellow: 'bg-(--el-label-6)',
 };
 
 /**

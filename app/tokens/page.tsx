@@ -45,6 +45,56 @@ import type { ThemePattern } from '@/lib/theme/types';
 import { STYLE_DIMENSIONS, STYLE_REGISTRY, STYLE_IDS } from '@/lib/theme/styles';
 import { StyleVignette } from '@/components/theme/StyleVignette';
 
+// Identity hues (MOTIR-1274 · 1266.3) — the dedicated --el-* families that
+// un-collapsed the shared --el-tint-* pool (roles / org-roles / privacy / labels
+// / avatars) plus the decoupled --el-notif-* / --el-model-* tokens. Each row is a
+// [token, label]; the specimen renders the resolved hue so a palette swap is
+// visible here. design/design-system/design-notes.md §D.
+const IDENTITY_HUE_GROUPS: { heading: string; tokens: [string, string][] }[] = [
+  {
+    heading: 'Roles · org-roles · privacy',
+    tokens: [
+      ['--el-role-admin', 'role admin'],
+      ['--el-role-member', 'role member'],
+      ['--el-role-viewer', 'role viewer'],
+      ['--el-org-role-owner', 'org owner'],
+      ['--el-org-role-admin', 'org admin'],
+      ['--el-org-role-member', 'org member'],
+      ['--el-privacy-private', 'privacy private'],
+      ['--el-privacy-public', 'privacy public'],
+    ],
+  },
+  {
+    heading: 'Label ramp',
+    tokens: [1, 2, 3, 4, 5, 6].map((n) => [`--el-label-${n}`, `label ${n}`] as [string, string]),
+  },
+  {
+    heading: 'Avatar ramp',
+    tokens: [
+      ['--el-avatar-peach', 'avatar peach'],
+      ['--el-avatar-rose', 'avatar rose'],
+      ['--el-avatar-mint', 'avatar mint'],
+      ['--el-avatar-lavender', 'avatar lavender'],
+      ['--el-avatar-sky', 'avatar sky'],
+      ['--el-avatar-yellow', 'avatar yellow'],
+      ['--el-avatar-fallback', 'avatar fallback'],
+    ],
+  },
+  {
+    heading: 'Notification badges · AI model dots',
+    tokens: [
+      ['--el-notif-mentioned', 'notif mentioned'],
+      ['--el-notif-commented', 'notif commented'],
+      ['--el-notif-assigned', 'notif assigned'],
+      ['--el-notif-transitioned', 'notif transitioned'],
+      ['--el-model-opus', 'model opus'],
+      ['--el-model-sonnet', 'model sonnet'],
+      ['--el-model-haiku', 'model haiku'],
+      ['--el-model-deepseek', 'model deepseek'],
+    ],
+  },
+];
+
 /**
  * /tokens — the design system reference route.
  *
@@ -567,6 +617,58 @@ export default function TokensPage() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section title="Identity hues (--el-role-* / --el-org-role-* / --el-privacy-* / --el-label-* / --el-avatar-* / --el-notif-* / --el-model-*)">
+        {IDENTITY_HUE_GROUPS.map((group) => (
+          <div key={group.heading} style={{ marginBottom: 'var(--spacing-md)' }}>
+            <div
+              className="font-mono text-xs"
+              style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-sm)' }}
+            >
+              {group.heading}
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: 'var(--spacing-md)',
+              }}
+            >
+              {group.tokens.map(([token, label]) => (
+                <div
+                  key={token}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--spacing-sm)',
+                    padding: 'var(--spacing-sm)',
+                    border: '1px solid var(--el-border)',
+                    borderRadius: 'var(--radius-card)',
+                  }}
+                >
+                  {/* Decorative resolved-hue chip; the token name is visible text
+                      below, so no aria-label (axe aria-prohibited-attr). */}
+                  <div
+                    aria-hidden
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      flex: 'none',
+                      borderRadius: 'var(--radius-badge)',
+                      backgroundColor: `var(${token})`,
+                      border: '1px solid var(--el-border)',
+                    }}
+                  />
+                  <div className="font-mono text-xs">
+                    <div style={{ color: 'var(--el-page-text)' }}>{label}</div>
+                    <div style={{ color: 'var(--el-page-text-muted)' }}>{token}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </Section>
 
       <Section title="Radius">

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { LabelDto } from '@/lib/dto/labels';
 import type { ComponentDto } from '@/lib/dto/components';
-import { labelTint } from '@/lib/labels/labelTint';
+import { labelTint, LABEL_TINTS } from '@/lib/labels/labelTint';
 import { LABELS_PER_ISSUE_LIMIT } from '@/lib/labels/constants';
 
 // The Labels / Components rail cards (Subtask 5.4.8), against
@@ -69,8 +69,14 @@ describe('LabelsCard', () => {
       <LabelsCard workItemId="wi_1" projectKey="PROD" initialLabels={[apiLabel, perfLabel]} />,
     );
     expect(screen.getByText('api')).toBeTruthy();
-    expect(container.innerHTML).toContain(`bg-(--el-tint-${labelTint('api')})`);
-    expect(container.innerHTML).toContain(`bg-(--el-tint-${labelTint('perf-q3')})`);
+    // Label chips route through the dedicated `--el-label-1..6` ramp (MOTIR-1274 ·
+    // 1266.3): labelTint hashes the name → a tint, mapped to its 1-based index in
+    // LABEL_TINTS (peach=1 … yellow=6). Zero visual change (each defaults to the
+    // matching `--el-tint-*`).
+    const labelToken = (name: string) =>
+      `bg-(--el-label-${LABEL_TINTS.indexOf(labelTint(name)) + 1})`;
+    expect(container.innerHTML).toContain(labelToken('api'));
+    expect(container.innerHTML).toContain(labelToken('perf-q3'));
     // Display mode: chips only, no remove ×.
     expect(screen.queryByRole('button', { name: 'Remove api' })).toBeNull();
   });

@@ -154,7 +154,9 @@ describe('ValueChip', () => {
       </>,
     );
     const [tinted, neutral] = Array.from(container.querySelectorAll('span.inline-flex'));
-    expect(tinted?.className).toContain('bg-(--el-tint-sky)');
+    // The chip tint routes through the dedicated `--el-label-1..6` ramp (MOTIR-1274
+    // · 1266.3); `sky` is the 5th tint → `--el-label-5` (zero visual change).
+    expect(tinted?.className).toContain('bg-(--el-label-5)');
     expect(tinted?.className).toContain('text-(--el-text-strong)');
     expect(neutral?.className).toContain('bg-(--el-surface)');
     expect(neutral?.className).toContain('border-(--el-border)');
