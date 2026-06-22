@@ -228,6 +228,149 @@ describe('reportsService.getBurndownSeries — derivation', () => {
   });
 });
 
+// MOTIR-1285 — a sprint entered with already-`done` items must keep those points
+// OUT of the remaining line: a done issue contributes 0 to remaining regardless
+// of WHEN/HOW it joined the sprint (the verified Linear behaviour; Jira literally
+// mis-counts this as added scope — the bug being fixed). Remaining at any time =
+// the NOT-done in-scope points at that time, so the drawn line never disagrees
+// with the numeric `rollupForSprint().remaining`.
+describe('reportsService.getBurndownSeries — already-done items stay out of remaining (MOTIR-1285)', () => {
+  it('a DONE item added mid-sprint does NOT raise the line (no phantom scope-add)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'AddDone' }, fx.ctx);
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createTestWorkItem(fx, { kind: 'task', title: 'C' });
+    const e = await createTestWorkItem(fx, { kind: 'task', title: 'E (done, added later)' });
+
+    // Present state: B,C committed at start (both not-done at start); E is added
+    // mid-sprint having ALREADY been completed BEFORE it joined.
+    await place(b.id, sprint.id, 'done', 8);
+    await place(c.id, sprint.id, 'todo', 3);
+    await place(e.id, sprint.id, 'done', 10);
+    // Locked baseline = B+C at start (11 pts / 2 items); E is NOT in it.
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 10),
+      completedAt: utcDay(2026, 6, 10),
+      committedPoints: 11,
+      committedIssueCount: 2,
+    });
+    // E completed BEFORE the sprint started (05-28 — outside the window, so no
+    // burn event lands inside it), then was added to the sprint on 06-05.
+    await addRevision(e.id, fx.ownerId, utcDay(2026, 5, 28), {
+      status: { from: 'todo', to: 'done' },
+    });
+    await addRevision(e.id, fx.ownerId, utcDay(2026, 6, 5), {
+      sprintId: { from: null, to: sprint.id },
+    });
+    // B done 06-06 (a real in-sprint burn).
+    await addRevision(b.id, fx.ownerId, utcDay(2026, 6, 6), {
+      status: { from: 'todo', to: 'done' },
+    });
+
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    const at = byDate(series.days);
+
+    // The actual line starts at the NOT-done work at start (B+C = 11), NOT the
+    // committed total, and is FLAT across the day E (done) is added.
+    expect(at('2026-06-02').remaining).toBe(11);
+    expect(at('2026-06-05').remaining).toBe(11); // E added but already done → no rise
+    expect(at('2026-06-06').remaining).toBe(3); // B (8) done → real burn
+    // Ends at the authoritative remaining (current not-done = C only = 3).
+    expect(series.days[9]!.remaining).toBe(3);
+    // A done item's add is NOT a remaining-scope change → no misleading marker.
+    expect(series.scopeChanges).toEqual([]);
+  });
+
+  it('an item already DONE at sprint start is kept out of the baseline', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'DoneAtStart' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A (done at start)' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createTestWorkItem(fx, { kind: 'task', title: 'C' });
+
+    // A,B,C all in the sprint from the start; A was already done at start.
+    await place(a.id, sprint.id, 'done', 5);
+    await place(b.id, sprint.id, 'done', 8);
+    await place(c.id, sprint.id, 'todo', 3);
+    // Locked baseline = the start snapshot of ALL members (5+8+3 = 16) — A's done
+    // points are IN the committed total but must NOT show in the remaining line.
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 10),
+      completedAt: utcDay(2026, 6, 10),
+      committedPoints: 16,
+      committedIssueCount: 3,
+    });
+    // A completed BEFORE the sprint (no burn event inside the window); B done 06-06.
+    await addRevision(a.id, fx.ownerId, utcDay(2026, 5, 28), {
+      status: { from: 'todo', to: 'done' },
+    });
+    await addRevision(b.id, fx.ownerId, utcDay(2026, 6, 6), {
+      status: { from: 'todo', to: 'done' },
+    });
+
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    const at = byDate(series.days);
+
+    // committed (the guideline + "Committed" annotation) stays the locked total.
+    expect(series.committed).toBe(16);
+    // The actual remaining line excludes A (done at start): starts at B+C = 11.
+    expect(at('2026-06-02').remaining).toBe(11);
+    expect(at('2026-06-06').remaining).toBe(3); // B (8) done → C (3) remains
+    expect(series.days[9]!.remaining).toBe(3); // == rollup.remaining (only C not done)
+  });
+
+  it('reconciles the live-bug shape: done-at-start + done-added-mid + real burn all agree with the roll-up', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Combined' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A (done at start)' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B (burns in-sprint)' });
+    const c = await createTestWorkItem(fx, { kind: 'task', title: 'C (stays open)' });
+    const e = await createTestWorkItem(fx, { kind: 'task', title: 'E (done, added mid)' });
+
+    await place(a.id, sprint.id, 'done', 20); // done at start
+    await place(b.id, sprint.id, 'done', 30); // burns during sprint
+    await place(c.id, sprint.id, 'todo', 19); // never done
+    await place(e.id, sprint.id, 'done', 21); // added mid-sprint, already done
+    // Start snapshot of members A,B,C = 20+30+19 = 69 (E joins later).
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 10),
+      completedAt: utcDay(2026, 6, 10),
+      committedPoints: 69,
+      committedIssueCount: 3,
+    });
+    await addRevision(a.id, fx.ownerId, utcDay(2026, 5, 20), {
+      status: { from: 'todo', to: 'done' },
+    }); // A done before start
+    await addRevision(e.id, fx.ownerId, utcDay(2026, 5, 25), {
+      status: { from: 'todo', to: 'done' },
+    }); // E done before joining
+    await addRevision(e.id, fx.ownerId, utcDay(2026, 6, 4), {
+      sprintId: { from: null, to: sprint.id },
+    }); // E joins (already done)
+    await addRevision(b.id, fx.ownerId, utcDay(2026, 6, 7), {
+      status: { from: 'todo', to: 'done' },
+    }); // B real burn
+
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    const at = byDate(series.days);
+
+    // The actual line: not-done at start = B+C = 49; flat across E's done-add;
+    // drops to 19 when B burns; ends at the authoritative roll-up remaining. The
+    // roll-up: current members A,B,C,E = 90 pts, A+B+E done = 71 → remaining 19
+    // (only C is not done) — the chart and the numeric remaining agree.
+    expect(at('2026-06-02').remaining).toBe(49);
+    expect(at('2026-06-04').remaining).toBe(49); // E added but already done → flat
+    expect(at('2026-06-07').remaining).toBe(19); // B (30) done
+    expect(series.days[9]!.remaining).toBe(19); // == rollupForSprint().remaining
+  });
+});
+
 describe('reportsService.getBurndownSeries — degraded + edge states', () => {
   it('degrades a wholly unestimated sprint to the issue-count series (never NaN)', async () => {
     const fx = await makeWorkItemFixture();

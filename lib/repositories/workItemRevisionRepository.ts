@@ -194,8 +194,16 @@ export const workItemRevisionRepository = {
    *   • a status transition INTO a `done`-category status (and out of a non-done
    *     one) BURNS down  → `-stat`
    *   • a transition OUT of done (reopened)                    → `+stat`
-   *   • an issue ADDED to this sprint after start (scope up)   → `+stat`
-   *   • an issue REMOVED from this sprint (scope down)         → `-stat`
+   *   • a NOT-`done` issue ADDED to this sprint after start    → `+stat`
+   *   • a NOT-`done` issue REMOVED from this sprint            → `-stat`
+   * A scope change of an ALREADY-`done` issue nets **0** (MOTIR-1285): a done
+   * item carries no remaining work into or out of the sprint, so its add/remove
+   * must not move the line (else its points would raise the remaining and never
+   * burn back down — there is no completion event inside the window to offset
+   * them). Done-ness at the scope event is the category of the item's most-recent
+   * status transition AT OR BEFORE that instant (the `ev` LATERAL — it searches
+   * the whole trail, so a completion that happened BEFORE the item joined still
+   * counts; no prior transition = the initial, not-`done` status).
    * `stat` is the per-issue statistic: `COALESCE(storyPoints, 0)` for the points
    * series, or `1` for the issue-count series (`useCount`). An issue unestimated
    * at read time contributes 0 to the points series (its `storyPoints` is NULL),
@@ -233,6 +241,16 @@ export const workItemRevisionRepository = {
     const reopened = Prisma.sql`${isStatusEvent} AND (ts."category" IS NULL OR ts."category" <> 'done') AND fs."category" = 'done'`;
     const scopeUp = Prisma.sql`(r."diff" -> 'sprintId' ->> 'to') = ${sprintId} AND COALESCE(r."diff" -> 'sprintId' ->> 'from', '') <> ${sprintId}`;
     const scopeDown = Prisma.sql`(r."diff" -> 'sprintId' ->> 'from') = ${sprintId} AND COALESCE(r."diff" -> 'sprintId' ->> 'to', '') <> ${sprintId}`;
+    // MOTIR-1285: a scope change only moves "remaining" by the item's NOT-`done`
+    // points AS OF the event time — an already-`done` item carries 0 remaining
+    // work into (or out of) the sprint, so its add/remove must net zero (no
+    // phantom rise that never burns back down). `ev."cat"` is the item's status
+    // category as of the scope event (the `ev` LATERAL below); a NULL category
+    // (no prior status transition) is the initial, not-`done` status. The
+    // status-event kinds (burn/reopen) already account for done-ness directly.
+    const scopeNotDone = Prisma.sql`(ev."cat" IS NULL OR ev."cat" <> 'done')`;
+    const scopeUpDelta = Prisma.sql`CASE WHEN ${scopeNotDone} THEN (${stat}) ELSE 0 END`;
+    const scopeDownDelta = Prisma.sql`CASE WHEN ${scopeNotDone} THEN -1 * (${stat}) ELSE 0 END`;
 
     return db.$queryRaw<Array<{ day: string; remainingDelta: number; scopeDelta: number }>>`
       SELECT
@@ -241,15 +259,15 @@ export const workItemRevisionRepository = {
           CASE
             WHEN ${burnedDown} THEN -1 * (${stat})
             WHEN ${reopened} THEN (${stat})
-            WHEN ${scopeUp} THEN (${stat})
-            WHEN ${scopeDown} THEN -1 * (${stat})
+            WHEN ${scopeUp} THEN (${scopeUpDelta})
+            WHEN ${scopeDown} THEN (${scopeDownDelta})
             ELSE 0
           END
         ), 0)::float8 AS "remainingDelta",
         COALESCE(SUM(
           CASE
-            WHEN ${scopeUp} THEN (${stat})
-            WHEN ${scopeDown} THEN -1 * (${stat})
+            WHEN ${scopeUp} THEN (${scopeUpDelta})
+            WHEN ${scopeDown} THEN (${scopeDownDelta})
             ELSE 0
           END
         ), 0)::float8 AS "scopeDelta"
@@ -264,6 +282,22 @@ export const workItemRevisionRepository = {
       LEFT JOIN "workflow_status" ts
         ON ts."project_id" = w."projectId"
        AND ts."key" = (r."diff" -> 'status' ->> 'to')
+      LEFT JOIN LATERAL (
+        -- The item status CATEGORY as of this revision instant: the "to"
+        -- category of its most-recent status transition at or before
+        -- r."changedAt". Searches the WHOLE trail (not the sprint window), so a
+        -- completion BEFORE the item joined the sprint still counts it as done.
+        SELECT pts."category" AS cat
+        FROM "work_item_revision" pr
+        JOIN "workflow_status" pts
+          ON pts."project_id" = w."projectId"
+         AND pts."key" = (pr."diff" -> 'status' ->> 'to')
+        WHERE pr."workItemId" = r."workItemId"
+          AND pr."diff" -> 'status' IS NOT NULL
+          AND pr."changedAt" <= r."changedAt"
+        ORDER BY pr."changedAt" DESC, pr."id" DESC
+        LIMIT 1
+      ) ev ON TRUE
       WHERE r."changeKind" = 'updated'
         AND r."changedAt" >= ${window.start}
         AND r."changedAt" <= ${window.end}
