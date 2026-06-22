@@ -232,6 +232,20 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
   tax-at-checkout, credits-vs-price, and that **seats are billed separately —
   manage them on the Motir plan screen (panel 6)** (the only cross-product link).
 
+**Credit top-up (the one-time overage purchase — `creditService.topUp()`).** Below
+the ladder, a **"Top up credits"** `Card`: the recurring plan covers the monthly
+allotment, top-ups are the **pay-as-you-go overage** beyond it (ADR §2/§3,
+`credit_topup` Stripe Price, `mode: 'payment'` one-time). It shows the current
+**balance** + allotment-used line, a row of **bundle** options
+(**1,000 · $10 / 5,000 · $50 / 10,000 · $100 / Custom × 1,000**, one selected with
+the accent border), a **"Buy {n} credits — ${total}"** CTA, and the rate line
+(**"$10 per 1,000 credits · one-time · tax at checkout"** — a price the org pays
+Stripe, distinct from the in-product credit allotment). A `note` gates it:
+**top-ups need a paid AI plan — the Free trial can't top up** (matching the §2
+table: Free has no top-ups), **owner-only** (§7). The paywall's "Buy credit
+top-up" (panel 7a) routes here. (`$` is legitimate here — it's a purchase price,
+not the credit allotment, which is never shown as currency.)
+
 > **Mirror (rung 1 — cited).** The monthly/annual toggle is the SaaS-standard
 > pricing control: place it below the headline above the cards, **default to
 > annual** with a visible discount, show the **per-month equivalent** for annual
@@ -489,6 +503,15 @@ Tier-0 under `--el-*`) — verified.
   internal usage allotment; the price shown is the AI plan fee, billed by Stripe to
   the {org} organization. Your Motir seats are billed separately — manage them on the
   Motir plan screen."**
+- Top-up (panel 5): **"Top up credits"** / **"A one-time purchase on top of your
+  plan — added to your balance right away, used after your monthly allotment."**;
+  **"Balance {n} credits · {used} of this month's {allotment} allotment used"**;
+  bundles **"{n} credits"** / **"${price}"** (1,000/$10 · 5,000/$50 · 10,000/$100 ·
+  **"Custom"** / **"× 1,000"**); **"Buy {n} credits — ${total}"**; rate **"$10 per
+  1,000 credits · one-time · tax at checkout. Credits are an allotment, not currency
+  — this is the price you pay Stripe."**; gate **"Top-ups are available on a paid AI
+  plan; the Free trial can't top up (choose a plan above first). Owner-only, like
+  every billing action."**
 - Seats (panel 6 + the panel-2 preview): **"Scaling bills 1 seat per member — {n}
   today"** / **"{n} × ${seat} = ${total} / mo"** / **"Seats follow membership ·
   prorated automatically"**; review **"Scale up Motir"** / **"One seat per

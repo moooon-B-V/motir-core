@@ -1030,6 +1030,70 @@
         font-weight: 600;
       }
 
+      /* ── Credit top-up (one-time overage purchase, $10 / 1,000) ──────────── */
+      .topup-bal {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-bottom: 4px;
+      }
+      .topup-bal b {
+        color: var(--el-text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .bundles {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 4px 0 2px;
+      }
+      .bundle {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 124px;
+        background: var(--el-page-bg);
+      }
+      .bundle.sel {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 1px var(--el-accent);
+        background: var(--el-surface-soft);
+      }
+      .bundle .bcr {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .bundle .bpr {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bundle.custom {
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-secondary);
+        border-style: dashed;
+      }
+      .topup-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .topup-rate {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
       /* cadence-driven price visibility — one toggle re-prices the whole store */
       .store[data-cadence='annual'] .cad-m {
         display: none;
@@ -1979,6 +2043,61 @@
               </div>
             </div>
           </div>
+
+          <!-- Credit top-up — one-time overage purchase, beyond the monthly plan -->
+          <div class="card" style="margin-top: 22px">
+            <div class="card-head">
+              <div class="ttl">
+                <span class="gico ai"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                ></span>
+                <div>
+                  <h3>Top up credits</h3>
+                  <div class="hsub">
+                    A one-time purchase on top of your plan — added to your balance right away, used
+                    after your monthly allotment.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="topup-bal">
+                <svg viewBox="0 0 24 24" style="width: 14px; height: 14px">
+                  <use href="#i-coins" />
+                </svg>
+                Balance <b>1,420 credits</b> · 580 of this month’s 2,000 allotment used
+              </div>
+              <div class="bundles">
+                <div class="bundle">
+                  <span class="bcr">1,000 credits</span><span class="bpr">$10</span>
+                </div>
+                <div class="bundle sel">
+                  <span class="bcr">5,000 credits</span><span class="bpr">$50</span>
+                </div>
+                <div class="bundle">
+                  <span class="bcr">10,000 credits</span><span class="bpr">$100</span>
+                </div>
+                <div class="bundle custom">
+                  <span class="bcr">Custom</span><span class="bpr">× 1,000</span>
+                </div>
+              </div>
+              <div class="topup-foot">
+                <button class="btn btn-primary">Buy 5,000 credits — $50</button>
+                <span class="topup-rate"
+                  >$10 per 1,000 credits · one-time · tax at checkout. Credits are an allotment, not
+                  currency — this is the price you pay Stripe.</span
+                >
+              </div>
+              <div class="note" style="margin-top: 14px">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  >Top-ups are available on a paid AI plan; the <b>Free</b> trial can’t top up
+                  (choose a plan above first). Owner-only, like every billing action.</span
+                >
+              </div>
+            </div>
+          </div>
+
           <div class="note" style="margin-top: 22px">
             <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
             <span
