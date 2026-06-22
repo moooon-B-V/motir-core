@@ -103,6 +103,33 @@ export const PALETTE_REGISTRY = {
       "Figma's vibrant multi-colour brand + Airtable's colourful, friendly palette, on Radix Violet/Iris/Pink/Blue scales.",
     designDoc: 'docs/palettes/spectrum.md',
   },
+  amber: {
+    id: 'amber',
+    name: 'Amber',
+    tagline:
+      'Warm and energetic — a bright trading-floor gold primary over warm sand neutrals; dark labels on the gold.',
+    inspiration:
+      'getdesign.md — Binance (bold yellow on monochrome) / ClickHouse / Miro (bright yellow), on Radix Amber/Yellow + Sand scales.',
+    designDoc: 'docs/palettes/amber.md',
+  },
+  sienna: {
+    id: 'sienna',
+    name: 'Sienna',
+    tagline:
+      'Warm and friendly — a burnt-orange primary over terracotta-warm neutrals; an inviting, workshop feel.',
+    inspiration:
+      'getdesign.md — Zapier (warm, friendly, illustration-driven orange), on Radix Orange/Tomato + Sand scales.',
+    designDoc: 'docs/palettes/sienna.md',
+  },
+  garnet: {
+    id: 'garnet',
+    name: 'Garnet',
+    tagline:
+      'Rich and bold — a deep wine-red primary over warm rose-grey neutrals; white labels on the garnet.',
+    inspiration:
+      'getdesign.md — Ferrari (Ferrari red) / Pinterest / Sanity (red accent), on Radix Red/Ruby/Crimson + Sand scales.',
+    designDoc: 'docs/palettes/garnet.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
