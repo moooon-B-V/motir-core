@@ -107,27 +107,27 @@ export const PALETTE_REGISTRY = {
     id: 'amber',
     name: 'Amber',
     tagline:
-      'Warm and energetic — a bright trading-floor gold primary over warm sand neutrals; dark labels on the gold.',
+      'Warm and electric — Binance trading-floor gold over the exchange’s graphite near-blacks; dark labels on the gold.',
     inspiration:
-      'getdesign.md — Binance (bold yellow on monochrome) / ClickHouse / Miro (bright yellow), on Radix Amber/Yellow + Sand scales.',
+      'Binance — its whole documented palette: the bold gold #F0B90B/#FCD535 over cool graphite trading-floor blacks (#0B0E11/#1E2329) + greys, with the buy-green/sell-red semantics.',
     designDoc: 'docs/palettes/amber.md',
   },
   sienna: {
     id: 'sienna',
     name: 'Sienna',
     tagline:
-      'Warm and vivid — a Mistral flame-orange primary over terracotta-warm neutrals; Mediterranean and inviting.',
+      'Warm and vivid — Mistral flame-orange over the Mediterranean warm-cream surfaces; dark labels on the flame.',
     inspiration:
-      'getdesign.md — Mistral AI (the Block-gradient flame, Mistral Orange #fa520f over Mediterranean warm neutrals), on Radix Orange/Tomato + Sand scales.',
+      'Mistral AI — its whole documented palette (getdesign.md/mistral.ai): the flame #fa520f + Block-gradient + Sunshine ambers over Warm-Ivory cream surfaces (#fffaeb) and Mistral-Black ink.',
     designDoc: 'docs/palettes/sienna.md',
   },
   garnet: {
     id: 'garnet',
     name: 'Garnet',
     tagline:
-      'Rich and bold — a deep wine-red primary over warm rose-grey neutrals; white labels on the garnet.',
+      'Rich and bold — Pinterest Pushpin red over the brand’s neutral greys; white labels on the red.',
     inspiration:
-      'getdesign.md — Ferrari (Ferrari red) / Pinterest / Sanity (red accent), on Radix Red/Ruby/Crimson + Sand scales.',
+      'Pinterest — its whole documented palette: Pushpin red #E60023/#BD081C over Cod-Gray ink (#111111) and neutral greys (#767676/#EFEFEF), with Gestalt “Skycicle” blue links.',
     designDoc: 'docs/palettes/garnet.md',
   },
 } satisfies Record<string, PaletteDefinition>;

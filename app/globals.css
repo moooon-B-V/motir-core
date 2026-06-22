@@ -2918,269 +2918,254 @@
 }
 
 /* ── Palette: Amber (data-palette="amber") — Subtask 8.8.34 (MOTIR-1252) ─────
-   A warm, energetic, GOLD re-skin — the first WARM-PRIMARY palette: a bright
-   trading-floor gold primary over warm sand-cream surfaces and warm-charcoal
-   ink. Mood anchored in getdesign.md's Binance (bold yellow on monochrome) /
-   ClickHouse / Miro (bright yellow) analysis; the actual light/dark ramps +
-   UI-state steps are built from Radix Colors (Amber / Yellow / Sand / Red /
-   Grass / Blue) — the accessibility-first 12-step scales designed for UI states.
-   Sand is the WARM neutral paired with the gold so the scheme reads warm, not a
-   warm accent on cold grey.
+   BINANCE's whole palette: the bold trading-floor GOLD over the exchange's
+   cool graphite near-blacks. Transcribed from Binance's documented system —
+   the warm gold primary IS what makes this a "warm" palette; the neutrals are
+   Binance's own cool greys (the whole-palette directive: a warm primary + the
+   brand's real neutrals). Brand tokens: Binance Gold #F0B90B (primary) /
+   brighter #FCD535 (on-dark accent), trading-floor blacks #0B0E11 / #181A20 /
+   "Shark" #1E2329 / #2B3139, greys #EAECEF / #B7BDC6 / #848E9C / #5E6673 /
+   #474D57, buy-green #0ECB81, sell-red #F6465D. (Binance ships no documented
+   light theme, so the light surfaces/greys are derived from its cool grey
+   family + the gold; the dark theme is the authentic trading floor.)
 
-   ⚠️ THE YELLOW TRAP: a gold/amber FILL cannot carry white text at AA, so the
-   accent-text (--color-primary-foreground) is a DARK warm ink, not #fff — dark
-   ink on the gold clears AA ≥9:1 (the el-text-inverted-flips lesson + finding
-   #35: put the hue in the FILL with dark text, never tint a page surface).
+   ⚠️ THE YELLOW TRAP: the gold FILL cannot carry white text at AA, so the
+   accent-text (--color-primary-foreground) is Binance's near-black #181A20,
+   not #fff (dark-on-gold ≥9:1) — Binance's own black-on-yellow treatment.
 
-   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
-   --el-* layer references (exactly how the [data-theme='dark'] block works), so
-   every --el-* token — surfaces, ink, accent, links, semantic, tints, and
-   work-item type hues — re-skins coherently with no per-token churn. It sets
-   ONLY colour tokens (--color-* / --el-*), NEVER a shape/feel token (radius /
-   spacing / shadow / sizing / motion / type) — that is the independent
-   data-style axis (paletteRegistry.test.ts enforces the disjointness).
-
-   Accessibility: every text-on-surface, accent-text-on-fill, link, and
-   chip-tint pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light
-   and dark — verified numerically + by rendered specimen, never eyeballed. See
-   docs/palettes/amber.md for the colour-role reference. */
+   Re-skins by overriding the Tier-0 --color-* SOURCE (as [data-theme='dark']
+   does), so every --el-* token re-skins coherently. ONLY colour tokens
+   (--color-* / --el-*), NEVER a shape/feel token (the independent data-style
+   axis; paletteRegistry.test.ts enforces the disjointness). Every --el-* role
+   clears WCAG AA (≥4.5 text; ≥3.0 icon/UI) in BOTH themes, verified
+   numerically. See docs/palettes/amber.md. */
 [data-palette='amber'] {
-  /* brand & primary — bright Binance-gold CTA. The FILL carries DARK ink
-     labels (the yellow trap); --color-primary is the gold-brown used AS
-     text/icon on a surface (AA on white/surface). */
-  --color-primary: #955d00; /* gold-brown as text/icon on a surface (AA ~5.5:1 on white) */
-  --color-primary-foreground: #2a1c00; /* DARK warm ink on the gold fill (AA ~9.2:1) */
-  --color-primary-pressed: #d99617;
-  --color-primary-fill: #f0b90b; /* bright trading-floor gold (Binance) — dark-on AA */
+  /* brand & primary — Binance Gold. The FILL carries DARK ink labels (yellow
+     trap); --color-primary is a darkened gold used AS text/icon on a surface. */
+  --color-primary: #8a6a00; /* darkened gold as text/icon (AA ~5:1 on white) */
+  --color-primary-foreground: #181a20; /* Binance near-black on the gold fill (AA ~9.6:1) */
+  --color-primary-pressed: #d4a30a;
+  --color-primary-fill: #f0b90b; /* Binance Gold — the signature; dark-on AA */
 
-  /* surfaces — white canvas over warm sand-cream sections */
+  /* surfaces — white canvas over cool graphite sections (derived light) */
   --color-background: #ffffff;
-  --color-foreground: #211c14; /* warm near-black ink */
-  --color-surface: #f6f1e8; /* warm sand-cream section background */
-  --color-surface-soft: #faf7f0; /* quieter warm division */
+  --color-foreground: #181a20; /* Binance near-black ink */
+  --color-surface: #f4f5f7; /* cool graphite section background */
+  --color-surface-soft: #fafbfc; /* quieter cool division */
 
-  /* text scale — warm sand hierarchy (Radix Sand) */
-  --color-ink: #211c14;
-  --color-charcoal: #2f2716; /* body emphasis / AA-safe text on tints */
-  --color-slate: #5f5640; /* secondary text */
-  --color-steel: #766b51; /* tertiary / footer */
-  --color-stone: #a99d83; /* faint labels */
-  --color-muted: #f6f1e8;
-  --color-muted-foreground: #6a6045; /* captions — AA on white + surfaces */
+  /* text scale — Binance cool-grey hierarchy */
+  --color-ink: #181a20;
+  --color-charcoal: #1e2329; /* Binance "Shark" — emphasis / AA-safe on tints */
+  --color-slate: #4a5159; /* secondary text */
+  --color-steel: #5e6673; /* tertiary / footer */
+  --color-stone: #848e9c; /* Binance signature grey — faint labels */
+  --color-muted: #f4f5f7;
+  --color-muted-foreground: #5e6673; /* captions — AA on white + surfaces */
 
-  /* borders — warm sand hairlines */
-  --color-hairline: #e8e0d0;
-  --color-hairline-soft: #f0ebe0;
-  --color-hairline-strong: #d6cbb4;
-  --color-border: #e8e0d0;
+  /* borders — cool graphite hairlines */
+  --color-hairline: #e6e8eb;
+  --color-hairline-soft: #eef0f2;
+  --color-hairline-strong: #c9ced4;
+  --color-border: #e6e8eb;
 
-  /* accent secondary — a deep amber-gold highlight (epic & design type hue),
+  /* accent secondary — a deep amber-gold highlight (epic & design hue),
      distinct from the bright primary gold */
-  --color-accent: #b06d00; /* deep amber — decorative / epic & design hue */
+  --color-accent: #97751a;
   --color-accent-orange: #c2410c;
   --color-accent-teal: #0e8f86;
-  --color-accent-green: #18874c;
+  --color-accent-green: #0a8f57; /* darkened Binance buy-green for light AA */
 
-  /* card tints — warm pastel washes (6 distinct feature hues; the yellow wash
-     leads the warm set) */
-  --color-tint-peach: #fce6cf;
-  --color-tint-rose: #f9dee6;
-  --color-tint-mint: #d9efe1;
-  --color-tint-lavender: #e7e2f3;
-  --color-tint-sky: #d9e8f6;
-  --color-tint-yellow: #fbeec0; /* warm gold wash — the most-used here */
+  /* card tints — gold-leaning warm washes + cool feature hues */
+  --color-tint-peach: #fbe7c2;
+  --color-tint-rose: #f7dde2;
+  --color-tint-mint: #d6ecdf;
+  --color-tint-lavender: #e2e4ee;
+  --color-tint-sky: #dbe7f5;
+  --color-tint-yellow: #fbeec0; /* gold wash — the most-used here */
 
-  /* semantic */
-  --color-success: #18804a;
+  /* semantic — Binance buy-green / sell-red, darkened for white-on / light AA */
+  --color-success: #0a8f57;
   --color-warning: #b45309;
-  --color-destructive: #c92a2a; /* white-on AA */
+  --color-destructive: #d4283f; /* Binance sell-red, darkened (white-on AA) */
   --color-destructive-foreground: #ffffff;
   --color-info: #1366c4;
 
-  /* links — a clear blue, distinct from the gold primary (AA on the soft
-     surface a hovered row paints, too) */
+  /* links — a clear blue, distinct from the gold primary */
   --color-link: #1366c4;
   --color-link-pressed: #0f4f9c;
 
-  /* sidebar hover is a concrete hex in Tier 3 (not a --color-* ref), so the
-     palette overrides it directly — one shade darker than the warm surface. */
-  --el-sidebar-item-bg-hover: #efe8d9;
+  /* sidebar hover — one shade darker than the cool surface */
+  --el-sidebar-item-bg-hover: #eceef1;
 }
 
-/* Amber — dark companion. A warm near-black canvas; the gold brightens so it
-   reads AS text on the dark surface, and the CTA fill stays bright gold with
-   dark ink labels (the yellow trap holds in dark too). */
+/* Amber — dark companion: the AUTHENTIC Binance trading floor. Cool near-black
+   canvas (#0B0E11) + "Shark" cards (#1E2329); the gold brightens to #FCD535 and
+   the CTA fill carries dark labels; semantics are Binance's real buy-green
+   #0ECB81 / sell-red #F6465D. */
 [data-palette='amber'][data-theme='dark'] {
-  --color-background: #16130c; /* warm near-black canvas */
-  --color-foreground: #f0ebe0;
-  --color-surface: #201b12;
-  --color-surface-soft: #1a160e;
+  --color-background: #0b0e11; /* Binance deepest trading-floor black */
+  --color-foreground: #eaecef;
+  --color-surface: #1e2329; /* Binance "Shark" card surface */
+  --color-surface-soft: #181a20; /* Binance app background — quieter division */
 
-  --color-ink: #f0ebe0;
-  --color-charcoal: #e3dccd;
-  --color-slate: #b0a589;
-  --color-steel: #8a8069;
-  --color-stone: #6b6250;
-  --color-muted: #201b12;
-  --color-muted-foreground: #a99d83;
+  --color-ink: #eaecef;
+  --color-charcoal: #d1d6dd;
+  --color-slate: #b7bdc6;
+  --color-steel: #848e9c;
+  --color-stone: #5e6673;
+  --color-muted: #1e2329;
+  --color-muted-foreground: #8a94a0;
 
-  --color-hairline: #322a1c;
-  --color-hairline-soft: #251f15;
-  --color-hairline-strong: #433926;
-  --color-border: #322a1c;
+  --color-hairline: #2b3139;
+  --color-hairline-soft: #1e2329;
+  --color-hairline-strong: #474d57;
+  --color-border: #2b3139;
 
-  /* gold brightened as text on the warm-dark canvas; the fill stays bright gold
-     and still carries DARK ink labels (AA ~10.5:1) */
-  --color-primary: #ffc53d;
-  --color-primary-foreground: #2a1c00;
-  --color-primary-pressed: #d99617;
-  --color-primary-fill: #ffc53d;
+  /* gold brightened to Binance #FCD535 on the dark floor; fill carries dark
+     labels (AA ~13.5:1) */
+  --color-primary: #fcd535;
+  --color-primary-foreground: #0b0e11;
+  --color-primary-pressed: #d4a30a;
+  --color-primary-fill: #fcd535;
 
-  /* warm tints, dimmed for the warm-black canvas */
-  --color-tint-peach: #2f2417;
-  --color-tint-rose: #301a25;
-  --color-tint-mint: #15281f;
-  --color-tint-lavender: #221d33;
-  --color-tint-sky: #13243a;
-  --color-tint-yellow: #2c2611;
+  /* tints dimmed for the trading-floor black */
+  --color-tint-peach: #2f2814;
+  --color-tint-rose: #2f1a22;
+  --color-tint-mint: #102a1e;
+  --color-tint-lavender: #1c2030;
+  --color-tint-sky: #122436;
+  --color-tint-yellow: #2e2810;
 
-  --color-accent: #f0b429; /* bright gold highlight on dark */
+  --color-accent: #f0b90b; /* Binance Gold highlight on dark */
   --color-accent-orange: #fb923c;
   --color-accent-teal: #2dd4bf;
-  --color-accent-green: #34d27a;
+  --color-accent-green: #0ecb81; /* Binance buy-green */
 
-  --color-success: #34d27a;
-  --color-warning: #fb923c;
-  --color-destructive: #e0586a; /* reads AS text on the warm-dark canvas */
-  --color-destructive-foreground: #16130c; /* dark ink on the bright danger fill */
+  --color-success: #0ecb81; /* Binance buy-green */
+  --color-warning: #fbab4c;
+  --color-destructive: #f6465d; /* Binance sell-red */
+  --color-destructive-foreground: #0b0e11; /* dark ink on the bright sell-red */
   --color-info: #6fb3ff;
 
-  --color-link: #7bb8ff;
+  --color-link: #6fb3ff;
   --color-link-pressed: #a3ccff;
 
-  /* sidebar hover — one shade lighter than the warm-dark surface */
-  --el-sidebar-item-bg-hover: #2a2316;
+  /* sidebar hover — one shade lighter than the dark "Shark" surface */
+  --el-sidebar-item-bg-hover: #262d35;
 }
 
 /* ── Palette: Sienna (data-palette="sienna") — Subtask 8.8.34 (MOTIR-1252) ───
-   A warm, vivid, FLAME-ORANGE re-skin: a Mistral-orange primary over warm
-   terracotta-cream surfaces and warm-brown ink — Mediterranean and inviting.
-   Mood + signature hue anchored in getdesign.md's Mistral AI analysis: the
-   "Block gradient" yellow→amber→flame→Mistral-orange (#fa520f) over Mediterranean
-   warm neutrals; the actual light/dark ramps + UI-state steps are built from
-   Radix Colors (Orange / Tomato / Sand / Red / Grass / Blue). Like Amber's gold,
-   the bright flame FILL cannot carry white at AA, so it carries DARK ink labels
-   in BOTH themes (Mistral's own dark-on-orange treatment). Paired with a warm
-   Sand neutral so the scheme reads warm.
+   MISTRAL AI's whole palette: the flame-orange over Mistral's Mediterranean
+   warm-cream surfaces. Transcribed from Mistral's documented system
+   (getdesign.md/mistral.ai): Mistral Orange #fa520f (primary) / Flame #fb6424,
+   the Block gradient (yellow→amber→flame→orange), the Sunshine family
+   (#ff8a00/#ffa110/#ffb83e/#ffd06a), Block Gold #ffe295, Warm-Ivory cream
+   surfaces (#fffaeb → #fff0c2), Mistral-Black #1f1f1f ink. Mistral ships NO
+   semantic colours, so success/warning/danger/info are added warm-consistent.
 
-   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
-   --el-* layer references (exactly how the [data-theme='dark'] block works), so
-   every --el-* token re-skins coherently with no per-token churn. It sets ONLY
-   colour tokens (--color-* / --el-*), NEVER a shape/feel token — that is the
-   independent data-style axis (paletteRegistry.test.ts enforces it).
+   ⚠️ THE YELLOW TRAP (as Amber): the bright flame FILL cannot carry white at
+   AA, so the accent-text is a DARK warm ink in BOTH themes — Mistral's own
+   dark-on-orange treatment (dark-on-flame ~5.3:1 light / ~6.8:1 dark).
 
-   Accessibility: every text-on-surface, accent-text-on-fill, link, and
-   chip-tint pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light
-   and dark. See docs/palettes/sienna.md for the colour-role reference. */
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel token (paletteRegistry.test.ts enforces it). Every --el-* role
+   clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/sienna.md. */
 [data-palette='sienna'] {
-  /* brand & primary — Mistral's vivid flame-orange CTA. Like Amber's gold, the
-     bright orange FILL cannot carry white at AA, so it carries DARK ink labels
-     (Mistral's own treatment); --color-primary is a darkened flame used AS
-     text/icon on a surface (AA on white). */
-  --color-primary: #bb4810; /* darkened Mistral flame as text/icon (AA ~5.2:1 on white) */
+  /* brand & primary — Mistral's flame. The FILL is Mistral Orange #fa520f with
+     DARK ink labels; --color-primary is a darkened flame used AS text/icon. */
+  --color-primary: #c4400a; /* darkened Mistral flame as text/icon (AA ~4.9:1 on the cream) */
   --color-primary-foreground: #2a1205; /* DARK warm ink on the flame fill (AA ~5.3:1) */
-  --color-primary-pressed: #d2530a;
+  --color-primary-pressed: #cc3a05; /* Mistral primary-deep */
   --color-primary-fill: #fa520f; /* Mistral Orange — the signature flame; dark-on AA */
 
-  /* surfaces — white canvas over warm terracotta-cream sections */
-  --color-background: #ffffff;
-  --color-foreground: #23190f; /* warm brown-black ink */
-  --color-surface: #f7f0ea;
-  --color-surface-soft: #fbf6f1;
+  /* surfaces — Mistral's Mediterranean warm creams (never pure white) */
+  --color-background: #fffaeb; /* Mistral "Warm Ivory" page background */
+  --color-foreground: #1f1f1f; /* Mistral Black ink */
+  --color-surface: #fbf1d3; /* warm cream section background (Mistral cream ramp) */
+  --color-surface-soft: #fdf6e0; /* quieter warm cream division */
 
-  /* text scale — warm terracotta-brown hierarchy */
-  --color-ink: #23190f;
-  --color-charcoal: #321f12; /* body emphasis / AA-safe text on tints */
-  --color-slate: #6a5444; /* secondary text */
-  --color-steel: #84695a; /* tertiary / footer */
-  --color-stone: #ad9789; /* faint labels */
-  --color-muted: #f7f0ea;
-  --color-muted-foreground: #705545; /* captions — AA on white + surfaces */
+  /* text scale — Mistral warm-charcoal hierarchy */
+  --color-ink: #1f1f1f;
+  --color-charcoal: #2c2c2c; /* emphasis / AA-safe text on tints */
+  --color-slate: #4a4a4a; /* secondary text */
+  --color-steel: #6a6a6a; /* tertiary / footer */
+  --color-stone: #8a8a8a; /* faint labels */
+  --color-muted: #fbf1d3;
+  --color-muted-foreground: #5f5f5f; /* captions — AA on the cream + surfaces */
 
-  /* borders — warm terracotta hairlines */
-  --color-hairline: #ece0d6;
-  --color-hairline-soft: #f3ebe3;
-  --color-hairline-strong: #dcccbd;
-  --color-border: #ece0d6;
+  /* borders — warm beige hairlines (Mistral beige-deep family) */
+  --color-hairline: #ece0c4;
+  --color-hairline-soft: #f3ebd6;
+  --color-hairline-strong: #ddcca6;
+  --color-border: #ece0c4;
 
-  /* accent secondary — a deep amber-gold highlight (epic & design hue),
-     distinct from the burnt-orange primary */
-  --color-accent: #a25a00;
+  /* accent secondary — a darkened Mistral "Sunshine" amber (epic & design hue) */
+  --color-accent: #b5660a;
   --color-accent-orange: #c2410c;
   --color-accent-teal: #0e8f86;
   --color-accent-green: #18874c;
 
-  /* card tints — warm pastel washes (charcoal text clears AA ≥12:1 on each) */
-  --color-tint-peach: #fce0cc;
-  --color-tint-rose: #f9dbe2;
-  --color-tint-mint: #d7eedf;
-  --color-tint-lavender: #e7e1f2;
-  --color-tint-sky: #d8e7f5;
-  --color-tint-yellow: #fbecc6;
+  /* card tints — Mistral's golden washes (yellow = Block Gold #ffe295) + warm
+     feature hues; charcoal text clears AA ≥11:1 on each */
+  --color-tint-peach: #ffe0c6;
+  --color-tint-rose: #fbdfd2;
+  --color-tint-mint: #e3ead0;
+  --color-tint-lavender: #ece6d6;
+  --color-tint-sky: #e6ebda;
+  --color-tint-yellow: #ffe295; /* Mistral Block Gold */
 
-  /* semantic */
+  /* semantic — Mistral documents none; added warm-consistent + AA-safe */
   --color-success: #18804a;
   --color-warning: #b45309;
-  --color-destructive: #c92a2a; /* white-on AA; distinct from the orange brand */
+  --color-destructive: #c92a2a;
   --color-destructive-foreground: #ffffff;
   --color-info: #1366c4;
 
-  /* links — a clear blue, distinct from the orange primary */
-  --color-link: #1366c4;
-  --color-link-pressed: #0f4f9c;
+  /* links — Mistral uses the brand orange for links; a darkened flame (AA) */
+  --color-link: #c4400a;
+  --color-link-pressed: #a8350a;
 
-  /* sidebar hover — one shade darker than the warm surface */
-  --el-sidebar-item-bg-hover: #f0e7df;
+  /* sidebar hover — one shade deeper than the cream surface */
+  --el-sidebar-item-bg-hover: #f5e9c4;
 }
 
-/* Sienna — dark companion. A warm near-black canvas; the flame brightens to
-   read AS text on the dark surface, and the CTA fill brightens to a vivid
-   flame carrying DARK ink labels (Mistral's dark-on-orange treatment). */
+/* Sienna — dark companion. Mistral is light-dominant (few dark tokens: Mistral
+   Black #1f1f1f); a warm near-black canvas built from it, the flame brightened
+   to read as text, the fill a bright flame with dark-ink labels. */
 [data-palette='sienna'][data-theme='dark'] {
-  --color-background: #181109; /* warm near-black canvas */
-  --color-foreground: #f3ebe2;
-  --color-surface: #22170e;
-  --color-surface-soft: #1c130b;
+  --color-background: #15120d; /* warm near-black canvas (from Mistral Black) */
+  --color-foreground: #f5efe2;
+  --color-surface: #1f1d17;
+  --color-surface-soft: #1a1712;
 
-  --color-ink: #f3ebe2;
-  --color-charcoal: #e7dccf;
-  --color-slate: #bda595;
-  --color-steel: #937f6f;
-  --color-stone: #726155;
-  --color-muted: #22170e;
-  --color-muted-foreground: #ad9789;
+  --color-ink: #f5efe2;
+  --color-charcoal: #e6ddcb;
+  --color-slate: #b3a892;
+  --color-steel: #8a8069;
+  --color-stone: #6b6250;
+  --color-muted: #1f1d17;
+  --color-muted-foreground: #a89d86;
 
-  --color-hairline: #352a1d;
-  --color-hairline-soft: #281f15;
-  --color-hairline-strong: #483b29;
-  --color-border: #352a1d;
+  --color-hairline: #322c1d;
+  --color-hairline-soft: #241f15;
+  --color-hairline-strong: #4a4129;
+  --color-border: #322c1d;
 
-  /* flame brightened as text on the warm-dark canvas; the fill is a bright
-     flame carrying DARK ink labels (AA ~6.8:1) */
+  /* flame brightened as text; fill a bright flame with DARK ink labels (~6.8:1) */
   --color-primary: #ff8a4c;
   --color-primary-foreground: #2a1205;
   --color-primary-pressed: #d2530a;
   --color-primary-fill: #ff7a38;
 
-  /* warm tints, dimmed for the warm-black canvas */
-  --color-tint-peach: #332314;
-  --color-tint-rose: #33191f;
-  --color-tint-mint: #15281e;
-  --color-tint-lavender: #231d33;
-  --color-tint-sky: #142339;
-  --color-tint-yellow: #2e2512;
+  --color-tint-peach: #33240f;
+  --color-tint-rose: #321c16;
+  --color-tint-mint: #23271a;
+  --color-tint-lavender: #272318;
+  --color-tint-sky: #22251a;
+  --color-tint-yellow: #332b12;
 
-  --color-accent: #f59340; /* bright amber-orange highlight on dark */
+  --color-accent: #ffa110; /* Mistral Sunshine-700 amber on dark */
   --color-accent-orange: #fb923c;
   --color-accent-teal: #2dd4bf;
   --color-accent-green: #34d27a;
@@ -3188,148 +3173,139 @@
   --color-success: #34d27a;
   --color-warning: #fbab4c;
   --color-destructive: #e0586a;
-  --color-destructive-foreground: #181109; /* dark ink on the bright danger fill */
+  --color-destructive-foreground: #15120d; /* dark ink on the bright danger fill */
   --color-info: #6fb3ff;
 
-  --color-link: #7bb8ff;
-  --color-link-pressed: #a3ccff;
+  --color-link: #ff9a5c; /* warm orange link on dark (Mistral) */
+  --color-link-pressed: #ffb37e;
 
   /* sidebar hover — one shade lighter than the warm-dark surface */
-  --el-sidebar-item-bg-hover: #2c2417;
+  --el-sidebar-item-bg-hover: #292619;
 }
 
 /* ── Palette: Garnet (data-palette="garnet") — Subtask 8.8.34 (MOTIR-1252) ───
-   A rich, bold, DEEP-WINE-RED re-skin: a garnet primary over warm rose-grey
-   surfaces and warm ink — confident and editorial. Mood anchored in
-   getdesign.md's Ferrari (Ferrari red) / Pinterest / Sanity (red accent)
-   analysis; the actual light/dark ramps + UI-state steps are built from Radix
-   Colors (Red / Ruby / Crimson / Mauve / Grass / Blue). The deep-wine primary
-   FILL carries WHITE labels at AA in BOTH themes (it stays rich, not bright);
-   paired with a warm rose-grey (Radix Mauve-warm) neutral so the scheme reads
-   warm, not a cold grey with a red accent.
+   PINTEREST's whole palette: the Pushpin RED over Pinterest's neutral greys.
+   Transcribed from Pinterest's documented brand + Gestalt design system: Pushpin
+   red #E60023 (primary, deepened to #c30021 for white-on AA) / darker #BD081C,
+   Cod-Gray #111111 ink, greys #767676 / #EFEFEF, Gestalt "Skycicle" blue for
+   links/info. The warm red primary makes this a "warm" palette; Pinterest's
+   neutrals are true-neutral greys (the whole-palette directive). The danger hue
+   is kept a distinct orange-red so it never blurs into the red brand.
 
-   This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
-   --el-* layer references (exactly how the [data-theme='dark'] block works), so
-   every --el-* token re-skins coherently with no per-token churn. It sets ONLY
-   colour tokens (--color-* / --el-*), NEVER a shape/feel token — that is the
-   independent data-style axis (paletteRegistry.test.ts enforces it).
-
-   Accessibility: every text-on-surface, accent-text-on-fill, link, and
-   chip-tint pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light
-   and dark. The danger hue is kept a distinct pure-red so it never blurs into
-   the wine brand. See docs/palettes/garnet.md for the colour-role reference. */
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel token (paletteRegistry.test.ts enforces it). The deep-red FILL
+   carries WHITE labels at AA in both themes. Every --el-* role clears WCAG AA in
+   BOTH themes, verified numerically. See docs/palettes/garnet.md. */
 [data-palette='garnet'] {
-  /* brand & primary — deep wine-red CTA; the FILL carries WHITE labels (AA
-     ~6.7:1); --color-primary is the garnet used AS text/icon on a surface. */
-  --color-primary: #b01a3f; /* garnet as text/icon on a surface (AA ~6.9:1) */
+  /* brand & primary — Pinterest Pushpin red, deepened for white-on AA */
+  --color-primary: #c30021; /* Pushpin red as text/icon on a surface (AA ~6.3:1 on white) */
   --color-primary-foreground: #ffffff;
-  --color-primary-pressed: #8f1633;
-  --color-primary-fill: #b21e3f; /* deep-wine fill — white-on AA ~6.7:1 */
+  --color-primary-pressed: #9e0419; /* darker (Pinterest #BD081C family) */
+  --color-primary-fill: #c30021; /* deep Pushpin red — white-on AA ~6.3:1 */
 
-  /* surfaces — white canvas over warm rose-grey sections */
+  /* surfaces — white canvas over Pinterest neutral greys */
   --color-background: #ffffff;
-  --color-foreground: #221318; /* warm wine-black ink */
-  --color-surface: #f7eef0;
-  --color-surface-soft: #fbf6f7;
+  --color-foreground: #111111; /* Pinterest "Cod Gray" ink */
+  --color-surface: #efefef; /* Pinterest light-gray section background */
+  --color-surface-soft: #f7f7f7; /* quieter neutral division */
 
-  /* text scale — warm rose-grey hierarchy (Radix Mauve, warmed) */
-  --color-ink: #221318;
-  --color-charcoal: #33161f; /* body emphasis / AA-safe text on tints */
-  --color-slate: #6b4a53; /* secondary text */
-  --color-steel: #855f68; /* tertiary / footer */
-  --color-stone: #ae8e96; /* faint labels */
-  --color-muted: #f7eef0;
-  --color-muted-foreground: #704c54; /* captions — AA on white + surfaces */
+  /* text scale — Pinterest neutral-grey hierarchy */
+  --color-ink: #111111;
+  --color-charcoal: #1a1a1a; /* emphasis / AA-safe text on tints */
+  --color-slate: #444444; /* secondary text */
+  --color-steel: #5f5f5f; /* tertiary / footer */
+  --color-stone: #767676; /* Pinterest grey — faint labels */
+  --color-muted: #efefef;
+  --color-muted-foreground: #5f5f5f; /* captions — AA on white + surfaces */
 
-  /* borders — warm rose-grey hairlines */
-  --color-hairline: #ecdce0;
-  --color-hairline-soft: #f3e9eb;
-  --color-hairline-strong: #ddc8cd;
-  --color-border: #ecdce0;
+  /* borders — neutral hairlines */
+  --color-hairline: #e0e0e0;
+  --color-hairline-soft: #ececec;
+  --color-hairline-strong: #cdcdcd;
+  --color-border: #e0e0e0;
 
   /* accent secondary — a warm magenta-plum highlight (epic & design hue),
-     distinct from both the garnet primary and the pure-red danger */
-  --color-accent: #a23a7a;
+     distinct from both the Pushpin red primary and the orange-red danger */
+  --color-accent: #9c2d7f;
   --color-accent-orange: #c2410c;
   --color-accent-teal: #0e8f86;
-  --color-accent-green: #18874c;
+  --color-accent-green: #0a7d4f;
 
-  /* card tints — warm pastel washes (charcoal text clears AA ≥12:1 on each) */
-  --color-tint-peach: #fce0d2;
-  --color-tint-rose: #f9d8e2;
-  --color-tint-mint: #d7eede;
-  --color-tint-lavender: #e8e0f1;
-  --color-tint-sky: #d9e6f4;
+  /* card tints — a Pinterest-red rose wash + clean feature hues */
+  --color-tint-peach: #ffe2d4;
+  --color-tint-rose: #ffe0e4; /* Pushpin-red rose wash */
+  --color-tint-mint: #d9efe1;
+  --color-tint-lavender: #ece0f2;
+  --color-tint-sky: #d8e8fb;
   --color-tint-yellow: #faedc8;
 
-  /* semantic — danger is a distinct pure red, separated from the wine brand */
-  --color-success: #18804a;
+  /* semantic — danger held distinct (orange-red) from the red brand */
+  --color-success: #0a7d4f;
   --color-warning: #b45309;
-  --color-destructive: #c12030;
+  --color-destructive: #e0300f;
   --color-destructive-foreground: #ffffff;
-  --color-info: #1366c4;
+  --color-info: #0a66c2; /* Gestalt "Skycicle" blue family */
 
-  /* links — a clear blue, distinct from the garnet primary */
-  --color-link: #1366c4;
-  --color-link-pressed: #0f4f9c;
+  /* links — Gestalt Skycicle blue, distinct from the red primary */
+  --color-link: #0a66c2;
+  --color-link-pressed: #084e95;
 
-  /* sidebar hover — one shade darker than the warm surface */
-  --el-sidebar-item-bg-hover: #f0e4e7;
+  /* sidebar hover — one shade darker than the neutral surface */
+  --el-sidebar-item-bg-hover: #e6e6e6;
 }
 
-/* Garnet — dark companion. A warm near-black canvas; the garnet brightens to
-   read AS text on the dark surface, while the CTA fill stays a rich wine that
-   still carries WHITE labels at AA (it does not flip to dark ink). */
+/* Garnet — dark companion. Pinterest's Cod-Gray near-black canvas; the red
+   brightens to read as text, the CTA fill stays the deep Pushpin red carrying
+   WHITE labels, semantics brighten to clear AA. */
 [data-palette='garnet'][data-theme='dark'] {
-  --color-background: #170b0e; /* warm near-black canvas */
-  --color-foreground: #f3e6e9;
-  --color-surface: #211016;
-  --color-surface-soft: #1b0c11;
+  --color-background: #0e0e0e; /* Cod-Gray near-black canvas */
+  --color-foreground: #efefef;
+  --color-surface: #1a1a1a;
+  --color-surface-soft: #161616;
 
-  --color-ink: #f3e6e9;
-  --color-charcoal: #e7d3d9;
-  --color-slate: #bf9aa3;
-  --color-steel: #967680;
-  --color-stone: #745a62;
-  --color-muted: #211016;
-  --color-muted-foreground: #ae8e96;
+  --color-ink: #efefef;
+  --color-charcoal: #e0e0e0;
+  --color-slate: #b5b5b5;
+  --color-steel: #8c8c8c;
+  --color-stone: #6e6e6e;
+  --color-muted: #1a1a1a;
+  --color-muted-foreground: #9a9a9a;
 
-  --color-hairline: #341c23;
-  --color-hairline-soft: #271219;
-  --color-hairline-strong: #482a33;
-  --color-border: #341c23;
+  --color-hairline: #2e2e2e;
+  --color-hairline-soft: #1f1f1f;
+  --color-hairline-strong: #444444;
+  --color-border: #2e2e2e;
 
-  /* garnet brightened as text on the dark canvas; the fill stays a rich wine
-     carrying WHITE labels (AA ~5.8:1) */
-  --color-primary: #ff6b85;
+  /* red brightened as text on the dark canvas; fill stays deep Pushpin red with
+     WHITE labels (AA ~6.3:1) */
+  --color-primary: #ff5a76;
   --color-primary-foreground: #ffffff;
-  --color-primary-pressed: #a01b38;
-  --color-primary-fill: #c12642;
+  --color-primary-pressed: #9e0419;
+  --color-primary-fill: #c30021;
 
-  /* warm tints, dimmed for the warm-black canvas */
-  --color-tint-peach: #321f16;
-  --color-tint-rose: #341823;
+  --color-tint-peach: #33231a;
+  --color-tint-rose: #33161a;
   --color-tint-mint: #15281e;
-  --color-tint-lavender: #241d33;
-  --color-tint-sky: #142338;
+  --color-tint-lavender: #271d33;
+  --color-tint-sky: #14233a;
   --color-tint-yellow: #2e2613;
 
-  --color-accent: #f06aae; /* bright magenta-plum highlight on dark */
+  --color-accent: #e35bb8; /* bright magenta-plum highlight on dark */
   --color-accent-orange: #fb923c;
   --color-accent-teal: #2dd4bf;
   --color-accent-green: #34d27a;
 
-  --color-success: #34d27a;
+  --color-success: #2ec27e;
   --color-warning: #fbab4c;
-  --color-destructive: #f0606f;
-  --color-destructive-foreground: #170b0e; /* dark ink on the bright danger fill */
-  --color-info: #6fb3ff;
+  --color-destructive: #ff6b6b;
+  --color-destructive-foreground: #0e0e0e; /* dark ink on the bright danger fill */
+  --color-info: #5aa0ff;
 
-  --color-link: #7bb8ff;
-  --color-link-pressed: #a3ccff;
+  --color-link: #5aa0ff;
+  --color-link-pressed: #8cc0ff;
 
-  /* sidebar hover — one shade lighter than the warm-dark surface */
-  --el-sidebar-item-bg-hover: #2b1820;
+  /* sidebar hover — one shade lighter than the dark surface */
+  --el-sidebar-item-bg-hover: #232323;
 }
 
 [data-type='grotesk'] {
