@@ -852,6 +852,80 @@
         justify-content: center;
       }
 
+      /* ── Monthly / Annual cadence toggle (Segmented primitive) ───────────── */
+      .store-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 14px;
+        border-radius: calc(var(--radius-btn) - 2px);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+      }
+      .seg-opt.active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      /* cadence-driven price visibility — one toggle re-prices the whole store */
+      .store[data-cadence='annual'] .cad-m {
+        display: none;
+      }
+      .store[data-cadence='monthly'] .cad-a {
+        display: none;
+      }
+      .price .cad {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+      }
+      .billed {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+      .save {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+
       /* ── EmptyState / ErrorState family (components/ui/EmptyState) ────────── */
       .state {
         display: flex;
@@ -1464,17 +1538,28 @@
             Motir and Motir AI are billed separately — buy either, both or neither. A small team
             within the free caps pays nothing for Motir and only for the AI it opts into.
           </p>
-          <div class="twomenus" style="margin-top: 22px">
+          <!-- Monthly / Annual toggle — below the headline, above the cards (the
+               single most impactful pricing control; default = Annual + visible
+               savings; Monthly always available). -->
+          <div class="store-toggle">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button class="seg-opt" data-cad="monthly" aria-pressed="false" onclick="setCadence('monthly')">Monthly</button>
+              <button class="seg-opt active" data-cad="annual" aria-pressed="true" onclick="setCadence('annual')">
+                Annual <span class="seg-badge">Save ~33%</span>
+              </button>
+            </div>
+          </div>
+          <div class="twomenus store" data-cadence="annual" style="margin-top: 22px">
             <!-- ① Motir (the PM tool) menu -->
             <div>
               <div class="menu-h">
                 <h4>① Motir</h4>
-                <span class="mh-sub">The PM tool — free for small teams, $5/seat only when you scale.</span>
+                <span class="mh-sub">The PM tool — free for small teams, paid only when you scale.</span>
               </div>
               <div class="tracker-grid">
                 <div class="plan cur">
                   <div class="pn">Free <span class="pill pill-active" style="font-size: 11px">Current</span></div>
-                  <div class="price"><span class="amt">$0</span><span class="per">/ mo</span></div>
+                  <div class="price"><span class="cad"><span class="amt">$0</span><span class="per">/ mo</span></span></div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 250 work items</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 3 projects · 1 workspace</li>
@@ -1485,8 +1570,12 @@
                 </div>
                 <div class="plan">
                   <div class="pn">Scaled</div>
-                  <div class="price"><span class="amt">$5</span><span class="per">/ seat / mo</span></div>
-                  <div class="alot" style="color: var(--el-text-muted); font-weight: 500">or $40 / seat / yr — save ~33%</div>
+                  <div class="price">
+                    <span class="cad cad-m"><span class="amt">$5</span><span class="per">/ seat / mo</span></span>
+                    <span class="cad cad-a"><span class="amt">$3.33</span><span class="per">/ seat / mo</span></span>
+                  </div>
+                  <div class="billed cad cad-a">billed annually · $40 / seat / yr <span class="save">Save $20 / seat / yr</span></div>
+                  <div class="billed cad cad-m">$60 / seat / yr · <span class="save">Save $20 with annual</span></div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited work items &amp; projects</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Multiple workspaces &amp; orgs</li>
@@ -1506,7 +1595,7 @@
               <div class="ai-grid">
                 <div class="plan">
                   <div class="pn">Free</div>
-                  <div class="price"><span class="amt">$0</span><span class="per">once</span></div>
+                  <div class="price"><span class="cad"><span class="amt">$0</span><span class="per">once</span></span></div>
                   <div class="alot">300 credits · one-time</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Try planning once</li>
@@ -1516,7 +1605,12 @@
                 </div>
                 <div class="plan">
                   <div class="pn">Starter</div>
-                  <div class="price"><span class="amt">$5</span><span class="per">/ mo</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"><span class="amt">$5</span><span class="per">/ mo</span></span>
+                    <span class="cad cad-a"><span class="amt">$3.33</span><span class="per">/ mo</span></span>
+                  </div>
+                  <div class="billed cad cad-a">billed annually · $40 / yr <span class="save">Save $20/yr</span></div>
+                  <div class="billed cad cad-m">$60 / yr · <span class="save">Save $20 with annual</span></div>
                   <div class="alot">300 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A recurring taste of planning</li>
@@ -1526,7 +1620,12 @@
                 </div>
                 <div class="plan cur">
                   <div class="pn">Standard <span class="pill pill-active" style="font-size: 11px">Current</span></div>
-                  <div class="price"><span class="amt">$25</span><span class="per">/ mo</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"><span class="amt">$25</span><span class="per">/ mo</span></span>
+                    <span class="cad cad-a"><span class="amt">$16.67</span><span class="per">/ mo</span></span>
+                  </div>
+                  <div class="billed cad cad-a">billed annually · $200 / yr <span class="save">Save $100/yr</span></div>
+                  <div class="billed cad cad-m">$300 / yr · <span class="save">Save $100 with annual</span></div>
                   <div class="alot">2,000 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everyday planning</li>
@@ -1536,7 +1635,12 @@
                 </div>
                 <div class="plan feat rec">
                   <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-zap" /></svg> Pro <span class="pill pill-tier" style="font-size: 11px">Recommended</span></div>
-                  <div class="price"><span class="amt">$75</span><span class="per">/ mo</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"><span class="amt">$75</span><span class="per">/ mo</span></span>
+                    <span class="cad cad-a"><span class="amt">$50</span><span class="per">/ mo</span></span>
+                  </div>
+                  <div class="billed cad cad-a">billed annually · $600 / yr <span class="save">Save $300/yr</span></div>
+                  <div class="billed cad cad-m">$900 / yr · <span class="save">Save $300 with annual</span></div>
                   <div class="alot">8,000 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning + hosted coding</li>
@@ -1546,7 +1650,12 @@
                 </div>
                 <div class="plan feat">
                   <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-crown" /></svg> Max</div>
-                  <div class="price"><span class="amt">$150</span><span class="per">/ mo</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"><span class="amt">$150</span><span class="per">/ mo</span></span>
+                    <span class="cad cad-a"><span class="amt">$100</span><span class="per">/ mo</span></span>
+                  </div>
+                  <div class="billed cad cad-a">billed annually · $1,200 / yr <span class="save">Save $600/yr</span></div>
+                  <div class="billed cad cad-m">$1,800 / yr · <span class="save">Save $600 with annual</span></div>
                   <div class="alot">30,000 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Heavy agent — design, docs, coding</li>
@@ -1556,7 +1665,7 @@
                 </div>
                 <div class="plan">
                   <div class="pn">Enterprise</div>
-                  <div class="price"><span class="amt">Custom</span></div>
+                  <div class="price"><span class="cad"><span class="amt">Custom</span></span></div>
                   <div class="alot">Custom credit pool</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoiced billing &amp; SSO</li>
@@ -1569,9 +1678,9 @@
           </div>
           <div class="note" style="margin-top: 22px">
             <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-            Prices shown monthly; choosing annual billing saves ~33% (the Stripe annual default). Tax
-            is calculated automatically at checkout. Credits are an internal usage allotment; the
-            price above is the plan fee, billed by Stripe to the moooon organization.
+            Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is
+            calculated automatically at checkout. Credits are an internal usage allotment; the price
+            shown is the plan fee, billed by Stripe to the moooon organization.
           </div>
         </div>
       </div>
@@ -1801,6 +1910,14 @@
       function toggleTheme() {
         const h = document.documentElement;
         h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+      }
+      function setCadence(c) {
+        document.querySelectorAll('.store').forEach((s) => (s.dataset.cadence = c));
+        document.querySelectorAll('.seg-opt').forEach((b) => {
+          const on = b.dataset.cad === c;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
       }
     </script>
   </body>

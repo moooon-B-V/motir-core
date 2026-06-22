@@ -175,21 +175,56 @@ Two mini-surfaces side by side so the gate is visible:
 
 ### Panel 5 — plan / pricing comparison (the storefront, reached from "Change plan")
 
-TWO independent menus (decision §2), under the `… · Change plan` breadcrumb:
+TWO independent menus (decision §2), under the `… · Change plan` breadcrumb.
+
+**Monthly / Annual cadence toggle (the SaaS-standard pricing control).** A
+`Segmented` ("Monthly" | "Annual") sits **below the headline, above the cards** —
+the single highest-impact control on a pricing page — and re-prices the **whole
+store** (both menus, one cadence). **Annual is the default** (the Stripe annual
+default; defaulting to annual lifts annual adoption ~25–35%) and carries a
+**"Save ~33%"** `seg-badge`; **Monthly is always available** (hiding it erodes
+trust). The pattern follows the verified SaaS convention (mirror below):
+
+- **Annual selected (default):** each paid card shows the **per-month equivalent**
+  (`$50 / mo`, not the yearly lump) with a `billed annually · $600 / yr` subline
+  and a green **`Save $300/yr`** `save` pill — **dollar** savings, which beat a
+  bare "%". (Per-month-equivalent + dollar-savings are the two display rules the
+  mirror sources converge on.)
+- **Monthly selected:** the card shows the monthly fee (`$75 / mo`) with a
+  `$900 / yr · Save $300 with annual` nudge back toward annual.
+- The `$0` Free cards and the **Enterprise** (Custom) card are cadence-inert.
+
+The mock implements the toggle live (a `setCadence()` script flips
+`.store[data-cadence]`; CSS shows `.cad-a` / `.cad-m`) so a reviewer can flip it;
+the PNG captures the **Annual** default. 8.1.7 wires it to the two annual/monthly
+Stripe Prices per line (`*_annual` is each Product's default Price).
+
+The cards:
 
 - **① Motir** — two `plan` cards: **Free** (`$0/mo`, marked **Current**, the
-  caps as a feature list) vs **Scaled** (`$5 / seat / mo`, `$40/yr — save ~33%`,
-  caps lifted), per-card CTA → Stripe Checkout for the seat subscription.
-- **② Motir AI ladder** — six `plan` cards: **Free** (`$0` once · 300 credits ·
-  one-time, "Trial used") / **Starter** (`$5/mo` · 300) / **Standard** (`$25/mo`
-  · 2,000, marked **Current**) / **Pro** (`$75/mo` · 8,000, `i-zap` accent,
-  marked **Recommended** — the anchor tier) / **Max** (`$150/mo` · 30,000,
-  `i-crown` accent) / **Enterprise** (Custom, "Contact sales"). Each card: name,
-  **price** (serif), credit **allotment**, a `i-check` feature list (off-features
-  `i-x`, faint), and a per-tier CTA → Checkout. The current plan is accent-bordered
-  + disabled CTA; the recommended Pro card is accent-bordered with a "Recommended"
-  `Pill`. A footer `note` reiterates annual-saves-~33%, tax-at-checkout and
-  credits-vs-price.
+  caps as a feature list) vs **Scaled** (`$5 / seat / mo` → annual `$3.33 / seat /
+  mo`, `$40/yr`, save `$20/seat/yr`; caps lifted), CTA → Stripe Checkout for the
+  seat subscription.
+- **② Motir AI ladder** — six `plan` cards (monthly → annual-per-month · yearly ·
+  save): **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
+  (`$5` → `$3.33/mo` · $40/yr · save $20 · 300) / **Standard** (`$25` → `$16.67/mo`
+  · $200/yr · save $100 · 2,000, marked **Current**) / **Pro** (`$75` → `$50/mo` ·
+  $600/yr · save $300 · 8,000, `i-zap` accent, marked **Recommended** — the anchor
+  tier) / **Max** (`$150` → `$100/mo` · $1,200/yr · save $600 · 30,000, `i-crown`
+  accent) / **Enterprise** (Custom). Each card: name, the cadence-aware **price**
+  (serif) + billed/save subline, credit **allotment**, a `i-check` feature list
+  (off-features `i-x`, faint), and a per-tier CTA → Checkout. The current plan is
+  accent-bordered + disabled CTA; the recommended Pro card is accent-bordered with
+  a "Recommended" `Pill`. A footer `note` states annual-is-shown / switch-to-monthly,
+  tax-at-checkout and credits-vs-price.
+
+> **Mirror (rung 1 — cited).** The monthly/annual toggle is the SaaS-standard
+> pricing control: place it below the headline above the cards, **default to
+> annual** with a visible discount, show the **per-month equivalent** for annual
+> ("$50/mo, billed annually" beats "$600/yr"), quote the **dollar** saving ("Save
+> $300/yr" beats "20% off"), and **always keep monthly** available.
+> ([InfluenceFlow — SaaS pricing best practices 2026](https://influenceflow.io/resources/saas-pricing-page-best-practices-a-complete-2026-guide/);
+> [PipelineRoad — what converts in 2026](https://pipelineroad.com/agency/blog/saas-pricing-page-best-practices))
 
 ### Panel 6 — paywall at the AI boundary (8.1.8)
 
@@ -248,6 +283,11 @@ workaround.
 - **`Button`** — primary (Upgrade / Change plan / Resubscribe), secondary (Manage
   plan / Portal / Retry / Contact owner), ghost (Maybe later / Update). Heights
   `--height-btn-md` / `--height-btn-sm`; padding `--spacing-btn-x[-sm]`.
+- **`Segmented`** — the **Monthly / Annual** cadence toggle (panel 5): the shipped
+  `components/ui/Segmented.tsx` grammar — an `--el-surface` track (`--radius-btn`,
+  2px inset), each option `calc(--radius-btn - 2px)` so it nests at any style, the
+  active option `--el-page-bg` + `--shadow-subtle`. A `aria-pressed` group; the
+  Annual option carries the `Save ~33%` badge. Reuse it — do not hand-roll.
 - **`EmptyState` / `ErrorState` family** — the member gate (4b), the tier-gate +
   member paywall (6b/6c), empty/error (7a/7c).
 - **`Skeleton`** — the loading panel (7b).
@@ -332,17 +372,19 @@ Tier-0 under `--el-*`) — verified.
   **"Contact an owner"**.
 - Storefront: **"Choose your plans"** / **"Motir and Motir AI are billed
   separately — buy either, both or neither. A small team within the free caps
-  pays nothing for Motir and only for the AI it opts into."**; **"① Motir"**
-  / **"The PM tool — free for small teams, $5/seat only when you scale."**;
+  pays nothing for Motir and only for the AI it opts into."**; cadence toggle
+  **"Monthly"** / **"Annual"** + badge **"Save ~33%"**; **"① Motir"**
+  / **"The PM tool — free for small teams, paid only when you scale."**;
   **"② Motir AI — planning & agents"** / **"An org-level monthly credit pool. Any
   org can buy it — paid Motir isn't required."**; **"Current"** / **"Recommended"**
   (Pro) / **"Your current plan"** / **"Current plan"** / **"Trial used"**; per-tier
   CTAs **"Upgrade Motir"** / **"Choose Starter"** / **"Upgrade to Pro"** / **"Upgrade
-  to Max"** / **"Contact sales"**; the Scaled card carries **"or $40 / seat / yr —
-  save ~33%"**; footer **"Prices shown monthly; choosing annual billing saves ~33%
-  (the Stripe annual default). Tax is calculated automatically at checkout. Credits
-  are an internal usage allotment; the price above is the plan fee, billed by
-  Stripe to the {org} organization."**
+  to Max"** / **"Contact sales"**; the annual per-card sublines **"billed annually ·
+  ${yr} / yr"** + **"Save ${n}/yr"**, the monthly sublines **"${yr} / yr · Save ${n}
+  with annual"**; footer **"Annual billing (the Stripe default) is shown — switch to
+  Monthly above to compare. Tax is calculated automatically at checkout. Credits are
+  an internal usage allotment; the price shown is the plan fee, billed by Stripe to
+  the {org} organization."**
 - Paywall: out-of-credits **"Planning is paused — you're out of credits"** /
   **"The {org} organization has used all of this month's {n} {tier} credits, so
   new planning runs are paused. Existing plans stay fully editable."** /
