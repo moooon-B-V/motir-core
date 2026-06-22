@@ -106,7 +106,12 @@ export function OnboardingCanvas({
         station={station}
         doc={state.docs[node.id]}
         session={state.session}
-        onOpenDesign={station.kind === 'design' ? onOpenDesign : undefined}
+        // The design step is Step 5 — enterable only once the station is ACTIVE
+        // (the tiers are complete); before then it's an upcoming roadmap node
+        // with no entry CTA.
+        onOpenDesign={
+          station.kind === 'design' && station.state === 'active' ? onOpenDesign : undefined
+        }
         revisiting={revisitingKind === node.id}
         refreshing={willRefreshSet.has(node.id)}
       />
@@ -114,10 +119,12 @@ export function OnboardingCanvas({
   }
 
   function onNodeActivate(id: string) {
-    // The design station opens the web-only design step (MOTIR-1040); a produced
-    // tier re-opens its read-only review.
+    // The design station opens the web-only design step (MOTIR-1040) — but only
+    // once it is the active step (the tiers are complete); an upcoming design
+    // station, like an upcoming tier, does not open. A produced tier re-opens its
+    // read-only review.
     if (id === 'design') {
-      onOpenDesign();
+      if (stationByKind.get('design')?.state === 'active') onOpenDesign();
       return;
     }
     const station = stationByKind.get(id as StationKind);

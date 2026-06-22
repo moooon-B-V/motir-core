@@ -141,11 +141,34 @@ describe('OnboardingCanvas', () => {
     expect(screen.getByText('Plan → your epics')).toBeTruthy();
   });
 
-  it('keeps the design station for a web project (default)', async () => {
+  // Step 5: the design station is VISIBLE on a web roadmap from the start, but is
+  // not ENTERABLE (no CTA, click is inert) until the tiers are complete.
+  it('shows the design station upcoming but inert before the tiers complete (web)', async () => {
+    const onOpenDesign = vi.fn();
     renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
+      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={onOpenDesign} />,
     );
-    expect(await screen.findByText('Design the look')).toBeTruthy();
+    await screen.findByTestId('canvas-edges');
+    expect(screen.getByText('Design the look')).toBeTruthy(); // roadmap node visible
     expect(document.querySelector('[data-node-id="design"]')).not.toBeNull();
+    expect(screen.queryByText('Design your look')).toBeNull(); // entry CTA absent
+    fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
+    expect(onOpenDesign).not.toHaveBeenCalled(); // click is inert
+  });
+
+  it('makes the design station enterable once the tiers are complete (web)', async () => {
+    const onOpenDesign = vi.fn();
+    renderWithIntl(
+      <OnboardingCanvas
+        state={hubState({ session: { ...hubState().session, status: 'tiers_complete' } })}
+        idea="x"
+        onOpen={vi.fn()}
+        onOpenDesign={onOpenDesign}
+      />,
+    );
+    await screen.findByTestId('canvas-edges');
+    expect(screen.getByText('Design your look')).toBeTruthy(); // entry CTA present
+    fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
+    expect(onOpenDesign).toHaveBeenCalled();
   });
 });

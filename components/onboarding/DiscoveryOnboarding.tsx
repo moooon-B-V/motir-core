@@ -126,11 +126,11 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     <PlanningWorkspace
       canvas={
         <div className="relative h-full min-h-0 w-full">
-          {/* The design step (MOTIR-1040) is reached from the `design` station on
-              the canvas (click the node or its "Design your look" button); the
-              conductor also offers it in chat (cross-repo, MOTIR-1099). A
-              top-right shortcut keeps it reachable even when the station is panned
-              out of view. */}
+          {/* The design step (MOTIR-1040) is Step 5 — reachable only once the tiers
+              are complete (and only for a web/desktop project — the 7.3.69 gate),
+              from the `design` station on the canvas or this top-right shortcut
+              (shown alongside the station's own entry CTA); the conductor also
+              offers it in chat (cross-repo, MOTIR-1099). */}
           <OnboardingCanvas
             state={state}
             idea={idea}
@@ -139,7 +139,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
             revisitingKind={state.cascade?.directTier ?? null}
             willRefresh={willRefreshKinds(state)}
           />
-          {showDesign && (
+          {showDesign && complete && (
             <Button
               variant="secondary"
               size="sm"
