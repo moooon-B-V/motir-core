@@ -261,9 +261,10 @@ const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
   amber: '#f0b90b',
   sienna: '#fa520f',
   garnet: '#c30021',
+  citrine: '#ffd02f',
 };
 
-/** Palette (colour) — the 8-palette chip row, each with its accent swatch dot. */
+/** Palette (colour) — the 9-palette chip row, each with its accent swatch dot. */
 export function PalettePicker({
   value,
   onChange,

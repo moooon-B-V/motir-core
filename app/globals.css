@@ -3308,6 +3308,142 @@
   --el-sidebar-item-bg-hover: #232323;
 }
 
+/* ── Palette: Citrine (data-palette="citrine") — Subtask 8.8.34 (MOTIR-1252) ──
+   MIRO's whole palette, transcribed verbatim from its Mirotone design system
+   (npm mirotone@5.3.2). EVERY value here is a documented Mirotone primitive
+   step or Miro brand token — nothing is invented or hand-darkened; where a role
+   needs a darker shade for AA, a documented deeper RAMP STEP is used (e.g.
+   yellow-700 #746019 for on-surface gold text). Miro is a 5-hue system
+   (yellow / blue / green / red / gray): the warm Sunglow YELLOW (#ffd02f =
+   yellow-500, the brand/logo colour) is the primary; the action-BLUE #3859ff
+   (blue-500) is the accent; ink is Stratos #050038; semantics are green-500
+   #1c8f00 / red-500 #d8182c. The warm yellow primary is what makes this a "warm"
+   palette; the neutrals are Mirotone's own cool gray ramp.
+
+   ⚠️ THE YELLOW TRAP: the Sunglow FILL cannot carry white at AA, so the
+   accent-text (--color-primary-foreground) is Miro's Stratos ink #050038, not
+   #fff (dark-on-Sunglow ~13.5:1) — Miro's own dark-on-yellow treatment.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel token (paletteRegistry.test.ts enforces it). Every --el-* role
+   clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/citrine.md. */
+[data-palette='citrine'] {
+  /* brand & primary — Miro Sunglow yellow (yellow-500). FILL carries DARK
+     Stratos-ink labels (yellow trap); --color-primary is a documented dark
+     yellow step (yellow-700) used AS text/icon on a surface. */
+  --color-primary: #746019; /* Mirotone yellow-700 — gold text/icon (AA ~6.1:1 on white) */
+  --color-primary-foreground: #050038; /* Miro Stratos ink on the Sunglow fill (AA ~13.5:1) */
+  --color-primary-pressed: #d7b029; /* Mirotone yellow-550 */
+  --color-primary-fill: #ffd02f; /* Miro Sunglow — yellow-500, the brand/logo colour */
+
+  /* surfaces — white over Mirotone gray-50/100 (documented) */
+  --color-background: #ffffff;
+  --color-foreground: #050038; /* Miro Stratos navy ink */
+  --color-surface: #f3f4f6; /* Mirotone gray-100 section background */
+  --color-surface-soft: #f6f7f9; /* Mirotone gray-50 — quieter division */
+
+  /* text scale — Mirotone gray ramp */
+  --color-ink: #050038;
+  --color-charcoal: #1a1b1e; /* gray-900 — emphasis / AA-safe on tints */
+  --color-slate: #4a4e5e; /* gray-600 — secondary text */
+  --color-steel: #656b81; /* gray-500 — tertiary / footer */
+  --color-stone: #7f8497; /* gray-450 — faint labels */
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #575c6f; /* gray-550 — captions, AA on white + surfaces */
+
+  /* borders — Mirotone gray hairlines */
+  --color-hairline: #e0e1e6; /* gray-200 */
+  --color-hairline-soft: #ebecf0; /* gray-150 */
+  --color-hairline-strong: #c1c3cd; /* gray-300 */
+  --color-border: #e0e1e6;
+
+  /* accent secondary — Miro's action-BLUE (blue-500) as the epic/design hue;
+     the deep-blue + dark-gold below cover the other type hues with documented
+     Mirotone steps (Miro has no orange/teal primitive) */
+  --color-accent: #3859ff; /* Mirotone blue-500 — Miro action blue */
+  --color-accent-orange: #91771e; /* yellow-650 (Miro has no orange ramp) */
+  --color-accent-teal: #243797; /* blue-650 (Miro has no teal ramp) */
+  --color-accent-green: #1c8f00; /* green-500 */
+
+  /* card tints — Mirotone light ramp steps (charcoal text clears AA ≥13:1) */
+  --color-tint-peach: #ffefb9; /* yellow-250 */
+  --color-tint-rose: #fbe6e8; /* red-150 */
+  --color-tint-mint: #dff1da; /* green-150 */
+  --color-tint-lavender: #d9dffc; /* blue-200 */
+  --color-tint-sky: #f2f4fc; /* blue-100 */
+  --color-tint-yellow: #fff7d9; /* yellow-150 */
+
+  /* semantic — Mirotone green/red/blue ramps (Miro maps these by convention) */
+  --color-success: #1c8f00; /* green-500 */
+  --color-warning: #91771e; /* yellow-650 (AA-safe documented gold) */
+  --color-destructive: #d8182c; /* red-500 */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #3859ff; /* blue-500 */
+
+  /* links — Miro action blue (blue-500 → pressed blue-550) */
+  --color-link: #3859ff;
+  --color-link-pressed: #314cd9;
+
+  /* sidebar hover — Mirotone gray-150, one step off the surface */
+  --el-sidebar-item-bg-hover: #ebecf0;
+}
+
+/* Citrine — dark companion. A Mirotone gray-ramp near-black canvas (black
+   #090909 / gray-900 #1a1b1e); the Sunglow yellow brightens to read as text and
+   the fill keeps dark Stratos labels; blue/green/red brighten one ramp step to
+   clear AA on the dark canvas. All values are documented Mirotone steps. */
+[data-palette='citrine'][data-theme='dark'] {
+  --color-background: #090909; /* Miro black */
+  --color-foreground: #f6f7f9; /* gray-50 */
+  --color-surface: #1a1b1e; /* gray-900 */
+  --color-surface-soft: #18191c; /* gray-950 */
+
+  --color-ink: #f6f7f9;
+  --color-charcoal: #ebecf0; /* gray-150 */
+  --color-slate: #c1c3cd; /* gray-300 */
+  --color-steel: #979cab; /* gray-400 */
+  --color-stone: #656b81; /* gray-500 */
+  --color-muted: #1a1b1e;
+  --color-muted-foreground: #adb1bd; /* gray-350 */
+
+  --color-hairline: #2b2e35; /* gray-750 */
+  --color-hairline-soft: #24262c; /* gray-800 */
+  --color-hairline-strong: #3f424f; /* gray-650 */
+  --color-border: #2b2e35;
+
+  /* Sunglow reads as text on black; fill stays Sunglow with dark Stratos labels */
+  --color-primary: #ffd02f; /* yellow-500 */
+  --color-primary-foreground: #050038; /* Stratos ink on the Sunglow fill */
+  --color-primary-pressed: #d7b029; /* yellow-550 */
+  --color-primary-fill: #ffd02f;
+
+  /* tints — Mirotone deep ramp steps for the dark feature washes */
+  --color-tint-peach: #342c0f; /* yellow-850 */
+  --color-tint-rose: #2f1719; /* red-900 */
+  --color-tint-mint: #11260c; /* green-900 */
+  --color-tint-lavender: #12193e; /* blue-850 */
+  --color-tint-sky: #101633; /* blue-900 */
+  --color-tint-yellow: #28220d; /* yellow-900 */
+
+  --color-accent: #5b76fe; /* blue-450 — brighter Miro blue on dark */
+  --color-accent-orange: #b39223; /* yellow-600 */
+  --color-accent-teal: #7a90fe; /* blue-400 */
+  --color-accent-green: #65b452; /* green-400 */
+
+  --color-success: #65b452; /* green-400 */
+  --color-warning: #ffd850; /* yellow-450 */
+  --color-destructive: #e56673; /* red-400 */
+  --color-destructive-foreground: #090909; /* dark ink on the bright danger */
+  --color-info: #7a90fe; /* blue-400 */
+
+  --color-link: #7a90fe;
+  --color-link-pressed: #97a8fe; /* blue-350 */
+
+  /* sidebar hover — Mirotone gray-800, one step lighter than the surface */
+  --el-sidebar-item-bg-hover: #24262c;
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk

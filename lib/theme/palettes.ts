@@ -130,6 +130,15 @@ export const PALETTE_REGISTRY = {
       'Pinterest — its whole documented palette: Pushpin red #E60023/#BD081C over Cod-Gray ink (#111111) and neutral greys (#767676/#EFEFEF), with Gestalt “Skycicle” blue links.',
     designDoc: 'docs/palettes/garnet.md',
   },
+  citrine: {
+    id: 'citrine',
+    name: 'Citrine',
+    tagline:
+      'Bright and collaborative — Miro’s Sunglow yellow over the whiteboard greys, with the Miro action-blue accent.',
+    inspiration:
+      'Miro — its whole Mirotone palette (every value a documented Mirotone step): Sunglow yellow #FFD02F (primary) + the action-blue #3859FF over the gray ramp + Stratos ink #050038, with the green/red semantic ramps.',
+    designDoc: 'docs/palettes/citrine.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */

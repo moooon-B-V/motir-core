@@ -22,7 +22,7 @@ import { themeInitScript } from '@/lib/theme/init-script';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('palette registry', () => {
-  it('registers the palette set (Motir — the house palette — plus the cool set Cobalt/Graphite/Evergreen/Spectrum and the warm set Amber/Sienna/Garnet)', () => {
+  it('registers the palette set (Motir — the house palette — plus the cool set Cobalt/Graphite/Evergreen/Spectrum and the warm-primary brand set Amber/Sienna/Garnet/Citrine)', () => {
     expect(PALETTE_IDS).toEqual([
       'motir',
       'cobalt',
@@ -32,6 +32,7 @@ describe('palette registry', () => {
       'amber',
       'sienna',
       'garnet',
+      'citrine',
     ]);
     expect(PALETTE_REGISTRY['motir'].name).toBe('Motir');
     expect(PALETTE_REGISTRY['cobalt'].name).toBe('Cobalt');
@@ -41,6 +42,7 @@ describe('palette registry', () => {
     expect(PALETTE_REGISTRY['amber'].name).toBe('Amber');
     expect(PALETTE_REGISTRY['sienna'].name).toBe('Sienna');
     expect(PALETTE_REGISTRY['garnet'].name).toBe('Garnet');
+    expect(PALETTE_REGISTRY['citrine'].name).toBe('Citrine');
   });
 
   it('keeps every entry self-consistent (key === id) and PALETTE_IDS in sync', () => {
