@@ -369,6 +369,56 @@ describe('reportsService.getBurndownSeries — already-done items stay out of re
     expect(at('2026-06-07').remaining).toBe(19); // B (30) done
     expect(series.days[9]!.remaining).toBe(19); // == rollupForSprint().remaining
   });
+
+  it('a large block of already-done points moved in mid-sprint does NOT plateau the line (the live Sprint-31 shape)', async () => {
+    // Mirrors the reported bug: the chart sat at 40+ while only ~21 was left,
+    // because a big block of already-`done` work was moved into the sprint and
+    // its points raised the remaining line with no completion event to burn it
+    // back down. The end-pin only corrected the final point, leaving an inflated
+    // plateau. Here the moved block is exaggerated (240 pts) so the OLD line
+    // would plateau at 240+ before snapping down — the fix keeps it flat.
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S31-shape' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A (burns in-sprint)' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B (the real remaining)' });
+    const big = await createTestWorkItem(fx, { kind: 'task', title: 'BIG (done block moved in)' });
+
+    await place(a.id, sprint.id, 'done', 30); // not done at start, burns mid-sprint
+    await place(b.id, sprint.id, 'todo', 21); // the true remaining
+    await place(big.id, sprint.id, 'done', 240); // a done block moved in mid-sprint
+    // Start snapshot = A+B in the sprint at start (51 pts); BIG joins later.
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 10),
+      completedAt: utcDay(2026, 6, 10),
+      committedPoints: 51,
+      committedIssueCount: 2,
+    });
+    await addRevision(big.id, fx.ownerId, utcDay(2026, 5, 15), {
+      status: { from: 'todo', to: 'done' },
+    }); // BIG completed long before it joined
+    await addRevision(big.id, fx.ownerId, utcDay(2026, 6, 5), {
+      sprintId: { from: null, to: sprint.id },
+    }); // BIG (240, already done) moved into the sprint
+    await addRevision(a.id, fx.ownerId, utcDay(2026, 6, 6), {
+      status: { from: 'todo', to: 'done' },
+    }); // A real burn
+
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    const at = byDate(series.days);
+
+    // Roll-up: current members A,B,BIG = 291 pts, A+BIG done = 270 → remaining 21.
+    // The actual line must NEVER exceed the not-done work (max 51), and is flat
+    // across the day the 240-pt done block was moved in — no 240+ plateau.
+    expect(at('2026-06-02').remaining).toBe(51); // A+B not done at start
+    expect(at('2026-06-05').remaining).toBe(51); // BIG moved in (done) → flat, no spike
+    expect(at('2026-06-06').remaining).toBe(21); // A (30) burns → only B left
+    expect(series.days[9]!.remaining).toBe(21); // == rollupForSprint().remaining
+    expect(Math.max(...series.days.map((d) => d.remaining ?? 0))).toBeLessThanOrEqual(51);
+    // The moved-in done block raises no scope-change marker (it adds 0 remaining).
+    expect(series.scopeChanges).toEqual([]);
+  });
 });
 
 describe('reportsService.getBurndownSeries — degraded + edge states', () => {
