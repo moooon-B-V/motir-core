@@ -309,7 +309,7 @@ export function PublicSubmitRequestForm({
       {rateLimited ? (
         <div
           role="status"
-          className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-warning) bg-(--el-tint-yellow) p-3 text-(--el-text-strong)"
+          className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-warning) bg-(--el-warning-surface) p-3 text-(--el-warning-text)"
         >
           <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
           <div className="text-[12.5px] leading-relaxed">
@@ -322,7 +322,7 @@ export function PublicSubmitRequestForm({
       {error ? (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-danger) bg-(--el-tint-rose) p-3 text-(--el-text-strong)"
+          className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-danger) bg-(--el-danger-surface) p-3 text-(--el-danger-surface-text)"
         >
           <TriangleAlert className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
           <div className="text-[12.5px] leading-relaxed">

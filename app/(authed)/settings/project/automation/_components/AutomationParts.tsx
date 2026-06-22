@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import type { ComboboxOption } from '@/components/ui/Combobox';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
+import { statusDotColor } from '@/lib/workflows/statusColor';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
@@ -41,17 +42,12 @@ export function MemberAvatar({ name, className }: { name: string; className?: st
   );
 }
 
-/** The per-status colour dot — a per-status hex override, else the category's
- * semantic `--el-*` token (the shipped StatusDot grammar; re-skins with the
- * palette). `rounded-full` is a genuine circle (the shape-rule carve-out). */
-const STATUS_CATEGORY_EL: Record<string, string> = {
-  todo: '--el-text-faint',
-  in_progress: '--el-info',
-  done: '--el-success',
-};
-
+/** The per-status colour dot — a per-status hex override, else the per-status
+ * `--el-status-*` token via shared `statusDotColor` (re-skins with the palette;
+ * differentiates in_review / blocked / cancelled). `rounded-full` is a genuine
+ * circle (the shape-rule carve-out). */
 export function StatusDot({ status }: { status: WorkflowStatusDto }) {
-  const color = status.color ?? `var(${STATUS_CATEGORY_EL[status.category] ?? '--el-text-faint'})`;
+  const color = statusDotColor(status);
   return (
     <span
       aria-hidden

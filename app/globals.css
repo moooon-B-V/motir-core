@@ -2235,6 +2235,55 @@
   --el-tint-sky: var(--color-tint-sky);
   --el-tint-yellow: var(--color-tint-yellow);
 
+  /* ── Status hues (MOTIR-1273 · 1266.2 — un-collapse the workflow statuses) ──
+     Each workflow status renders its dot/icon in its OWN hue, so in_review /
+     blocked / cancelled differentiate from the three lifecycle CATEGORIES the
+     filter dots used to collapse them onto. Maps to a Tier-0 --color-* (the
+     gold-standard --el-chart-* / --el-type-* pattern), so every palette re-skins
+     them automatically through its --color-* overrides — no per-palette block
+     needed (the card's "+ 10 palette blocks" is satisfied by that indirection;
+     verified slate ≠ stone and info/warning/destructive/success/primary are all
+     palette-defined across all 10). The status DOT uses the hue at full strength;
+     a status CHIP bg = color-mix(var(--el-status-X) 14%, var(--el-surface)) with
+     --el-text-strong (design/design-system/design-notes.md §A). Keys grounded in
+     lib/workflows/defaultWorkflow.ts. */
+  --el-status-todo: var(--color-stone); /* neutral grey — not started */
+  --el-status-in-progress: var(--color-info); /* blue — active */
+  --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
+  --el-status-done: var(--color-success); /* green — resolved */
+  --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
+  --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
+
+  /* ── Priority hues (MOTIR-1273 · 1266.2 — a 5-step diverging ramp) ──
+     Un-collapses lib/issues/priorityMeta.ts, where `medium` AND `lowest` were
+     both neutral grey (the exact "can't differentiate" complaint). red → orange
+     → mid-slate → blue → faint-stone: two DISTINCT greys for medium / lowest,
+     kept legible by the redundant ArrowUp / Minus / ArrowDown icon (AA, finding
+     #35). The Pill `priority` tone tints these over --el-surface
+     (design/design-system/design-notes.md §B). */
+  --el-priority-highest: var(--color-destructive); /* red */
+  --el-priority-high: var(--color-warning); /* orange */
+  --el-priority-medium: var(--color-slate); /* mid slate (un-collapsed) */
+  --el-priority-low: var(--color-info); /* blue */
+  --el-priority-lowest: var(--color-stone); /* faint stone (un-collapsed) */
+
+  /* ── Semantic SURFACES (MOTIR-1273 · 1266.2 — banner / callout fills) ──
+     Names the banner/callout fills components reached for as raw --el-tint-*
+     (the FormField error box, the public danger / warning banners). Each = a
+     tint base + a strong-ink text token, AA-safe (charcoal-on-tint clears
+     ~10:1 both themes, finding #35). notice-info / callout / success are
+     defined AHEAD of their dedicated surfaces (the spec's "NEW (no impl)"
+     pattern; design/design-system/design-notes.md §C). */
+  --el-danger-surface: var(--color-tint-rose);
+  --el-danger-surface-text: var(--color-charcoal);
+  --el-warning-surface: var(--color-tint-peach);
+  --el-warning-text: var(--color-charcoal); /* ink on the warning surface */
+  --el-success-surface: var(--color-tint-mint);
+  --el-notice-info-bg: var(--color-tint-sky);
+  --el-notice-info-border: var(--color-info);
+  --el-callout-bg: var(--color-tint-lavender);
+  --el-callout-text: var(--color-charcoal);
+
   /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
   /* The colour the UI was missing: each issue type renders its icon in its
      own hue, matching ISSUE_TYPE_META.colorToken. */

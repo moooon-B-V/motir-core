@@ -464,9 +464,9 @@ export function PublicOverviewEditor({
           </div>
 
           {saveError ? (
-            <div className="mt-4 flex items-start gap-2 rounded-(--radius-card) border border-(--el-danger) bg-(--el-tint-rose) px-(--spacing-card-padding) py-2.5">
+            <div className="mt-4 flex items-start gap-2 rounded-(--radius-card) border border-(--el-danger) bg-(--el-danger-surface) px-(--spacing-card-padding) py-2.5">
               <TriangleAlert className="mt-0.5 size-4 shrink-0 text-(--el-danger)" aria-hidden />
-              <p className="text-xs text-(--el-text-strong)">
+              <p className="text-xs text-(--el-danger-surface-text)">
                 <b className="font-semibold">{t('editSaveErrorLead')}</b> {saveError}
               </p>
             </div>

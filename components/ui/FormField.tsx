@@ -50,7 +50,7 @@ export function FormField({
           className={cn(
             'font-sans text-xs',
             errorVariant === 'box' &&
-              'bg-(--el-tint-rose) text-(--el-text-strong) rounded-(--radius-control) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y)',
+              'bg-(--el-danger-surface) text-(--el-danger-surface-text) rounded-(--radius-control) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y)',
           )}
           style={errorVariant === 'box' ? undefined : { color: 'var(--el-danger)' }}
         >

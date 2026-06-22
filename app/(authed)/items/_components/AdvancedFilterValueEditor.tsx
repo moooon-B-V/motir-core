@@ -10,6 +10,7 @@ import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
+import { statusDotColor } from '@/lib/workflows/statusColor';
 import { labelTint } from '@/lib/labels/labelTint';
 import { customFieldIdOfFilterField, type FilterConditionValue } from '@/lib/filters/ast';
 import type { FilterFieldDef, FilterValueEditorKind } from '@/lib/filters/registry';
@@ -61,16 +62,10 @@ const KIND_GLYPHS = Object.fromEntries(
   ]),
 ) as Record<IssueType, ComponentType<{ className?: string }>>;
 
-// Mirrors the 2.5.4 facet bar's status dot (per-status hex override, else the
-// category's semantic token) at glyph size.
-const STATUS_CATEGORY_EL: Record<string, string> = {
-  todo: '--el-text-faint',
-  in_progress: '--el-info',
-  done: '--el-success',
-};
-
+// Mirrors the 2.5.4 facet bar's status dot via shared `statusDotColor` (per-status
+// hex override, else the per-status `--el-status-*` token) at glyph size.
 function statusGlyph(status: WorkflowStatusDto): ComponentType<{ className?: string }> {
-  const color = status.color ?? `var(${STATUS_CATEGORY_EL[status.category] ?? '--el-text-faint'})`;
+  const color = statusDotColor(status);
   return function StatusGlyph({ className }: { className?: string }) {
     return (
       <span

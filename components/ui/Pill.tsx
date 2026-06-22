@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils/cn';
  * Variant axes (use exactly one):
  *  - `status`: planned | in-progress | done — Motir's Subtask lifecycle states.
  *  - `severity`: info | success | warning | danger — semantic UI states.
+ *  - `priority`: highest | high | medium | low | lowest — work-item priority, a
+ *    5-step diverging ramp (`--el-priority-*` hue tinted over the surface, plus a
+ *    redundant direction icon). The single source of truth is `PRIORITY_META`.
  *  - `memberRole`: admin | member | viewer — a project membership role
  *    (Story 6.4), one hued tint per role. (Named `memberRole`, not `role`, so
  *    it can't collide with the DOM `role` ARIA attribute on the span.)
@@ -56,6 +59,23 @@ const pillVariants = cva(
         warning: 'bg-(--el-tint-peach) text-(--el-text-strong) border-transparent',
         danger: 'bg-(--el-tint-rose) text-(--el-text-strong) border-transparent',
       },
+      // Priority chips (MOTIR-1273 · 1266.2) — a 5-step diverging ramp keyed off
+      // the `--el-priority-*` hues, un-collapsing `medium` and `lowest` (both
+      // were `tone="neutral"` grey). Each hue is diluted to a 14% tint over
+      // `--el-surface` so charcoal `--el-text-strong` clears AA in both themes
+      // (the hue lives in the background — finding #35); the redundant direction
+      // icon (PRIORITY_META) is the non-colour cue. `medium` (slate) and
+      // `lowest` (stone) resolve to two distinct greys in every palette.
+      priority: {
+        highest:
+          'bg-[color-mix(in_srgb,var(--el-priority-highest)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+        high: 'bg-[color-mix(in_srgb,var(--el-priority-high)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+        medium:
+          'bg-[color-mix(in_srgb,var(--el-priority-medium)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+        low: 'bg-[color-mix(in_srgb,var(--el-priority-low)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+        lowest:
+          'bg-[color-mix(in_srgb,var(--el-priority-lowest)_14%,var(--el-surface))] text-(--el-text-strong) border-transparent',
+      },
       // Project membership roles (Story 6.4 · design/projects access-members):
       // admin → lavender, member → sky, viewer → mint — the hue in the tint,
       // charcoal text (AA-safe, finding #35), same recipe as `status`.
@@ -88,13 +108,16 @@ export interface PillProps
   extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof pillVariants> {}
 
 export const Pill = forwardRef<HTMLSpanElement, PillProps>(function Pill(
-  { status, severity, memberRole, orgRole, tone, className, children, ...rest },
+  { status, severity, priority, memberRole, orgRole, tone, className, children, ...rest },
   ref,
 ) {
   return (
     <span
       ref={ref}
-      className={cn(pillVariants({ status, severity, memberRole, orgRole, tone }), className)}
+      className={cn(
+        pillVariants({ status, severity, priority, memberRole, orgRole, tone }),
+        className,
+      )}
       {...rest}
     >
       {children}
