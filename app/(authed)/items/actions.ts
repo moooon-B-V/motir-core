@@ -12,6 +12,7 @@ import { parseSort } from '@/lib/issues/issueListView';
 import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { workItemErrorMessage } from '@/lib/workItems/errorMessages';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { EntitlementExceededError } from '@/lib/billing/errors';
 import {
   IllegalParentTypeError,
   WorkItemError,
@@ -157,6 +158,9 @@ export async function createIssueAction(input: CreateIssueInput): Promise<Create
         field: 'links',
       };
     }
+    // §4 work-item cap hit (8.1.11) — the org is at its free-tier ceiling.
+    // Surface the upgrade message as a toast (the upgrade CTA is 8.1.7/8.1.8).
+    if (err instanceof EntitlementExceededError) return { ok: false, error: err.message };
     // Any other typed work-item error (cross-project parent, assignee/reporter
     // not a member, …) surfaces as a toast with its own message.
     if (err instanceof WorkItemError) return { ok: false, error: workItemErrorMessage(err, t) };

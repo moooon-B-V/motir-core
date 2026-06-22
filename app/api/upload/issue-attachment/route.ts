@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { AttachmentError } from '@/lib/blob/errors';
+import { EntitlementExceededError } from '@/lib/billing/errors';
 
 // POST /api/upload/issue-attachment (Subtask 2.3.7) — the thin HTTP layer over
 // attachmentsService.uploadAttachment. Multipart body with a single `file`
@@ -49,6 +50,14 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof AttachmentError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
+    }
+    // §4 entitlement cap (8.1.11): the per-file size OVERAGE an upgrade lifts, or
+    // the total-storage cap → 402 Payment Required + the upgrade-prompt payload.
+    if (err instanceof EntitlementExceededError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
+        { status: 402 },
+      );
     }
     throw err;
   }

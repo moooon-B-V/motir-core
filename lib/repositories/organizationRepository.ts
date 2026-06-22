@@ -46,6 +46,56 @@ export const organizationRepository = {
   },
 
   /**
+   * Row-lock the organization `FOR UPDATE` inside the caller's transaction — the
+   * serialization anchor for the §4 count-guarded creates (8.1.11). The work-item
+   * / project / workspace caps read a count then create; without a shared lock
+   * two concurrent creates both observe `count = limit - 1`, both pass, and both
+   * insert (a warm-pool TOCTOU overage — CLAUDE.md § lock-before-read-derived).
+   * Locking the single org row serializes every create under the org: the second
+   * racer blocks until the first commits, then re-counts and correctly sees the
+   * limit. Returns whether the row exists (false → the org was deleted/hidden).
+   * `tx` REQUIRED — a row lock lives only for its transaction.
+   */
+  async lockByIdForUpdate(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "organization" WHERE "id" = ${id} FOR UPDATE
+    `;
+    return rows.length > 0;
+  },
+
+  /**
+   * Read just the org's scaled-tracker subscription state (the §4 cap tier
+   * signal, 8.1.11) inside the caller's transaction. Returns `null` when the org
+   * is absent/hidden OR has no subscription — both collapse to the bounded `free`
+   * tier (`pmTierFromScaledTracker`), so the cap path treats a missing org the
+   * same as an unsubscribed one (safe-by-default: caps apply).
+   */
+  async findScaledTrackerStateInTx(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ScaledTrackerSubscription | null> {
+    const org = await tx.organization.findUnique({
+      where: { id },
+      select: { scaledTrackerSubscription: true },
+    });
+    return (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+  },
+
+  /**
+   * Read-only (db-singleton) variant of {@link findScaledTrackerStateInTx} for
+   * the §4 upload path (8.1.11), which checks the per-file + total-storage caps
+   * as a standalone read BEFORE the blob round-trip — no create transaction to
+   * thread. Null when absent/hidden → the bounded `free` tier (safe default).
+   */
+  async findScaledTrackerState(id: string): Promise<ScaledTrackerSubscription | null> {
+    const org = await db.organization.findUnique({
+      where: { id },
+      select: { scaledTrackerSubscription: true },
+    });
+    return (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+  },
+
+  /**
    * Set (or clear) the org's scaled-tracker subscription state (8.1.4c). A
    * non-null `state` writes the propagated subscription JSON; `null` clears the
    * column to SQL NULL via `Prisma.DbNull` (the cancel path — non-destructive,

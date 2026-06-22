@@ -23,6 +23,8 @@ import { workItemComponentRepository } from '@/lib/repositories/workItemComponen
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -644,6 +646,13 @@ export const workItemsService = {
     }
 
     const { dto, revisionId } = await db.$transaction(async (tx) => {
+      // §4 work-item cap (8.1.11): block BEFORE burning a key when the org is at
+      // its free-tier ceiling. Org resolved UP from the workspace; the assert
+      // locks the org row FOR UPDATE so concurrent creates serialize (inert
+      // off-cloud / for a scaled org). A null org id (workspace unresolvable
+      // under RLS) skips the cap rather than blocking a legitimate create.
+      const capOrgId = await workspaceRepository.findOrganizationId(workspaceId, tx);
+      if (capOrgId) await entitlementsService.assertWithinWorkItemCap(capOrgId, tx);
       const key = await projectRepository.allocateWorkItemNumber(input.projectId, tx);
       // Build the identifier prefix from a FRESH in-tx read, NOT the pre-tx
       // `project` snapshot: a project key change (Story 6.8 `changeKey`) racing

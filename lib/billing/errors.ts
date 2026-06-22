@@ -3,6 +3,8 @@
 // reuses `OrganizationNotFoundError` from lib/organizations/errors.ts — the org
 // is an existing entity, not a billing-owned one.)
 
+import type { EntitlementKind } from '@/lib/billing/entitlements';
+
 /**
  * The inbound billing-state body failed validation — a missing/empty
  * organizationId, or a `scaledTrackerSubscription` that is neither null nor a
@@ -54,5 +56,32 @@ export class UnknownBillingPriceError extends Error {
   constructor(priceLookupKey: string) {
     super(`Unknown billing price: ${priceLookupKey}`);
     this.name = 'UnknownBillingPriceError';
+  }
+}
+
+// ── The §4 entitlement-cap surface (Story 8.1.11) error ────────────────────
+
+/**
+ * A free-tier scale cap was hit (ADR §4) — the org tried to create a work item /
+ * project / workspace / organization, or upload a file, beyond what its tier
+ * allows. Maps to **402 Payment Required**: the action is legitimate but gated
+ * behind the $5/seat scaled-tracker subscription (the upgrade path). Carries a
+ * machine-readable `entitlement` so the client renders the right upgrade prompt
+ * (8.1.7/8.1.8), plus the `limit` and current `usage` for the prompt copy.
+ *
+ * Distinct from `FileTooLargeError` (413, lib/blob/errors.ts), which the upload
+ * path still throws for the PER-FILE size cap (a malformed-request shape); this
+ * is the TOTAL-STORAGE / count caps and the tier-derived per-file overage that
+ * an upgrade lifts.
+ */
+export class EntitlementExceededError extends Error {
+  readonly code = 'ENTITLEMENT_EXCEEDED' as const;
+  constructor(
+    readonly entitlement: EntitlementKind,
+    readonly detail: { limit: number | null; usage?: number },
+    message?: string,
+  ) {
+    super(message ?? `Your plan's ${entitlement.replace('_', ' ')} limit has been reached.`);
+    this.name = 'EntitlementExceededError';
   }
 }

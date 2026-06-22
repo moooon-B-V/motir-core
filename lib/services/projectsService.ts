@@ -3,6 +3,8 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectKeyAliasRepository } from '@/lib/repositories/projectKeyAliasRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
@@ -241,6 +243,11 @@ export const projectsService = {
         const project = await withWorkspaceContext(
           { userId: input.actorUserId, workspaceId: input.workspaceId },
           async (tx) => {
+            // §4 project cap (8.1.11): block before any work when the org is at
+            // its free-tier project ceiling. Org resolved UP from the workspace;
+            // the assert locks the org row FOR UPDATE (inert off-cloud / scaled).
+            const capOrgId = await workspaceRepository.findOrganizationId(input.workspaceId, tx);
+            if (capOrgId) await entitlementsService.assertWithinProjectCap(capOrgId, tx);
             // Reserved-key guard (Story 6.8): a new project must not take a key
             // reserved by another project's retired-key alias. The alias table is
             // a SEPARATE table from `project`, so a reserved key does NOT trip the
