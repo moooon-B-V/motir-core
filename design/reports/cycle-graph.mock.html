@@ -1,0 +1,1560 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Sprint cycle graph — Linear-style scope vs completed (Story 8.14 · 8.14.1)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the SPRINT CYCLE GRAPH — Story 8.14, subtask
+      8.14.1. EXTENDS design/reports/charts (4.6) — same hand-rolled token-aware
+      SVG design system, same LineChart visual language, same legend / value-label
+      / data-table-fallback a11y model (finding #35). It does NOT redraw the chart
+      scaffold; it composes the SAME plot frame + tokens the 4.6 charts asset
+      established.
+
+      WHY THIS REFRAME (grounded in the story + its data subtasks — NOT invented):
+        • MOTIR-1297 (8.14, parent) — reframe the burndown into Linear's CYCLE
+          GRAPH: a burn-UP of LIVE scope vs completed, replacing the
+          burn-down-from-a-frozen-committedPoints baseline.
+        • MOTIR-1285 (bug, done) — a sprint entered with already-DONE items kept
+          their points in the remaining line; the old chart never burned to the
+          real remaining.
+        • MOTIR-1288 (bug) — startSprint locks committedPoints=null when items are
+          unestimated at start; the immutable baseline never reflects later
+          estimates. Linear derives scope LIVE from the change trail, so the
+          snapshot fragility disappears.
+      Verified rung-1 standard: Linear's cycle graph — https://linear.app/docs/cycle-graph
+
+      THE DTO IT DRAWS (grounds the series — MOTIR-1290 / 8.14.2 CycleGraphDto):
+        days: { date, scope, completed, started, target }[]   (cumulative points)
+        + statistic · committedAtStart · scopeCreepPct · startDate · endDate
+      And the LIVE-scope model (MOTIR-1292 / 8.14.4 getSprintCycleGraph):
+        scope = estimationService.rollupForSprint committed (LIVE sum, reconciles
+        with the scrum header); completed = done-category roll-up; committedAtStart
+        reconstructed = currentScope − Σ(scopeDelta) — NO committedPoints dependence.
+
+      THE FOUR SERIES + ONE METRIC (per MOTIR-1289):
+        • Scope     (gray)        — LIVE total estimate in the sprint, over time;
+                                     RISES/falls as items are added/removed/re-estimated.
+        • Completed (solid blue)  — points in a done-category by each day (burn-UP).
+        • Started   (amber)       — points in progress by each day.
+        • Target    (blue dotted) — ideal even DESCENT of the start scope to 0 over
+                                     the REMAINING WORKING days; flat on weekends.
+                                     Compare it to the actual remaining = the
+                                     (scope − completed) gap.
+        • Scope-creep indicator   — % of scope added after start
+                                     (currentScope − committedAtStart) / committedAtStart.
+
+      TOKEN DECISION (read by 8.14.5 / MOTIR-1293 — the consuming UI subtask):
+        The cycle graph needs FOUR series tokens. MOTIR-1293 sketched them as
+        --el-chart-completed / --el-chart-started / --el-chart-target, but
+        --el-chart-completed is ALREADY taken (velocity's GREEN completed bar) and
+        --el-chart-actual / --el-chart-guideline are the OLD burndown's blue/gray.
+        Re-using or re-defining those would silently re-skin the velocity + old
+        burndown charts. So this design defines a COLLISION-FREE --el-chart-cycle-*
+        family (per the per-component token-growth pattern in CLAUDE.md). 8.14.5
+        adds THESE to globals.css Tier 3 and consumes them — never Tier-0 --color-*.
+
+      Built FROM the real design system: the token block below is copied 1:1 from
+      design/reports/charts.mock.html (itself 1:1 from app/globals.css) and EXTENDS
+      Tier 3 with the new --el-chart-cycle-* tokens. --el-* only (no Tier-0
+      --color-* in chart markup); shape via element shape tokens; AA-safe; READ AS
+      TEXT (visible legend + value labels + data-table fallback), never colour alone.
+
+      Covers (multi-panel — review EACH):
+        (0) TOKENS + SERIES LEGEND — the 4 new --el-chart-cycle-* tokens + the
+            read-as-text legend + the DTO field → series mapping.
+        (1) CYCLE GRAPH — full, ACTIVE (sprint-report form): scope + completed area
+            + started + dotted target + weekend flat + today marker + scope-creep %.
+        (2) STATES — COMPLETE (finished sprint) + EMPTY (sprint not started).
+        (3) COMPACT — the board sprint-header / scrum-header variant (live, small,
+            scope-creep chip).
+        (4) ACCESS PATH — the four surfaces the chart mounts in + the doors that
+            reach them (sprint report · backlog section · board header · /reports/burndown).
+      Toggle dark mode to confirm token parity. See design-notes.md (Story 8.14).
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* ── Tier-3 chart SCAFFOLD tokens (4.6.2 — REUSED, not redrawn) ──────── */
+        --el-chart-plot: var(--color-surface-soft); /* plot background fill         */
+        --el-chart-grid: var(--color-border); /* gridlines                    */
+        --el-chart-axis: var(--color-steel); /* axis line + tick labels      */
+
+        /* ★ NEW — Tier-3 CYCLE-GRAPH series tokens (8.14.5 adds these to
+           globals.css). Collision-free --el-chart-cycle-* family so the existing
+           velocity (--el-chart-completed = green) + old burndown
+           (--el-chart-actual / --el-chart-guideline) stay untouched. Every cycle
+           colour routes through one of these — NEVER raw --color-*. */
+        --el-chart-cycle-scope: var(--color-stone); /* live total scope (gray)      */
+        --el-chart-cycle-started: var(--color-warning); /* started / in progress (amber)*/
+        --el-chart-cycle-completed: var(--color-info); /* completed (solid blue)       */
+        --el-chart-cycle-target: var(--color-info); /* ideal remaining (blue dotted)*/
+
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #9a968d;
+        --color-stone: #6f6c64;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-accent-orange: #ff8a3d;
+        --color-warning: #ff8a3d;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-success: #38c463;
+        --color-info: #4d9fff;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+      }
+      .review-head code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .stage {
+        max-width: 1180px;
+        margin: 0 auto;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 24px;
+      }
+      .row {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .row > * {
+        flex: 1 1 360px;
+        min-width: 0;
+      }
+
+      /* ── The Card primitive the chart mounts inside (components/ui/Card) ──── */
+      .chart-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        padding: var(--spacing-card-padding);
+      }
+      .chart-card.tight {
+        padding: 16px;
+      }
+      .chart-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .chart-title {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .chart-sub {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The scope-creep STAT chip + headline metrics row ────────────────── */
+      .stat-row {
+        display: flex;
+        gap: 22px;
+        flex-wrap: wrap;
+        margin: 0 0 14px;
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .stat .v {
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .stat .l {
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-muted);
+      }
+      .creep-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .creep-chip .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-chart-cycle-scope);
+      }
+      .creep-chip.warn .dot {
+        background: var(--el-warning);
+      }
+
+      /* ── The shared LEGEND (read as TEXT — finding #35) ──────────────────── */
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        margin-bottom: 12px;
+      }
+      .legend.below {
+        margin: 12px 0 0;
+      }
+      .leg {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .leg b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .leg .sw {
+        width: 16px;
+        height: 12px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .leg .sw-line {
+        width: 18px;
+        height: 0;
+        border-top-width: 3px;
+        border-top-style: solid;
+        flex: none;
+      }
+      .leg .sw-dash {
+        border-top-style: dashed;
+      }
+
+      .chart-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        font-family: var(--font-sans);
+      }
+      .tick-txt {
+        fill: var(--el-chart-axis);
+        font-size: 11px;
+        font-family: var(--font-sans);
+      }
+      .val-txt {
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font-sans);
+      }
+      .annot {
+        font-size: 10.5px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+      }
+
+      /* ── The a11y DATA-TABLE fallback (every chart ships one) ────────────── */
+      .data-fallback {
+        margin-top: 14px;
+        border-top: 1px solid var(--el-border);
+        padding-top: 12px;
+      }
+      .data-fallback summary {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .data-fallback summary svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-muted);
+      }
+      table.dt {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 10px;
+        font-size: 12px;
+      }
+      table.dt caption {
+        text-align: left;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-bottom: 6px;
+      }
+      table.dt th,
+      table.dt td {
+        border: 1px solid var(--el-border);
+        padding: 4px 9px;
+        text-align: right;
+        color: var(--el-text-secondary);
+      }
+      table.dt th[scope='row'],
+      table.dt th[scope='col']:first-child {
+        text-align: left;
+      }
+      table.dt thead th {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      table.dt td.n {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+      }
+
+      /* ── Token table (panel 0) ──────────────────────────────────────────── */
+      table.tok {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+        margin-top: 4px;
+      }
+      table.tok th,
+      table.tok td {
+        border: 1px solid var(--el-border);
+        padding: 7px 10px;
+        text-align: left;
+        vertical-align: middle;
+      }
+      table.tok thead th {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+      }
+      table.tok td code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        padding: 1px 6px;
+        border-radius: var(--radius-control);
+      }
+      .swcell {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .swcell .box {
+        width: 26px;
+        height: 14px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .swcell .line {
+        width: 28px;
+        height: 0;
+        border-top-width: 3px;
+        border-top-style: solid;
+        flex: none;
+      }
+
+      /* ── States ─────────────────────────────────────────────────────────── */
+      .state-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-align: center;
+        min-height: 248px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        padding: 20px;
+      }
+      .state-box svg {
+        width: 26px;
+        height: 26px;
+        color: var(--el-text-faint);
+      }
+      .state-box .st-t {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .state-box .st-s {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        max-width: 300px;
+        line-height: 1.5;
+      }
+
+      /* ── Access-path / seam reference chrome (panel 4) — greyed, NOT redrawn ── */
+      .ap-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .ap-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .ap-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .ap-head .route {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+      .ap-head .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ref-tag {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+      }
+      .ref-mute {
+        opacity: 0.6;
+        filter: grayscale(1);
+      }
+      /* a tiny greyed surface sketch */
+      .sketch {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .sk-bar {
+        height: 9px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+      }
+      .sk-slot {
+        border: 1.5px dashed var(--el-accent);
+        border-radius: var(--radius-control);
+        color: var(--el-accent);
+        font-size: 10.5px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 12px 8px;
+        text-align: center;
+        background: color-mix(in srgb, var(--el-accent) 6%, transparent);
+      }
+      /* a board-header strip with the compact chart slot inline */
+      .hdr-strip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .hdr-strip .nav-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        background: var(--el-muted);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      /* the Reports sidebar nav door */
+      .nav-door {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+      }
+      .nav-door .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .nav-door .nav-item.active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .nav-door .nav-item svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      .note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 12px;
+        line-height: 1.55;
+      }
+      .note b {
+        color: var(--el-text-secondary);
+      }
+      .ap-note {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+        margin: 0;
+      }
+      .ap-note b {
+        color: var(--el-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Sprint cycle graph — Linear-style scope vs completed</h1>
+        <p>
+          Story 8.14 · subtask 8.14.1 — reframes the burndown into Linear's
+          <a href="https://linear.app/docs/cycle-graph">cycle graph</a> (verified rung-1): a burn-UP
+          of <b>live scope</b> vs <b>completed</b>, killing the frozen-<code>committedPoints</code>
+          baseline (MOTIR-1285 / MOTIR-1288). EXTENDS <code>design/reports/charts</code> — same
+          token-aware SVG, same <code>LineChart</code> language, same read-as-text a11y (finding
+          #35). Draws the <code>CycleGraphDto</code> series (8.14.2):
+          <code>scope · completed · started · target</code> + <code>scopeCreepPct</code>.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ═══════════════ PANEL 0 — TOKENS + SERIES LEGEND ═══════════════ -->
+    <div class="panel-label">
+      0 · Cycle-graph tokens + series legend (the --el-chart-cycle-* family 8.14.5 adds)
+    </div>
+    <div class="stage">
+      <div class="chart-card">
+        <div class="chart-head">
+          <h3 class="chart-title">The four series + the metric</h3>
+          <span class="chart-sub"
+            >colour via new <code>--el-chart-cycle-*</code> · no Tier-0 --color-*</span
+          >
+        </div>
+        <div class="legend">
+          <span class="leg"
+            ><span class="sw-line" style="border-color: var(--el-chart-cycle-scope)"></span
+            ><b>Scope</b> (live total)</span
+          >
+          <span class="leg"
+            ><span
+              class="sw"
+              style="background: var(--el-chart-cycle-completed); border-radius: 2px"
+            ></span
+            ><b>Completed</b> (done)</span
+          >
+          <span class="leg"
+            ><span class="sw-line" style="border-color: var(--el-chart-cycle-started)"></span
+            ><b>Started</b> (in progress)</span
+          >
+          <span class="leg"
+            ><span class="sw-line sw-dash" style="border-color: var(--el-chart-cycle-target)"></span
+            ><b>Target</b> (ideal remaining)</span
+          >
+        </div>
+        <table class="tok">
+          <thead>
+            <tr>
+              <th>Series</th>
+              <th>Token (8.14.5 adds to globals.css Tier 3)</th>
+              <th>Maps to (Tier 0)</th>
+              <th>DTO field</th>
+              <th>Render</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <span class="swcell"
+                  ><span class="line" style="border-color: var(--el-chart-cycle-scope)"></span>
+                  Scope</span
+                >
+              </td>
+              <td><code>--el-chart-cycle-scope</code></td>
+              <td><code>--color-stone</code> (gray)</td>
+              <td><code>days[].scope</code></td>
+              <td>line + faint area; the live ceiling — rises on scope-add</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="swcell"
+                  ><span class="box" style="background: var(--el-chart-cycle-completed)"></span>
+                  Completed</span
+                >
+              </td>
+              <td><code>--el-chart-cycle-completed</code></td>
+              <td><code>--color-info</code> (blue)</td>
+              <td><code>days[].completed</code></td>
+              <td>solid line + area fill; burns UP toward scope</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="swcell"
+                  ><span class="line" style="border-color: var(--el-chart-cycle-started)"></span>
+                  Started</span
+                >
+              </td>
+              <td><code>--el-chart-cycle-started</code></td>
+              <td><code>--color-warning</code> (amber)</td>
+              <td><code>days[].started</code></td>
+              <td>solid line; in-progress, sits between completed & scope</td>
+            </tr>
+            <tr>
+              <td>
+                <span class="swcell"
+                  ><span
+                    class="line"
+                    style="border-color: var(--el-chart-cycle-target); border-top-style: dashed"
+                  ></span>
+                  Target</span
+                >
+              </td>
+              <td><code>--el-chart-cycle-target</code></td>
+              <td><code>--color-info</code> (blue, dotted)</td>
+              <td><code>days[].target</code></td>
+              <td>dotted; ideal remaining: startScope → 0 over working days, flat on weekends</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="note">
+          <b>Scaffold tokens are REUSED, not redrawn:</b> <code>--el-chart-plot</code> /
+          <code>--el-chart-grid</code> / <code>--el-chart-axis</code> are the 4.6.2 chart frame.
+          <b>Collision note for 8.14.5:</b> the cycle family is
+          <code>--el-chart-cycle-*</code> precisely because
+          <code>--el-chart-completed</code> already maps to velocity GREEN and
+          <code>--el-chart-actual</code> / <code>--el-chart-guideline</code> are the OLD burndown's
+          blue/gray — adding the bare names would silently re-skin those charts.
+          <b>Reading the chart:</b> actual remaining at any day = the
+          <b>(scope − completed) gap</b>; on-track ⇔ that gap sits at or below the dotted
+          <b>target</b>.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 1 — CYCLE GRAPH (full / ACTIVE, sprint-report form) ═══════════════ -->
+    <div class="panel-label">
+      1 · Cycle graph — full form, ACTIVE (sprint-report seam) — scope + completed area + started +
+      dotted target + weekend flat + today marker + scope-creep (gates 8.14.5)
+    </div>
+    <div class="stage">
+      <div class="chart-card">
+        <div class="chart-head">
+          <h3 class="chart-title">Sprint 24 · Cycle graph</h3>
+          <span class="chart-sub">Jun 2 → Jun 13 · active · day 8 of 10 working days</span>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><span class="v">46</span><span class="l">Scope (live)</span></div>
+          <div class="stat"><span class="v">29</span><span class="l">Completed</span></div>
+          <div class="stat"><span class="v">38</span><span class="l">Started</span></div>
+          <div class="stat"><span class="v">17</span><span class="l">Remaining</span></div>
+          <div class="stat">
+            <span class="creep-chip warn"><span class="dot"></span>+9.5% scope creep</span>
+            <span class="l" style="margin-top: 4px">+4 pts added after start</span>
+          </div>
+        </div>
+        <div class="legend">
+          <span class="leg"
+            ><span class="sw-line" style="border-color: var(--el-chart-cycle-scope)"></span
+            ><b>Scope</b></span
+          >
+          <span class="leg"
+            ><span
+              class="sw"
+              style="background: var(--el-chart-cycle-completed); border-radius: 2px"
+            ></span
+            ><b>Completed</b></span
+          >
+          <span class="leg"
+            ><span class="sw-line" style="border-color: var(--el-chart-cycle-started)"></span
+            ><b>Started</b></span
+          >
+          <span class="leg"
+            ><span class="sw-line sw-dash" style="border-color: var(--el-chart-cycle-target)"></span
+            >Target (ideal)</span
+          >
+          <span class="leg"
+            ><span class="sw-line sw-dash" style="border-color: var(--el-chart-axis)"></span
+            >Today</span
+          >
+        </div>
+        <svg class="chart-svg" viewBox="0 0 600 300" role="img" aria-describedby="cg-full-desc">
+          <desc id="cg-full-desc">
+            Cycle graph for Sprint 24, an active 10-working-day sprint (Jun 2 to Jun 13), now on day
+            8. Scope is the live total: 42 points at start, rising to 46 on day 3 when 4 points were
+            added (a 9.5 percent scope creep). Completed burns up from 0 to 29 points done. Started
+            rises from 6 to 38 points in progress. The dotted target line is the ideal remaining: it
+            descends evenly from 42 at the start to 0 at the end over the working days, holding flat
+            across the weekend (Jun 7 to Jun 8). Today the actual remaining is 17 points (scope 46
+            minus completed 29) against an ideal of 14 — about 3 points behind pace.
+          </desc>
+          <rect x="44" y="16" width="540" height="224" rx="4" fill="var(--el-chart-plot)" />
+          <!-- weekend band (Sat Jun 7 + Sun Jun 8 = day indices 5,6) -->
+          <rect
+            x="264.9"
+            y="16"
+            width="98.2"
+            height="224"
+            fill="var(--el-chart-grid)"
+            opacity="0.35"
+          />
+          <text
+            class="annot"
+            x="313.9"
+            y="30"
+            fill="var(--el-chart-axis)"
+            text-anchor="middle"
+            opacity="0.8"
+          >
+            weekend
+          </text>
+          <!-- gridlines + Y ticks (0..50) -->
+          <g stroke="var(--el-chart-grid)" stroke-width="1">
+            <line x1="44" y1="240" x2="584" y2="240" />
+            <line x1="44" y1="195.2" x2="584" y2="195.2" />
+            <line x1="44" y1="150.4" x2="584" y2="150.4" />
+            <line x1="44" y1="105.6" x2="584" y2="105.6" />
+            <line x1="44" y1="60.8" x2="584" y2="60.8" />
+          </g>
+          <g class="tick-txt" text-anchor="end">
+            <text x="38" y="244">0</text>
+            <text x="38" y="199">10</text>
+            <text x="38" y="154">20</text>
+            <text x="38" y="109">30</text>
+            <text x="38" y="64">40</text>
+            <text x="38" y="20">50</text>
+          </g>
+          <line x1="44" y1="16" x2="44" y2="240" stroke="var(--el-chart-axis)" stroke-width="1.5" />
+          <text class="tick-txt" x="14" y="128" transform="rotate(-90 14 128)" text-anchor="middle">
+            Story points
+          </text>
+          <line
+            x1="44"
+            y1="240"
+            x2="584"
+            y2="240"
+            stroke="var(--el-chart-axis)"
+            stroke-width="1.5"
+          />
+          <!-- X day ticks (calendar dates) -->
+          <g class="tick-txt" text-anchor="middle">
+            <text x="44" y="258">Jun 2</text>
+            <text x="142.18" y="258">Jun 4</text>
+            <text x="240.36" y="258">Jun 6</text>
+            <text x="338.55" y="258">Jun 8</text>
+            <text x="436.73" y="258">Jun 10</text>
+            <text x="534.91" y="258">Jun 12</text>
+          </g>
+          <text class="tick-txt" x="314" y="286" text-anchor="middle">Sprint day</text>
+
+          <!-- scope: faint gray area (to today) under the live ceiling line -->
+          <path
+            d="M44,51.84 L93.09,51.84 L142.18,51.84 L191.27,33.92 L240.36,33.92 L289.45,33.92 L338.55,33.92 L387.64,33.92 L436.73,33.92 L436.73,240 L44,240 Z"
+            fill="var(--el-chart-cycle-scope)"
+            fill-opacity="0.08"
+            stroke="none"
+          />
+          <!-- completed: blue area fill (burn-UP) -->
+          <path
+            d="M44,240 L93.09,222.08 L142.18,195.2 L191.27,177.28 L240.36,159.36 L289.45,159.36 L338.55,159.36 L387.64,132.48 L436.73,110.08 L436.73,240 Z"
+            fill="var(--el-chart-cycle-completed)"
+            fill-opacity="0.13"
+            stroke="none"
+          />
+
+          <!-- target (dotted, ideal remaining): 42 → 0 over working days, flat on weekend -->
+          <path
+            d="M44,51.84 L93.09,72.76 L142.18,93.64 L191.27,114.56 L240.36,135.48 L289.45,135.48 L338.55,135.48 L387.64,156.36 L436.73,177.28 L485.82,198.2 L534.91,219.08 L584,240"
+            fill="none"
+            stroke="var(--el-chart-cycle-target)"
+            stroke-width="2"
+            stroke-dasharray="5 5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            opacity="0.85"
+          />
+          <!-- scope (gray line, to today) -->
+          <path
+            d="M44,51.84 L93.09,51.84 L142.18,51.84 L191.27,33.92 L240.36,33.92 L289.45,33.92 L338.55,33.92 L387.64,33.92 L436.73,33.92"
+            fill="none"
+            stroke="var(--el-chart-cycle-scope)"
+            stroke-width="2.25"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <!-- started (amber line, to today) -->
+          <path
+            d="M44,213.12 L93.09,186.24 L142.18,159.36 L191.27,141.44 L240.36,114.56 L289.45,114.56 L338.55,114.56 L387.64,87.68 L436.73,69.76"
+            fill="none"
+            stroke="var(--el-chart-cycle-started)"
+            stroke-width="2.25"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <!-- completed (blue line, to today) -->
+          <path
+            d="M44,240 L93.09,222.08 L142.18,195.2 L191.27,177.28 L240.36,159.36 L289.45,159.36 L338.55,159.36 L387.64,132.48 L436.73,110.08"
+            fill="none"
+            stroke="var(--el-chart-cycle-completed)"
+            stroke-width="2.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+
+          <!-- scope-add marker at day 3 (the +4 creep step) -->
+          <rect
+            x="186.27"
+            y="28.92"
+            width="10"
+            height="10"
+            rx="2"
+            transform="rotate(45 191.27 33.92)"
+            fill="var(--el-chart-cycle-scope)"
+          />
+          <text class="annot" x="199" y="30" fill="var(--el-chart-axis)">+4 scope</text>
+
+          <!-- "today" vertical marker at day 8 -->
+          <line
+            x1="436.73"
+            y1="16"
+            x2="436.73"
+            y2="240"
+            stroke="var(--el-chart-axis)"
+            stroke-width="1.5"
+            stroke-dasharray="3 3"
+          />
+
+          <!-- endpoint dots + labels -->
+          <circle cx="436.73" cy="33.92" r="3.75" fill="var(--el-chart-cycle-scope)" />
+          <text class="annot" x="430" y="30" fill="var(--el-chart-axis)" text-anchor="end">
+            46 scope
+          </text>
+          <circle cx="436.73" cy="69.76" r="3.75" fill="var(--el-chart-cycle-started)" />
+          <text class="annot" x="444" y="66" fill="var(--el-chart-cycle-started)">38 started</text>
+          <circle cx="436.73" cy="110.08" r="3.75" fill="var(--el-chart-cycle-completed)" />
+          <text class="annot" x="444" y="114" fill="var(--el-chart-cycle-completed)">29 done</text>
+        </svg>
+        <details class="data-fallback">
+          <summary>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 3v18" />
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M3 9h18" />
+              <path d="M3 15h18" />
+            </svg>
+            View data table
+          </summary>
+          <table class="dt">
+            <caption>
+              Sprint 24 cycle graph — cumulative story points by day (end-of-day). Scope is live;
+              target is the ideal remaining over working days.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Scope</th>
+                <th scope="col">Completed</th>
+                <th scope="col">Started</th>
+                <th scope="col">Target</th>
+                <th scope="col">Event</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Jun 2</th>
+                <td class="n">42</td>
+                <td class="n">0</td>
+                <td class="n">6</td>
+                <td class="n">42.0</td>
+                <td>Sprint started · 42 committed (live)</td>
+              </tr>
+              <tr>
+                <th scope="row">Jun 4</th>
+                <td class="n">42</td>
+                <td class="n">10</td>
+                <td class="n">18</td>
+                <td class="n">32.7</td>
+                <td>10 done · 18 started</td>
+              </tr>
+              <tr>
+                <th scope="row">Jun 5</th>
+                <td class="n">46</td>
+                <td class="n">14</td>
+                <td class="n">22</td>
+                <td class="n">28.0</td>
+                <td>+4 scope added (re-estimate)</td>
+              </tr>
+              <tr>
+                <th scope="row">Jun 7–8</th>
+                <td class="n">46</td>
+                <td class="n">18</td>
+                <td class="n">28</td>
+                <td class="n">23.3</td>
+                <td>Weekend · target flat</td>
+              </tr>
+              <tr>
+                <th scope="row">Jun 10</th>
+                <td class="n">46</td>
+                <td class="n">29</td>
+                <td class="n">38</td>
+                <td class="n">14.0</td>
+                <td>Today · 17 remaining vs 14 ideal</td>
+              </tr>
+            </tbody>
+          </table>
+        </details>
+        <p class="note">
+          The series are reconstructed from the <b>1.4.6 work_item_revision trail</b> by 8.14.3's
+          aggregate and assembled by the <b>pure 8.14.2 <code>toCycleGraphDto</code></b
+          >. <b>Scope is LIVE</b> — <code>estimationService.rollupForSprint</code> committed
+          (8.14.4) — so it reconciles with the scrum header (scope = committed roll-up, completed =
+          done roll-up) and has
+          <b>no dependence on the frozen <code>committedPoints</code> snapshot</b> (resolves
+          MOTIR-1285 / MOTIR-1288). <code>committedAtStart</code> is reconstructed (<code
+            >currentScope − Σ scopeDelta</code
+          >) only for the scope-creep %.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 2 — STATES (complete + empty) ═══════════════ -->
+    <div class="panel-label">2 · States — COMPLETE (finished sprint) · EMPTY (not started)</div>
+    <div class="stage">
+      <div class="row">
+        <!-- COMPLETE -->
+        <div class="chart-card" style="flex: 1 1 460px">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 15px">Sprint 23 · Cycle graph</h3>
+            <span class="chart-sub">completed · 40 of 46 done</span>
+          </div>
+          <div class="stat-row" style="margin-bottom: 10px">
+            <div class="stat"><span class="v">46</span><span class="l">Scope</span></div>
+            <div class="stat"><span class="v">40</span><span class="l">Completed</span></div>
+            <div class="stat"><span class="v">6</span><span class="l">Carried over</span></div>
+            <div class="stat">
+              <span class="creep-chip warn"><span class="dot"></span>+9.5% creep</span>
+            </div>
+          </div>
+          <div class="legend" style="margin-bottom: 8px">
+            <span class="leg"
+              ><span class="sw-line" style="border-color: var(--el-chart-cycle-scope)"></span
+              ><b>Scope</b></span
+            >
+            <span class="leg"
+              ><span
+                class="sw"
+                style="background: var(--el-chart-cycle-completed); border-radius: 2px"
+              ></span
+              ><b>Completed</b></span
+            >
+            <span class="leg"
+              ><span class="sw-line" style="border-color: var(--el-chart-cycle-started)"></span
+              ><b>Started</b></span
+            >
+            <span class="leg"
+              ><span
+                class="sw-line sw-dash"
+                style="border-color: var(--el-chart-cycle-target)"
+              ></span
+              >Target</span
+            >
+          </div>
+          <svg class="chart-svg" viewBox="0 0 360 200" role="img" aria-describedby="cg-done-desc">
+            <desc id="cg-done-desc">
+              Completed cycle graph for Sprint 23. Scope held at 42 then 46 after a mid-sprint add.
+              Completed burned up to 40, leaving 6 points carried over. Started reached 44. The
+              dotted target reached 0 at the end; completed finished just under the target pace.
+            </desc>
+            <rect x="36" y="14" width="312" height="154" rx="4" fill="var(--el-chart-plot)" />
+            <g stroke="var(--el-chart-grid)" stroke-width="1">
+              <line x1="36" y1="168" x2="348" y2="168" />
+              <line x1="36" y1="129.5" x2="348" y2="129.5" />
+              <line x1="36" y1="91" x2="348" y2="91" />
+              <line x1="36" y1="52.5" x2="348" y2="52.5" />
+            </g>
+            <g class="tick-txt" text-anchor="end">
+              <text x="31" y="171">0</text>
+              <text x="31" y="94">24</text>
+              <text x="31" y="32">46</text>
+            </g>
+            <line
+              x1="36"
+              y1="14"
+              x2="36"
+              y2="168"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <line
+              x1="36"
+              y1="168"
+              x2="348"
+              y2="168"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <g class="tick-txt" text-anchor="middle">
+              <text x="36" y="184">D1</text>
+              <text x="192" y="184">D5</text>
+              <text x="348" y="184">D10</text>
+            </g>
+            <!-- completed area -->
+            <path
+              d="M36,168 L98.4,139.13 L160.8,110.26 L223.2,81.38 L285.6,58.93 L348,39.68 L348,168 Z"
+              fill="var(--el-chart-cycle-completed)"
+              fill-opacity="0.13"
+              stroke="none"
+            />
+            <!-- target dotted 42 -> 0 -->
+            <path
+              d="M36,33.26 L98.4,60.21 L160.8,87.16 L223.2,114.1 L285.6,141.05 L348,168"
+              fill="none"
+              stroke="var(--el-chart-cycle-target)"
+              stroke-width="1.75"
+              stroke-dasharray="4 4"
+              stroke-linecap="round"
+              opacity="0.85"
+            />
+            <!-- scope gray (42 -> 46) -->
+            <path
+              d="M36,33.26 L98.4,33.26 L160.8,20.43 L223.2,20.43 L285.6,20.43 L348,20.43"
+              fill="none"
+              stroke="var(--el-chart-cycle-scope)"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <!-- started amber -->
+            <path
+              d="M36,168 L98.4,129.5 L160.8,91 L223.2,58.93 L285.6,33.26 L348,26.85"
+              fill="none"
+              stroke="var(--el-chart-cycle-started)"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <!-- completed blue line -->
+            <path
+              d="M36,168 L98.4,139.13 L160.8,110.26 L223.2,81.38 L285.6,58.93 L348,39.68"
+              fill="none"
+              stroke="var(--el-chart-cycle-completed)"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle cx="348" cy="39.68" r="3.5" fill="var(--el-chart-cycle-completed)" />
+            <circle cx="348" cy="20.43" r="3.5" fill="var(--el-chart-cycle-scope)" />
+          </svg>
+          <p class="note" style="margin-top: 8px">
+            Terminal state — the chart freezes at the sprint end. The gap between the gray
+            <b>scope</b> (46) and blue <b>completed</b> (40) is the <b>6 points carried over</b>;
+            the carry surfaces in the sprint report's roll-up beside the chart.
+          </p>
+        </div>
+        <!-- EMPTY / not started -->
+        <div class="chart-card" style="flex: 1 1 320px">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 15px">Sprint 25 · Cycle graph</h3>
+            <span class="chart-sub">planned · not started</span>
+          </div>
+          <div class="state-box">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 3v18h18" />
+              <path d="M7 14l4-4 3 3 5-6" stroke-dasharray="3 3" />
+            </svg>
+            <div class="st-t">No cycle data yet</div>
+            <div class="st-s">
+              The cycle graph appears once the sprint is started. Until then there's no change trail
+              to plot — start Sprint 25 to begin tracking scope vs completed.
+            </div>
+          </div>
+          <p class="note" style="margin-top: 10px">
+            Backs the service's <code>SprintNotStartedError</code> (8.14.4, mirroring
+            <code>getBurndownSeries</code>) — a planned sprint has no <code>startDate</code> window,
+            so the chart shows this empty state rather than a degenerate flat line.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 3 — COMPACT (board / scrum-header variant) ═══════════════ -->
+    <div class="panel-label">
+      3 · Compact form — board sprint-header / scrum-header seam — small, live, beside the numeric
+      remaining + scope-creep chip
+    </div>
+    <div class="stage">
+      <div class="row">
+        <div class="chart-card tight" style="flex: 1 1 440px">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 15px">Cycle</h3>
+            <span class="chart-sub">Sprint 24 · day 6 of 10</span>
+          </div>
+          <div class="legend" style="margin-bottom: 8px">
+            <span class="leg"
+              ><span class="sw-line" style="border-color: var(--el-chart-cycle-scope)"></span
+              >Scope</span
+            >
+            <span class="leg"
+              ><span
+                class="sw"
+                style="background: var(--el-chart-cycle-completed); border-radius: 2px"
+              ></span
+              ><b>Done</b></span
+            >
+            <span class="leg"
+              ><span class="sw-line" style="border-color: var(--el-chart-cycle-started)"></span
+              >Started</span
+            >
+            <span class="leg"
+              ><span
+                class="sw-line sw-dash"
+                style="border-color: var(--el-chart-cycle-target)"
+              ></span
+              >Target</span
+            >
+          </div>
+          <svg
+            class="chart-svg"
+            viewBox="0 0 360 150"
+            role="img"
+            aria-describedby="cg-compact-desc"
+          >
+            <desc id="cg-compact-desc">
+              Compact in-sprint cycle graph for the active Sprint 24 on day 6 of 10. Scope is 34
+              rising to 38 after a scope add. Completed is at 28 done, started at 36. The dotted
+              target descends from 34 to 0; today is marked. Remaining is 10 points.
+            </desc>
+            <rect x="30" y="12" width="320" height="108" rx="4" fill="var(--el-chart-plot)" />
+            <g stroke="var(--el-chart-grid)" stroke-width="1">
+              <line x1="30" y1="120" x2="350" y2="120" />
+              <line x1="30" y1="84" x2="350" y2="84" />
+              <line x1="30" y1="48" x2="350" y2="48" />
+            </g>
+            <g class="tick-txt" text-anchor="end">
+              <text x="25" y="123">0</text>
+              <text x="25" y="51">32</text>
+            </g>
+            <line
+              x1="30"
+              y1="12"
+              x2="30"
+              y2="120"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <line
+              x1="30"
+              y1="120"
+              x2="350"
+              y2="120"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+            />
+            <g class="tick-txt" text-anchor="middle">
+              <text x="30" y="136">D1</text>
+              <text x="222" y="136">today</text>
+              <text x="350" y="136">D10</text>
+            </g>
+            <!-- completed area -->
+            <path
+              d="M30,120 L62,108.75 L94,97.5 L126,84 L158,75 L190,66 L222,57 L222,120 Z"
+              fill="var(--el-chart-cycle-completed)"
+              fill-opacity="0.13"
+              stroke="none"
+            />
+            <!-- target dotted 34 -> 0 -->
+            <path
+              d="M30,43.5 L350,120"
+              fill="none"
+              stroke="var(--el-chart-cycle-target)"
+              stroke-width="1.75"
+              stroke-dasharray="4 4"
+              stroke-linecap="round"
+              opacity="0.85"
+            />
+            <!-- today marker (day 6) -->
+            <line
+              x1="222"
+              y1="12"
+              x2="222"
+              y2="120"
+              stroke="var(--el-chart-axis)"
+              stroke-width="1.5"
+              stroke-dasharray="3 3"
+            />
+            <!-- scope gray 34 -> 38 -->
+            <path
+              d="M30,43.5 L62,43.5 L94,43.5 L126,34.5 L158,34.5 L190,34.5 L222,34.5"
+              fill="none"
+              stroke="var(--el-chart-cycle-scope)"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <!-- started amber -->
+            <path
+              d="M30,102 L62,88.5 L94,75 L126,61.5 L158,52.5 L190,43.5 L222,39"
+              fill="none"
+              stroke="var(--el-chart-cycle-started)"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <!-- completed blue -->
+            <path
+              d="M30,120 L62,108.75 L94,97.5 L126,84 L158,75 L190,66 L222,57"
+              fill="none"
+              stroke="var(--el-chart-cycle-completed)"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle cx="222" cy="57" r="3.5" fill="var(--el-chart-cycle-completed)" />
+          </svg>
+        </div>
+        <!-- the numeric companion the compact chart sits beside in the header -->
+        <div class="chart-card tight" style="flex: 1 1 240px">
+          <div class="chart-head">
+            <h3 class="chart-title" style="font-size: 15px">At a glance</h3>
+          </div>
+          <div class="stat-row" style="margin: 0">
+            <div class="stat"><span class="v">38</span><span class="l">Scope</span></div>
+            <div class="stat"><span class="v">28</span><span class="l">Done</span></div>
+            <div class="stat"><span class="v">10</span><span class="l">Remaining</span></div>
+          </div>
+          <div style="margin-top: 12px">
+            <span class="creep-chip warn"><span class="dot"></span>+11.8% scope creep</span>
+          </div>
+          <p class="note" style="margin-top: 12px">
+            The compact form drops the value-labels + data-table chrome but keeps the four series,
+            the today marker, and the <code>&lt;desc&gt;</code> summary. It mounts in the
+            <b>board sprint-header</b> slot beside these numbers, so a glance reads
+            done-vs-remaining without opening the report. The scope-creep chip turns to the amber
+            <code>warn</code> tone once creep exceeds 0.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ PANEL 4 — ACCESS PATH (the four surfaces + their doors) ═══════════════ -->
+    <div class="panel-label">
+      4 · Access path — where the cycle graph renders + the door that reaches each (chrome
+      REFERENCED, not redrawn)
+    </div>
+    <div class="stage">
+      <div class="ap-grid">
+        <!-- 1. Sprint report -->
+        <div class="ap-card">
+          <div class="ap-head">
+            <span class="nm">Sprint report</span>
+            <span class="route">app/(authed)/sprints/[id]/report</span>
+          </div>
+          <div class="sketch ref-mute">
+            <div class="sk-bar" style="width: 45%"></div>
+            <div class="sk-slot">▣ Cycle graph — FULL form (panel 1)</div>
+            <div class="sk-bar" style="width: 70%"></div>
+            <div class="sk-bar" style="width: 60%"></div>
+          </div>
+          <p class="ap-note">
+            <b>Door:</b> a finished/active sprint's <b>“View report”</b> action. The full cycle
+            graph replaces the old burndown in the report's chart seam; the velocity chart below it
+            is unchanged (story boundary).
+          </p>
+        </div>
+        <!-- 2. Backlog burndown section -->
+        <div class="ap-card">
+          <div class="ap-head">
+            <span class="nm">Backlog — sprint section</span>
+            <span class="route">app/(authed)/backlog</span>
+          </div>
+          <div class="sketch ref-mute">
+            <div class="sk-bar" style="width: 55%"></div>
+            <div class="sk-bar" style="width: 80%"></div>
+            <div class="sk-slot">▣ Cycle graph — FULL form, active sprint</div>
+          </div>
+          <p class="ap-note">
+            <b>Door:</b> the active-sprint panel on the backlog page (where
+            <code>BurndownChart</code> renders today). Same full form; repointed to the new DTO by
+            8.14.6.
+          </p>
+        </div>
+        <!-- 3. Board sprint-header -->
+        <div class="ap-card">
+          <div class="ap-head">
+            <span class="nm">Board — sprint header</span>
+            <span class="route">app/(authed)/board</span>
+          </div>
+          <div class="sketch ref-mute">
+            <div class="hdr-strip">
+              <span class="nav-pill">Sprint 24 · day 6/10</span>
+              <span class="sk-slot" style="padding: 8px 10px">▣ COMPACT cycle (panel 3)</span>
+              <span class="nav-pill">10 left</span>
+            </div>
+          </div>
+          <p class="ap-note">
+            <b>Door:</b> always-visible in the scrum board's sprint header — the
+            <b>compact</b> variant beside the numeric remaining. The in-context glance, no
+            navigation required.
+          </p>
+        </div>
+        <!-- 4. Standalone /reports/burndown -->
+        <div class="ap-card">
+          <div class="ap-head">
+            <span class="nm">Reports → Burndown</span>
+            <span class="route">/reports/burndown</span>
+          </div>
+          <div class="sketch ref-mute" style="border-style: solid">
+            <div class="nav-door">
+              <div class="nav-item">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 3v18h18" />
+                  <path d="M18 17V9" />
+                  <path d="M13 17V5" />
+                  <path d="M8 17v-3" />
+                </svg>
+                Velocity
+              </div>
+              <div class="nav-item active">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 3v18h18" />
+                  <path d="M7 12l4-3 3 3 5-5" />
+                </svg>
+                Burndown (cycle graph)
+              </div>
+            </div>
+          </div>
+          <p class="ap-note">
+            <b>Door:</b> the <b>Reports</b> nav → <b>Burndown</b> entry (highlighted). The
+            standalone page hosts the full cycle graph with a sprint picker; the label stays
+            “Burndown” (the familiar word) while the chart is the cycle model.
+          </p>
+        </div>
+      </div>
+      <p class="note">
+        All four surfaces consume the SAME component + <code>CycleGraphDto</code> (8.14.5 builds it
+        once, 8.14.6 repoints every consumer). Full form on the report / backlog / standalone page;
+        compact form in the board header. Per the design-reference rule, the entry affordance is
+        drawn for each — not just named in prose.
+      </p>
+    </div>
+  </body>
+</html>

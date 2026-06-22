@@ -413,3 +413,138 @@ value labels, and a `<details>` data-table fallback.
 - **Per-epic / per-component workload variants**, time-tracking-based workload
   (no time-tracking entity), CSV/image export — no use case yet (no complexity
   for nothing).
+
+---
+
+# Sprint cycle graph — Linear-style scope vs completed (Story 8.14 · subtask 8.14.1)
+
+Design reference for the **reframed sprint burndown**: Linear's
+[**cycle graph**](https://linear.app/docs/cycle-graph) (verified rung-1 standard)
+— a burn-**UP** of **live scope vs completed** over the sprint window, replacing
+the burn-**down**-from-a-frozen-`committedPoints`-baseline the 4.6.1 burndown
+drew. **EXTENDS `design/reports/charts`** (4.6): same hand-rolled token-aware SVG,
+same `LineChart` multi-series language, same legend + value-label + `<details>`
+data-table a11y model (finding #35). It does **not** redraw the chart scaffold —
+it composes the same plot frame + `--el-chart-plot/grid/axis` tokens 4.6.2
+established and adds a new series family.
+
+| Surface         | Asset                                     | Notes                                                                                                                                                                               |
+| --------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Cycle graph** | **`cycle-graph.mock.html`** (HTML mockup) | 5 panels: tokens + series legend · full ACTIVE chart · COMPLETE + EMPTY states · COMPACT (board-header) variant · access path (4 surfaces). Gates **8.14.5** (the chart component). |
+
+**Why the reframe (grounded, not invented).** The current burndown depends on the
+immutable `committedPoints` snapshot taken at `startSprint`. Started with
+unestimated items, that snapshot locks to `null` (**MOTIR-1288**), so the chart
+degraded to a unitless issue-count line with no anchor and showed the wrong
+remaining (**MOTIR-1285**). Linear derives scope **LIVE** from the change trail,
+so the snapshot fragility disappears. This asset is grounded in the parent story
+(**MOTIR-1297**) and the data subtasks it draws — **MOTIR-1290** (`CycleGraphDto`
+
+- `toCycleGraphDto`) and **MOTIR-1292** (`getSprintCycleGraph`, the live-scope
+  service) — it does not invent the data model.
+
+## The four series + the one metric (the `CycleGraphDto` it draws)
+
+The DTO (8.14.2): `days: { date, scope, completed, started, target }[]` (cumulative
+points) `+ statistic · committedAtStart · scopeCreepPct · startDate · endDate`.
+
+| Series                   | Render                                                              | DTO field          | Meaning                                                                            |
+| ------------------------ | ------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------- |
+| **Scope** (gray)         | line + faint area; the live ceiling                                 | `days[].scope`     | LIVE total estimate in the sprint; **rises/falls** as items are added/re-estimated |
+| **Completed** (blue)     | solid line + area fill; burns **UP**                                | `days[].completed` | points in a done-category by each day                                              |
+| **Started** (amber)      | solid line, between completed and scope                             | `days[].started`   | points in progress by each day                                                     |
+| **Target** (blue dotted) | dotted; descends startScope → 0 over working days, flat on weekends | `days[].target`    | ideal remaining; **compare to the (scope − completed) gap**                        |
+| **Scope creep** (metric) | amber `creep-chip` pill                                             | `scopeCreepPct`    | `(currentScope − committedAtStart) / committedAtStart` — % added after start       |
+
+**Reading the chart:** actual remaining at any day = the **(scope − completed)
+gap** at the top; on-track ⇔ that gap sits at or below the dotted **target**. In
+the active panel, day 8 shows 17 remaining (46 − 29) vs a 14 ideal — ~3 pts behind
+pace. The **today** marker is the dashed vertical (`--el-chart-axis`), the
+**scope-add** step is annotated (`+4 scope` diamond), and the **weekend** is a
+faint shaded band where the target line holds flat.
+
+## NEW `--el-chart-cycle-*` tokens (8.14.5 adds these to globals.css Tier 3)
+
+Four net-new series tokens — a **collision-free `--el-chart-cycle-*` family**, the
+deliberate name decision of this design:
+
+| Token                        | Maps to           | Role                           |
+| ---------------------------- | ----------------- | ------------------------------ |
+| `--el-chart-cycle-scope`     | `--color-stone`   | live total scope (gray)        |
+| `--el-chart-cycle-started`   | `--color-warning` | started / in progress (amber)  |
+| `--el-chart-cycle-completed` | `--color-info`    | completed (solid blue)         |
+| `--el-chart-cycle-target`    | `--color-info`    | ideal remaining (blue, dotted) |
+
+> **Token collision note for 8.14.5 (MOTIR-1293).** The card sketched the names as
+> `--el-chart-completed` / `--el-chart-started` / `--el-chart-target`, but
+> **`--el-chart-completed` is ALREADY taken** (velocity's GREEN completed bar), and
+> `--el-chart-actual` / `--el-chart-guideline` are the OLD burndown's blue/gray.
+> Adding or reusing those bare names would silently re-skin the velocity + legacy
+> burndown charts. So this design defines the `--el-chart-cycle-*` family instead
+> (the per-component token-growth pattern, CLAUDE.md colour rule). Every cycle
+> colour routes through one of these — never a raw `--color-*`. The
+> `--el-chart-plot/grid/axis` scaffold tokens are **reused** unchanged. All four
+> inherit the `[data-theme="dark"]` flip via their mapping (the mock's Toggle-dark
+> confirms parity).
+
+## States + variants (panels 2–3)
+
+- **ACTIVE** (full, sprint-report form) — the headline. Stat row (Scope / Completed
+  / Started / Remaining + scope-creep chip), four series to **today**, target across
+  the full window, weekend band, today marker, data-table fallback.
+- **COMPLETE** — terminal: the chart freezes at sprint end; the gray-scope ↔
+  blue-completed gap is the **carried-over** points (surfaced in the report roll-up
+  beside the chart).
+- **EMPTY / not started** — a planned sprint has no `startDate` window → the
+  `state-box` "No cycle data yet" (backs the service's `SprintNotStartedError`,
+  8.14.4, mirroring `getBurndownSeries`). Never a degenerate flat line.
+- **COMPACT** (board / scrum-header variant) — drops the value-labels + data-table
+  chrome, keeps the four series + today marker + `<desc>` + scope-creep chip; mounts
+  beside the numeric remaining for an at-a-glance read.
+
+## Access path (panel 4 — drawn, not just named)
+
+The same component + `CycleGraphDto` renders on **four** surfaces; each door is
+drawn (the design-content rule):
+
+| Surface                    | Route                              | Form    | Door                                                                                        |
+| -------------------------- | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
+| **Sprint report**          | `app/(authed)/sprints/[id]/report` | full    | the sprint's **View report** action (replaces the burndown seam)                            |
+| **Backlog sprint section** | `app/(authed)/backlog`             | full    | the active-sprint panel (where `BurndownChart` renders today)                               |
+| **Board sprint header**    | `app/(authed)/board`               | compact | always-visible beside the numeric remaining                                                 |
+| **Reports → Burndown**     | `/reports/burndown`                | full    | the **Reports** nav → **Burndown** entry (label stays "Burndown"; chart is the cycle model) |
+
+8.14.5 builds the component once; **8.14.6** repoints every consumer to the new
+DTO/component. The velocity chart and `startSprint`'s snapshot logic are out of
+scope (story boundary, MOTIR-1297) — this chart is correct regardless of whether
+MOTIR-1288 fixes the snapshot.
+
+## Tokens, shape, a11y
+
+- **Colour via `--el-*` only** — the four new `--el-chart-cycle-*` series tokens +
+  the reused `--el-chart-plot/grid/axis` scaffold, `--el-text*` for labels/legends,
+  `--el-tint-peach` + `--el-text-strong` for the scope-creep chip, `--el-surface*` /
+  `--el-border` for the Card, `--el-tint-lavender` for the active nav door. AA holds
+  (series are vivid strokes/fills on the soft plot; the chip puts the hue in the
+  tint background).
+- **Shape via element-semantic tokens** — `--radius-card` (chart Card / state box),
+  `--radius-control` (sketch surfaces / nav door), `--radius-badge` (chips / nav
+  pills), `--radius-btn` (toggle), `--spacing-card-padding`, `--spacing-chip-*`,
+  `--shadow-subtle`. SVG point `r` / stroke widths / dash arrays are intrinsic chart
+  shape.
+- **a11y** — each chart is a `role="img"` figure with a `<desc>` narrating every
+  series + the on/behind-pace read, a visible read-as-text legend, value labels at
+  the endpoints, and a `<details>` `<table>` fallback (`<caption>` + `scope`-ed
+  headers). The series read as text + number; colour is never the sole signal
+  (finding #35). The today marker + weekend band are labelled, not colour-only.
+
+## Out of scope (built elsewhere / consumed here)
+
+- The **data path** — `CycleGraphDto` + `toCycleGraphDto` (8.14.2 / MOTIR-1290),
+  the revision-trail aggregate (8.14.3), and `getSprintCycleGraph` live-scope
+  service (8.14.4 / MOTIR-1292). This asset is pure UI.
+- The **chart component + tokens** — `BurndownChart` reframed onto `LineChart` with
+  the new `--el-chart-cycle-*` tokens (8.14.5 / MOTIR-1293, from this spec).
+- **Repointing the consumers** to the new DTO/component (8.14.6).
+- The **velocity chart**, dashboards beyond the burndown repoint, and `startSprint`
+  snapshot logic — explicit story boundary (MOTIR-1297).
