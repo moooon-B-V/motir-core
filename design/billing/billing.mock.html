@@ -53,12 +53,15 @@
             cross-link to Usage & cost.
         (3) PANEL STATES — past_due / dunning warning, trialing (one-time trial), canceled→free.
         (4) ROLE GATING (decision §7) — admin READ-ONLY view vs a plain member's "ask your owner".
-        (5) PLAN / PRICING COMPARISON — the storefront: ① Motir free ↔ scaled, ② the Motir AI ladder
-            (Free / Starter / Standard / Pro / Max / Enterprise) with per-tier CTA → Checkout.
-        (6) PAYWALL AT THE AI BOUNDARY (8.1.8) — (a) out_of_credits 402 with an ACTIVE Upgrade CTA
+        (5) PLAN / PRICING COMPARISON — the storefront with a Monthly/Annual toggle (default Annual):
+            ① Motir free ↔ scaled, ② the Motir AI ladder (Free / Starter / Standard / Pro / Max /
+            Enterprise) with per-tier CTA → Checkout.
+        (6) SEATS — the scaled-Motir upgrade (Jira/Linear seat model): the seat-review step shows the
+            member→seat count + total before Checkout; the scaled state shows billed seats + Manage seats.
+        (7) PAYWALL AT THE AI BOUNDARY (8.1.8) — (a) out_of_credits 402 with an ACTIVE Upgrade CTA
             (activates the ai-usage passive slot); (b) tier-gate "AI is a paid feature"; (c) the
             non-billing-admin member variant ("ask your org owner").
-        (7) EMPTY / LOADING / ERROR — the billing-status fetch over the 7.1 boundary.
+        (8) EMPTY / LOADING / ERROR — the billing-status fetch over the 7.1 boundary.
       Toggle dark mode to confirm token parity. See design-notes.md for the per-surface primitive +
       copy + --el-* role spec.
     -->
@@ -638,6 +641,64 @@
         color: var(--el-text-muted);
         font-size: 12px;
       }
+
+      /* ── Seat review (seats = members, billed per-seat · Jira/Linear) ────── */
+      .seatcalc {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        flex-wrap: wrap;
+      }
+      .seatcalc .sc-l {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .seatcalc .sc-total {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .seatcalc .sc-total .per {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--el-text-muted);
+      }
+      .avatars {
+        display: inline-flex;
+        flex: none;
+      }
+      .avatars span {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        border: 2px solid var(--el-page-bg);
+        margin-left: -6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .avatars span:first-child {
+        margin-left: 0;
+      }
+      .av1 { background: var(--el-tint-lavender); }
+      .av2 { background: var(--el-tint-sky); }
+      .av3 { background: var(--el-tint-mint); }
+      .av4 { background: var(--el-tint-peach); }
+      .av5 { background: var(--el-tint-rose); }
+      .av6 { background: var(--el-tint-yellow); }
 
       /* a quiet inline cross-link (→ Usage & cost) */
       .xlink {
@@ -1299,11 +1360,22 @@
                     </div>
                   </div>
                 </div>
-                <div class="acts" style="margin-top: 16px; display: flex; gap: 8px">
-                  <button class="btn btn-secondary">Upgrade Motir <span style="color: var(--el-text-muted); font-weight: 400">· $5/seat</span></button>
-                  <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
-                    1 workspace · 6 members · 2 of 3 projects
-                  </a>
+                <!-- seat preview: scaling is billed per member (like Jira/Linear) -->
+                <div class="seatcalc" style="margin-top: 16px">
+                  <span class="sc-l">
+                    <span class="avatars">
+                      <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
+                      <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                    </span>
+                    Scaling bills <b>1 seat per member</b> — 6 today
+                  </span>
+                  <span class="sc-total">6 × $5 = $30 <span class="per">/ mo</span></span>
+                </div>
+                <div class="acts" style="margin-top: 12px; display: flex; align-items: center; gap: 8px">
+                  <button class="btn btn-secondary">Upgrade Motir</button>
+                  <span class="xlink" style="cursor: default; color: var(--el-text-muted)">
+                    Seats follow membership · prorated automatically
+                  </span>
                 </div>
               </div>
             </div>
@@ -1577,13 +1649,19 @@
                   </div>
                   <div class="billed cad cad-a">billed annually · $40 / seat / yr <span class="save">Save $20 / seat / yr</span></div>
                   <div class="billed cad cad-m">$60 / seat / yr · <span class="save">Save $20 with annual</span></div>
+                  <div class="billed" style="margin-top: 8px; color: var(--el-text-secondary)">
+                    <svg viewBox="0 0 24 24" style="width: 13px; height: 13px"><use href="#i-users" /></svg>
+                    your 6 members ·
+                    <b class="cad cad-m" style="color: var(--el-text)">$30 / mo</b>
+                    <b class="cad cad-a" style="color: var(--el-text)">$20 / mo ($240 / yr)</b>
+                  </div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited work items &amp; projects</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Multiple workspaces &amp; orgs</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 100 MB / file · 100 GB total</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Free</li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-primary">Upgrade Motir</button></div>
+                  <div class="pcta"><button class="btn btn-primary">Upgrade Motir — <span class="cad cad-m">$30/mo</span><span class="cad cad-a">$20/mo</span></button></div>
                 </div>
               </div>
             </div>
@@ -1687,9 +1765,89 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 6 — PAYWALL AT THE AI BOUNDARY (8.1.8) ══════════ -->
+    <!-- ════════════════ PANEL 6 — SEATS: THE SCALED-MOTIR UPGRADE ════════════ -->
     <div class="panel-label">
-      6 · Paywall at the AI boundary (8.1.8) — the in-product upsell when an org can’t use AI. (a)
+      6 · Seats — the scaled-Motir upgrade. Motir Scaled is billed one seat per organization member
+      (the Jira/Linear model: pay for active members; the seat count = membership, prorated). (a) the
+      seat-review step before Checkout shows the exact member→seat count + the resulting total; (b)
+      the scaled state once paying shows the billed seats + a Manage-seats affordance.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="grid-2 top">
+            <!-- (a) seat-review before checkout -->
+            <div>
+              <p class="crumb">a · Upgrade review — seats counted before Checkout</p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
+                    <div><h3>Scale up Motir</h3><div class="hsub">One seat per organization member — like Jira &amp; Linear.</div></div>
+                  </div>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
+                  <div class="seatcalc">
+                    <span class="sc-l">
+                      <span class="avatars">
+                        <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
+                        <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                      </span>
+                      <span><b>6 members</b> → 6 seats</span>
+                    </span>
+                    <span class="sc-total">6 × $5 = $30 <span class="per">/ mo</span></span>
+                  </div>
+                  <div class="note" style="border-style: solid; background: var(--el-surface-soft)">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    Charged now, <b>prorated</b> for the rest of this cycle. Seats follow your
+                    membership automatically — add or remove a member and your next invoice adjusts
+                    (Stripe proration). Choose annual at Checkout to pay <b>$20 / mo</b> ($240 / yr).
+                  </div>
+                  <div class="acts" style="display: flex; gap: 8px">
+                    <button class="btn btn-primary">Continue to Checkout — $30/mo</button>
+                    <button class="btn btn-ghost">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- (b) scaled state — seats billed, post-upgrade -->
+            <div>
+              <p class="crumb">b · Scaled — seats billed (post-upgrade)</p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
+                    <div><h3>Motir</h3><div class="hsub">The project-management tool — scaled.</div></div>
+                  </div>
+                  <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Scaled</span>
+                </div>
+                <div class="card-body">
+                  <div class="seatcalc">
+                    <span class="sc-l">
+                      <span class="avatars">
+                        <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
+                        <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                      </span>
+                      <span><b>6 seats</b> billed · all caps lifted</span>
+                    </span>
+                    <span class="sc-total">$30 <span class="per">/ mo</span></span>
+                  </div>
+                  <div class="desc">Renews <b>1 Jul 2026</b> · seats update automatically as members join or leave.</div>
+                  <div class="acts">
+                    <button class="btn btn-secondary">Manage seats <svg viewBox="0 0 24 24"><use href="#i-users" /></svg></button>
+                    <button class="btn btn-secondary">Manage plan &amp; payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 7 — PAYWALL AT THE AI BOUNDARY (8.1.8) ══════════ -->
+    <div class="panel-label">
+      7 · Paywall at the AI boundary (8.1.8) — the in-product upsell when an org can’t use AI. (a)
       out_of_credits (402 from motir-ai) ACTIVATES the passive “out of credits” slot the ai-usage
       design drew, now with a real Upgrade CTA; (b) the tier-gate “AI is a paid feature”; (c) the
       member who can’t buy gets “ask your owner”, never a dead CTA. Shown at the AI entry points
@@ -1757,9 +1915,9 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 7 — EMPTY / LOADING / ERROR ════════════════════ -->
+    <!-- ════════════════ PANEL 8 — EMPTY / LOADING / ERROR ════════════════════ -->
     <div class="panel-label">
-      7 · Empty / loading / error — the billing-status fetch over the 7.1 boundary. First-run (no
+      8 · Empty / loading / error — the billing-status fetch over the 7.1 boundary. First-run (no
       Stripe customer yet) invites a first purchase; the loading skeleton holds the panel; the
       fetch-failed state (motir-ai / Stripe boundary down) offers Retry — never a broken-looking zero.
     </div>

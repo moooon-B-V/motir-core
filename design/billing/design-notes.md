@@ -20,7 +20,7 @@ the same primitives — no design→code gap.
 
 | Surface                                              | Asset                              | Notes                                                                                                                                                                                                       |
 | ---------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 7 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · plan/pricing comparison · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
+| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · plan/pricing comparison (Monthly/Annual toggle) · seat-based scaled-Motir upgrade · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
 
 ## What this area is
 
@@ -130,9 +130,12 @@ breadcrumb. The two billed lines + payment:
   **"Motir"**, a state `Pill` (**"Free"** neutral / **"Scaled"** when paid).
   Body on `free`: a one-line explainer, then a **caps grid** of three cells —
   **Work items** `182 / 250`, **Projects** `2 / 3`, **Storage** `0.4 / 2 GB` —
-  each with a token-only `.meter`. Action: **"Upgrade Motir · $5/seat"**
-  (secondary) + a quiet workspace/member/project summary. (On a `scaled` org the
-  caps grid is replaced by the seat count + renewal and the action is "Manage".)
+  each with a token-only `.meter`. Then a **seat preview** (`.seatcalc`): the
+  member avatars + **"Scaling bills 1 seat per member — 6 today"** and the
+  resolved total **"6 × $5 = $30 / mo"**, so the per-seat price is concrete before
+  the user ever clicks. Action: **"Upgrade Motir"** + a **"Seats follow membership
+  · prorated automatically"** caption. (On a `scaled` org the caps grid is replaced
+  by the billed seat count + renewal and the action is "Manage seats" — panel 6b.)
 - **② Motir AI line (`Card`).** Head: a lavender product glyph (`i-sparkle`),
   title **"Motir AI"**, the subscription status `Pill` (**Active**). Body: a tier
   `Pill` (**"Standard"**) + **"2,000 credits / mo"** + the **plan fee "$25 /
@@ -203,8 +206,11 @@ The cards:
 
 - **① Motir** — two `plan` cards: **Free** (`$0/mo`, marked **Current**, the
   caps as a feature list) vs **Scaled** (`$5 / seat / mo` → annual `$3.33 / seat /
-  mo`, `$40/yr`, save `$20/seat/yr`; caps lifted), CTA → Stripe Checkout for the
-  seat subscription.
+  mo`, `$40/yr`, save `$20/seat/yr`; caps lifted). The Scaled card resolves the
+  per-seat price to the org's **actual seat count** — a `your 6 members · $30 / mo`
+  line (annual `$20 / mo · $240 / yr`) and a CTA that carries the total
+  (**"Upgrade Motir — $30/mo"**) → Stripe Checkout for the seat subscription. (The
+  full seat review is panel 6.)
 - **② Motir AI ladder** — six `plan` cards (monthly → annual-per-month · yearly ·
   save): **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
   (`$5` → `$3.33/mo` · $40/yr · save $20 · 300) / **Standard** (`$25` → `$16.67/mo`
@@ -226,7 +232,35 @@ The cards:
 > ([InfluenceFlow — SaaS pricing best practices 2026](https://influenceflow.io/resources/saas-pricing-page-best-practices-a-complete-2026-guide/);
 > [PipelineRoad — what converts in 2026](https://pipelineroad.com/agency/blog/saas-pricing-page-best-practices))
 
-### Panel 6 — paywall at the AI boundary (8.1.8)
+### Panel 6 — seats: the scaled-Motir upgrade (seat = member, billed per-seat)
+
+Motir Scaled is billed **one seat per organization member** — the seat item's
+Stripe `quantity` syncs to membership (ADR §3). So the design **shows the seat
+count wherever the seat price appears**, never an abstract "$5/seat" alone. Two
+sub-surfaces:
+
+- **(a) Upgrade review (before Checkout).** A `Card` titled **"Scale up Motir"**
+  with a `.seatcalc`: the member **avatars** + **"6 members → 6 seats"** and the
+  resolved **"6 × $5 = $30 / mo"**, then a `note` — **charged now, prorated** for
+  the rest of the cycle; **seats follow membership** (add/remove a member → the
+  next invoice adjusts via Stripe proration); annual at Checkout pays $20/mo
+  ($240/yr). CTA **"Continue to Checkout — $30/mo"** + Cancel.
+- **(b) Scaled state (post-upgrade).** The Motir line once paying: a **"Scaled"**
+  status `Pill`, a `.seatcalc` reading **"6 seats billed · all caps lifted"** +
+  **"$30 / mo"**, **"Renews 1 Jul 2026 · seats update automatically as members
+  join or leave"**, and the actions **"Manage seats"** (`i-users`) + **"Manage
+  plan & payment"** (→ Portal).
+
+> **Mirror (rung 1 — cited).** Showing the billed seat count at upgrade is how
+> both reference PM tools work. **Linear** bills for the number of **active
+> (unsuspended) members** in any role, surfaces that count in Settings → Billing,
+> and **prorates** mid-cycle changes by date. **Jira** bills per user and shows
+> the **user tier** you occupy. Motir mirrors Linear's "seats = active members,
+> prorated" model (the closer fit — Motir caps scope like Linear, not seats).
+> ([Linear — Billing & plans](https://linear.app/docs/billing-and-plans);
+> [Jira pricing 2026](https://smartprocessflow.com/jira-pricing))
+
+### Panel 7 — paywall at the AI boundary (8.1.8)
 
 The in-product upsell. **This ACTIVATES the passive "out of credits" slot the
 `ai-usage` design drew** (its panel 7b `.passive-slot`, shipped as
@@ -247,7 +281,7 @@ CTA here.
   credits for this org"** with **"Ask an owner to upgrade"** — never a dead CTA
   (decision §7: a member's prompt routes to an owner).
 
-### Panel 7 — empty / loading / error
+### Panel 8 — empty / loading / error
 
 - **(a) Empty / first-run** — no Stripe customer yet: a `state` (`i-card`),
   **"You're on the free plan"**, **"See plans"** CTA.
@@ -294,6 +328,12 @@ workaround.
 - **Meter / bar (token-only)** — the allotment meter + the free-cap meters are
   plain token-styled `div`s (radius + tint), no charting lib, no image — the same
   `.meter` pattern as `ai-usage`.
+- **Avatar stack + seat calc (panel 6, panel 2 preview)** — the overlapping member
+  **avatars** reuse the shipped member-avatar token grammar (`--radius-badge`,
+  pastel `--el-tint-*` fills + `--el-text-strong`, a `--el-page-bg` ring); the
+  `.seatcalc` row is a token-styled `Card`-like band (`--el-surface-soft`,
+  `--radius-card`, `--el-border-soft`) — no new primitive. 8.1.7 sources the seat
+  count from membership (the seat `quantity`), not a hand-typed number.
 
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
@@ -385,6 +425,17 @@ Tier-0 under `--el-*`) — verified.
   Monthly above to compare. Tax is calculated automatically at checkout. Credits are
   an internal usage allotment; the price shown is the plan fee, billed by Stripe to
   the {org} organization."**
+- Seats (panel 6 + the panel-2 preview): **"Scaling bills 1 seat per member — {n}
+  today"** / **"{n} × ${seat} = ${total} / mo"** / **"Seats follow membership ·
+  prorated automatically"**; review **"Scale up Motir"** / **"One seat per
+  organization member — like Jira & Linear."** / **"{n} members → {n} seats"** /
+  **"Charged now, prorated for the rest of this cycle. Seats follow your membership
+  automatically — add or remove a member and your next invoice adjusts (Stripe
+  proration). Choose annual at Checkout to pay ${aTotal} / mo (${aYear} / yr)."** /
+  **"Continue to Checkout — ${total}/mo"** / **"Cancel"**; scaled state **"Scaled"**
+  / **"{n} seats billed · all caps lifted"** / **"Renews {date} · seats update
+  automatically as members join or leave."** / **"Manage seats"** / **"Manage plan
+  & payment"**.
 - Paywall: out-of-credits **"Planning is paused — you're out of credits"** /
   **"The {org} organization has used all of this month's {n} {tier} credits, so
   new planning runs are paused. Existing plans stay fully editable."** /
