@@ -4,9 +4,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { ProjectAvatar } from '@/app/(authed)/_components/ProjectAvatar';
 
 // ProjectAvatar (Subtask 6.8.4) — the project identity chip. A valid preset
-// (icon + colour) renders the lucide glyph over its `--el-tint-*`; null (or an
-// invalid key) falls back to the shipped MONO rendering: the key's first two
-// letters on `--el-type-task`.
+// (icon + colour) renders the lucide glyph over its `--el-avatar-*` tint
+// (MOTIR-1274 · 1266.3); null (or an invalid key) falls back to the shipped MONO
+// rendering: the key's first two letters on `--el-avatar-fallback`.
 
 afterEach(cleanup);
 
