@@ -188,18 +188,25 @@ export const reportsService = {
     }
     const start = sprint.startDate;
 
-    // The configured statistic (the same default `rollupForSprint` resolves),
-    // narrowed to what the sprint actually snapshotted at start.
+    // The configured statistic (the same default `rollupForSprint` resolves).
     const projectStatistic = await resolveStatistic(sprint.projectId);
     const committedPoints = sprint.committedPoints === null ? null : Number(sprint.committedPoints);
-    // Points burndown only when the project measures points AND the sprint locked
-    // a non-zero point baseline; otherwise (issue-count project, time-estimate
-    // project — no committed-time snapshot exists — or a wholly unestimated
-    // sprint) the issue-count series.
-    const useCount =
-      projectStatistic !== 'story_points' || committedPoints === null || committedPoints === 0;
+
+    // The authoritative present roll-up (4.3.3) — drives both the end anchor AND
+    // whether the sprint has any POINTS work to burn (which decides the series).
+    const rollup = await estimationService.rollupForSprint(sprintId, ctx);
+
+    // Draw the POINTS burndown whenever the project measures points AND the sprint
+    // actually has points work (`rollup.committed > 0`) — EVEN IF the immutable
+    // `committedPoints` start-snapshot is missing or zero (MOTIR-1285: a sprint
+    // made active without a snapshot — e.g. via a path that didn't run
+    // `startSprint` — must still anchor to the real remaining instead of silently
+    // falling onto a unitless issue-count series that never reconciles to the
+    // points the scrum header shows). Degrade to issue-count only for a non-points
+    // project, or a sprint with NO points work at all (a wholly unestimated sprint
+    // — a points burndown there would be a flat line at 0).
+    const useCount = projectStatistic !== 'story_points' || rollup.committed === 0;
     const statistic: BurndownStatisticDto = useCount ? 'issue_count' : 'story_points';
-    const committed = useCount ? (sprint.committedIssueCount ?? 0) : (committedPoints ?? 0);
 
     // Window. The axis ends at the planned end (else completedAt, else now); the
     // ACTUAL line is drawn to completedAt (complete) or now (active). The axis
@@ -219,12 +226,36 @@ export const reportsService = {
       useCount,
     );
 
-    // The authoritative present remaining (4.3.3). Anchor the last drawn actual
-    // point to it ONLY when the burndown is measured in the same unit as the
-    // roll-up (a degraded issue-count series over a points/time project must not
-    // be pinned to a points/minutes figure).
-    const rollup = await estimationService.rollupForSprint(sprintId, ctx);
+    // Anchor the last drawn actual point to the authoritative remaining ONLY when
+    // the burndown is measured in the same unit as the roll-up (a degraded
+    // issue-count series over a points/time project must not be pinned to a
+    // points/minutes figure).
     const anchorRemaining = statistic === projectStatistic ? rollup.remaining : null;
+
+    // The committed baseline (the guideline + the chart's "Committed" annotation):
+    //  • issue-count series → the locked issue-count snapshot;
+    //  • points series WITH a real locked snapshot → that snapshot;
+    //  • points series WITHOUT a snapshot (`committedPoints` null/0 but points
+    //    exist) → the not-`done`-at-start work, derived from the authoritative
+    //    remaining minus the net of the drawn deltas — the SAME identity
+    //    `toBurndownSeriesDto` uses for the actual line's origin, so the guideline
+    //    and the actual line share a starting point.
+    let committed: number;
+    if (useCount) {
+      committed = sprint.committedIssueCount ?? 0;
+    } else if (committedPoints && committedPoints > 0) {
+      committed = committedPoints;
+    } else {
+      // No snapshot: the not-`done`-at-start work = remaining − net deltas. But a
+      // sprint started EMPTY or with UNESTIMATED items (then estimated/populated
+      // later) has 0 such points, which would make `committed === 0` — the chart's
+      // "nothing committed" EMPTY state, i.e. a blank burndown despite real
+      // remaining work. Floor the baseline at the current remaining so the points
+      // series always renders (and never sits below where the actual line lands).
+      const netRemainingDelta = dailyDeltas.reduce((sum, d) => sum + d.remainingDelta, 0);
+      const notDoneAtStart = Math.max(0, rollup.remaining - netRemainingDelta);
+      committed = Math.max(notDoneAtStart, rollup.remaining);
+    }
 
     return toBurndownSeriesDto({
       sprintId,

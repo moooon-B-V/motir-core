@@ -119,8 +119,25 @@ export function toBurndownSeriesDto(input: BurndownSeriesInput): BurndownSeriesD
   const cutoffMs = Math.max(startMs, utcMidnight(input.actualCutoff));
   const dayCount = Math.round((endMs - startMs) / DAY_MS) + 1;
 
+  // The actual line's t=0 origin is the NOT-`done` work at sprint start — NOT
+  // the committed total, which may include items already `done` at start
+  // (MOTIR-1285: a done item contributes 0 to remaining, regardless of when/how
+  // it joined the sprint). We derive that origin from the authoritative present
+  // remaining minus the net of every (status-aware) delta drawn since start —
+  // `remaining(now) = origin + Σdelta`, so `origin = anchorRemaining − Σdelta`.
+  // This keeps already-`done`-at-start points out of the line AND makes it land
+  // EXACTLY on `rollupForSprint().remaining`. When the rollup can't anchor (a
+  // degraded series in a different unit — `anchorRemaining === null`), fall back
+  // to the locked committed baseline (the pre-MOTIR-1285 behaviour; those series
+  // are best-effort and never pinned). `committed` (the guideline + the chart's
+  // "Committed" annotation) stays the locked snapshot — only the ACTUAL
+  // remaining line is corrected.
+  const totalRemainingDelta = input.dailyDeltas.reduce((sum, r) => sum + r.remainingDelta, 0);
+  const actualBaseline =
+    input.anchorRemaining !== null ? input.anchorRemaining - totalRemainingDelta : input.committed;
+
   const days: BurndownDayDto[] = [];
-  let running = input.committed;
+  let running = actualBaseline;
   let lastDrawn: BurndownDayDto | null = null;
 
   for (let i = 0; i < dayCount; i++) {
