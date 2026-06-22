@@ -16,8 +16,8 @@
 
       GROUNDED IN (read at run time, NOT invented):
         · docs/decisions/billing-tiering.md (8.1.1 / MOTIR-1138, ACCEPTED 2026-06-21) — the locked
-          tiering model: TWO independent billed products (① the Tracker, free ↔ $4/seat when scaled;
-          ② AI, an org-level monthly credit plan: Free-trial / Starter / Standard / Pro / Max /
+          tiering model: TWO independent billed products (① Motir — the PM tool, free ↔ $5/seat when
+          scaled; ② Motir AI, an org-level monthly credit plan: Free-trial / Starter / Standard / Pro / Max /
           Enterprise). Subscription states trialing/active/past_due/canceled. Owner mutates billing,
           admin views, a member is routed to an owner. Credits are an internal ALLOTMENT, never a
           currency in-product; plan FEES are shown in $ only on the storefront. Cloud-only behind the
@@ -47,13 +47,13 @@
       Panels (review EACH — mistake #31):
         (1) ACCESS PATH — FROM WHICH UI billing is reached: the org-settings stack with the live
             Billing card replacing the passive placeholder (the door is drawn, not just named).
-        (2) BILLING SETTINGS PANEL — owner view, populated/active: the TWO billed lines (Tracker
-            free↔scaled · AI plan) with status Pills, allotment meter, renewal, Manage-plan→Portal +
+        (2) BILLING SETTINGS PANEL — owner view, populated/active: the TWO billed lines (Motir
+            free↔scaled · Motir AI) with status Pills, allotment meter, renewal, Manage-plan→Portal +
             Change-plan, the payment method + invoices (Stripe Customer Portal), and the
             cross-link to Usage & cost.
         (3) PANEL STATES — past_due / dunning warning, trialing (one-time trial), canceled→free.
         (4) ROLE GATING (decision §7) — admin READ-ONLY view vs a plain member's "ask your owner".
-        (5) PLAN / PRICING COMPARISON — the storefront: ① Tracker free ↔ scaled, ② the AI ladder
+        (5) PLAN / PRICING COMPARISON — the storefront: ① Motir free ↔ scaled, ② the Motir AI ladder
             (Free / Starter / Standard / Pro / Max / Enterprise) with per-tier CTA → Checkout.
         (6) PAYWALL AT THE AI BOUNDARY (8.1.8) — (a) out_of_credits 402 with an ACTIVE Upgrade CTA
             (activates the ai-usage passive slot); (b) tier-gate "AI is a paid feature"; (c) the
@@ -778,6 +778,9 @@
         border-color: var(--el-accent);
         box-shadow: 0 0 0 1px var(--el-accent);
       }
+      .plan.rec {
+        border-color: var(--el-accent);
+      }
       .plan.feat {
         background: var(--el-surface-soft);
       }
@@ -1075,8 +1078,8 @@
       <div>
         <h1>Billing · pricing · paywall — Story 8.1 (8.1.3)</h1>
         <p>
-          The commercial surfaces gating Motir’s two billed products (the Tracker, free ↔ $4/seat
-          scaled · AI, an org-level credit plan). Grounded in the 8.1.1 ADR
+          The commercial surfaces gating Motir’s two billed products (Motir — the PM tool, free ↔
+          $5/seat scaled · Motir AI, an org-level credit plan). Grounded in the 8.1.1 ADR
           (<code>docs/decisions/billing-tiering.md</code>) and composed alongside the shipped
           ai-usage dashboard. Owner-mutates / admin-views / member-asks; credits are an allotment,
           never a currency in-product; cloud-only (hidden on self-host). Source of truth for 8.1.7 +
@@ -1139,14 +1142,14 @@
                   <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-card" /></svg></span>
                   <div>
                     <h3>Billing &amp; plans</h3>
-                    <div class="hsub">Your Tracker plan, AI plan, payment method and invoices.</div>
+                    <div class="hsub">Your Motir plan, Motir AI plan, payment method and invoices.</div>
                   </div>
                 </div>
                 <a class="btn btn-secondary btn-sm" href="#">Open <svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></a>
               </div>
               <div class="card-body" style="display: flex; gap: 10px; flex-wrap: wrap">
-                <span class="pill pill-free">Tracker · Free</span>
-                <span class="pill pill-tier">AI · Standard</span>
+                <span class="pill pill-free">Motir · Free</span>
+                <span class="pill pill-tier">Motir AI · Standard</span>
                 <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span>
               </div>
             </div>
@@ -1168,7 +1171,7 @@
     <!-- ════════════════ PANEL 2 — BILLING SETTINGS PANEL (owner, active) ══════ -->
     <div class="panel-label">
       2 · Billing settings panel — owner view, populated &amp; active. The TWO billed lines: ① the
-      Tracker (free here, within caps) and ② the AI plan (Standard, active) with its allotment meter,
+      Motir (free here, within caps) and ② Motir AI (Standard, active) with its allotment meter,
       renewal and Manage-plan → Stripe Portal / Change-plan. Plus the payment method + invoices (the
       Customer Portal) and the cross-link to Usage &amp; cost. Credits = allotment; the only $ is the
       plan FEE paid to Stripe.
@@ -1179,8 +1182,8 @@
           <span class="crumb">Organization · moooon · Billing &amp; plans</span>
           <h2>Billing &amp; plans</h2>
           <p class="sub">
-            Your two Motir products are billed independently. The Tracker is free until your org
-            outgrows the free caps; AI is an org-level credit plan you buy separately.
+            Your two Motir products are billed independently. Motir is free until your org
+            outgrows the free caps; Motir AI is an org-level credit plan you buy separately.
           </p>
           <div class="stack">
             <!-- ① TRACKER LINE -->
@@ -1189,8 +1192,8 @@
                 <div class="ttl">
                   <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
                   <div>
-                    <h3>Tracker</h3>
-                    <div class="hsub">The PM tracker — free for your team, paid only at scale.</div>
+                    <h3>Motir</h3>
+                    <div class="hsub">The project-management tool — free for your team, paid only at scale.</div>
                   </div>
                 </div>
                 <span class="pill pill-free">Free</span>
@@ -1199,8 +1202,8 @@
                 <div class="line">
                   <div class="meta">
                     <div class="desc" style="margin-top: 0">
-                      You’re on the free Tracker — unlimited members, within the free caps below.
-                      You’ll only pay <b>$4 / seat / mo</b> if the org crosses a cap.
+                      You’re on free Motir — unlimited members, within the free caps below.
+                      You’ll only pay <b>$5 / seat / mo</b> if the org crosses a cap.
                     </div>
                     <div class="caps">
                       <div class="cap">
@@ -1222,7 +1225,7 @@
                   </div>
                 </div>
                 <div class="acts" style="margin-top: 16px; display: flex; gap: 8px">
-                  <button class="btn btn-secondary">Upgrade Tracker <span style="color: var(--el-text-muted); font-weight: 400">· $4/seat</span></button>
+                  <button class="btn btn-secondary">Upgrade Motir <span style="color: var(--el-text-muted); font-weight: 400">· $5/seat</span></button>
                   <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
                     1 workspace · 6 members · 2 of 3 projects
                   </a>
@@ -1236,7 +1239,7 @@
                 <div class="ttl">
                   <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
                   <div>
-                    <h3>AI plan</h3>
+                    <h3>Motir AI</h3>
                     <div class="hsub">Planning &amp; hosted agents — an org-level monthly credit pool.</div>
                   </div>
                 </div>
@@ -1248,7 +1251,7 @@
                     <div class="row1">
                       <span class="pill pill-tier">Standard</span>
                       <span class="pname">2,000 credits / mo</span>
-                      <span class="fee">Plan fee <b>$20 / mo</b></span>
+                      <span class="fee">Plan fee <b>$25 / mo</b></span>
                     </div>
                     <div class="meterlbl">
                       <span>Allotment this month</span><b>1,420 of 2,000 credits left</b>
@@ -1318,7 +1321,7 @@
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                    <div><h3>AI plan</h3><div class="hsub">Pro · 8,000 credits / mo</div></div>
+                    <div><h3>Motir AI</h3><div class="hsub">Pro · 8,000 credits / mo</div></div>
                   </div>
                   <span class="pill pill-pastdue"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg> Past due</span>
                 </div>
@@ -1326,7 +1329,7 @@
                   <div class="banner banner-warn">
                     <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
                     <span class="bt">
-                      <strong>We couldn’t charge your card.</strong> Your AI plan stays active while
+                      <strong>We couldn’t charge your card.</strong> Your Motir AI plan stays active while
                       we retry over the next ~2 weeks. Update your payment method to avoid dropping to
                       the free allotment.
                       <span class="ba">
@@ -1346,7 +1349,7 @@
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                    <div><h3>AI plan</h3><div class="hsub">Free — try planning once</div></div>
+                    <div><h3>Motir AI</h3><div class="hsub">Free — try planning once</div></div>
                   </div>
                   <span class="pill pill-trial"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Free trial</span>
                 </div>
@@ -1354,11 +1357,11 @@
                   <div class="meterlbl"><span>One-time trial grant</span><b>185 of 300 credits left</b></div>
                   <div class="meter"><span style="width: 62%"></span></div>
                   <div class="desc">
-                    Your 300 trial credits are granted once and don’t refresh. Pick a monthly AI plan
-                    to keep planning when they run out.
+                    Your 300 trial credits are granted once and don’t refresh. Pick a monthly Motir AI
+                    plan to keep planning when they run out.
                   </div>
                   <div class="acts">
-                    <button class="btn btn-primary">Choose an AI plan</button>
+                    <button class="btn btn-primary">Choose a Motir AI plan</button>
                   </div>
                 </div>
               </div>
@@ -1371,7 +1374,7 @@
               <div class="card-head">
                 <div class="ttl">
                   <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                  <div><h3>AI plan</h3><div class="hsub">Free — your paid plan was canceled</div></div>
+                  <div><h3>Motir AI</h3><div class="hsub">Free — your paid plan was canceled</div></div>
                 </div>
                 <span class="pill pill-canceled"><svg viewBox="0 0 24 24"><use href="#i-x" /></svg> Canceled</span>
               </div>
@@ -1409,7 +1412,7 @@
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                    <div><h3>AI plan</h3><div class="hsub">Standard · 2,000 credits / mo</div></div>
+                    <div><h3>Motir AI</h3><div class="hsub">Standard · 2,000 credits / mo</div></div>
                   </div>
                   <span class="pill pill-readonly"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg> View only</span>
                 </div>
@@ -1447,9 +1450,10 @@
     <!-- ════════════════ PANEL 5 — PLAN / PRICING COMPARISON (storefront) ══════ -->
     <div class="panel-label">
       5 · Plan / pricing comparison — the storefront reached from “Change plan”. TWO independent
-      menus (decision §2): ① the Tracker (free ↔ scaled) and ② the AI ladder (Free / Starter /
-      Standard / Pro / Max / Enterprise). Each card’s CTA starts Stripe Checkout for that line; the
-      current plan is marked. Prices are the plan FEE (a currency is legitimate on the storefront).
+      menus (decision §2): ① Motir (free ↔ scaled) and ② the Motir AI ladder (Free / Starter /
+      Standard / Pro / Max / Enterprise; Pro is the recommended anchor). Each card’s CTA starts
+      Stripe Checkout for that line; the current plan is marked. Prices are the plan FEE (a currency
+      is legitimate on the storefront).
     </div>
     <div class="panel">
       <div class="stage">
@@ -1457,15 +1461,15 @@
           <span class="crumb">Organization · moooon · Billing &amp; plans · Change plan</span>
           <h2>Choose your plans</h2>
           <p class="sub">
-            The Tracker and AI are billed separately — buy either, both or neither. A small team
-            within the free caps pays nothing for the Tracker and only for the AI it opts into.
+            Motir and Motir AI are billed separately — buy either, both or neither. A small team
+            within the free caps pays nothing for Motir and only for the AI it opts into.
           </p>
           <div class="twomenus" style="margin-top: 22px">
-            <!-- ① Tracker menu -->
+            <!-- ① Motir (the PM tool) menu -->
             <div>
               <div class="menu-h">
-                <h4>① Tracker</h4>
-                <span class="mh-sub">The PM tool — free for small teams, $4/seat only when you scale.</span>
+                <h4>① Motir</h4>
+                <span class="mh-sub">The PM tool — free for small teams, $5/seat only when you scale.</span>
               </div>
               <div class="tracker-grid">
                 <div class="plan cur">
@@ -1477,26 +1481,27 @@
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited members</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 10 MB / file · 2 GB total</li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-secondary is-disabled" disabled>Your current Tracker</button></div>
+                  <div class="pcta"><button class="btn btn-secondary is-disabled" disabled>Your current plan</button></div>
                 </div>
                 <div class="plan">
                   <div class="pn">Scaled</div>
-                  <div class="price"><span class="amt">$4</span><span class="per">/ seat / mo</span></div>
+                  <div class="price"><span class="amt">$5</span><span class="per">/ seat / mo</span></div>
+                  <div class="alot" style="color: var(--el-text-muted); font-weight: 500">or $40 / seat / yr — save ~33%</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited work items &amp; projects</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Multiple workspaces &amp; orgs</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 100 MB / file · 100 GB total</li>
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Free</li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-primary">Upgrade Tracker</button></div>
+                  <div class="pcta"><button class="btn btn-primary">Upgrade Motir</button></div>
                 </div>
               </div>
             </div>
-            <!-- ② AI ladder -->
+            <!-- ② Motir AI ladder -->
             <div>
               <div class="menu-h">
-                <h4>② AI — planning &amp; agents</h4>
-                <span class="mh-sub">An org-level monthly credit pool. Any org can buy it — a paid Tracker isn’t required.</span>
+                <h4>② Motir AI — planning &amp; agents</h4>
+                <span class="mh-sub">An org-level monthly credit pool. Any org can buy it — paid Motir isn’t required.</span>
               </div>
               <div class="ai-grid">
                 <div class="plan">
@@ -1521,7 +1526,7 @@
                 </div>
                 <div class="plan cur">
                   <div class="pn">Standard <span class="pill pill-active" style="font-size: 11px">Current</span></div>
-                  <div class="price"><span class="amt">$20</span><span class="per">/ mo</span></div>
+                  <div class="price"><span class="amt">$25</span><span class="per">/ mo</span></div>
                   <div class="alot">2,000 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everyday planning</li>
@@ -1529,9 +1534,9 @@
                   </ul>
                   <div class="pcta"><button class="btn btn-secondary is-disabled" disabled>Current plan</button></div>
                 </div>
-                <div class="plan feat">
-                  <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-zap" /></svg> Pro</div>
-                  <div class="price"><span class="amt">$70</span><span class="per">/ mo</span></div>
+                <div class="plan feat rec">
+                  <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-zap" /></svg> Pro <span class="pill pill-tier" style="font-size: 11px">Recommended</span></div>
+                  <div class="price"><span class="amt">$75</span><span class="per">/ mo</span></div>
                   <div class="alot">8,000 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning + hosted coding</li>
@@ -1541,7 +1546,7 @@
                 </div>
                 <div class="plan feat">
                   <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-crown" /></svg> Max</div>
-                  <div class="price"><span class="amt">$250</span><span class="per">/ mo</span></div>
+                  <div class="price"><span class="amt">$150</span><span class="per">/ mo</span></div>
                   <div class="alot">30,000 credits / mo</div>
                   <ul class="flist">
                     <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Heavy agent — design, docs, coding</li>
@@ -1564,8 +1569,9 @@
           </div>
           <div class="note" style="margin-top: 22px">
             <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-            Tax is calculated automatically at checkout. Credits are an internal usage allotment;
-            the price above is the monthly plan fee, billed by Stripe to the moooon organization.
+            Prices shown monthly; choosing annual billing saves ~33% (the Stripe annual default). Tax
+            is calculated automatically at checkout. Credits are an internal usage allotment; the
+            price above is the plan fee, billed by Stripe to the moooon organization.
           </div>
         </div>
       </div>
@@ -1598,7 +1604,7 @@
               </p>
               <div class="actions">
                 <button class="btn btn-primary"><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg> Upgrade plan</button>
-                <button class="btn btn-secondary">Buy credit top-up</button>
+                <button class="btn btn-secondary">Buy credit top-up <span style="color: var(--el-text-muted); font-weight: 400">· $10/1k</span></button>
               </div>
               <span class="passive-note">Renews 1 Jul · or upgrade now to keep planning.</span>
             </div>
@@ -1612,11 +1618,11 @@
                 <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
                 <h4>AI planning is a paid feature</h4>
                 <p>
-                  Generate and expand plans with AI by adding an AI plan to the
+                  Generate and expand plans with AI by adding a Motir AI plan to the
                   <strong>moooon</strong> organization. Start with 300 free trial credits.
                 </p>
                 <div class="actions">
-                  <button class="btn btn-primary">See AI plans</button>
+                  <button class="btn btn-primary">See Motir AI plans</button>
                   <button class="btn btn-ghost">Maybe later</button>
                 </div>
               </div>
@@ -1658,8 +1664,8 @@
                 <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-card" /></svg></span>
                 <h4>You’re on the free plan</h4>
                 <p>
-                  The moooon organization has no paid subscription yet — the Tracker is free within
-                  its caps and AI is on the one-time trial. Add a plan when you’re ready to scale.
+                  The moooon organization has no paid subscription yet — Motir is free within its
+                  caps and Motir AI is on the one-time trial. Add a plan when you’re ready to scale.
                 </p>
                 <div class="actions"><button class="btn btn-primary">See plans</button></div>
               </div>
@@ -1705,8 +1711,8 @@
             <span>
               <strong>Cloud-only.</strong> Every surface in this asset is gated behind
               <code>MOTIR_CLOUD</code>. A self-hosted (GPL-3.0) build shows no billing, no paywall and
-              no caps — the Tracker is unbounded and AI is reached via the self-hoster’s own
-              connection. None of these surfaces render when <code>MOTIR_CLOUD=false</code>.
+              no caps — Motir is unbounded and AI is reached via the self-hoster’s own connection.
+              None of these surfaces render when <code>MOTIR_CLOUD=false</code>.
             </span>
           </div>
         </div>
