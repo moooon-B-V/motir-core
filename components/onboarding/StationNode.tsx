@@ -25,6 +25,7 @@ import {
 } from '@/lib/onboarding/directionDoc';
 import type { DiscoverySession } from '@/lib/onboarding/discoveryLoop';
 import { type StationKind, type StationView, captureLines } from '@/lib/onboarding/canvasModel';
+import { Spinner } from '@/components/ui/Spinner';
 
 // The CONTENT of a canvas node (Subtask 7.3.11 / MOTIR-840) — the station card the
 // onboarding canvas (`OnboardingCanvas`) renders inside each `PlanningCanvas`
@@ -90,6 +91,9 @@ export function StationCard({
   const Icon = ICON[station.kind];
   const tierKind: DirectionDocKind | null = isTierKind(station.kind) ? station.kind : null;
   const active = station.state === 'active' || station.state === 'deciding';
+  // A tier mid-draft is the live frontier too — ring it like "active" while it
+  // loads (it just shows "Drafting now…" instead of a settled pill).
+  const ringed = active || station.state === 'working';
   const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
   const subtitle = t(`stations.${station.kind}.subtitle`);
   const showCaptured = tierKind !== null && (station.state === 'done' || active);
@@ -100,7 +104,7 @@ export function StationCard({
         'w-[300px] rounded-(--radius-card) border p-(--spacing-card-padding)',
         revisiting
           ? 'border-(--el-border-strong) bg-(--el-tint-peach) shadow-(--shadow-card)'
-          : active
+          : ringed
             ? 'border-(--el-accent) bg-(--el-surface-soft) shadow-(--shadow-card)'
             : station.state === 'upcoming'
               ? 'border-(--el-border-soft) bg-(--el-surface) opacity-80'
@@ -119,17 +123,6 @@ export function StationCard({
             <RotateCw className="size-3.5" aria-hidden="true" />
           )}
           {revisiting ? tr('revisitingLabel') : tr('willRefreshLabel')}
-        </div>
-      )}
-
-      {/* The state marker rides its OWN row — it pairs the ringed border (design
-          `ai-chat`: a map-pin + "You are here") and must NOT share the title's
-          row: a `shrink-0` pill there steals ~100px of a 300px card, squeezing a
-          longer step name into a narrow column that wraps to several lines
-          (MOTIR-1258). "upcoming" has no pill, so the row is omitted entirely. */}
-      {station.state !== 'upcoming' && (
-        <div className="mb-2.5 flex">
-          <StatePill state={station.state} />
         </div>
       )}
 
@@ -169,12 +162,35 @@ export function StationCard({
           deciding={station.state === 'deciding'}
         />
       )}
+
+      {/* The state marker sits in the card's bottom-right corner (design `ai-chat`:
+          a map-pin + "You are here", pairing the ringed border). Kept off the
+          title's row so a longer step name keeps the full card width instead of a
+          `shrink-0` pill squeezing it to several lines (MOTIR-1258). "upcoming" has
+          no pill, so the footer is omitted entirely. */}
+      {station.state !== 'upcoming' && (
+        <div className="mt-2.5 flex justify-end">
+          <StatePill state={station.state} />
+        </div>
+      )}
     </div>
   );
 }
 
 function StatePill({ state }: { state: StationView['state'] }) {
   const t = useTranslations('onboarding.chat.canvas');
+  const tc = useTranslations('onboarding.chat');
+  if (state === 'working') {
+    // The conductor is mid-draft on this tier — a LOADING pill that mirrors the
+    // chat rail's drafting indicator (same "Drafting now…" copy + spinner), not a
+    // settled "you are here".
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-sky) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong)">
+        <Spinner size="sm" aria-hidden="true" />
+        {tc('drafting')}
+      </span>
+    );
+  }
   if (state === 'done') {
     return (
       <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong)">
