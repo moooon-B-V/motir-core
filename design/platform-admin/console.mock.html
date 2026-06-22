@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · PLATFORM ADMIN console — estate overview / usage·cost rollup / drill-down (Epic
-      10 · Story 10.1 · 10.1.1)
+      Design mock · PLATFORM ADMIN console — access path / nav shell / estate overview / usage·cost
+      rollup / drill-down (Epic 10 · Story 10.1 · 10.1.1)
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the PLATFORM ADMIN (superadmin) CONSOLE — Epic 10, Story 10.1,
@@ -13,7 +13,7 @@
       and the drill-down (10.1.6) are `blocked` behind this design gate (Principle #13 / notes.html
       #31 — without it the operator console would be improvised, forbidden). This card ALSO
       establishes the shared `design/platform-admin/` shell language that Story 10.2 (monitoring)
-      and Story 10.3 (governance toolkit) EXTEND — their skeletons reuse this area.
+      and Story 10.3 (governance toolkit) EXTEND — their skeletons reuse the LEFT-NAV shell drawn here.
 
       WHAT THIS IS. An INTERNAL operator console for Motir PLATFORM STAFF (moooon B.V.), NOT a
       customer surface. It manages the WHOLE estate from one place: every organization, workspace,
@@ -23,6 +23,15 @@
       scans the whole estate, it reads denser / more table-heavy than a customer screen — but it
       composes the SAME shipped design system (no bespoke admin CSS). A persistent --el-info-tinted
       "Platform staff" context banner keeps the operator from ever confusing this with a tenant view.
+
+      ACCESS PATH + NAVIGATION (the design-reference rule — show the DOOR + the HALLWAY, not just the
+      rooms). Panel 1 draws HOW STAFF ENTER the console (a staff-only "Platform admin" item in the
+      normal-app account menu → /admin; absent + 404 for everyone else). Panels 2–5 then render
+      INSIDE the console's own shell — a persistent LEFT-NAV rail (Overview · Usage & cost · Tenants ·
+      Monitoring[10.2] · Governance[10.3]) with the active section highlighted, the staff banner
+      across the top, and an "Exit to app" footer — so every screen shows WHERE YOU ARE and HOW TO
+      REACH the next one. The drill-down (Panel 5) is reachable three ways, all drawn: any tenant row
+      in Overview / the rollup / top-consumers, OR the Tenants section.
 
       READ-MOSTLY (10.1). Story 10.1 is overview + usage/cost rollup + drill-down — READ surfaces.
       The governance ACTIONS (suspend a tenant, adjust credits, impersonate, etc.) are Story 10.3's
@@ -39,38 +48,28 @@
       MIRROR (cited — SaaS operator consoles). The verified shape is the internal superadmin panel
       managing ALL tenants from one place: Supastarter's super-admin panel (manage all tenants /
       subscriptions / teams), MSP-style multi-tenant dashboards (view usage + drill into any client
-      from one console), and the Stripe / Vercel-dashboard idiom (an estate overview of counts +
-      activity that drills into a single account's usage / members / status). We draw THAT:
-      overview -> usage-rollup -> drill-down.
+      from one console), and the Stripe / Vercel-dashboard idiom (a left-nav estate console of counts
+      + activity that drills into a single account's usage / members / status). We draw THAT:
+      enter -> overview -> usage-rollup -> drill-down, all under one left-nav shell.
 
       Built FROM the real design system: the token block below is copied 1:1 from app/globals.css
       (Tier-0 --color-* + Tier-3 --el-* + the [data-display-style] shape tokens), and the markup
-      composes ONLY shipped primitives — Card (stat + table + state cards), Pill (level / model /
-      status / event chips — hue in the tint BACKGROUND with --el-text-strong text, AA-safe per
-      finding #35), Button (primary / secondary / ghost), the at-scale list/table pattern with a
-      foot pager (NOT load-all, finding #57), the scope breadcrumb (Combobox/breadcrumb grammar),
-      EmptyState / ErrorState family, Skeleton (loading). No new primitive is introduced. (Most CSS
-      below is shared 1:1 with design/ai-usage/usage.mock.html, the closest existing usage surface.)
+      composes ONLY shipped primitives — Card, Pill, Button, the at-scale list/table pattern with a
+      foot pager (NOT load-all, finding #57), the Sidebar/nav-row grammar (the left rail), the
+      Popover menu grammar (the access-path account menu), the scope breadcrumb, EmptyState /
+      ErrorState family, Skeleton. No new primitive is introduced.
 
       Covers (multi-panel — review EACH; mistake #31):
-        (1) ESTATE OVERVIEW (populated) — the platform-staff context banner + the estate counts
-            (orgs / workspaces / projects / users) as stat Cards (per-entity tint, not grey-only,
-            finding #54) + a PAGINATED recent-activity feed (new orgs/workspaces, planning + coding
-            jobs). At-scale, NOT load-all (finding #57).
-        (2) USAGE / COST ROLLUP (hierarchy) — the platform total as the hero, with an expandable
-            project -> workspace -> org -> platform hierarchy beneath it; per-LEVEL totals + tokens,
-            so an operator sees which org/workspace is the big consumer. Paginated / pre-aggregated
-            (never a full scan).
-        (3) PER-MODEL breakdown + TOP CONSUMERS — a per-model usage table (planning Claude models +
-            the 9.0 gateway models): tokens / credits / $-equivalent per model, per-model tint; and a
-            "top consumers" leaderboard (the N orgs/workspaces draining the most), each row a drill-in.
-        (4) DRILL-DOWN detail (org / workspace / project) — a single tenant's usage over time, its
-            recent jobs (planning + coding), its members and its status, behind a CLEAR
-            "viewing another tenant's data (audited)" affordance. The recent-jobs list paginates.
-        (5) GATING / EMPTY / LOADING / ERROR — the access-denied state drawn as a 404 (the surface is
-            ABSENT for non-staff, NOT a visible forbidden page); the first-run empty state; the
-            loading skeleton while the rollup fetches over 7.1; and the fetch-failed (motir-ai down)
-            state with a Retry — not a misleading zero.
+        (1) ACCESS PATH — how staff ENTER /admin (the staff-only account-menu item; 404 for others).
+        (2) ESTATE OVERVIEW (populated, in the shell) — staff banner + estate counts (per-entity
+            tint) + a PAGINATED recent-activity feed. Left-nav "Overview" active.
+        (3) USAGE / COST ROLLUP (in the shell) — platform total hero + an expandable
+            project -> workspace -> org -> platform tree. Left-nav "Usage & cost" active.
+        (4) PER-MODEL + TOP CONSUMERS (in the shell) — per-model table + a drill-in leaderboard.
+        (5) DRILL-DOWN detail (in the shell, Tenants active) — one tenant's usage / jobs / members /
+            status behind an audited-read affordance; the three ways to reach it are drawn.
+        (6) GATING / EMPTY / LOADING / ERROR — access-denied as a 404 (surface absent), first-run
+            empty, the loading skeleton, and the motir-ai-down error (Retry, not a misleading zero).
       Toggle dark mode to confirm token parity. See design-notes.md for the per-surface primitive +
       copy + --el-* role spec.
     -->
@@ -227,7 +226,7 @@
         padding: 32px 24px 96px;
       }
       .review-head {
-        max-width: 1180px;
+        max-width: 1200px;
         margin: 0 auto 24px;
         display: flex;
         align-items: center;
@@ -243,7 +242,7 @@
         margin: 4px 0 0;
         color: var(--el-text-secondary);
         font-size: 13px;
-        max-width: 860px;
+        max-width: 880px;
         line-height: 1.5;
       }
       .toggle {
@@ -259,7 +258,7 @@
         flex: none;
       }
       .panel {
-        max-width: 1180px;
+        max-width: 1200px;
         margin: 0 auto;
       }
       .panel-label {
@@ -271,7 +270,7 @@
         color: var(--el-text-faint);
         margin: 44px auto 10px;
         padding-left: 2px;
-        max-width: 1180px;
+        max-width: 1200px;
       }
       .stage {
         position: relative;
@@ -283,17 +282,152 @@
       .grid-2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 28px;
+        gap: 24px;
       }
-      @media (max-width: 860px) {
+      @media (max-width: 900px) {
         .grid-2 {
           grid-template-columns: 1fr;
         }
       }
 
+      /* ── Admin console SHELL — the persistent LEFT NAV (the hallway) ───────── */
+      .shell {
+        display: flex;
+        min-height: 540px;
+      }
+      .admin-nav {
+        width: 224px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        display: flex;
+        flex-direction: column;
+        padding: 14px 10px;
+      }
+      .admin-nav .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 4px 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .admin-nav .brand .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 12px;
+        flex: none;
+      }
+      .admin-nav .brand .bt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .admin-nav .brand .bs {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .nav-group {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 14px 8px 4px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        margin-top: 1px;
+      }
+      .nav-item svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .nav-item .soon {
+        margin-left: auto;
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 6px;
+      }
+      .nav-item.active {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .nav-item.active svg {
+        color: var(--el-info);
+      }
+      .nav-item.muted {
+        color: var(--el-text-muted);
+        cursor: default;
+      }
+      .admin-nav .spacer {
+        flex: 1;
+      }
+      .navfoot {
+        border-top: 1px solid var(--el-border-soft);
+        margin-top: 12px;
+        padding-top: 10px;
+      }
+      .navfoot .who {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 8px 8px;
+      }
+      .navfoot .who .pava {
+        width: 26px;
+        height: 26px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        flex: none;
+      }
+      .navfoot .who .wt {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .navfoot .who .ws {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .shell-main {
+        flex: 1;
+        min-width: 0;
+      }
+
       /* ── Page shell — mirrors app/(authed)/settings/* (org-admin grammar) ──── */
       .page {
-        padding: 24px 28px 32px;
+        padding: 22px 26px 30px;
       }
       .crumb {
         display: block;
@@ -307,7 +441,7 @@
       }
       .page > h2 {
         font-family: ui-serif, Georgia, 'Times New Roman', serif;
-        font-size: 22px;
+        font-size: 21px;
         font-weight: 600;
         color: var(--el-text);
         margin: 0;
@@ -323,7 +457,7 @@
         display: flex;
         flex-direction: column;
         gap: 20px;
-        margin-top: 22px;
+        margin-top: 20px;
       }
       .row-between {
         display: flex;
@@ -332,24 +466,41 @@
         gap: 16px;
         flex-wrap: wrap;
       }
+      .reach-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        margin-top: 14px;
+        line-height: 1.45;
+      }
+      .reach-note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-info);
+      }
 
       /* ── Platform-staff context banner — the OPERATOR-view marker (--el-info) ─ */
-      /* The single strongest "this is not a tenant view" cue. Info-family tint
-         (--el-tint-sky bg + --el-info icon/accent), shield icon, never page-tinted
-         (finding #35: hue lives in the banner, not the page surface). */
       .staff-banner {
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 12px 18px;
+        padding: 11px 18px;
         background: var(--el-tint-sky);
         border-bottom: 1px solid var(--el-border-soft);
         box-shadow: inset 3px 0 0 var(--el-info);
       }
       .staff-banner .sb-ico {
         flex: none;
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
         border-radius: var(--radius-control);
         display: inline-flex;
         align-items: center;
@@ -358,8 +509,8 @@
         color: var(--el-info);
       }
       .staff-banner .sb-ico svg {
-        width: 17px;
-        height: 17px;
+        width: 16px;
+        height: 16px;
       }
       .staff-banner .sb-t {
         font-size: 12.5px;
@@ -435,7 +586,6 @@
         color: var(--el-text-faint);
       }
 
-      /* hero figure (the platform total, the tenant balance) */
       .hero-fig {
         text-align: right;
         flex: none;
@@ -464,18 +614,18 @@
       .stat-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
+        gap: 14px;
       }
-      @media (max-width: 860px) {
+      @media (max-width: 900px) {
         .stat-grid {
           grid-template-columns: 1fr 1fr;
         }
       }
       .stat {
-        padding: 18px 20px;
+        padding: 16px 18px;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 9px;
       }
       .stat .ico {
         width: 32px;
@@ -490,7 +640,6 @@
         width: 17px;
         height: 17px;
       }
-      /* per-entity icon tints — orgs / workspaces / projects / users */
       .ico.ent-org {
         background: var(--el-tint-lavender);
         color: var(--el-accent-on-surface);
@@ -509,7 +658,7 @@
       }
       .stat .big {
         font-family: ui-serif, Georgia, 'Times New Roman', serif;
-        font-size: 30px;
+        font-size: 28px;
         font-weight: 600;
         color: var(--el-text);
         line-height: 1;
@@ -620,7 +769,6 @@
       }
 
       /* ── Rollup tree (project -> workspace -> org -> platform) ─────────────── */
-      /* the TreeTable indentation pattern — level pill + expand chevron + bar */
       .tree td.name {
         padding-right: 16px;
       }
@@ -657,7 +805,7 @@
         background: color-mix(in srgb, var(--el-surface) 55%, transparent);
       }
 
-      /* level pills (org / workspace / project / platform) — palette, not grey */
+      /* pills */
       .pill {
         display: inline-flex;
         align-items: center;
@@ -679,11 +827,9 @@
         color: var(--el-text-secondary);
         border-color: var(--el-border);
       }
-      .pill-platform {
-        background: var(--el-tint-lavender);
-        color: var(--el-text-strong);
-      }
-      .pill-org {
+      .pill-platform,
+      .pill-org,
+      .pill-tier {
         background: var(--el-tint-lavender);
         color: var(--el-text-strong);
       }
@@ -695,7 +841,6 @@
         background: var(--el-tint-mint);
         color: var(--el-text-strong);
       }
-      /* event-kind pills (recent activity) */
       .pill-neworg {
         background: var(--el-tint-lavender);
         color: var(--el-text-strong);
@@ -712,17 +857,8 @@
         background: var(--el-tint-peach);
         color: var(--el-text-strong);
       }
-      /* tenant status pills */
       .pill-active {
         background: var(--el-tint-mint);
-        color: var(--el-text-strong);
-      }
-      .pill-tier {
-        background: var(--el-tint-lavender);
-        color: var(--el-text-strong);
-      }
-      .pill-trial {
-        background: var(--el-tint-yellow);
         color: var(--el-text-strong);
       }
 
@@ -730,7 +866,7 @@
       .usebar {
         height: 8px;
         width: 100%;
-        min-width: 110px;
+        min-width: 96px;
         border-radius: var(--radius-badge);
         background: var(--el-surface);
         overflow: hidden;
@@ -750,8 +886,6 @@
       .usebar > span.proj {
         background: var(--el-success);
       }
-
-      /* model chip + per-model usage bar (palette · finding #54) */
       .model {
         display: inline-flex;
         align-items: center;
@@ -791,8 +925,6 @@
         color: var(--el-text-muted);
         font-variant-numeric: tabular-nums;
       }
-
-      /* leaderboard rank chip (top consumers) */
       .rank {
         width: 22px;
         height: 22px;
@@ -882,7 +1014,7 @@
         display: flex;
         align-items: flex-end;
         gap: 8px;
-        height: 96px;
+        height: 92px;
         padding: 6px 2px 0;
       }
       .trend .col {
@@ -907,8 +1039,6 @@
         font-size: 10px;
         color: var(--el-text-muted);
       }
-
-      /* mini stat (members / projects in the drill detail) */
       .mini-stats {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1037,7 +1167,200 @@
         color: var(--el-text-faint);
       }
 
-      /* ── EmptyState / ErrorState / 404 family (components/ui/EmptyState) ──── */
+      /* ── Access-path: the normal-app TopNav + account menu ───────────────── */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: var(--el-surface);
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .trigger .org-ava {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .mini-search {
+        height: var(--height-btn-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .mini-search svg {
+        width: 14px;
+        height: 14px;
+      }
+      .user-ava {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        cursor: pointer;
+      }
+      .menu {
+        width: 280px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-head {
+        padding: 8px 10px 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .menu-id {
+        padding: 2px 10px 8px;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt.active {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .opt .ot {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt .ot .od {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .opt svg.li {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .opt.active svg.li {
+        color: var(--el-info);
+      }
+      .opt .staff-tag {
+        margin-left: auto;
+        font-size: 9.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-info);
+        background: var(--el-tint-sky);
+        border-radius: var(--radius-badge);
+        padding: 1px 7px;
+      }
+      .entry-call {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+        max-width: 60ch;
+        line-height: 1.45;
+      }
+      .entry-call svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-info);
+        flex: none;
+        margin-top: 1px;
+      }
+      .access-wrap {
+        display: flex;
+        gap: 28px;
+        padding: 22px 24px 26px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .access-wrap .menu-col {
+        flex: none;
+      }
+      .access-wrap .note-col {
+        flex: 1;
+        min-width: 260px;
+      }
+      .access-wrap .note-col p {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        margin: 0 0 10px;
+      }
+      .access-wrap .note-col strong {
+        color: var(--el-text-strong);
+      }
+
+      /* ── EmptyState / ErrorState / 404 family ────────────────────────────── */
       .state {
         display: flex;
         flex-direction: column;
@@ -1108,7 +1431,7 @@
         background: var(--el-surface-soft);
         color: var(--el-text-secondary);
         font-size: 11.5px;
-        max-width: 50ch;
+        max-width: 52ch;
         line-height: 1.45;
         text-align: left;
         display: flex;
@@ -1123,7 +1446,7 @@
         color: var(--el-text-faint);
       }
 
-      /* ── Skeleton (components/ui/Skeleton) — the loading dashboard ────────── */
+      /* ── Skeleton ────────────────────────────────────────────────────────── */
       .sk {
         background: linear-gradient(
           90deg,
@@ -1142,170 +1465,32 @@
         flex-direction: column;
         gap: 12px;
       }
-
       .states-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 20px;
       }
-      @media (max-width: 860px) {
+      @media (max-width: 900px) {
         .states-grid {
           grid-template-columns: 1fr;
         }
-      }
-
-      /* ── TopNav + admin menu (the ACCESS PATH — mirrors TopNav.tsx) ───────── */
-      .topnav {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        height: 56px;
-        padding: 0 20px;
-        border-bottom: 1px solid var(--el-border);
-        background: var(--el-page-bg);
-      }
-      .topnav .left,
-      .topnav .right {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .trigger {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        height: var(--height-btn-md);
-        padding: 0 var(--spacing-btn-x-sm);
-        border-radius: var(--radius-btn);
-        background: var(--el-surface);
-        border: 1px solid transparent;
-        color: var(--el-text);
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-      }
-      .trigger .org-ava {
-        flex: none;
-        width: 22px;
-        height: 22px;
-        border-radius: var(--radius-control);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 700;
-        background: var(--el-tint-lavender);
-        color: var(--el-text-strong);
-      }
-      .trigger svg {
-        width: 15px;
-        height: 15px;
-        color: var(--el-text-muted);
-        flex: none;
-      }
-      .user-ava {
-        width: 28px;
-        height: 28px;
-        border-radius: 9999px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 600;
-        background: var(--el-text);
-        color: var(--el-text-inverted);
-      }
-      .menu {
-        position: relative;
-        margin-top: 6px;
-        width: 312px;
-        background: var(--el-page-bg);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-elevated);
-        padding: 4px;
-      }
-      .menu-head {
-        padding: 8px 10px 4px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--el-text-muted);
-      }
-      .menu-sep {
-        height: 1px;
-        background: var(--el-border);
-        margin: 4px 2px;
-      }
-      .opt {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: var(--spacing-control-y) var(--spacing-control-x);
-        border-radius: var(--radius-control);
-        font-size: 13px;
-        color: var(--el-text);
-        cursor: pointer;
-      }
-      .opt.active {
-        background: var(--el-tint-sky);
-        color: var(--el-text-strong);
-        font-weight: 600;
-      }
-      .opt .ot {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.25;
-        min-width: 0;
-        flex: 1;
-      }
-      .opt .ot .od {
-        font-size: 11px;
-        color: var(--el-text-muted);
-        font-weight: 400;
-      }
-      .opt svg.li {
-        width: 15px;
-        height: 15px;
-        color: var(--el-text-muted);
-        flex: none;
-      }
-      .opt.active svg.li {
-        color: var(--el-info);
-      }
-      .entry-call {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--el-text-muted);
-        margin-top: 8px;
-      }
-      .entry-call svg {
-        width: 16px;
-        height: 16px;
-        color: var(--el-info);
-        flex: none;
       }
     </style>
   </head>
   <body>
     <div class="review-head">
       <div>
-        <h1>Platform admin console — estate overview · usage/cost rollup · drill-down</h1>
+        <h1>Platform admin console — access path · nav shell · estate · usage/cost · drill-down</h1>
         <p>
           Epic 10 · Story 10.1 · Subtask 10.1.1 design asset — built from app/globals.css tokens. An
           <strong>internal operator console for Motir platform staff</strong> (moooon B.V.), gated
-          to /admin and a <strong>404 for everyone else</strong>. It manages the WHOLE estate —
-          every org / workspace / project / user and the platform-wide usage/cost rollup — from one
-          place. Read-mostly (governance actions are Story 10.3). A persistent
-          <strong>--el-info “Platform staff” banner</strong> keeps it visually distinct from any
-          tenant view. Mirror = SaaS superadmin panels (Supastarter / MSP dashboards / the
-          Stripe-estate idiom). Source of truth = this HTML; see design-notes.md. Gates 10.1.4 /
-          10.1.5 / 10.1.6 and seeds the shared shell for Stories 10.2 + 10.3.
+          to /admin and a <strong>404 for everyone else</strong>. Panel 1 draws how staff
+          <strong>enter</strong> it; Panels 2–5 render inside the console’s
+          <strong>persistent left-nav shell</strong> so every screen shows where you are and how to
+          reach the next. Read-mostly (governance actions are Story 10.3). Mirror = SaaS superadmin
+          panels (Supastarter / MSP dashboards / the Stripe-estate idiom). Source of truth = this
+          HTML; see design-notes.md. Gates 10.1.4 / 10.1.5 / 10.1.6 and seeds the shared shell for
+          Stories 10.2 + 10.3.
         </p>
       </div>
       <button
@@ -1319,250 +1504,355 @@
       </button>
     </div>
 
-    <!-- ════════════════ PANEL 1 — ESTATE OVERVIEW (populated) ════════════════ -->
+    <!-- ════════════════ PANEL 1 — ACCESS PATH (how staff ENTER /admin) ════════════════ -->
     <div class="panel-label">
-      1 · Estate overview (populated) — the platform-staff context banner, the estate counts (orgs /
-      workspaces / projects / users) as per-entity-tinted stat Cards, and a PAGINATED
-      recent-activity feed (new tenants + planning/coding jobs). At-scale, NOT load-all (finding
-      #57).
+      1 · Access path — how a platform-staff user ENTERS the console. The normal-app account menu
+      carries a staff-only “Platform admin” item → /admin. For a non-staff user the item is absent
+      AND /admin 404s (the surface does not exist for them; see Panel 6a). Show the door, not just
+      the room.
     </div>
     <div class="panel">
       <div class="stage">
-        <!-- The TopNav — note: this is the STAFF account; the org button shows a staff badge,
-             and the entry to /admin is in the user menu (drawn in panel 5's access note). -->
+        <!-- the normal Motir app TopNav (a customer tenant view) — the staff user clicks their avatar -->
         <div class="topnav">
           <div class="left">
-            <button class="trigger" aria-label="Platform admin">
+            <button class="trigger" aria-label="Organization menu">
               <span class="org-ava">M</span>
-              <span>Motir · Platform</span>
+              <span>moooon</span>
               <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
             </button>
           </div>
           <div class="right">
+            <span class="mini-search"
+              ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search</span
+            >
             <span class="user-ava">OP</span>
           </div>
         </div>
-
-        <!-- THE platform-staff context banner — the strongest "not a tenant" cue -->
-        <div class="staff-banner">
-          <span class="sb-ico"
-            ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-          ></span>
-          <span class="sb-t">
-            <strong>Platform staff · operator console.</strong> You are viewing the entire Motir
-            estate across all tenants. Every cross-tenant read is recorded in the audit log.
-          </span>
-          <span class="sb-chip pill pill-neutral">moooon B.V. internal</span>
-        </div>
-
-        <div class="page">
-          <span class="crumb"><b>Platform</b> · Overview</span>
-          <h2>Platform overview</h2>
-          <p class="sub">
-            The whole estate at a glance — how many organizations, workspaces, projects and users
-            Motir hosts, and what’s happened recently across every tenant. Read-only; tenant
-            governance lives in the Governance toolkit.
-          </p>
-
-          <div class="stack">
-            <!-- estate counts — per-entity tint (finding #54) -->
-            <div class="stat-grid">
-              <div class="card stat">
-                <span class="ico ent-org"
-                  ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
-                ></span>
-                <div class="big">214</div>
-                <div class="lbl">Organizations</div>
-                <div class="delta">
-                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+12 this month
-                </div>
+        <div class="access-wrap">
+          <div class="menu-col">
+            <!-- the ACCOUNT menu OPEN — "Platform admin" is the staff-only entry to /admin -->
+            <div class="menu">
+              <div class="menu-head">Account</div>
+              <div class="menu-id">ops@moooon.net</div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+                <span class="ot"><span class="nm">Account settings</span></span>
               </div>
-              <div class="card stat">
-                <span class="ico ent-ws"
-                  ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg
-                ></span>
-                <div class="big">863</div>
-                <div class="lbl">Workspaces</div>
-                <div class="delta">
-                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+41 this month
-                </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+                <span class="ot"><span class="nm">Your organizations</span></span>
               </div>
-              <div class="card stat">
-                <span class="ico ent-proj"
-                  ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
-                ></span>
-                <div class="big">2,407</div>
-                <div class="lbl">Projects</div>
-                <div class="delta">
-                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+118 this month
-                </div>
+              <div class="menu-sep"></div>
+              <!-- THE ENTRY POINT — visible ONLY to platform staff -->
+              <div class="opt active">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-shield" /></svg>
+                <span class="ot"
+                  ><span class="nm">Platform admin</span
+                  ><span class="od">Operator console · the whole estate</span></span
+                >
+                <span class="staff-tag">Staff only</span>
               </div>
-              <div class="card stat">
-                <span class="ico ent-user"
-                  ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
-                ></span>
-                <div class="big">5,142</div>
-                <div class="lbl">Users</div>
-                <div class="delta">
-                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+286 this month
-                </div>
+              <div class="menu-sep"></div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-logout" /></svg>
+                <span class="ot"><span class="nm">Sign out</span></span>
               </div>
             </div>
+          </div>
+          <div class="note-col">
+            <p>
+              <strong>The account menu, open.</strong> A platform-staff account (e.g.
+              <strong>ops@moooon.net</strong>) sees an extra <strong>“Platform admin”</strong> item
+              — the single door into the operator console at <strong>/admin</strong>. Selecting it
+              opens the shell in Panels 2–5.
+            </p>
+            <p>
+              For a <strong>normal user the item is simply absent</strong>, and typing
+              <strong>/admin</strong> directly returns the standard app <strong>404</strong> (Panel
+              6a) — the route’s very existence isn’t revealed. The staff gate is a net-new
+              capability; see design-notes.
+            </p>
+            <p class="entry-call">
+              <svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>
+              <span
+                >Selecting “Platform admin” lands on the console
+                <strong>Overview</strong> (breadcrumb <em>Platform · Overview</em>), with the
+                left-nav shell below.</span
+              >
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
 
-            <!-- recent-activity feed — PAGINATED (at-scale, not load-all) -->
-            <div class="card">
-              <div class="card-head">
-                <div class="ttl">
-                  <span class="ico ent-ws" style="width: 30px; height: 30px"
-                    ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
-                  ></span>
-                  <div>
-                    <h3>Recent estate activity</h3>
-                    <p class="hsub">
-                      New tenants and AI jobs across every organization, newest first.
-                    </p>
+    <!-- ════════════════ PANEL 2 — ESTATE OVERVIEW (in the shell) ════════════════ -->
+    <div class="panel-label">
+      2 · Estate overview (populated) — the console’s landing page, INSIDE the left-nav shell
+      (“Overview” active). The persistent rail is how you move between screens; the staff banner
+      tops every page. Estate counts (per-entity tint) + a PAGINATED activity feed. Each tenant row
+      drills to Panel 5.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <!-- ░░ the persistent LEFT NAV — the same on every console screen ░░ -->
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring<span class="soon"
+                >10.2</span
+              >
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="staff-banner">
+              <span class="sb-ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+              ></span>
+              <span class="sb-t">
+                <strong>Platform staff · operator console.</strong> You are viewing the entire Motir
+                estate across all tenants. Every cross-tenant read is recorded in the audit log.
+              </span>
+              <span class="sb-chip pill pill-neutral">moooon B.V. internal</span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Overview</span>
+              <h2>Platform overview</h2>
+              <p class="sub">
+                The whole estate at a glance — how many organizations, workspaces, projects and
+                users Motir hosts, and what’s happened recently across every tenant. Read-only;
+                tenant governance lives in the Governance toolkit.
+              </p>
+
+              <div class="stack">
+                <div class="stat-grid">
+                  <div class="card stat">
+                    <span class="ico ent-org"
+                      ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                    ></span>
+                    <div class="big">214</div>
+                    <div class="lbl">Organizations</div>
+                    <div class="delta">
+                      <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+12 this month
+                    </div>
+                  </div>
+                  <div class="card stat">
+                    <span class="ico ent-ws"
+                      ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg
+                    ></span>
+                    <div class="big">863</div>
+                    <div class="lbl">Workspaces</div>
+                    <div class="delta">
+                      <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+41 this month
+                    </div>
+                  </div>
+                  <div class="card stat">
+                    <span class="ico ent-proj"
+                      ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                    ></span>
+                    <div class="big">2,407</div>
+                    <div class="lbl">Projects</div>
+                    <div class="delta">
+                      <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+118 this month
+                    </div>
+                  </div>
+                  <div class="card stat">
+                    <span class="ico ent-user"
+                      ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                    ></span>
+                    <div class="big">5,142</div>
+                    <div class="lbl">Users</div>
+                    <div class="delta">
+                      <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+286 this month
+                    </div>
                   </div>
                 </div>
-                <span class="pill pill-neutral">All tenants</span>
-              </div>
-              <div class="card-body flush">
-                <table class="tbl">
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Event</th>
-                      <th>Tenant</th>
-                      <th class="num">Detail</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr class="drillable">
-                      <td><span class="when">2m ago</span></td>
-                      <td>
-                        <span class="pill pill-code"
-                          ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding job</span
-                        >
-                      </td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-proj">M</span
-                          ><span class="nm"
-                            >Acme <span class="path">› Engineering › Mobile App</span></span
-                          ></span
-                        >
-                      </td>
-                      <td class="num">
-                        <span class="muted">subtask · Claude Opus · </span>4.2k tok
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="when">8m ago</span></td>
-                      <td>
-                        <span class="pill pill-plan"
-                          ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Planning
-                          run</span
-                        >
-                      </td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-proj">G</span
-                          ><span class="nm"
-                            >Globex <span class="path">› Product › Roadmap</span></span
-                          ></span
-                        >
-                      </td>
-                      <td class="num">
-                        <span class="muted">generate · DeepSeek · </span>11.7k tok
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="when">21m ago</span></td>
-                      <td>
-                        <span class="pill pill-neworg"
-                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>New
-                          organization</span
-                        >
-                      </td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-org">N</span
-                          ><span class="nm">Northwind Labs</span></span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">owner · jess@northwind.io</span></td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="when">34m ago</span></td>
-                      <td>
-                        <span class="pill pill-newws"
-                          ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>New workspace</span
-                        >
-                      </td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-ws">I</span
-                          ><span class="nm"
-                            >Initech <span class="path">› Marketing</span></span
-                          ></span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">by tom@initech.com</span></td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="when">52m ago</span></td>
-                      <td>
-                        <span class="pill pill-plan"
-                          ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Planning
-                          run</span
-                        >
-                      </td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-proj">A</span
-                          ><span class="nm"
-                            >Acme <span class="path">› Engineering › Web Platform</span></span
-                          ></span
-                        >
-                      </td>
-                      <td class="num">
-                        <span class="muted">expand · Claude Sonnet · </span>6.0k tok
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="when">1h ago</span></td>
-                      <td>
-                        <span class="pill pill-code"
-                          ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding job</span
-                        >
-                      </td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-proj">U</span
-                          ><span class="nm"
-                            >Umbrella <span class="path">› Platform › API</span></span
-                          ></span
-                        >
-                      </td>
-                      <td class="num">
-                        <span class="muted">subtask · Claude Opus · </span>9.1k tok
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="card-foot">
-                <span class="fnote"
-                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–6 of 48,920
-                  events</span
-                >
-                <div class="pager">
-                  <span class="pbtn is-disabled"
-                    ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-ws" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
+                      ></span>
+                      <div>
+                        <h3>Recent estate activity</h3>
+                        <p class="hsub">
+                          New tenants and AI jobs across every organization, newest first.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">All tenants</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Event</th>
+                          <th>Tenant</th>
+                          <th class="num">Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="drillable">
+                          <td><span class="when">2m ago</span></td>
+                          <td>
+                            <span class="pill pill-code"
+                              ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding
+                              job</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">M</span
+                              ><span class="nm"
+                                >Acme <span class="path">› Engineering › Mobile App</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="muted">subtask · Claude Opus · </span>4.2k tok
+                          </td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="when">8m ago</span></td>
+                          <td>
+                            <span class="pill pill-plan"
+                              ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Planning
+                              run</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">G</span
+                              ><span class="nm"
+                                >Globex <span class="path">› Product › Roadmap</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="muted">generate · DeepSeek · </span>11.7k tok
+                          </td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="when">21m ago</span></td>
+                          <td>
+                            <span class="pill pill-neworg"
+                              ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>New
+                              organization</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">N</span
+                              ><span class="nm">Northwind Labs</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">owner · jess@northwind.io</span></td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="when">34m ago</span></td>
+                          <td>
+                            <span class="pill pill-newws"
+                              ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>New
+                              workspace</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">I</span
+                              ><span class="nm"
+                                >Initech <span class="path">› Marketing</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">by tom@initech.com</span></td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="when">52m ago</span></td>
+                          <td>
+                            <span class="pill pill-plan"
+                              ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Planning
+                              run</span
+                            >
+                          </td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-proj">A</span
+                              ><span class="nm"
+                                >Acme <span class="path">› Engineering › Web Platform</span></span
+                              ></span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="muted">expand · Claude Sonnet · </span>6.0k tok
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–5 of 48,920
+                      events</span
+                    >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 9,784</span>
+                      <span class="pbtn"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="reach-note">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  <span
+                    >Navigation: the <strong>left rail</strong> switches sections (Overview · Usage
+                    &amp; cost · Tenants); <strong>clicking any tenant row</strong> here opens that
+                    tenant’s drill-down (Panel 5). “Exit to app” returns to the normal Motir
+                    app.</span
                   >
-                  <span>Page 1 of 8,154</span>
-                  <span class="pbtn"
-                    >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                  ></span>
                 </div>
               </div>
             </div>
@@ -1571,736 +1861,871 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 2 — USAGE / COST ROLLUP (hierarchy) ════════════════ -->
+    <!-- ════════════════ PANEL 3 — USAGE / COST ROLLUP (in the shell) ════════════════ -->
     <div class="panel-label">
-      2 · Usage / cost rollup (the hierarchy) — the platform total as the hero, with an expandable
-      project → workspace → org → platform tree beneath it; per-LEVEL credits + tokens so the big
-      consumer is obvious. Pre-aggregated + paginated (never a full scan · finding #57).
+      3 · Usage &amp; cost rollup — left-nav “Usage &amp; cost” active. The platform total as the
+      hero, with an expandable project → workspace → org → platform tree; per-level credits + tokens
+      so the big consumer is obvious. Pre-aggregated + paginated (never a full scan · finding #57).
     </div>
     <div class="panel">
       <div class="stage">
-        <div class="staff-banner">
-          <span class="sb-ico"
-            ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-          ></span>
-          <span class="sb-t"><strong>Platform staff.</strong> Estate-wide usage rollup.</span>
-        </div>
-        <div class="page">
-          <span class="crumb"><b>Platform</b> · Usage &amp; cost</span>
-          <div class="row-between">
-            <div>
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring<span class="soon"
+                >10.2</span
+              >
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="staff-banner">
+              <span class="sb-ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+              ></span>
+              <span class="sb-t"><strong>Platform staff.</strong> Estate-wide usage rollup.</span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Usage &amp; cost</span>
               <h2>Usage &amp; cost rollup</h2>
               <p class="sub">
                 Credits spent across the whole estate this month, rolled up the tenancy hierarchy.
                 Credits are an internal usage unit (never a currency); the $-equivalent is operator
                 context only.
               </p>
+
+              <div class="stack">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                      ></span>
+                      <div>
+                        <h3>Spend by tenancy</h3>
+                        <p class="hsub">
+                          Expand an org to see its workspaces and projects. Sorted by spend.
+                        </p>
+                      </div>
+                    </div>
+                    <div class="hero-fig">
+                      <div class="big">74,180<span class="unit"> credits</span></div>
+                      <div class="cap">Platform total · this month · ≈ $5,560 equiv</div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl tree">
+                      <thead>
+                        <tr>
+                          <th class="name">Tenant</th>
+                          <th>Level</th>
+                          <th class="num">Tokens</th>
+                          <th>Share of estate</th>
+                          <th class="num">Credits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="r-org drillable">
+                          <td class="name">
+                            <span class="indent"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-org">A</span
+                                ><span class="nm">Acme Corp</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-org"
+                              ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">1.21M</span></td>
+                          <td>
+                            <span class="usebar"><span class="org" style="width: 24%"></span></span>
+                          </td>
+                          <td class="num credits">17,640</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-1"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-ws">E</span
+                                ><span class="nm">Engineering</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-ws"
+                              ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Workspace</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">842k</span></td>
+                          <td>
+                            <span class="usebar"><span class="ws" style="width: 17%"></span></span>
+                          </td>
+                          <td class="num credits">12,310</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-2"
+                              ><span class="exp leaf"></span
+                              ><span class="tenant"
+                                ><span class="ava ent-proj">M</span
+                                ><span class="nm">Mobile App</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-proj"
+                              ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">498k</span></td>
+                          <td>
+                            <span class="usebar"
+                              ><span class="proj" style="width: 10%"></span
+                            ></span>
+                          </td>
+                          <td class="num credits">7,280</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-2"
+                              ><span class="exp leaf"></span
+                              ><span class="tenant"
+                                ><span class="ava ent-proj">W</span
+                                ><span class="nm">Web Platform</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-proj"
+                              ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">344k</span></td>
+                          <td>
+                            <span class="usebar"><span class="proj" style="width: 7%"></span></span>
+                          </td>
+                          <td class="num credits">5,030</td>
+                        </tr>
+                        <tr class="drillable">
+                          <td class="name">
+                            <span class="indent lvl-1"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-ws">M</span
+                                ><span class="nm">Marketing</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-ws"
+                              ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Workspace</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">365k</span></td>
+                          <td>
+                            <span class="usebar"><span class="ws" style="width: 7%"></span></span>
+                          </td>
+                          <td class="num credits">5,330</td>
+                        </tr>
+                        <tr class="r-org drillable">
+                          <td class="name">
+                            <span class="indent"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-org">G</span
+                                ><span class="nm">Globex</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-org"
+                              ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">982k</span></td>
+                          <td>
+                            <span class="usebar"><span class="org" style="width: 19%"></span></span>
+                          </td>
+                          <td class="num credits">14,320</td>
+                        </tr>
+                        <tr class="r-org drillable">
+                          <td class="name">
+                            <span class="indent"
+                              ><span class="exp"
+                                ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                              ><span class="tenant"
+                                ><span class="ava ent-org">U</span
+                                ><span class="nm">Umbrella</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="pill pill-org"
+                              ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">713k</span></td>
+                          <td>
+                            <span class="usebar"><span class="org" style="width: 14%"></span></span>
+                          </td>
+                          <td class="num credits">10,390</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Top 3 of 214 orgs ·
+                      figures are pre-aggregated, never a live scan of raw usage rows</span
+                    >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 72</span>
+                      <span class="pbtn"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
 
-          <div class="stack">
-            <div class="card">
-              <div class="card-head">
-                <div class="ttl">
-                  <span class="ico ent-org" style="width: 30px; height: 30px"
-                    ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
-                  ></span>
+    <!-- ════════════════ PANEL 4 — PER-MODEL + TOP CONSUMERS (in the shell) ════════════════ -->
+    <div class="panel-label">
+      4 · Per-model breakdown + top consumers — still under “Usage &amp; cost”. A per-model usage
+      table (planning Claude models + the 9.0 gateway models: tokens / credits / $-equiv, per-model
+      tint) and a top-consumers leaderboard (each row drills to Panel 5).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring<span class="soon"
+                >10.2</span
+              >
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="staff-banner">
+              <span class="sb-ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+              ></span>
+              <span class="sb-t"
+                ><strong>Platform staff.</strong> Where the estate’s credits go.</span
+              >
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Usage &amp; cost · By model</span>
+              <div class="grid-2" style="margin-top: 16px">
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <div>
+                        <h3>By model</h3>
+                        <p class="hsub">
+                          Estate-wide tokens + credits this month, per model. Planning + coding.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">This month</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Model</th>
+                          <th class="num">Tokens</th>
+                          <th>Share</th>
+                          <th class="num">Credits</th>
+                          <th class="num">$ equiv</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span class="model"><span class="dot opus"></span>Claude Opus</span>
+                          </td>
+                          <td class="num"><span class="muted">2.71M</span></td>
+                          <td>
+                            <span class="usebar"
+                              ><span class="opus" style="width: 46%"></span
+                            ></span>
+                          </td>
+                          <td class="num credits">34,120</td>
+                          <td class="num usd">$2,560</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="model"><span class="dot sonnet"></span>Claude Sonnet</span>
+                          </td>
+                          <td class="num"><span class="muted">1.94M</span></td>
+                          <td>
+                            <span class="usebar"
+                              ><span class="sonnet" style="width: 28%"></span
+                            ></span>
+                          </td>
+                          <td class="num credits">20,760</td>
+                          <td class="num usd">$1,557</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="model"
+                              ><span class="dot deepseek"></span>DeepSeek
+                              <span class="muted">· 9.0 gateway</span></span
+                            >
+                          </td>
+                          <td class="num"><span class="muted">3.38M</span></td>
+                          <td>
+                            <span class="usebar"
+                              ><span class="deepseek" style="width: 19%"></span
+                            ></span>
+                          </td>
+                          <td class="num credits">14,090</td>
+                          <td class="num usd">$1,056</td>
+                        </tr>
+                        <tr>
+                          <td>
+                            <span class="model"><span class="dot haiku"></span>Claude Haiku</span>
+                          </td>
+                          <td class="num"><span class="muted">1.12M</span></td>
+                          <td>
+                            <span class="usebar"
+                              ><span class="haiku" style="width: 7%"></span
+                            ></span>
+                          </td>
+                          <td class="num credits">5,210</td>
+                          <td class="num usd">$391</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote">8.15M tokens · 74,180 credits</span>
+                    <span class="pill pill-neutral">≈ $5,560 equiv</span>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span
+                        class="ico"
+                        style="
+                          width: 30px;
+                          height: 30px;
+                          background: var(--el-tint-yellow);
+                          color: var(--el-warning);
+                        "
+                        ><svg viewBox="0 0 24 24"><use href="#i-flame" /></svg
+                      ></span>
+                      <div>
+                        <h3>Top consumers</h3>
+                        <p class="hsub">
+                          The orgs &amp; workspaces draining the most this month. Click to drill in.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th style="width: 34px">#</th>
+                          <th>Tenant</th>
+                          <th>Share</th>
+                          <th class="num">Credits</th>
+                          <th style="width: 24px"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="drillable">
+                          <td><span class="rank top">1</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">A</span
+                              ><span class="nm"
+                                >Acme Corp <span class="path">· org</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="usebar"
+                              ><span class="org" style="width: 100%"></span
+                            ></span>
+                          </td>
+                          <td class="num credits">17,640</td>
+                          <td>
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="rank top">2</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">G</span
+                              ><span class="nm">Globex <span class="path">· org</span></span></span
+                            >
+                          </td>
+                          <td>
+                            <span class="usebar"><span class="org" style="width: 81%"></span></span>
+                          </td>
+                          <td class="num credits">14,320</td>
+                          <td>
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="rank top">3</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-ws">E</span
+                              ><span class="nm"
+                                >Acme › Engineering <span class="path">· workspace</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="usebar"><span class="ws" style="width: 70%"></span></span>
+                          </td>
+                          <td class="num credits">12,310</td>
+                          <td>
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="rank">4</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">U</span
+                              ><span class="nm"
+                                >Umbrella <span class="path">· org</span></span
+                              ></span
+                            >
+                          </td>
+                          <td>
+                            <span class="usebar"><span class="org" style="width: 59%"></span></span>
+                          </td>
+                          <td class="num credits">10,390</td>
+                          <td>
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                        <tr class="drillable">
+                          <td><span class="rank">5</span></td>
+                          <td>
+                            <span class="tenant"
+                              ><span class="ava ent-org">I</span
+                              ><span class="nm">Initech <span class="path">· org</span></span></span
+                            >
+                          </td>
+                          <td>
+                            <span class="usebar"><span class="org" style="width: 40%"></span></span>
+                          </td>
+                          <td class="num credits">7,090</td>
+                          <td>
+                            <span class="drill-chev"
+                              ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                            ></span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Top 5 of 214 · ranked by
+                      credits this month</span
+                    >
+                    <span class="pbtn"
+                      >View all<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                    ></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — DRILL-DOWN DETAIL (in the shell, Tenants) ════════════════ -->
+    <div class="panel-label">
+      5 · Drill-down detail — left-nav “Tenants” active. Reached three ways (all drawn elsewhere): a
+      tenant row in Overview, the rollup tree, or the top-consumers list, OR the Tenants section.
+      One tenant’s usage over time, recent jobs (planning + coding), members and status, behind a
+      CLEAR “viewing another tenant (audited)” affordance. The jobs list paginates.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring<span class="soon"
+                >10.2</span
+              >
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="staff-banner">
+              <span class="sb-ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+              ></span>
+              <span class="sb-t"><strong>Platform staff.</strong> Single-tenant drill-down.</span>
+            </div>
+            <div class="page">
+              <div class="scope" style="margin-bottom: 12px">
+                <span class="seg">Platform</span>
+                <span class="sep">›</span>
+                <span class="seg">Tenants</span>
+                <span class="sep">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  >You are viewing <strong>Acme Corp</strong>’s data as platform staff. This
+                  cross-tenant read is recorded in the audit log (operator
+                  <strong>OP · ops@moooon.net</strong>, just now).</span
+                >
+              </div>
+
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-org" style="width: 36px; height: 36px; font-size: 14px"
+                    >A</span
+                  >
                   <div>
-                    <h3>Spend by tenancy</h3>
-                    <p class="hsub">
-                      Expand an org to see its workspaces and projects. Sorted by spend.
-                    </p>
+                    <h2 style="margin: 0; font-size: 19px">Acme Corp</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px">
+                      <span class="pill pill-active">● Active</span>
+                      <span class="pill pill-tier">Pro tier</span>
+                      <span class="pill pill-neutral">Created Mar 2026</span>
+                    </div>
                   </div>
                 </div>
                 <div class="hero-fig">
-                  <div class="big">74,180<span class="unit"> credits</span></div>
-                  <div class="cap">Platform total · this month · ≈ $5,560 equiv</div>
+                  <div class="big">8,420<span class="unit"> credits</span></div>
+                  <div class="cap">Balance · 42% of monthly allotment left</div>
                 </div>
               </div>
-              <div class="card-body flush">
-                <table class="tbl tree">
-                  <thead>
-                    <tr>
-                      <th class="name">Tenant</th>
-                      <th>Level</th>
-                      <th class="num">Tokens</th>
-                      <th>Share of estate</th>
-                      <th class="num">Credits</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <!-- Org row (expanded) -->
-                    <tr class="r-org drillable">
-                      <td class="name">
-                        <span class="indent"
-                          ><span class="exp"
-                            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
-                          ><span class="tenant"
-                            ><span class="ava ent-org">A</span
-                            ><span class="nm">Acme Corp</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-org"
-                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">1.21M</span></td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 24%"></span></span>
-                      </td>
-                      <td class="num credits">17,640</td>
-                    </tr>
-                    <tr class="drillable">
-                      <td class="name">
-                        <span class="indent lvl-1"
-                          ><span class="exp"
-                            ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg></span
-                          ><span class="tenant"
-                            ><span class="ava ent-ws">E</span
-                            ><span class="nm">Engineering</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-ws"
-                          ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Workspace</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">842k</span></td>
-                      <td>
-                        <span class="usebar"><span class="ws" style="width: 17%"></span></span>
-                      </td>
-                      <td class="num credits">12,310</td>
-                    </tr>
-                    <tr class="drillable">
-                      <td class="name">
-                        <span class="indent lvl-2"
-                          ><span class="exp leaf"></span
-                          ><span class="tenant"
-                            ><span class="ava ent-proj">M</span
-                            ><span class="nm">Mobile App</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-proj"
-                          ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">498k</span></td>
-                      <td>
-                        <span class="usebar"><span class="proj" style="width: 10%"></span></span>
-                      </td>
-                      <td class="num credits">7,280</td>
-                    </tr>
-                    <tr class="drillable">
-                      <td class="name">
-                        <span class="indent lvl-2"
-                          ><span class="exp leaf"></span
-                          ><span class="tenant"
-                            ><span class="ava ent-proj">W</span
-                            ><span class="nm">Web Platform</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-proj"
-                          ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">344k</span></td>
-                      <td>
-                        <span class="usebar"><span class="proj" style="width: 7%"></span></span>
-                      </td>
-                      <td class="num credits">5,030</td>
-                    </tr>
-                    <tr class="drillable">
-                      <td class="name">
-                        <span class="indent lvl-1"
-                          ><span class="exp"
-                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
-                          ><span class="tenant"
-                            ><span class="ava ent-ws">M</span
-                            ><span class="nm">Marketing</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-ws"
-                          ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Workspace</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">365k</span></td>
-                      <td>
-                        <span class="usebar"><span class="ws" style="width: 7%"></span></span>
-                      </td>
-                      <td class="num credits">5,330</td>
-                    </tr>
-                    <!-- Org row (collapsed) -->
-                    <tr class="r-org drillable">
-                      <td class="name">
-                        <span class="indent"
-                          ><span class="exp"
-                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
-                          ><span class="tenant"
-                            ><span class="ava ent-org">G</span><span class="nm">Globex</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-org"
-                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">982k</span></td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 19%"></span></span>
-                      </td>
-                      <td class="num credits">14,320</td>
-                    </tr>
-                    <tr class="r-org drillable">
-                      <td class="name">
-                        <span class="indent"
-                          ><span class="exp"
-                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
-                          ><span class="tenant"
-                            ><span class="ava ent-org">U</span
-                            ><span class="nm">Umbrella</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-org"
-                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">713k</span></td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 14%"></span></span>
-                      </td>
-                      <td class="num credits">10,390</td>
-                    </tr>
-                    <tr class="r-org drillable">
-                      <td class="name">
-                        <span class="indent"
-                          ><span class="exp"
-                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
-                          ><span class="tenant"
-                            ><span class="ava ent-org">I</span><span class="nm">Initech</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="pill pill-org"
-                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">486k</span></td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 9%"></span></span>
-                      </td>
-                      <td class="num credits">7,090</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="card-foot">
-                <span class="fnote"
-                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Top 4 of 214 orgs · figures
-                  are pre-aggregated, never a live scan of raw usage rows</span
-                >
-                <div class="pager">
-                  <span class="pbtn is-disabled"
-                    ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
-                  >
-                  <span>Page 1 of 54</span>
-                  <span class="pbtn"
-                    >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                  ></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- ════════════════ PANEL 3 — PER-MODEL + TOP CONSUMERS ════════════════ -->
-    <div class="panel-label">
-      3 · Per-model breakdown + top consumers — a per-model usage table (planning Claude models +
-      the 9.0 gateway models: tokens / credits / $-equiv, per-model tint so a costlier model is
-      visibly the bigger drain) and a top-consumers leaderboard (each row a drill-in target).
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="staff-banner">
-          <span class="sb-ico"
-            ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-          ></span>
-          <span class="sb-t"><strong>Platform staff.</strong> Where the estate’s credits go.</span>
-        </div>
-        <div class="page">
-          <span class="crumb"><b>Platform</b> · Usage &amp; cost · By model</span>
-          <div class="grid-2" style="margin-top: 18px">
-            <!-- per-model breakdown -->
-            <div class="card">
-              <div class="card-head">
-                <div class="ttl">
-                  <div>
-                    <h3>By model</h3>
-                    <p class="hsub">
-                      Estate-wide tokens + credits this month, per model. Planning + coding.
-                    </p>
-                  </div>
-                </div>
-                <span class="pill pill-neutral">This month</span>
-              </div>
-              <div class="card-body flush">
-                <table class="tbl">
-                  <thead>
-                    <tr>
-                      <th>Model</th>
-                      <th class="num">Tokens</th>
-                      <th>Share</th>
-                      <th class="num">Credits</th>
-                      <th class="num">$ equiv</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>
-                        <span class="model"><span class="dot opus"></span>Claude Opus</span>
-                      </td>
-                      <td class="num"><span class="muted">2.71M</span></td>
-                      <td>
-                        <span class="usebar"><span class="opus" style="width: 46%"></span></span>
-                      </td>
-                      <td class="num credits">34,120</td>
-                      <td class="num usd">$2,560</td>
-                    </tr>
-                    <tr>
-                      <td>
-                        <span class="model"><span class="dot sonnet"></span>Claude Sonnet</span>
-                      </td>
-                      <td class="num"><span class="muted">1.94M</span></td>
-                      <td>
-                        <span class="usebar"><span class="sonnet" style="width: 28%"></span></span>
-                      </td>
-                      <td class="num credits">20,760</td>
-                      <td class="num usd">$1,557</td>
-                    </tr>
-                    <tr>
-                      <td>
-                        <span class="model"
-                          ><span class="dot deepseek"></span>DeepSeek
-                          <span class="muted">· 9.0 gateway</span></span
-                        >
-                      </td>
-                      <td class="num"><span class="muted">3.38M</span></td>
-                      <td>
-                        <span class="usebar"
-                          ><span class="deepseek" style="width: 19%"></span
-                        ></span>
-                      </td>
-                      <td class="num credits">14,090</td>
-                      <td class="num usd">$1,056</td>
-                    </tr>
-                    <tr>
-                      <td>
-                        <span class="model"><span class="dot haiku"></span>Claude Haiku</span>
-                      </td>
-                      <td class="num"><span class="muted">1.12M</span></td>
-                      <td>
-                        <span class="usebar"><span class="haiku" style="width: 7%"></span></span>
-                      </td>
-                      <td class="num credits">5,210</td>
-                      <td class="num usd">$391</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="card-foot">
-                <span class="fnote">8.15M tokens · 74,180 credits</span>
-                <span class="pill pill-neutral">≈ $5,560 equiv</span>
-              </div>
-            </div>
-
-            <!-- top consumers leaderboard -->
-            <div class="card">
-              <div class="card-head">
-                <div class="ttl">
-                  <span
-                    class="ico"
-                    style="
-                      width: 30px;
-                      height: 30px;
-                      background: var(--el-tint-yellow);
-                      color: var(--el-warning);
-                    "
-                    ><svg viewBox="0 0 24 24"><use href="#i-flame" /></svg
-                  ></span>
-                  <div>
-                    <h3>Top consumers</h3>
-                    <p class="hsub">
-                      The orgs &amp; workspaces draining the most this month. Click to drill in.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div class="card-body flush">
-                <table class="tbl">
-                  <thead>
-                    <tr>
-                      <th style="width: 34px">#</th>
-                      <th>Tenant</th>
-                      <th>Share</th>
-                      <th class="num">Credits</th>
-                      <th style="width: 24px"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr class="drillable">
-                      <td><span class="rank top">1</span></td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-org">A</span
-                          ><span class="nm">Acme Corp <span class="path">· org</span></span></span
-                        >
-                      </td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 100%"></span></span>
-                      </td>
-                      <td class="num credits">17,640</td>
-                      <td>
-                        <span class="drill-chev"
-                          ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                        ></span>
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="rank top">2</span></td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-org">G</span
-                          ><span class="nm">Globex <span class="path">· org</span></span></span
-                        >
-                      </td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 81%"></span></span>
-                      </td>
-                      <td class="num credits">14,320</td>
-                      <td>
-                        <span class="drill-chev"
-                          ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                        ></span>
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="rank top">3</span></td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-ws">E</span
-                          ><span class="nm"
-                            >Acme › Engineering <span class="path">· workspace</span></span
-                          ></span
-                        >
-                      </td>
-                      <td>
-                        <span class="usebar"><span class="ws" style="width: 70%"></span></span>
-                      </td>
-                      <td class="num credits">12,310</td>
-                      <td>
-                        <span class="drill-chev"
-                          ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                        ></span>
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="rank">4</span></td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-org">U</span
-                          ><span class="nm">Umbrella <span class="path">· org</span></span></span
-                        >
-                      </td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 59%"></span></span>
-                      </td>
-                      <td class="num credits">10,390</td>
-                      <td>
-                        <span class="drill-chev"
-                          ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                        ></span>
-                      </td>
-                    </tr>
-                    <tr class="drillable">
-                      <td><span class="rank">5</span></td>
-                      <td>
-                        <span class="tenant"
-                          ><span class="ava ent-org">I</span
-                          ><span class="nm">Initech <span class="path">· org</span></span></span
-                        >
-                      </td>
-                      <td>
-                        <span class="usebar"><span class="org" style="width: 40%"></span></span>
-                      </td>
-                      <td class="num credits">7,090</td>
-                      <td>
-                        <span class="drill-chev"
-                          ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                        ></span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="card-foot">
-                <span class="fnote"
-                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Top 5 of 214 · ranked by
-                  credits this month</span
-                >
-                <span class="pbtn"
-                  >View all<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                ></span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════════════ PANEL 4 — DRILL-DOWN DETAIL (audited) ════════════════ -->
-    <div class="panel-label">
-      4 · Drill-down detail (org / workspace / project) — a single tenant’s usage over time, recent
-      jobs (planning + coding), members and status, behind a CLEAR “viewing another tenant’s data
-      (audited)” affordance. The recent-jobs list paginates.
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <div class="staff-banner">
-          <span class="sb-ico"
-            ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-          ></span>
-          <span class="sb-t"><strong>Platform staff.</strong> Single-tenant drill-down.</span>
-        </div>
-        <div class="page">
-          <!-- scope breadcrumb (the drill path) -->
-          <div class="scope" style="margin-bottom: 12px">
-            <span class="seg">Platform</span>
-            <span class="sep">›</span>
-            <span class="seg">Organizations</span>
-            <span class="sep">›</span>
-            <span class="seg active"
-              ><span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span
-              ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
-            ></span>
-          </div>
-
-          <!-- the AUDITED cross-tenant read affordance — the posture made visible -->
-          <div class="audit-banner">
-            <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
-            <span
-              >You are viewing <strong>Acme Corp</strong>’s data as platform staff. This
-              cross-tenant read is recorded in the audit log (operator
-              <strong>OP · ops@moooon.net</strong>, just now).</span
-            >
-          </div>
-
-          <div class="row-between" style="margin-top: 18px">
-            <div class="tenant" style="gap: 12px">
-              <span class="ava ent-org" style="width: 36px; height: 36px; font-size: 14px">A</span>
-              <div>
-                <h2 style="margin: 0; font-size: 19px">Acme Corp</h2>
-                <div style="display: flex; gap: 6px; margin-top: 6px">
-                  <span class="pill pill-active">● Active</span>
-                  <span class="pill pill-tier">Pro tier</span>
-                  <span class="pill pill-neutral">Created Mar 2026</span>
-                </div>
-              </div>
-            </div>
-            <div class="hero-fig">
-              <div class="big">8,420<span class="unit"> credits</span></div>
-              <div class="cap">Balance · 42% of monthly allotment left</div>
-            </div>
-          </div>
-
-          <div class="stack">
-            <div class="grid-2">
-              <!-- usage over time -->
-              <div class="card">
-                <div class="card-head">
-                  <div class="ttl">
-                    <div>
-                      <h3>Usage over time</h3>
-                      <p class="hsub">Credits debited per month — this tenant.</p>
+              <div class="stack">
+                <div class="grid-2">
+                  <div class="card">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <div>
+                          <h3>Usage over time</h3>
+                          <p class="hsub">Credits debited per month — this tenant.</p>
+                        </div>
+                      </div>
+                      <span class="pill pill-neutral">6 months</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="trend">
+                        <div class="col">
+                          <span class="bar" style="height: 40%"></span><span class="mo">Jan</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 55%"></span><span class="mo">Feb</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 48%"></span><span class="mo">Mar</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 72%"></span><span class="mo">Apr</span>
+                        </div>
+                        <div class="col">
+                          <span class="bar" style="height: 64%"></span><span class="mo">May</span>
+                        </div>
+                        <div class="col cur">
+                          <span class="bar" style="height: 88%"></span><span class="mo">Jun</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <span class="pill pill-neutral">6 months</span>
-                </div>
-                <div class="card-body">
-                  <div class="trend">
-                    <div class="col">
-                      <span class="bar" style="height: 40%"></span><span class="mo">Jan</span>
+                  <div class="card">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <div>
+                          <h3>Tenant</h3>
+                          <p class="hsub">Shape &amp; access — read-only.</p>
+                        </div>
+                      </div>
+                      <span class="pill pill-neutral">Org</span>
                     </div>
-                    <div class="col">
-                      <span class="bar" style="height: 55%"></span><span class="mo">Feb</span>
-                    </div>
-                    <div class="col">
-                      <span class="bar" style="height: 48%"></span><span class="mo">Mar</span>
-                    </div>
-                    <div class="col">
-                      <span class="bar" style="height: 72%"></span><span class="mo">Apr</span>
-                    </div>
-                    <div class="col">
-                      <span class="bar" style="height: 64%"></span><span class="mo">May</span>
-                    </div>
-                    <div class="col cur">
-                      <span class="bar" style="height: 88%"></span><span class="mo">Jun</span>
+                    <div class="card-body">
+                      <div class="mini-stats">
+                        <div class="mini-stat">
+                          <div class="mv">6</div>
+                          <div class="ml">Workspaces</div>
+                        </div>
+                        <div class="mini-stat">
+                          <div class="mv">19</div>
+                          <div class="ml">Projects</div>
+                        </div>
+                        <div class="mini-stat">
+                          <div class="mv">48</div>
+                          <div class="ml">Members</div>
+                        </div>
+                        <div class="mini-stat">
+                          <div class="mv">1,204</div>
+                          <div class="ml">Work items</div>
+                        </div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px">
+                        <span class="member"><span class="pava">JD</span></span>
+                        <span class="member"><span class="pava">SK</span></span>
+                        <span class="member"><span class="pava">RM</span></span>
+                        <span style="font-size: 12px; color: var(--el-text-muted)"
+                          >+45 more · owner
+                          <strong style="color: var(--el-text-secondary)"
+                            >jane@acme.com</strong
+                          ></span
+                        >
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <!-- tenant shape: members + projects + members preview -->
-              <div class="card">
-                <div class="card-head">
-                  <div class="ttl">
-                    <div>
-                      <h3>Tenant</h3>
-                      <p class="hsub">Shape &amp; access — read-only.</p>
+
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <div>
+                        <h3>Recent jobs</h3>
+                        <p class="hsub">
+                          Planning &amp; coding runs for this tenant, newest first.
+                        </p>
+                      </div>
                     </div>
+                    <span class="pill pill-neutral">Acme Corp</span>
                   </div>
-                  <span class="pill pill-neutral">Org</span>
-                </div>
-                <div class="card-body">
-                  <div class="mini-stats">
-                    <div class="mini-stat">
-                      <div class="mv">6</div>
-                      <div class="ml">Workspaces</div>
-                    </div>
-                    <div class="mini-stat">
-                      <div class="mv">19</div>
-                      <div class="ml">Projects</div>
-                    </div>
-                    <div class="mini-stat">
-                      <div class="mv">48</div>
-                      <div class="ml">Members</div>
-                    </div>
-                    <div class="mini-stat">
-                      <div class="mv">1,204</div>
-                      <div class="ml">Work items</div>
-                    </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Job</th>
+                          <th>Project</th>
+                          <th>Model</th>
+                          <th class="num">Tokens</th>
+                          <th class="num">Credits</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="when">2m ago</span></td>
+                          <td>
+                            <span class="pill pill-code"
+                              ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding</span
+                            >
+                          </td>
+                          <td><span class="muted">Mobile App</span></td>
+                          <td>
+                            <span class="model"><span class="dot opus"></span>Opus</span>
+                          </td>
+                          <td class="num">4,210</td>
+                          <td class="num credits">58</td>
+                        </tr>
+                        <tr>
+                          <td><span class="when">52m ago</span></td>
+                          <td>
+                            <span class="pill pill-plan"
+                              ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Expand</span
+                            >
+                          </td>
+                          <td><span class="muted">Web Platform</span></td>
+                          <td>
+                            <span class="model"><span class="dot sonnet"></span>Sonnet</span>
+                          </td>
+                          <td class="num">6,040</td>
+                          <td class="num credits">64</td>
+                        </tr>
+                        <tr>
+                          <td><span class="when">3h ago</span></td>
+                          <td>
+                            <span class="pill pill-plan"
+                              ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                              >Generate</span
+                            >
+                          </td>
+                          <td><span class="muted">Mobile App</span></td>
+                          <td>
+                            <span class="model"><span class="dot deepseek"></span>DeepSeek</span>
+                          </td>
+                          <td class="num">11,720</td>
+                          <td class="num credits">49</td>
+                        </tr>
+                        <tr>
+                          <td><span class="when">5h ago</span></td>
+                          <td>
+                            <span class="pill pill-code"
+                              ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding</span
+                            >
+                          </td>
+                          <td><span class="muted">Web Platform</span></td>
+                          <td>
+                            <span class="model"><span class="dot opus"></span>Opus</span>
+                          </td>
+                          <td class="num">8,930</td>
+                          <td class="num credits">122</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px">
-                    <span class="member"><span class="pava">JD</span></span>
-                    <span class="member"><span class="pava">SK</span></span>
-                    <span class="member"><span class="pava">RM</span></span>
-                    <span style="font-size: 12px; color: var(--el-text-muted)"
-                      >+45 more · owner
-                      <strong style="color: var(--el-text-secondary)">jane@acme.com</strong></span
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–4 of 9,140
+                      jobs</span
                     >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 2,285</span>
+                      <span class="pbtn"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- recent jobs (planning + coding) — PAGINATED -->
-            <div class="card">
-              <div class="card-head">
-                <div class="ttl">
-                  <div>
-                    <h3>Recent jobs</h3>
-                    <p class="hsub">Planning &amp; coding runs for this tenant, newest first.</p>
-                  </div>
-                </div>
-                <span class="pill pill-neutral">Acme Corp</span>
-              </div>
-              <div class="card-body flush">
-                <table class="tbl">
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Job</th>
-                      <th>Project</th>
-                      <th>Model</th>
-                      <th class="num">Tokens</th>
-                      <th class="num">Credits</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td><span class="when">2m ago</span></td>
-                      <td>
-                        <span class="pill pill-code"
-                          ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding</span
-                        >
-                      </td>
-                      <td><span class="muted">Mobile App</span></td>
-                      <td>
-                        <span class="model"><span class="dot opus"></span>Opus</span>
-                      </td>
-                      <td class="num">4,210</td>
-                      <td class="num credits">58</td>
-                    </tr>
-                    <tr>
-                      <td><span class="when">52m ago</span></td>
-                      <td>
-                        <span class="pill pill-plan"
-                          ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Expand</span
-                        >
-                      </td>
-                      <td><span class="muted">Web Platform</span></td>
-                      <td>
-                        <span class="model"><span class="dot sonnet"></span>Sonnet</span>
-                      </td>
-                      <td class="num">6,040</td>
-                      <td class="num credits">64</td>
-                    </tr>
-                    <tr>
-                      <td><span class="when">3h ago</span></td>
-                      <td>
-                        <span class="pill pill-plan"
-                          ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Generate</span
-                        >
-                      </td>
-                      <td><span class="muted">Mobile App</span></td>
-                      <td>
-                        <span class="model"><span class="dot deepseek"></span>DeepSeek</span>
-                      </td>
-                      <td class="num">11,720</td>
-                      <td class="num credits">49</td>
-                    </tr>
-                    <tr>
-                      <td><span class="when">5h ago</span></td>
-                      <td>
-                        <span class="pill pill-code"
-                          ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding</span
-                        >
-                      </td>
-                      <td><span class="muted">Web Platform</span></td>
-                      <td>
-                        <span class="model"><span class="dot opus"></span>Opus</span>
-                      </td>
-                      <td class="num">8,930</td>
-                      <td class="num credits">122</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="card-foot">
-                <span class="fnote"
-                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–4 of 9,140
-                  jobs</span
-                >
-                <div class="pager">
-                  <span class="pbtn is-disabled"
-                    ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
-                  >
-                  <span>Page 1 of 2,285</span>
-                  <span class="pbtn"
-                    >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
-                  ></span>
                 </div>
               </div>
             </div>
@@ -2309,15 +2734,14 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 5 — GATING / EMPTY / LOADING / ERROR ════════════════ -->
+    <!-- ════════════════ PANEL 6 — GATING / EMPTY / LOADING / ERROR ════════════════ -->
     <div class="panel-label">
-      5 · Gating · empty · loading · error. The access-denied case is a 404 — the surface is ABSENT
-      for non-staff, NOT a visible “forbidden” page (so its very existence isn’t leaked). Plus the
-      first-run empty state, the loading skeleton (fetch over 7.1), and the motir-ai-down error.
+      6 · Gating · empty · loading · error. Access-denied is a 404 — the surface is ABSENT for
+      non-staff, NOT a visible “forbidden” page (its existence isn’t leaked). Plus the first-run
+      empty state, the loading skeleton (fetch over 7.1), and the motir-ai-down error.
     </div>
     <div class="panel">
       <div class="states-grid">
-        <!-- (a) ACCESS DENIED = a 404, surface absent (not a forbidden page) -->
         <div class="state notfound">
           <span class="ico"
             ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg
@@ -2340,7 +2764,6 @@
           </div>
         </div>
 
-        <!-- (b) EMPTY — first run, no usage yet across the estate -->
         <div class="state">
           <span class="ico"
             ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
@@ -2353,7 +2776,6 @@
           <div class="actions"><span class="btn btn-secondary">View tenants</span></div>
         </div>
 
-        <!-- (c) LOADING — the rollup fetches over the 7.1 boundary -->
         <div
           class="state"
           style="align-items: stretch; text-align: left; padding: 22px 22px"
@@ -2385,7 +2807,6 @@
           <p style="text-align: center; margin-top: 16px">Loading the estate rollup…</p>
         </div>
 
-        <!-- (d) ERROR — motir-ai boundary down; Retry, not a misleading zero -->
         <div class="state err">
           <span class="ico"
             ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
@@ -2443,6 +2864,17 @@
         >
           <path d="m5 12 7-7 7 7" />
           <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
         </g>
         <g
           id="i-updown"
@@ -2534,6 +2966,17 @@
           />
         </g>
         <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
           id="i-users"
           fill="none"
           stroke="currentColor"
@@ -2546,7 +2989,31 @@
           <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </g>
-        <!-- ── platform-admin additions (lucide) ── -->
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-logout"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" x2="9" y1="12" y2="12" />
+        </g>
         <g
           id="i-shield"
           fill="none"
