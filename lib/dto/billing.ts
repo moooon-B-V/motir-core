@@ -24,18 +24,43 @@ export interface BillingAccessDTO {
 }
 
 /**
- * ② The Motir AI line — the org's AI plan as the boundary can read it TODAY: the
- * `PlanTier` + balance, folded from the existing `/v1/usage` read (the 8.1.6 card's
- * blessed "fold subscription/tier into the usage read" path). The Stripe AI
- * SUBSCRIPTION lifecycle (status `Pill` + renewal date the design panel 2/5 want)
- * needs a motir-ai subscription-READ endpoint that 8.1.5 did not ship — tracked as
- * a seam (the 8.1.7 follow-up), so this DTO carries the tier+balance, not those.
+ * The Motir AI Stripe SUBSCRIPTION lifecycle (Subtask 8.1.13) — what the design's
+ * panel 2 status `Pill` + panel 5 "renews {date}" render. Folded from motir-ai's
+ * `GET /v1/stripe/subscription`. EVERY field is nullable: a free / never-transacted
+ * org has `status: null` (no AI subscription yet), NOT an error.
+ */
+export interface MotirAiSubscriptionDTO {
+  /** The Stripe subscription lifecycle (decision §5), or `null` = no subscription. */
+  status:
+    | 'trialing'
+    | 'active'
+    | 'past_due'
+    | 'canceled'
+    | 'incomplete'
+    | 'incomplete_expired'
+    | 'unpaid'
+    | null;
+  /** ISO-8601 renewal date ("renews {date}"), or `null` before a period is known. */
+  currentPeriodEnd: string | null;
+  /** The subscribed Stripe Price, or `null`. */
+  priceId: string | null;
+  /** The tier the subscription resolves to, or `null` until the webhook binds one. */
+  planTier: { key: string; name: string; monthlyCreditAllotment: number } | null;
+}
+
+/**
+ * ② The Motir AI line — the org's AI plan over the boundary: the `PlanTier` +
+ * balance folded from the `/v1/usage` read, plus the Stripe `subscription`
+ * lifecycle (status `Pill` + renewal date, design panels 2/5) folded from the
+ * 8.1.13 `/v1/stripe/subscription` read.
  */
 export interface MotirAiBillingDTO {
   /** The active AI tier, or `null` before any ledger is provisioned. */
   tier: { key: string; name: string; monthlyCreditAllotment: number } | null;
   /** The current credit balance (allotment remainder + any top-up). */
   balance: number;
+  /** The Stripe AI-subscription lifecycle (status + renewal); `status: null` = none. */
+  subscription: MotirAiSubscriptionDTO;
 }
 
 /**

@@ -139,6 +139,32 @@ export interface RawUsageResponse {
   recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
 }
 
+// ── Stripe AI-subscription lifecycle read (Subtask 8.1.13) ───────────────────
+// The raw GET /v1/stripe/subscription wire body (motir-ai's
+// stripeBillingService.SubscriptionDto). `status` is the Stripe lifecycle value
+// (decision §5). EVERY field is nullable: a free / never-transacted org resolves
+// to the EMPTY shape (`status: null`), NOT a 404 — "no AI subscription yet" is a
+// normal state. `currentPeriodEnd` is ISO-8601 (or null before a period is known).
+export type StripeSubscriptionStatus =
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'unpaid';
+
+export interface SubscriptionQuery {
+  coreOrganizationId: string;
+}
+
+export interface RawSubscriptionResponse {
+  status: StripeSubscriptionStatus | null;
+  currentPeriodEnd: string | null; // ISO-8601
+  priceId: string | null;
+  planTier: { key: string; name: string; monthlyCreditAllotment: number } | null;
+}
+
 // ── Pre-plan read surface (Subtask 7.3.25) ───────────────────────────────────
 // The resumable pre-plan state motir-core fetches over GET /v1/preplan to resume
 // the onboarding loop and render each artifact's revision diffs at the gate

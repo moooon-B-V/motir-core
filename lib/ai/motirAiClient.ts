@@ -25,8 +25,10 @@ import type {
   Problem,
   RawJobResponse,
   RawPreplanStateResponse,
+  RawSubscriptionResponse,
   RawUsageResponse,
   RequestEnvelope,
+  SubscriptionQuery,
   Tenant,
   UsageQuery,
 } from './types';
@@ -174,6 +176,29 @@ export async function getOrgUsage(query: UsageQuery): Promise<RawUsageResponse> 
   }
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawUsageResponse;
+}
+
+// GET /v1/stripe/subscription — the org's AI-pool Stripe subscription lifecycle
+// (status + renewal + resolved tier) the billing panel renders (Subtask 8.1.13 →
+// the 8.1.5 store). Read-through: the caller (billingService) has already gated
+// the actor + the cloud build. motir-ai returns the EMPTY shape (`status: null`)
+// for a free / never-transacted org — NOT a 404 — so this never throws on "no
+// subscription"; only a transport failure / non-2xx maps to a typed error.
+export async function getOrgSubscription(
+  query: SubscriptionQuery,
+): Promise<RawSubscriptionResponse> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ coreOrganizationId: query.coreOrganizationId });
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/stripe/subscription?${params.toString()}`, {
+      headers: authHeaders(serviceToken),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawSubscriptionResponse;
 }
 
 // POST /v1/stripe/checkout-session — start a subscription-mode, Stripe-hosted
