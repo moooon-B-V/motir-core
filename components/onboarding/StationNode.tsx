@@ -122,6 +122,17 @@ export function StationCard({
         </div>
       )}
 
+      {/* The state marker rides its OWN row — it pairs the ringed border (design
+          `ai-chat`: a map-pin + "You are here") and must NOT share the title's
+          row: a `shrink-0` pill there steals ~100px of a 300px card, squeezing a
+          longer step name into a narrow column that wraps to several lines
+          (MOTIR-1258). "upcoming" has no pill, so the row is omitted entirely. */}
+      {station.state !== 'upcoming' && (
+        <div className="mb-2.5 flex">
+          <StatePill state={station.state} />
+        </div>
+      )}
+
       <div className="flex items-start gap-2.5">
         <span
           className={`flex size-8 shrink-0 items-center justify-center rounded-(--radius-control) ${
@@ -148,7 +159,6 @@ export function StationCard({
           </div>
           <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
         </div>
-        <StatePill state={station.state} />
       </div>
 
       {showCaptured && (
