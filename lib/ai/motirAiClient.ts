@@ -176,6 +176,70 @@ export async function getOrgUsage(query: UsageQuery): Promise<RawUsageResponse> 
   return (await res.json()) as RawUsageResponse;
 }
 
+// POST /v1/stripe/checkout-session — start a subscription-mode, Stripe-hosted
+// Checkout Session for an org + a selected price, returning the hosted URL the
+// caller redirects to (Subtask 8.1.6 → the 8.1.5 endpoint). The Stripe SECRET
+// never crosses this boundary — motir-ai owns the SDK and the customer; motir-core
+// only initiates and gets back a URL (the open-core invariant). The caller
+// (billingService) has already gated the actor (org owner) + the cloud build. A
+// transport failure / non-2xx maps to a typed error.
+export async function createCheckoutSession(input: {
+  coreOrganizationId: string;
+  priceId: string;
+  successUrl: string;
+  cancelUrl: string;
+  idempotencyKey?: string;
+}): Promise<{ url: string }> {
+  const { url, serviceToken } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/stripe/checkout-session`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return readSessionUrl(res);
+}
+
+// POST /v1/stripe/portal-session — open a short-lived Billing Portal session for
+// an org that already has a Stripe Customer, returning its URL (the client
+// redirects immediately — the portal session expires in ~5 min). A 404 (the org
+// has no customer yet) maps to MotirAiJobNotFoundError via the §5 `not_found`
+// code. The caller has already gated the actor (org owner) + the cloud build.
+export async function createPortalSession(input: {
+  coreOrganizationId: string;
+  returnUrl: string;
+}): Promise<{ url: string }> {
+  const { url, serviceToken } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/stripe/portal-session`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return readSessionUrl(res);
+}
+
+// Both Stripe session endpoints return `{ url }` (contract §2.4); a 2xx body
+// missing the URL is an unexpected upstream response, not a client condition.
+async function readSessionUrl(res: Response): Promise<{ url: string }> {
+  const body: unknown = await res.json();
+  const sessionUrl = (body as { url?: unknown })?.url;
+  if (typeof sessionUrl !== 'string' || !sessionUrl) {
+    throw new MotirAiUnavailableError('stripe session response missing a url');
+  }
+  return { url: sessionUrl };
+}
+
 // GET /v1/preplan — the resumable pre-plan read surface (Subtask 7.3.25): the
 // session decisions/position/transcript + each artifact's forward revision log /
 // diffs. Read-through: the caller (the 7.3.5 gate / 7.3.9 resume) has already

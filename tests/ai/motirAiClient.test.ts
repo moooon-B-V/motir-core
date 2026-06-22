@@ -4,6 +4,8 @@ import {
   getJob,
   getPreplanState,
   parseSseFrame,
+  createCheckoutSession,
+  createPortalSession,
   type RequestActor,
 } from '@/lib/ai/motirAiClient';
 import { verifyJobToken } from '@/lib/ai/jobToken';
@@ -229,6 +231,87 @@ describe('getPreplanState', () => {
   it('maps a transport failure to MotirAiUnavailableError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     await expect(getPreplanState(query)).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+});
+
+describe('createCheckoutSession', () => {
+  const input = {
+    coreOrganizationId: 'org_1',
+    priceId: 'pro_pool_annual',
+    successUrl: 'https://app.test/settings/organization/billing?checkout=success',
+    cancelUrl: 'https://app.test/settings/organization/billing?checkout=cancel',
+  };
+
+  it('POSTs the input to /v1/stripe/checkout-session and returns the hosted url', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ url: 'https://checkout.stripe.com/c/pay/cs_test_1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { url } = await createCheckoutSession(input);
+    expect(url).toBe('https://checkout.stripe.com/c/pay/cs_test_1');
+
+    const [reqUrl, init] = fetchMock.mock.calls[0]!;
+    expect(reqUrl).toBe('https://ai.example.test/v1/stripe/checkout-session');
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer svc-token');
+    expect(JSON.parse(init.body)).toEqual(input);
+  });
+
+  it('maps a problem+json error to a typed error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ code: 'validation_error', title: 'bad price', status: 400 }, 400),
+        ),
+    );
+    await expect(createCheckoutSession(input)).rejects.toBeInstanceOf(MotirAiBadRequestError);
+  });
+
+  it('throws when a 2xx response is missing the url', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, 200)));
+    await expect(createCheckoutSession(input)).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+
+  it('maps a transport failure to MotirAiUnavailableError', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    await expect(createCheckoutSession(input)).rejects.toBeInstanceOf(MotirAiUnavailableError);
+  });
+});
+
+describe('createPortalSession', () => {
+  const input = {
+    coreOrganizationId: 'org_1',
+    returnUrl: 'https://app.test/settings/organization/billing',
+  };
+
+  it('POSTs to /v1/stripe/portal-session and returns the portal url', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ url: 'https://billing.stripe.com/p/session/1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { url } = await createPortalSession(input);
+    expect(url).toBe('https://billing.stripe.com/p/session/1');
+
+    const [reqUrl, init] = fetchMock.mock.calls[0]!;
+    expect(reqUrl).toBe('https://ai.example.test/v1/stripe/portal-session');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual(input);
+  });
+
+  it('maps a 404 (no Stripe customer yet) to MotirAiJobNotFoundError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ code: 'not_found', title: 'no customer', status: 404 }, 404),
+        ),
+    );
+    await expect(createPortalSession(input)).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
   });
 });
 
