@@ -22,13 +22,29 @@ import { themeInitScript } from '@/lib/theme/init-script';
 const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
 
 describe('palette registry', () => {
-  it('registers the v1 palette set (Motir — the house palette — plus Cobalt, Graphite, Evergreen, Spectrum)', () => {
-    expect(PALETTE_IDS).toEqual(['motir', 'cobalt', 'graphite', 'evergreen', 'spectrum']);
+  it('registers the palette set (Motir — the house palette — plus the cool set Cobalt/Graphite/Evergreen/Spectrum and the warm-primary brand set Amber/Sienna/Garnet/Citrine)', () => {
+    expect(PALETTE_IDS).toEqual([
+      'motir',
+      'cobalt',
+      'graphite',
+      'evergreen',
+      'spectrum',
+      'amber',
+      'sienna',
+      'garnet',
+      'citrine',
+      'candy',
+    ]);
     expect(PALETTE_REGISTRY['motir'].name).toBe('Motir');
     expect(PALETTE_REGISTRY['cobalt'].name).toBe('Cobalt');
     expect(PALETTE_REGISTRY['graphite'].name).toBe('Graphite');
     expect(PALETTE_REGISTRY['evergreen'].name).toBe('Evergreen');
     expect(PALETTE_REGISTRY['spectrum'].name).toBe('Spectrum');
+    expect(PALETTE_REGISTRY['amber'].name).toBe('Amber');
+    expect(PALETTE_REGISTRY['sienna'].name).toBe('Sienna');
+    expect(PALETTE_REGISTRY['garnet'].name).toBe('Garnet');
+    expect(PALETTE_REGISTRY['citrine'].name).toBe('Citrine');
+    expect(PALETTE_REGISTRY['candy'].name).toBe('Candy');
   });
 
   it('keeps every entry self-consistent (key === id) and PALETTE_IDS in sync', () => {

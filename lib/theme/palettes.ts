@@ -103,6 +103,51 @@ export const PALETTE_REGISTRY = {
       "Figma's vibrant multi-colour brand + Airtable's colourful, friendly palette, on Radix Violet/Iris/Pink/Blue scales.",
     designDoc: 'docs/palettes/spectrum.md',
   },
+  amber: {
+    id: 'amber',
+    name: 'Amber',
+    tagline:
+      'Warm and electric — Binance trading-floor gold over the exchange’s graphite near-blacks; dark labels on the gold.',
+    inspiration:
+      'Binance — its whole documented palette: the bold gold #F0B90B/#FCD535 over cool graphite trading-floor blacks (#0B0E11/#1E2329) + greys, with the buy-green/sell-red semantics.',
+    designDoc: 'docs/palettes/amber.md',
+  },
+  sienna: {
+    id: 'sienna',
+    name: 'Sienna',
+    tagline:
+      'Warm and vivid — Mistral flame-orange over the Mediterranean warm-cream surfaces; dark labels on the flame.',
+    inspiration:
+      'Mistral AI — its whole documented palette (getdesign.md/mistral.ai): the flame #fa520f + Block-gradient + Sunshine ambers over Warm-Ivory cream surfaces (#fffaeb) and Mistral-Black ink.',
+    designDoc: 'docs/palettes/sienna.md',
+  },
+  garnet: {
+    id: 'garnet',
+    name: 'Garnet',
+    tagline:
+      'Rich and bold — Pinterest Pushpin red over the brand’s neutral greys; white labels on the red.',
+    inspiration:
+      'Pinterest — its whole documented palette: Pushpin red #E60023/#BD081C over Cod-Gray ink (#111111) and neutral greys (#767676/#EFEFEF), with Gestalt “Skycicle” blue links.',
+    designDoc: 'docs/palettes/garnet.md',
+  },
+  citrine: {
+    id: 'citrine',
+    name: 'Citrine',
+    tagline:
+      'Bright and collaborative — Miro’s Sunglow yellow over the whiteboard greys, with the Miro action-blue accent.',
+    inspiration:
+      'Miro — its whole Mirotone palette (every value a documented Mirotone step): Sunglow yellow #FFD02F (primary) + the action-blue #3859FF over the gray ramp + Stratos ink #050038, with the green/red semantic ramps.',
+    designDoc: 'docs/palettes/citrine.md',
+  },
+  candy: {
+    id: 'candy',
+    name: 'Candy',
+    tagline:
+      'Sweet and playful — a light bubblegum-pink primary over candy-paper pinks, with a full pastel-candy rainbow.',
+    inspiration:
+      'A candy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Pink primary + Mauve neutrals + a Sky/Jade/Violet/Amber/Crimson candy rainbow; Glossier Pink #F5DADF as the pastel-pink mood reference.',
+    designDoc: 'docs/palettes/candy.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
