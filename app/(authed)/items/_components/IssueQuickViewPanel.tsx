@@ -65,6 +65,8 @@ function OpenFullPageLink({ identifier }: { identifier: string }) {
   return (
     <Link
       href={`/items/${identifier}`}
+      target="_blank"
+      rel="noopener noreferrer"
       data-testid="quick-view-open-full"
       className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
     >
@@ -258,6 +260,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
         <Link
           href={`/items/${data.identifier}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {data.identifier}
@@ -302,6 +306,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               link: (chunks) => (
                 <Link
                   href={`/items/${data.identifier}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="font-medium text-(--el-link) hover:underline"
                 >
                   {chunks}
@@ -369,6 +375,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {data.parent ? (
               <Link
                 href={`/items/${data.parent.identifier}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex min-w-0 items-center gap-1.5 text-(--el-link) hover:underline"
               >
                 <IssueTypeIcon type={data.parent.kind} className="h-3.5 w-3.5 shrink-0" />

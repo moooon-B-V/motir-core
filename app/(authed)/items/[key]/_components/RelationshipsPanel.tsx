@@ -1,10 +1,10 @@
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { ReadinessVerdictDto, RelationshipLinkDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import { ContentSectionCard } from './ContentSectionCard';
 import { AddLinkControl } from './AddLinkControl';
 import { RemoveLinkButton } from './RemoveLinkButton';
+import { RelationshipPeekLink } from './RelationshipPeekLink';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
@@ -68,8 +68,8 @@ function LinkRow({
   const statusMeta = workflow.statuses.find((s) => s.key === item.status);
   return (
     <li className="hover:bg-(--el-surface) flex items-center gap-1 rounded-md pr-1">
-      <Link
-        href={`/items/${item.identifier}`}
+      <RelationshipPeekLink
+        identifier={item.identifier}
         className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {isOpenBlocker ? (
@@ -95,7 +95,7 @@ function LinkRow({
             {item.status}
           </Pill>
         )}
-      </Link>
+      </RelationshipPeekLink>
       {editable && identifier ? (
         <RemoveLinkButton
           linkId={link.linkId}

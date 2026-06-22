@@ -95,6 +95,21 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
     expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/items/PROD-7');
     expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe('/items/PROD-7');
   });
+
+  it('opens every detail-page link in a NEW TAB — target=_blank + rel=noopener (8.8.31)', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    // The four links that navigate to a work-item DETAIL page (`/items/<KEY>`):
+    // the header identifier, "Open full page →", the description-footer "more"
+    // link (all → /items/PROD-7), and the rail Parent link (→ /items/PROD-1).
+    const detailLinks = screen
+      .getAllByRole('link')
+      .filter((a) => /^\/items\/[A-Z]/.test(a.getAttribute('href') ?? ''));
+    expect(detailLinks).toHaveLength(4);
+    for (const a of detailLinks) {
+      expect(a.getAttribute('target')).toBe('_blank');
+      expect(a.getAttribute('rel')).toContain('noopener');
+    }
+  });
 });
 
 describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
@@ -186,6 +201,9 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     expect(screen.getByRole('link', { name: 'PROD-8' }).getAttribute('href')).toBe(
       '/items?view=list&peek=PROD-8',
     );
+    // 8.8.31 exclusion: a blocker link is an in-list peek SWAP, not a detail-page
+    // link, so it must NOT open in a new tab (only the four detail links do).
+    expect(screen.getByRole('link', { name: 'PROD-3' }).getAttribute('target')).not.toBe('_blank');
   });
 
   it('ready: renders "Ready to start" when the verdict is ready (all blockers resolved, OR none — bug-ready-banner-no-deps)', () => {
