@@ -1,19 +1,21 @@
 # Palette — Sienna (`data-palette="sienna"`)
 
-> A warm, friendly **burnt-orange** re-skin. Registered in
+> A warm, vivid **flame-orange** re-skin. Registered in
 > [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its override lives in
 > the **AXIS 1 (COLOUR)** section of
 > [`app/globals.css`](../../app/globals.css) as the `[data-palette='sienna']`
 > block (light) + a `[data-palette='sienna'][data-theme='dark']` companion.
 
-**Tagline:** Warm and friendly — a burnt-orange primary over terracotta-warm
-neutrals; an inviting, workshop feel.
-**Inspiration:** Zapier's warm, friendly, illustration-driven orange — the mood
-from **getdesign.md** — mapped onto Motir's `--el-*` roles; the actual light/dark
-ramps and UI-state steps are drawn from **Radix Colors** (Orange / Tomato / Sand
-/ Red / Grass / Blue), the accessibility-first 12-step scales designed for UI
-states. The neutral is Radix **Sand**, warmed toward terracotta, so the scheme
-reads warm.
+**Tagline:** Warm and vivid — a Mistral flame-orange primary over terracotta-warm
+neutrals; Mediterranean and inviting.
+**Inspiration:** Mistral AI — its signature **Block gradient** (yellow → amber →
+flame → **Mistral Orange `#fa520f`**) over Mediterranean warm neutrals, the mood +
+signature hue from **getdesign.md**
+([mistral.ai/design-md](https://getdesign.md/mistral.ai/design-md)) — mapped onto
+Motir's `--el-*` roles; the actual light/dark ramps and UI-state steps are drawn
+from **Radix Colors** (Orange / Tomato / Sand / Red / Grass / Blue), the
+accessibility-first 12-step scales designed for UI states. The neutral is Radix
+**Sand**, warmed toward terracotta, so the scheme reads warm.
 
 This is the COLOUR (palette) axis only. Shape/feel is the independent
 `data-style` axis — picking Sienna never changes a radius. `data-theme`
@@ -21,14 +23,16 @@ This is the COLOUR (palette) axis only. Shape/feel is the independent
 [`DESIGN.md`](../DESIGN.md) §2 for the full colour system and the two-axis
 contract.
 
-## Accent-text — white in light, dark in dark
+## Accent-text — DARK ink on the flame, in both themes (the Mistral treatment)
 
-Unlike Amber's luminous gold, Sienna's burnt-orange primary FILL in **light**
-(`#c2480c`) is deep enough to carry **white** labels at AA (~5:1). In **dark**
-the fill brightens to a vivid orange (`#ff8a4c`, the Supabase-style bright-fill
-pattern), which then carries **dark ink** labels (`#2a1205`, ~7.6:1) — so the
-`--el-accent-text` source (`--color-primary-foreground`) flips white → dark
-between the themes, each chosen to pass AA on its own fill.
+Like Amber's luminous gold, Mistral's bright flame-orange FILL (`#fa520f` light /
+`#ff7a38` dark) **cannot carry white text at AA** (white on `#fa520f` is only
+~3.3:1). So Sienna follows Mistral's own dark-on-orange treatment:
+`--color-primary-foreground` (the source of `--el-accent-text`) is a **dark warm
+ink** (`#2a1205`) in **both** themes — dark ink on the flame clears AA at ~5.3:1
+(light) / ~6.8:1 (dark). `--color-primary` (the accent used AS text/icon on a
+surface) is a darkened flame (`#bb4810` / `#ff8a4c`) chosen to pass AA on the
+page.
 
 ## How it re-skins (token mapping)
 
@@ -48,16 +52,16 @@ axis — is what makes "style × palette" a product of two independent choices, 
 
 ## Colour roles (the `--el-*` element-token layer)
 
-| Role group          | Sienna (light → dark)                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Text scale          | warm terracotta-brown ink hierarchy — ink `#23190f` → `#f3ebe2`; secondary `#6a5444` → `#bda595`             |
-| Accent (CTA)        | burnt-orange fill `#c2480c` (white labels) → vivid `#ff8a4c` (dark labels); terracotta `#bb4810` as text     |
-| Surfaces            | white canvas over terracotta-cream sections — `#f7f0ea` / `#fbf6f1` → warm-black `#181109` / `#22170e`       |
-| Borders             | warm terracotta hairlines — `#ece0d6` → `#352a1d`                                                            |
-| Links               | clear blue, distinct from the orange primary — `#1366c4` → `#7bb8ff`                                         |
-| Semantic            | danger `#c92a2a`/`#e0586a` (kept distinct from the orange brand) · success `#18804a` · warning `#b45309`     |
-| Pastel tints        | warm feature washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}`                                      |
-| Work-item type hues | re-skin automatically via the `--color-*` they map to — review/warning read warm orange; the rest stay apart |
+| Role group          | Sienna (light → dark)                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Text scale          | warm terracotta-brown ink hierarchy — ink `#23190f` → `#f3ebe2`; secondary `#6a5444` → `#bda595`                         |
+| Accent (CTA)        | Mistral flame fill `#fa520f` → `#ff7a38`, **dark ink labels** `#2a1205` both themes; flame `#bb4810` → `#ff8a4c` as text |
+| Surfaces            | white canvas over terracotta-cream sections — `#f7f0ea` / `#fbf6f1` → warm-black `#181109` / `#22170e`                   |
+| Borders             | warm terracotta hairlines — `#ece0d6` → `#352a1d`                                                                        |
+| Links               | clear blue, distinct from the orange primary — `#1366c4` → `#7bb8ff`                                                     |
+| Semantic            | danger `#c92a2a`/`#e0586a` (kept distinct from the orange brand) · success `#18804a` · warning `#b45309`                 |
+| Pastel tints        | warm feature washes — `--el-tint-{peach,rose,mint,lavender,sky,yellow}`                                                  |
+| Work-item type hues | re-skin automatically via the `--color-*` they map to — review/warning read warm orange; the rest stay apart             |
 
 ## Accessibility
 
@@ -68,8 +72,8 @@ numerically and by a rendered specimen, never eyeballed. Notable margins:
 - Primary ink on canvas — **17.3:1** (light) / **15.8:1** (dark).
 - Secondary `--el-text-secondary` on surface — **6.3:1** / **7.5:1**.
 - Captions `--el-text-muted` on surface — **6.1:1** / **6.3:1**.
-- Burnt-orange `--el-accent-on-surface` on a surface — **4.6:1** / **7.5:1**;
-  white on the orange fill (light) — **5.0:1**; dark ink on the bright fill
-  (dark) — **7.6:1**.
+- Flame `--el-accent-on-surface` on a surface — **4.6:1** / **7.5:1**; **dark
+  ink** on the Mistral-flame fill — **5.3:1** (light) / **6.8:1** (dark) (the
+  same yellow-trap treatment as Amber).
 - Link on the soft (hovered) surface — **5.3:1** / **8.8:1**.
 - `--el-text-strong` on every pastel tint — **≥11.2:1** both themes.

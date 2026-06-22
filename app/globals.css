@@ -3063,14 +3063,15 @@
 }
 
 /* ── Palette: Sienna (data-palette="sienna") — Subtask 8.8.34 (MOTIR-1252) ───
-   A warm, friendly, BURNT-ORANGE re-skin: a terracotta primary over warm
-   terracotta-cream surfaces and warm-brown ink — an inviting, workshop feel.
-   Mood anchored in getdesign.md's Zapier (warm, friendly, illustration-driven
-   orange) analysis; the actual light/dark ramps + UI-state steps are built from
-   Radix Colors (Orange / Tomato / Sand / Red / Grass / Blue). The burnt-orange
-   primary FILL is deep enough to carry WHITE labels at AA in light (unlike the
-   amber gold); in dark the fill brightens and flips to dark ink. Paired with a
-   warm Sand neutral so the scheme reads warm.
+   A warm, vivid, FLAME-ORANGE re-skin: a Mistral-orange primary over warm
+   terracotta-cream surfaces and warm-brown ink — Mediterranean and inviting.
+   Mood + signature hue anchored in getdesign.md's Mistral AI analysis: the
+   "Block gradient" yellow→amber→flame→Mistral-orange (#fa520f) over Mediterranean
+   warm neutrals; the actual light/dark ramps + UI-state steps are built from
+   Radix Colors (Orange / Tomato / Sand / Red / Grass / Blue). Like Amber's gold,
+   the bright flame FILL cannot carry white at AA, so it carries DARK ink labels
+   in BOTH themes (Mistral's own dark-on-orange treatment). Paired with a warm
+   Sand neutral so the scheme reads warm.
 
    This block re-skins by overriding the Tier-0 --color-* SOURCE the Tier-3
    --el-* layer references (exactly how the [data-theme='dark'] block works), so
@@ -3082,12 +3083,14 @@
    chip-tint pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light
    and dark. See docs/palettes/sienna.md for the colour-role reference. */
 [data-palette='sienna'] {
-  /* brand & primary — burnt-orange CTA; the FILL is deep enough for white
-     labels (AA ~5:1); --color-primary is the terracotta used AS text/icon. */
-  --color-primary: #bb4810; /* burnt orange as text/icon on a surface (AA ~5.2:1) */
-  --color-primary-foreground: #ffffff;
-  --color-primary-pressed: #9e3a08;
-  --color-primary-fill: #c2480c; /* burnt-orange fill — white-on AA ~5:1 */
+  /* brand & primary — Mistral's vivid flame-orange CTA. Like Amber's gold, the
+     bright orange FILL cannot carry white at AA, so it carries DARK ink labels
+     (Mistral's own treatment); --color-primary is a darkened flame used AS
+     text/icon on a surface (AA on white). */
+  --color-primary: #bb4810; /* darkened Mistral flame as text/icon (AA ~5.2:1 on white) */
+  --color-primary-foreground: #2a1205; /* DARK warm ink on the flame fill (AA ~5.3:1) */
+  --color-primary-pressed: #d2530a;
+  --color-primary-fill: #fa520f; /* Mistral Orange — the signature flame; dark-on AA */
 
   /* surfaces — white canvas over warm terracotta-cream sections */
   --color-background: #ffffff;
@@ -3140,9 +3143,9 @@
   --el-sidebar-item-bg-hover: #f0e7df;
 }
 
-/* Sienna — dark companion. A warm near-black canvas; the orange brightens to
+/* Sienna — dark companion. A warm near-black canvas; the flame brightens to
    read AS text on the dark surface, and the CTA fill brightens to a vivid
-   orange carrying DARK ink labels (the Supabase-style bright-fill pattern). */
+   flame carrying DARK ink labels (Mistral's dark-on-orange treatment). */
 [data-palette='sienna'][data-theme='dark'] {
   --color-background: #181109; /* warm near-black canvas */
   --color-foreground: #f3ebe2;
@@ -3162,12 +3165,12 @@
   --color-hairline-strong: #483b29;
   --color-border: #352a1d;
 
-  /* orange brightened as text on the warm-dark canvas; the fill brightens to a
-     vivid orange with DARK ink labels (AA ~7.6:1) */
+  /* flame brightened as text on the warm-dark canvas; the fill is a bright
+     flame carrying DARK ink labels (AA ~6.8:1) */
   --color-primary: #ff8a4c;
   --color-primary-foreground: #2a1205;
   --color-primary-pressed: #d2530a;
-  --color-primary-fill: #ff8a4c;
+  --color-primary-fill: #ff7a38;
 
   /* warm tints, dimmed for the warm-black canvas */
   --color-tint-peach: #332314;

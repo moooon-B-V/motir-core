@@ -116,9 +116,9 @@ export const PALETTE_REGISTRY = {
     id: 'sienna',
     name: 'Sienna',
     tagline:
-      'Warm and friendly — a burnt-orange primary over terracotta-warm neutrals; an inviting, workshop feel.',
+      'Warm and vivid — a Mistral flame-orange primary over terracotta-warm neutrals; Mediterranean and inviting.',
     inspiration:
-      'getdesign.md — Zapier (warm, friendly, illustration-driven orange), on Radix Orange/Tomato + Sand scales.',
+      'getdesign.md — Mistral AI (the Block-gradient flame, Mistral Orange #fa520f over Mediterranean warm neutrals), on Radix Orange/Tomato + Sand scales.',
     designDoc: 'docs/palettes/sienna.md',
   },
   garnet: {

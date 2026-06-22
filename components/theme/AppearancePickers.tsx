@@ -259,7 +259,7 @@ const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
   evergreen: '#0c7a52',
   spectrum: '#5a37c9',
   amber: '#f0b90b',
-  sienna: '#c2480c',
+  sienna: '#fa520f',
   garnet: '#b21e3f',
 };
 
