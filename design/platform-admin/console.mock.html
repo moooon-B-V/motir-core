@@ -4,74 +4,66 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      Design mock · PLATFORM ADMIN console — access path / nav shell / estate overview / usage·cost
-      rollup / drill-down (Epic 10 · Story 10.1 · 10.1.1)
+      Design mock · PLATFORM ADMIN console — access path / nav shell + search / estate / usage·cost
+      (tenancy ↔ model) / seats / read-only drill-down (Epic 10 · 10.1 · 10.1.1)
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the PLATFORM ADMIN (superadmin) CONSOLE — Epic 10, Story 10.1,
-      subtask 10.1.1 (card MOTIR-728). The estate overview (10.1.4), the usage/cost rollups (10.1.5)
-      and the drill-down (10.1.6) are `blocked` behind this design gate (Principle #13 / notes.html
-      #31 — without it the operator console would be improvised, forbidden). This card ALSO
-      establishes the shared `design/platform-admin/` shell language that Story 10.2 (monitoring)
-      and Story 10.3 (governance toolkit) EXTEND — their skeletons reuse the LEFT-NAV shell drawn here.
+      subtask 10.1.1 (card MOTIR-728). Gates the estate overview (10.1.4), usage/cost rollups
+      (10.1.5) and drill-down (10.1.6); establishes the shared `design/platform-admin/` shell that
+      Stories 10.2 (monitoring) + 10.3 (governance) extend.
 
       WHAT THIS IS. An INTERNAL operator console for Motir PLATFORM STAFF (moooon B.V.), NOT a
-      customer surface. It manages the WHOLE estate from one place: every organization, workspace,
-      project and user across all tenants, plus the platform-wide usage/cost rollup. It is gated to
-      platform staff and lives at /admin (a route that returns 404 for everyone else — the surface
-      does NOT exist for a non-staff user; it is not a visible "forbidden" page). Because an operator
-      scans the whole estate, it reads denser / more table-heavy than a customer screen — but it
-      composes the SAME shipped design system (no bespoke admin CSS). A persistent --el-info-tinted
-      "Platform staff" context banner keeps the operator from ever confusing this with a tenant view.
+      customer surface. It manages the WHOLE estate from one place — every org / workspace / project /
+      user across all tenants + the platform-wide usage/cost rollup. Gated to /admin (a 404 for
+      everyone else — the surface does not exist for a non-staff user; not a visible "forbidden"
+      page). Composes the SAME shipped design system (no bespoke admin CSS); a persistent
+      --el-info-tinted operator top bar keeps it visually distinct from a tenant view.
 
-      ACCESS PATH + NAVIGATION (the design-reference rule — show the DOOR + the HALLWAY, not just the
-      rooms). Panel 1 draws HOW STAFF ENTER the console (a staff-only "Platform admin" item in the
-      normal-app account menu → /admin; absent + 404 for everyone else). Panels 2–5 then render
-      INSIDE the console's own shell — a persistent LEFT-NAV rail (Overview · Usage & cost · Tenants ·
-      Monitoring[10.2] · Governance[10.3]) with the active section highlighted, the staff banner
-      across the top, and an "Exit to app" footer — so every screen shows WHERE YOU ARE and HOW TO
-      REACH the next one. The drill-down (Panel 5) is reachable three ways, all drawn: any tenant row
-      in Overview / the rollup / top-consumers, OR the Tenants section.
+      ── REVISION (Yue review #2, addresses 4 points) ──
+        1. JUMP screen 3 ↔ 4. The rollup ("By tenancy") and the per-model + top-consumers
+           ("By model & consumers") are ONE "Usage & cost" page with a shipped SEGMENTED control
+           (components/ui/Segmented) switching the two views — the jump is now explicit (Panels 4–5).
+        2. SEARCH org / workspace / project. A persistent search box in the console top bar (every
+           page), with a grouped results popover (Organizations / Workspaces / Projects / Users),
+           each a drill-in — the CommandPalette grammar (Panel 3).
+        3. READ-ONLY "view as" other tenants for debugging. 10.1 exposes READ-ONLY, AUDITED
+           cross-tenant inspection: a "View as tenant (read-only)" affordance opens a read-only
+           session (all write controls disabled, a persistent banner, audited). WRITE impersonation
+           (acting AS a user) is OUT of 10.1 — it is Story 10.3 governance, heavily gated. (Panel 6.)
+        4. SEATS / member counts. Member counts are now exposed at EVERY level: a "Members" column on
+           the rollup tree (org / workspace / project), and a "Seats & members" card in the
+           drill-down (org seats used / tier limit + a per-workspace member·project breakdown).
 
-      READ-MOSTLY (10.1). Story 10.1 is overview + usage/cost rollup + drill-down — READ surfaces.
-      The governance ACTIONS (suspend a tenant, adjust credits, impersonate, etc.) are Story 10.3's
-      toolkit; this design draws no destructive control, only the read views + the audited drill-in.
+      READ-MOSTLY (10.1). Overview + usage/cost rollup + drill-down — READ surfaces + the read-only
+      inspect. The governance ACTIONS (suspend, adjust credits, write-impersonate, …) are Story 10.3.
 
-      SHIPPED-REALITY NOTE (recon 2026-06-21). No platform-staff role, no /admin route, and no
-      cross-tenant operator capability exist yet (the only role enums are OrganizationRole and
-      MemberRole, both tenant-scoped). This console therefore introduces a NET-NEW platform-staff
-      persona orthogonal to those — a planning dependency the 10.1.x code subtasks (and an Epic-10
-      prerequisite) must own; see design-notes.md "Net-new capability". The usage figures aggregate
-      the SAME OrgUsageDTO shape the 7.2 org dashboard reads over the 7.1 motir-ai boundary, summed
-      UP one level to the estate (a PlatformUsageDTO 10.1.5 builds); numbers here are illustrative.
+      SHIPPED-REALITY NOTE (recon 2026-06-21). No platform-staff role, no /admin route, no
+      cross-tenant operator capability exist yet (only OrganizationRole + MemberRole, tenant-scoped).
+      This console introduces a NET-NEW platform-staff persona — a planning dependency the 10.1.x
+      code subtasks (and an Epic-10 prerequisite) must own; see design-notes.md. Usage figures
+      aggregate the SAME OrgUsageDTO the 7.2 org dashboard reads over the 7.1 motir-ai boundary,
+      summed UP to the estate (a PlatformUsageDTO 10.1.5 builds); member counts come from
+      Organization/Workspace/ProjectMembership. Numbers are illustrative.
 
-      MIRROR (cited — SaaS operator consoles). The verified shape is the internal superadmin panel
-      managing ALL tenants from one place: Supastarter's super-admin panel (manage all tenants /
-      subscriptions / teams), MSP-style multi-tenant dashboards (view usage + drill into any client
-      from one console), and the Stripe / Vercel-dashboard idiom (a left-nav estate console of counts
-      + activity that drills into a single account's usage / members / status). We draw THAT:
-      enter -> overview -> usage-rollup -> drill-down, all under one left-nav shell.
+      MIRROR (cited — SaaS operator consoles): Supastarter's super-admin panel, MSP multi-tenant
+      dashboards, the Stripe/Vercel estate idiom (left-nav console of counts + activity that searches
+      + drills into a single account's usage / members / status).
 
-      Built FROM the real design system: the token block below is copied 1:1 from app/globals.css
-      (Tier-0 --color-* + Tier-3 --el-* + the [data-display-style] shape tokens), and the markup
-      composes ONLY shipped primitives — Card, Pill, Button, the at-scale list/table pattern with a
-      foot pager (NOT load-all, finding #57), the Sidebar/nav-row grammar (the left rail), the
-      Popover menu grammar (the access-path account menu), the scope breadcrumb, EmptyState /
-      ErrorState family, Skeleton. No new primitive is introduced.
+      Built FROM the real design system: the token block is copied 1:1 from app/globals.css; markup
+      composes ONLY shipped primitives — Card, Pill, Button, Segmented (the view switcher), the
+      Sidebar/nav rail, the Popover menu + CommandPalette search grammar, the at-scale table + pager,
+      the scope breadcrumb, EmptyState / ErrorState, Skeleton. No new primitive is introduced.
 
-      Covers (multi-panel — review EACH; mistake #31):
-        (1) ACCESS PATH — how staff ENTER /admin (the staff-only account-menu item; 404 for others).
-        (2) ESTATE OVERVIEW (populated, in the shell) — staff banner + estate counts (per-entity
-            tint) + a PAGINATED recent-activity feed. Left-nav "Overview" active.
-        (3) USAGE / COST ROLLUP (in the shell) — platform total hero + an expandable
-            project -> workspace -> org -> platform tree. Left-nav "Usage & cost" active.
-        (4) PER-MODEL + TOP CONSUMERS (in the shell) — per-model table + a drill-in leaderboard.
-        (5) DRILL-DOWN detail (in the shell, Tenants active) — one tenant's usage / jobs / members /
-            status behind an audited-read affordance; the three ways to reach it are drawn.
-        (6) GATING / EMPTY / LOADING / ERROR — access-denied as a 404 (surface absent), first-run
-            empty, the loading skeleton, and the motir-ai-down error (Retry, not a misleading zero).
-      Toggle dark mode to confirm token parity. See design-notes.md for the per-surface primitive +
-      copy + --el-* role spec.
+      Panels (review EACH; mistake #31):
+        1 ACCESS PATH — the staff-only "Platform admin" account-menu entry → /admin (404 for others).
+        2 OVERVIEW — estate counts + paginated activity, in the left-nav shell (search bar in the top
+          bar). 3 GLOBAL SEARCH — the search popover open, results grouped by entity, each a drill-in.
+        4 USAGE & COST · By tenancy — the rollup tree + a MEMBERS column; the segmented switcher.
+        5 USAGE & COST · By model & consumers — per-model + top consumers; segmented switcher (the
+          3↔4 jump). 6 DRILL-DOWN — one tenant's usage / SEATS & members / jobs / status, the audited
+          read-only "View as tenant" affordance. 7 GATING / EMPTY / LOADING / ERROR.
+      Toggle dark mode to confirm token parity. See design-notes.md for the per-surface spec.
     -->
     <style>
       /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
@@ -226,7 +218,7 @@
         padding: 32px 24px 96px;
       }
       .review-head {
-        max-width: 1200px;
+        max-width: 1220px;
         margin: 0 auto 24px;
         display: flex;
         align-items: center;
@@ -242,7 +234,7 @@
         margin: 4px 0 0;
         color: var(--el-text-secondary);
         font-size: 13px;
-        max-width: 880px;
+        max-width: 900px;
         line-height: 1.5;
       }
       .toggle {
@@ -258,7 +250,7 @@
         flex: none;
       }
       .panel {
-        max-width: 1200px;
+        max-width: 1220px;
         margin: 0 auto;
       }
       .panel-label {
@@ -270,7 +262,7 @@
         color: var(--el-text-faint);
         margin: 44px auto 10px;
         padding-left: 2px;
-        max-width: 1200px;
+        max-width: 1220px;
       }
       .stage {
         position: relative;
@@ -284,7 +276,7 @@
         grid-template-columns: 1fr 1fr;
         gap: 24px;
       }
-      @media (max-width: 900px) {
+      @media (max-width: 920px) {
         .grid-2 {
           grid-template-columns: 1fr;
         }
@@ -425,6 +417,177 @@
         min-width: 0;
       }
 
+      /* ── Console TOP BAR — operator marker + GLOBAL SEARCH + operator menu ── */
+      /* The persistent operator header on every console screen. --el-tint-sky
+         keeps the "this is staff, not a tenant" cue (hue in the bar, finding #35);
+         the search box is the entry to find any org / workspace / project / user. */
+      .adminbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 9px 16px;
+        background: var(--el-tint-sky);
+        border-bottom: 1px solid var(--el-border-soft);
+        box-shadow: inset 3px 0 0 var(--el-info);
+        position: relative;
+        z-index: 5;
+      }
+      .staff-mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      .staff-mark .sm-ico {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        color: var(--el-info);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .staff-mark .sm-ico svg {
+        width: 15px;
+        height: 15px;
+      }
+      .staff-mark .sm-t {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        line-height: 1.2;
+      }
+      .staff-mark .sm-s {
+        font-size: 10.5px;
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .searchbar {
+        flex: 1;
+        max-width: 480px;
+        height: var(--height-btn-md);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        color: var(--el-text-muted);
+        font-size: 13px;
+        cursor: text;
+      }
+      .searchbar.focused {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 18%, transparent);
+        color: var(--el-text);
+      }
+      .searchbar svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .searchbar .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 1px 6px;
+        background: var(--el-surface);
+      }
+      .adminbar .op {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        cursor: pointer;
+      }
+      .adminbar .op .op-ava {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .adminbar .op svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-secondary);
+      }
+
+      /* the SEARCH RESULTS popover (CommandPalette grammar) */
+      .search-pop {
+        position: absolute;
+        top: 52px;
+        left: 224px;
+        width: 480px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+        z-index: 8;
+      }
+      .sr-group {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        padding: 10px 10px 4px;
+      }
+      .sr-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .sr-item.active {
+        background: var(--el-surface);
+      }
+      .sr-item .sr-path {
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .sr-item .sr-meta {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .sr-item .drill-chev svg {
+        width: 15px;
+        height: 15px;
+      }
+      .sr-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px 4px;
+        margin-top: 4px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+
       /* ── Page shell — mirrors app/(authed)/settings/* (org-admin grammar) ──── */
       .page {
         padding: 22px 26px 30px;
@@ -487,42 +650,51 @@
         color: var(--el-info);
       }
 
-      /* ── Platform-staff context banner — the OPERATOR-view marker (--el-info) ─ */
-      .staff-banner {
+      /* ── Segmented control (components/ui/Segmented) — the view switcher ──── */
+      .seg-row {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 12px;
-        padding: 11px 18px;
-        background: var(--el-tint-sky);
-        border-bottom: 1px solid var(--el-border-soft);
-        box-shadow: inset 3px 0 0 var(--el-info);
+        flex-wrap: wrap;
+        margin-top: 16px;
       }
-      .staff-banner .sb-ico {
-        flex: none;
-        width: 28px;
-        height: 28px;
-        border-radius: var(--radius-control);
+      .segmented {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
+        gap: 2px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: calc(var(--radius-btn) - 2px);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 0;
+        background: transparent;
+      }
+      .seg-opt svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-faint);
+      }
+      .seg-opt.active {
         background: var(--el-page-bg);
-        color: var(--el-info);
-      }
-      .staff-banner .sb-ico svg {
-        width: 16px;
-        height: 16px;
-      }
-      .staff-banner .sb-t {
-        font-size: 12.5px;
         color: var(--el-text-strong);
-        line-height: 1.4;
+        box-shadow: var(--shadow-subtle);
+        font-weight: 600;
       }
-      .staff-banner .sb-t strong {
-        font-weight: 700;
-      }
-      .staff-banner .sb-chip {
-        margin-left: auto;
-        flex: none;
+      .seg-opt.active svg {
+        color: var(--el-accent-on-surface);
       }
 
       /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
@@ -616,7 +788,7 @@
         grid-template-columns: repeat(4, 1fr);
         gap: 14px;
       }
-      @media (max-width: 900px) {
+      @media (max-width: 920px) {
         .stat-grid {
           grid-template-columns: 1fr 1fr;
         }
@@ -728,6 +900,19 @@
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
       }
+      .seatcell {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text-secondary);
+      }
+      .seatcell svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-text-faint);
+        flex: none;
+      }
       .tenant {
         display: inline-flex;
         align-items: center;
@@ -755,6 +940,10 @@
       }
       .ava.ent-proj {
         background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .ava.ent-user {
+        background: var(--el-tint-rose);
         color: var(--el-text-strong);
       }
       .tenant .nm {
@@ -861,12 +1050,16 @@
         background: var(--el-tint-mint);
         color: var(--el-text-strong);
       }
+      .pill-readonly {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
 
       /* share-of-spend usage bar — per-entity / per-model tint */
       .usebar {
         height: 8px;
         width: 100%;
-        min-width: 96px;
+        min-width: 84px;
         border-radius: var(--radius-badge);
         background: var(--el-surface);
         overflow: hidden;
@@ -951,7 +1144,7 @@
         height: 16px;
       }
 
-      /* ── Audited cross-tenant read affordance (the drill-down banner) ─────── */
+      /* ── Audited cross-tenant read affordance + read-only session banner ──── */
       .audit-banner {
         display: flex;
         align-items: center;
@@ -971,6 +1164,29 @@
       }
       .audit-banner strong {
         font-weight: 700;
+      }
+      /* the read-only impersonation/inspect SESSION banner (point #3) */
+      .ro-session {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-size: 12.5px;
+        line-height: 1.4;
+        border: 1px dashed var(--el-border-strong);
+      }
+      .ro-session svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-warning);
+      }
+      .ro-session .ro-exit {
+        margin-left: auto;
+        flex: none;
       }
 
       /* ── Scope breadcrumb (Combobox/breadcrumb grammar) ──────────────────── */
@@ -1059,6 +1275,20 @@
         font-size: 11.5px;
         color: var(--el-text-muted);
         margin-top: 2px;
+      }
+      /* seats meter (org seats used / tier limit) */
+      .seatmeter {
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        overflow: hidden;
+        margin-top: 10px;
+      }
+      .seatmeter > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
       }
       .member {
         display: inline-flex;
@@ -1470,7 +1700,7 @@
         grid-template-columns: 1fr 1fr;
         gap: 20px;
       }
-      @media (max-width: 900px) {
+      @media (max-width: 920px) {
         .states-grid {
           grid-template-columns: 1fr;
         }
@@ -1480,17 +1710,19 @@
   <body>
     <div class="review-head">
       <div>
-        <h1>Platform admin console — access path · nav shell · estate · usage/cost · drill-down</h1>
+        <h1>
+          Platform admin console — access · search · navigation · usage/cost · seats · drill-down
+        </h1>
         <p>
           Epic 10 · Story 10.1 · Subtask 10.1.1 design asset — built from app/globals.css tokens. An
           <strong>internal operator console for Motir platform staff</strong> (moooon B.V.), gated
-          to /admin and a <strong>404 for everyone else</strong>. Panel 1 draws how staff
-          <strong>enter</strong> it; Panels 2–5 render inside the console’s
-          <strong>persistent left-nav shell</strong> so every screen shows where you are and how to
-          reach the next. Read-mostly (governance actions are Story 10.3). Mirror = SaaS superadmin
-          panels (Supastarter / MSP dashboards / the Stripe-estate idiom). Source of truth = this
-          HTML; see design-notes.md. Gates 10.1.4 / 10.1.5 / 10.1.6 and seeds the shared shell for
-          Stories 10.2 + 10.3.
+          to /admin and a <strong>404 for everyone else</strong>. Revision #2 adds: a
+          <strong>global search</strong> (org / workspace / project / user) in the console top bar,
+          a <strong>segmented switcher</strong> that ties the two “Usage &amp; cost” views together,
+          <strong>member/seat counts</strong> at every level, and a
+          <strong>read-only “View as tenant”</strong> inspect affordance for debugging (write
+          impersonation stays in Story 10.3). Read-mostly. Source of truth = this HTML; see
+          design-notes.md. Gates 10.1.4 / 10.1.5 / 10.1.6.
         </p>
       </div>
       <button
@@ -1508,12 +1740,10 @@
     <div class="panel-label">
       1 · Access path — how a platform-staff user ENTERS the console. The normal-app account menu
       carries a staff-only “Platform admin” item → /admin. For a non-staff user the item is absent
-      AND /admin 404s (the surface does not exist for them; see Panel 6a). Show the door, not just
-      the room.
+      AND /admin 404s (Panel 7a). Show the door, not just the room.
     </div>
     <div class="panel">
       <div class="stage">
-        <!-- the normal Motir app TopNav (a customer tenant view) — the staff user clicks their avatar -->
         <div class="topnav">
           <div class="left">
             <button class="trigger" aria-label="Organization menu">
@@ -1531,7 +1761,6 @@
         </div>
         <div class="access-wrap">
           <div class="menu-col">
-            <!-- the ACCOUNT menu OPEN — "Platform admin" is the staff-only entry to /admin -->
             <div class="menu">
               <div class="menu-head">Account</div>
               <div class="menu-id">ops@moooon.net</div>
@@ -1544,7 +1773,6 @@
                 <span class="ot"><span class="nm">Your organizations</span></span>
               </div>
               <div class="menu-sep"></div>
-              <!-- THE ENTRY POINT — visible ONLY to platform staff -->
               <div class="opt active">
                 <svg viewBox="0 0 24 24" class="li"><use href="#i-shield" /></svg>
                 <span class="ot"
@@ -1565,12 +1793,12 @@
               <strong>The account menu, open.</strong> A platform-staff account (e.g.
               <strong>ops@moooon.net</strong>) sees an extra <strong>“Platform admin”</strong> item
               — the single door into the operator console at <strong>/admin</strong>. Selecting it
-              opens the shell in Panels 2–5.
+              opens the shell in Panels 2–6.
             </p>
             <p>
               For a <strong>normal user the item is simply absent</strong>, and typing
               <strong>/admin</strong> directly returns the standard app <strong>404</strong> (Panel
-              6a) — the route’s very existence isn’t revealed. The staff gate is a net-new
+              7a) — the route’s very existence isn’t revealed. The staff gate is a net-new
               capability; see design-notes.
             </p>
             <p class="entry-call">
@@ -1578,7 +1806,7 @@
               <span
                 >Selecting “Platform admin” lands on the console
                 <strong>Overview</strong> (breadcrumb <em>Platform · Overview</em>), with the
-                left-nav shell below.</span
+                left-nav shell + search top bar below.</span
               >
             </p>
           </div>
@@ -1588,15 +1816,13 @@
 
     <!-- ════════════════ PANEL 2 — ESTATE OVERVIEW (in the shell) ════════════════ -->
     <div class="panel-label">
-      2 · Estate overview (populated) — the console’s landing page, INSIDE the left-nav shell
-      (“Overview” active). The persistent rail is how you move between screens; the staff banner
-      tops every page. Estate counts (per-entity tint) + a PAGINATED activity feed. Each tenant row
-      drills to Panel 5.
+      2 · Estate overview (populated) — INSIDE the left-nav shell (“Overview” active). The top bar
+      carries the operator marker + the GLOBAL SEARCH (Panel 3 shows it open). Estate counts
+      (per-entity tint) + a PAGINATED activity feed. Each tenant row drills to Panel 6.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="shell">
-          <!-- ░░ the persistent LEFT NAV — the same on every console screen ░░ -->
           <aside class="admin-nav">
             <div class="brand">
               <span class="logo">M</span>
@@ -1642,15 +1868,25 @@
           </aside>
 
           <div class="shell-main">
-            <div class="staff-banner">
-              <span class="sb-ico"
-                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-              ></span>
-              <span class="sb-t">
-                <strong>Platform staff · operator console.</strong> You are viewing the entire Motir
-                estate across all tenants. Every cross-tenant read is recorded in the audit log.
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
               </span>
-              <span class="sb-chip pill pill-neutral">moooon B.V. internal</span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
             </div>
             <div class="page">
               <span class="crumb"><b>Platform</b> · Overview</span>
@@ -1698,7 +1934,7 @@
                       ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
                     ></span>
                     <div class="big">5,142</div>
-                    <div class="lbl">Users</div>
+                    <div class="lbl">Users (seats)</div>
                     <div class="delta">
                       <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+286 this month
                     </div>
@@ -1848,10 +2084,10 @@
                 <div class="reach-note">
                   <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
                   <span
-                    >Navigation: the <strong>left rail</strong> switches sections (Overview · Usage
-                    &amp; cost · Tenants); <strong>clicking any tenant row</strong> here opens that
-                    tenant’s drill-down (Panel 5). “Exit to app” returns to the normal Motir
-                    app.</span
+                    >Navigation: the <strong>left rail</strong> switches sections; the
+                    <strong>search box</strong> (top bar) finds any org / workspace / project / user
+                    (Panel 3); <strong>clicking any tenant row</strong> opens its drill-down (Panel
+                    6). “Exit to app” returns to the normal Motir app.</span
                   >
                 </div>
               </div>
@@ -1861,11 +2097,179 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 3 — USAGE / COST ROLLUP (in the shell) ════════════════ -->
+    <!-- ════════════════ PANEL 3 — GLOBAL SEARCH (org / workspace / project / user) ════════════════ -->
     <div class="panel-label">
-      3 · Usage &amp; cost rollup — left-nav “Usage &amp; cost” active. The platform total as the
-      hero, with an expandable project → workspace → org → platform tree; per-level credits + tokens
-      so the big consumer is obvious. Pre-aggregated + paginated (never a full scan · finding #57).
+      3 · Global search — the top-bar search, OPEN. Typing matches across the estate; results group
+      by entity (Organizations / Workspaces / Projects / Users), each row a drill-in to Panel 6. The
+      CommandPalette grammar (⌘K). This is how an operator finds a specific tenant fast.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring<span class="soon"
+                >10.2</span
+              >
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar focused">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+                ><span style="color: var(--el-text)">acme</span><span class="kbd">esc</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+
+            <!-- the search RESULTS popover, anchored under the search box -->
+            <div class="search-pop">
+              <div class="sr-group">Organizations</div>
+              <div class="sr-item active">
+                <span class="tenant"
+                  ><span class="ava ent-org">A</span><span class="nm">Acme Corp</span></span
+                >
+                <span class="sr-meta"
+                  ><span class="seatcell"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>48</span
+                  >
+                  <span class="drill-chev"
+                    ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                ></span>
+              </div>
+              <div class="sr-item">
+                <span class="tenant"
+                  ><span class="ava ent-org">A</span
+                  ><span class="nm">Acme Holdings (EU)</span></span
+                >
+                <span class="sr-meta"
+                  ><span class="seatcell"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>12</span
+                  >
+                  <span class="drill-chev"
+                    ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                ></span>
+              </div>
+              <div class="sr-group">Workspaces</div>
+              <div class="sr-item">
+                <span class="tenant"
+                  ><span class="ava ent-ws">E</span
+                  ><span class="nm"
+                    >Engineering <span class="sr-path">· Acme Corp</span></span
+                  ></span
+                >
+                <span class="sr-meta"
+                  ><span class="seatcell"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>22</span
+                  >
+                  <span class="drill-chev"
+                    ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                ></span>
+              </div>
+              <div class="sr-group">Projects</div>
+              <div class="sr-item">
+                <span class="tenant"
+                  ><span class="ava ent-proj">M</span
+                  ><span class="nm"
+                    >Mobile App <span class="sr-path">· Acme Corp › Engineering</span></span
+                  ></span
+                >
+                <span class="sr-meta"
+                  ><span class="seatcell"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>9</span
+                  >
+                  <span class="drill-chev"
+                    ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                ></span>
+              </div>
+              <div class="sr-group">Users</div>
+              <div class="sr-item">
+                <span class="tenant"
+                  ><span class="ava ent-user">J</span
+                  ><span class="nm"
+                    >jane@acme.com <span class="sr-path">· owner · Acme Corp</span></span
+                  ></span
+                >
+                <span class="sr-meta"
+                  ><span class="drill-chev"
+                    ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
+                ></span>
+              </div>
+              <div class="sr-hint">
+                <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--el-info)">
+                  <use href="#i-info" /></svg
+                >Enter opens the selected tenant’s drill-down · ↑ ↓ to move · esc to close
+              </div>
+            </div>
+
+            <div class="page" style="opacity: 0.5">
+              <span class="crumb"><b>Platform</b> · Overview</span>
+              <h2>Platform overview</h2>
+              <p class="sub">
+                (The overview sits behind the open search. Search is reachable on every console
+                screen from the top bar — ⌘K from anywhere.)
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — USAGE & COST · BY TENANCY (segmented) ════════════════ -->
+    <div class="panel-label">
+      4 · Usage &amp; cost · <strong>By tenancy</strong> — left-nav “Usage &amp; cost” active. The
+      SEGMENTED control (By tenancy / By model &amp; consumers) is how you switch to Panel 5 — one
+      page, two views. The rollup tree now also shows a MEMBERS column per level (point #4).
     </div>
     <div class="panel">
       <div class="stage">
@@ -1915,22 +2319,55 @@
           </aside>
 
           <div class="shell-main">
-            <div class="staff-banner">
-              <span class="sb-ico"
-                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
               ></span>
-              <span class="sb-t"><strong>Platform staff.</strong> Estate-wide usage rollup.</span>
             </div>
             <div class="page">
               <span class="crumb"><b>Platform</b> · Usage &amp; cost</span>
-              <h2>Usage &amp; cost rollup</h2>
-              <p class="sub">
-                Credits spent across the whole estate this month, rolled up the tenancy hierarchy.
-                Credits are an internal usage unit (never a currency); the $-equivalent is operator
-                context only.
-              </p>
+              <div class="row-between">
+                <div>
+                  <h2>Usage &amp; cost</h2>
+                  <p class="sub">
+                    Where the estate’s credits go this month. Credits are an internal usage unit
+                    (never a currency); the $-equivalent is operator context only.
+                  </p>
+                </div>
+              </div>
 
-              <div class="stack">
+              <!-- the SEGMENTED switcher — the explicit jump between the two views -->
+              <div class="seg-row">
+                <div class="segmented" role="group" aria-label="Usage view">
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-layers" /></svg>By tenancy
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>By model &amp; consumers
+                  </button>
+                </div>
+                <span class="hero-fig" style="text-align: right"
+                  ><span class="big" style="font-size: 22px">74,180</span
+                  ><span class="unit"> credits · platform total this month</span></span
+                >
+              </div>
+
+              <div class="stack" style="margin-top: 16px">
                 <div class="card">
                   <div class="card-head">
                     <div class="ttl">
@@ -1940,14 +2377,11 @@
                       <div>
                         <h3>Spend by tenancy</h3>
                         <p class="hsub">
-                          Expand an org to see its workspaces and projects. Sorted by spend.
+                          Expand an org to its workspaces and projects. Members shown per level.
                         </p>
                       </div>
                     </div>
-                    <div class="hero-fig">
-                      <div class="big">74,180<span class="unit"> credits</span></div>
-                      <div class="cap">Platform total · this month · ≈ $5,560 equiv</div>
-                    </div>
+                    <span class="pill pill-neutral">≈ $5,560 equiv</span>
                   </div>
                   <div class="card-body flush">
                     <table class="tbl tree">
@@ -1955,8 +2389,9 @@
                         <tr>
                           <th class="name">Tenant</th>
                           <th>Level</th>
+                          <th class="num">Members</th>
                           <th class="num">Tokens</th>
-                          <th>Share of estate</th>
+                          <th>Share</th>
                           <th class="num">Credits</th>
                         </tr>
                       </thead>
@@ -1975,6 +2410,11 @@
                           <td>
                             <span class="pill pill-org"
                               ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="seatcell" style="justify-content: flex-end"
+                              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>48</span
                             >
                           </td>
                           <td class="num"><span class="muted">1.21M</span></td>
@@ -1999,6 +2439,11 @@
                               ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Workspace</span
                             >
                           </td>
+                          <td class="num">
+                            <span class="seatcell" style="justify-content: flex-end"
+                              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>22</span
+                            >
+                          </td>
                           <td class="num"><span class="muted">842k</span></td>
                           <td>
                             <span class="usebar"><span class="ws" style="width: 17%"></span></span>
@@ -2018,6 +2463,11 @@
                           <td>
                             <span class="pill pill-proj"
                               ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="seatcell" style="justify-content: flex-end"
+                              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>9</span
                             >
                           </td>
                           <td class="num"><span class="muted">498k</span></td>
@@ -2043,33 +2493,16 @@
                               ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg>Project</span
                             >
                           </td>
+                          <td class="num">
+                            <span class="seatcell" style="justify-content: flex-end"
+                              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>7</span
+                            >
+                          </td>
                           <td class="num"><span class="muted">344k</span></td>
                           <td>
                             <span class="usebar"><span class="proj" style="width: 7%"></span></span>
                           </td>
                           <td class="num credits">5,030</td>
-                        </tr>
-                        <tr class="drillable">
-                          <td class="name">
-                            <span class="indent lvl-1"
-                              ><span class="exp"
-                                ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></span
-                              ><span class="tenant"
-                                ><span class="ava ent-ws">M</span
-                                ><span class="nm">Marketing</span></span
-                              ></span
-                            >
-                          </td>
-                          <td>
-                            <span class="pill pill-ws"
-                              ><svg viewBox="0 0 24 24"><use href="#i-grid" /></svg>Workspace</span
-                            >
-                          </td>
-                          <td class="num"><span class="muted">365k</span></td>
-                          <td>
-                            <span class="usebar"><span class="ws" style="width: 7%"></span></span>
-                          </td>
-                          <td class="num credits">5,330</td>
                         </tr>
                         <tr class="r-org drillable">
                           <td class="name">
@@ -2085,6 +2518,11 @@
                           <td>
                             <span class="pill pill-org"
                               ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
+                            >
+                          </td>
+                          <td class="num">
+                            <span class="seatcell" style="justify-content: flex-end"
+                              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>36</span
                             >
                           </td>
                           <td class="num"><span class="muted">982k</span></td>
@@ -2109,6 +2547,11 @@
                               ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Org</span
                             >
                           </td>
+                          <td class="num">
+                            <span class="seatcell" style="justify-content: flex-end"
+                              ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>29</span
+                            >
+                          </td>
                           <td class="num"><span class="muted">713k</span></td>
                           <td>
                             <span class="usebar"><span class="org" style="width: 14%"></span></span>
@@ -2121,7 +2564,7 @@
                   <div class="card-foot">
                     <span class="fnote"
                       ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Top 3 of 214 orgs ·
-                      figures are pre-aggregated, never a live scan of raw usage rows</span
+                      pre-aggregated, never a live scan of raw usage rows</span
                     >
                     <div class="pager">
                       <span class="pbtn is-disabled"
@@ -2141,11 +2584,11 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 4 — PER-MODEL + TOP CONSUMERS (in the shell) ════════════════ -->
+    <!-- ════════════════ PANEL 5 — USAGE & COST · BY MODEL & CONSUMERS (segmented) ════════════════ -->
     <div class="panel-label">
-      4 · Per-model breakdown + top consumers — still under “Usage &amp; cost”. A per-model usage
-      table (planning Claude models + the 9.0 gateway models: tokens / credits / $-equiv, per-model
-      tint) and a top-consumers leaderboard (each row drills to Panel 5).
+      5 · Usage &amp; cost · <strong>By model &amp; consumers</strong> — the SAME page, the OTHER
+      segment selected (this is the jump from Panel 4). Per-model breakdown (Claude + 9.0-gateway
+      models) + a top-consumers leaderboard; each consumer row drills to Panel 6.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2195,16 +2638,43 @@
           </aside>
 
           <div class="shell-main">
-            <div class="staff-banner">
-              <span class="sb-ico"
-                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
               ></span>
-              <span class="sb-t"
-                ><strong>Platform staff.</strong> Where the estate’s credits go.</span
-              >
             </div>
             <div class="page">
               <span class="crumb"><b>Platform</b> · Usage &amp; cost · By model</span>
+              <div class="seg-row">
+                <div class="segmented" role="group" aria-label="Usage view">
+                  <button class="seg-opt" aria-pressed="false">
+                    <svg viewBox="0 0 24 24"><use href="#i-layers" /></svg>By tenancy
+                  </button>
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>By model &amp; consumers
+                  </button>
+                </div>
+                <span class="hero-fig" style="text-align: right"
+                  ><span class="big" style="font-size: 22px">74,180</span
+                  ><span class="unit"> credits · platform total this month</span></span
+                >
+              </div>
+
               <div class="grid-2" style="margin-top: 16px">
                 <div class="card">
                   <div class="card-head">
@@ -2212,7 +2682,7 @@
                       <div>
                         <h3>By model</h3>
                         <p class="hsub">
-                          Estate-wide tokens + credits this month, per model. Planning + coding.
+                          Estate-wide tokens + credits, per model. Planning + coding.
                         </p>
                       </div>
                     </div>
@@ -2310,7 +2780,7 @@
                       <div>
                         <h3>Top consumers</h3>
                         <p class="hsub">
-                          The orgs &amp; workspaces draining the most this month. Click to drill in.
+                          The orgs &amp; workspaces draining the most. Click to drill in.
                         </p>
                       </div>
                     </div>
@@ -2445,12 +2915,12 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 5 — DRILL-DOWN DETAIL (in the shell, Tenants) ════════════════ -->
+    <!-- ════════════════ PANEL 6 — DRILL-DOWN DETAIL + SEATS + READ-ONLY VIEW ════════════════ -->
     <div class="panel-label">
-      5 · Drill-down detail — left-nav “Tenants” active. Reached three ways (all drawn elsewhere): a
-      tenant row in Overview, the rollup tree, or the top-consumers list, OR the Tenants section.
-      One tenant’s usage over time, recent jobs (planning + coding), members and status, behind a
-      CLEAR “viewing another tenant (audited)” affordance. The jobs list paginates.
+      6 · Drill-down detail — left-nav “Tenants” active. Reached via a tenant row (Overview / rollup
+      / top-consumers / search) or the Tenants section. Adds a SEATS &amp; MEMBERS card (point #4)
+      and a read-only “View as tenant” inspect affordance + a read-only-session banner (point #3).
+      The audit banner makes the cross-tenant read explicit. Jobs list paginates.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2500,11 +2970,25 @@
           </aside>
 
           <div class="shell-main">
-            <div class="staff-banner">
-              <span class="sb-ico"
-                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
               ></span>
-              <span class="sb-t"><strong>Platform staff.</strong> Single-tenant drill-down.</span>
             </div>
             <div class="page">
               <div class="scope" style="margin-bottom: 12px">
@@ -2521,9 +3005,9 @@
               <div class="audit-banner">
                 <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
                 <span
-                  >You are viewing <strong>Acme Corp</strong>’s data as platform staff. This
-                  cross-tenant read is recorded in the audit log (operator
-                  <strong>OP · ops@moooon.net</strong>, just now).</span
+                  >You are viewing <strong>Acme Corp</strong>’s data as platform staff —
+                  <strong>read-only</strong>. This cross-tenant read is recorded in the audit log
+                  (operator <strong>OP · ops@moooon.net</strong>, just now).</span
                 >
               </div>
 
@@ -2541,23 +3025,114 @@
                     </div>
                   </div>
                 </div>
-                <div class="hero-fig">
-                  <div class="big">8,420<span class="unit"> credits</span></div>
-                  <div class="cap">Balance · 42% of monthly allotment left</div>
-                </div>
+                <!-- the READ-ONLY inspect affordance (point #3). Write impersonation = 10.3. -->
+                <span class="btn btn-secondary"
+                  ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>View as tenant
+                  (read-only)</span
+                >
+              </div>
+
+              <!-- what a read-only inspect SESSION looks like (the banner that rides on the tenant's own app) -->
+              <div class="ro-session" style="margin-top: 14px">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  ><strong>Read-only session.</strong> “View as tenant” opens Acme Corp’s own app
+                  with this banner pinned and <strong>every write control disabled</strong> — staff
+                  can SEE what the tenant sees to debug, but cannot change anything. The session is
+                  audited. (Acting <em>as a user</em> with write is Story 10.3 governance,
+                  separately gated.)</span
+                >
+                <span class="btn btn-sm btn-secondary ro-exit">Exit read-only</span>
               </div>
 
               <div class="stack">
                 <div class="grid-2">
+                  <!-- SEATS & MEMBERS (point #4) — org seats used / tier limit + per-workspace breakdown -->
+                  <div class="card">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico ent-user" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                        ></span>
+                        <div>
+                          <h3>Seats &amp; members</h3>
+                          <p class="hsub">Members per level. Seat limit from the tier (Epic 8).</p>
+                        </div>
+                      </div>
+                      <span class="pill pill-tier">48 / 50 seats</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="seatmeter" title="48 of 50 seats used">
+                        <span style="width: 96%"></span>
+                      </div>
+                      <p class="hsub" style="margin: 8px 0 14px">
+                        48 of 50 Pro-tier seats used across 6 workspaces &amp; 19 projects.
+                      </p>
+                      <table class="tbl">
+                        <thead>
+                          <tr>
+                            <th>Workspace</th>
+                            <th class="num">Members</th>
+                            <th class="num">Projects</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-ws">E</span
+                                ><span class="nm">Engineering</span></span
+                              >
+                            </td>
+                            <td class="num">22</td>
+                            <td class="num"><span class="muted">4</span></td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-ws">M</span
+                                ><span class="nm">Marketing</span></span
+                              >
+                            </td>
+                            <td class="num">11</td>
+                            <td class="num"><span class="muted">3</span></td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <span class="tenant"
+                                ><span class="ava ent-ws">P</span
+                                ><span class="nm">Product</span></span
+                              >
+                            </td>
+                            <td class="num">9</td>
+                            <td class="num"><span class="muted">5</span></td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <span class="muted" style="font-size: 12px">+3 more workspaces</span>
+                            </td>
+                            <td class="num"><span class="muted">6</span></td>
+                            <td class="num"><span class="muted">7</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <!-- tenant shape + usage over time -->
                   <div class="card">
                     <div class="card-head">
                       <div class="ttl">
                         <div>
-                          <h3>Usage over time</h3>
-                          <p class="hsub">Credits debited per month — this tenant.</p>
+                          <h3>Usage &amp; shape</h3>
+                          <p class="hsub">This tenant — read-only.</p>
                         </div>
                       </div>
-                      <span class="pill pill-neutral">6 months</span>
+                      <div class="hero-fig">
+                        <div class="big" style="font-size: 22px">
+                          8,420<span class="unit"> cr</span>
+                        </div>
+                        <div class="cap">Balance · 42% of allotment</div>
+                      </div>
                     </div>
                     <div class="card-body">
                       <div class="trend">
@@ -2580,20 +3155,7 @@
                           <span class="bar" style="height: 88%"></span><span class="mo">Jun</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                  <div class="card">
-                    <div class="card-head">
-                      <div class="ttl">
-                        <div>
-                          <h3>Tenant</h3>
-                          <p class="hsub">Shape &amp; access — read-only.</p>
-                        </div>
-                      </div>
-                      <span class="pill pill-neutral">Org</span>
-                    </div>
-                    <div class="card-body">
-                      <div class="mini-stats">
+                      <div class="mini-stats" style="margin-top: 14px">
                         <div class="mini-stat">
                           <div class="mv">6</div>
                           <div class="ml">Workspaces</div>
@@ -2602,25 +3164,6 @@
                           <div class="mv">19</div>
                           <div class="ml">Projects</div>
                         </div>
-                        <div class="mini-stat">
-                          <div class="mv">48</div>
-                          <div class="ml">Members</div>
-                        </div>
-                        <div class="mini-stat">
-                          <div class="mv">1,204</div>
-                          <div class="ml">Work items</div>
-                        </div>
-                      </div>
-                      <div style="display: flex; align-items: center; gap: 8px; margin-top: 14px">
-                        <span class="member"><span class="pava">JD</span></span>
-                        <span class="member"><span class="pava">SK</span></span>
-                        <span class="member"><span class="pava">RM</span></span>
-                        <span style="font-size: 12px; color: var(--el-text-muted)"
-                          >+45 more · owner
-                          <strong style="color: var(--el-text-secondary)"
-                            >jane@acme.com</strong
-                          ></span
-                        >
                       </div>
                     </div>
                   </div>
@@ -2694,33 +3237,19 @@
                           <td class="num">11,720</td>
                           <td class="num credits">49</td>
                         </tr>
-                        <tr>
-                          <td><span class="when">5h ago</span></td>
-                          <td>
-                            <span class="pill pill-code"
-                              ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Coding</span
-                            >
-                          </td>
-                          <td><span class="muted">Web Platform</span></td>
-                          <td>
-                            <span class="model"><span class="dot opus"></span>Opus</span>
-                          </td>
-                          <td class="num">8,930</td>
-                          <td class="num credits">122</td>
-                        </tr>
                       </tbody>
                     </table>
                   </div>
                   <div class="card-foot">
                     <span class="fnote"
-                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–4 of 9,140
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–3 of 9,140
                       jobs</span
                     >
                     <div class="pager">
                       <span class="pbtn is-disabled"
                         ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
                       >
-                      <span>Page 1 of 2,285</span>
+                      <span>Page 1 of 3,047</span>
                       <span class="pbtn"
                         >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
                       ></span>
@@ -2734,11 +3263,11 @@
       </div>
     </div>
 
-    <!-- ════════════════ PANEL 6 — GATING / EMPTY / LOADING / ERROR ════════════════ -->
+    <!-- ════════════════ PANEL 7 — GATING / EMPTY / LOADING / ERROR ════════════════ -->
     <div class="panel-label">
-      6 · Gating · empty · loading · error. Access-denied is a 404 — the surface is ABSENT for
-      non-staff, NOT a visible “forbidden” page (its existence isn’t leaked). Plus the first-run
-      empty state, the loading skeleton (fetch over 7.1), and the motir-ai-down error.
+      7 · Gating · empty · loading · error. Access-denied is a 404 — the surface is ABSENT for
+      non-staff, NOT a visible “forbidden” page. Plus the first-run empty state, the loading
+      skeleton (fetch over 7.1), and the motir-ai-down error.
     </div>
     <div class="panel">
       <div class="states-grid">
@@ -2758,8 +3287,8 @@
             <span
               ><strong>Reviewer note (not shown):</strong> a non-staff user hitting
               <code>/admin</code> gets the standard app 404 — the console does NOT exist for them.
-              No “403 / forbidden” page, no hint the route is real (its existence isn’t leaked). The
-              staff gate is a net-new platform-staff capability — see design-notes.</span
+              No “403 / forbidden” page, no hint the route is real. The staff gate is a net-new
+              platform-staff capability — see design-notes.</span
             >
           </div>
         </div>
