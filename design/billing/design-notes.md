@@ -240,13 +240,23 @@ count wherever the seat price appears**, never an abstract "$5/seat" alone. Two
 sub-surfaces:
 
 - **(a) BEFORE — upgrade review (before Checkout).** A width-constrained `Card`
-  (a confirmation dialog) titled **"Scale up Motir"** with a `.seatcalc`: the
-  member **avatars** + **"6 members → 6 seats"** and the resolved **annual** total
-  **"6 × $40/yr = $240 / yr"** (annual is the default), then a `note` — **billed
-  annually** ($240/yr, $20/mo equiv); **charged now, prorated** for the rest of the
-  cycle; **seats follow membership** (add/remove a member → the next invoice adjusts
-  via Stripe proration); prefer monthly? switch at Checkout for $30/mo. CTA
-  **"Continue to Checkout — $240/yr"** + Cancel.
+  (a confirmation dialog) titled **"Scale up Motir"** with a `.seatcalc` (member
+  **avatars** + **"6 members → 6 seats"** + the resolved annual total **"6 × $40/yr
+  = $240 / yr"**), then a **`.terms` key/value list that spells out what & when we
+  charge** — the part a narrow note couldn't carry:
+  - **Billing** — Annual, $240/yr ($20/mo equiv, the default).
+  - **Due today** — $240, **prorated** to the renewal date (less for the days left
+    this term).
+  - **Add a member later** — a **prorated charge** for the new seat, for the rest of
+    the term.
+  - **Remove a member** — a **prorated credit** on the next invoice — **no mid-term
+    refund**.
+
+  Then a short `note` (Stripe proration; "prefer monthly? switch at Checkout for
+  $30/mo") and the CTA **"Continue to Checkout — $240/yr"** + Cancel. (Implementation
+  note: a `.note` is `display:flex`; its text MUST be wrapped in ONE `<span>` — bare
+  text + inline `<b>` become separate flex items and shred into narrow columns.)
+
 - **(b) AFTER — the live Motir seats subscription (full-width).** The **scaled
   counterpart to panel 2's free-Motir line** — same `Card` grammar as the Motir-AI
   line, so the paid Motir plan reads as a real subscription, not a fragment. Head:
@@ -255,8 +265,9 @@ sub-surfaces:
   the right-aligned **"Plan fee $240 / yr"** + an **"Annual · saves $120/yr"**
   `save` pill; a `.seatcalc` (avatars + **"6 seats billed · 1 per member"** + **"6 ×
   $40/yr = $240 / yr"**); a `desc` — **"Billed annually · $20/mo equiv · renews 1
-  Jul 2026. All free-tier caps lifted … seats update automatically as members join
-  or leave — changes are prorated."**; actions **"Manage seats"** (`i-users`),
+  Jul 2026. All free-tier caps lifted … seats track membership: adding a member adds
+  a prorated charge for the rest of the term; removing one applies a prorated credit
+  to the next invoice (no mid-term refund)."**; actions **"Manage seats"** (`i-users`),
   **"Manage plan & payment"** (→ Portal), and a **"Switch to monthly billing"**
   cross-link. (This is the surface the user lands on after subscribing; panel 2
   shows the same org's Motir-AI line + the _free_ Motir line. The plan defaults to
@@ -268,8 +279,24 @@ sub-surfaces:
 > and **prorates** mid-cycle changes by date. **Jira** bills per user and shows
 > the **user tier** you occupy. Motir mirrors Linear's "seats = active members,
 > prorated" model (the closer fit — Motir caps scope like Linear, not seats).
+>
+> **Mid-cycle changes on an ANNUAL seats plan — what & when (the panel-6 copy).**
+> Both mirrors agree, and Motir (Stripe proration, ADR §5) follows them:
+>
+> - **Add a member mid-term → a prorated CHARGE for the new seat covering the rest
+>   of the annual term**, at the annual per-seat rate. _Linear_ generates a
+>   prorated charge for the remaining year, reconciled on a **monthly true-up**
+>   invoice tied to the annual start date (charged automatically); _Jira_ charges
+>   the added seat prorated through the remainder of the annual term. (Motir =
+>   Stripe `create_prorations`; surface it as "a prorated charge for the rest of the
+>   term".)
+> - **Remove a member → a prorated CREDIT applied to future invoices, NOT a cash
+>   refund; the annual total does not drop mid-term.** _Linear_ issues a credit on
+>   suspension applied to future invoices; _Jira_ defers the reduction to the next
+>   billing cycle. (Motir mirrors this: credit-to-next-invoice, no mid-term refund.)
+>
 > ([Linear — Billing & plans](https://linear.app/docs/billing-and-plans);
-> [Jira pricing 2026](https://smartprocessflow.com/jira-pricing))
+> [Atlassian — manage users & user tiers](https://support.atlassian.com/subscriptions-and-billing/docs/manage-users-and-user-tiers/))
 
 ### Panel 7 — paywall at the AI boundary (8.1.8)
 

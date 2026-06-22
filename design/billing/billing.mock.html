@@ -693,6 +693,41 @@
       .avatars span:first-child {
         margin-left: 0;
       }
+      /* key/value terms list (the upgrade review — what & when we charge) */
+      .terms {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .terms .trow {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 10px 14px;
+        font-size: 13px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .terms .trow:first-child {
+        border-top: 0;
+      }
+      .terms .tk {
+        color: var(--el-text-muted);
+        flex: none;
+        white-space: nowrap;
+      }
+      .terms .tv {
+        color: var(--el-text);
+        text-align: right;
+        line-height: 1.45;
+      }
+      .terms .tv b {
+        font-weight: 600;
+      }
+      .terms .tv .muted {
+        color: var(--el-text-muted);
+      }
+
       .av1 {
         background: var(--el-tint-lavender);
       }
@@ -2020,7 +2055,7 @@
             <!-- (a) BEFORE — upgrade review (a Checkout confirmation dialog) -->
             <div>
               <p class="crumb">a · Before — upgrade review (member → seats counted at Checkout)</p>
-              <div class="card" style="max-width: 580px">
+              <div class="card" style="max-width: 660px">
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico tracker"
@@ -2046,12 +2081,41 @@
                     </span>
                     <span class="sc-total">6 × $40 / yr = $240 <span class="per">/ yr</span></span>
                   </div>
+                  <div class="terms">
+                    <div class="trow">
+                      <span class="tk">Billing</span>
+                      <span class="tv"
+                        ><b>Annual</b> — $240 / yr
+                        <span class="muted">($20 / mo equiv, the default)</span></span
+                      >
+                    </div>
+                    <div class="trow">
+                      <span class="tk">Due today</span>
+                      <span class="tv"
+                        ><b>$240</b>, <b>prorated</b> to your renewal date
+                        <span class="muted">(less for the days left this term)</span></span
+                      >
+                    </div>
+                    <div class="trow">
+                      <span class="tk">Add a member later</span>
+                      <span class="tv"
+                        >a prorated charge for the new seat, for the rest of the term</span
+                      >
+                    </div>
+                    <div class="trow">
+                      <span class="tk">Remove a member</span>
+                      <span class="tv"
+                        >a prorated <b>credit</b> on your next invoice
+                        <span class="muted">— no mid-term refund</span></span
+                      >
+                    </div>
+                  </div>
                   <div class="note" style="border-style: solid; background: var(--el-surface-soft)">
                     <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-                    Billed <b>annually</b> — $240 / yr ($20 / mo equiv), the default. Charged now,
-                    <b>prorated</b> for the rest of this cycle. Seats follow your membership
-                    automatically — add or remove a member and your next invoice adjusts (Stripe
-                    proration). Prefer monthly? Switch at Checkout to pay $30 / mo.
+                    <span
+                      >Seats follow your membership automatically (Stripe proration). Prefer
+                      monthly? Switch at Checkout to pay $30 / mo.</span
+                    >
                   </div>
                   <div class="acts" style="display: flex; gap: 8px">
                     <button class="btn btn-primary">Continue to Checkout — $240/yr</button>
@@ -2108,8 +2172,9 @@
                       <div class="desc">
                         Billed <b>annually</b> · $20 / mo equiv · renews <b>1 Jul 2026</b>. All
                         free-tier caps lifted (unlimited work items &amp; projects,
-                        multi-workspace). Seats update automatically as members join or leave —
-                        changes are prorated.
+                        multi-workspace). Seats track membership: adding a member adds a
+                        <b>prorated charge</b> for the rest of the term; removing one applies a
+                        <b>prorated credit</b> to your next invoice (no mid-term refund).
                       </div>
                     </div>
                   </div>
