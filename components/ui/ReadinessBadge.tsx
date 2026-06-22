@@ -24,10 +24,23 @@ export interface ReadinessBadgeProps {
   ready: boolean;
   /** The OPEN (non-terminal) blockers, named + linked when blocked. */
   blockers?: Array<{ identifier: string; href: string }>;
+  /**
+   * Open each blocker link in a NEW TAB (`target="_blank"` + `rel="noopener
+   * noreferrer"`). OPT-IN (default false) so the shared primitive stays correct
+   * for both callers: the detail-page `RelationshipsPanel` keeps same-tab
+   * navigation; the quick-view peek modal sets this true (8.8.32 — a click from
+   * a transient overlay opens the blocker's detail page beside the open peek).
+   */
+  blockerLinksNewTab?: boolean;
   className?: string;
 }
 
-export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBadgeProps) {
+export function ReadinessBadge({
+  ready,
+  blockers = [],
+  blockerLinksNewTab = false,
+  className,
+}: ReadinessBadgeProps) {
   const t = useTranslations('ui');
   if (ready) {
     return (
@@ -73,6 +86,7 @@ export function ReadinessBadge({ ready, blockers = [], className }: ReadinessBad
                 {i > 0 ? ', ' : null}
                 <Link
                   href={b.href}
+                  {...(blockerLinksNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="text-(--el-text-strong) font-mono text-xs underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
                 >
                   {b.identifier}

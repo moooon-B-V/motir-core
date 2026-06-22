@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
   Bot,
@@ -110,18 +109,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
     [locale],
   );
-  // A named readiness blocker SWAPS the peek (push `?peek=<blockerKey>`, staying
-  // in-list) rather than navigating to the full page — the 2.5.20 design. Build
-  // the href the same way QuickViewTrigger opens a peek: preserve every other
-  // param (view/sort/filter/page), just swap `peek`.
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const buildPeekHref = (identifier: string) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '');
-    params.set('peek', identifier);
-    return `${pathname}?${params.toString()}`;
-  };
-
   const mutedNone = <span className="text-(--el-text-muted)">{t('none')}</span>;
 
   // Read-only custom-field value (8.8.8) — the detail rail's per-type value
@@ -282,14 +269,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               main column under the title, per quick-view.mock.html (2.5.20). Shown
               only for a TODO-category item that has blockers: no banner without
               blockers, and none once the item is in-progress / done ("can I start
-              this?" is moot past todo). Named blockers swap the peek. */}
+              this?" is moot past todo). Each named blocker opens its DETAIL page in
+              a NEW TAB (8.8.32 — overrides the 2.5.20 peek-swap), matching the
+              new-tab treatment the other quick-view detail links got in 8.8.31. */}
           {data.readiness && data.statusCategory === 'todo' ? (
             <ReadinessBadge
               ready={data.readiness.ready}
               blockers={data.readiness.blockers.map((identifier) => ({
                 identifier,
-                href: buildPeekHref(identifier),
+                href: `/items/${identifier}`,
               }))}
+              blockerLinksNewTab
               className="mt-4"
             />
           ) : null}
