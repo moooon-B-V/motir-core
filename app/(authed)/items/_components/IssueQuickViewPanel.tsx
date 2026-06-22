@@ -392,7 +392,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               labelTint (5.4.8), NOT a fixed lavender: the labelTint decision
               (product owner, 2026-06-10) guarantees a label renders the SAME
               colour on every surface, so the peek and the detail rail match. */}
-          <RailField label={tl('labelsField')}>
+          <RailField label={t('labelsField')}>
             {data.labels.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {data.labels.map((l) => (
@@ -408,7 +408,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </RailField>
 
           {/* Components — neutral chips with the component glyph (5.4.8). */}
-          <RailField label={tl('componentsField')}>
+          <RailField label={t('componentsField')}>
             {data.components.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {data.components.map((c) => (

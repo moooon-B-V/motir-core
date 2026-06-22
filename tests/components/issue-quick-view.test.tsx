@@ -156,6 +156,10 @@ describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
     render(<IssueQuickViewPanel state="ready" data={FULL} />);
     expect(screen.getByText('Code')).toBeTruthy();
     expect(screen.getByText('Agent')).toBeTruthy();
+    // Rail field titles resolve from the `issueViews` namespace (bug 8.8.x:
+    // they were read via the `labels` namespace, so the raw key path showed).
+    expect(screen.getByText('Labels')).toBeTruthy();
+    expect(screen.getByText('Components')).toBeTruthy();
     expect(screen.getByText('auth')).toBeTruthy();
     expect(screen.getByText('security')).toBeTruthy();
     expect(screen.getByText('API')).toBeTruthy();
