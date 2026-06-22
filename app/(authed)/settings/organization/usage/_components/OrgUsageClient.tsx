@@ -214,14 +214,17 @@ function monthLabel(yearMonth: string): string {
   });
 }
 
-// Per-model hue → an --el-* element token (palette, not grey-only · finding #54).
-// DeepSeek reuses the subtask teal token rather than reaching Tier-0 (design note).
+// Per-model hue → its DEDICATED `--el-model-*` element token (MOTIR-1274 ·
+// 1266.3). A named family now: DeepSeek used to BORROW the work-item-KIND teal
+// `--el-type-subtask` for non-type meaning (misuse #2); `--el-model-deepseek`
+// keeps that exact teal but decoupled. Each maps to its prior hue → zero change
+// (opus → `--el-model-opus` = the same `--color-primary-fill` `--el-accent` had).
 function modelColorVar(model: string | null): string {
   const m = (model ?? '').toLowerCase();
-  if (m.includes('opus')) return 'var(--el-accent)';
-  if (m.includes('sonnet')) return 'var(--el-info)';
-  if (m.includes('haiku')) return 'var(--el-success)';
-  if (m.includes('deepseek')) return 'var(--el-type-subtask)';
+  if (m.includes('opus')) return 'var(--el-model-opus)';
+  if (m.includes('sonnet')) return 'var(--el-model-sonnet)';
+  if (m.includes('haiku')) return 'var(--el-model-haiku)';
+  if (m.includes('deepseek')) return 'var(--el-model-deepseek)';
   return 'var(--el-text-muted)';
 }
 

@@ -26,12 +26,18 @@ import type { NotificationDTO } from '@/lib/dto/notifications';
 // rows only. The design's "mark as unread" affordance is surfaced as a finding
 // (design vs shipped-API gap) rather than improvised against a missing endpoint.
 
-/** event type → its glyph + the --el-* hue its avatar badge takes. */
+// event type → its glyph + the dedicated `--el-notif-*` hue its avatar badge
+// takes (MOTIR-1274 · 1266.3). commented/assigned/transitioned previously
+// BORROWED the work-item-KIND hues `--el-type-task/story/subtask` for non-type
+// meaning (misuse #2); each `--el-notif-*` keeps that exact hue but decoupled, so
+// a palette can move notification badges without dragging the type ramp. Zero
+// visual change. `mentioned` keeps the accent fill (`--el-notif-mentioned` =
+// the same `--color-primary-fill` `--el-accent` resolved to).
 const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; badge: string }> = {
-  mentioned: { Icon: AtSign, badge: 'bg-(--el-accent)' },
-  commented: { Icon: MessageSquare, badge: 'bg-(--el-type-task)' },
-  assigned: { Icon: UserCheck, badge: 'bg-(--el-type-story)' },
-  transitioned: { Icon: GitPullRequest, badge: 'bg-(--el-type-subtask)' },
+  mentioned: { Icon: AtSign, badge: 'bg-(--el-notif-mentioned)' },
+  commented: { Icon: MessageSquare, badge: 'bg-(--el-notif-commented)' },
+  assigned: { Icon: UserCheck, badge: 'bg-(--el-notif-assigned)' },
+  transitioned: { Icon: GitPullRequest, badge: 'bg-(--el-notif-transitioned)' },
 };
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
 

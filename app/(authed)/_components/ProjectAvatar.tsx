@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils/cn';
 
 // The project avatar chip (Story 6.8 · Subtask 6.8.4). A preset icon over its
 // colour tint, OR — when the project has no avatar — the shipped MONO rendering
-// (the project's key letters on the `--el-type-task` tile). Rendered everywhere
+// (the project's key letters on the `--el-avatar-fallback` tile). Rendered everywhere
 // a project identity appears: the Details page, the project switcher (closed
 // trigger + open list), and the settings-area rail header — per
 // `design/projects/details.mock.html` (the `.pav` chip).
@@ -64,15 +64,19 @@ const ICON_COMPONENTS: Record<AvatarIcon, LucideIcon> = {
 };
 
 // Literal class strings (not interpolated) so Tailwind's source scanner emits
-// each `--el-tint-*` background. Colour stays on the swap layer — never a raw
+// each background. Routed through the DEDICATED `--el-avatar-*` ramp (MOTIR-1274
+// · 1266.3) — the KEY NAMES stay (peach…yellow): lib/projects/avatar.ts persists
+// `project.avatarColor` ∈ these strings, so renaming the keys would break stored
+// rows (spec §7.1). Each `--el-avatar-*` defaults to its prior `--el-tint-*`
+// value → zero visual change. Colour stays on the swap layer — never a raw
 // `--color-*` (the design-token rule).
 const COLOR_BG: Record<AvatarColor, string> = {
-  peach: 'bg-(--el-tint-peach)',
-  rose: 'bg-(--el-tint-rose)',
-  mint: 'bg-(--el-tint-mint)',
-  lavender: 'bg-(--el-tint-lavender)',
-  sky: 'bg-(--el-tint-sky)',
-  yellow: 'bg-(--el-tint-yellow)',
+  peach: 'bg-(--el-avatar-peach)',
+  rose: 'bg-(--el-avatar-rose)',
+  mint: 'bg-(--el-avatar-mint)',
+  lavender: 'bg-(--el-avatar-lavender)',
+  sky: 'bg-(--el-avatar-sky)',
+  yellow: 'bg-(--el-avatar-yellow)',
 };
 
 export interface ProjectAvatarProps {
@@ -113,12 +117,15 @@ export function ProjectAvatar({
       <span
         aria-hidden
         style={{ ...boxStyle, fontSize: Math.round(size * 0.4) }}
-        // White key-letters on the type-task fill (the mock's `#fff`). NOT
-        // `--el-text-inverted`: that flips to the dark page bg in dark mode,
-        // which fails AA on the blue tile (4.19:1). `--el-accent-text` is
-        // #ffffff in BOTH themes → 4.57:1, AA-safe (the dark-sweep caught this).
+        // White key-letters on the mono-fallback fill (the mock's `#fff`). The
+        // fill is the DEDICATED `--el-avatar-fallback` (MOTIR-1274 · 1266.3),
+        // which defaults to `--color-info` (the same blue the tile used to borrow
+        // from `--el-type-task`) — decouples avatar identity from work-item-KIND
+        // hue (misuse #2), zero visual change. NOT `--el-text-inverted`: that
+        // flips to the dark page bg in dark mode, which fails AA on the blue tile
+        // (4.19:1). `--el-accent-text` is #ffffff in BOTH themes → 4.57:1, AA-safe.
         className={cn(
-          'inline-flex flex-none items-center justify-center bg-(--el-type-task) font-sans font-bold text-(--el-accent-text)',
+          'inline-flex flex-none items-center justify-center bg-(--el-avatar-fallback) font-sans font-bold text-(--el-accent-text)',
           radius,
           className,
         )}

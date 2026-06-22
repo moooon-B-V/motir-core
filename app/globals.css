@@ -2284,6 +2284,64 @@
   --el-callout-bg: var(--color-tint-lavender);
   --el-callout-text: var(--color-charcoal);
 
+  /* ── Identity hues (MOTIR-1274 · 1266.3 — un-collapse the shared --el-tint-* pool) ──
+     Roles / org-roles / privacy / labels / avatars each got a DEDICATED token so a
+     palette can tune them apart (today they all pulled from the same six --el-tint-*,
+     so a label, a role and an avatar could not diverge). Every token DEFAULTS to
+     today's exact tint → zero visual change in the motir base; each maps to a Tier-0
+     --color-* so palettes + the dark block re-skin them for free (no per-palette
+     block — the gold-standard --el-chart-* / --el-type-* indirection). This block
+     also DECOUPLES the --el-type-* MISUSE: NotificationRow event badges, the
+     ProjectAvatar mono tile and the OrgUsageClient model dots were borrowing
+     work-item-KIND hues for non-type meaning; they get their own --el-notif-* /
+     --el-avatar-fallback / --el-model-* tokens at the SAME hues (still zero change).
+     design/design-system/design-notes.md §D. */
+  /* Roles / org-roles / privacy — Pill memberRole/orgRole/tone (today hardcoded in
+     Pill.tsx CVA). admin→lavender, member→sky, viewer→mint; owner→lavender; private→
+     lavender, public→sky (public defined AHEAD — no rendered "public" badge yet). */
+  --el-role-admin: var(--color-tint-lavender);
+  --el-role-member: var(--color-tint-sky);
+  --el-role-viewer: var(--color-tint-mint);
+  --el-org-role-owner: var(--color-tint-lavender);
+  --el-org-role-admin: var(--color-tint-sky);
+  --el-org-role-member: var(--color-tint-mint);
+  --el-privacy-private: var(--color-tint-lavender);
+  --el-privacy-public: var(--color-tint-sky);
+  /* Label ramp — lib/labels/labelTint.ts hashes the name → 1..6 in the fixed order
+     peach,rose,mint,lavender,sky,yellow (the seed-loader family; matches shipped). */
+  --el-label-1: var(--color-tint-peach);
+  --el-label-2: var(--color-tint-rose);
+  --el-label-3: var(--color-tint-mint);
+  --el-label-4: var(--color-tint-lavender);
+  --el-label-5: var(--color-tint-sky);
+  --el-label-6: var(--color-tint-yellow);
+  /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists
+     project.avatarColor ∈ these strings, so numbering them would break stored rows
+     (spec §7.1, rung-2 migration safety). The fallback fixes --el-type-* misuse #2 —
+     the mono initials tile keeps its blue but stops borrowing --el-type-task. */
+  --el-avatar-peach: var(--color-tint-peach);
+  --el-avatar-rose: var(--color-tint-rose);
+  --el-avatar-mint: var(--color-tint-mint);
+  --el-avatar-lavender: var(--color-tint-lavender);
+  --el-avatar-sky: var(--color-tint-sky);
+  --el-avatar-yellow: var(--color-tint-yellow);
+  --el-avatar-fallback: var(--color-info); /* mono tile — was --el-type-task (= --color-info) */
+  /* Notification event badges (decouple --el-type-* misuse #2; same hues → zero change).
+     mentioned keeps the accent fill it already used — --el-accent resolves to
+     --color-primary-fill (purple), NOT --color-accent (pink); the spec's base column
+     read --color-accent but its note said "alias for consistency", so per §2
+     zero-visual-change this maps to the SHIPPED value. */
+  --el-notif-mentioned: var(--color-primary-fill); /* the accent fill (matches prior --el-accent) */
+  --el-notif-commented: var(--color-info); /* was --el-type-task */
+  --el-notif-assigned: var(--color-accent-green); /* was --el-type-story */
+  --el-notif-transitioned: var(--color-accent-teal); /* was --el-type-subtask */
+  /* AI model dots (promote to a named family; deepseek was borrowing --el-type-subtask).
+     opus keeps the accent fill, same --color-primary-fill reasoning as mentioned. */
+  --el-model-opus: var(--color-primary-fill); /* the accent fill (matches prior --el-accent) */
+  --el-model-sonnet: var(--color-info);
+  --el-model-haiku: var(--color-success);
+  --el-model-deepseek: var(--color-accent-teal); /* was --el-type-subtask */
+
   /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
   /* The colour the UI was missing: each issue type renders its icon in its
      own hue, matching ISSUE_TYPE_META.colorToken. */
