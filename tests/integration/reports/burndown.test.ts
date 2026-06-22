@@ -422,6 +422,37 @@ describe('reportsService.getBurndownSeries — already-done items stay out of re
     // The moved-in done block raises no scope-change marker (it adds 0 remaining).
     expect(series.scopeChanges).toEqual([]);
   });
+
+  it('a sprint started EMPTY/unestimated then populated still RENDERS (committed never collapses to 0)', async () => {
+    // Regression: a sprint with no committed snapshot whose not-`done`-at-start
+    // points are 0 (started empty, or started with unestimated items, then
+    // populated later) must NOT yield `committed === 0` — that is the chart's
+    // "nothing committed" EMPTY state, i.e. a blank burndown despite real
+    // remaining work. The committed baseline must stay at least the current
+    // remaining so the points series renders.
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'EmptyStart' }, fx.ctx);
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B (added after start)' });
+
+    // Started with NOTHING (no snapshot); B (todo, 21) moved in mid-sprint.
+    await place(b.id, sprint.id, 'todo', 21);
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 10),
+      completedAt: utcDay(2026, 6, 10),
+      committedPoints: null,
+      committedIssueCount: 0,
+    });
+    await addRevision(b.id, fx.ownerId, utcDay(2026, 6, 5), {
+      sprintId: { from: null, to: sprint.id },
+    });
+
+    const series = await reportsService.getBurndownSeries(sprint.id, fx.ctx);
+    expect(series.statistic).toBe('story_points');
+    expect(series.committed).toBeGreaterThan(0); // NOT the empty-state 0 → chart renders
+    expect(series.days[9]!.remaining).toBe(21); // still reconciles to the real remaining
+  });
 });
 
 describe('reportsService.getBurndownSeries — degraded + edge states', () => {

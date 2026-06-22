@@ -246,8 +246,15 @@ export const reportsService = {
     } else if (committedPoints && committedPoints > 0) {
       committed = committedPoints;
     } else {
+      // No snapshot: the not-`done`-at-start work = remaining − net deltas. But a
+      // sprint started EMPTY or with UNESTIMATED items (then estimated/populated
+      // later) has 0 such points, which would make `committed === 0` — the chart's
+      // "nothing committed" EMPTY state, i.e. a blank burndown despite real
+      // remaining work. Floor the baseline at the current remaining so the points
+      // series always renders (and never sits below where the actual line lands).
       const netRemainingDelta = dailyDeltas.reduce((sum, d) => sum + d.remainingDelta, 0);
-      committed = Math.max(0, rollup.remaining - netRemainingDelta);
+      const notDoneAtStart = Math.max(0, rollup.remaining - netRemainingDelta);
+      committed = Math.max(notDoneAtStart, rollup.remaining);
     }
 
     return toBurndownSeriesDto({
