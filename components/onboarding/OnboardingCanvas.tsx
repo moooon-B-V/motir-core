@@ -9,7 +9,7 @@ import {
 import { Spinner } from '@/components/ui/Spinner';
 import { IdeaCard, StationCard } from './StationNode';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
-import { type DiscoveryState } from '@/lib/onboarding/discoveryLoop';
+import { type DiscoveryState, shouldShowDesignStep } from '@/lib/onboarding/discoveryLoop';
 import { type StationKind, type StationView, buildStations } from '@/lib/onboarding/canvasModel';
 import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
 import {
@@ -74,13 +74,28 @@ export function OnboardingCanvas({
   const stationByKind = new Map<StationKind, StationView>(stations.map((s) => [s.kind, s]));
 
   const showIdea = !!(idea && idea.trim());
-  const keys = CANVAS_NODE_KEYS.filter((k) => (k === 'idea' ? showIdea : true));
+  // The design-phase gate (7.3.69): a mobile / other project's roadmap omits the
+  // `design` station — the web design step doesn't apply (mobile is deferred,
+  // 7.3.31). Web / desktop / not-yet-inferred keep it.
+  const showDesign = shouldShowDesignStep(state.session.platform);
+  const keys = CANVAS_NODE_KEYS.filter((k) =>
+    k === 'idea' ? showIdea : k === 'design' ? showDesign : true,
+  );
   const present = new Set<CanvasNodeKey>(keys);
 
   const nodes: CanvasNode[] = keys.map((key) => ({ id: key, ...positionFor(key, positions) }));
   const edges: CanvasEdge[] = STATION_EDGES.filter(
     ([from, to]) => present.has(from) && present.has(to),
   ).map(([from, to]) => ({ from, to, variant: edgeVariant(from, to, stationByKind) }));
+  // Bridge the chain when the design station is gated out, so `plan` stays
+  // connected: validation → plan replaces validation → design → plan.
+  if (!showDesign && present.has('validation') && present.has('plan')) {
+    edges.push({
+      from: 'validation',
+      to: 'plan',
+      variant: edgeVariant('validation', 'plan', stationByKind),
+    });
+  }
 
   function renderNode(node: CanvasNode) {
     if (node.id === 'idea') return <IdeaCard idea={idea!.trim()} />;

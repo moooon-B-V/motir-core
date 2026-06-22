@@ -119,4 +119,33 @@ describe('OnboardingCanvas', () => {
     expect(await screen.findByText('Revisiting')).toBeTruthy();
     expect(screen.getByText('Will refresh')).toBeTruthy();
   });
+
+  // The design-phase gate (7.3.69): the `design` station is dropped from a mobile /
+  // other project's roadmap, and the chain bridges validation → plan.
+  it('omits the design station for a mobile project and bridges the chain', async () => {
+    renderWithIntl(
+      <OnboardingCanvas
+        state={hubState({
+          session: { ...hubState().session, platform: 'mobile' },
+        })}
+        idea="x"
+        onOpen={vi.fn()}
+        onOpenDesign={vi.fn()}
+      />,
+    );
+    const edges = await screen.findByTestId('canvas-edges');
+    expect(screen.queryByText('Design the look')).toBeNull();
+    expect(document.querySelector('[data-node-id="design"]')).toBeNull();
+    // idea→discovery→vision→feasibility→validation→plan (design contracted) = 5 edges
+    expect(edges.querySelectorAll('path')).toHaveLength(5);
+    expect(screen.getByText('Plan → your epics')).toBeTruthy();
+  });
+
+  it('keeps the design station for a web project (default)', async () => {
+    renderWithIntl(
+      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
+    );
+    expect(await screen.findByText('Design the look')).toBeTruthy();
+    expect(document.querySelector('[data-node-id="design"]')).not.toBeNull();
+  });
 });

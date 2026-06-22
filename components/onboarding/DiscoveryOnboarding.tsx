@@ -15,6 +15,7 @@ import {
   activeDoc,
   activeRevisions,
   isTiersComplete,
+  shouldShowDesignStep,
   willRefreshKinds,
 } from '@/lib/onboarding/discoveryLoop';
 
@@ -63,6 +64,10 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
 
   const reviewing = state.view === 'review' ? activeDoc(state) : null;
   const complete = isTiersComplete(state);
+  // The design-phase gate (7.3.69): the design step (button + canvas station +
+  // full-screen view) is offered only for a web / desktop project; a mobile /
+  // other project skips it (the conductor-inferred `session.platform`).
+  const showDesign = shouldShowDesignStep(state.session.platform);
   const canSkip =
     !state.isStreaming &&
     state.producedKinds.includes('vision') &&
@@ -77,7 +82,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
   // The web-only full-page design step (MOTIR-1040) — styles its whole self via
   // the shipped three-axis runtime; "Use this design" returns to the hub with the
   // look applied (the plan exit is MOTIR-1041).
-  if (state.view === 'design') {
+  if (state.view === 'design' && showDesign) {
     return (
       <div className="h-dvh w-full">
         <DesignStep onBack={back} onUseDesign={back} />
@@ -134,15 +139,17 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
             revisitingKind={state.cascade?.directTier ?? null}
             willRefresh={willRefreshKinds(state)}
           />
-          <Button
-            variant="secondary"
-            size="sm"
-            className="absolute top-4 right-4 bg-(--el-page-bg)"
-            leftIcon={<Palette className="size-4" />}
-            onClick={openDesign}
-          >
-            {t('designLook')}
-          </Button>
+          {showDesign && (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="absolute top-4 right-4 bg-(--el-page-bg)"
+              leftIcon={<Palette className="size-4" />}
+              onClick={openDesign}
+            >
+              {t('designLook')}
+            </Button>
+          )}
           {complete && (
             <div className="absolute right-4 bottom-4 max-w-[20rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-mint) px-4 py-4 shadow-(--shadow-card)">
               <p className="font-medium text-(--el-text-strong)">{t('completeTitle')}</p>
