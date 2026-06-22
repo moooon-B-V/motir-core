@@ -160,6 +160,12 @@ export interface RawPreplanSession {
   platform: string | null;
   docSkipSet: string[];
   designStarter: string | null;
+  // The persisted onboarding design choice (Subtask 7.3.80/MOTIR-1254 added the
+  // column + write endpoint; 7.3.81 consumes it). motir-ai stores it OPAQUELY —
+  // the style/palette/type registries live in motir-core — so on the wire the
+  // three axes are plain strings; the motir-core service validated them before
+  // the write, and re-validates/casts on read.
+  designChoice: { styleId: string; paletteId: string; typeId: string } | null;
   validationTiming: string | null;
   currentGate: string | null;
   conversation: unknown;

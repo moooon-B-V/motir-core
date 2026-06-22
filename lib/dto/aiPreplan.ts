@@ -1,4 +1,22 @@
 import type { FeatureCatalogView } from '@/lib/onboarding/directionDoc';
+import type { StyleId } from '@/lib/theme/styles';
+import type { PaletteId } from '@/lib/theme/palettes';
+import type { TypeId } from '@/lib/theme/typography';
+
+// The onboarding DESIGN CHOICE (Subtask 7.3.81 / MOTIR-1255) — Motir's three
+// design axes the design step (MOTIR-1040) lets the user pick for THEIR project:
+// Style × Palette × Type. Persisted to motir-ai (`PreplanSession.designChoice`,
+// stored opaquely there) and read back here so re-entering the step restores the
+// saved look. The ids are the motir-core registry ids — `aiPreplanService`
+// VALIDATES each against `isStyleId`/`isPaletteId`/`isTypeId` before it writes
+// (motir-ai owns no registries), so a populated DTO always carries a known id.
+// The light/dark Theme toggle is a PREVIEW mode, NOT an axis — it is not part of
+// the persisted design choice.
+export interface DesignChoiceDTO {
+  styleId: StyleId;
+  paletteId: PaletteId;
+  typeId: TypeId;
+}
 
 // The pre-plan read DTO (Subtask 7.3.70) — what `GET /api/ai/pre-plan` returns to
 // the browser so the discovery UI (7.3.5) can RESUME the onboarding loop and
@@ -48,6 +66,10 @@ export interface PreplanSessionDTO {
   classification: string | null;
   platform: string | null;
   designStarter: string | null;
+  // The user's persisted three-axis design choice (7.3.81 / MOTIR-1255), or null
+  // until they pick one in the design step. Read back from motir-ai so re-entering
+  // the step restores the saved look.
+  designChoice: DesignChoiceDTO | null;
   validationTiming: string | null;
   docSkipSet: string[];
   // Where the loop currently sits (the gate the UI resumes at) + lifecycle.

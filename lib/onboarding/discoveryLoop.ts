@@ -24,7 +24,7 @@ import {
   type FeatureCatalogView,
   DIRECTION_DOC_ORDER,
 } from './directionDoc';
-import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
+import type { DesignChoiceDTO, PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 import type { RevisionsByKind } from './revisions';
 
 // ── The conductor SSE frames (relayed verbatim from motir-ai) ────────────────
@@ -180,6 +180,11 @@ export interface DiscoverySession {
   validationTiming: string | null;
   currentGate: string | null;
   status: string;
+  // The user's persisted design-step choice (7.3.81 / MOTIR-1255) — hydrated from
+  // the pre-plan read so re-entering the design step restores the saved axes, and
+  // updated optimistically when they press "Use this design". The conductor's
+  // `state` frames never carry it; it changes only via hydrate / setDesignChoice.
+  designChoice: DesignChoiceDTO | null;
 }
 
 /** The blocking validate-demand-first ask (the one place the loop waits on a
@@ -243,6 +248,7 @@ const EMPTY_SESSION: DiscoverySession = {
   validationTiming: null,
   currentGate: null,
   status: 'active',
+  designChoice: null,
 };
 
 export function initialDiscoveryState(): DiscoveryState {
@@ -272,6 +278,9 @@ export interface HydrateSession {
   validationTiming: string | null;
   currentGate: string | null;
   status: string;
+  // Optional on the resume subset: an older session predating 7.3.81 (or one
+  // where the user never picked) simply has no choice yet → defaults restore.
+  designChoice?: DesignChoiceDTO | null;
 }
 
 export type DiscoveryAction =
@@ -295,6 +304,7 @@ export type DiscoveryAction =
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
   | { type: 'openDesign' }
+  | { type: 'setDesignChoice'; choice: DesignChoiceDTO }
   | { type: 'backToHub' }
   | { type: 'dismissError' };
 
@@ -339,6 +349,7 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
             validationTiming: action.session.validationTiming,
             currentGate: action.session.currentGate,
             status: action.session.status,
+            designChoice: action.session.designChoice ?? null,
           }
         : { ...EMPTY_SESSION };
       const active = gateToActive(session.currentGate, produced);
@@ -409,6 +420,12 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
     case 'openDesign':
       return { ...state, view: 'design' };
 
+    case 'setDesignChoice':
+      // Optimistic local update when the user presses "Use this design" — the
+      // PATCH is best-effort (the hook degrades quietly on failure), so the choice
+      // is kept here regardless and re-opening the step shows it.
+      return { ...state, session: { ...state.session, designChoice: action.choice } };
+
     case 'backToHub':
       // Leaving the gate (Back, or Continue replaying forward) ends the cascade —
       // nothing was locked; the downstream tiers simply re-derive.
@@ -445,6 +462,8 @@ function reduceFrame(state: DiscoveryState, frame: DiscoveryFrame): DiscoverySta
           p.validationTiming !== undefined ? p.validationTiming : state.session.validationTiming,
         currentGate: p.currentGate !== undefined ? p.currentGate : state.session.currentGate,
         status: p.status !== undefined ? p.status : state.session.status,
+        // The conductor's `state` patch never carries the design choice; preserve it.
+        designChoice: state.session.designChoice,
       };
       // A terminal completion clears any parked ask.
       const pendingAsk = session.status === 'tiers_complete' ? null : state.pendingAsk;

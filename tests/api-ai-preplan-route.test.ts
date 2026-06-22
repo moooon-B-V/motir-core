@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectContext } from '@/lib/projects';
-import type { RawPreplanStateResponse } from '@/lib/ai/types';
+import type { RawPreplanSession, RawPreplanStateResponse } from '@/lib/ai/types';
 
 // Transport tests for GET /api/ai/pre-plan — the resumable pre-plan read seam
 // (Subtask 7.3.70). The COMPANION service test (`ai/aiPreplanService.test.ts`)
@@ -26,12 +26,24 @@ vi.mock('@/lib/auth', () => ({ getSession: async () => session.current }));
 vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.current }));
 
 const getPreplanStateMock = vi.fn<(q: unknown) => Promise<RawPreplanStateResponse>>();
+const saveDesignChoiceMock = vi.fn<(input: unknown) => Promise<RawPreplanSession>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getPreplanState: (q: unknown) => getPreplanStateMock(q),
+  saveDesignChoice: (input: unknown) => saveDesignChoiceMock(input),
+}));
+
+// The PATCH service path resolves the active workspace's org id (the write
+// find-or-creates the AiProject under it). Stub the RLS tx + the workspace read so
+// this stays a transport test (no DB), the same way it stubs the context resolvers.
+vi.mock('@/lib/workspaces/context', () => ({
+  withWorkspaceContext: <T>(_c: unknown, fn: (tx: unknown) => Promise<T>) => fn({}),
+}));
+vi.mock('@/lib/repositories/workspaceRepository', () => ({
+  workspaceRepository: { findByIdInTx: async () => ({ organizationId: 'org_1' }) },
 }));
 
 // Import the handler AFTER the mocks are registered.
-const { GET } = await import('@/app/api/ai/pre-plan/route');
+const { GET, PATCH } = await import('@/app/api/ai/pre-plan/route');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 
 const PROJECT_CTX: ProjectContext = {
@@ -52,6 +64,7 @@ beforeEach(() => {
   session.current = null;
   activeCtx.current = null;
   getPreplanStateMock.mockReset();
+  saveDesignChoiceMock.mockReset();
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -84,6 +97,7 @@ describe('GET /api/ai/pre-plan', () => {
         platform: 'web',
         docSkipSet: [],
         designStarter: 'minimal',
+        designChoice: { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' },
         validationTiming: 'after',
         currentGate: 'vision',
         conversation: [{ role: 'user', content: 'hi' }],
@@ -127,6 +141,13 @@ describe('GET /api/ai/pre-plan', () => {
     const body = await res.json();
     expect(body.session.classification).toBe('startup');
     expect(body.session).not.toHaveProperty('aiProjectId'); // internal id not leaked
+    // The persisted design choice (7.3.81) rides back to the browser so the design
+    // step restores the saved look on resume.
+    expect(body.session.designChoice).toEqual({
+      styleId: 'soft-playful',
+      paletteId: 'cobalt',
+      typeId: 'grotesk',
+    });
     // Each produced tier's rendered body reaches the browser (the 7.3.5 gate
     // renders it through DirectionDocView) alongside its forward revision log.
     expect(body.docs).toEqual([
@@ -165,5 +186,88 @@ describe('GET /api/ai/pre-plan', () => {
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.code).toBe('MOTIR_AI_UNAVAILABLE');
+  });
+});
+
+describe('PATCH /api/ai/pre-plan (the design-choice write, 7.3.81)', () => {
+  // Valid registry ids for each axis (Style × Palette × Type).
+  const choice = { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' };
+  const patchReq = (body: unknown): Request =>
+    new Request('http://test/api/ai/pre-plan', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('401s an unauthenticated request before touching the service / motir-ai', async () => {
+    const res = await PATCH(patchReq({ designChoice: choice }));
+    expect(res.status).toBe(401);
+    expect(saveDesignChoiceMock).not.toHaveBeenCalled();
+  });
+
+  it('404s when there is no active project (the no-existence-leak shape)', async () => {
+    signIn();
+    const res = await PATCH(patchReq({ designChoice: choice }));
+    expect(res.status).toBe(404);
+    expect(saveDesignChoiceMock).not.toHaveBeenCalled();
+  });
+
+  it('400s a malformed body (missing / non-string axes) before any write', async () => {
+    signIn();
+    withActiveProject();
+    const bad = [
+      {},
+      { designChoice: null },
+      { designChoice: { styleId: 'soft-playful' } },
+      { designChoice: { styleId: 1, paletteId: 'cobalt', typeId: 'grotesk' } },
+    ];
+    for (const body of bad) {
+      const res = await PATCH(patchReq(body));
+      expect(res.status).toBe(400);
+    }
+    expect(saveDesignChoiceMock).not.toHaveBeenCalled();
+  });
+
+  it('422s an unknown axis id (motir-core owns the registries), without writing', async () => {
+    signIn();
+    withActiveProject();
+    const res = await PATCH(patchReq({ designChoice: { ...choice, styleId: 'not-a-style' } }));
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ code: 'INVALID_DESIGN_CHOICE' });
+    expect(saveDesignChoiceMock).not.toHaveBeenCalled();
+  });
+
+  it('200s and echoes the persisted choice for a valid pick, forwarding org + bare starter', async () => {
+    signIn();
+    withActiveProject();
+    saveDesignChoiceMock.mockResolvedValue({
+      designChoice: choice,
+    } as unknown as RawPreplanSession);
+
+    const res = await PATCH(patchReq({ designChoice: choice }));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store');
+    await expect(res.json()).resolves.toEqual({ designChoice: choice });
+    expect(saveDesignChoiceMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coreOrganizationId: 'org_1',
+        coreWorkspaceId: 'ws_1',
+        coreProjectId: 'pj_1',
+        designChoice: choice,
+        designStarter: 'bare',
+      }),
+    );
+  });
+
+  it('502s when motir-ai is unavailable (never a silent drop)', async () => {
+    signIn();
+    withActiveProject();
+    saveDesignChoiceMock.mockRejectedValue(new MotirAiUnavailableError('connect ECONNREFUSED'));
+
+    const res = await PATCH(patchReq({ designChoice: choice }));
+
+    expect(res.status).toBe(502);
+    await expect(res.json()).resolves.toMatchObject({ code: 'MOTIR_AI_UNAVAILABLE' });
   });
 });

@@ -17,6 +17,7 @@ import { DEFAULT_STYLE_ID, STYLE_REGISTRY, type StyleId } from '@/lib/theme/styl
 import { DEFAULT_PALETTE_ID, PALETTE_REGISTRY, type PaletteId } from '@/lib/theme/palettes';
 import { DEFAULT_TYPE_ID, TYPE_REGISTRY, type TypeId } from '@/lib/theme/typography';
 import type { ThemePattern } from '@/lib/theme/types';
+import type { DesignChoiceDTO } from '@/lib/dto/aiPreplan';
 
 // The onboarding DESIGN STEP (Subtask 7.3.27 / MOTIR-1040) — screen H of
 // `design/ai-chat/onboarding.mock.html`. The web-only step where the user designs
@@ -41,20 +42,25 @@ import type { ThemePattern } from '@/lib/theme/types';
 export interface DesignStepProps {
   /** Leave the design step for the hub. */
   onBack: () => void;
-  /** Confirm the look and return to the hub (persisting the choice to the project
-   *  is the downstream cross-repo handoff, MOTIR-1041). */
-  onUseDesign: () => void;
+  /** Confirm the look: hands the chosen three axes up so the caller can persist
+   *  them (Subtask 7.3.81) and return to the hub. The Theme toggle is a preview
+   *  mode, NOT part of the choice. */
+  onUseDesign: (choice: DesignChoiceDTO) => void;
+  /** The previously-saved choice (7.3.81) to RESTORE on re-entry — seeds the three
+   *  axes so the step shows the saved look, not defaults. Null/undefined → defaults. */
+  initialChoice?: DesignChoiceDTO | null;
 }
 
-export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
+export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepProps) {
   const t = useTranslations('onboarding.design');
 
-  // The PROJECT's design — local to this step, NOT the global Motir theme. Light
-  // is the default product look.
+  // The PROJECT's design — local to this step, NOT the global Motir theme. Seeded
+  // from the saved choice when re-entering (7.3.81), else the default product look.
+  // Theme defaults to light (a preview mode, never persisted).
   const [pattern, setPattern] = useState<ThemePattern>('light');
-  const [styleId, setStyleId] = useState<StyleId>(DEFAULT_STYLE_ID);
-  const [palette, setPalette] = useState<PaletteId>(DEFAULT_PALETTE_ID);
-  const [type, setType] = useState<TypeId>(DEFAULT_TYPE_ID);
+  const [styleId, setStyleId] = useState<StyleId>(initialChoice?.styleId ?? DEFAULT_STYLE_ID);
+  const [palette, setPalette] = useState<PaletteId>(initialChoice?.paletteId ?? DEFAULT_PALETTE_ID);
+  const [type, setType] = useState<TypeId>(initialChoice?.typeId ?? DEFAULT_TYPE_ID);
 
   const themeLabels: Record<ThemePattern, string> = {
     light: t('theme.light'),
@@ -207,7 +213,7 @@ export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
         <Button
           variant="primary"
           rightIcon={<ArrowRight className="size-4" />}
-          onClick={onUseDesign}
+          onClick={() => onUseDesign({ styleId, paletteId: palette, typeId: type })}
         >
           {t('use')}
         </Button>

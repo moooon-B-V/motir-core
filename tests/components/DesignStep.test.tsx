@@ -4,6 +4,9 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { DesignStep } from '@/components/onboarding/DesignStep';
 import { DEFAULT_STYLE_ID, STYLE_IDS, STYLE_REGISTRY } from '@/lib/theme/styles';
+import { DEFAULT_PALETTE_ID } from '@/lib/theme/palettes';
+import { DEFAULT_TYPE_ID } from '@/lib/theme/typography';
+import type { DesignChoiceDTO } from '@/lib/dto/aiPreplan';
 
 // The onboarding design step (Subtask 7.3.27 / MOTIR-1040). It designs the USER'S
 // PROJECT: the picks scope to THIS PAGE (the section's data-* attributes) — the
@@ -13,10 +16,18 @@ import { DEFAULT_STYLE_ID, STYLE_IDS, STYLE_REGISTRY } from '@/lib/theme/styles'
 
 const OTHER_STYLE = STYLE_IDS.find((id) => id !== DEFAULT_STYLE_ID)!;
 
-function renderStep(props: { onBack?: () => void; onUseDesign?: () => void } = {}) {
+function renderStep(
+  props: {
+    onBack?: () => void;
+    onUseDesign?: (choice: DesignChoiceDTO) => void;
+    initialChoice?: DesignChoiceDTO | null;
+  } = {},
+) {
   const onBack = props.onBack ?? vi.fn();
   const onUseDesign = props.onUseDesign ?? vi.fn();
-  const { container } = renderWithIntl(<DesignStep onBack={onBack} onUseDesign={onUseDesign} />);
+  const { container } = renderWithIntl(
+    <DesignStep onBack={onBack} onUseDesign={onUseDesign} initialChoice={props.initialChoice} />,
+  );
   const page = () => container.querySelector('[data-testid="design-page"]')!;
   return { onBack, onUseDesign, page };
 }
@@ -78,6 +89,31 @@ describe('DesignStep (MOTIR-1040)', () => {
     expect(onUseDesign).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores a saved choice from initialChoice (the saved look, not defaults) — 7.3.81', () => {
+    const choice: DesignChoiceDTO = {
+      styleId: OTHER_STYLE,
+      paletteId: 'cobalt',
+      typeId: 'grotesk',
+    };
+    const { page } = renderStep({ initialChoice: choice });
+    expect(page().getAttribute('data-style')).toBe(OTHER_STYLE);
+    expect(page().getAttribute('data-palette')).toBe('cobalt');
+    expect(page().getAttribute('data-type')).toBe('grotesk');
+  });
+
+  it('hands the chosen three axes (not the Theme) to onUseDesign — 7.3.81', () => {
+    const { onUseDesign } = renderStep();
+    fireEvent.click(screen.getByRole('radio', { name: STYLE_REGISTRY[OTHER_STYLE].name }));
+    // The Theme toggle is a preview mode, NOT part of the persisted choice.
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use this design' }));
+    expect(onUseDesign).toHaveBeenCalledWith({
+      styleId: OTHER_STYLE,
+      paletteId: DEFAULT_PALETTE_ID,
+      typeId: DEFAULT_TYPE_ID,
+    });
   });
 
   it('shows no Fine-tune control (that is a separate subtask)', () => {

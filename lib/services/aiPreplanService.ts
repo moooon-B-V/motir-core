@@ -1,7 +1,31 @@
-import { getPreplanState as fetchPreplanState } from '@/lib/ai/motirAiClient';
-import type { RawPreplanStateResponse } from '@/lib/ai/types';
+import {
+  getPreplanState as fetchPreplanState,
+  saveDesignChoice as saveDesignChoiceUpstream,
+} from '@/lib/ai/motirAiClient';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { InvalidDesignChoiceError } from '@/lib/ai/preplanErrors';
+import { isStyleId, type StyleId } from '@/lib/theme/styles';
+import { isPaletteId, type PaletteId } from '@/lib/theme/palettes';
+import { isTypeId, type TypeId } from '@/lib/theme/typography';
+import type { RawPreplanSession, RawPreplanStateResponse } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
-import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
+import type { DesignChoiceDTO, PreplanStateDTO } from '@/lib/dto/aiPreplan';
+
+// The starter flag set ALONGSIDE the design choice (motir-ai stores it as the
+// distinct `designStarter` column). A real pick → 'bare' (the project scaffolds
+// from the bare starter with the chosen look applied), versus 'with-design' on a
+// SKIP (the default-design starter). This card wires the pick path; the skip path
+// is the plan-exit's concern (MOTIR-1041).
+const DESIGN_STARTER_ON_PICK = 'bare';
+
+// The raw three-axis ids as they arrive from the route (pre-validation). Each is
+// validated against the motir-core registry before the write.
+export interface DesignChoiceInput {
+  styleId: string;
+  paletteId: string;
+  typeId: string;
+}
 
 // The pre-plan READ-THROUGH service (Subtask 7.3.70): the thin motir-core seam
 // the discovery UI (7.3.5) reads its resumable pre-plan state from. This is the
@@ -31,7 +55,61 @@ export const aiPreplanService = {
     });
     return mapPreplanState(raw);
   },
+
+  // Persist the user's design-step choice (Subtask 7.3.81). VALIDATE each axis
+  // against the motir-core registries (motir-ai owns none, storing the choice
+  // opaquely) — an unknown id throws InvalidDesignChoiceError (the route → 422) —
+  // then forward to the motir-ai write seam with the resolved org id (the write
+  // find-or-creates the AiProject) and the 'bare' starter flag. Returns the
+  // (validated) choice the upstream echoed back, so the route can confirm it.
+  async saveDesignChoice(ctx: ProjectContext, choice: DesignChoiceInput): Promise<DesignChoiceDTO> {
+    const validated = validateDesignChoice(choice);
+    const organizationId = await resolveOrganizationId(ctx);
+    const raw = await saveDesignChoiceUpstream({
+      coreOrganizationId: organizationId,
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: ctx.projectId,
+      designChoice: validated,
+      designStarter: DESIGN_STARTER_ON_PICK,
+    });
+    // Trust the round-trip but fall back to the just-validated choice if motir-ai
+    // somehow omitted it (defensive — the write always echoes the session DTO).
+    return mapDesignChoice(raw.designChoice) ?? validated;
+  },
 };
+
+// Validate the three axes against the motir-core registries, narrowing to the
+// branded ids. Each axis is checked in order; the FIRST unknown id throws.
+function validateDesignChoice(choice: DesignChoiceInput): DesignChoiceDTO {
+  if (!isStyleId(choice.styleId)) throw new InvalidDesignChoiceError('styleId', choice.styleId);
+  if (!isPaletteId(choice.paletteId))
+    throw new InvalidDesignChoiceError('paletteId', choice.paletteId);
+  if (!isTypeId(choice.typeId)) throw new InvalidDesignChoiceError('typeId', choice.typeId);
+  return { styleId: choice.styleId, paletteId: choice.paletteId, typeId: choice.typeId };
+}
+
+// Map the wire design choice (opaque strings) to the DTO (branded ids). motir-core
+// validated these before writing, so the cast is sound; null stays null.
+function mapDesignChoice(raw: RawPreplanSession['designChoice']): DesignChoiceDTO | null {
+  return raw
+    ? {
+        styleId: raw.styleId as StyleId,
+        paletteId: raw.paletteId as PaletteId,
+        typeId: raw.typeId as TypeId,
+      }
+    : null;
+}
+
+// Resolve the active workspace's organization id — the billing entity the write
+// tenant carries (the write find-or-creates the AiProject under it). RLS-aware,
+// mirroring aiExplanationService / aiChatService.
+async function resolveOrganizationId(ctx: ProjectContext): Promise<string> {
+  return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    const workspace = await workspaceRepository.findByIdInTx(ctx.workspaceId, tx);
+    if (!workspace) throw new Error(`workspace ${ctx.workspaceId} not found`);
+    return workspace.organizationId;
+  });
+}
 
 // Map the motir-ai wire body to the motir-core DTO: drop the motir-ai-internal
 // `aiProjectId` (never leaked to the browser), pass the opaque `conversation` /
@@ -44,6 +122,7 @@ function mapPreplanState(raw: RawPreplanStateResponse): PreplanStateDTO {
           classification: raw.session.classification,
           platform: raw.session.platform,
           designStarter: raw.session.designStarter,
+          designChoice: mapDesignChoice(raw.session.designChoice),
           validationTiming: raw.session.validationTiming,
           docSkipSet: raw.session.docSkipSet,
           currentGate: raw.session.currentGate,

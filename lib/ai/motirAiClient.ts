@@ -24,6 +24,7 @@ import type {
   PreplanStateQuery,
   Problem,
   RawJobResponse,
+  RawPreplanSession,
   RawPreplanStateResponse,
   RawUsageResponse,
   RequestEnvelope,
@@ -263,6 +264,40 @@ export async function getPreplanState(query: PreplanStateQuery): Promise<RawPrep
   }
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawPreplanStateResponse;
+}
+
+// PATCH /v1/preplan — the pre-plan WRITE seam (Subtask 7.3.81): persist the
+// onboarding design choice the user picked in the design step (MOTIR-1040). Unlike
+// the read above, a write FIND-OR-CREATES the AiProject + its org spine, so the
+// body carries the `coreOrganizationId` too (the caller — aiPreplanService — has
+// resolved it). `designChoice` is Motir's three axes `{ styleId, paletteId, typeId }`,
+// validated against the motir-core registries BEFORE this call (motir-ai stores it
+// opaquely); `designStarter` is the distinct with-design-vs-bare starter flag.
+// motir-ai returns the updated session DTO (same shape GET's `session` carries),
+// so the choice can be echoed back. A transport failure / non-2xx maps to a typed
+// error the caller degrades on (the choice is kept optimistically in the UI).
+export interface SaveDesignChoiceInput {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  designChoice: { styleId: string; paletteId: string; typeId: string };
+  designStarter: string;
+}
+
+export async function saveDesignChoice(input: SaveDesignChoiceInput): Promise<RawPreplanSession> {
+  const { url, serviceToken } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/preplan`, {
+      method: 'PATCH',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawPreplanSession;
 }
 
 // GET /v1/jobs/:id/stream — yield SSE frames (status / done / error) as they

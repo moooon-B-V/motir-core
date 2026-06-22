@@ -4,7 +4,7 @@ import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { drainSseFrames } from '@/lib/ai/sseFrames';
 import { toDirectionDocView, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
 import { mapRevisions } from '@/lib/onboarding/revisions';
-import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
+import type { DesignChoiceDTO, PreplanStateDTO } from '@/lib/dto/aiPreplan';
 import {
   type DiscoveryState,
   initialDiscoveryState,
@@ -61,6 +61,9 @@ export interface UseDiscoveryChat {
   openTier: (kind: DirectionDocKind) => void;
   /** Open the web-only full-page design step (Subtask 7.3.27 / MOTIR-1040). */
   openDesign: () => void;
+  /** Persist the chosen design (Subtask 7.3.81): update locally at once, then PATCH
+   *  /api/ai/pre-plan best-effort (a failed save keeps the local choice). */
+  saveDesign: (choice: DesignChoiceDTO) => void;
   /** Leave the full-screen review / design step for the hub. */
   back: () => void;
   dismissError: () => void;
@@ -241,6 +244,22 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     [],
   );
   const openDesign = useCallback(() => dispatch({ type: 'openDesign' }), []);
+
+  // Persist the design choice (7.3.81). Update local state OPTIMISTICALLY so the
+  // step restores the pick immediately, then PATCH best-effort: a failed save
+  // degrades quietly (the local choice is kept — the inline-edit-no-refresh /
+  // side-effect-graceful contract). The Theme toggle is preview-only, not sent.
+  const saveDesign = useCallback((choice: DesignChoiceDTO) => {
+    dispatch({ type: 'setDesignChoice', choice });
+    void fetch('/api/ai/pre-plan', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ designChoice: choice }),
+    }).catch(() => {
+      // best-effort: keep the optimistic local choice on a network failure.
+    });
+  }, []);
+
   const back = useCallback(() => dispatch({ type: 'backToHub' }), []);
   const dismissError = useCallback(() => dispatch({ type: 'dismissError' }), []);
 
@@ -252,6 +271,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     decideValidateEarly,
     openTier,
     openDesign,
+    saveDesign,
     back,
     dismissError,
   };

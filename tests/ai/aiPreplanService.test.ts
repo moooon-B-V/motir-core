@@ -5,13 +5,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // primitive and maps the wire body to the motir-core DTO — there is no DB read to
 // stub (unlike usage, this read carries no org resolution), so this is a pure
 // mapping test in the node env.
-vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn() }));
+vi.mock('@/lib/ai/motirAiClient', () => ({ getPreplanState: vi.fn(), saveDesignChoice: vi.fn() }));
+// The write resolves the active workspace's org id (the write find-or-creates the
+// AiProject under it). Stub the RLS tx + the workspace read so this stays a pure
+// node-env service test (no DB), mirroring the boundary-mock convention above.
+vi.mock('@/lib/workspaces/context', () => ({
+  withWorkspaceContext: <T>(_ctx: unknown, fn: (tx: unknown) => Promise<T>) => fn({}),
+}));
+vi.mock('@/lib/repositories/workspaceRepository', () => ({
+  workspaceRepository: { findByIdInTx: vi.fn(async () => ({ organizationId: 'org_1' })) },
+}));
 
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
-import { getPreplanState } from '@/lib/ai/motirAiClient';
+import { getPreplanState, saveDesignChoice } from '@/lib/ai/motirAiClient';
+import { InvalidDesignChoiceError } from '@/lib/ai/preplanErrors';
 import { toDirectionDocView } from '@/lib/onboarding/directionDoc';
 import type { ProjectContext } from '@/lib/projects';
-import type { RawPreplanStateResponse } from '@/lib/ai/types';
+import type { RawPreplanSession, RawPreplanStateResponse } from '@/lib/ai/types';
 
 const ctx = {
   userId: 'user_1',
@@ -27,6 +37,7 @@ const fullRaw: RawPreplanStateResponse = {
     platform: 'web',
     docSkipSet: ['feasibility'],
     designStarter: 'minimal',
+    designChoice: { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' },
     validationTiming: 'after',
     currentGate: 'vision',
     conversation: [{ role: 'user', content: 'build me a tracker' }],
@@ -137,6 +148,7 @@ describe('aiPreplanService.getPreplanState', () => {
       classification: 'startup',
       platform: 'web',
       designStarter: 'minimal',
+      designChoice: { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' },
       validationTiming: 'after',
       docSkipSet: ['feasibility'],
       currentGate: 'vision',
@@ -283,5 +295,59 @@ describe('aiPreplanService.getPreplanState', () => {
     vi.mocked(getPreplanState).mockRejectedValue(new Error('boom'));
 
     await expect(aiPreplanService.getPreplanState(ctx)).rejects.toThrow('boom');
+  });
+
+  it('maps a null designChoice through (the user never picked a design)', async () => {
+    vi.mocked(getPreplanState).mockResolvedValue({
+      ...fullRaw,
+      session: { ...fullRaw.session!, designChoice: null },
+    });
+
+    const dto = await aiPreplanService.getPreplanState(ctx);
+
+    expect(dto.session?.designChoice).toBeNull();
+  });
+});
+
+describe('aiPreplanService.saveDesignChoice (7.3.81)', () => {
+  // Valid registry ids for each axis (Style × Palette × Type).
+  const choice = { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' };
+  const echoed = (c: typeof choice): RawPreplanSession =>
+    ({ designChoice: c }) as unknown as RawPreplanSession;
+
+  it('validates the axes, resolves the org id, and forwards with the bare starter flag', async () => {
+    vi.mocked(saveDesignChoice).mockResolvedValue(echoed(choice));
+
+    const result = await aiPreplanService.saveDesignChoice(ctx, choice);
+
+    expect(saveDesignChoice).toHaveBeenCalledWith({
+      coreOrganizationId: 'org_1',
+      coreWorkspaceId: 'ws_1',
+      coreProjectId: 'pj_1',
+      designChoice: { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' },
+      designStarter: 'bare',
+    });
+    // Returns the choice echoed back by motir-ai (mapped to the DTO).
+    expect(result).toEqual(choice);
+  });
+
+  it('falls back to the validated choice if motir-ai omits it from the echo', async () => {
+    vi.mocked(saveDesignChoice).mockResolvedValue({ designChoice: null } as RawPreplanSession);
+
+    const result = await aiPreplanService.saveDesignChoice(ctx, choice);
+
+    expect(result).toEqual(choice);
+  });
+
+  it.each([
+    ['styleId', { ...choice, styleId: 'not-a-style' }],
+    ['paletteId', { ...choice, paletteId: 'not-a-palette' }],
+    ['typeId', { ...choice, typeId: 'not-a-type' }],
+  ])('rejects an unknown %s with InvalidDesignChoiceError before any write', async (_axis, bad) => {
+    await expect(aiPreplanService.saveDesignChoice(ctx, bad)).rejects.toBeInstanceOf(
+      InvalidDesignChoiceError,
+    );
+    // Validation runs FIRST — no org resolution, no upstream write.
+    expect(saveDesignChoice).not.toHaveBeenCalled();
   });
 });
