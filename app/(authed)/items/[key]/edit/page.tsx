@@ -12,6 +12,7 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EditIssueForm } from './_components/EditIssueForm';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
+import { IssueQuickViewController } from '../../_components/IssueQuickViewController';
 
 // The issue edit route (Subtask 2.3.6). Server Component: resolves the active
 // project (the shipped active-project model — finding #50, no projects/[key]
@@ -96,6 +97,11 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
         currentItemId={detail.item.id}
         identifier={detail.item.identifier}
       />
+      {/* The shared quick-view (peek) modal — `?peek=<identifier>`-driven, so a
+        RelationshipsPanel row here opens the linked item in a peek instead of
+        navigating away (8.8.31). A peek is a shallow URL overlay; it does not
+        navigate, so unsaved edits in the form above are preserved. */}
+      <IssueQuickViewController />
     </div>
   );
 }

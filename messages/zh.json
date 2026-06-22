@@ -39,7 +39,7 @@
       "chore": "杂务"
     },
     "executor": {
-      "coding_agent": "编码智能体",
+      "coding_agent": "智能体",
       "human": "人工"
     },
     "priority": {
@@ -3736,7 +3736,29 @@
         "body": "市场核查发现需求真实存在，但你的具体设想尚未得到验证。先验证需求——在构建前先上线一个带等候名单的小型营销站点——还是直接开始构建？",
         "blockedNote": "选择一项以继续——Motir 会在此等你决定"
       },
-      "designLook": "设计外观"
+      "designLook": "设计外观",
+      "revisions": {
+        "historyTitle": "修订记录",
+        "historyHint": "Motir 只会向前推进——较早的版本会留在记录里，且无法撤销。想改什么，直接在对话里告诉 Motir 就好。",
+        "whatChangedTitle": "改动内容",
+        "noChange": "本次修订没有任何改动。",
+        "currentTag": "当前",
+        "kindBaseline": "初稿",
+        "kindDirect": "已修订",
+        "kindCascade": "自动更新",
+        "kindOther": "已更新",
+        "whyLabel": "原因",
+        "showChanges": "查看改动",
+        "hideChanges": "收起改动",
+        "diffAdded": "新增",
+        "diffRemoved": "删除",
+        "diffChanged": "变更",
+        "cascadeBackTitle": "返回修订这一步",
+        "cascadeBackBody": "你的反馈改动了这里——方向中较早的一部分。看一下再继续；Motir 会相应刷新后面的步骤。",
+        "cascadeNothingLocked": "尚未锁定任何内容——随时回头都很安全。",
+        "willRefreshLabel": "将刷新",
+        "revisitingLabel": "正在重看"
+      }
     },
     "design": {
       "back": "返回",

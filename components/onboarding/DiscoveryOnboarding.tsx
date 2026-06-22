@@ -11,7 +11,12 @@ import { OnboardingCanvas } from './OnboardingCanvas';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
 import { useDiscoveryChat } from '@/lib/hooks/useDiscoveryChat';
-import { activeDoc, isTiersComplete } from '@/lib/onboarding/discoveryLoop';
+import {
+  activeDoc,
+  activeRevisions,
+  isTiersComplete,
+  willRefreshKinds,
+} from '@/lib/onboarding/discoveryLoop';
 
 // The onboarding SHELL (Subtask 7.3.11 / MOTIR-840) — the client island that
 // composes the finalized two-pane onboarding into one frame with two modes: the
@@ -95,6 +100,9 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
         <TierReviewGate
           doc={reviewing}
           availableKinds={state.producedKinds}
+          revisions={activeRevisions(state)}
+          cascadeActive={state.cascade?.directTier === reviewing.kind}
+          willRefresh={willRefreshKinds(state)}
           catalog={state.catalog}
           validateDecision={validateDecision}
           onNavigate={openTier}
@@ -118,7 +126,14 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
               conductor also offers it in chat (cross-repo, MOTIR-1099). A
               top-right shortcut keeps it reachable even when the station is panned
               out of view. */}
-          <OnboardingCanvas state={state} idea={idea} onOpen={openTier} onOpenDesign={openDesign} />
+          <OnboardingCanvas
+            state={state}
+            idea={idea}
+            onOpen={openTier}
+            onOpenDesign={openDesign}
+            revisitingKind={state.cascade?.directTier ?? null}
+            willRefresh={willRefreshKinds(state)}
+          />
           <Button
             variant="secondary"
             size="sm"

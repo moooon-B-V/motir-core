@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type {
   ReadinessVerdictDto,
@@ -21,10 +21,27 @@ vi.mock('@/app/(authed)/items/[key]/actions', () => ({
   listLinkCandidatesAction: vi.fn(),
 }));
 
+// 8.8.31: the rows now render the client RelationshipPeekLink, which calls
+// usePeekOpen (usePathname / useSearchParams). Stub next/navigation — happy-dom
+// has no App Router context — and assert the shallow `?peek=` push.
+let searchParamsString = '';
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/items/PROD-1',
+  useSearchParams: () => new URLSearchParams(searchParamsString),
+}));
+
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { RelationshipsPanel } from '@/app/(authed)/items/[key]/_components/RelationshipsPanel';
 
-afterEach(cleanup);
+// The peek opens via SHALLOW routing (window.history.pushState), so assert
+// against a pushState spy — never a real navigation.
+const historyPush = vi.spyOn(window.history, 'pushState').mockImplementation(() => {});
+
+afterEach(() => {
+  historyPush.mockClear();
+  searchParamsString = '';
+  cleanup();
+});
 
 function summary(overrides: Partial<WorkItemSummaryDto> = {}): WorkItemSummaryDto {
   return {
@@ -110,6 +127,8 @@ describe('ReadinessBadge (2.4.5)', () => {
     screen.getByText(/Waiting on 2 work items/);
     const lnk = screen.getByRole('link', { name: 'PROD-3' });
     expect(lnk.getAttribute('href')).toBe('/items/PROD-3');
+    // Opt-in default: without `blockerLinksNewTab`, links stay same-tab (8.8.32).
+    expect(lnk.getAttribute('target')).not.toBe('_blank');
   });
 
   it('singularizes "issue" for a single blocker', () => {
@@ -169,6 +188,13 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
     expect(blocker.textContent).toContain('PROD-3');
     expect(blocker.textContent).toContain('To Do');
 
+    // The detail-page banner blocker link stays SAME-TAB (the opt-in default;
+    // ReadinessBadge here gets no `blockerLinksNewTab`, unlike the 8.8.32 quick
+    // modal): it navigates to /items/<KEY> with NO target=_blank.
+    const bannerBlocker = screen.getByRole('link', { name: 'PROD-3' });
+    expect(bannerBlocker.getAttribute('href')).toBe('/items/PROD-3');
+    expect(bannerBlocker.getAttribute('target')).not.toBe('_blank');
+
     expect(screen.getByRole('link', { name: /Downstream/ }).textContent).toContain('Done');
 
     screen.getByText('Blocked');
@@ -217,5 +243,40 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
       />,
     );
     expect(screen.getByRole('link', { name: /OTHER-2/ }).textContent).toContain('mystery');
+  });
+
+  it('a PLAIN click on a relationship row opens the quick-view peek, not a navigation (8.8.31)', () => {
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        relatesTo={[link({ id: 'r', identifier: 'PROD-5', title: 'Related thing' })]}
+        readiness={READY}
+        workflow={workflow}
+      />,
+    );
+    const row = screen.getByRole('link', { name: /Related thing/ });
+    // The anchor keeps its detail-page href (shareable + ⌘/ctrl/middle-click →
+    // new tab natively)…
+    expect(row.getAttribute('href')).toBe('/items/PROD-5');
+    // …but a plain primary click is intercepted (default prevented) and opens the
+    // peek for PROD-5 via a shallow `?peek=` push on the current item's URL.
+    const notPrevented = fireEvent.click(row, { button: 0 });
+    expect(notPrevented).toBe(false); // preventDefault was called
+    expect(historyPush).toHaveBeenCalledWith(null, '', '/items/PROD-1?peek=PROD-5');
+  });
+
+  it('a ⌘/ctrl-click on a relationship row does NOT open the peek — the browser opens the full page (8.8.31)', () => {
+    render(
+      <RelationshipsPanel
+        {...EMPTY}
+        relatesTo={[link({ id: 'r', identifier: 'PROD-5', title: 'Related thing' })]}
+        readiness={READY}
+        workflow={workflow}
+      />,
+    );
+    const row = screen.getByRole('link', { name: /Related thing/ });
+    fireEvent.click(row, { button: 0, metaKey: true });
+    fireEvent.click(row, { button: 0, ctrlKey: true });
+    expect(historyPush).not.toHaveBeenCalled();
   });
 });

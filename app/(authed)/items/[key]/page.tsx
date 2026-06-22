@@ -38,6 +38,7 @@ import { ChildList } from './_components/ChildList';
 import { ActivitySection } from './_components/ActivitySection';
 import { AttachmentsPanel } from './_components/AttachmentsPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
+import { IssueQuickViewController } from '../_components/IssueQuickViewController';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
 import type { ActivityAllPageDto, ActivityHistoryPageDto } from '@/lib/dto/activity';
@@ -447,6 +448,11 @@ export default async function IssueDetailPage({
           </aside>
         </div>
       </div>
+      {/* The shared quick-view (peek) modal — driven by `?peek=<identifier>`.
+        Mounted here so the RelationshipsPanel rows can open a linked item in
+        the same peek used on the list/board/ready surfaces (8.8.31), without
+        navigating away from this detail page. */}
+      <IssueQuickViewController />
     </EstimationConfigProvider>
   );
 }

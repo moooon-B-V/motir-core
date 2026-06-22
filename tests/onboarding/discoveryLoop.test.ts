@@ -1,18 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import type { DirectionDocView, FeatureCatalogView } from '@/lib/onboarding/directionDoc';
+import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
 import {
   type DiscoveryState,
   activeDoc,
+  activeRevisions,
   initialDiscoveryState,
+  isGoingBack,
   isTiersComplete,
   normalizeFrame,
   reduceDiscovery,
+  willRefreshKinds,
 } from '@/lib/onboarding/discoveryLoop';
 
 const doc = (kind: DirectionDocView['kind'], body = `# ${kind}\n\nbody`): DirectionDocView => ({
   kind,
   contentMd: body,
   version: 1,
+});
+
+const revDto = (version: number, changeKind: string): PreplanRevisionDTO => ({
+  version,
+  changeReason: changeKind === 'created' ? null : 'you asked to broaden the audience',
+  changeKind,
+  diff:
+    version === 1 ? null : [{ path: 'pitch.headline', kind: 'changed', before: 'a', after: 'b' }],
+  createdAt: `2026-06-2${version}T00:00:00.000Z`,
 });
 
 const catalog = (title = 'Work Items'): FeatureCatalogView => ({
@@ -209,8 +222,64 @@ describe('reduceDiscovery — validate-early ask + completion', () => {
   });
 });
 
-describe('reduceDiscovery — revisions are forward-only (cascade-back is 1179)', () => {
-  it('a revisions frame marks affected tiers stale but does NOT change the view', () => {
+describe('reduceDiscovery — revisions route the downstream cascade-back (1179)', () => {
+  it('normalizeFrame parses the revisions `gate` (the route-back tier)', () => {
+    expect(
+      normalizeFrame('revisions', {
+        revisions: [{ tier: 'discovery', reason: 'direct' }],
+        gate: 'discovery',
+      }),
+    ).toEqual({
+      event: 'revisions',
+      data: { revisions: [{ tier: 'discovery', reason: 'direct' }], gate: 'discovery' },
+    });
+    // A non-tier / absent gate narrows to null, never throws.
+    expect(
+      normalizeFrame('revisions', { revisions: [{ tier: 'vision', reason: 'cascade' }] }),
+    ).toEqual({
+      event: 'revisions',
+      data: { revisions: [{ tier: 'vision', reason: 'cascade' }], gate: null },
+    });
+  });
+
+  it('routes BACK to the attributed tier, marks downstream "will refresh", keeps nothing locked', () => {
+    // Reviewing validation (a LATER gate); a reaction is attributed upstream to
+    // discovery, cascading through vision + validation.
+    const s = run([
+      { type: 'docsLoaded', docs: [doc('discovery'), doc('vision'), doc('validation')] },
+      { type: 'openReview', kind: 'validation' },
+      {
+        type: 'frame',
+        frame: {
+          event: 'revisions',
+          data: {
+            revisions: [
+              { tier: 'discovery', reason: 'direct' },
+              { tier: 'vision', reason: 'cascade' },
+              { tier: 'validation', reason: 'cascade' },
+            ],
+            gate: 'discovery',
+          },
+        },
+      },
+    ]);
+    // Sent back to the attributed (earliest) tier.
+    expect(s.activeKind).toBe('discovery');
+    expect(s.view).toBe('review');
+    expect(s.cascade).toEqual({
+      directTier: 'discovery',
+      tiers: ['discovery', 'vision', 'validation'],
+      fromKind: 'validation',
+    });
+    // Every affected tier's body is stale (re-fetch pending).
+    expect(s.staleKinds).toEqual(['discovery', 'vision', 'validation']);
+    // Downstream tiers (not the attributed one) read "will refresh" while stale.
+    expect(willRefreshKinds(s)).toEqual(['vision', 'validation']);
+    // Going truly BACK (the attributed tier is upstream of where the user was).
+    expect(isGoingBack(s)).toBe(true);
+  });
+
+  it('docsLoaded threads the new revision logs + diffs and clears "will refresh"', () => {
     const s = run([
       { type: 'docsLoaded', docs: [doc('discovery'), doc('vision')], catalog: null },
       { type: 'openReview', kind: 'vision' },
@@ -218,13 +287,71 @@ describe('reduceDiscovery — revisions are forward-only (cascade-back is 1179)'
         type: 'frame',
         frame: {
           event: 'revisions',
-          data: { revisions: [{ tier: 'discovery', reason: 'reframed' }] },
+          data: {
+            revisions: [
+              { tier: 'discovery', reason: 'direct' },
+              { tier: 'vision', reason: 'cascade' },
+            ],
+            gate: 'discovery',
+          },
+        },
+      },
+      // The hook re-fetches the seam and threads the forward logs.
+      {
+        type: 'docsLoaded',
+        docs: [doc('discovery'), doc('vision')],
+        revisions: {
+          discovery: [revDto(2, 'direct'), revDto(1, 'created')],
+          vision: [revDto(2, 'cascade'), revDto(1, 'created')],
         },
       },
     ]);
-    expect(s.staleKinds).toEqual(['discovery']);
-    expect(s.view).toBe('review'); // no auto cascade-back routing
-    expect(s.activeKind).toBe('vision');
+    expect(s.staleKinds).toEqual([]);
+    expect(willRefreshKinds(s)).toEqual([]); // bodies landed → no longer refreshing
+    expect(activeRevisions(s).map((v) => v.version)).toEqual([2, 1]);
+    expect(activeRevisions(s)[0]!.changeKind).toBe('direct');
+  });
+
+  it('moving forward (Continue → Back) clears the cascade — nothing is locked', () => {
+    const s = run([
+      { type: 'docsLoaded', docs: [doc('discovery'), doc('vision')] },
+      { type: 'openReview', kind: 'vision' },
+      {
+        type: 'frame',
+        frame: {
+          event: 'revisions',
+          data: { revisions: [{ tier: 'discovery', reason: 'direct' }], gate: 'discovery' },
+        },
+      },
+      { type: 'backToHub' },
+    ]);
+    expect(s.cascade).toBeNull();
+    expect(s.view).toBe('hub');
+    expect(willRefreshKinds(s)).toEqual([]);
+  });
+
+  it('a fresh user reaction supersedes a prior cascade banner', () => {
+    const s = run([
+      { type: 'docsLoaded', docs: [doc('discovery')] },
+      {
+        type: 'frame',
+        frame: {
+          event: 'revisions',
+          data: { revisions: [{ tier: 'discovery', reason: 'direct' }], gate: 'discovery' },
+        },
+      },
+      { type: 'userTurn', text: 'actually, change the audience' },
+    ]);
+    expect(s.cascade).toBeNull();
+  });
+
+  it('there is NO rollback/restore action — the log is forward-only by construction', () => {
+    // The action union admits no rollback/restore/revert/undo; a dispatched
+    // "rollback" hits the reducer's default branch and is a no-op (the forward-only
+    // guarantee — undo is only ever a new forward revision the user asks for).
+    const before = run([{ type: 'docsLoaded', docs: [doc('discovery')] }]);
+    const after = reduceDiscovery(before, { type: 'rollback' } as never);
+    expect(after).toEqual(before);
   });
 });
 

@@ -95,6 +95,21 @@ describe('IssueQuickViewPanel — populated (ready)', () => {
     expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe('/items/PROD-7');
     expect(screen.getByRole('link', { name: 'PROD-7' }).getAttribute('href')).toBe('/items/PROD-7');
   });
+
+  it('opens every detail-page link in a NEW TAB — target=_blank + rel=noopener (8.8.31)', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    // The four links that navigate to a work-item DETAIL page (`/items/<KEY>`):
+    // the header identifier, "Open full page →", the description-footer "more"
+    // link (all → /items/PROD-7), and the rail Parent link (→ /items/PROD-1).
+    const detailLinks = screen
+      .getAllByRole('link')
+      .filter((a) => /^\/items\/[A-Z]/.test(a.getAttribute('href') ?? ''));
+    expect(detailLinks).toHaveLength(4);
+    for (const a of detailLinks) {
+      expect(a.getAttribute('target')).toBe('_blank');
+      expect(a.getAttribute('rel')).toContain('noopener');
+    }
+  });
 });
 
 describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
@@ -140,7 +155,11 @@ describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
   it('renders the work type, executor, labels, components, sprint, and story points', () => {
     render(<IssueQuickViewPanel state="ready" data={FULL} />);
     expect(screen.getByText('Code')).toBeTruthy();
-    expect(screen.getByText('Coding agent')).toBeTruthy();
+    expect(screen.getByText('Agent')).toBeTruthy();
+    // Rail field titles resolve from the `issueViews` namespace (bug 8.8.x:
+    // they were read via the `labels` namespace, so the raw key path showed).
+    expect(screen.getByText('Labels')).toBeTruthy();
+    expect(screen.getByText('Components')).toBeTruthy();
     expect(screen.getByText('auth')).toBeTruthy();
     expect(screen.getByText('security')).toBeTruthy();
     expect(screen.getByText('API')).toBeTruthy();
@@ -161,7 +180,7 @@ describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
   it('omits the leaf-only Type/Executor rows for a container kind (story)', () => {
     // The base DATA is a story (no work type) — Type/Executor must not render.
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
-    expect(screen.queryByText('Coding agent')).toBeNull();
+    expect(screen.queryByText('Agent')).toBeNull();
   });
 });
 
@@ -169,7 +188,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
   // The banner shows only for a TODO-category item with blockers.
   const TODO = { ...DATA, statusLabel: 'To Do', statusCategory: 'todo' as const };
 
-  it('blocked: renders the Blocked banner naming open blockers as ?peek= swap-peek links', () => {
+  it('blocked: renders the Blocked banner naming open blockers as new-tab detail links (8.8.32)', () => {
     searchParamsString = 'view=list&peek=PROD-7';
     render(
       <IssueQuickViewPanel
@@ -179,13 +198,17 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     );
     expect(screen.getByText('Blocked')).toBeTruthy();
     expect(screen.getByText(/Waiting on 2 work items/)).toBeTruthy();
-    // A blocker link SWAPS the peek (preserves view, swaps peek), staying in-list.
-    expect(screen.getByRole('link', { name: 'PROD-3' }).getAttribute('href')).toBe(
-      '/items?view=list&peek=PROD-3',
-    );
-    expect(screen.getByRole('link', { name: 'PROD-8' }).getAttribute('href')).toBe(
-      '/items?view=list&peek=PROD-8',
-    );
+    // 8.8.32 (overrides the 2.5.20 peek-swap + the 8.8.31 exclusion): each blocker
+    // link now points to the blocker's DETAIL page and opens in a NEW TAB, so a
+    // click leaves the current peek open in the original tab.
+    const b3 = screen.getByRole('link', { name: 'PROD-3' });
+    expect(b3.getAttribute('href')).toBe('/items/PROD-3');
+    expect(b3.getAttribute('target')).toBe('_blank');
+    expect(b3.getAttribute('rel')).toContain('noopener');
+    const b8 = screen.getByRole('link', { name: 'PROD-8' });
+    expect(b8.getAttribute('href')).toBe('/items/PROD-8');
+    expect(b8.getAttribute('target')).toBe('_blank');
+    expect(b8.getAttribute('rel')).toContain('noopener');
   });
 
   it('ready: renders "Ready to start" when the verdict is ready (all blockers resolved, OR none — bug-ready-banner-no-deps)', () => {

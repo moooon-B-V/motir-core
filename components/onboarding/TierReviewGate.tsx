@@ -1,14 +1,19 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, ArrowRight, ListChecks, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ListChecks, Lock, Sparkles, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DirectionDocView } from './DirectionDocView';
+import { CascadeBackBanner } from './CascadeBackBanner';
+import { RevisionDiff } from './RevisionDiff';
+import { RevisionLog } from './RevisionLog';
 import type {
   DirectionDocKind,
   DirectionDocView as DirectionDocModel,
   FeatureCatalogView,
 } from '@/lib/onboarding/directionDoc';
+import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
+import { latestRevision } from '@/lib/onboarding/revisions';
 
 /** The on-page validate-demand-first decision (MOTIR-1064) shown on the validation
  *  tier; when present it BLOCKS Continue until the user picks an option. */
@@ -33,6 +38,14 @@ export interface TierReviewGateProps {
   doc: DirectionDocModel;
   /** The other produced tiers, for the doc's cross-link footer. */
   availableKinds: DirectionDocKind[];
+  /** This tier's forward revision log (newest-first) — drives the per-revision
+   *  diff + the revision-log viewer (Subtask 7.3.71 / MOTIR-1179). */
+  revisions: PreplanRevisionDTO[];
+  /** This tier is the attributed target of an active downstream cascade (G3) —
+   *  show the going-back banner above the doc. */
+  cascadeActive?: boolean;
+  /** The downstream tiers re-deriving in the active cascade ("will refresh"). */
+  willRefresh?: DirectionDocKind[];
   /** The structured feature catalog — folded into the VISION tier's review by
    *  `DirectionDocView` (ignored for every other tier). Null when undrafted. */
   catalog?: FeatureCatalogView | null;
@@ -50,6 +63,9 @@ export interface TierReviewGateProps {
 export function TierReviewGate({
   doc,
   availableKinds,
+  revisions,
+  cascadeActive = false,
+  willRefresh = [],
   catalog = null,
   validateDecision,
   onBack,
@@ -58,9 +74,13 @@ export function TierReviewGate({
   onNavigate,
 }: TierReviewGateProps) {
   const t = useTranslations('onboarding.chat');
+  const tr = useTranslations('onboarding.chat.revisions');
   // The validate-demand-first decision gates Continue: until the user picks an
   // option on the page (or in the chat), advancing is blocked (MOTIR-1064).
   const blockedByDecision = validateDecision !== undefined;
+  // The newest revision of this tier (null when never revised) — the WHAT the gate
+  // surfaces prominently; the full history sits below in the log viewer (1179).
+  const latest = latestRevision(revisions);
 
   return (
     <section
@@ -83,12 +103,29 @@ export function TierReviewGate({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-[48rem]">
+          {cascadeActive && <CascadeBackBanner willRefresh={willRefresh} />}
+
           <DirectionDocView
             doc={doc}
             catalog={catalog}
             availableDocs={availableKinds}
             onNavigate={onNavigate}
           />
+
+          {latest && (
+            <section
+              className="mt-6 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding)"
+              aria-label={tr('whatChangedTitle')}
+            >
+              <header className="mb-2 flex items-center gap-2">
+                <Sparkles className="size-4 text-(--el-accent-on-surface)" aria-hidden="true" />
+                <h2 className="text-sm font-semibold text-(--el-text)">{tr('whatChangedTitle')}</h2>
+              </header>
+              <RevisionDiff diff={latest.diff} />
+            </section>
+          )}
+
+          <RevisionLog versions={revisions} currentVersion={doc.version ?? 1} />
 
           {validateDecision && (
             <section

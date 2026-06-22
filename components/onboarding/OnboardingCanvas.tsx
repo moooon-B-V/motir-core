@@ -38,11 +38,24 @@ export interface OnboardingCanvasProps {
   onOpen: (kind: DirectionDocKind) => void;
   /** Open the web-only design step (MOTIR-1040) — the `design` station's action. */
   onOpenDesign: () => void;
+  /** The tier the conductor sent the user BACK to re-review (G3, MOTIR-1179) —
+   *  its station shows the "Revisiting" state. */
+  revisitingKind?: DirectionDocKind | null;
+  /** Downstream tiers re-deriving in the active cascade — "Will refresh". */
+  willRefresh?: DirectionDocKind[];
 }
 
-export function OnboardingCanvas({ state, idea, onOpen, onOpenDesign }: OnboardingCanvasProps) {
+export function OnboardingCanvas({
+  state,
+  idea,
+  onOpen,
+  onOpenDesign,
+  revisitingKind = null,
+  willRefresh = [],
+}: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
   const { positions, savePosition, loaded } = useCanvasLayout();
+  const willRefreshSet = new Set<string>(willRefresh);
 
   // Hold a loading state until the saved positions resolve, so nodes never paint
   // at the auto-layout and then jump to the stored arrangement (MOTIR-1253).
@@ -79,6 +92,8 @@ export function OnboardingCanvas({ state, idea, onOpen, onOpenDesign }: Onboardi
         doc={state.docs[node.id]}
         session={state.session}
         onOpenDesign={station.kind === 'design' ? onOpenDesign : undefined}
+        revisiting={revisitingKind === node.id}
+        refreshing={willRefreshSet.has(node.id)}
       />
     );
   }

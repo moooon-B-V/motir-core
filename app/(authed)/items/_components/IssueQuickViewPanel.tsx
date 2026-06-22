@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
   Bot,
@@ -65,6 +64,8 @@ function OpenFullPageLink({ identifier }: { identifier: string }) {
   return (
     <Link
       href={`/items/${identifier}`}
+      target="_blank"
+      rel="noopener noreferrer"
       data-testid="quick-view-open-full"
       className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
     >
@@ -108,18 +109,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
     [locale],
   );
-  // A named readiness blocker SWAPS the peek (push `?peek=<blockerKey>`, staying
-  // in-list) rather than navigating to the full page — the 2.5.20 design. Build
-  // the href the same way QuickViewTrigger opens a peek: preserve every other
-  // param (view/sort/filter/page), just swap `peek`.
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const buildPeekHref = (identifier: string) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '');
-    params.set('peek', identifier);
-    return `${pathname}?${params.toString()}`;
-  };
-
   const mutedNone = <span className="text-(--el-text-muted)">{t('none')}</span>;
 
   // Read-only custom-field value (8.8.8) — the detail rail's per-type value
@@ -258,6 +247,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
         <Link
           href={`/items/${data.identifier}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {data.identifier}
@@ -278,14 +269,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               main column under the title, per quick-view.mock.html (2.5.20). Shown
               only for a TODO-category item that has blockers: no banner without
               blockers, and none once the item is in-progress / done ("can I start
-              this?" is moot past todo). Named blockers swap the peek. */}
+              this?" is moot past todo). Each named blocker opens its DETAIL page in
+              a NEW TAB (8.8.32 — overrides the 2.5.20 peek-swap), matching the
+              new-tab treatment the other quick-view detail links got in 8.8.31. */}
           {data.readiness && data.statusCategory === 'todo' ? (
             <ReadinessBadge
               ready={data.readiness.ready}
               blockers={data.readiness.blockers.map((identifier) => ({
                 identifier,
-                href: buildPeekHref(identifier),
+                href: `/items/${identifier}`,
               }))}
+              blockerLinksNewTab
               className="mt-4"
             />
           ) : null}
@@ -302,6 +296,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               link: (chunks) => (
                 <Link
                   href={`/items/${data.identifier}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="font-medium text-(--el-link) hover:underline"
                 >
                   {chunks}
@@ -369,6 +365,8 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {data.parent ? (
               <Link
                 href={`/items/${data.parent.identifier}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex min-w-0 items-center gap-1.5 text-(--el-link) hover:underline"
               >
                 <IssueTypeIcon type={data.parent.kind} className="h-3.5 w-3.5 shrink-0" />
@@ -384,7 +382,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               labelTint (5.4.8), NOT a fixed lavender: the labelTint decision
               (product owner, 2026-06-10) guarantees a label renders the SAME
               colour on every surface, so the peek and the detail rail match. */}
-          <RailField label={tl('labelsField')}>
+          <RailField label={t('labelsField')}>
             {data.labels.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {data.labels.map((l) => (
@@ -400,7 +398,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </RailField>
 
           {/* Components — neutral chips with the component glyph (5.4.8). */}
-          <RailField label={tl('componentsField')}>
+          <RailField label={t('componentsField')}>
             {data.components.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {data.components.map((c) => (

@@ -12,10 +12,11 @@
 // The SSE frames mirror what the motir-ai `discovery` job emits
 // (`src/jobs/handlers/discovery.ts`) and `/api/ai/chat/[jobId]/stream` relays
 // VERBATIM. motir-core does not own those shapes — so we type only the fields the
-// UI consumes and tolerate extras. The revise/diff/cascade-back half (the
-// `revisions` cascade routing, per-doc diffs, the forward revision log) is
-// explicitly OUT of this card → Subtask 7.3.71 / MOTIR-1179; here a `revisions`
-// frame only marks the affected tiers stale so their read-only body re-fetches.
+// UI consumes and tolerate extras. The revise/diff/cascade-back half (Subtask
+// 7.3.71 / MOTIR-1179) consumes the `revisions` frame's `gate` to route the user
+// BACK to the attributed (earliest changed) tier, marks the cascade's downstream
+// tiers "will refresh", and threads each artifact's forward revision log + diffs
+// (from the 7.3.70 read seam) into state for the gate to render.
 
 import {
   type DirectionDocKind,
@@ -23,6 +24,8 @@ import {
   type FeatureCatalogView,
   DIRECTION_DOC_ORDER,
 } from './directionDoc';
+import type { PreplanRevisionDTO } from '@/lib/dto/aiPreplan';
+import type { RevisionsByKind } from './revisions';
 
 // ── The conductor SSE frames (relayed verbatim from motir-ai) ────────────────
 
@@ -49,7 +52,17 @@ export type DiscoveryFrame =
   | { event: 'state'; data: DiscoveryStatePatch }
   | { event: 'docs'; data: { docs: DiscoveryDocRef[] } }
   | { event: 'validate_early_ask'; data: { recommendation: string; defaultTiming: string } }
-  | { event: 'revisions'; data: { revisions: { tier: DirectionDocKind; reason: string }[] } }
+  | {
+      event: 'revisions';
+      // `revisions[].reason` is the engine's `'direct' | 'cascade'` classification
+      // (typed loose — motir-ai owns the wire). `gate` is the EARLIEST changed
+      // tier the conductor replays forward from = the tier to route the user BACK
+      // to (the cascade-back target). Null when no produced tier was named.
+      data: {
+        revisions: { tier: DirectionDocKind; reason: string }[];
+        gate: DirectionDocKind | null;
+      };
+    }
   | { event: 'error'; data: { code: string; message: string | null } };
 
 const TIER_SET = new Set<string>(DIRECTION_DOC_ORDER);
@@ -130,7 +143,9 @@ export function normalizeFrame(event: string, data: unknown): DiscoveryFrame | n
           return tier ? { tier, reason: typeof o.reason === 'string' ? o.reason : '' } : null;
         })
         .filter((x): x is { tier: DirectionDocKind; reason: string } => x !== null);
-      return revisions.length ? { event: 'revisions', data: { revisions } } : null;
+      return revisions.length
+        ? { event: 'revisions', data: { revisions, gate: asTier(d.gate) } }
+        : null;
     }
     case 'error':
       return {
@@ -178,6 +193,21 @@ export interface ValidateEarlyAsk {
 // reached from the hub, styling its WHOLE self via the shipped three-axis runtime.
 export type DiscoveryView = 'hub' | 'review' | 'design';
 
+/**
+ * An in-flight downstream-only cascade (design screen G3). Set when a chat
+ * reaction triggers a coordinated revision: the conductor attributes it to
+ * `directTier` (the earliest changed tier — the route-back target) and re-derives
+ * `tiers` (directTier + every downstream dependent). `fromKind` is where the user
+ * was when they reacted, so the UI can tell a true "going BACK" (directTier is
+ * upstream) from an in-place revision. Cleared when the user moves forward
+ * (Continue / a new turn / Back) — nothing is ever locked.
+ */
+export interface CascadeState {
+  directTier: DirectionDocKind;
+  tiers: DirectionDocKind[];
+  fromKind: DirectionDocKind | null;
+}
+
 export interface DiscoveryState {
   turns: ChatTurn[];
   /** A user turn is in flight (POST sent, stream open) — disables the composer. */
@@ -188,6 +218,9 @@ export interface DiscoveryState {
   producedKinds: DirectionDocKind[];
   /** The read-only bodies, by kind (fetched from /api/ai/pre-plan). */
   docs: Record<string, DirectionDocView>;
+  /** Each artifact's forward revision LOG + diffs, newest-first (the read seam's
+   *  `versions`). What the gate's revision viewer + per-revision diff render. */
+  revisions: RevisionsByKind;
   /** The structured feature catalog, folded into the vision tier's review
    *  (fetched from /api/ai/pre-plan; null until the vision step drafts it). */
   catalog: FeatureCatalogView | null;
@@ -195,6 +228,8 @@ export interface DiscoveryState {
   activeKind: DirectionDocKind | null;
   view: DiscoveryView;
   pendingAsk: ValidateEarlyAsk | null;
+  /** The active downstream-only cascade-back (G3), or null when not cascading. */
+  cascade: CascadeState | null;
   /** Kinds whose body needs a (re)fetch — set by `docs` / `revisions` frames. */
   staleKinds: DirectionDocKind[];
   error: { code: string; message: string | null } | null;
@@ -218,10 +253,12 @@ export function initialDiscoveryState(): DiscoveryState {
     session: { ...EMPTY_SESSION },
     producedKinds: [],
     docs: {},
+    revisions: {},
     catalog: null,
     activeKind: null,
     view: 'hub',
     pendingAsk: null,
+    cascade: null,
     staleKinds: [],
     error: null,
     seq: 0,
@@ -243,11 +280,17 @@ export type DiscoveryAction =
       type: 'hydrate';
       session: HydrateSession | null;
       docs: DirectionDocView[];
-      catalog: FeatureCatalogView | null;
+      revisions?: RevisionsByKind;
+      catalog?: FeatureCatalogView | null;
     }
   | { type: 'userTurn'; text: string }
   | { type: 'frame'; frame: DiscoveryFrame }
-  | { type: 'docsLoaded'; docs: DirectionDocView[]; catalog: FeatureCatalogView | null }
+  | {
+      type: 'docsLoaded';
+      docs: DirectionDocView[];
+      revisions?: RevisionsByKind;
+      catalog?: FeatureCatalogView | null;
+    }
   | { type: 'streamEnd' }
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
@@ -305,7 +348,8 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         ...initialDiscoveryState(),
         session,
         docs,
-        catalog: action.catalog,
+        revisions: action.revisions ?? {},
+        catalog: action.catalog ?? null,
         producedKinds: produced,
         activeKind: active ?? (produced.length ? produced[produced.length - 1]! : null),
         // Resume INTO the review gate when the session parks at a tier; otherwise
@@ -321,6 +365,9 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         turns: [...state.turns, { id: `t${state.seq}`, role: 'user', text: action.text }],
         seq: state.seq + 1,
         isStreaming: true,
+        // A new reaction supersedes any prior cascade-back banner; the incoming
+        // turn re-establishes it (or doesn't) from the conductor's next frames.
+        cascade: null,
         error: null,
       };
 
@@ -334,9 +381,12 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
       return {
         ...state,
         docs,
+        // Thread the freshly-read forward revision logs + diffs (newest-first) so
+        // the gate's revision viewer + per-revision diff update with the bodies.
+        revisions: action.revisions ? { ...state.revisions, ...action.revisions } : state.revisions,
         // A pre-plan re-read carries the CURRENT catalog (the vision step may have
-        // just (re)drafted it); refresh from the authoritative read.
-        catalog: action.catalog,
+        // just (re)drafted it); refresh from the authoritative read when provided.
+        catalog: action.catalog !== undefined ? action.catalog : state.catalog,
         staleKinds: state.staleKinds.filter((k) => !loaded.has(k)),
       };
     }
@@ -360,7 +410,9 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
       return { ...state, view: 'design' };
 
     case 'backToHub':
-      return { ...state, view: 'hub' };
+      // Leaving the gate (Back, or Continue replaying forward) ends the cascade —
+      // nothing was locked; the downstream tiers simply re-derive.
+      return { ...state, view: 'hub', cascade: null };
 
     case 'dismissError':
       return { ...state, error: null };
@@ -416,18 +468,30 @@ function reduceFrame(state: DiscoveryState, frame: DiscoveryFrame): DiscoverySta
     case 'validate_early_ask':
       return { ...state, pendingAsk: { recommendation: frame.data.recommendation }, working: null };
 
-    case 'revisions':
-      // Forward-only here: a coordinated revision marks the affected tiers' bodies
-      // stale so the read re-fetches them; the cascade-BACK routing + per-doc diffs
-      // are Subtask 7.3.71 / MOTIR-1179, deliberately not built in this card.
+    case 'revisions': {
+      // A coordinated revision (the downstream-only cascade, screen G3). Mark every
+      // affected tier's body stale so the read re-fetches it (with its new diff),
+      // and route the user BACK to re-review the attributed tier (`gate` = the
+      // earliest changed). The downstream tiers in the set render "will refresh"
+      // until their bodies land. Forward-only: nothing locks; Continue replays the
+      // gates forward from here.
+      const tiers = DIRECTION_DOC_ORDER.filter((k) =>
+        frame.data.revisions.some((r) => r.tier === k),
+      );
+      const directTier = frame.data.gate ?? tiers[0] ?? null;
+      const staleKinds = addStale(state.staleKinds, tiers);
+      if (!directTier) {
+        return { ...state, staleKinds, working: null };
+      }
       return {
         ...state,
-        staleKinds: addStale(
-          state.staleKinds,
-          frame.data.revisions.map((r) => r.tier),
-        ),
+        staleKinds,
+        cascade: { directTier, tiers, fromKind: state.activeKind },
+        activeKind: directTier,
+        view: 'review',
         working: null,
       };
+    }
 
     case 'error':
       return {
@@ -453,4 +517,32 @@ export function isTiersComplete(state: DiscoveryState): boolean {
 /** The doc currently under review, if any. */
 export function activeDoc(state: DiscoveryState): DirectionDocView | null {
   return state.activeKind ? (state.docs[state.activeKind] ?? null) : null;
+}
+
+/** The forward revision log (newest-first) of the tier under review. */
+export function activeRevisions(state: DiscoveryState): PreplanRevisionDTO[] {
+  return state.activeKind ? (state.revisions[state.activeKind] ?? []) : [];
+}
+
+/**
+ * The downstream tiers of the active cascade that are still refreshing — the
+ * cascade set minus the attributed tier, restricted to those whose body has not
+ * yet re-loaded (still stale). Drives the canvas "will refresh" markers.
+ */
+export function willRefreshKinds(state: DiscoveryState): DirectionDocKind[] {
+  const c = state.cascade;
+  if (!c) return [];
+  return c.tiers.filter((k) => k !== c.directTier && state.staleKinds.includes(k));
+}
+
+/**
+ * Whether the active cascade routed the user genuinely BACK (the attributed tier
+ * is upstream of where they reacted) — versus an in-place revision of the tier
+ * they were already on. The G3 "going back" banner uses this for its framing.
+ */
+export function isGoingBack(state: DiscoveryState): boolean {
+  const c = state.cascade;
+  if (!c) return false;
+  if (c.fromKind === null) return true; // reacted from the hub → routed into review
+  return DIRECTION_DOC_ORDER.indexOf(c.directTier) < DIRECTION_DOC_ORDER.indexOf(c.fromKind);
 }
