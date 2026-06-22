@@ -59,7 +59,9 @@ export interface UseDiscoveryChat {
   decideValidateEarly: (decisionText: string) => void;
   /** Re-open a produced tier's read-only review. */
   openTier: (kind: DirectionDocKind) => void;
-  /** Leave the full-screen review for the hub. */
+  /** Open the web-only full-page design step (Subtask 7.3.27 / MOTIR-1040). */
+  openDesign: () => void;
+  /** Leave the full-screen review / design step for the hub. */
   back: () => void;
   dismissError: () => void;
 }
@@ -238,6 +240,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     (kind: DirectionDocKind) => dispatch({ type: 'openReview', kind }),
     [],
   );
+  const openDesign = useCallback(() => dispatch({ type: 'openDesign' }), []);
   const back = useCallback(() => dispatch({ type: 'backToHub' }), []);
   const dismissError = useCallback(() => dispatch({ type: 'dismissError' }), []);
 
@@ -248,6 +251,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     skipTier,
     decideValidateEarly,
     openTier,
+    openDesign,
     back,
     dismissError,
   };

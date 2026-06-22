@@ -45,7 +45,8 @@ describe('TierReviewGate', () => {
         onContinue={vi.fn()}
       />,
     );
-    expect(screen.getByText('Pre-plan · building your direction')).toBeTruthy();
+    // the step header + the doc body (834's DirectionDocView, embedded)
+    expect(screen.getByText('Building your direction')).toBeTruthy();
     expect(screen.getByText(/A focused invoicing tool/)).toBeTruthy();
     expect(screen.getByText(/nothing locks until your plan generates/)).toBeTruthy();
   });

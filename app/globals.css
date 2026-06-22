@@ -284,6 +284,50 @@
   --color-link-pressed: #79b8ff;
 }
 
+/* Explicit LIGHT re-assertion. Light is the implicit base (the @theme defaults
+   above), so <html> needs no `data-theme='light'` — it omits the attribute. This
+   block exists so a NESTED subtree can force light back ON even when an ancestor
+   (<html>) is dark — the symmetric counterpart to [data-theme='dark'], mirroring
+   how [data-palette]/[data-style]/[data-type] already re-skin a subtree. The
+   onboarding design step (MOTIR-1040) uses it to preview the user's project in
+   light regardless of Motir's own theme. Values mirror the @theme light base. */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --color-background: #ffffff;
+  --color-foreground: #1a1a1a;
+  --color-surface: #f6f5f4;
+  --color-surface-soft: #fafaf9;
+
+  --color-ink: #1a1a1a;
+  --color-charcoal: #37352f;
+  --color-slate: #5d5b54;
+  --color-steel: #787671;
+  --color-stone: #a4a097;
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #787671;
+
+  --color-hairline: #e5e3df;
+  --color-hairline-soft: #ede9e4;
+  --color-hairline-strong: #c8c4be;
+  --color-border: #e5e3df;
+
+  --color-primary: #5645d4;
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #4534b3;
+  --color-primary-fill: #5645d4;
+
+  --color-tint-peach: #ffe8d4;
+  --color-tint-rose: #fde0ec;
+  --color-tint-mint: #d9f3e1;
+  --color-tint-lavender: #e6e0f5;
+  --color-tint-sky: #dcecfa;
+  --color-tint-yellow: #fef7d6;
+
+  --color-link: #0070d2;
+  --color-link-pressed: #005bab;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    TIER 2 — Named-style overrides ([data-style], Axis 2)
    `warm-editorial` is the base (the Tier-0 defaults above — Notion-sober
@@ -2126,7 +2170,16 @@
    only concrete hexes (the sidebar hover lift) carry their own dark value.
    ═══════════════════════════════════════════════════════════════════════ */
 
-:root {
+/* `[data-appearance-scope]` re-emits this whole Tier-3 layer onto a NESTED
+   element too — not just :root. `--el-*` reference `--color-*` and var() resolves
+   at the DECLARING element, so a subtree that overrides `--color-*` (via a nested
+   data-theme/-palette/-style) needs the `--el-*` re-declared locally to pick those
+   overrides up. Put `data-appearance-scope` on an element alongside its data-*
+   axes to theme that subtree independently of <html> (the onboarding design step,
+   MOTIR-1040, uses it to preview the user's PROJECT design without touching Motir).
+   Keep this selector list in sync if a new `--el-*` token is added below. */
+:root,
+[data-appearance-scope] {
   /* ── Page ──────────────────────────────────────────────────────── */
   --el-page-bg: var(--color-background);
   --el-page-text: var(--color-foreground);
