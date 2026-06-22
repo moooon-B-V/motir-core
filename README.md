@@ -156,6 +156,14 @@ Vercel preview deploy.
   migrations). The other env vars (`POSTGRES_URL`, `PGHOST`, etc.) are
   unused by Motir and can be ignored. Never commit secrets to git.
   `.env.example` documents what's needed locally.
+- **Service-to-service tokens (open-core boundary)**: `motir-ai` calls
+  `motir-core` over a shared bearer. `MOTIR_AI_TO_CORE_SERVICE_TOKEN`
+  authenticates the inbound billing-propagation route
+  (`POST /api/internal/billing/scaled-tracker-state`, Subtask 8.1.4c) — the
+  same secret is set on `motir-ai`'s `coreClient` (8.1.4d). It must match on
+  both sides; the route fails CLOSED (rejects every request) when it is unset.
+  Stripe secrets never enter `motir-core` — only this plain propagated state
+  crosses the boundary.
 - **Build pipeline**: Vercel runs `pnpm install` (which triggers
   `postinstall: prisma generate` to refresh the Prisma client against the
   current schema), then `pnpm build` (which is `next build`). Prisma

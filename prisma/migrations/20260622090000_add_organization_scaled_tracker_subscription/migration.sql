@@ -1,0 +1,21 @@
+-- The scaled-tracker (per-seat PM) subscription state on the billing root
+-- (Organization), propagated from motir-ai's Stripe webhook (8.1.4b) via the
+-- service-auth'd inbound route POST /api/internal/billing/scaled-tracker-state
+-- (8.1.4c). NULL = no scaled-tracker subscription (the default free state).
+--
+-- The 8.1.11 cap-enforcement reader consumes this column; a cancel resets it to
+-- NULL non-destructively (billing-tiering.md §4 — caps re-apply on read, no rows
+-- deleted). JSONB (not a set of scalar columns) because the shape is owned by the
+-- billing line, may grow per ADR, and is read whole by the cap reader.
+--
+-- No FK / no index: the column is read by the organization's primary key (the
+-- cap reader already holds the org row); it carries no referential edge.
+--
+-- RLS: no policy change. The existing `organization_mutate_active` UPDATE policy
+-- (add_organization_tier) gates UPDATE purely on the active-org GUC
+-- (`id = current_setting('app.organization_id')`) with no user requirement, so the
+-- service-auth'd inbound write binds `app.organization_id` to the target org and
+-- the UPDATE is admitted for exactly that row (billingPropagationService).
+
+-- AlterTable
+ALTER TABLE "organization" ADD COLUMN     "scaledTrackerSubscription" JSONB;
