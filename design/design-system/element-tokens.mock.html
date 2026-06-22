@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<!--
+  Token specimen for MOTIR-1267 — the granular --el-* taxonomy.
+  Self-contained: embeds the REAL `motir` base --color-* hexes (app/globals.css
+  @theme + [data-theme='dark']) and defines the PROPOSED --el-* tokens on top, so
+  every swatch resolves to the colour the spec actually prescribes. Light + dark.
+  This is a SPEC specimen, not a component — the code subtasks add these tokens to
+  globals.css and migrate the cited components.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Element-token taxonomy — specimen</title>
+    <style>
+      /* ── Tier-0 base (motir palette, light) — copied from globals.css @theme ── */
+      :root {
+        --color-primary: #5645d4; --color-primary-foreground: #ffffff;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff; --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4; --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f; --color-slate: #5d5b54; --color-steel: #787671;
+        --color-stone: #a4a097; --color-muted: #f3f4f6; --color-muted-foreground: #787671;
+        --color-hairline-strong: #c8c4be; --color-border: #e5e3df;
+        --color-accent: #ff64c8; --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99; --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4; --color-tint-rose: #fde0ec; --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5; --color-tint-sky: #dcecfa; --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39; --color-warning: #dd5b00; --color-destructive: #e03131;
+        --color-info: #0075de;
+
+        /* ── PROPOSED --el-* taxonomy (each → a --color-* base) ── */
+        --el-page-bg: var(--color-background); --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal); --el-surface: var(--color-surface);
+        --el-accent-text: var(--color-primary-foreground);
+
+        --el-status-todo: var(--color-stone); --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary); --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning); --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive); --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate); --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose); --el-warning-surface: var(--color-tint-peach);
+        --el-success-surface: var(--color-tint-mint); --el-notice-info-bg: var(--color-tint-sky);
+        --el-callout-bg: var(--color-tint-lavender); --el-surface-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender); --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender); --el-privacy-public: var(--color-tint-sky);
+
+        --el-label-1: var(--color-tint-peach); --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint); --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky); --el-label-6: var(--color-tint-yellow);
+
+        --el-notif-mentioned: var(--color-accent); --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green); --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-accent); --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success); --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground); --el-icon-active: var(--color-primary);
+        --el-icon-heading: var(--color-charcoal); --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground); --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground); --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground); --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill); --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066; --el-chip-bg: var(--color-surface);
+        --el-input-border: var(--color-hairline-strong); --el-count-text: var(--color-slate);
+
+        --el-selection-bg: var(--color-tint-sky); --el-droptarget-bg: var(--color-tint-lavender);
+        --el-overdue: var(--color-destructive); --el-due-soon: var(--color-warning);
+        --el-board-column-accent: var(--color-primary); --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent); --el-archived-pill-bg: var(--color-muted);
+        --el-auth-wash: var(--color-tint-sky); --el-tabnav-active: var(--color-primary);
+        --el-vote-bg: var(--color-tint-lavender);
+
+        --el-diff-added: var(--color-tint-mint); --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky); --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-border); --el-canvas-edge-committed: var(--color-hairline-strong);
+        --el-station-tier-discovery: var(--color-tint-sky); --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint); --el-station-tier-validation: var(--color-tint-peach);
+      }
+      /* ── Tier-1 dark overrides (the subset globals.css flips) ── */
+      [data-theme='dark'] {
+        --color-background: #0f0f0f; --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a; --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5; --color-slate: #a4a097; --color-steel: #787671;
+        --color-stone: #5d5b54; --color-muted: #1a1a1a; --color-muted-foreground: #a4a097;
+        --color-hairline-strong: #3a3a3a; --color-border: #2a2a2a;
+        --color-primary: #7b6ce5; --color-primary-fill: #6c5cdd;
+        --color-tint-peach: #3a2a1a; --color-tint-rose: #3a1f2a; --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a; --color-tint-sky: #1a2a3a; --color-tint-yellow: #3a341a;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 32px 40px;
+        font-family: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+        background: var(--el-page-bg); color: var(--el-text);
+        font-size: 13px; line-height: 1.5;
+      }
+      h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: -0.01em; }
+      .lede { color: var(--el-text-subtitle); max-width: 760px; margin: 0 0 4px; }
+      .eyebrow {
+        font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--el-text-eyebrow); font-weight: 600; margin: 26px 0 10px;
+        border-top: 1px solid var(--color-border); padding-top: 14px;
+      }
+      .grid { display: flex; flex-wrap: wrap; gap: 10px; }
+      .sw {
+        width: 132px; border: 1px solid var(--color-border); border-radius: 10px;
+        overflow: hidden; background: var(--el-page-bg);
+      }
+      .sw .chip { height: 46px; display: flex; align-items: flex-end; padding: 5px 7px; }
+      .sw .meta { padding: 6px 8px 8px; }
+      .sw .name { font-family: ui-monospace, 'SF Mono', monospace; font-size: 10px;
+        color: var(--el-text-identifier); word-break: break-all; }
+      .sw .base { font-size: 9.5px; color: var(--el-text-helper); margin-top: 2px; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px;
+        border-radius: 999px; font-size: 11.5px; font-weight: 600;
+        color: var(--el-text-strong); border: 1px solid transparent;
+      }
+      .dot { width: 9px; height: 9px; border-radius: 50%; }
+      .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .surf {
+        border-radius: 10px; padding: 11px 14px; font-weight: 600;
+        color: var(--el-surface-text); min-width: 190px;
+        border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+      }
+      .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+      .panel { background: var(--el-page-bg); }
+      [data-theme='dark'] .panel { border-radius: 14px; padding: 24px; border: 1px solid var(--color-border); }
+      .ba { display: flex; gap: 16px; flex-wrap: wrap; }
+      .ba .card { border: 1px solid var(--color-border); border-radius: 10px; padding: 12px 14px; min-width: 230px; }
+      .ba .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+      .bad { color: var(--color-destructive); }
+      .good { color: var(--color-success); }
+      .note { font-size: 11px; color: var(--el-text-helper); margin: 4px 0 0; }
+      .badge { display:inline-flex; width:18px; height:18px; border-radius:50%; }
+    </style>
+  </head>
+  <body>
+    <h1>Element-token taxonomy — specimen</h1>
+    <p class="lede">
+      MOTIR-1267 (1266.1). Every swatch resolves against the real <code>motir</code>
+      base. Each token maps to a Tier-0 <code>--color-*</code>, so it re-skins across
+      all 10 palettes + dark for free. Light (left) and dark (right) prove the swap layer.
+    </p>
+
+    <div class="twocol">
+      <div class="panel" id="light">
+        <!-- ───────────── LIGHT ───────────── -->
+        <div class="eyebrow">A · Status hues — un-collapsed (dot bypass fixed)</div>
+        <div class="row" id="status-pills"></div>
+
+        <div class="eyebrow">B · Priority — medium vs lowest no longer both grey</div>
+        <div class="row" id="priority-pills"></div>
+
+        <div class="eyebrow">C · Semantic surfaces (strong-ink text, AA)</div>
+        <div class="row" id="surfaces"></div>
+
+        <div class="eyebrow">D · Identity hues — role · privacy · label ramp</div>
+        <div class="row" id="identity"></div>
+        <div class="grid" id="labels" style="margin-top:10px"></div>
+
+        <div class="eyebrow">D · <code>--el-type-*</code> misuse → dedicated tokens</div>
+        <div class="ba">
+          <div class="card">
+            <div class="tag bad">before</div>
+            <p class="note"><code>NotificationRow</code> borrowed work-item-type hues:</p>
+            <div class="row">
+              <span><span class="badge" style="background:var(--color-info)"></span> commented = <code>--el-type-task</code></span>
+            </div>
+            <div class="row"><span><span class="badge" style="background:var(--color-accent-green)"></span> assigned = <code>--el-type-story</code></span></div>
+          </div>
+          <div class="card">
+            <div class="tag good">after</div>
+            <p class="note">own notification + model families:</p>
+            <div class="row" id="notif"></div>
+            <div class="row" id="models" style="margin-top:6px"></div>
+          </div>
+        </div>
+
+        <div class="eyebrow">E/F · Icon & text roles · component primitives</div>
+        <div class="grid" id="neutrals"></div>
+
+        <div class="eyebrow">G · Interaction / agile</div>
+        <div class="grid" id="agile"></div>
+
+        <div class="eyebrow">H · Onboarding / canvas</div>
+        <div class="grid" id="canvas"></div>
+        <div class="row" id="bubbles" style="margin-top:10px"></div>
+      </div>
+
+      <div class="panel" data-theme="dark" id="dark">
+        <!-- ───────────── DARK (same content, re-skinned) ───────────── -->
+        <div class="eyebrow">A · Status hues (dark)</div>
+        <div class="row" data-clone="status-pills"></div>
+        <div class="eyebrow">B · Priority (dark)</div>
+        <div class="row" data-clone="priority-pills"></div>
+        <div class="eyebrow">C · Semantic surfaces (dark)</div>
+        <div class="row" data-clone="surfaces"></div>
+        <div class="eyebrow">D · Identity + label ramp (dark)</div>
+        <div class="row" data-clone="identity"></div>
+        <div class="grid" data-clone="labels" style="margin-top:10px"></div>
+        <div class="eyebrow">G · Interaction / agile (dark)</div>
+        <div class="grid" data-clone="agile"></div>
+        <div class="eyebrow">H · Canvas (dark)</div>
+        <div class="grid" data-clone="canvas"></div>
+        <div class="row" data-clone="bubbles" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <script>
+      const swatch = (name, varRef) => `
+        <div class="sw"><div class="chip" style="background:${varRef}"></div>
+        <div class="meta"><div class="name">${name}</div></div></div>`;
+      const statusPill = (label, v) =>
+        `<span class="pill" style="background:color-mix(in srgb, ${v} 14%, var(--el-surface))">
+           <span class="dot" style="background:${v}"></span>${label}</span>`;
+      const tintPill = (label, v) => `<span class="pill" style="background:${v}">${label}</span>`;
+      const badge = (label, v) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:8px">
+        <span class="badge" style="background:${v}"></span><span style="font-size:11.5px">${label}</span></span>`;
+
+      const set = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
+
+      set('status-pills', [
+        ['To Do','--el-status-todo'],['In Progress','--el-status-in-progress'],
+        ['In Review','--el-status-in-review'],['Done','--el-status-done'],
+        ['Blocked','--el-status-blocked'],['Cancelled','--el-status-cancelled'],
+      ].map(([l,v]) => statusPill(l, `var(${v})`)).join(''));
+
+      set('priority-pills', [
+        ['Highest','--el-priority-highest'],['High','--el-priority-high'],
+        ['Medium','--el-priority-medium'],['Low','--el-priority-low'],['Lowest','--el-priority-lowest'],
+      ].map(([l,v]) => statusPill(l, `var(${v})`)).join(''));
+
+      set('surfaces', [
+        ['Danger surface','--el-danger-surface'],['Warning surface','--el-warning-surface'],
+        ['Success surface','--el-success-surface'],['Info notice','--el-notice-info-bg'],
+        ['Callout','--el-callout-bg'],
+      ].map(([l,v]) => `<div class="surf" style="background:var(${v})">${l}</div>`).join(''));
+
+      set('identity', [
+        ['admin','--el-role-admin'],['member','--el-role-member'],['viewer','--el-role-viewer'],
+        ['private','--el-privacy-private'],['public','--el-privacy-public'],
+      ].map(([l,v]) => tintPill(l, `var(${v})`)).join(''));
+
+      set('labels', [1,2,3,4,5,6].map(n => swatch(`--el-label-${n}`, `var(--el-label-${n})`)).join(''));
+
+      set('notif', [
+        ['mentioned','--el-notif-mentioned'],['commented','--el-notif-commented'],
+        ['assigned','--el-notif-assigned'],['transitioned','--el-notif-transitioned'],
+      ].map(([l,v]) => badge(l, `var(${v})`)).join(''));
+      set('models', [
+        ['opus','--el-model-opus'],['sonnet','--el-model-sonnet'],
+        ['haiku','--el-model-haiku'],['deepseek','--el-model-deepseek'],
+      ].map(([l,v]) => badge(l, `var(${v})`)).join(''));
+
+      set('neutrals', [
+        ['--el-icon-muted','--el-icon-muted'],['--el-icon-active','--el-icon-active'],
+        ['--el-icon-heading','--el-icon-heading'],['--el-text-subtitle','--el-text-subtitle'],
+        ['--el-text-identifier','--el-text-identifier'],['--el-tooltip-bg','--el-tooltip-bg'],
+        ['--el-switch-on','--el-switch-on'],['--el-option-active-bg','--el-option-active-bg'],
+        ['--el-overlay-scrim','--el-overlay-scrim'],['--el-input-border','--el-input-border'],
+        ['--el-chip-bg','--el-chip-bg'],['--el-count-text','--el-count-text'],
+      ].map(([n,v]) => swatch(n, `var(${v})`)).join(''));
+
+      set('agile', [
+        ['--el-selection-bg','--el-selection-bg'],['--el-droptarget-bg','--el-droptarget-bg'],
+        ['--el-overdue','--el-overdue'],['--el-due-soon','--el-due-soon'],
+        ['--el-board-column-accent','--el-board-column-accent'],['--el-sprint-accent','--el-sprint-accent'],
+        ['--el-epic-accent','--el-epic-accent'],['--el-archived-pill-bg','--el-archived-pill-bg'],
+        ['--el-auth-wash','--el-auth-wash'],['--el-tabnav-active','--el-tabnav-active'],
+        ['--el-vote-bg (wired)','--el-vote-bg'],
+      ].map(([n,v]) => swatch(n, `var(${v})`)).join(''));
+
+      set('canvas', [
+        ['--el-diff-added','--el-diff-added'],['--el-diff-removed','--el-diff-removed'],
+        ['--el-diff-moved','--el-diff-moved'],['--el-canvas-edge-pending','--el-canvas-edge-pending'],
+        ['--el-canvas-edge-committed','--el-canvas-edge-committed'],
+        ['station: discovery','--el-station-tier-discovery'],['station: vision','--el-station-tier-vision'],
+        ['station: feasibility','--el-station-tier-feasibility'],['station: validation','--el-station-tier-validation'],
+      ].map(([n,v]) => swatch(n, `var(${v})`)).join(''));
+
+      set('bubbles',
+        `<span class="pill" style="background:var(--el-chat-bubble-user);color:var(--el-accent-text)">user bubble</span>
+         <span class="pill" style="background:var(--el-chat-bubble-ai);color:var(--el-text);border:1px solid var(--color-border)">AI bubble</span>`);
+
+      // mirror light content into the dark panel
+      document.querySelectorAll('[data-clone]').forEach(el => {
+        const src = document.getElementById(el.getAttribute('data-clone'));
+        if (src) el.innerHTML = src.innerHTML;
+      });
+    </script>
+  </body>
+</html>
