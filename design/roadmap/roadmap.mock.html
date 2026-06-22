@@ -1,0 +1,2371 @@
+<!doctype html>
+<!--
+  ROADMAP — the reusable, DETERMINISTIC work-item canvas (MOTIR-1009 / 7.3.76).
+  The opinionated, auto-arranged sibling of the free-form SPATIAL canvas
+  (design/ai-chat/canvas-spatial.*, MOTIR-1235). Same node + edge MODEL, a
+  different LAYOUT DISCIPLINE: the spatial canvas lets the user drag nodes
+  anywhere; this one auto-initialises them in a fixed, legible arrangement
+  (still pannable / zoomable; nodes still draggable from there).
+
+  Built on the SHIPPED reality (rung 2): it renders on the shipped PlanningCanvas
+  engine (MOTIR-1236 — pan / zoom / drag / fit + read-only edges) and reuses the
+  shipped StationCard / node + edge language. Edges follow the shipped engine's
+  NEUTRAL firm (solid --el-border-strong) / pending (dashed --el-border)
+  convention — the spatial mock's illustrative green/accent edges are the
+  simplification this asset corrects to. The one addition is the warning-toned
+  CROSS-STORY blocked_by edge + flag.
+
+  This is a multi-PANEL review board (every panel inspected). Colours are the real
+  Motir light palette (app/globals.css --el-* values, inlined for the static mock,
+  exactly as canvas-spatial.mock.html does). NOT the shipped component — a design
+  artifact to pin the deterministic layout + the reuse surfaces before the build
+  (the BUILD is MOTIR-1194 / 7.3.77).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — the deterministic work-item canvas (MOTIR-1009)</title>
+    <style>
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --borderstrong: #d3cfc8;
+        --hair: #ede9e4;
+        --accent: #5645d4;
+        --accent-text: #ffffff;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --info: #0075de;
+        --sky: #dcecfa;
+        --lavender: #e6e0f5;
+        --mint: #d9f3e1;
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --yellow: #fef7d6;
+        --pink: #ff64c8;
+        /* work-item type hues (--el-type-*) */
+        --t-epic: #ff64c8;
+        --t-story: #1aae39;
+        --t-task: #0075de;
+        --t-subtask: #2a9d99;
+        --t-bug: #e03131;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--text);
+        padding: 28px 22px 60px;
+      }
+      .pagehead {
+        max-width: 1150px;
+        margin: 0 auto 22px;
+      }
+      .pagehead h1 {
+        font-size: 21px;
+        margin: 0 0 4px;
+        color: var(--strong);
+      }
+      .pagehead p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: var(--muted);
+        max-width: 880px;
+      }
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: #ece9fb;
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+
+      /* ── the canvas viewport ── */
+      .viewport {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
+          var(--hub);
+      }
+      .world {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+      }
+      .edges {
+        position: absolute;
+        top: 0;
+        left: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      /* ── canvas overlay chrome (fixed; does NOT pan/zoom) ── */
+      .overlay-top {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        right: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: none;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 11px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .crumb .dot {
+        width: 15px;
+        height: 15px;
+        border-radius: 5px;
+        background: var(--accent);
+        display: grid;
+        place-items: center;
+      }
+      /* search-to-locate-and-focus */
+      .search {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 12.5px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+        min-width: 188px;
+      }
+      .search svg {
+        width: 14px;
+        height: 14px;
+        color: var(--faint);
+      }
+      .search kbd {
+        margin-left: auto;
+        font:
+          600 10px ui-monospace,
+          monospace;
+        color: var(--faint);
+        background: var(--mutedfill);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      /* the Board <-> Roadmap view toggle (the access path) */
+      .vtoggle {
+        margin-left: auto;
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px #0000000d;
+        pointer-events: auto;
+      }
+      .vtoggle button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 6px 11px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .vtoggle button svg {
+        width: 14px;
+        height: 14px;
+      }
+      .vtoggle button.on {
+        background: var(--accent);
+        color: #fff;
+      }
+      /* filter chips */
+      .filters {
+        position: absolute;
+        top: 52px;
+        left: 14px;
+        display: flex;
+        gap: 7px;
+        pointer-events: none;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12px;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .chip svg {
+        width: 13px;
+        height: 13px;
+        color: var(--muted);
+      }
+      .chip .car {
+        color: var(--faint);
+        font-size: 10px;
+      }
+      .chip.active {
+        border-color: var(--accent);
+        background: #f4f2fd;
+        color: var(--accent);
+      }
+      .zoomwrap {
+        position: absolute;
+        left: 14px;
+        bottom: 14px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .zoom {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .zoom button {
+        width: 36px;
+        height: 34px;
+        border: 0;
+        background: transparent;
+        font-size: 17px;
+        color: var(--strong);
+        cursor: pointer;
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--hair);
+      }
+      .zoomlevel {
+        font:
+          600 12px ui-monospace,
+          monospace;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 7px 9px;
+      }
+      .legend {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 7px 11px;
+        font-size: 10.5px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+        max-width: 360px;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .legend i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .legend i.dotbox {
+        width: 13px;
+        height: 9px;
+        border-radius: 2px;
+        background: transparent;
+      }
+
+      /* ── nodes ── */
+      .node {
+        position: absolute;
+        width: 216px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        padding: 11px 12px;
+        box-shadow: 0 2px 6px #0000000f;
+      }
+      /* upcoming / ghosted = DASHED border (not yet reached) */
+      .node.upcoming {
+        opacity: 0.62;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      /* skippable = DOTTED border (an optional step you may skip in the chat) —
+         DELIBERATELY distinct from the upcoming DASHED border */
+      .node.skippable {
+        border-style: dotted;
+        border-width: 1.5px;
+        border-color: var(--borderstrong);
+      }
+      .node.active {
+        border-color: var(--accent);
+        border-style: solid;
+        box-shadow:
+          0 0 0 3px #5645d426,
+          0 4px 12px #5645d41f;
+      }
+      .node.compact {
+        width: 184px;
+        padding: 10px 11px;
+      }
+      .nhead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .tile {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile svg {
+        width: 17px;
+        height: 17px;
+      }
+      .ntitle {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.15;
+      }
+      .nsub {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .pill {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-weight: 600;
+      }
+      .pill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .pill.reviewed {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.here {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.deciding {
+        background: var(--peach);
+        color: #8a3d00;
+      }
+      .pill.drafting {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .youhere {
+        position: absolute;
+        top: -10px;
+        left: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+      }
+      .youhere svg {
+        width: 11px;
+        height: 11px;
+      }
+      .capt {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .capt div {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        font-size: 11px;
+        color: #54514b;
+      }
+      .capt svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .capt .warn {
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .canskip {
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        color: var(--muted);
+        background: var(--mutedfill);
+        padding: 2px 6px;
+        border-radius: 6px;
+        margin-left: 6px;
+        white-space: nowrap;
+      }
+      /* connect-repo affordance inside the "Read your project" node */
+      .connect {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .connect .grant {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 10.5px;
+        color: #54514b;
+      }
+      .connect .grant svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        color: var(--muted);
+      }
+      .connectbtn {
+        margin-top: 2px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: #1a1a1a;
+        color: #fff;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .connectbtn svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* epic / story / subtask cluster (post-plan tree) */
+      .epic {
+        width: 196px;
+      }
+      .epic .ntitle {
+        font-size: 12.5px;
+      }
+      .rows {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 11px;
+        color: var(--strong);
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 7px;
+        padding: 4px 7px;
+      }
+      .row i.tdot {
+        width: 8px;
+        height: 8px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .row .st {
+        margin-left: auto;
+        font-size: 9.5px;
+        color: var(--faint);
+      }
+      .row.linked {
+        background: #f4f2fd;
+        border-color: #d8d2f5;
+        color: var(--accent);
+      }
+      .typechip {
+        margin-left: auto;
+        font:
+          600 9px ui-monospace,
+          monospace;
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+
+      .grouplabel {
+        position: absolute;
+        font:
+          600 11px ui-monospace,
+          monospace;
+        color: var(--faint);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .flagtag {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        background: #fff3e8;
+        border: 1px solid #f6cfa6;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #8a3d00;
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .flagtag svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      /* ── static strips (controls / states) ── */
+      .strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        padding: 18px;
+      }
+      .statecard {
+        flex: 1 1 200px;
+        min-width: 190px;
+        border: 1px solid var(--hair);
+        border-radius: 11px;
+        padding: 13px;
+        background: var(--soft);
+      }
+      .statecard h3 {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0 0 6px;
+        font-size: 12.5px;
+        color: var(--strong);
+      }
+      .statecard h3 .swatch {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .statecard h3 .swatch svg {
+        width: 13px;
+        height: 13px;
+      }
+      .statecard p {
+        margin: 0;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+      .statecard .demo {
+        margin-top: 10px;
+        height: 30px;
+        border-radius: 10px;
+      }
+
+      .stategrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        padding: 18px;
+      }
+      .estate {
+        border: 1px solid var(--hair);
+        border-radius: 12px;
+        background: var(--hub);
+        min-height: 168px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        text-align: center;
+        padding: 20px;
+      }
+      .estate .glyph {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+      .estate .glyph svg {
+        width: 21px;
+        height: 21px;
+        color: var(--muted);
+      }
+      .estate h4 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--strong);
+      }
+      .estate p {
+        margin: 0;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--muted);
+        max-width: 240px;
+      }
+      .estate .ebtn {
+        margin-top: 2px;
+        padding: 7px 13px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .estate.error .glyph {
+        border-color: #f3b4a0;
+        background: #fdeae3;
+      }
+      .estate.error .glyph svg {
+        color: var(--warning);
+      }
+      .spinner {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 3px solid var(--border);
+        border-top-color: var(--accent);
+      }
+      .reuse {
+        padding: 16px 18px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--muted);
+        border-top: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .reuse b {
+        color: var(--strong);
+      }
+      .reuse code {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        background: var(--mutedfill);
+        padding: 1px 5px;
+        border-radius: 5px;
+        color: #54514b;
+      }
+
+      /* ── multi-level-chain OPTION sheets (sheets 6-8) ── */
+      .optdivider {
+        max-width: 1150px;
+        margin: 34px auto 18px;
+        padding-top: 26px;
+        border-top: 2px dashed var(--borderstrong);
+      }
+      .optdivider h2 {
+        font-size: 18px;
+        margin: 0 0 5px;
+        color: var(--strong);
+      }
+      .optdivider p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+        max-width: 900px;
+      }
+      .optdivider .pickflag {
+        display: inline-block;
+        margin-bottom: 8px;
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--warning);
+        background: #fff3e8;
+        border: 1px solid #f6cfa6;
+        padding: 3px 9px;
+        border-radius: 6px;
+      }
+      .ocanvas {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
+          var(--hub);
+      }
+      .oworld {
+        position: absolute;
+        inset: 0;
+        transform-origin: 0 0;
+      }
+      .oedges {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 16px;
+        font-size: 12.5px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--hair);
+      }
+      .crumbs .c {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .crumbs .c.here {
+        color: var(--strong);
+        font-weight: 700;
+      }
+      .crumbs .sep {
+        color: var(--faint);
+      }
+      .crumbs .back {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--strong);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .toggle {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        overflow: hidden;
+      }
+      .toggle button {
+        border: 0;
+        background: transparent;
+        padding: 6px 13px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .toggle button + button {
+        border-left: 1px solid var(--hair);
+      }
+      .toggle button.on {
+        background: var(--accent);
+        color: #fff;
+      }
+      .scope {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--strong);
+      }
+      .scope b {
+        color: var(--accent);
+      }
+      .arrowdown {
+        max-width: 1150px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: center;
+        padding: 3px 0;
+        color: var(--accent);
+        font-size: 17px;
+      }
+      .cluster {
+        position: absolute;
+        border: 2px dashed #b6a0e6;
+        background: #efeafc;
+        border-radius: 16px;
+        z-index: 0;
+      }
+      .cluster .clab {
+        position: absolute;
+        top: -12px;
+        left: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 11px;
+        background: var(--accent);
+        border-radius: 999px;
+        font:
+          700 10.5px ui-monospace,
+          monospace;
+        color: #fff;
+        z-index: 2;
+      }
+      .onode {
+        position: absolute;
+        width: 196px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px 11px;
+        box-shadow: 0 2px 6px #0000000f;
+        z-index: 1;
+      }
+      .onode.compact {
+        width: 168px;
+      }
+      .onode.active {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px #5645d426,
+          0 4px 12px #5645d41f;
+      }
+      .onode.upcoming {
+        opacity: 0.6;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .ohead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .otile {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .otile svg {
+        width: 16px;
+        height: 16px;
+      }
+      .ometa {
+        min-width: 0;
+      }
+      .otitle {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.15;
+      }
+      .osub {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .opill {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 9.5px;
+        font-weight: 600;
+      }
+      .opill svg {
+        width: 10px;
+        height: 10px;
+      }
+      .opill.done {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .opill.act {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .ohere {
+        position: absolute;
+        top: -10px;
+        right: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 9.5px;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+      }
+      .ohere svg {
+        width: 10px;
+        height: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pagehead">
+      <h1>Roadmap — the deterministic work-item canvas</h1>
+      <p>
+        MOTIR-1009 / 7.3.76. One reusable canvas that renders any project's work-item tree +
+        pre-plan phase in a FIXED, opinionated layout — the auto-arranged sibling of the free-form
+        spatial canvas (MOTIR-1235). Rendered on the shipped <code>PlanningCanvas</code> engine
+        (MOTIR-1236: pan / zoom / drag / fit + read-only edges). Reused by start-fresh onboarding
+        (7.3), migrate-existing onboarding (7.15), re-planning (7.11), the persistent roadmap
+        (7.19), and the public project page.
+      </p>
+      <p style="margin-top: 8px">
+        <b>Sheets 1–5</b> spec the canvas. <b>Sheet 6</b> specs MULTI-LEVEL navigation: because the
+        planner orders same-level work as a <b>chain</b> at every level (epic↔epic · story↔story ·
+        subtask↔subtask — `plan.md`’s dependency-arrow rule), the canvas renders the
+        <b>story-level and subtask-level chains</b>, not just the epic level, via <b>drill-down</b>
+        (decided, Yue 2026-06-22).
+      </p>
+    </div>
+
+    <!-- SHEET 1 — the deterministic INITIAL LAYOUT, start-fresh onboarding -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>Initial layout — start-fresh onboarding (no existing project)</h2>
+        <span class="cap"
+          >4-tier row → “Design your look” → a single “Plan” node — auto-arranged</span
+        >
+      </div>
+      <div class="viewport" id="vp1" style="height: 440px">
+        <svg class="world edges" id="ed1"></svg>
+        <div class="world" id="w1"></div>
+        <div class="overlay-top">
+          <span class="crumb"
+            ><span class="dot">
+              <svg
+                viewBox="0 0 24 24"
+                width="10"
+                height="10"
+                fill="none"
+                stroke="#fff"
+                stroke-width="2.4"
+              >
+                <path
+                  d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"
+                />
+              </svg> </span
+            >PayFlow · your project</span
+          >
+          <div class="vtoggle">
+            <button>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="3" y="3" width="7" height="18" rx="1" />
+                <rect x="14" y="3" width="7" height="18" rx="1" />
+              </svg>
+              Board
+            </button>
+            <button class="on">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" />
+                <path d="M9 3v15M15 6v15" />
+              </svg>
+              Roadmap
+            </button>
+          </div>
+        </div>
+        <div class="zoomwrap">
+          <div class="zoom">
+            <button>−</button><button>+</button><button style="font-size: 13px">⤢</button>
+          </div>
+          <span class="zoomlevel">Fit · 78%</span>
+        </div>
+        <div class="legend">
+          <span><i style="background: var(--success)"></i>reviewed</span>
+          <span><i style="background: var(--accent)"></i>you are here</span>
+          <span><i class="dotbox" style="border: 1.5px dotted var(--strong)"></i>skippable</span>
+          <span><i class="dotbox" style="border: 1.5px dashed var(--faint)"></i>upcoming</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHEET 2 — same deterministic layout, MIGRATE variant ("Read your project") -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>Initial layout — migrate-existing-codebase onboarding (Workflow B)</h2>
+        <span class="cap"
+          >row 2 gains “Read your project” — shown ONLY when the project already has work
+          items</span
+        >
+      </div>
+      <div class="viewport" id="vp2" style="height: 452px">
+        <svg class="world edges" id="ed2"></svg>
+        <div class="world" id="w2"></div>
+        <div class="overlay-top">
+          <span class="crumb"
+            ><span class="dot">
+              <svg
+                viewBox="0 0 24 24"
+                width="10"
+                height="10"
+                fill="none"
+                stroke="#fff"
+                stroke-width="2.4"
+              >
+                <path
+                  d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"
+                />
+              </svg> </span
+            >Acme app · existing project</span
+          >
+          <span class="search">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            Find a step, story or task…
+            <kbd>/</kbd>
+          </span>
+        </div>
+        <div class="zoomwrap">
+          <div class="zoom">
+            <button>−</button><button>+</button><button style="font-size: 13px">⤢</button>
+          </div>
+          <span class="zoomlevel">Fit · 74%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHEET 3 — POST-PLAN: the tree + dependency edges + the cross-story warning edge -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>Post-plan — the work-item tree, dependency edges &amp; the cross-story warning edge</h2>
+        <span class="cap"
+          >epic → story → subtask · within-story arrow vs. cross-story blocked_by · migrate
+          linking</span
+        >
+      </div>
+      <div class="viewport" id="vp3" style="height: 520px">
+        <svg class="world edges" id="ed3"></svg>
+        <div class="world" id="w3"></div>
+        <div class="overlay-top">
+          <span class="crumb"
+            ><span class="dot">
+              <svg
+                viewBox="0 0 24 24"
+                width="10"
+                height="10"
+                fill="none"
+                stroke="#fff"
+                stroke-width="2.4"
+              >
+                <path
+                  d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"
+                />
+              </svg> </span
+            >Acme app · roadmap</span
+          >
+        </div>
+        <div class="legend" style="max-width: 430px">
+          <span
+            ><svg width="22" height="8">
+              <line x1="0" y1="4" x2="22" y2="4" stroke="#d3cfc8" stroke-width="2.5" /></svg
+            >within-story dep</span
+          >
+          <span
+            ><svg width="22" height="8">
+              <line x1="0" y1="4" x2="22" y2="4" stroke="#dd5b00" stroke-width="2.5" /></svg
+            >cross-story blocked_by</span
+          >
+          <span
+            ><i class="dotbox" style="background: #f4f2fd; border: 1px solid #d8d2f5"></i>linked
+            existing item</span
+          >
+        </div>
+      </div>
+      <div class="reuse">
+        A correct plan reads as a <b>TREE</b>; the moment a <code>blocked_by</code> crosses story
+        boundaries the edge turns <b>warning-toned + flagged</b>, so the tangle the dependency-arrow
+        audit forbids is VISIBLE to a reviewer (carried from MOTIR-1009; the spatial language of
+        MOTIR-1235). The migrate flow (7.15) links an <b>existing</b> work item under the tier it
+        informs (the violet “linked” row), or leaves it <b>standalone</b> when it is not reusable
+        (the “Legacy export job” cluster, off on its own).
+      </div>
+    </section>
+
+    <!-- SHEET 4 — node states (the spec strip) -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>Node states — each an icon + label + tint (never colour alone, finding #35)</h2>
+        <span class="cap"
+          >+ the deliberate dotted (skippable) vs. dashed (upcoming) border distinction</span
+        >
+      </div>
+      <div class="strip">
+        <div class="statecard">
+          <h3>
+            <span class="swatch" style="background: var(--mint)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#0f5e29"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </span>
+            Done · Reviewed
+          </h3>
+          <p>
+            A produced, reviewed tier or a completed work item. Solid border, mint “Reviewed ✓”
+            pill, carries its captured-findings rows.
+          </p>
+          <div
+            class="demo"
+            style="border: 1px solid var(--border); background: var(--surface)"
+          ></div>
+        </div>
+        <div class="statecard">
+          <h3>
+            <span class="swatch" style="background: var(--lavender)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#3a2d8a"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z" />
+                <circle cx="12" cy="10" r="2.5" />
+              </svg>
+            </span>
+            Active · frontier
+          </h3>
+          <p>
+            Where you are now. Accent ring + “You are here” map-pin tab,
+            <code>aria-current="step"</code> on the node region.
+          </p>
+          <div class="demo" style="border: 1.5px solid var(--accent); background: #f6f4fe"></div>
+        </div>
+        <div class="statecard">
+          <h3>
+            <span class="swatch" style="background: var(--peach)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#8a3d00"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                />
+              </svg>
+            </span>
+            Deciding · blocking ask
+          </h3>
+          <p>
+            Validation’s validate-demand-first ask (MOTIR-1064). Peach “Deciding” pill + a warning
+            capture row; blocks continuing.
+          </p>
+          <div class="demo" style="border: 1px solid #f6cfa6; background: #fff3e8"></div>
+        </div>
+        <div class="statecard">
+          <h3>
+            <span class="swatch" style="background: var(--mutedfill)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#787671"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M5 12h14" />
+              </svg>
+            </span>
+            Skippable · DOTTED
+          </h3>
+          <p>
+            An optional step (the two optional tiers, Design, Read your project).
+            <b>Dotted</b> border + a “can skip” chip — skipped in the chat, not on the node.
+          </p>
+          <div
+            class="demo"
+            style="border: 1.5px dotted var(--borderstrong); background: var(--surface)"
+          ></div>
+        </div>
+        <div class="statecard">
+          <h3>
+            <span class="swatch" style="background: var(--mutedfill)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#a4a097"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+            </span>
+            Upcoming · DASHED
+          </h3>
+          <p>
+            Not yet reached (the Plan node before planning; future epics). <b>Dashed</b> border,
+            ghosted — deliberately distinct from dotted/skippable.
+          </p>
+          <div
+            class="demo"
+            style="border: 1.5px dashed var(--faint); background: var(--surface); opacity: 0.62"
+          ></div>
+        </div>
+        <div class="statecard">
+          <h3>
+            <span class="swatch" style="background: var(--lavender)">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#3a2d8a"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"
+                />
+              </svg>
+            </span>
+            Drafting / Will refresh
+          </h3>
+          <p>
+            The conductor narrates a handoff (“Drafting now…”, sparkles) or a downstream tier
+            re-derives in a cascade (“Will refresh”, rotate). Carried from the spatial canvas.
+          </p>
+          <div class="demo" style="border: 1px solid #d8d2f5; background: #f4f2fd"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHEET 5 — filters / search / density (the reuse controls) + empty/loading/error -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>
+          Controls &amp; states — filters · search-to-focus · density · empty / loading / error
+        </h2>
+        <span class="cap"
+          >the surface-agnostic controls every reuse (7.11 / 7.19 / public page) gets</span
+        >
+      </div>
+      <div class="strip" style="gap: 10px; align-items: center">
+        <span class="chip active"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg
+          >Status <span class="car">In progress ▾</span></span
+        >
+        <span class="chip"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21v-1a6 6 0 0 1 12 0v1" /></svg
+          >Assignee <span class="car">Anyone ▾</span></span
+        >
+        <span class="chip"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" /></svg
+          >Epic <span class="car">All epics ▾</span></span
+        >
+        <span class="search" style="box-shadow: none">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          Search-to-focus — centres &amp; highlights the match
+          <kbd>/</kbd>
+        </span>
+        <span class="chip"
+          ><svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" /></svg
+          >Density <span class="car">Comfortable ▾</span></span
+        >
+      </div>
+      <div class="stategrid">
+        <div class="estate">
+          <span class="glyph">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" />
+              <path d="M9 3v15M15 6v15" />
+            </svg>
+          </span>
+          <h4>Nothing planned yet</h4>
+          <p>This project has no work items. Start a plan with Motir AI, or add an epic by hand.</p>
+          <span class="ebtn">Plan with Motir</span>
+        </div>
+        <div class="estate">
+          <span class="glyph"><span class="spinner"></span></span>
+          <h4>Loading the roadmap…</h4>
+          <p>
+            Reading the work-item graph and your saved layout. Nodes paint once positions resolve
+            (no layout jump).
+          </p>
+        </div>
+        <div class="estate error">
+          <span class="glyph">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+              />
+            </svg>
+          </span>
+          <h4>Couldn’t load the roadmap</h4>
+          <p>The work-item graph didn’t come back. Your layout is safe — nothing was changed.</p>
+          <span class="ebtn">Try again</span>
+        </div>
+      </div>
+      <div class="reuse">
+        <b>One surface, many callers.</b> The canvas is surface-agnostic — it renders
+        <b>any</b> project’s tree + pre-plan phase. Reused by <b>7.3</b> start-fresh onboarding,
+        <b>7.15</b> migrate onboarding, <b>7.11</b> re-planning (an already-planned tree being
+        augmented), <b>7.19</b> the persistent roadmap (reached via the
+        <code>Board ↔ Roadmap</code> toggle, sheet 1), and the public project page. Large trees
+        reuse the shipped engine’s pan / zoom + windowing (<code>PlanningCanvas</code>, MOTIR-1236)
+        — the engine is never rebuilt.
+      </div>
+    </section>
+
+    <!-- ════ MULTI-LEVEL CHAINS — DRILL-DOWN (decided, Yue 2026-06-22) ════ -->
+    <div class="optdivider">
+      <span class="pickflag" style="color: #0f5e29; background: #dff0e2; border-color: #b6dcc1"
+        >DECIDED · drill-down</span
+      >
+      <h2>Multi-level chains — drill-down (self-similar)</h2>
+      <p>
+        The plan is a chain (DAG) at EVERY level (epic↔epic · story↔story · subtask↔subtask —
+        `plan.md`’s dependency-arrow rule), so the canvas renders the <b>story-level</b> and
+        <b>subtask-level</b> chains too. The model is <b>drill-down</b>: click a node and the canvas
+        REFRESHES to that node’s children, laid out as their own chain; a breadcrumb + “Back” walks
+        you up. One level fills the screen, so each chain stays legible at any tree size. Below: the
+        three states as you drill Plan ▸ Invoices ▸ Create invoice.
+      </p>
+    </div>
+
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>Drill-down — the canvas refreshes to each level’s chain</h2>
+        <span class="cap">epic chain → click → story chain → click → subtask chain</span>
+      </div>
+      <div class="crumbs"><span class="c here">Plan · epics</span></div>
+      <div class="ocanvas" id="vpA1" style="height: 168px">
+        <svg class="oedges" id="edA1"></svg>
+        <div class="oworld" id="wA1"></div>
+      </div>
+      <div class="arrowdown">↓ click “Invoices”</div>
+      <div class="crumbs">
+        <span class="c">Plan</span><span class="sep">▸</span
+        ><span class="c here">Invoices · stories</span>
+        <span class="back">◂ Back to epics</span>
+      </div>
+      <div class="ocanvas" id="vpA2" style="height: 168px">
+        <svg class="oedges" id="edA2"></svg>
+        <div class="oworld" id="wA2"></div>
+      </div>
+      <div class="arrowdown">↓ click “Create invoice”</div>
+      <div class="crumbs">
+        <span class="c">Plan</span><span class="sep">▸</span><span class="c">Invoices</span
+        ><span class="sep">▸</span><span class="c here">Create invoice · subtasks</span>
+        <span class="back">◂ Back to stories</span>
+      </div>
+      <div class="ocanvas" id="vpA3" style="height: 168px">
+        <svg class="oedges" id="edA3"></svg>
+        <div class="oworld" id="wA3"></div>
+      </div>
+      <div class="reuse">
+        <b>One level fills the screen at a time</b> — each chain stays big + legible no matter how
+        large the tree (the completeness / scale axis). You drill DOWN into a node’s children and
+        Back UP via the breadcrumb; zoom-to-fit gives a whole-level overview. This EXTENDS the
+        shipped spatial canvas’s “self-similar at every level” — the same node + edge language (the
+        shipped <code>StationCard</code> / <code>PlanningCanvas</code>,
+        <code>--el-type-*</code> hues, neutral firm / dashed-pending edges + the cross-story warning
+        edge) renders at every level; only the per-level node + edge set is re-fed to the engine on
+        drill.
+      </div>
+    </section>
+
+    <script>
+      // ── icons (inline, lucide-ish) — viewBox 0 0 24 24 so strokes scale ──
+      const I = {
+        bulb: '<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/>',
+        search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+        shapes: '<path d="M8.3 10 4 17h8.6L8.3 10Z"/><circle cx="17" cy="7" r="3"/>',
+        shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+        list: '<path d="m3 7 2 2 3-3"/><path d="m3 16 2 2 3-3"/><path d="M13 7h8M13 17h8"/>',
+        palette:
+          '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 1 0 0 20c1.1 0 1.5-1 1-1.8-.6-1 .2-2.2 1.4-2.2H17a5 5 0 0 0 5-5c0-5.5-4.5-9-10-9Z"/>',
+        net: '<rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4M12 12H5v4M12 12h7v4"/>',
+        code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+        gitbranch:
+          '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+        github:
+          '<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3-.3 6.2-1.5 6.2-6.7A5.2 5.2 0 0 0 20 4.8 4.8 4.8 0 0 0 19.9 1S18.7.6 16 2.5a13.4 13.4 0 0 0-7 0C6.3.6 5.1 1 5.1 1A4.8 4.8 0 0 0 5 4.8 5.2 5.2 0 0 0 3.7 8.4c0 5.2 3.2 6.4 6.2 6.7A3.4 3.4 0 0 0 9 17.7V22"/>',
+        check: '<path d="M20 6 9 17l-5-5"/>',
+        spark:
+          '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+        pin: '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+        alert:
+          '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
+        flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+        lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+      };
+      const svg = (p, stroke, sw) =>
+        `<svg viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="${sw || 2}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+      // A node card (the SHIPPED StationCard language). `border` ∈
+      // solid|active|skippable|upcoming; `pill` ∈ reviewed|deciding|drafting|null.
+      function nodeCard(n) {
+        const cls = [
+          'node',
+          n.compact ? 'compact' : '',
+          n.border === 'active' ? 'active' : '',
+          n.border === 'skippable' ? 'skippable' : '',
+          n.border === 'upcoming' ? 'upcoming' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        let pill = '';
+        if (n.pill === 'reviewed')
+          pill = `<span class="pill reviewed">${svg(I.check, '#0f5e29', 2.4)}Reviewed</span>`;
+        else if (n.pill === 'deciding')
+          pill = `<span class="pill deciding">${svg(I.spark, '#8a3d00', 2.4)}Deciding</span>`;
+        else if (n.pill === 'drafting')
+          pill = `<span class="pill drafting">${svg(I.spark, '#3a2d8a', 2.4)}Drafting now…</span>`;
+        const head =
+          `<div class="nhead"><span class="tile" style="background:${n.tileBg}">${svg(I[n.icon], n.tile)}</span>` +
+          `<div><div class="ntitle">${n.title}${n.skipchip ? '<span class="canskip">can skip</span>' : ''}</div>` +
+          (n.sub ? `<div class="nsub">${n.sub}</div>` : '') +
+          `</div>${pill}</div>`;
+        const here = n.here
+          ? `<span class="youhere">${svg(I.pin, '#fff', 2.4)}You are here</span>`
+          : '';
+        let body = '';
+        if (n.capt) {
+          body =
+            `<div class="capt">` +
+            n.capt
+              .map(([txt, kind]) => {
+                const ic =
+                  kind === 2
+                    ? svg(I.alert, '#dd5b00', 2.4)
+                    : svg(I.check, kind ? '#1aae39' : '#a4a097', 2.4);
+                return `<div class="${kind === 2 ? 'warn' : ''}">${ic}<span>${txt}</span></div>`;
+              })
+              .join('') +
+            `</div>`;
+        }
+        if (n.connect) {
+          body =
+            `<div class="connect">` +
+            `<div class="grant">${svg(I.gitbranch, '#787671')}<span>Connect the git repo</span></div>` +
+            `<div class="grant">${svg(I.code, '#787671')}<span>Grant Motir AI read access</span></div>` +
+            `<div class="connectbtn">${svg(I.github, '#fff')}Connect GitHub</div>` +
+            `</div>`;
+        }
+        if (n.rows) {
+          body =
+            `<div class="rows">` +
+            n.rows
+              .map(
+                (r) =>
+                  `<div class="row ${r.linked ? 'linked' : ''}"><i class="tdot" style="background:${r.hue}"></i><span>${r.t}</span>` +
+                  (r.chip
+                    ? `<span class="typechip" style="background:${r.chipBg};color:${r.chipC}">${r.chip}</span>`
+                    : '') +
+                  (r.st ? `<span class="st">${r.st}</span>` : '') +
+                  `</div>`,
+              )
+              .join('') +
+            `</div>`;
+        }
+        return `<div class="${cls}" style="left:${n.x}px;top:${n.y}px;${n.w ? 'width:' + n.w + 'px;' : ''}">${head}${here}${body}</div>`;
+      }
+
+      // edge: bottom/top OR side bezier between two measured node rects.
+      function drawEdges(svgEl, pos, list) {
+        for (const [a, b, kind] of list) {
+          const A = pos[a],
+            B = pos[b];
+          if (!A || !B) continue;
+          const acx = A.x + A.w / 2,
+            acy = A.y + A.h / 2,
+            bcx = B.x + B.w / 2,
+            bcy = B.y + B.h / 2;
+          const dx = bcx - acx,
+            dy = bcy - acy;
+          let ax, ay, bx, by, c1x, c1y, c2x, c2y;
+          if (Math.abs(dx) >= Math.abs(dy)) {
+            ax = dx > 0 ? A.x + A.w : A.x;
+            bx = dx > 0 ? B.x : B.x + B.w;
+            ay = acy;
+            by = bcy;
+            const mx = (ax + bx) / 2;
+            ((c1x = mx), (c1y = ay), (c2x = mx), (c2y = by));
+          } else {
+            ay = dy > 0 ? A.y + A.h : A.y;
+            by = dy > 0 ? B.y : B.y + B.h;
+            ax = acx;
+            bx = bcx;
+            const my = (ay + by) / 2;
+            ((c1x = ax), (c1y = my), (c2x = bx), (c2y = my));
+          }
+          const path = `M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}`;
+          // firm = solid neutral (shipped --el-border-strong); pending = dashed
+          // neutral (--el-border); cross = warning-toned + flagged.
+          const stroke = kind === 'cross' ? '#dd5b00' : kind === 'pending' ? '#d8d4cd' : '#d3cfc8';
+          const dash = kind === 'pending' ? 'stroke-dasharray="2 7"' : '';
+          svgEl.insertAdjacentHTML(
+            'beforeend',
+            `<path d="${path}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round" ${dash}/>`,
+          );
+          if (kind === 'cross') {
+            const mx = (ax + bx) / 2,
+              my = (ay + by) / 2;
+            svgEl.insertAdjacentHTML(
+              'beforeend',
+              `<g transform="translate(${mx - 9},${my - 9})"><circle cx="9" cy="9" r="10" fill="#fff3e8" stroke="#f6cfa6"/>` +
+                `<g transform="translate(3,3) scale(0.6)" stroke="#dd5b00" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">${I.flag}</g></g>`,
+            );
+          }
+        }
+      }
+
+      // Render a canvas panel: place nodes, measure, draw edges, scale-to-fit.
+      function renderCanvas({ vp, world, edges, nodes, edgeList, labels, flags, scale, tx, ty }) {
+        const wEl = document.getElementById(world);
+        const eEl = document.getElementById(edges);
+        const pos = {};
+        wEl.innerHTML =
+          nodes.map(nodeCard).join('') +
+          (labels || [])
+            .map((l) => `<div class="grouplabel" style="left:${l.x}px;top:${l.y}px">${l.t}</div>`)
+            .join('') +
+          (flags || [])
+            .map(
+              (f) =>
+                `<div class="flagtag" style="left:${f.x}px;top:${f.y}px">${svg(I.flag, '#dd5b00', 2.4)}${f.t}</div>`,
+            )
+            .join('');
+        // measure
+        Array.from(wEl.querySelectorAll('.node')).forEach((el, i) => {
+          const n = nodes[i];
+          pos[n.id] = { x: n.x, y: n.y, w: el.offsetWidth, h: el.offsetHeight };
+        });
+        drawEdges(eEl, pos, edgeList);
+        const t = `translate(${tx}px,${ty}px) scale(${scale})`;
+        wEl.style.transform = t;
+        eEl.style.transform = t;
+        eEl.setAttribute('width', 2400);
+        eEl.setAttribute('height', 1600);
+      }
+
+      // ── SHEET 1 — deterministic initial layout, start-fresh ──
+      // Row 1 = the four pre-plan tiers, left→right in ONE row. Row 2 = "Design
+      // your look". Then a SINGLE "Plan" node (epics NOT fanned out initially).
+      renderCanvas({
+        world: 'w1',
+        edges: 'ed1',
+        scale: 0.78,
+        tx: 30,
+        ty: 18,
+        labels: [{ x: 250, y: 22, t: 'Pre-plan' }],
+        nodes: [
+          {
+            id: 'idea',
+            x: 18,
+            y: 150,
+            compact: 1,
+            icon: 'bulb',
+            tile: '#5645d4',
+            tileBg: '#ece9fb',
+            title: 'Your idea',
+            sub: '“invoicing + chase late payers”',
+          },
+          // Row 1 — the 4 tiers
+          {
+            id: 'disc',
+            x: 250,
+            y: 60,
+            icon: 'search',
+            tile: '#0075de',
+            tileBg: 'var(--sky)',
+            title: 'Understanding your idea',
+            sub: 'what · who · competitors',
+            pill: 'reviewed',
+            capt: [
+              ['What — send & track invoices', 1],
+              ['Who — solo freelancers', 1],
+              ['Closest — FreshBooks · Wave', 1],
+            ],
+          },
+          {
+            id: 'vis',
+            x: 528,
+            y: 60,
+            border: 'active',
+            here: 1,
+            icon: 'shapes',
+            tile: '#5645d4',
+            tileBg: 'var(--lavender)',
+            title: "What we'll build",
+            sub: 'scope · key decisions',
+            pill: 'drafting',
+          },
+          {
+            id: 'feas',
+            x: 806,
+            y: 60,
+            border: 'skippable',
+            skipchip: 1,
+            icon: 'shield',
+            tile: '#1aae39',
+            tileBg: 'var(--mint)',
+            title: 'Is it worth building?',
+            sub: 'optional · market · build risk',
+          },
+          {
+            id: 'val',
+            x: 1084,
+            y: 60,
+            border: 'skippable',
+            skipchip: 1,
+            icon: 'list',
+            tile: '#dd5b00',
+            tileBg: 'var(--peach)',
+            title: 'Will people want it?',
+            sub: 'optional · demand · validate-first',
+          },
+          // Row 2 — Design your look
+          {
+            id: 'design',
+            x: 528,
+            y: 300,
+            border: 'skippable',
+            skipchip: 1,
+            icon: 'palette',
+            tile: '#787671',
+            tileBg: 'var(--mutedfill)',
+            title: 'Design your look',
+            sub: 'web only · style · palette · type',
+          },
+          // a single Plan node — NOT the epics fanned out
+          {
+            id: 'plan',
+            x: 528,
+            y: 470,
+            compact: 1,
+            border: 'upcoming',
+            icon: 'net',
+            tile: '#a4a097',
+            tileBg: 'var(--mutedfill)',
+            title: 'Plan → your project',
+            sub: 'the backlog, after planning',
+          },
+        ],
+        edgeList: [
+          ['idea', 'disc', 'firm'],
+          ['disc', 'vis', 'firm'],
+          ['vis', 'feas', 'pending'],
+          ['feas', 'val', 'pending'],
+          ['vis', 'design', 'pending'],
+          ['design', 'plan', 'pending'],
+        ],
+      });
+
+      // ── SHEET 2 — migrate variant: "Read your project" appears in row 2 ──
+      renderCanvas({
+        world: 'w2',
+        edges: 'ed2',
+        scale: 0.74,
+        tx: 26,
+        ty: 16,
+        labels: [{ x: 250, y: 20, t: 'Pre-plan' }],
+        nodes: [
+          {
+            id: 'idea',
+            x: 18,
+            y: 150,
+            compact: 1,
+            icon: 'bulb',
+            tile: '#5645d4',
+            tileBg: '#ece9fb',
+            title: 'Your idea',
+            sub: '“modernise the billing app”',
+          },
+          {
+            id: 'disc',
+            x: 250,
+            y: 60,
+            icon: 'search',
+            tile: '#0075de',
+            tileBg: 'var(--sky)',
+            title: 'Understanding your idea',
+            sub: 'what · who · competitors',
+            pill: 'reviewed',
+            capt: [
+              ['Read 1,240 files · 86 work items', 1],
+              ['What — B2B billing & dunning', 1],
+            ],
+          },
+          {
+            id: 'vis',
+            x: 528,
+            y: 60,
+            icon: 'shapes',
+            tile: '#5645d4',
+            tileBg: 'var(--lavender)',
+            title: "What we'll build",
+            sub: 'scope · key decisions',
+            border: 'active',
+            here: 1,
+            pill: 'drafting',
+          },
+          {
+            id: 'feas',
+            x: 806,
+            y: 60,
+            border: 'skippable',
+            skipchip: 1,
+            icon: 'shield',
+            tile: '#1aae39',
+            tileBg: 'var(--mint)',
+            title: 'Is it worth building?',
+            sub: 'optional · market · build risk',
+          },
+          {
+            id: 'val',
+            x: 1084,
+            y: 60,
+            border: 'skippable',
+            skipchip: 1,
+            icon: 'list',
+            tile: '#dd5b00',
+            tileBg: 'var(--peach)',
+            title: 'Will people want it?',
+            sub: 'optional · demand · validate-first',
+          },
+          // Row 2 — Read your project (migrate entry) + Design your look
+          {
+            id: 'read',
+            x: 250,
+            y: 300,
+            border: 'skippable',
+            icon: 'gitbranch',
+            tile: '#0075de',
+            tileBg: 'var(--sky)',
+            title: 'Read your project',
+            sub: 'connect repo · grant Motir AI access',
+            connect: 1,
+          },
+          {
+            id: 'design',
+            x: 620,
+            y: 300,
+            border: 'skippable',
+            skipchip: 1,
+            icon: 'palette',
+            tile: '#787671',
+            tileBg: 'var(--mutedfill)',
+            title: 'Design your look',
+            sub: 'web only · style · palette · type',
+          },
+          {
+            id: 'plan',
+            x: 620,
+            y: 520,
+            compact: 1,
+            border: 'upcoming',
+            icon: 'net',
+            tile: '#a4a097',
+            tileBg: 'var(--mutedfill)',
+            title: 'Plan → your project',
+            sub: 'the backlog, after planning',
+          },
+        ],
+        edgeList: [
+          ['idea', 'disc', 'firm'],
+          ['read', 'disc', 'firm'],
+          ['disc', 'vis', 'firm'],
+          ['vis', 'feas', 'pending'],
+          ['feas', 'val', 'pending'],
+          ['vis', 'design', 'pending'],
+          ['design', 'plan', 'pending'],
+        ],
+      });
+
+      // ── SHEET 3 — post-plan tree: epic → story → subtask, dependency edges,
+      // the cross-story warning edge, and migrate post-plan linking. ──
+      renderCanvas({
+        world: 'w3',
+        edges: 'ed3',
+        scale: 0.82,
+        tx: 24,
+        ty: 16,
+        labels: [
+          { x: 20, y: 18, t: 'Plan' },
+          { x: 360, y: 18, t: 'Epics → stories → subtasks' },
+          { x: 360, y: 470, t: 'Standalone · not reusable' },
+        ],
+        nodes: [
+          {
+            id: 'plan',
+            x: 20,
+            y: 220,
+            compact: 1,
+            icon: 'net',
+            tile: '#5645d4',
+            tileBg: '#ece9fb',
+            title: 'Plan → your project',
+            sub: '3 epics · 8 stories',
+            pill: 'reviewed',
+          },
+          {
+            id: 'e1',
+            x: 330,
+            y: 60,
+            w: 232,
+            icon: 'net',
+            tile: '#ff64c8',
+            tileBg: '#ffe4f5',
+            title: 'Epic 1 · Foundation',
+            sub: 'auth · schema · CI',
+            rows: [
+              {
+                t: 'Auth & sessions',
+                hue: '#1aae39',
+                chip: 'STORY',
+                chipBg: '#dff0e2',
+                chipC: '#0f5e29',
+                st: 'done',
+              },
+              {
+                t: 'Existing: User model',
+                hue: '#2a9d99',
+                chip: 'LINKED',
+                chipBg: '#e6e0f5',
+                chipC: '#3a2d8a',
+                linked: 1,
+              },
+              {
+                t: 'DB schema + migrations',
+                hue: '#2a9d99',
+                chip: 'TASK',
+                chipBg: '#dcecfa',
+                chipC: '#0a5aa8',
+              },
+            ],
+          },
+          {
+            id: 'e2',
+            x: 620,
+            y: 60,
+            w: 232,
+            border: 'upcoming',
+            icon: 'net',
+            tile: '#ff64c8',
+            tileBg: '#ffe4f5',
+            title: 'Epic 2 · Invoices',
+            sub: 'create · send · PDF',
+            rows: [
+              {
+                t: 'Create invoice',
+                hue: '#1aae39',
+                chip: 'STORY',
+                chipBg: '#dff0e2',
+                chipC: '#0f5e29',
+              },
+              {
+                t: 'Render PDF',
+                hue: '#2a9d99',
+                chip: 'SUBTASK',
+                chipBg: '#d8f0ef',
+                chipC: '#1d6b67',
+              },
+            ],
+          },
+          {
+            id: 'e3',
+            x: 620,
+            y: 300,
+            w: 232,
+            border: 'upcoming',
+            icon: 'net',
+            tile: '#ff64c8',
+            tileBg: '#ffe4f5',
+            title: 'Epic 3 · Reminders',
+            sub: 'schedule · email',
+            rows: [
+              {
+                t: 'Schedule reminders',
+                hue: '#1aae39',
+                chip: 'STORY',
+                chipBg: '#dff0e2',
+                chipC: '#0f5e29',
+              },
+              {
+                t: 'Dunning email',
+                hue: '#0075de',
+                chip: 'TASK',
+                chipBg: '#dcecfa',
+                chipC: '#0a5aa8',
+              },
+            ],
+          },
+          {
+            id: 'legacy',
+            x: 330,
+            y: 360,
+            w: 232,
+            border: 'skippable',
+            icon: 'code',
+            tile: '#787671',
+            tileBg: 'var(--mutedfill)',
+            title: 'Legacy export job',
+            sub: 'existing · not folded into the plan',
+            rows: [
+              {
+                t: 'Nightly CSV export',
+                hue: '#a4a097',
+                chip: 'STANDALONE',
+                chipBg: '#f3f4f6',
+                chipC: '#787671',
+              },
+            ],
+          },
+        ],
+        edgeList: [
+          ['plan', 'e1', 'firm'],
+          ['e1', 'e2', 'firm'],
+          ['e1', 'e3', 'firm'],
+          // a cross-story blocked_by (Reminders' dunning email needs Invoices' PDF)
+          ['e3', 'e2', 'cross'],
+        ],
+        flags: [{ x: 596, y: 250, t: 'crosses stories' }],
+      });
+
+      // ════ multi-level-chain OPTION renderer (sheets 6-8) ════
+      const OI = {
+        flask:
+          '<path d="M9 3h6M10 3v6l-4.5 8a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M7 14h10"/>',
+        cursor: '<path d="m3 3 7.5 18 2.6-7.9L21 10.5 3 3Z"/>',
+      };
+      const oicon = (k) => I[k] || OI[k];
+      const TYPEO = {
+        epic: { hue: '#ff64c8', bg: '#ffe4f5', ic: 'net' },
+        story: { hue: '#1aae39', bg: 'var(--mint)', ic: 'shapes' },
+        design: { hue: '#dd5b00', bg: 'var(--peach)', ic: 'palette' },
+        code: { hue: '#0075de', bg: 'var(--sky)', ic: 'code' },
+        test: { hue: '#2a9d99', bg: '#d8f0ef', ic: 'flask' },
+        plan: { hue: '#5645d4', bg: '#ece9fb', ic: 'net' },
+      };
+      function onodeHTML(n) {
+        const ty = TYPEO[n.kind] || TYPEO.code;
+        const cls = [
+          'onode',
+          n.compact ? 'compact' : '',
+          n.state === 'active' ? 'active' : '',
+          n.state === 'upcoming' ? 'upcoming' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        let pill = '';
+        if (n.state === 'done')
+          pill = `<span class="opill done">${svg(I.check, '#0f5e29', 2.4)}Done</span>`;
+        else if (n.state === 'active')
+          pill = `<span class="opill act">${svg(I.spark, '#3a2d8a', 2.4)}In progress</span>`;
+        const head =
+          `<div class="ohead"><span class="otile" style="background:${ty.bg}">${svg(oicon(ty.ic), ty.hue)}</span>` +
+          `<div class="ometa"><div class="otitle">${n.title}</div>${n.sub ? `<div class="osub">${n.sub}</div>` : ''}</div>${pill}</div>`;
+        const here = n.here
+          ? `<span class="ohere">${svg(OI.cursor, '#fff', 2.2)}clicked here</span>`
+          : '';
+        return `<div class="${cls}" style="left:${n.x}px;top:${n.y}px;${n.w ? 'width:' + n.w + 'px;' : ''}">${head}${here}</div>`;
+      }
+      function oedge(svgEl, A, B, kind) {
+        const acx = A.x + A.w / 2,
+          acy = A.y + A.h / 2,
+          bcx = B.x + B.w / 2,
+          bcy = B.y + B.h / 2;
+        const dx = bcx - acx,
+          dy = bcy - acy;
+        let ax, ay, bx, by, c1x, c1y, c2x, c2y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          ax = dx > 0 ? A.x + A.w : A.x;
+          bx = dx > 0 ? B.x : B.x + B.w;
+          ay = acy;
+          by = bcy;
+          const mx = (ax + bx) / 2;
+          ((c1x = mx), (c1y = ay), (c2x = mx), (c2y = by));
+        } else {
+          ay = dy > 0 ? A.y + A.h : A.y;
+          by = dy > 0 ? B.y : B.y + B.h;
+          ax = acx;
+          bx = bcx;
+          const my = (ay + by) / 2;
+          ((c1x = ax), (c1y = my), (c2x = bx), (c2y = my));
+        }
+        const stroke = kind === 'cross' ? '#dd5b00' : kind === 'pending' ? '#d8d4cd' : '#cdb8e8';
+        const dash = kind === 'pending' ? 'stroke-dasharray="2 7"' : '';
+        const ang = Math.atan2(by - c2y, bx - c2x),
+          ah = 7;
+        const p1x = bx - ah * Math.cos(ang - 0.5),
+          p1y = by - ah * Math.sin(ang - 0.5);
+        const p2x = bx - ah * Math.cos(ang + 0.5),
+          p2y = by - ah * Math.sin(ang + 0.5);
+        svgEl.insertAdjacentHTML(
+          'beforeend',
+          `<path d="M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round" ${dash}/>` +
+            `<path d="M${bx},${by} L${p1x},${p1y} M${bx},${by} L${p2x},${p2y}" stroke="${stroke}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+        );
+        if (kind === 'cross') {
+          const mx = (ax + bx) / 2,
+            my = (ay + by) / 2;
+          svgEl.insertAdjacentHTML(
+            'beforeend',
+            `<g transform="translate(${mx - 9},${my - 9})"><circle cx="9" cy="9" r="10" fill="#fff3e8" stroke="#f6cfa6"/><g transform="translate(3,3) scale(0.6)" stroke="#dd5b00" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">${I.flag}</g></g>`,
+          );
+        }
+      }
+      function orender(worldId, edgesId, nodes, edges) {
+        const w = document.getElementById(worldId),
+          e = document.getElementById(edgesId);
+        w.innerHTML = nodes.map(onodeHTML).join('');
+        const pos = {};
+        Array.from(w.querySelectorAll('.onode')).forEach((el, i) => {
+          const n = nodes[i];
+          pos[n.id] = { x: n.x, y: n.y, w: el.offsetWidth, h: el.offsetHeight };
+        });
+        for (const [a, b, k] of edges) if (pos[a] && pos[b]) oedge(e, pos[a], pos[b], k);
+        return w;
+      }
+
+      // ── Option A — drill-down: three states, the canvas refreshing per level ──
+      orender(
+        'wA1',
+        'edA1',
+        [
+          {
+            id: 'plan',
+            x: 24,
+            y: 62,
+            w: 150,
+            compact: 1,
+            kind: 'plan',
+            title: 'Plan',
+            sub: '3 epics',
+            state: 'done',
+          },
+          {
+            id: 'e1',
+            x: 250,
+            y: 48,
+            kind: 'epic',
+            title: 'Foundation',
+            sub: 'auth · schema · CI',
+            state: 'done',
+          },
+          {
+            id: 'e2',
+            x: 516,
+            y: 48,
+            kind: 'epic',
+            title: 'Invoices',
+            sub: 'create · send · PDF',
+            state: 'active',
+            here: 1,
+          },
+          {
+            id: 'e3',
+            x: 782,
+            y: 48,
+            kind: 'epic',
+            title: 'Reminders',
+            sub: 'schedule · email',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['plan', 'e1', 'firm'],
+          ['e1', 'e2', 'firm'],
+          ['e2', 'e3', 'pending'],
+        ],
+      );
+      orender(
+        'wA2',
+        'edA2',
+        [
+          {
+            id: 's1',
+            x: 24,
+            y: 48,
+            kind: 'story',
+            title: 'Invoice schema',
+            sub: 'model + migration',
+            state: 'done',
+          },
+          {
+            id: 's2',
+            x: 290,
+            y: 48,
+            kind: 'story',
+            title: 'Create invoice',
+            sub: 'form + API',
+            state: 'active',
+            here: 1,
+          },
+          {
+            id: 's3',
+            x: 556,
+            y: 48,
+            kind: 'story',
+            title: 'Send invoice',
+            sub: 'email + status',
+            state: 'upcoming',
+          },
+          {
+            id: 's4',
+            x: 822,
+            y: 48,
+            kind: 'story',
+            title: 'Invoice PDF',
+            sub: 'render + download',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['s1', 's2', 'firm'],
+          ['s2', 's3', 'pending'],
+          ['s3', 's4', 'pending'],
+        ],
+      );
+      orender(
+        'wA3',
+        'edA3',
+        [
+          {
+            id: 'd1',
+            x: 24,
+            y: 48,
+            kind: 'design',
+            title: 'Design the form',
+            sub: 'mock + notes',
+            state: 'done',
+          },
+          {
+            id: 'c1',
+            x: 290,
+            y: 48,
+            kind: 'code',
+            title: 'Invoice service + API',
+            sub: 'repo · service · route',
+            state: 'done',
+          },
+          {
+            id: 'c2',
+            x: 556,
+            y: 48,
+            kind: 'code',
+            title: 'Create-invoice UI',
+            sub: 'form + submit',
+            state: 'active',
+            here: 1,
+          },
+          {
+            id: 't1',
+            x: 822,
+            y: 48,
+            kind: 'test',
+            title: 'E2E: create invoice',
+            sub: 'happy + error paths',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['d1', 'c1', 'firm'],
+          ['c1', 'c2', 'firm'],
+          ['c2', 't1', 'pending'],
+        ],
+      );
+    </script>
+  </body>
+</html>
