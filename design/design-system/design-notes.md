@@ -22,7 +22,7 @@ component changes**. It is audit-driven: every token below is grounded in a
 > `--el-type-*` (work-item-type hues) **borrowed** for notification badges, AI
 > models, and avatar fallbacks. When a vivid palette (Candy) re-tints those six
 > pastels, every collapsed meaning moves together — priority `medium` and
-> `lowest` are *both* grey, a status dot bypasses the swap layer entirely
+> `lowest` are _both_ grey, a status dot bypasses the swap layer entirely
 > (`StatusPicker`), and a notification badge inherits a work-item-type colour it
 > has nothing to do with. **This spec un-collapses each meaning onto its own
 > `--el-*` token so a palette can tune it independently.**
@@ -46,7 +46,7 @@ override blocks: each sets **≈83 `--color-*` vars and exactly ONE `--el-*`**
 
 > **∴ THE RULE: a new `--el-*` token that maps to an existing Tier-0 `--color-*`
 > re-skins across all 10 palettes AND light/dark with ZERO per-palette work.**
-> Its "value in palette X" *is* whatever palette X already sets that `--color-*`
+> Its "value in palette X" _is_ whatever palette X already sets that `--color-*`
 > to. This is exactly how the gold-standard `--el-chart-*` and `--el-type-*`
 > ramps work (globals.css 2238-2302) — every entry maps to a `--color-*`, so the
 > dark block and every palette re-skin them for free. **This spec mirrors that
@@ -109,9 +109,9 @@ rename-with-same-value, not a re-colour.
 ## 4. Don't-churn list (already gold-standard — leave untouched)
 
 `--el-chart-*`, `--el-type-*` (the work-item KIND + NATURE ramps), `--el-build-*`,
-`--el-vote-active-*` (the *token* — only its unused sibling gets wired),
+`--el-vote-active-*` (the _token_ — only its unused sibling gets wired),
 `--el-roadmap-*`, `--el-public-banner-*`, `--el-hero-wash-*`, `--el-code-*`. These
-already map cleanly to `--color-*` and re-skin correctly; the spec adds *around*
+already map cleanly to `--color-*` and re-skin correctly; the spec adds _around_
 them.
 
 ---
@@ -122,65 +122,65 @@ Each table: **token · `--color-*` base · current source (file:line) · note**.
 "matches shipped" = the default reproduces today's pixels (zero-change migration);
 "NEW (no impl)" = the surface isn't built yet, the token is defined ahead of it.
 
-### A. Data hues — STATUS  → owned by **MOTIR-1273 (1266.2)**
+### A. Data hues — STATUS → owned by **MOTIR-1273 (1266.2)**
 
 Un-collapses the workflow statuses. Today the dot bypasses `--el-*` (bug #1) and
-the filter bars map only by *category* (`--el-text-faint`/`--el-info`/`--el-success`),
+the filter bars map only by _category_ (`--el-text-faint`/`--el-info`/`--el-success`),
 so `in_review` is indistinguishable from `in_progress` and `blocked`/`cancelled`
 inherit a wrong terminal colour. Defs: `lib/workflows/defaultWorkflow.ts:27-39`.
 
-| Token | base | current source | note |
-|---|---|---|---|
-| `--el-status-todo` | `--color-stone` | StatusPicker `--color-muted-foreground` | neutral grey |
-| `--el-status-in-progress` | `--color-info` | `--color-info` / `--el-info` | blue |
-| `--el-status-in-review` | `--color-primary` | shares info-blue today | **differentiate** from in-progress |
-| `--el-status-done` | `--color-success` | `--color-accent-green` / `--el-success` | green |
-| `--el-status-blocked` | `--color-warning` | falls back to todo grey | **gap fixed** → amber |
-| `--el-status-cancelled` | `--color-steel` | falls back to done green | **gap fixed** → terminal grey (not red — cancel ≠ error) |
+| Token                     | base              | current source                          | note                                                     |
+| ------------------------- | ----------------- | --------------------------------------- | -------------------------------------------------------- |
+| `--el-status-todo`        | `--color-stone`   | StatusPicker `--color-muted-foreground` | neutral grey                                             |
+| `--el-status-in-progress` | `--color-info`    | `--color-info` / `--el-info`            | blue                                                     |
+| `--el-status-in-review`   | `--color-primary` | shares info-blue today                  | **differentiate** from in-progress                       |
+| `--el-status-done`        | `--color-success` | `--color-accent-green` / `--el-success` | green                                                    |
+| `--el-status-blocked`     | `--color-warning` | falls back to todo grey                 | **gap fixed** → amber                                    |
+| `--el-status-cancelled`   | `--color-steel`   | falls back to done green                | **gap fixed** → terminal grey (not red — cancel ≠ error) |
 
 Status **chip** bg = `color-mix(in srgb, var(--el-status-X) 14%, var(--el-surface))`
 with `--el-text-strong`; the **dot/icon** uses the hue at full strength. Replaces
 the `CATEGORY_VAR` inline-style in `StatusPicker.tsx` and the per-category maps in
 `IssueFilterBar.tsx:60-64`, `AdvancedFilterValueEditor.tsx:66-70`, `AutomationParts.tsx:47-51`.
 
-### B. Data hues — PRIORITY  → **MOTIR-1273 (1266.2)**
+### B. Data hues — PRIORITY → **MOTIR-1273 (1266.2)**
 
 The headline collapse: `lib/issues/priorityMeta.ts:15-19` routes priority through
 `Pill` `severity`/`tone`, so **`medium` AND `lowest` are both `neutral` grey** —
 the exact "can't differentiate" complaint. A graded 5-step diverging ramp:
 
-| Token | base | current (`priorityMeta.ts`) | note |
-|---|---|---|---|
-| `--el-priority-highest` | `--color-destructive` | `severity: danger` (rose) | red |
-| `--el-priority-high` | `--color-warning` | `severity: warning` (peach) | orange |
-| `--el-priority-medium` | `--color-slate` | `tone: neutral` (grey) | **un-collapsed** → mid slate |
-| `--el-priority-low` | `--color-info` | `severity: info` (sky) | blue |
-| `--el-priority-lowest` | `--color-stone` | `tone: neutral` (grey) | **un-collapsed** → faint stone |
+| Token                   | base                  | current (`priorityMeta.ts`) | note                           |
+| ----------------------- | --------------------- | --------------------------- | ------------------------------ |
+| `--el-priority-highest` | `--color-destructive` | `severity: danger` (rose)   | red                            |
+| `--el-priority-high`    | `--color-warning`     | `severity: warning` (peach) | orange                         |
+| `--el-priority-medium`  | `--color-slate`       | `tone: neutral` (grey)      | **un-collapsed** → mid slate   |
+| `--el-priority-low`     | `--color-info`        | `severity: info` (sky)      | blue                           |
+| `--el-priority-lowest`  | `--color-stone`       | `tone: neutral` (grey)      | **un-collapsed** → faint stone |
 
 `medium` (slate) vs `lowest` (stone) are now two distinct greys; keep the
 `ArrowUp/Minus/ArrowDown` redundant icon (AA). 1273 may add a `priority` axis to
 `Pill` or have `PRIORITY_META` reference these tokens directly.
 
-### C. Semantic SURFACES (banner / callout backgrounds)  → **MOTIR-1273 (1266.2)**
+### C. Semantic SURFACES (banner / callout backgrounds) → **MOTIR-1273 (1266.2)**
 
 Today only `--el-danger-surface` exists in spirit (`FormField.tsx:53` =
 `--el-tint-rose`); warning/success/info have **borders only** (`Toast.tsx`), no fill.
 Each = a tint base + a strong-ink text token (§3).
 
-| Token | base | current source | note |
-|---|---|---|---|
-| `--el-danger-surface` / `-text` | `--color-tint-rose` / `--color-charcoal` | `FormField.tsx:53` | matches shipped |
-| `--el-warning-surface` | `--color-tint-peach` | none (Toast border only) | NEW fill |
-| `--el-success-surface` | `--color-tint-mint` | none (Toast border only) | NEW fill |
-| `--el-notice-info-bg` / `-border` | `--color-tint-sky` / `--color-info` | `Toast.tsx:35` border | NEW fill + existing border |
-| `--el-callout-bg` / `-text` | `--color-tint-lavender` / `--color-charcoal` | `CascadeBackBanner.tsx:28` (peach) | generic callout; banner may keep warning semantic |
-| `--el-warning-text` | `--color-charcoal` | — | ink on the warning surface |
+| Token                             | base                                         | current source                     | note                                              |
+| --------------------------------- | -------------------------------------------- | ---------------------------------- | ------------------------------------------------- |
+| `--el-danger-surface` / `-text`   | `--color-tint-rose` / `--color-charcoal`     | `FormField.tsx:53`                 | matches shipped                                   |
+| `--el-warning-surface`            | `--color-tint-peach`                         | none (Toast border only)           | NEW fill                                          |
+| `--el-success-surface`            | `--color-tint-mint`                          | none (Toast border only)           | NEW fill                                          |
+| `--el-notice-info-bg` / `-border` | `--color-tint-sky` / `--color-info`          | `Toast.tsx:35` border              | NEW fill + existing border                        |
+| `--el-callout-bg` / `-text`       | `--color-tint-lavender` / `--color-charcoal` | `CascadeBackBanner.tsx:28` (peach) | generic callout; banner may keep warning semantic |
+| `--el-warning-text`               | `--color-charcoal`                           | —                                  | ink on the warning surface                        |
 
 > If a palette's tint is too saturated to carry charcoal at AA, the surface may
 > instead be `color-mix(in srgb, var(--color-<hue>) 14%, var(--el-surface))`; the
 > code subtask verifies AA per palette and picks per token.
 
-### D. Identity hues  → **MOTIR-1274 (1266.3)**
+### D. Identity hues → **MOTIR-1274 (1266.3)**
 
 These are **already tint-compliant but collapsed** onto the six shared
 `--el-tint-*` (so a label, a role, and an avatar can't diverge). Dedicated tokens
@@ -188,92 +188,92 @@ default to today's value (zero-change) and decouple the `--el-type-*` misuse.
 
 **Roles / privacy** (today hardcoded in `Pill.tsx` CVA, lines 62-80):
 
-| Token | base | current | note |
-|---|---|---|---|
-| `--el-role-admin` / `-member` / `-viewer` | `--color-tint-lavender` / `-sky` / `-mint` | `Pill memberRole` | matches shipped; lets workspace roles (today `tone="neutral"`, `MembersCard.tsx:131`) adopt the same hues |
-| `--el-org-role-owner` / `-admin` / `-member` | `--color-tint-lavender` / `-sky` / `-mint` | `Pill orgRole` (`OrgMembersClient.tsx:356`) | matches shipped |
-| `--el-privacy-private` / `-public` | `--color-tint-lavender` / `--color-tint-sky` | `Pill tone="private"` (epic-privacy) | private matches shipped; public = open/sky |
+| Token                                        | base                                         | current                                     | note                                                                                                      |
+| -------------------------------------------- | -------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `--el-role-admin` / `-member` / `-viewer`    | `--color-tint-lavender` / `-sky` / `-mint`   | `Pill memberRole`                           | matches shipped; lets workspace roles (today `tone="neutral"`, `MembersCard.tsx:131`) adopt the same hues |
+| `--el-org-role-owner` / `-admin` / `-member` | `--color-tint-lavender` / `-sky` / `-mint`   | `Pill orgRole` (`OrgMembersClient.tsx:356`) | matches shipped                                                                                           |
+| `--el-privacy-private` / `-public`           | `--color-tint-lavender` / `--color-tint-sky` | `Pill tone="private"` (epic-privacy)        | private matches shipped; public = open/sky                                                                |
 
 **Label + avatar ramps** (deterministic hash → tint):
 
-| Token | base | current | note |
-|---|---|---|---|
-| `--el-label-1..6` | tint `peach,rose,mint,lavender,sky,yellow` (in order) | `lib/labels/labelTint.ts:15` `LABEL_TINTS` + `MultiSelectPicker` | hash `fnv1a(name)%6`→token; matches shipped |
-| `--el-avatar-{peach,rose,mint,lavender,sky,yellow}` | matching tint | `ProjectAvatar.tsx:69-76`, `TriageAvatar.tsx:11-18` | **keep the named keys** — `lib/projects/avatar.ts` persists `project.avatarColor` ∈ these strings; numbering them (`1..N`) would break stored rows. Spec deviates from the card's "1..N" for **migration safety** (rung-2: `avatar.ts` is the DB contract). |
-| `--el-avatar-fallback` | `--color-info` | `ProjectAvatar.tsx:121` (`--el-type-task`) | **fixes misuse #2** — mono initials tile keeps its blue, stops borrowing the type token |
+| Token                                               | base                                                  | current                                                          | note                                                                                                                                                                                                                                                        |
+| --------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--el-label-1..6`                                   | tint `peach,rose,mint,lavender,sky,yellow` (in order) | `lib/labels/labelTint.ts:15` `LABEL_TINTS` + `MultiSelectPicker` | hash `fnv1a(name)%6`→token; matches shipped                                                                                                                                                                                                                 |
+| `--el-avatar-{peach,rose,mint,lavender,sky,yellow}` | matching tint                                         | `ProjectAvatar.tsx:69-76`, `TriageAvatar.tsx:11-18`              | **keep the named keys** — `lib/projects/avatar.ts` persists `project.avatarColor` ∈ these strings; numbering them (`1..N`) would break stored rows. Spec deviates from the card's "1..N" for **migration safety** (rung-2: `avatar.ts` is the DB contract). |
+| `--el-avatar-fallback`                              | `--color-info`                                        | `ProjectAvatar.tsx:121` (`--el-type-task`)                       | **fixes misuse #2** — mono initials tile keeps its blue, stops borrowing the type token                                                                                                                                                                     |
 
 **`--el-type-*` misuse decouple** (bug #2 — give each its own token):
 
-| Token | base | current misuse | file:line |
-|---|---|---|---|
-| `--el-notif-mentioned` | `--color-accent` | (already `--el-accent` — alias for consistency) | `NotificationRow.tsx:31` |
-| `--el-notif-commented` | `--color-info` | `--el-type-task` | `NotificationRow.tsx:32` |
-| `--el-notif-assigned` | `--color-accent-green` | `--el-type-story` | `NotificationRow.tsx:33` |
-| `--el-notif-transitioned` | `--color-accent-teal` | `--el-type-subtask` | `NotificationRow.tsx:34` |
-| `--el-model-opus` / `-sonnet` / `-haiku` | `--color-accent` / `--color-info` / `--color-success` | (already `--el-*` — promote to a named family) | `OrgUsageClient.tsx:221-223` |
-| `--el-model-deepseek` | `--color-accent-teal` | `--el-type-subtask` | `OrgUsageClient.tsx:224` |
+| Token                                    | base                                                  | current misuse                                  | file:line                    |
+| ---------------------------------------- | ----------------------------------------------------- | ----------------------------------------------- | ---------------------------- |
+| `--el-notif-mentioned`                   | `--color-accent`                                      | (already `--el-accent` — alias for consistency) | `NotificationRow.tsx:31`     |
+| `--el-notif-commented`                   | `--color-info`                                        | `--el-type-task`                                | `NotificationRow.tsx:32`     |
+| `--el-notif-assigned`                    | `--color-accent-green`                                | `--el-type-story`                               | `NotificationRow.tsx:33`     |
+| `--el-notif-transitioned`                | `--color-accent-teal`                                 | `--el-type-subtask`                             | `NotificationRow.tsx:34`     |
+| `--el-model-opus` / `-sonnet` / `-haiku` | `--color-accent` / `--color-info` / `--color-success` | (already `--el-*` — promote to a named family)  | `OrgUsageClient.tsx:221-223` |
+| `--el-model-deepseek`                    | `--color-accent-teal`                                 | `--el-type-subtask`                             | `OrgUsageClient.tsx:224`     |
 
-### E. Icon + text roles  → **MOTIR-1275 (1266.4)**
+### E. Icon + text roles → **MOTIR-1275 (1266.4)**
 
 Splits the `--el-text-muted` / `--el-text` triple-duty so an icon can be tuned
 apart from body copy. All map to existing neutrals → zero-change defaults.
 
-| Token | base | current source | note |
-|---|---|---|---|
-| `--el-icon-muted` | `--color-muted-foreground` | `Sidebar.tsx:191`, `Combobox.tsx:574`, `Modal.tsx:179` | inactive nav/chevron/close |
-| `--el-icon-active` | `--color-primary` | `Sidebar.tsx:134` (`--el-accent-on-surface`) | active nav |
-| `--el-icon-btn` | `--color-foreground` | `Button.tsx:88-96` (inherits) | usually `currentColor`; token for explicit cases |
-| `--el-icon-heading` | `--color-charcoal` | (inherits heading) | icon beside a heading |
-| `--el-icon-field` | `--color-muted-foreground` | `Input.tsx:70,88`, `DatePicker.tsx:266` | search/chevron/calendar in inputs |
-| `--el-text-eyebrow` | `--color-muted-foreground` | `SectionLabel.tsx:35`, `Combobox.tsx:463` | uppercase mono overline |
-| `--el-text-subtitle` | `--color-slate` | (Modal/EmptyState desc, `--el-text-secondary`) | lead paragraph |
-| `--el-text-helper` | `--color-muted-foreground` | `FormField.tsx:60` | form hint |
-| `--el-text-identifier` | `--color-slate` | `Combobox.tsx:488` | monospace `MOTIR-123` keys |
+| Token                  | base                       | current source                                         | note                                             |
+| ---------------------- | -------------------------- | ------------------------------------------------------ | ------------------------------------------------ |
+| `--el-icon-muted`      | `--color-muted-foreground` | `Sidebar.tsx:191`, `Combobox.tsx:574`, `Modal.tsx:179` | inactive nav/chevron/close                       |
+| `--el-icon-active`     | `--color-primary`          | `Sidebar.tsx:134` (`--el-accent-on-surface`)           | active nav                                       |
+| `--el-icon-btn`        | `--color-foreground`       | `Button.tsx:88-96` (inherits)                          | usually `currentColor`; token for explicit cases |
+| `--el-icon-heading`    | `--color-charcoal`         | (inherits heading)                                     | icon beside a heading                            |
+| `--el-icon-field`      | `--color-muted-foreground` | `Input.tsx:70,88`, `DatePicker.tsx:266`                | search/chevron/calendar in inputs                |
+| `--el-text-eyebrow`    | `--color-muted-foreground` | `SectionLabel.tsx:35`, `Combobox.tsx:463`              | uppercase mono overline                          |
+| `--el-text-subtitle`   | `--color-slate`            | (Modal/EmptyState desc, `--el-text-secondary`)         | lead paragraph                                   |
+| `--el-text-helper`     | `--color-muted-foreground` | `FormField.tsx:60`                                     | form hint                                        |
+| `--el-text-identifier` | `--color-slate`            | `Combobox.tsx:488`                                     | monospace `MOTIR-123` keys                       |
 
-### F. Component-surface primitives  → **MOTIR-1275 (1266.4)**
+### F. Component-surface primitives → **MOTIR-1275 (1266.4)**
 
-| Token | base | current source | note |
-|---|---|---|---|
-| `--el-tooltip-bg` / `-text` | `--color-foreground` / `--color-background` | `Tooltip.tsx:44-52` | matches shipped (inverted) |
-| `--el-switch-on` | `--color-primary-fill` | `Switch.tsx:55-66` (`--el-accent`) | checked track |
-| `--el-switch-knob` | `--color-surface` | `Switch.tsx` knob | the thumb |
-| `--el-option-active-bg` | `--color-muted` | `Combobox.tsx:479` (`--el-surface`) | highlighted option |
-| `--el-overlay-scrim` | **concrete** `#00000066` (light) / `#000000a6` (dark) | `Modal.tsx:131` `bg-black/40` | the lone non-`--color-*` token here; carries explicit dark value |
-| `--el-chip-bg` / `-border` | `--color-surface` / `--color-border` | `Pill.tsx` neutral tone | neutral chip (tinted chips keep their tint) |
-| `--el-card` | `--color-background` | `Card.tsx:23` (`--el-page-bg`) | untinted card surface |
-| `--el-input-border` | `--color-hairline-strong` | `Input.tsx:65` | input outline |
-| `--el-button-border` | `--color-hairline-strong` | `Button.tsx:41` | secondary-button outline |
-| `--el-count-bg` / `-text` | `--color-surface` / `--color-slate` | `Sidebar.tsx:62`, `Pill.tsx:76` | numeric count badge |
+| Token                       | base                                                  | current source                      | note                                                             |
+| --------------------------- | ----------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| `--el-tooltip-bg` / `-text` | `--color-foreground` / `--color-background`           | `Tooltip.tsx:44-52`                 | matches shipped (inverted)                                       |
+| `--el-switch-on`            | `--color-primary-fill`                                | `Switch.tsx:55-66` (`--el-accent`)  | checked track                                                    |
+| `--el-switch-knob`          | `--color-surface`                                     | `Switch.tsx` knob                   | the thumb                                                        |
+| `--el-option-active-bg`     | `--color-muted`                                       | `Combobox.tsx:479` (`--el-surface`) | highlighted option                                               |
+| `--el-overlay-scrim`        | **concrete** `#00000066` (light) / `#000000a6` (dark) | `Modal.tsx:131` `bg-black/40`       | the lone non-`--color-*` token here; carries explicit dark value |
+| `--el-chip-bg` / `-border`  | `--color-surface` / `--color-border`                  | `Pill.tsx` neutral tone             | neutral chip (tinted chips keep their tint)                      |
+| `--el-card`                 | `--color-background`                                  | `Card.tsx:23` (`--el-page-bg`)      | untinted card surface                                            |
+| `--el-input-border`         | `--color-hairline-strong`                             | `Input.tsx:65`                      | input outline                                                    |
+| `--el-button-border`        | `--color-hairline-strong`                             | `Button.tsx:41`                     | secondary-button outline                                         |
+| `--el-count-bg` / `-text`   | `--color-surface` / `--color-slate`                   | `Sidebar.tsx:62`, `Pill.tsx:76`     | numeric count badge                                              |
 
-### G. Interaction / agile surfaces  → **MOTIR-1276 (1266.5)**
+### G. Interaction / agile surfaces → **MOTIR-1276 (1266.5)**
 
-| Token | base | current source | note |
-|---|---|---|---|
-| `--el-selection-bg` | `--color-tint-sky` | none | **NEW** — selected row/card highlight (not impl) |
-| `--el-droptarget-bg` | `--color-tint-lavender` | `BoardColumn.tsx:143-145` | matches shipped dnd drop-zone |
-| `--el-board-column-accent` | `--color-primary` | `BoardColumn.tsx:142-146` (accent ring) | drop ring/border |
-| `--el-overdue` | `--color-destructive` | none (`issueCellPrimitives.tsx:77-84` plain text) | **NEW** — past-due date |
-| `--el-due-soon` | `--color-warning` | none | **NEW** — due within N days |
-| `--el-sprint-accent` | `--color-tint-lavender` | `SprintHeader.tsx:59-60` emphasis | matches shipped |
-| `--el-epic-accent` | `--color-accent` | `--el-type-epic` (globals 2241) | the pink epic identity |
-| `--el-archived-pill-bg` / `-text` | `--color-muted` / `--color-slate` | `ProjectSwitcher.tsx:98-102` (`Pill neutral`) | inactive-state badge |
-| `--el-auth-wash` | `--color-tint-sky` | none (`AuthShell.tsx` plain) | **NEW** — sign-in background wash (not impl) |
-| `--el-tabnav-track` / `--el-tabnav-active` | `--color-surface` / `--color-primary` | `Segmented.tsx:59,85-87` | the de-facto tab primitive |
-| `--el-card-icon-bg` / `-fg` | `--color-muted` / `--color-primary` | none | **NEW** — coloured icon tile on a hub/settings card (not impl) |
-| `--el-vote-bg` *(exists)* | `--color-tint-lavender` | **unused** — `PublicRoadmapVote.tsx:98` uses `--el-page-bg` | **wire it** (bug #3) |
+| Token                                      | base                                  | current source                                              | note                                                           |
+| ------------------------------------------ | ------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| `--el-selection-bg`                        | `--color-tint-sky`                    | none                                                        | **NEW** — selected row/card highlight (not impl)               |
+| `--el-droptarget-bg`                       | `--color-tint-lavender`               | `BoardColumn.tsx:143-145`                                   | matches shipped dnd drop-zone                                  |
+| `--el-board-column-accent`                 | `--color-primary`                     | `BoardColumn.tsx:142-146` (accent ring)                     | drop ring/border                                               |
+| `--el-overdue`                             | `--color-destructive`                 | none (`issueCellPrimitives.tsx:77-84` plain text)           | **NEW** — past-due date                                        |
+| `--el-due-soon`                            | `--color-warning`                     | none                                                        | **NEW** — due within N days                                    |
+| `--el-sprint-accent`                       | `--color-tint-lavender`               | `SprintHeader.tsx:59-60` emphasis                           | matches shipped                                                |
+| `--el-epic-accent`                         | `--color-accent`                      | `--el-type-epic` (globals 2241)                             | the pink epic identity                                         |
+| `--el-archived-pill-bg` / `-text`          | `--color-muted` / `--color-slate`     | `ProjectSwitcher.tsx:98-102` (`Pill neutral`)               | inactive-state badge                                           |
+| `--el-auth-wash`                           | `--color-tint-sky`                    | none (`AuthShell.tsx` plain)                                | **NEW** — sign-in background wash (not impl)                   |
+| `--el-tabnav-track` / `--el-tabnav-active` | `--color-surface` / `--color-primary` | `Segmented.tsx:59,85-87`                                    | the de-facto tab primitive                                     |
+| `--el-card-icon-bg` / `-fg`                | `--color-muted` / `--color-primary`   | none                                                        | **NEW** — coloured icon tile on a hub/settings card (not impl) |
+| `--el-vote-bg` _(exists)_                  | `--color-tint-lavender`               | **unused** — `PublicRoadmapVote.tsx:98` uses `--el-page-bg` | **wire it** (bug #3)                                           |
 
-### H. Onboarding / canvas surfaces  → **MOTIR-1277 (1266.6)**
+### H. Onboarding / canvas surfaces → **MOTIR-1277 (1266.6)**
 
-| Token | base | current source | note |
-|---|---|---|---|
-| `--el-diff-added` | `--color-tint-mint` | `RevisionDiff.tsx:50` | matches shipped |
-| `--el-diff-removed` | `--color-tint-rose` | `RevisionDiff.tsx:51` | matches shipped |
-| `--el-diff-moved` | `--color-tint-sky` | `RevisionDiff.tsx:52` ("changed") | matches shipped |
-| `--el-chat-bubble-user` | `--color-primary-fill` | `DiscoveryChatRail.tsx:170` (`--el-accent`) | + text `--el-accent-text` |
-| `--el-chat-bubble-ai` | `--color-surface-soft` | `DiscoveryChatRail.tsx:171` | + text `--el-text` |
-| `--el-canvas-edge-pending` | `--color-border` | `PlanningCanvas.tsx:300` (dashed) | matches shipped |
-| `--el-canvas-edge-committed` | `--color-hairline-strong` | `PlanningCanvas.tsx:300` (solid) | matches shipped |
-| `--el-station-tier-{discovery,vision,feasibility,validation}` | tint `sky,lavender,mint,peach` | `StationNode.tsx:44-49` | **optional**; defaults match shipped tier tints |
+| Token                                                         | base                           | current source                              | note                                            |
+| ------------------------------------------------------------- | ------------------------------ | ------------------------------------------- | ----------------------------------------------- |
+| `--el-diff-added`                                             | `--color-tint-mint`            | `RevisionDiff.tsx:50`                       | matches shipped                                 |
+| `--el-diff-removed`                                           | `--color-tint-rose`            | `RevisionDiff.tsx:51`                       | matches shipped                                 |
+| `--el-diff-moved`                                             | `--color-tint-sky`             | `RevisionDiff.tsx:52` ("changed")           | matches shipped                                 |
+| `--el-chat-bubble-user`                                       | `--color-primary-fill`         | `DiscoveryChatRail.tsx:170` (`--el-accent`) | + text `--el-accent-text`                       |
+| `--el-chat-bubble-ai`                                         | `--color-surface-soft`         | `DiscoveryChatRail.tsx:171`                 | + text `--el-text`                              |
+| `--el-canvas-edge-pending`                                    | `--color-border`               | `PlanningCanvas.tsx:300` (dashed)           | matches shipped                                 |
+| `--el-canvas-edge-committed`                                  | `--color-hairline-strong`      | `PlanningCanvas.tsx:300` (solid)            | matches shipped                                 |
+| `--el-station-tier-{discovery,vision,feasibility,validation}` | tint `sky,lavender,mint,peach` | `StationNode.tsx:44-49`                     | **optional**; defaults match shipped tier tints |
 
 > **⚠️ Card correction (rung-2).** The card says "wire existing `--el-roadmap-*`
 > into StationNode." The sweep shows that is a **mismatch**: `StationNode.tsx:44-49`
@@ -298,13 +298,13 @@ the cited components off raw `--color-*` / wrong `--el-*` / hardcoded values; sh
 a test that the swap layer holds (a palette swap moves the token). Concrete-value
 tokens (`--el-overlay-scrim`) need a `[data-theme='dark']` companion.
 
-| Subtask | Families (§) | Real fixes (pixel-changing) |
-|---|---|---|
-| **1273** (1266.2) | A status · B priority · C surfaces | StatusPicker Tier-0 violation; priority medium/lowest un-collapse |
-| **1274** (1266.3) | D identity hues | `--el-type-*` misuse ×5 (NotificationRow, ProjectAvatar, OrgUsageClient); preserve avatar DB keys |
-| **1275** (1266.4) | E icon/text roles · F surface primitives | split icon/text from body copy; `--el-overlay-scrim` dark companion |
-| **1276** (1266.5) | G interaction/agile | wire unused `--el-vote-bg`; selection/overdue/auth-wash are NEW (define now, render when surface lands) |
-| **1277** (1266.6) | H onboarding/canvas | `--el-roadmap-*` correction (don't force onto StationNode) |
+| Subtask           | Families (§)                             | Real fixes (pixel-changing)                                                                             |
+| ----------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **1273** (1266.2) | A status · B priority · C surfaces       | StatusPicker Tier-0 violation; priority medium/lowest un-collapse                                       |
+| **1274** (1266.3) | D identity hues                          | `--el-type-*` misuse ×5 (NotificationRow, ProjectAvatar, OrgUsageClient); preserve avatar DB keys       |
+| **1275** (1266.4) | E icon/text roles · F surface primitives | split icon/text from body copy; `--el-overlay-scrim` dark companion                                     |
+| **1276** (1266.5) | G interaction/agile                      | wire unused `--el-vote-bg`; selection/overdue/auth-wash are NEW (define now, render when surface lands) |
+| **1277** (1266.6) | H onboarding/canvas                      | `--el-roadmap-*` correction (don't force onto StationNode)                                              |
 
 ## 7. Decisions resolved here (no user round-trip — `motir run` never asks)
 
