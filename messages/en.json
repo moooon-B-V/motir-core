@@ -3722,7 +3722,7 @@
           },
           "design": {
             "title": "Design the look",
-            "subtitle": "up next · web only",
+            "subtitle": "up next",
             "cta": "Design your look"
           },
           "plan": {
@@ -3739,7 +3739,7 @@
       "designLook": "Design your look"
     },
     "design": {
-      "header": "Pre-plan · design · web only",
+      "header": "Pre-plan · design",
       "back": "Back",
       "title": "Design your project's look",
       "lead": "Pick a theme, style, palette and type for your new project. This whole page previews your choice — and only this page. The rest of Motir stays exactly as it is.",
