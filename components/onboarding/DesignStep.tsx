@@ -107,14 +107,17 @@ export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
         </span>
       </div>
 
-      {/* Scrolling body: the controls, then the big scoped preview. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto max-w-[72rem]">
+      {/* Body — two columns that fill the width (no centered gutters): the
+          controls on the LEFT (own scroll), the live example on the RIGHT (own
+          scroll), so changing a control never scrolls the example out of view.
+          Stacks below lg. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* LEFT — the controls. */}
+        <div className="min-h-0 overflow-y-auto px-6 py-6 lg:w-[28rem] lg:shrink-0 lg:border-r lg:border-(--el-border)">
           <h1 className="font-serif text-2xl font-bold text-(--el-text)">{t('title')}</h1>
-          <p className="mt-1 max-w-[70ch] text-sm text-(--el-text-secondary)">{t('lead')}</p>
+          <p className="mt-1 text-sm text-(--el-text-secondary)">{t('lead')}</p>
 
-          {/* The four controls — Motir's own chrome; they drive the LOCAL project
-              design, never the app theme. */}
+          {/* The four controls — they drive the LOCAL project design. */}
           <div className="mt-5 flex flex-col">
             <AxisField
               name={t('theme.name')}
@@ -165,29 +168,28 @@ export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
               <TypePicker value={type} onChange={setType} label={t('type.name')} />
             </AxisField>
           </div>
+        </div>
 
-          {/* A concrete product preview INSIDE the already-scoped page — a real
-              app surface (the 7.3.37 specimen) framed as an app window, so the user
-              sees their PRODUCT UI (not just the wizard chrome) in the chosen
-              design. It inherits the section's scoped axes (no own data-*). */}
-          <div className="mt-8">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-faint)">
-              {t('example.eyebrow')}
-            </p>
-            <div className="mt-2.5 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)">
-              {/* faux window chrome — three dots + the project's accent bar */}
-              <div className="flex items-center gap-2 border-b border-(--el-border) bg-(--el-surface) px-4 py-2.5">
-                <span className="size-3 rounded-full bg-(--el-danger)" aria-hidden />
-                <span className="size-3 rounded-full bg-(--el-warning)" aria-hidden />
-                <span className="size-3 rounded-full bg-(--el-success)" aria-hidden />
-                <span
-                  className="ml-3 h-4 w-40 rounded-(--radius-badge) bg-(--el-muted)"
-                  aria-hidden
-                />
-              </div>
-              <div className="p-6 lg:p-8">
-                <StyleVignette label={t('example.label')} className="w-full" />
-              </div>
+        {/* RIGHT — the live example, always in view while you edit. A concrete
+            product surface (the 7.3.37 specimen) framed as an app window, in the
+            chosen design (inherits the section's scoped axes). */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-(--el-surface-soft) px-6 py-6">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-faint)">
+            {t('example.eyebrow')}
+          </p>
+          <div className="mt-2.5 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)">
+            {/* faux window chrome — three dots + the project's accent bar */}
+            <div className="flex items-center gap-2 border-b border-(--el-border) bg-(--el-surface) px-4 py-2.5">
+              <span className="size-3 rounded-full bg-(--el-danger)" aria-hidden />
+              <span className="size-3 rounded-full bg-(--el-warning)" aria-hidden />
+              <span className="size-3 rounded-full bg-(--el-success)" aria-hidden />
+              <span
+                className="ml-3 h-4 w-40 rounded-(--radius-badge) bg-(--el-muted)"
+                aria-hidden
+              />
+            </div>
+            <div className="p-6 lg:p-8">
+              <StyleVignette label={t('example.label')} className="w-full" />
             </div>
           </div>
         </div>
