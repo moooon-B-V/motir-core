@@ -415,6 +415,11 @@
         background: var(--el-tint-lavender);
         color: var(--el-text-strong);
       }
+      /* purchased top-up credits (extra, beyond the monthly allotment) */
+      .pill-topup {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
       /* subscription-status tones (decision §5) */
       .pill-active {
         background: var(--el-tint-mint);
@@ -562,6 +567,11 @@
         color: var(--el-text-strong);
         font-weight: 600;
         font-variant-numeric: tabular-nums;
+      }
+      .topup-note {
+        color: var(--el-text-faint);
+        font-weight: 400;
+        font-size: 11px;
       }
 
       /* caps grid (the tracker line's free-tier usage) */
@@ -1566,15 +1576,22 @@
                     <div class="row1">
                       <span class="pill pill-tier">Standard</span>
                       <span class="pname">2,000 credits / mo</span>
+                      <span class="pill pill-topup">+3,000 top-up</span>
                       <span class="fee">Plan fee <b>$25 / mo</b></span>
                     </div>
                     <div class="meterlbl">
-                      <span>Allotment this month</span><b>1,420 of 2,000 credits left</b>
+                      <span>Allotment this month</span><b>1,420 of 2,000 left</b>
                     </div>
                     <div class="meter"><span style="width: 71%"></span></div>
+                    <div class="meterlbl" style="margin-top: 8px">
+                      <span
+                        >+ <b>3,000</b> top-up credits
+                        <span class="topup-note">extra · don’t expire</span></span
+                      ><b>4,420 credits available</b>
+                    </div>
                     <div class="desc">
-                      Renews <b>1 Jul 2026</b> · credits are a usage allotment, not a bill — one
-                      planning run debits the tokens it used.
+                      Renews <b>1 Jul 2026</b> · monthly allotment resets; purchased top-up credits
+                      roll over. Credits are a usage allotment, not a bill.
                     </div>
                   </div>
                 </div>

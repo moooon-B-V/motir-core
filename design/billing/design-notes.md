@@ -138,9 +138,15 @@ breadcrumb. The two billed lines + payment:
   by the billed seat count + renewal and the action is "Manage seats" — panel 6b.)
 - **② Motir AI line (`Card`).** Head: a lavender product glyph (`i-sparkle`),
   title **"Motir AI"**, the subscription status `Pill` (**Active**). Body: a tier
-  `Pill` (**"Standard"**) + **"2,000 credits / mo"** + the **plan fee "$25 /
-  mo"** (right-aligned); an **allotment meter** with **"1,420 of 2,000 credits
-  left"**; **"Renews 1 Jul 2026"** + the credits-are-not-a-bill line. Actions:
+  `Pill` (**"Standard"**) + the subscription amount **"2,000 credits / mo"** +
+  — **when the org holds purchased top-ups — an `--el-tint-sky` `pill-topup`
+  beside it: `+3,000 top-up`** (the EXTRA credits, distinct from the recurring
+  allotment) + the **plan fee "$25 / mo"** (right-aligned). Then the **allotment
+  meter** with **"1,420 of 2,000 left"**, and a second `meterlbl` totalling the
+  two pools: **"+3,000 top-up credits (extra · don't expire)"** | **"4,420 credits
+  available"**. The `desc` notes **"monthly allotment resets; purchased top-up
+  credits roll over"**. (No top-up held → the `pill-topup` + the total line are
+  omitted; the meter reads the allotment alone.) Actions:
   **"Change plan"** (primary → panel 5), **"Manage plan & payment"** (secondary,
   `i-external` → Stripe Customer Portal), and the **"View Usage & cost"**
   cross-link (`i-coins`, to the `ai-usage` dashboard).
@@ -413,31 +419,32 @@ workaround.
 
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
-| Element                                      | Token                                                             | Why                                                             |
-| -------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
-| **Plan price / credit figures (serif)**      | `--el-text` · unit/`per` in `--el-text-muted`                     | The primary numbers; the unit/price-cadence reads quiet.        |
-| **Tier chip (Standard / Pro / …)**           | `--el-tint-lavender` bg + `--el-text-strong`                      | The AI plan tier — brand-purple family, matches the org avatar. |
-| **Status: Active**                           | `--el-tint-mint` bg + `--el-text-strong`, `i-check`               | Healthy / paid — success family.                                |
-| **Status: Free trial / trialing**            | `--el-tint-sky` bg + `--el-text-strong`, `i-sparkle`              | Informational, not yet paid — the info/try family.              |
-| **Status: Past due (dunning)**               | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`   | Warning, recoverable — keep-through-grace, not danger.          |
-| **Status: Canceled**                         | `--el-tint-rose` bg + `--el-text-strong`, `i-x`                   | Ended / dropped — danger family (but data retained).            |
-| **Motir-state: Free / View-only / readonly** | neutral `Pill` (`--el-surface` + `--el-text-secondary`)           | Genuinely neutral state metadata.                               |
-| **Allotment meter fill (healthy)**           | `--el-accent`                                                     | Primary "credits remaining" share.                              |
-| **Allotment meter fill (low / past_due)**    | `--el-warning`                                                    | Low-balance / dunning variant.                                  |
-| **Free-cap meters**                          | `--el-accent`                                                     | Usage-against-cap share.                                        |
-| **Dunning / warning banner**                 | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`   | Warning hue in the BANNER tint, not the page (finding #35).     |
-| **Canceled banner**                          | `--el-tint-rose` bg + `--el-text-strong`, icon `--el-danger-text` | Ended-plan notice — danger tint in the banner only.             |
-| **Info / tax / cloud-only notes**            | `--el-surface-soft` dashed (`--el-border-strong`) · `i-info`      | Quiet, dashed advisory — the passive-affordance shape.          |
-| **Out-of-credits / paused icon**             | `--el-tint-yellow` + `--el-warning`                               | The paused state — warning, not danger (nothing is broken).     |
-| **Tier-gate / lock-gate icon**               | `--el-tint-lavender` / `--el-surface` + `--el-text-strong`        | "AI is paid" / "ask your owner" — gate, not error.              |
-| **Error icon tint**                          | `--el-tint-rose` + `--el-danger-text`                             | Fetch-error state (panel 8c).                                   |
-| **Feature-list check / off**                 | `i-check` `--el-success` · off `i-x` `--el-text-faint`            | Included vs not — palette green, not grey-only.                 |
-| **Pro / Max accent glyph**                   | `--el-accent-on-surface` (`i-zap` / `i-crown`)                    | The heavier paid tiers carry an accent glyph (accent AS icon).  |
-| **Current-plan card border**                 | `--el-accent`                                                     | Marks the org's current plan in the storefront.                 |
-| **Primary CTAs / Upgrade**                   | `--el-accent` + `--el-accent-text`                                | Upgrade / Change-plan / Resubscribe — the conversion action.    |
-| **Cross-link (View Usage & cost)**           | `--el-link`                                                       | Quiet inline navigation to the sibling dashboard.               |
-| **Payment card-brand chip**                  | `--el-tint-sky` + `--el-text-strong`                              | The Stripe payment-method affordance.                           |
-| Text / surfaces / borders                    | `--el-text*`, `--el-surface*`, `--el-border*`                     | Standard element tokens — never Tier-0 `--color-*`.             |
+| Element                                      | Token                                                             | Why                                                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Plan price / credit figures (serif)**      | `--el-text` · unit/`per` in `--el-text-muted`                     | The primary numbers; the unit/price-cadence reads quiet.                                         |
+| **Tier chip (Standard / Pro / …)**           | `--el-tint-lavender` bg + `--el-text-strong`                      | The AI plan tier — brand-purple family, matches the org avatar.                                  |
+| **Top-up chip (`+N top-up`)**                | `--el-tint-sky` bg + `--el-text-strong`                           | Purchased extra credits — a DISTINCT tint from the tier/allotment so the bonus pool reads apart. |
+| **Status: Active**                           | `--el-tint-mint` bg + `--el-text-strong`, `i-check`               | Healthy / paid — success family.                                                                 |
+| **Status: Free trial / trialing**            | `--el-tint-sky` bg + `--el-text-strong`, `i-sparkle`              | Informational, not yet paid — the info/try family.                                               |
+| **Status: Past due (dunning)**               | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`   | Warning, recoverable — keep-through-grace, not danger.                                           |
+| **Status: Canceled**                         | `--el-tint-rose` bg + `--el-text-strong`, `i-x`                   | Ended / dropped — danger family (but data retained).                                             |
+| **Motir-state: Free / View-only / readonly** | neutral `Pill` (`--el-surface` + `--el-text-secondary`)           | Genuinely neutral state metadata.                                                                |
+| **Allotment meter fill (healthy)**           | `--el-accent`                                                     | Primary "credits remaining" share.                                                               |
+| **Allotment meter fill (low / past_due)**    | `--el-warning`                                                    | Low-balance / dunning variant.                                                                   |
+| **Free-cap meters**                          | `--el-accent`                                                     | Usage-against-cap share.                                                                         |
+| **Dunning / warning banner**                 | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`   | Warning hue in the BANNER tint, not the page (finding #35).                                      |
+| **Canceled banner**                          | `--el-tint-rose` bg + `--el-text-strong`, icon `--el-danger-text` | Ended-plan notice — danger tint in the banner only.                                              |
+| **Info / tax / cloud-only notes**            | `--el-surface-soft` dashed (`--el-border-strong`) · `i-info`      | Quiet, dashed advisory — the passive-affordance shape.                                           |
+| **Out-of-credits / paused icon**             | `--el-tint-yellow` + `--el-warning`                               | The paused state — warning, not danger (nothing is broken).                                      |
+| **Tier-gate / lock-gate icon**               | `--el-tint-lavender` / `--el-surface` + `--el-text-strong`        | "AI is paid" / "ask your owner" — gate, not error.                                               |
+| **Error icon tint**                          | `--el-tint-rose` + `--el-danger-text`                             | Fetch-error state (panel 8c).                                                                    |
+| **Feature-list check / off**                 | `i-check` `--el-success` · off `i-x` `--el-text-faint`            | Included vs not — palette green, not grey-only.                                                  |
+| **Pro / Max accent glyph**                   | `--el-accent-on-surface` (`i-zap` / `i-crown`)                    | The heavier paid tiers carry an accent glyph (accent AS icon).                                   |
+| **Current-plan card border**                 | `--el-accent`                                                     | Marks the org's current plan in the storefront.                                                  |
+| **Primary CTAs / Upgrade**                   | `--el-accent` + `--el-accent-text`                                | Upgrade / Change-plan / Resubscribe — the conversion action.                                     |
+| **Cross-link (View Usage & cost)**           | `--el-link`                                                       | Quiet inline navigation to the sibling dashboard.                                                |
+| **Payment card-brand chip**                  | `--el-tint-sky` + `--el-text-strong`                              | The Stripe payment-method affordance.                                                            |
+| Text / surfaces / borders                    | `--el-text*`, `--el-surface*`, `--el-border*`                     | Standard element tokens — never Tier-0 `--color-*`.                                              |
 
 All shaped surfaces use the **`[data-display-style]` shape tokens**
 (`--radius-{btn,card,input,control,badge}`, `--spacing-{btn,input,control,chip,
