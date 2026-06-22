@@ -75,12 +75,15 @@ export function StationCard({
   station,
   doc,
   session,
+  onOpenDesign,
   revisiting = false,
   refreshing = false,
 }: {
   station: StationView;
   doc: DirectionDocView | undefined;
   session: DiscoverySession;
+  /** Present on the `design` station — opens the web-only design step (MOTIR-1040). */
+  onOpenDesign?: () => void;
   /** This tier is the cascade-back target (G3, MOTIR-1179) — "Revisiting". */
   revisiting?: boolean;
   /** This tier re-derives downstream of the cascade — "Will refresh". */
@@ -97,6 +100,7 @@ export function StationCard({
   const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
   const subtitle = t(`stations.${station.kind}.subtitle`);
   const showCaptured = tierKind !== null && (station.state === 'done' || active);
+  const isDesign = station.kind === 'design';
 
   return (
     <div
@@ -161,6 +165,24 @@ export function StationCard({
           session={session}
           deciding={station.state === 'deciding'}
         />
+      )}
+
+      {isDesign && onOpenDesign && (
+        // The in-block door to the design step (MOTIR-1040). `stopPropagation` on
+        // pointer-down so the canvas drag/activate gesture doesn't also fire — the
+        // button is the sole handler for its own hit area.
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenDesign();
+          }}
+          className="mt-2.5 inline-flex h-(--height-btn-sm) items-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        >
+          <Palette className="size-4" aria-hidden="true" />
+          {t('stations.design.cta')}
+        </button>
       )}
 
       {/* The state marker sits in the card's bottom-right corner (design `ai-chat`:

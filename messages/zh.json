@@ -3640,7 +3640,6 @@
         "summaryHint": "—— Motir 仅在适合你的项目时才加入这些步骤",
         "names": "可行性检查 · 市场检查 · 设计",
         "optionalTag": "可选",
-        "webOnlyTag": "仅限网页",
         "worthTitle": "值得做吗？",
         "worthDesc": "一次快速的现实检查 —— 市场有多大、构建有多难。",
         "demandTitle": "会有人想要它吗？",
@@ -3662,7 +3661,7 @@
       "send": "发送",
       "working": "Motir 正在思考……",
       "drafting": "正在起草……",
-      "stepHeader": "前期规划 · 梳理你的方向",
+      "stepHeader": "梳理你的方向",
       "back": "返回",
       "saveExit": "保存并退出",
       "gateNote": "继续 = 进入下一步，并非定稿 —— 在生成计划之前一切都不会锁定",
@@ -3722,19 +3721,22 @@
           },
           "design": {
             "title": "设计外观",
-            "subtitle": "接下来 · 仅网页"
+            "subtitle": "接下来",
+            "cta": "设计外观"
           },
           "plan": {
             "title": "计划 → 你的篇章",
             "subtitle": "路线图从这里继续"
           }
-        }
+        },
+        "loading": "正在加载你的路线图……"
       },
       "validate": {
         "title": "规划前的一个决定",
         "body": "市场核查发现需求真实存在，但你的具体设想尚未得到验证。先验证需求——在构建前先上线一个带等候名单的小型营销站点——还是直接开始构建？",
         "blockedNote": "选择一项以继续——Motir 会在此等你决定"
       },
+      "designLook": "设计外观",
       "revisions": {
         "historyTitle": "修订记录",
         "historyHint": "Motir 只会向前推进——较早的版本会留在记录里，且无法撤销。想改什么，直接在对话里告诉 Motir 就好。",
@@ -3757,6 +3759,42 @@
         "willRefreshLabel": "将刷新",
         "revisitingLabel": "正在重看"
       }
+    },
+    "design": {
+      "back": "返回",
+      "title": "设计你项目的外观",
+      "lead": "为你的新项目选择主题、风格、配色与字体。整个页面都会按你的选择实时预览 —— 且仅限本页面，Motir 其余部分保持原样。",
+      "theme": {
+        "name": "主题",
+        "help": "浅色、深色，或跟随设备。",
+        "light": "浅色",
+        "dark": "深色",
+        "system": "跟随系统",
+        "note": {
+          "light": "你的项目以浅色开始。",
+          "dark": "你的项目以深色开始。",
+          "system": "你的项目跟随设备的浅色 / 深色设置。"
+        }
+      },
+      "style": {
+        "name": "风格",
+        "help": "形态与质感 —— 轮廓、层次、疏密。"
+      },
+      "palette": {
+        "name": "配色",
+        "help": "界面所采用的色彩方案。"
+      },
+      "type": {
+        "name": "字体",
+        "help": "标题与正文的字体搭配。"
+      },
+      "example": {
+        "eyebrow": "你的项目 —— 实时预览",
+        "label": "按所选主题、风格、配色与字体实时预览你的项目"
+      },
+      "footerNote": "这只影响你的项目，不影响 Motir —— 不会锁定，随时可改。",
+      "reset": "重置为默认",
+      "use": "使用此设计"
     }
   }
 }

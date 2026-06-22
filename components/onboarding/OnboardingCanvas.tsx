@@ -6,6 +6,7 @@ import {
   type CanvasEdge,
   type CanvasNode,
 } from '@/components/planning/PlanningCanvas';
+import { Spinner } from '@/components/ui/Spinner';
 import { IdeaCard, StationCard } from './StationNode';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
 import { type DiscoveryState } from '@/lib/onboarding/discoveryLoop';
@@ -35,6 +36,8 @@ export interface OnboardingCanvasProps {
   idea: string | null;
   /** Re-open a produced tier's read-only review. */
   onOpen: (kind: DirectionDocKind) => void;
+  /** Open the web-only design step (MOTIR-1040) — the `design` station's action. */
+  onOpenDesign: () => void;
   /** The tier the conductor sent the user BACK to re-review (G3, MOTIR-1179) —
    *  its station shows the "Revisiting" state. */
   revisitingKind?: DirectionDocKind | null;
@@ -46,12 +49,26 @@ export function OnboardingCanvas({
   state,
   idea,
   onOpen,
+  onOpenDesign,
   revisitingKind = null,
   willRefresh = [],
 }: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
-  const { positions, savePosition } = useCanvasLayout();
+  const { positions, savePosition, loaded } = useCanvasLayout();
   const willRefreshSet = new Set<string>(willRefresh);
+
+  // Hold a loading state until the saved positions resolve, so nodes never paint
+  // at the auto-layout and then jump to the stored arrangement (MOTIR-1253).
+  if (!loaded) {
+    return (
+      <div
+        aria-busy="true"
+        className="flex h-full w-full items-center justify-center bg-(--el-surface-soft)"
+      >
+        <Spinner aria-label={t('loading')} />
+      </div>
+    );
+  }
 
   const stations = buildStations(state);
   const stationByKind = new Map<StationKind, StationView>(stations.map((s) => [s.kind, s]));
@@ -74,6 +91,7 @@ export function OnboardingCanvas({
         station={station}
         doc={state.docs[node.id]}
         session={state.session}
+        onOpenDesign={station.kind === 'design' ? onOpenDesign : undefined}
         revisiting={revisitingKind === node.id}
         refreshing={willRefreshSet.has(node.id)}
       />
@@ -81,6 +99,12 @@ export function OnboardingCanvas({
   }
 
   function onNodeActivate(id: string) {
+    // The design station opens the web-only design step (MOTIR-1040); a produced
+    // tier re-opens its read-only review.
+    if (id === 'design') {
+      onOpenDesign();
+      return;
+    }
     const station = stationByKind.get(id as StationKind);
     if (station?.openable) onOpen(id as DirectionDocKind);
   }

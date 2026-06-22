@@ -18,10 +18,15 @@ const SAVE_DEBOUNCE_MS = 500;
 export interface UseCanvasLayout {
   positions: Positions;
   savePosition: (nodeKey: string, x: number, y: number) => void;
+  /** False until the saved-layout load ATTEMPT completes (success OR failure).
+   *  Consumers gate rendering on it so nodes never paint at the auto-layout first
+   *  and then jump to the stored positions (the MOTIR-1253 reposition flash). */
+  loaded: boolean;
 }
 
 export function useCanvasLayout(): UseCanvasLayout {
   const [positions, setPositions] = useState<Positions>({});
+  const [loaded, setLoaded] = useState(false);
   const pending = useRef<Positions>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
@@ -36,14 +41,20 @@ export function useCanvasLayout(): UseCanvasLayout {
           headers: { Accept: 'application/json' },
           signal: controller.signal,
         });
-        if (!res.ok || !mounted.current) return;
-        const body = (await res.json()) as { layout: CanvasLayoutDTO };
-        if (!mounted.current) return;
-        const map: Positions = {};
-        for (const p of body.layout.positions) map[p.nodeKey] = { x: p.x, y: p.y };
-        setPositions(map);
+        if (res.ok && mounted.current) {
+          const body = (await res.json()) as { layout: CanvasLayoutDTO };
+          if (mounted.current) {
+            const map: Positions = {};
+            for (const p of body.layout.positions) map[p.nodeKey] = { x: p.x, y: p.y };
+            setPositions(map);
+          }
+        }
       } catch {
         /* best-effort: fall back to the auto-layout */
+      } finally {
+        // Flip `loaded` once the attempt is done — even on failure (the canvas
+        // then renders with the auto-layout fallback rather than hanging).
+        if (mounted.current) setLoaded(true);
       }
     })();
     return () => {
@@ -77,5 +88,5 @@ export function useCanvasLayout(): UseCanvasLayout {
     [flush],
   );
 
-  return { positions, savePosition };
+  return { positions, savePosition, loaded };
 }

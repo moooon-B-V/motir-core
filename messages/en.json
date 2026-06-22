@@ -3640,7 +3640,6 @@
         "summaryHint": "— Motir adds these only when they fit your project",
         "names": "reality check · market check · design",
         "optionalTag": "optional",
-        "webOnlyTag": "web only",
         "worthTitle": "Is it worth building?",
         "worthDesc": "A quick reality check — how big the market is and how hard it'll be to build.",
         "demandTitle": "Will people want it?",
@@ -3662,7 +3661,7 @@
       "send": "Send",
       "working": "Motir is thinking…",
       "drafting": "Drafting now…",
-      "stepHeader": "Pre-plan · building your direction",
+      "stepHeader": "Building your direction",
       "back": "Back",
       "saveExit": "Save & exit",
       "gateNote": "Continue = next step, not sign-off — nothing locks until your plan generates",
@@ -3722,19 +3721,22 @@
           },
           "design": {
             "title": "Design the look",
-            "subtitle": "up next · web only"
+            "subtitle": "up next",
+            "cta": "Design your look"
           },
           "plan": {
             "title": "Plan → your epics",
             "subtitle": "the roadmap continues here"
           }
-        }
+        },
+        "loading": "Loading your roadmap…"
       },
       "validate": {
         "title": "One call before we plan",
         "body": "The market check found real demand, but it's unproven for your exact take. Prove demand first — launch a small marketing site with a waitlist before building — or build straight away?",
         "blockedNote": "Pick an option to continue — Motir waits here until you choose"
       },
+      "designLook": "Design your look",
       "revisions": {
         "historyTitle": "Revision history",
         "historyHint": "Motir only moves forward — earlier versions stay in the log, and there's no undo. To change something, just tell Motir in the chat.",
@@ -3757,6 +3759,42 @@
         "willRefreshLabel": "Will refresh",
         "revisitingLabel": "Revisiting"
       }
+    },
+    "design": {
+      "back": "Back",
+      "title": "Design your project's look",
+      "lead": "Pick a theme, style, palette and type for your new project. This whole page previews your choice — and only this page. The rest of Motir stays exactly as it is.",
+      "theme": {
+        "name": "Theme",
+        "help": "Light, dark, or match the device.",
+        "light": "Light",
+        "dark": "Dark",
+        "system": "System",
+        "note": {
+          "light": "Your project starts in light.",
+          "dark": "Your project starts in dark.",
+          "system": "Your project follows the device's light / dark setting."
+        }
+      },
+      "style": {
+        "name": "Style",
+        "help": "The shape and feel — silhouette, elevation, density."
+      },
+      "palette": {
+        "name": "Palette",
+        "help": "The colour scheme the interface wears."
+      },
+      "type": {
+        "name": "Typography",
+        "help": "The typeface pairing for headings and body."
+      },
+      "example": {
+        "eyebrow": "Your project — live preview",
+        "label": "Live preview of your project in the chosen theme, style, palette and type"
+      },
+      "footerNote": "This styles your project, not Motir — nothing locks, change it any time.",
+      "reset": "Reset to default",
+      "use": "Use this design"
     }
   }
 }
