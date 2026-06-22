@@ -747,6 +747,255 @@
         border-radius: 5px;
         color: #54514b;
       }
+
+      /* ── multi-level-chain OPTION sheets (sheets 6-8) ── */
+      .optdivider {
+        max-width: 1150px;
+        margin: 34px auto 18px;
+        padding-top: 26px;
+        border-top: 2px dashed var(--borderstrong);
+      }
+      .optdivider h2 {
+        font-size: 18px;
+        margin: 0 0 5px;
+        color: var(--strong);
+      }
+      .optdivider p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--muted);
+        max-width: 900px;
+      }
+      .optdivider .pickflag {
+        display: inline-block;
+        margin-bottom: 8px;
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--warning);
+        background: #fff3e8;
+        border: 1px solid #f6cfa6;
+        padding: 3px 9px;
+        border-radius: 6px;
+      }
+      .ocanvas {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
+          var(--hub);
+      }
+      .oworld {
+        position: absolute;
+        inset: 0;
+        transform-origin: 0 0;
+      }
+      .oedges {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 16px;
+        font-size: 12.5px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--hair);
+      }
+      .crumbs .c {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .crumbs .c.here {
+        color: var(--strong);
+        font-weight: 700;
+      }
+      .crumbs .sep {
+        color: var(--faint);
+      }
+      .crumbs .back {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--strong);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .toggle {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        overflow: hidden;
+      }
+      .toggle button {
+        border: 0;
+        background: transparent;
+        padding: 6px 13px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .toggle button + button {
+        border-left: 1px solid var(--hair);
+      }
+      .toggle button.on {
+        background: var(--accent);
+        color: #fff;
+      }
+      .scope {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--strong);
+      }
+      .scope b {
+        color: var(--accent);
+      }
+      .arrowdown {
+        max-width: 1150px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: center;
+        padding: 3px 0;
+        color: var(--accent);
+        font-size: 17px;
+      }
+      .cluster {
+        position: absolute;
+        border: 2px dashed #b6a0e6;
+        background: #efeafc;
+        border-radius: 16px;
+        z-index: 0;
+      }
+      .cluster .clab {
+        position: absolute;
+        top: -12px;
+        left: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 11px;
+        background: var(--accent);
+        border-radius: 999px;
+        font:
+          700 10.5px ui-monospace,
+          monospace;
+        color: #fff;
+        z-index: 2;
+      }
+      .onode {
+        position: absolute;
+        width: 196px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px 11px;
+        box-shadow: 0 2px 6px #0000000f;
+        z-index: 1;
+      }
+      .onode.compact {
+        width: 168px;
+      }
+      .onode.active {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px #5645d426,
+          0 4px 12px #5645d41f;
+      }
+      .onode.upcoming {
+        opacity: 0.6;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .ohead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .otile {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .otile svg {
+        width: 16px;
+        height: 16px;
+      }
+      .ometa {
+        min-width: 0;
+      }
+      .otitle {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.15;
+      }
+      .osub {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .opill {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 9.5px;
+        font-weight: 600;
+      }
+      .opill svg {
+        width: 10px;
+        height: 10px;
+      }
+      .opill.done {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .opill.act {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .ohere {
+        position: absolute;
+        top: -10px;
+        right: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 9.5px;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+      }
+      .ohere svg {
+        width: 10px;
+        height: 10px;
+      }
     </style>
   </head>
   <body>
@@ -759,6 +1008,13 @@
         (MOTIR-1236: pan / zoom / drag / fit + read-only edges). Reused by start-fresh onboarding
         (7.3), migrate-existing onboarding (7.15), re-planning (7.11), the persistent roadmap
         (7.19), and the public project page.
+      </p>
+      <p style="margin-top: 8px">
+        <b>Sheets 1–5</b> spec the canvas. <b>Sheets 6–8</b> are an OPEN DECISION (Yue, 2026-06-22):
+        because the planner orders same-level work as a <b>chain</b> at every level (epic↔epic ·
+        story↔story · subtask↔subtask — `plan.md`’s dependency-arrow rule), the canvas must render
+        the <b>story-level and subtask-level chains</b>, not just the epic level. Three ways to
+        navigate between levels are drawn below — <b>pick one</b>.
       </p>
     </div>
 
@@ -1246,6 +1502,126 @@
         <code>Board ↔ Roadmap</code> toggle, sheet 1), and the public project page. Large trees
         reuse the shipped engine’s pan / zoom + windowing (<code>PlanningCanvas</code>, MOTIR-1236)
         — the engine is never rebuilt.
+      </div>
+    </section>
+
+    <!-- ════ MULTI-LEVEL CHAINS — three navigation options (OPEN DECISION) ════ -->
+    <div class="optdivider">
+      <span class="pickflag">OPEN DECISION · pick one</span>
+      <h2>Multi-level chains — how the canvas surfaces the story &amp; subtask roadmaps</h2>
+      <p>
+        The plan is a chain (DAG) at EVERY level. Sheets 1–5 show the epic-level chain; these three
+        options show how you reach the <b>story-level</b> and <b>subtask-level</b> chains. Same
+        scenario in each (Plan ▸ Invoices ▸ Create invoice) for a fair comparison.
+      </p>
+    </div>
+
+    <!-- OPTION A — drill-down (self-similar) -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>Option A — Drill-down (self-similar)</h2>
+        <span class="cap"
+          >click a node → the canvas refreshes to that node’s children, as a chain</span
+        >
+      </div>
+      <div class="crumbs"><span class="c here">Plan · epics</span></div>
+      <div class="ocanvas" id="vpA1" style="height: 168px">
+        <svg class="oedges" id="edA1"></svg>
+        <div class="oworld" id="wA1"></div>
+      </div>
+      <div class="arrowdown">↓ click “Invoices”</div>
+      <div class="crumbs">
+        <span class="c">Plan</span><span class="sep">▸</span
+        ><span class="c here">Invoices · stories</span>
+        <span class="back">◂ Back to epics</span>
+      </div>
+      <div class="ocanvas" id="vpA2" style="height: 168px">
+        <svg class="oedges" id="edA2"></svg>
+        <div class="oworld" id="wA2"></div>
+      </div>
+      <div class="arrowdown">↓ click “Create invoice”</div>
+      <div class="crumbs">
+        <span class="c">Plan</span><span class="sep">▸</span><span class="c">Invoices</span
+        ><span class="sep">▸</span><span class="c here">Create invoice · subtasks</span>
+        <span class="back">◂ Back to stories</span>
+      </div>
+      <div class="ocanvas" id="vpA3" style="height: 168px">
+        <svg class="oedges" id="edA3"></svg>
+        <div class="oworld" id="wA3"></div>
+      </div>
+      <div class="reuse">
+        <b>One level fills the screen at a time</b> — each chain stays big + legible no matter how
+        large the tree (the completeness / scale axis). Trade-off: you don’t see a level and its
+        children at once; zoom-to-fit gives the whole-level overview. Extends the shipped spatial
+        canvas’s “self-similar at every level”. <b>(Recommended.)</b>
+      </div>
+    </section>
+
+    <!-- OPTION B — expand in place (nested clusters) -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">7</span>
+        <h2>Option B — Expand in place (nested clusters)</h2>
+        <span class="cap"
+          >all levels on one canvas; an epic opens its stories inline, a story its subtasks</span
+        >
+      </div>
+      <div class="ocanvas" id="vpB" style="height: 472px">
+        <svg class="oedges" id="edB"></svg>
+        <div class="oworld" id="wB"></div>
+      </div>
+      <div class="reuse">
+        The whole multi-level shape is visible at once — great on a small tree, but a real
+        (hundreds-of-items) backlog crowds fast; collapse a cluster (▸) or zoom to manage density.
+        The cross-story <span style="color: #8a3d00">⚑ warning edge</span> stays legible as the only
+        non-neutral connector.
+      </div>
+    </section>
+
+    <!-- OPTION C — level toggle -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">8</span>
+        <h2>Option C — Level toggle (view switch)</h2>
+        <span class="cap"
+          >an Epic / Story / Subtask switch + a scope filter picks which level’s chain to draw</span
+        >
+      </div>
+      <div class="crumbs" style="gap: 10px">
+        <div class="toggle">
+          <button class="on">Epics</button><button>Stories</button><button>Subtasks</button>
+        </div>
+        <span class="scope">Scope: <b>whole project</b></span>
+      </div>
+      <div class="ocanvas" id="vpC1" style="height: 160px">
+        <svg class="oedges" id="edC1"></svg>
+        <div class="oworld" id="wC1"></div>
+      </div>
+      <div class="crumbs" style="gap: 10px">
+        <div class="toggle">
+          <button>Epics</button><button class="on">Stories</button><button>Subtasks</button>
+        </div>
+        <span class="scope">Scope: Epic <b>Invoices ▾</b></span>
+      </div>
+      <div class="ocanvas" id="vpC2" style="height: 160px">
+        <svg class="oedges" id="edC2"></svg>
+        <div class="oworld" id="wC2"></div>
+      </div>
+      <div class="crumbs" style="gap: 10px">
+        <div class="toggle">
+          <button>Epics</button><button>Stories</button><button class="on">Subtasks</button>
+        </div>
+        <span class="scope">Scope: Story <b>Create invoice ▾</b></span>
+      </div>
+      <div class="ocanvas" id="vpC3" style="height: 160px">
+        <svg class="oedges" id="edC3"></svg>
+        <div class="oworld" id="wC3"></div>
+      </div>
+      <div class="reuse">
+        Simplest model; each view stays uncluttered. Trade-off: you only ever see ONE level — the
+        parent/child relationship lives in the scope dropdown, not on the canvas — so the “one
+        roadmap of the whole project” feel is weaker than drill-down or nesting.
       </div>
     </section>
 
@@ -1807,6 +2183,508 @@
         ],
         flags: [{ x: 596, y: 250, t: 'crosses stories' }],
       });
+
+      // ════ multi-level-chain OPTION renderer (sheets 6-8) ════
+      const OI = {
+        flask:
+          '<path d="M9 3h6M10 3v6l-4.5 8a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M7 14h10"/>',
+        cursor: '<path d="m3 3 7.5 18 2.6-7.9L21 10.5 3 3Z"/>',
+      };
+      const oicon = (k) => I[k] || OI[k];
+      const TYPEO = {
+        epic: { hue: '#ff64c8', bg: '#ffe4f5', ic: 'net' },
+        story: { hue: '#1aae39', bg: 'var(--mint)', ic: 'shapes' },
+        design: { hue: '#dd5b00', bg: 'var(--peach)', ic: 'palette' },
+        code: { hue: '#0075de', bg: 'var(--sky)', ic: 'code' },
+        test: { hue: '#2a9d99', bg: '#d8f0ef', ic: 'flask' },
+        plan: { hue: '#5645d4', bg: '#ece9fb', ic: 'net' },
+      };
+      function onodeHTML(n) {
+        const ty = TYPEO[n.kind] || TYPEO.code;
+        const cls = [
+          'onode',
+          n.compact ? 'compact' : '',
+          n.state === 'active' ? 'active' : '',
+          n.state === 'upcoming' ? 'upcoming' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        let pill = '';
+        if (n.state === 'done')
+          pill = `<span class="opill done">${svg(I.check, '#0f5e29', 2.4)}Done</span>`;
+        else if (n.state === 'active')
+          pill = `<span class="opill act">${svg(I.spark, '#3a2d8a', 2.4)}In progress</span>`;
+        const head =
+          `<div class="ohead"><span class="otile" style="background:${ty.bg}">${svg(oicon(ty.ic), ty.hue)}</span>` +
+          `<div class="ometa"><div class="otitle">${n.title}</div>${n.sub ? `<div class="osub">${n.sub}</div>` : ''}</div>${pill}</div>`;
+        const here = n.here
+          ? `<span class="ohere">${svg(OI.cursor, '#fff', 2.2)}clicked here</span>`
+          : '';
+        return `<div class="${cls}" style="left:${n.x}px;top:${n.y}px;${n.w ? 'width:' + n.w + 'px;' : ''}">${head}${here}</div>`;
+      }
+      function oedge(svgEl, A, B, kind) {
+        const acx = A.x + A.w / 2,
+          acy = A.y + A.h / 2,
+          bcx = B.x + B.w / 2,
+          bcy = B.y + B.h / 2;
+        const dx = bcx - acx,
+          dy = bcy - acy;
+        let ax, ay, bx, by, c1x, c1y, c2x, c2y;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          ax = dx > 0 ? A.x + A.w : A.x;
+          bx = dx > 0 ? B.x : B.x + B.w;
+          ay = acy;
+          by = bcy;
+          const mx = (ax + bx) / 2;
+          ((c1x = mx), (c1y = ay), (c2x = mx), (c2y = by));
+        } else {
+          ay = dy > 0 ? A.y + A.h : A.y;
+          by = dy > 0 ? B.y : B.y + B.h;
+          ax = acx;
+          bx = bcx;
+          const my = (ay + by) / 2;
+          ((c1x = ax), (c1y = my), (c2x = bx), (c2y = my));
+        }
+        const stroke = kind === 'cross' ? '#dd5b00' : kind === 'pending' ? '#d8d4cd' : '#cdb8e8';
+        const dash = kind === 'pending' ? 'stroke-dasharray="2 7"' : '';
+        const ang = Math.atan2(by - c2y, bx - c2x),
+          ah = 7;
+        const p1x = bx - ah * Math.cos(ang - 0.5),
+          p1y = by - ah * Math.sin(ang - 0.5);
+        const p2x = bx - ah * Math.cos(ang + 0.5),
+          p2y = by - ah * Math.sin(ang + 0.5);
+        svgEl.insertAdjacentHTML(
+          'beforeend',
+          `<path d="M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}" fill="none" stroke="${stroke}" stroke-width="2.5" stroke-linecap="round" ${dash}/>` +
+            `<path d="M${bx},${by} L${p1x},${p1y} M${bx},${by} L${p2x},${p2y}" stroke="${stroke}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+        );
+        if (kind === 'cross') {
+          const mx = (ax + bx) / 2,
+            my = (ay + by) / 2;
+          svgEl.insertAdjacentHTML(
+            'beforeend',
+            `<g transform="translate(${mx - 9},${my - 9})"><circle cx="9" cy="9" r="10" fill="#fff3e8" stroke="#f6cfa6"/><g transform="translate(3,3) scale(0.6)" stroke="#dd5b00" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round">${I.flag}</g></g>`,
+          );
+        }
+      }
+      function orender(worldId, edgesId, nodes, edges) {
+        const w = document.getElementById(worldId),
+          e = document.getElementById(edgesId);
+        w.innerHTML = nodes.map(onodeHTML).join('');
+        const pos = {};
+        Array.from(w.querySelectorAll('.onode')).forEach((el, i) => {
+          const n = nodes[i];
+          pos[n.id] = { x: n.x, y: n.y, w: el.offsetWidth, h: el.offsetHeight };
+        });
+        for (const [a, b, k] of edges) if (pos[a] && pos[b]) oedge(e, pos[a], pos[b], k);
+        return w;
+      }
+
+      // ── Option A — drill-down: three states, the canvas refreshing per level ──
+      orender(
+        'wA1',
+        'edA1',
+        [
+          {
+            id: 'plan',
+            x: 24,
+            y: 62,
+            w: 150,
+            compact: 1,
+            kind: 'plan',
+            title: 'Plan',
+            sub: '3 epics',
+            state: 'done',
+          },
+          {
+            id: 'e1',
+            x: 250,
+            y: 48,
+            kind: 'epic',
+            title: 'Foundation',
+            sub: 'auth · schema · CI',
+            state: 'done',
+          },
+          {
+            id: 'e2',
+            x: 516,
+            y: 48,
+            kind: 'epic',
+            title: 'Invoices',
+            sub: 'create · send · PDF',
+            state: 'active',
+            here: 1,
+          },
+          {
+            id: 'e3',
+            x: 782,
+            y: 48,
+            kind: 'epic',
+            title: 'Reminders',
+            sub: 'schedule · email',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['plan', 'e1', 'firm'],
+          ['e1', 'e2', 'firm'],
+          ['e2', 'e3', 'pending'],
+        ],
+      );
+      orender(
+        'wA2',
+        'edA2',
+        [
+          {
+            id: 's1',
+            x: 24,
+            y: 48,
+            kind: 'story',
+            title: 'Invoice schema',
+            sub: 'model + migration',
+            state: 'done',
+          },
+          {
+            id: 's2',
+            x: 290,
+            y: 48,
+            kind: 'story',
+            title: 'Create invoice',
+            sub: 'form + API',
+            state: 'active',
+            here: 1,
+          },
+          {
+            id: 's3',
+            x: 556,
+            y: 48,
+            kind: 'story',
+            title: 'Send invoice',
+            sub: 'email + status',
+            state: 'upcoming',
+          },
+          {
+            id: 's4',
+            x: 822,
+            y: 48,
+            kind: 'story',
+            title: 'Invoice PDF',
+            sub: 'render + download',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['s1', 's2', 'firm'],
+          ['s2', 's3', 'pending'],
+          ['s3', 's4', 'pending'],
+        ],
+      );
+      orender(
+        'wA3',
+        'edA3',
+        [
+          {
+            id: 'd1',
+            x: 24,
+            y: 48,
+            kind: 'design',
+            title: 'Design the form',
+            sub: 'mock + notes',
+            state: 'done',
+          },
+          {
+            id: 'c1',
+            x: 290,
+            y: 48,
+            kind: 'code',
+            title: 'Invoice service + API',
+            sub: 'repo · service · route',
+            state: 'done',
+          },
+          {
+            id: 'c2',
+            x: 556,
+            y: 48,
+            kind: 'code',
+            title: 'Create-invoice UI',
+            sub: 'form + submit',
+            state: 'active',
+            here: 1,
+          },
+          {
+            id: 't1',
+            x: 822,
+            y: 48,
+            kind: 'test',
+            title: 'E2E: create invoice',
+            sub: 'happy + error paths',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['d1', 'c1', 'firm'],
+          ['c1', 'c2', 'firm'],
+          ['c2', 't1', 'pending'],
+        ],
+      );
+
+      // ── Option B — expand in place: all levels nested on one canvas ──
+      orender(
+        'wB',
+        'edB',
+        [
+          {
+            id: 'e1',
+            x: 40,
+            y: 26,
+            kind: 'epic',
+            title: 'Foundation',
+            sub: 'auth · schema · CI',
+            state: 'done',
+          },
+          {
+            id: 'e2',
+            x: 336,
+            y: 26,
+            kind: 'epic',
+            title: 'Invoices',
+            sub: 'create · send · PDF',
+            state: 'active',
+          },
+          {
+            id: 'e3',
+            x: 632,
+            y: 26,
+            kind: 'epic',
+            title: 'Reminders',
+            sub: 'schedule · email',
+            state: 'upcoming',
+          },
+          {
+            id: 's1',
+            x: 78,
+            y: 178,
+            compact: 1,
+            kind: 'story',
+            title: 'Invoice schema',
+            sub: 'migration',
+            state: 'done',
+          },
+          {
+            id: 's2',
+            x: 344,
+            y: 178,
+            compact: 1,
+            kind: 'story',
+            title: 'Create invoice',
+            sub: 'form + API',
+            state: 'active',
+          },
+          {
+            id: 's3',
+            x: 610,
+            y: 178,
+            compact: 1,
+            kind: 'story',
+            title: 'Send invoice',
+            sub: 'email',
+            state: 'upcoming',
+          },
+          {
+            id: 'd1',
+            x: 112,
+            y: 358,
+            compact: 1,
+            kind: 'design',
+            title: 'Design form',
+            sub: 'mock',
+            state: 'done',
+          },
+          {
+            id: 'c1',
+            x: 378,
+            y: 358,
+            compact: 1,
+            kind: 'code',
+            title: 'Service + API',
+            sub: 'repo·svc·route',
+            state: 'done',
+          },
+          {
+            id: 'c2',
+            x: 644,
+            y: 358,
+            compact: 1,
+            kind: 'code',
+            title: 'Create UI',
+            sub: 'form',
+            state: 'active',
+          },
+        ],
+        [
+          ['e1', 'e2', 'firm'],
+          ['e2', 'e3', 'pending'],
+          ['e2', 's1', 'firm'],
+          ['s2', 'd1', 'firm'],
+          ['s1', 's2', 'firm'],
+          ['s2', 's3', 'pending'],
+          ['d1', 'c1', 'firm'],
+          ['c1', 'c2', 'firm'],
+          ['e3', 's3', 'cross'],
+        ],
+      );
+      document
+        .getElementById('wB')
+        .insertAdjacentHTML(
+          'afterbegin',
+          `<div class="cluster" style="left:58px;top:150px;width:772px;height:104px"><span class="clab">Invoices ▾ · stories</span></div>` +
+            `<div class="cluster" style="left:92px;top:330px;width:772px;height:104px"><span class="clab">Create invoice ▾ · subtasks</span></div>`,
+        );
+
+      // ── Option C — level toggle: same plan under each toggle setting ──
+      orender(
+        'wC1',
+        'edC1',
+        [
+          {
+            id: 'plan',
+            x: 24,
+            y: 56,
+            w: 150,
+            compact: 1,
+            kind: 'plan',
+            title: 'Plan',
+            sub: '3 epics',
+            state: 'done',
+          },
+          {
+            id: 'e1',
+            x: 250,
+            y: 42,
+            kind: 'epic',
+            title: 'Foundation',
+            sub: 'auth · schema · CI',
+            state: 'done',
+          },
+          {
+            id: 'e2',
+            x: 516,
+            y: 42,
+            kind: 'epic',
+            title: 'Invoices',
+            sub: 'create · send · PDF',
+            state: 'active',
+          },
+          {
+            id: 'e3',
+            x: 782,
+            y: 42,
+            kind: 'epic',
+            title: 'Reminders',
+            sub: 'schedule · email',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['plan', 'e1', 'firm'],
+          ['e1', 'e2', 'firm'],
+          ['e2', 'e3', 'pending'],
+        ],
+      );
+      orender(
+        'wC2',
+        'edC2',
+        [
+          {
+            id: 's1',
+            x: 24,
+            y: 42,
+            kind: 'story',
+            title: 'Invoice schema',
+            sub: 'model + migration',
+            state: 'done',
+          },
+          {
+            id: 's2',
+            x: 290,
+            y: 42,
+            kind: 'story',
+            title: 'Create invoice',
+            sub: 'form + API',
+            state: 'active',
+          },
+          {
+            id: 's3',
+            x: 556,
+            y: 42,
+            kind: 'story',
+            title: 'Send invoice',
+            sub: 'email + status',
+            state: 'upcoming',
+          },
+          {
+            id: 's4',
+            x: 822,
+            y: 42,
+            kind: 'story',
+            title: 'Invoice PDF',
+            sub: 'render + download',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['s1', 's2', 'firm'],
+          ['s2', 's3', 'pending'],
+          ['s3', 's4', 'pending'],
+        ],
+      );
+      orender(
+        'wC3',
+        'edC3',
+        [
+          {
+            id: 'd1',
+            x: 24,
+            y: 42,
+            kind: 'design',
+            title: 'Design the form',
+            sub: 'mock + notes',
+            state: 'done',
+          },
+          {
+            id: 'c1',
+            x: 290,
+            y: 42,
+            kind: 'code',
+            title: 'Invoice service + API',
+            sub: 'repo · service · route',
+            state: 'done',
+          },
+          {
+            id: 'c2',
+            x: 556,
+            y: 42,
+            kind: 'code',
+            title: 'Create-invoice UI',
+            sub: 'form + submit',
+            state: 'active',
+          },
+          {
+            id: 't1',
+            x: 822,
+            y: 42,
+            kind: 'test',
+            title: 'E2E: create invoice',
+            sub: 'happy + error',
+            state: 'upcoming',
+          },
+        ],
+        [
+          ['d1', 'c1', 'firm'],
+          ['c1', 'c2', 'firm'],
+          ['c2', 't1', 'pending'],
+        ],
+      );
     </script>
   </body>
 </html>
