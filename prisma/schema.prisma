@@ -53,11 +53,11 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  emailVerified Boolean  @default(false)
-  name          String
-  image         String?
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  emailVerified       Boolean  @default(false)
+  name                String
+  image               String?
   /// The user's GLOBAL last-active project pointer (Subtask 8.8.27) — the
   /// landing target on a fresh session/device. On login the active workspace
   /// + org are DERIVED from this project (project → workspace → org), so the
@@ -71,8 +71,8 @@ model User {
   /// resolution degrades to the first-by-createdAt fallback rather than
   /// dangling at a dead project.
   lastActiveProjectId String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   accounts                  Account[]
   sessions                  Session[]
@@ -320,6 +320,20 @@ model Organization {
   slug      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// The scaled-tracker (per-seat PM) subscription state, propagated from
+  /// motir-ai's Stripe webhook (8.1.4b) through the service-auth'd inbound
+  /// route /api/internal/billing/scaled-tracker-state (8.1.4c). Shape:
+  /// `{ status: 'active'|'past_due'|'canceled', priceId: 'tracker_monthly'|
+  /// 'tracker_annual', currentPeriodEnd: <unix-seconds> }`. NULL = no
+  /// scaled-tracker subscription (the default free state). This is the
+  /// motir-core half of the two-store billing split (billing-tiering.md §3 —
+  /// the AI-side `*_pool_*` line lives on motir-ai's `AiOrganization.planTierId`).
+  /// The §4 cap-enforcement reader (8.1.11) consumes this column; a cancel
+  /// resets it to NULL non-destructively (ADR §4 — caps re-apply on read, no
+  /// rows deleted). Stripe SDK never enters motir-core (open-core invariant);
+  /// this is plain propagated state.
+  scaledTrackerSubscription Json?
 
   memberships OrganizationMembership[]
   workspaces  Workspace[]

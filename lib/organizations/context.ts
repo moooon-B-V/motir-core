@@ -53,3 +53,34 @@ export async function withOrgContext<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Opens a Prisma transaction binding ONLY the active-org GUC (no `app.user_id`),
+ * then invokes `fn` with the transaction client. This is the context for a
+ * TRUSTED SERVICE-TO-SERVICE writer that operates on one org WITHOUT an acting
+ * user — the 8.1 billing-propagation inbound route (motir-ai writing
+ * Stripe-derived subscription state, authenticated by the shared service bearer
+ * at the route edge; see `lib/billing/serviceAuth.ts`).
+ *
+ * Why org-GUC-only is sufficient AND safe: the `organization` table's
+ * `organization_mutate_active` UPDATE policy (add_organization_tier) gates purely
+ * on `"id" = current_setting('app.organization_id')` — it requires NO user — so
+ * binding the target org id admits the UPDATE for EXACTLY that one row and
+ * nothing else. The bearer is the authorization; this GUC only RLS-scopes the
+ * write. Unlike `withSystemContext` (which binds the cross-table system_admin
+ * flag), this stays row-scoped to a single org, so it grants no broader reach.
+ *
+ * SECURITY: the org id here comes from the service-authenticated request body —
+ * legitimate, because the policy confines the effect to that org's own row
+ * (a caller cannot touch another org, nor any other table). Do NOT extend this
+ * helper to also bind `app.user_id` or `app.system_admin` from request data.
+ */
+export async function withOrgServiceWriteContext<T>(
+  organizationId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
+    return fn(tx);
+  });
+}
