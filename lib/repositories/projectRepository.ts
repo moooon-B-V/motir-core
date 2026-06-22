@@ -169,6 +169,24 @@ export const projectRepository = {
   },
 
   /**
+   * Count projects across an organization (§4.2 cap, 8.1.11) — every project in
+   * every workspace of the org, joined `project → workspace`. Takes `tx` so the
+   * count + the guarded create run in one transaction, serialized by the org row
+   * lock (`organizationRepository.lockByIdForUpdate`). Raw SQL because the count
+   * crosses the workspace join at the org boundary (the ungameable org-wide count
+   * §4 mandates), not the active-workspace scope a Prisma `count` sees.
+   */
+  async countByOrganization(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) AS count
+      FROM "project" p
+      JOIN "workspace" w ON w."id" = p."workspaceId"
+      WHERE w."organizationId" = ${organizationId}
+    `;
+    return Number(rows[0]?.count ?? 0);
+  },
+
+  /**
    * Resolve a PUBLIC project by its `identifier` (the `PROD`-style key) WITHOUT
    * a workspace scope — the lookup behind the anonymous public view
    * (`/p/[identifier]`, Story 6.12 · Subtask 6.12.4). The public surface knows

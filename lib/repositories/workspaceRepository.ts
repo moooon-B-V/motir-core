@@ -65,4 +65,29 @@ export const workspaceRepository = {
   async delete(id: string, tx: Prisma.TransactionClient): Promise<Workspace> {
     return tx.workspace.delete({ where: { id } });
   },
+
+  /**
+   * The organization a workspace belongs to (the §4 cap path resolves the org
+   * UP from the entity being created — 8.1.11). Takes `tx` so it reads the
+   * workspace the enclosing create transaction operates in. Null when absent.
+   */
+  async findOrganizationId(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const ws = await tx.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    return ws?.organizationId ?? null;
+  },
+
+  /**
+   * Count workspaces in an organization (§4.4 cap, 8.1.11). Takes `tx` so the
+   * count + the guarded create run in one transaction, serialized by the org
+   * row lock (`organizationRepository.lockByIdForUpdate`).
+   */
+  async countByOrganization(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.workspace.count({ where: { organizationId } });
+  },
 };

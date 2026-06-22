@@ -4,6 +4,7 @@ import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import {
   BillingForbiddenError,
   BillingNotAvailableError,
+  EntitlementExceededError,
   UnknownBillingPriceError,
 } from '@/lib/billing/errors';
 
@@ -29,6 +30,14 @@ export function mapBillingError(err: unknown): NextResponse | null {
   }
   if (err instanceof UnknownBillingPriceError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
+  }
+  if (err instanceof EntitlementExceededError) {
+    // §4 cap hit (8.1.11) → 402 Payment Required + the upgrade-prompt payload
+    // (the `entitlement` kind + limit/usage the UI keys its prompt off).
+    return NextResponse.json(
+      { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
+      { status: 402 },
+    );
   }
   if (err instanceof OrganizationNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });

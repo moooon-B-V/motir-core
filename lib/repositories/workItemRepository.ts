@@ -1873,6 +1873,27 @@ export const workItemRepository = {
     }
   },
 
+  /**
+   * Count ALL work items across an organization (§4.1 headline cap, 8.1.11) —
+   * every project in every workspace of the org, joined `work_item → workspace`.
+   * A PLAIN ROW COUNT with NO archive filter: §4 counts archived AND active
+   * items ("archiving does NOT free room" — the deliberate divergence from
+   * Linear's non-archived cap that closes the archive loophole). Takes `tx` so
+   * the count + the guarded create run in one transaction, serialized by the org
+   * row lock (`organizationRepository.lockByIdForUpdate`). Raw SQL because the
+   * count crosses the workspace join at the org boundary (the ungameable org-wide
+   * count §4 mandates), not the active-workspace scope a Prisma `count` sees.
+   */
+  async countByOrganization(organizationId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) AS count
+      FROM "work_item" wi
+      JOIN "workspace" w ON w."id" = wi."workspaceId"
+      WHERE w."organizationId" = ${organizationId}
+    `;
+    return Number(rows[0]?.count ?? 0);
+  },
+
   // --- Board swimlane lane aggregates (Subtask 3.3.4, finding #57) ----------
   // Each returns one row PER LANE (a grouped/distinct aggregate), NOT one row
   // per card — so the board never fetches every card to discover its lanes.

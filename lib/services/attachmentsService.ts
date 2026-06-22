@@ -4,6 +4,8 @@ import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { deleteAttachmentBlob, putAttachment } from '@/lib/blob/uploader';
@@ -171,9 +173,21 @@ function checkRateLimit(userId: string): void {
 export const attachmentsService = {
   async uploadAttachment(file: File, ctx: UploadContext): Promise<UploadAttachmentResult> {
     // Gates, cheapest first — reject BEFORE spending a Blob round-trip.
-    if (file.size > MAX_UPLOAD_BYTES) throw new FileTooLargeError(MAX_UPLOAD_BYTES);
+    // §4 upload caps (8.1.11): the per-file limit is now TIER-DERIVED — the
+    // 10 MB baseline on every build (and cloud `free`), raised to 100 MB for a
+    // cloud `scaled` org — and the org's TOTAL storage is capped on cloud (free
+    // 2 GB / scaled 100 GB; lifted off-cloud). Both resolve the org UP from the
+    // workspace; a workspace we can't resolve falls back to the 10 MB default
+    // (never weaker than today) and skips the storage sum.
+    const organizationId =
+      (await workspaceRepository.findById(ctx.workspaceId))?.organizationId ?? null;
+    const perFileLimit = organizationId
+      ? await entitlementsService.resolvePerFileLimitBytes(organizationId)
+      : MAX_UPLOAD_BYTES;
+    if (file.size > perFileLimit) throw new FileTooLargeError(perFileLimit);
     if (!isAllowedUploadType(file.type)) throw new UnsupportedFileTypeError(file.type);
     checkRateLimit(ctx.userId);
+    if (organizationId) await entitlementsService.assertWithinStorageCap(organizationId, file.size);
 
     const pathname = `attachments/${ctx.workspaceId}/${file.name}`;
     const { url } = await putAttachment(pathname, file, file.type);

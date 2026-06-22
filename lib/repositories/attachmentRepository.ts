@@ -166,4 +166,27 @@ export const attachmentRepository = {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
   },
+
+  /**
+   * Total bytes stored by an organization (§4.3b cap, 8.1.11) —
+   * `SUM(Attachment.sizeBytes)` over every attachment in every workspace of the
+   * org, joined `attachment → workspace`. The §4 v1 strategy: SUM on upload (a
+   * cached running counter is a later optimization); a single-file race overage
+   * is benign (storage, not money — no FOR UPDATE), so `tx` is OPTIONAL and the
+   * upload path calls it as a standalone read before the blob round-trip.
+   * `COALESCE(...,0)` so an org with no attachments returns 0, not null.
+   */
+  async sumSizeByOrganization(
+    organizationId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ total: bigint }>>`
+      SELECT COALESCE(SUM(a."size_bytes"), 0) AS total
+      FROM "attachment" a
+      JOIN "workspace" w ON w."id" = a."workspace_id"
+      WHERE w."organizationId" = ${organizationId}
+    `;
+    return Number(rows[0]?.total ?? 0);
+  },
 };

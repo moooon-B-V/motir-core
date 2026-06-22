@@ -7,6 +7,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withOrgContext } from '@/lib/organizations/context';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import {
@@ -218,6 +219,10 @@ export const organizationsService = {
       lastAttempt = slug;
       try {
         const org = await db.$transaction(async (tx) => {
+          // §4.5 org-creation gate (8.1.11): the first org is always free; a
+          // 2nd+ requires the actor to own/admin a paid (active scaled-tracker)
+          // org. Inert off-cloud. Throws EntitlementExceededError otherwise.
+          await entitlementsService.assertCanCreateOrganization(input.actorUserId, tx);
           const organization = await organizationRepository.create({ name: input.name, slug }, tx);
           await organizationMembershipRepository.create(
             {

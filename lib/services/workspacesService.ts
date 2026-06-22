@@ -10,6 +10,7 @@ import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context'
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { entitlementsService } from '@/lib/services/entitlementsService';
 import {
   AlreadyMemberError,
   LastMemberError,
@@ -103,8 +104,17 @@ async function insertWorkspaceWithOwner(
   // this org-aware path; not done here.)
   let organizationId = input.organizationId;
   if (organizationId) {
+    // §4.4 workspace cap (8.1.11): a 2nd+ workspace under an existing org is
+    // gated (free org = exactly 1 workspace). Lock + count inside this tx.
+    await entitlementsService.assertWithinWorkspaceCap(organizationId, tx);
     await organizationsService.ensureOrgMembership(input.ownerUserId, organizationId, tx);
   } else {
+    // §4.5 org-creation gate (8.1.11): minting a NEW org (the signup / "create
+    // workspace under a fresh org" path) is itself an org create — gate it
+    // exactly as organizationsService.createOrganization does (the first org is
+    // always free; a 2nd+ needs a paid org). Sweep ALL org-creators, not just
+    // the explicit createOrganization entry (new-access-gate-sweep-all-creators).
+    await entitlementsService.assertCanCreateOrganization(input.ownerUserId, tx);
     const organization = await organizationRepository.create(
       { name: input.name, slug: input.slug },
       tx,
