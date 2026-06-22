@@ -39,7 +39,7 @@
       "chore": "Chore"
     },
     "executor": {
-      "coding_agent": "Coding agent",
+      "coding_agent": "Agent",
       "human": "Human"
     },
     "priority": {

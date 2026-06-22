@@ -155,7 +155,7 @@ describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
   it('renders the work type, executor, labels, components, sprint, and story points', () => {
     render(<IssueQuickViewPanel state="ready" data={FULL} />);
     expect(screen.getByText('Code')).toBeTruthy();
-    expect(screen.getByText('Coding agent')).toBeTruthy();
+    expect(screen.getByText('Agent')).toBeTruthy();
     expect(screen.getByText('auth')).toBeTruthy();
     expect(screen.getByText('security')).toBeTruthy();
     expect(screen.getByText('API')).toBeTruthy();
@@ -176,7 +176,7 @@ describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
   it('omits the leaf-only Type/Executor rows for a container kind (story)', () => {
     // The base DATA is a story (no work type) — Type/Executor must not render.
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
-    expect(screen.queryByText('Coding agent')).toBeNull();
+    expect(screen.queryByText('Agent')).toBeNull();
   });
 });
 

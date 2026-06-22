@@ -39,7 +39,7 @@
       "chore": "杂务"
     },
     "executor": {
-      "coding_agent": "编码智能体",
+      "coding_agent": "智能体",
       "human": "人工"
     },
     "priority": {
