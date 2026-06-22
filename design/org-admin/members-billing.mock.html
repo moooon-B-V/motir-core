@@ -1125,10 +1125,12 @@
         height: 13px;
       }
 
-      /* ── Modal (components/ui/Modal — overlay bg-black/40, panel radius-modal) ── */
+      /* ── Modal (components/ui/Modal — overlay bg-black/40, panel radius-modal) ──
+         The scrim flows in normal layout (NOT position:absolute) so the stage
+         GROWS to contain the full modal — an absolute inset:0 scrim only fills
+         the stage's fixed height and the tall modal would clip under
+         overflow:hidden. */
       .scrim {
-        position: absolute;
-        inset: 0;
         background: rgba(0, 0, 0, 0.4);
         display: flex;
         align-items: flex-start;
@@ -1412,7 +1414,7 @@
       renewal. No pay-wall.
     </div>
     <div class="panel">
-      <div class="stage" style="min-height: 460px">
+      <div class="stage">
         <div class="scrim">
           <div class="modal">
             <h3>Invite to moooon</h3>
