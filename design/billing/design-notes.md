@@ -6,10 +6,10 @@ subtask **8.1.3** (card **MOTIR-1142**). The asset is the source of truth for th
 two motir-core UI code subtasks, both `blocked` behind this design gate
 (Principle #13 + the design-reference rule; `notes.html` #31):
 
-| Code subtask                                                          | What it builds from this asset                            |
-| -------------------------------------------------------------------- | --------------------------------------------------------- |
-| **8.1.7 / MOTIR-1148** — billing settings panel + plan/pricing UI    | Panels **1–5** (the settings panel, its states, the storefront) |
-| **8.1.8 / MOTIR-1149** — paywall / upgrade prompt at the AI boundary | Panel **6** (out_of_credits 402 + tier-gate + member variant) |
+| Code subtask                                                         | What it builds from this asset                                                          |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **8.1.7 / MOTIR-1148** — billing settings panel + plan/pricing UI    | Panels **1–6, 8** (settings panel, states, storefront, seats subscription, empty/error) |
+| **8.1.8 / MOTIR-1149** — paywall / upgrade prompt at the AI boundary | Panel **7** (out_of_credits 402 + tier-gate + member variant)                           |
 
 These two cards are linked to MOTIR-1142 as `relates_to` (with the boundary
 service **8.1.6 / MOTIR-1147**) — they SPECIFY the flow this design draws; the
@@ -18,8 +18,8 @@ design GROUNDS in them and does not invent it. Built FROM the real design system
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no design→code gap.
 
-| Surface                                              | Asset                              | Notes                                                                                                                                                                                                       |
-| ---------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · plan/pricing comparison (Monthly/Annual toggle) · seat-based scaled-Motir upgrade · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
 
 ## What this area is
@@ -73,7 +73,7 @@ MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
   views** (read-only); a **member** is routed to an owner.
 - **402 at the AI boundary.** motir-ai raises `out_of_credits` → **HTTP 402**
   (`OutOfCreditsError`, `src/problem.ts:16`), surfaced over the 7.1 boundary. The
-  paywall (panel 6) handles it.
+  paywall (panel 7) handles it.
 
 ### Where it lives + the access path (panel 1)
 
@@ -96,8 +96,8 @@ MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
   settings entry.
 - **Data over the 7.1 boundary.** Subscription/tier figures are fetched
   client-side over the motir-core ↔ motir-ai boundary (the 8.1.6 billing service
-  → 8.1.5 motir-ai endpoints): the loading skeleton (panel 7b) and the
-  fetch-failed error (panel 7c) are real states. Numbers in the mock are
+  → 8.1.5 motir-ai endpoints): the loading skeleton (panel 8b) and the
+  fetch-failed error (panel 8c) are real states. Numbers in the mock are
   illustrative.
 
 ### Self-host — these surfaces are CLOUD-ONLY
@@ -145,7 +145,7 @@ breadcrumb. The two billed lines + payment:
   `i-external` → Stripe Customer Portal), and the **"View Usage & cost"**
   cross-link (`i-coins`, to the `ai-usage` dashboard).
 - **Payment & invoices (`Card`).** A payment-method row (card brand chip + `••••
-  4242` + expiry + an Update affordance) and a **"Stripe Customer Portal"**
+4242` + expiry + an Update affordance) and a **"Stripe Customer Portal"**
   button (`i-external`) — the Portal owns invoices, VAT ID, payment-method change
   and cancellation. A dashed `note` states tax is applied automatically.
 
@@ -206,7 +206,7 @@ The cards:
 
 - **① Motir** — two `plan` cards: **Free** (`$0/mo`, marked **Current**, the
   caps as a feature list) vs **Scaled** (`$5 / seat / mo` → annual `$3.33 / seat /
-  mo`, `$40/yr`, save `$20/seat/yr`; caps lifted). The Scaled card resolves the
+mo`, `$40/yr`, save `$20/seat/yr`; caps lifted). The Scaled card resolves the
   per-seat price to the org's **actual seat count** — a `your 6 members · $30 / mo`
   line (annual `$20 / mo · $240 / yr`) and a CTA that carries the total
   (**"Upgrade Motir — $30/mo"**) → Stripe Checkout for the seat subscription. (The
@@ -257,7 +257,7 @@ sub-surfaces:
   leave — changes are prorated."**; actions **"Manage seats"** (`i-users`),
   **"Manage plan & payment"** (→ Portal), and a **"Switch to annual — save
   $120/yr"** cross-link. (This is the surface the user lands on after subscribing;
-  panel 2 shows the same org's Motir-AI line + the *free* Motir line.)
+  panel 2 shows the same org's Motir-AI line + the _free_ Motir line.)
 
 > **Mirror (rung 1 — cited).** Showing the billed seat count at upgrade is how
 > both reference PM tools work. **Linear** bills for the number of **active
@@ -345,31 +345,31 @@ workaround.
 
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
-| Element                                       | Token                                                        | Why                                                                  |
-| --------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------- |
-| **Plan price / credit figures (serif)**       | `--el-text` · unit/`per` in `--el-text-muted`                | The primary numbers; the unit/price-cadence reads quiet.            |
-| **Tier chip (Standard / Pro / …)**            | `--el-tint-lavender` bg + `--el-text-strong`                 | The AI plan tier — brand-purple family, matches the org avatar.     |
-| **Status: Active**                            | `--el-tint-mint` bg + `--el-text-strong`, `i-check`          | Healthy / paid — success family.                                    |
-| **Status: Free trial / trialing**             | `--el-tint-sky` bg + `--el-text-strong`, `i-sparkle`         | Informational, not yet paid — the info/try family.                  |
-| **Status: Past due (dunning)**                | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning` | Warning, recoverable — keep-through-grace, not danger.           |
-| **Status: Canceled**                          | `--el-tint-rose` bg + `--el-text-strong`, `i-x`              | Ended / dropped — danger family (but data retained).                |
-| **Motir-state: Free / View-only / readonly**  | neutral `Pill` (`--el-surface` + `--el-text-secondary`)      | Genuinely neutral state metadata.                                   |
-| **Allotment meter fill (healthy)**            | `--el-accent`                                                | Primary "credits remaining" share.                                  |
-| **Allotment meter fill (low / past_due)**     | `--el-warning`                                               | Low-balance / dunning variant.                                      |
-| **Free-cap meters**                           | `--el-accent`                                                | Usage-against-cap share.                                            |
-| **Dunning / warning banner**                  | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning` | Warning hue in the BANNER tint, not the page (finding #35).      |
-| **Canceled banner**                           | `--el-tint-rose` bg + `--el-text-strong`, icon `--el-danger-text` | Ended-plan notice — danger tint in the banner only.            |
-| **Info / tax / cloud-only notes**             | `--el-surface-soft` dashed (`--el-border-strong`) · `i-info` | Quiet, dashed advisory — the passive-affordance shape.              |
-| **Out-of-credits / paused icon**              | `--el-tint-yellow` + `--el-warning`                          | The paused state — warning, not danger (nothing is broken).         |
-| **Tier-gate / lock-gate icon**                | `--el-tint-lavender` / `--el-surface` + `--el-text-strong`   | "AI is paid" / "ask your owner" — gate, not error.                  |
-| **Error icon tint**                           | `--el-tint-rose` + `--el-danger-text`                        | Fetch-error state (panel 7c).                                       |
-| **Feature-list check / off**                  | `i-check` `--el-success` · off `i-x` `--el-text-faint`       | Included vs not — palette green, not grey-only.                     |
-| **Pro / Max accent glyph**                    | `--el-accent-on-surface` (`i-zap` / `i-crown`)               | The heavier paid tiers carry an accent glyph (accent AS icon).      |
-| **Current-plan card border**                  | `--el-accent`                                                | Marks the org's current plan in the storefront.                     |
-| **Primary CTAs / Upgrade**                    | `--el-accent` + `--el-accent-text`                           | Upgrade / Change-plan / Resubscribe — the conversion action.        |
-| **Cross-link (View Usage & cost)**            | `--el-link`                                                  | Quiet inline navigation to the sibling dashboard.                   |
-| **Payment card-brand chip**                   | `--el-tint-sky` + `--el-text-strong`                         | The Stripe payment-method affordance.                               |
-| Text / surfaces / borders                     | `--el-text*`, `--el-surface*`, `--el-border*`                | Standard element tokens — never Tier-0 `--color-*`.                 |
+| Element                                      | Token                                                             | Why                                                             |
+| -------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Plan price / credit figures (serif)**      | `--el-text` · unit/`per` in `--el-text-muted`                     | The primary numbers; the unit/price-cadence reads quiet.        |
+| **Tier chip (Standard / Pro / …)**           | `--el-tint-lavender` bg + `--el-text-strong`                      | The AI plan tier — brand-purple family, matches the org avatar. |
+| **Status: Active**                           | `--el-tint-mint` bg + `--el-text-strong`, `i-check`               | Healthy / paid — success family.                                |
+| **Status: Free trial / trialing**            | `--el-tint-sky` bg + `--el-text-strong`, `i-sparkle`              | Informational, not yet paid — the info/try family.              |
+| **Status: Past due (dunning)**               | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`   | Warning, recoverable — keep-through-grace, not danger.          |
+| **Status: Canceled**                         | `--el-tint-rose` bg + `--el-text-strong`, `i-x`                   | Ended / dropped — danger family (but data retained).            |
+| **Motir-state: Free / View-only / readonly** | neutral `Pill` (`--el-surface` + `--el-text-secondary`)           | Genuinely neutral state metadata.                               |
+| **Allotment meter fill (healthy)**           | `--el-accent`                                                     | Primary "credits remaining" share.                              |
+| **Allotment meter fill (low / past_due)**    | `--el-warning`                                                    | Low-balance / dunning variant.                                  |
+| **Free-cap meters**                          | `--el-accent`                                                     | Usage-against-cap share.                                        |
+| **Dunning / warning banner**                 | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`   | Warning hue in the BANNER tint, not the page (finding #35).     |
+| **Canceled banner**                          | `--el-tint-rose` bg + `--el-text-strong`, icon `--el-danger-text` | Ended-plan notice — danger tint in the banner only.             |
+| **Info / tax / cloud-only notes**            | `--el-surface-soft` dashed (`--el-border-strong`) · `i-info`      | Quiet, dashed advisory — the passive-affordance shape.          |
+| **Out-of-credits / paused icon**             | `--el-tint-yellow` + `--el-warning`                               | The paused state — warning, not danger (nothing is broken).     |
+| **Tier-gate / lock-gate icon**               | `--el-tint-lavender` / `--el-surface` + `--el-text-strong`        | "AI is paid" / "ask your owner" — gate, not error.              |
+| **Error icon tint**                          | `--el-tint-rose` + `--el-danger-text`                             | Fetch-error state (panel 8c).                                   |
+| **Feature-list check / off**                 | `i-check` `--el-success` · off `i-x` `--el-text-faint`            | Included vs not — palette green, not grey-only.                 |
+| **Pro / Max accent glyph**                   | `--el-accent-on-surface` (`i-zap` / `i-crown`)                    | The heavier paid tiers carry an accent glyph (accent AS icon).  |
+| **Current-plan card border**                 | `--el-accent`                                                     | Marks the org's current plan in the storefront.                 |
+| **Primary CTAs / Upgrade**                   | `--el-accent` + `--el-accent-text`                                | Upgrade / Change-plan / Resubscribe — the conversion action.    |
+| **Cross-link (View Usage & cost)**           | `--el-link`                                                       | Quiet inline navigation to the sibling dashboard.               |
+| **Payment card-brand chip**                  | `--el-tint-sky` + `--el-text-strong`                              | The Stripe payment-method affordance.                           |
+| Text / surfaces / borders                    | `--el-text*`, `--el-surface*`, `--el-border*`                     | Standard element tokens — never Tier-0 `--color-*`.             |
 
 All shaped surfaces use the **`[data-display-style]` shape tokens**
 (`--radius-{btn,card,input,control,badge}`, `--spacing-{btn,input,control,chip,

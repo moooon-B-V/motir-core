@@ -693,12 +693,24 @@
       .avatars span:first-child {
         margin-left: 0;
       }
-      .av1 { background: var(--el-tint-lavender); }
-      .av2 { background: var(--el-tint-sky); }
-      .av3 { background: var(--el-tint-mint); }
-      .av4 { background: var(--el-tint-peach); }
-      .av5 { background: var(--el-tint-rose); }
-      .av6 { background: var(--el-tint-yellow); }
+      .av1 {
+        background: var(--el-tint-lavender);
+      }
+      .av2 {
+        background: var(--el-tint-sky);
+      }
+      .av3 {
+        background: var(--el-tint-mint);
+      }
+      .av4 {
+        background: var(--el-tint-peach);
+      }
+      .av5 {
+        background: var(--el-tint-rose);
+      }
+      .av6 {
+        background: var(--el-tint-yellow);
+      }
 
       /* a quiet inline cross-link (→ Usage & cost) */
       .xlink {
@@ -1253,8 +1265,12 @@
           <div class="opt">
             <svg viewBox="0 0 24 24"><use href="#i-settings" /></svg> Settings
           </div>
-          <div class="opt"><svg viewBox="0 0 24 24"><use href="#i-users" /></svg> Members</div>
-          <div class="opt"><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg> Usage &amp; cost</div>
+          <div class="opt">
+            <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> Members
+          </div>
+          <div class="opt">
+            <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg> Usage &amp; cost
+          </div>
           <div class="opt active">
             <svg viewBox="0 0 24 24"><use href="#i-card" /></svg> Billing &amp; plans
           </div>
@@ -1275,18 +1291,26 @@
             <div class="card" style="border-color: var(--el-accent)">
               <div class="card-head">
                 <div class="ttl">
-                  <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-card" /></svg></span>
+                  <span class="gico ai"
+                    ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                  ></span>
                   <div>
                     <h3>Billing &amp; plans</h3>
-                    <div class="hsub">Your Motir plan, Motir AI plan, payment method and invoices.</div>
+                    <div class="hsub">
+                      Your Motir plan, Motir AI plan, payment method and invoices.
+                    </div>
                   </div>
                 </div>
-                <a class="btn btn-secondary btn-sm" href="#">Open <svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg></a>
+                <a class="btn btn-secondary btn-sm" href="#"
+                  >Open <svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                ></a>
               </div>
               <div class="card-body" style="display: flex; gap: 10px; flex-wrap: wrap">
                 <span class="pill pill-free">Motir · Free</span>
                 <span class="pill pill-tier">Motir AI · Standard</span>
-                <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span>
+                <span class="pill pill-active"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+                >
               </div>
             </div>
             <div class="card ghost">
@@ -1309,8 +1333,8 @@
       2 · Billing settings panel — owner view, populated &amp; active. The TWO billed lines: ① the
       Motir (free here, within caps) and ② Motir AI (Standard, active) with its allotment meter,
       renewal and Manage-plan → Stripe Portal / Change-plan. Plus the payment method + invoices (the
-      Customer Portal) and the cross-link to Usage &amp; cost. Credits = allotment; the only $ is the
-      plan FEE paid to Stripe.
+      Customer Portal) and the cross-link to Usage &amp; cost. Credits = allotment; the only $ is
+      the plan FEE paid to Stripe.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1318,18 +1342,22 @@
           <span class="crumb">Organization · moooon · Billing &amp; plans</span>
           <h2>Billing &amp; plans</h2>
           <p class="sub">
-            Your two Motir products are billed independently. Motir is free until your org
-            outgrows the free caps; Motir AI is an org-level credit plan you buy separately.
+            Your two Motir products are billed independently. Motir is free until your org outgrows
+            the free caps; Motir AI is an org-level credit plan you buy separately.
           </p>
           <div class="stack">
             <!-- ① TRACKER LINE -->
             <div class="card">
               <div class="card-head">
                 <div class="ttl">
-                  <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
+                  <span class="gico tracker"
+                    ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                  ></span>
                   <div>
                     <h3>Motir</h3>
-                    <div class="hsub">The project-management tool — free for your team, paid only at scale.</div>
+                    <div class="hsub">
+                      The project-management tool — free for your team, paid only at scale.
+                    </div>
                   </div>
                 </div>
                 <span class="pill pill-free">Free</span>
@@ -1338,22 +1366,28 @@
                 <div class="line">
                   <div class="meta">
                     <div class="desc" style="margin-top: 0">
-                      You’re on free Motir — unlimited members, within the free caps below.
-                      You’ll only pay <b>$5 / seat / mo</b> if the org crosses a cap.
+                      You’re on free Motir — unlimited members, within the free caps below. You’ll
+                      only pay <b>$5 / seat / mo</b> if the org crosses a cap.
                     </div>
                     <div class="caps">
                       <div class="cap">
-                        <span class="ct"><svg viewBox="0 0 24 24"><use href="#i-box" /></svg> Work items</span>
+                        <span class="ct"
+                          ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg> Work items</span
+                        >
                         <div class="cv">182 / 250</div>
                         <div class="meter"><span style="width: 73%"></span></div>
                       </div>
                       <div class="cap">
-                        <span class="ct"><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg> Projects</span>
+                        <span class="ct"
+                          ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg> Projects</span
+                        >
                         <div class="cv">2 / 3</div>
                         <div class="meter"><span style="width: 66%"></span></div>
                       </div>
                       <div class="cap">
-                        <span class="ct"><svg viewBox="0 0 24 24"><use href="#i-database" /></svg> Storage</span>
+                        <span class="ct"
+                          ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg> Storage</span
+                        >
                         <div class="cv">0.4 / 2 GB</div>
                         <div class="meter"><span style="width: 20%"></span></div>
                       </div>
@@ -1364,14 +1398,18 @@
                 <div class="seatcalc" style="margin-top: 16px">
                   <span class="sc-l">
                     <span class="avatars">
-                      <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
-                      <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                      <span class="av1">YZ</span><span class="av2">JD</span
+                      ><span class="av3">AK</span> <span class="av4">MP</span
+                      ><span class="av5">RS</span><span class="av6">+1</span>
                     </span>
                     Scaling bills <b>1 seat per member</b> — 6 today
                   </span>
                   <span class="sc-total">6 × $5 = $30 <span class="per">/ mo</span></span>
                 </div>
-                <div class="acts" style="margin-top: 12px; display: flex; align-items: center; gap: 8px">
+                <div
+                  class="acts"
+                  style="margin-top: 12px; display: flex; align-items: center; gap: 8px"
+                >
                   <button class="btn btn-secondary">Upgrade Motir</button>
                   <span class="xlink" style="cursor: default; color: var(--el-text-muted)">
                     Seats follow membership · prorated automatically
@@ -1384,13 +1422,19 @@
             <div class="card">
               <div class="card-head">
                 <div class="ttl">
-                  <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
+                  <span class="gico ai"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
                   <div>
                     <h3>Motir AI</h3>
-                    <div class="hsub">Planning &amp; hosted agents — an org-level monthly credit pool.</div>
+                    <div class="hsub">
+                      Planning &amp; hosted agents — an org-level monthly credit pool.
+                    </div>
                   </div>
                 </div>
-                <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span>
+                <span class="pill pill-active"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+                >
               </div>
               <div class="card-body">
                 <div class="line">
@@ -1413,7 +1457,8 @@
                 <div class="acts">
                   <button class="btn btn-primary">Change plan</button>
                   <button class="btn btn-secondary">
-                    Manage plan &amp; payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                    Manage plan &amp; payment
+                    <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
                   </button>
                   <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
                     <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg> View Usage &amp; cost
@@ -1433,7 +1478,9 @@
               <div class="card-body" style="display: flex; flex-direction: column; gap: 12px">
                 <div class="pay">
                   <span class="pm">
-                    <span class="brand"><svg viewBox="0 0 24 24"><use href="#i-card" /></svg></span>
+                    <span class="brand"
+                      ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                    ></span>
                     <span class="digits">•••• 4242</span>
                     <span class="exp">expires 08 / 28</span>
                   </span>
@@ -1453,9 +1500,9 @@
 
     <!-- ════════════════ PANEL 3 — PANEL STATES (past_due / trialing / canceled) -->
     <div class="panel-label">
-      3 · Panel states — the non-happy subscription lifecycle (decision §5). past_due / dunning keeps
-      access through the grace window with a warning banner; trialing shows the one-time free trial
-      grant; canceled has dropped to the free allotment (data retained, never deleted).
+      3 · Panel states — the non-happy subscription lifecycle (decision §5). past_due / dunning
+      keeps access through the grace window with a warning banner; trialing shows the one-time free
+      trial grant; canceled has dropped to the free allotment (data retained, never deleted).
     </div>
     <div class="panel">
       <div class="stage">
@@ -1467,25 +1514,38 @@
               <div class="card">
                 <div class="card-head">
                   <div class="ttl">
-                    <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                    <div><h3>Motir AI</h3><div class="hsub">Pro · 8,000 credits / mo</div></div>
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">Pro · 8,000 credits / mo</div>
+                    </div>
                   </div>
-                  <span class="pill pill-pastdue"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg> Past due</span>
+                  <span class="pill pill-pastdue"
+                    ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg> Past due</span
+                  >
                 </div>
                 <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
                   <div class="banner banner-warn">
                     <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
                     <span class="bt">
-                      <strong>We couldn’t charge your card.</strong> Your Motir AI plan stays active while
-                      we retry over the next ~2 weeks. Update your payment method to avoid dropping to
-                      the free allotment.
+                      <strong>We couldn’t charge your card.</strong> Your Motir AI plan stays active
+                      while we retry over the next ~2 weeks. Update your payment method to avoid
+                      dropping to the free allotment.
                       <span class="ba">
-                        <button class="btn btn-primary btn-sm">Update payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg></button>
+                        <button class="btn btn-primary btn-sm">
+                          Update payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                        </button>
                       </span>
                     </span>
                   </div>
-                  <div class="meterlbl"><span>Allotment this month</span><b>3,100 of 8,000 credits left</b></div>
-                  <div class="meter"><span style="width: 39%; background: var(--el-warning)"></span></div>
+                  <div class="meterlbl">
+                    <span>Allotment this month</span><b>3,100 of 8,000 credits left</b>
+                  </div>
+                  <div class="meter">
+                    <span style="width: 39%; background: var(--el-warning)"></span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1495,17 +1555,26 @@
               <div class="card">
                 <div class="card-head">
                   <div class="ttl">
-                    <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                    <div><h3>Motir AI</h3><div class="hsub">Free — try planning once</div></div>
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">Free — try planning once</div>
+                    </div>
                   </div>
-                  <span class="pill pill-trial"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Free trial</span>
+                  <span class="pill pill-trial"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Free trial</span
+                  >
                 </div>
                 <div class="card-body">
-                  <div class="meterlbl"><span>One-time trial grant</span><b>185 of 300 credits left</b></div>
+                  <div class="meterlbl">
+                    <span>One-time trial grant</span><b>185 of 300 credits left</b>
+                  </div>
                   <div class="meter"><span style="width: 62%"></span></div>
                   <div class="desc">
-                    Your 300 trial credits are granted once and don’t refresh. Pick a monthly Motir AI
-                    plan to keep planning when they run out.
+                    Your 300 trial credits are granted once and don’t refresh. Pick a monthly Motir
+                    AI plan to keep planning when they run out.
                   </div>
                   <div class="acts">
                     <button class="btn btn-primary">Choose a Motir AI plan</button>
@@ -1520,10 +1589,17 @@
             <div class="card">
               <div class="card-head">
                 <div class="ttl">
-                  <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                  <div><h3>Motir AI</h3><div class="hsub">Free — your paid plan was canceled</div></div>
+                  <span class="gico ai"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
+                  <div>
+                    <h3>Motir AI</h3>
+                    <div class="hsub">Free — your paid plan was canceled</div>
+                  </div>
                 </div>
-                <span class="pill pill-canceled"><svg viewBox="0 0 24 24"><use href="#i-x" /></svg> Canceled</span>
+                <span class="pill pill-canceled"
+                  ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg> Canceled</span
+                >
               </div>
               <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
                 <div class="banner banner-danger">
@@ -1558,13 +1634,22 @@
               <div class="card">
                 <div class="card-head">
                   <div class="ttl">
-                    <span class="gico ai"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
-                    <div><h3>Motir AI</h3><div class="hsub">Standard · 2,000 credits / mo</div></div>
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">Standard · 2,000 credits / mo</div>
+                    </div>
                   </div>
-                  <span class="pill pill-readonly"><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg> View only</span>
+                  <span class="pill pill-readonly"
+                    ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg> View only</span
+                  >
                 </div>
                 <div class="card-body">
-                  <div class="meterlbl"><span>Allotment this month</span><b>1,420 of 2,000 credits left</b></div>
+                  <div class="meterlbl">
+                    <span>Allotment this month</span><b>1,420 of 2,000 credits left</b>
+                  </div>
                   <div class="meter"><span style="width: 71%"></span></div>
                   <div class="note" style="margin-top: 16px">
                     <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
@@ -1578,7 +1663,9 @@
             <div>
               <p class="crumb">b · Org member — no billing access</p>
               <div class="state gate flat">
-                <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg></span>
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
                 <h4>Billing is managed by your org owner</h4>
                 <p>
                   Plans and payment for the <strong>moooon</strong> organization are visible to
@@ -1616,8 +1703,20 @@
                savings; Monthly always available). -->
           <div class="store-toggle">
             <div class="seg" role="group" aria-label="Billing cadence">
-              <button class="seg-opt" data-cad="monthly" aria-pressed="false" onclick="setCadence('monthly')">Monthly</button>
-              <button class="seg-opt active" data-cad="annual" aria-pressed="true" onclick="setCadence('annual')">
+              <button
+                class="seg-opt"
+                data-cad="monthly"
+                aria-pressed="false"
+                onclick="setCadence('monthly')"
+              >
+                Monthly
+              </button>
+              <button
+                class="seg-opt active"
+                data-cad="annual"
+                aria-pressed="true"
+                onclick="setCadence('annual')"
+              >
                 Annual <span class="seg-badge">Save ~33%</span>
               </button>
             </div>
@@ -1627,41 +1726,89 @@
             <div>
               <div class="menu-h">
                 <h4>① Motir</h4>
-                <span class="mh-sub">The PM tool — free for small teams, paid only when you scale.</span>
+                <span class="mh-sub"
+                  >The PM tool — free for small teams, paid only when you scale.</span
+                >
               </div>
               <div class="tracker-grid">
                 <div class="plan cur">
-                  <div class="pn">Free <span class="pill pill-active" style="font-size: 11px">Current</span></div>
-                  <div class="price"><span class="cad"><span class="amt">$0</span><span class="per">/ mo</span></span></div>
+                  <div class="pn">
+                    Free <span class="pill pill-active" style="font-size: 11px">Current</span>
+                  </div>
+                  <div class="price">
+                    <span class="cad"
+                      ><span class="amt">$0</span><span class="per">/ mo</span></span
+                    >
+                  </div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 250 work items</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 3 projects · 1 workspace</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited members</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 10 MB / file · 2 GB total</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 250 work items
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 3 projects · 1
+                      workspace
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited members
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 10 MB / file · 2 GB
+                      total
+                    </li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-secondary is-disabled" disabled>Your current plan</button></div>
+                  <div class="pcta">
+                    <button class="btn btn-secondary is-disabled" disabled>
+                      Your current plan
+                    </button>
+                  </div>
                 </div>
                 <div class="plan">
                   <div class="pn">Scaled</div>
                   <div class="price">
-                    <span class="cad cad-m"><span class="amt">$5</span><span class="per">/ seat / mo</span></span>
-                    <span class="cad cad-a"><span class="amt">$3.33</span><span class="per">/ seat / mo</span></span>
+                    <span class="cad cad-m"
+                      ><span class="amt">$5</span><span class="per">/ seat / mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$3.33</span><span class="per">/ seat / mo</span></span
+                    >
                   </div>
-                  <div class="billed cad cad-a">billed annually · $40 / seat / yr <span class="save">Save $20 / seat / yr</span></div>
-                  <div class="billed cad cad-m">$60 / seat / yr · <span class="save">Save $20 with annual</span></div>
+                  <div class="billed cad cad-a">
+                    billed annually · $40 / seat / yr <span class="save">Save $20 / seat / yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $60 / seat / yr · <span class="save">Save $20 with annual</span>
+                  </div>
                   <div class="billed" style="margin-top: 8px; color: var(--el-text-secondary)">
-                    <svg viewBox="0 0 24 24" style="width: 13px; height: 13px"><use href="#i-users" /></svg>
+                    <svg viewBox="0 0 24 24" style="width: 13px; height: 13px">
+                      <use href="#i-users" />
+                    </svg>
                     your 6 members ·
                     <b class="cad cad-m" style="color: var(--el-text)">$30 / mo</b>
                     <b class="cad cad-a" style="color: var(--el-text)">$20 / mo ($240 / yr)</b>
                   </div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited work items &amp; projects</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Multiple workspaces &amp; orgs</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 100 MB / file · 100 GB total</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Free</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited work items
+                      &amp; projects
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Multiple workspaces
+                      &amp; orgs
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 100 MB / file · 100 GB
+                      total
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Free
+                    </li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-primary">Upgrade Motir — <span class="cad cad-m">$30/mo</span><span class="cad cad-a">$20/mo</span></button></div>
+                  <div class="pcta">
+                    <button class="btn btn-primary">
+                      Upgrade Motir — <span class="cad cad-m">$30/mo</span
+                      ><span class="cad cad-a">$20/mo</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1669,86 +1816,178 @@
             <div>
               <div class="menu-h">
                 <h4>② Motir AI — planning &amp; agents</h4>
-                <span class="mh-sub">An org-level monthly credit pool. Any org can buy it — paid Motir isn’t required.</span>
+                <span class="mh-sub"
+                  >An org-level monthly credit pool. Any org can buy it — paid Motir isn’t
+                  required.</span
+                >
               </div>
               <div class="ai-grid">
                 <div class="plan">
                   <div class="pn">Free</div>
-                  <div class="price"><span class="cad"><span class="amt">$0</span><span class="per">once</span></span></div>
+                  <div class="price">
+                    <span class="cad"
+                      ><span class="amt">$0</span><span class="per">once</span></span
+                    >
+                  </div>
                   <div class="alot">300 credits · one-time</div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Try planning once</li>
-                    <li class="off"><svg viewBox="0 0 24 24"><use href="#i-x" /></svg> No monthly refresh · no top-ups</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Try planning once
+                    </li>
+                    <li class="off">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg> No monthly refresh · no
+                      top-ups
+                    </li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-secondary is-disabled" disabled>Trial used</button></div>
+                  <div class="pcta">
+                    <button class="btn btn-secondary is-disabled" disabled>Trial used</button>
+                  </div>
                 </div>
                 <div class="plan">
                   <div class="pn">Starter</div>
                   <div class="price">
-                    <span class="cad cad-m"><span class="amt">$5</span><span class="per">/ mo</span></span>
-                    <span class="cad cad-a"><span class="amt">$3.33</span><span class="per">/ mo</span></span>
+                    <span class="cad cad-m"
+                      ><span class="amt">$5</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$3.33</span><span class="per">/ mo</span></span
+                    >
                   </div>
-                  <div class="billed cad cad-a">billed annually · $40 / yr <span class="save">Save $20/yr</span></div>
-                  <div class="billed cad cad-m">$60 / yr · <span class="save">Save $20 with annual</span></div>
+                  <div class="billed cad cad-a">
+                    billed annually · $40 / yr <span class="save">Save $20/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $60 / yr · <span class="save">Save $20 with annual</span>
+                  </div>
                   <div class="alot">300 credits / mo</div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A recurring taste of planning</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A recurring taste of
+                      planning
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-secondary">Choose Starter</button></div>
                 </div>
                 <div class="plan cur">
-                  <div class="pn">Standard <span class="pill pill-active" style="font-size: 11px">Current</span></div>
-                  <div class="price">
-                    <span class="cad cad-m"><span class="amt">$25</span><span class="per">/ mo</span></span>
-                    <span class="cad cad-a"><span class="amt">$16.67</span><span class="per">/ mo</span></span>
+                  <div class="pn">
+                    Standard <span class="pill pill-active" style="font-size: 11px">Current</span>
                   </div>
-                  <div class="billed cad cad-a">billed annually · $200 / yr <span class="save">Save $100/yr</span></div>
-                  <div class="billed cad cad-m">$300 / yr · <span class="save">Save $100 with annual</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$25</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$16.67</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $200 / yr <span class="save">Save $100/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $300 / yr · <span class="save">Save $100 with annual</span>
+                  </div>
                   <div class="alot">2,000 credits / mo</div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everyday planning</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everyday planning
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
                   </ul>
-                  <div class="pcta"><button class="btn btn-secondary is-disabled" disabled>Current plan</button></div>
+                  <div class="pcta">
+                    <button class="btn btn-secondary is-disabled" disabled>Current plan</button>
+                  </div>
                 </div>
                 <div class="plan feat rec">
-                  <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-zap" /></svg> Pro <span class="pill pill-tier" style="font-size: 11px">Recommended</span></div>
-                  <div class="price">
-                    <span class="cad cad-m"><span class="amt">$75</span><span class="per">/ mo</span></span>
-                    <span class="cad cad-a"><span class="amt">$50</span><span class="per">/ mo</span></span>
+                  <div class="pn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"
+                    >
+                      <use href="#i-zap" />
+                    </svg>
+                    Pro <span class="pill pill-tier" style="font-size: 11px">Recommended</span>
                   </div>
-                  <div class="billed cad cad-a">billed annually · $600 / yr <span class="save">Save $300/yr</span></div>
-                  <div class="billed cad cad-m">$900 / yr · <span class="save">Save $300 with annual</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$75</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$50</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $600 / yr <span class="save">Save $300/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $900 / yr · <span class="save">Save $300 with annual</span>
+                  </div>
                   <div class="alot">8,000 credits / mo</div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning + hosted coding</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning + hosted
+                      coding
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-primary">Upgrade to Pro</button></div>
                 </div>
                 <div class="plan feat">
-                  <div class="pn"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"><use href="#i-crown" /></svg> Max</div>
-                  <div class="price">
-                    <span class="cad cad-m"><span class="amt">$150</span><span class="per">/ mo</span></span>
-                    <span class="cad cad-a"><span class="amt">$100</span><span class="per">/ mo</span></span>
+                  <div class="pn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"
+                    >
+                      <use href="#i-crown" />
+                    </svg>
+                    Max
                   </div>
-                  <div class="billed cad cad-a">billed annually · $1,200 / yr <span class="save">Save $600/yr</span></div>
-                  <div class="billed cad cad-m">$1,800 / yr · <span class="save">Save $600 with annual</span></div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$150</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$100</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $1,200 / yr <span class="save">Save $600/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $1,800 / yr · <span class="save">Save $600 with annual</span>
+                  </div>
                   <div class="alot">30,000 credits / mo</div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Heavy agent — design, docs, coding</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Heavy agent — design,
+                      docs, coding
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-secondary">Upgrade to Max</button></div>
                 </div>
                 <div class="plan">
                   <div class="pn">Enterprise</div>
-                  <div class="price"><span class="cad"><span class="amt">Custom</span></span></div>
+                  <div class="price">
+                    <span class="cad"><span class="amt">Custom</span></span>
+                  </div>
                   <div class="alot">Custom credit pool</div>
                   <ul class="flist">
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoiced billing &amp; SSO</li>
-                    <li><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Dedicated support</li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoiced billing &amp;
+                      SSO
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Dedicated support
+                    </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-secondary">Contact sales</button></div>
                 </div>
@@ -1757,9 +1996,9 @@
           </div>
           <div class="note" style="margin-top: 22px">
             <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-            Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is
-            calculated automatically at checkout. Credits are an internal usage allotment; the price
-            shown is the plan fee, billed by Stripe to the moooon organization.
+            Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax
+            is calculated automatically at checkout. Credits are an internal usage allotment; the
+            price shown is the plan fee, billed by Stripe to the moooon organization.
           </div>
         </div>
       </div>
@@ -1784,16 +2023,24 @@
               <div class="card" style="max-width: 580px">
                 <div class="card-head">
                   <div class="ttl">
-                    <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
-                    <div><h3>Scale up Motir</h3><div class="hsub">One seat per organization member — like Jira &amp; Linear.</div></div>
+                    <span class="gico tracker"
+                      ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                    ></span>
+                    <div>
+                      <h3>Scale up Motir</h3>
+                      <div class="hsub">
+                        One seat per organization member — like Jira &amp; Linear.
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
                   <div class="seatcalc">
                     <span class="sc-l">
                       <span class="avatars">
-                        <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
-                        <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                        <span class="av1">YZ</span><span class="av2">JD</span
+                        ><span class="av3">AK</span> <span class="av4">MP</span
+                        ><span class="av5">RS</span><span class="av6">+1</span>
                       </span>
                       <span><b>6 members</b> → 6 seats</span>
                     </span>
@@ -1803,7 +2050,8 @@
                     <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
                     Charged now, <b>prorated</b> for the rest of this cycle. Seats follow your
                     membership automatically — add or remove a member and your next invoice adjusts
-                    (Stripe proration). Choose annual at Checkout to pay <b>$20 / mo</b> ($240 / yr).
+                    (Stripe proration). Choose annual at Checkout to pay <b>$20 / mo</b> ($240 /
+                    yr).
                   </div>
                   <div class="acts" style="display: flex; gap: 8px">
                     <button class="btn btn-primary">Continue to Checkout — $30/mo</button>
@@ -1819,13 +2067,19 @@
               <div class="card">
                 <div class="card-head">
                   <div class="ttl">
-                    <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
+                    <span class="gico tracker"
+                      ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                    ></span>
                     <div>
                       <h3>Motir</h3>
-                      <div class="hsub">The project-management tool — scaled seats subscription.</div>
+                      <div class="hsub">
+                        The project-management tool — scaled seats subscription.
+                      </div>
                     </div>
                   </div>
-                  <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span>
+                  <span class="pill pill-active"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+                  >
                 </div>
                 <div class="card-body">
                   <div class="line">
@@ -1838,23 +2092,29 @@
                       <div class="seatcalc" style="margin-top: 12px">
                         <span class="sc-l">
                           <span class="avatars">
-                            <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
-                            <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                            <span class="av1">YZ</span><span class="av2">JD</span
+                            ><span class="av3">AK</span> <span class="av4">MP</span
+                            ><span class="av5">RS</span><span class="av6">+1</span>
                           </span>
                           <span><b>6 seats</b> billed · 1 per member</span>
                         </span>
                         <span class="sc-total">6 × $5 = $30 <span class="per">/ mo</span></span>
                       </div>
                       <div class="desc">
-                        Renews <b>1 Jul 2026</b> · all free-tier caps lifted (unlimited work items &amp;
-                        projects, multi-workspace). Seats update automatically as members join or
-                        leave — changes are prorated.
+                        Renews <b>1 Jul 2026</b> · all free-tier caps lifted (unlimited work items
+                        &amp; projects, multi-workspace). Seats update automatically as members join
+                        or leave — changes are prorated.
                       </div>
                     </div>
                   </div>
                   <div class="acts">
-                    <button class="btn btn-primary">Manage seats <svg viewBox="0 0 24 24"><use href="#i-users" /></svg></button>
-                    <button class="btn btn-secondary">Manage plan &amp; payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg></button>
+                    <button class="btn btn-primary">
+                      Manage seats <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>
+                    </button>
+                    <button class="btn btn-secondary">
+                      Manage plan &amp; payment
+                      <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                    </button>
                     <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
                       Switch to annual — save $120 / yr
                     </a>
@@ -1883,18 +2143,27 @@
           <div class="composer">
             <div class="cbar">
               <div class="fauxin"></div>
-              <button class="btn btn-primary is-disabled" disabled><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Plan</button>
+              <button class="btn btn-primary is-disabled" disabled>
+                <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Plan
+              </button>
             </div>
             <div class="state blocked flat" style="padding: 28px 24px">
-              <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-pause" /></svg></span>
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-pause" /></svg
+              ></span>
               <h4>Planning is paused — you’re out of credits</h4>
               <p>
                 The <strong>moooon</strong> organization has used all of this month’s 2,000 Standard
                 credits, so new planning runs are paused. Existing plans stay fully editable.
               </p>
               <div class="actions">
-                <button class="btn btn-primary"><svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg> Upgrade plan</button>
-                <button class="btn btn-secondary">Buy credit top-up <span style="color: var(--el-text-muted); font-weight: 400">· $10/1k</span></button>
+                <button class="btn btn-primary">
+                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg> Upgrade plan
+                </button>
+                <button class="btn btn-secondary">
+                  Buy credit top-up
+                  <span style="color: var(--el-text-muted); font-weight: 400">· $10/1k</span>
+                </button>
               </div>
               <span class="passive-note">Renews 1 Jul · or upgrade now to keep planning.</span>
             </div>
@@ -1905,7 +2174,9 @@
             <div>
               <p class="crumb">b · tier-gate — free org, AI not purchased</p>
               <div class="state gate flat">
-                <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg></span>
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                ></span>
                 <h4>AI planning is a paid feature</h4>
                 <p>
                   Generate and expand plans with AI by adding a Motir AI plan to the
@@ -1921,7 +2192,9 @@
             <div>
               <p class="crumb">c · member — can’t buy, routed to owner</p>
               <div class="state gate flat">
-                <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg></span>
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
                 <h4>AI is out of credits for this org</h4>
                 <p>
                   Planning is paused until the <strong>moooon</strong> organization’s plan is
@@ -1941,7 +2214,8 @@
     <div class="panel-label">
       8 · Empty / loading / error — the billing-status fetch over the 7.1 boundary. First-run (no
       Stripe customer yet) invites a first purchase; the loading skeleton holds the panel; the
-      fetch-failed state (motir-ai / Stripe boundary down) offers Retry — never a broken-looking zero.
+      fetch-failed state (motir-ai / Stripe boundary down) offers Retry — never a broken-looking
+      zero.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1951,7 +2225,9 @@
             <div>
               <p class="crumb">a · No subscription yet (first run)</p>
               <div class="state flat">
-                <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-card" /></svg></span>
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                ></span>
                 <h4>You’re on the free plan</h4>
                 <p>
                   The moooon organization has no paid subscription yet — Motir is free within its
@@ -1972,11 +2248,16 @@
                       <span class="sk sk-line" style="width: 150px; margin-top: 8px"></span>
                     </div>
                   </div>
-                  <span class="sk" style="width: 64px; height: 22px; border-radius: var(--radius-badge)"></span>
+                  <span
+                    class="sk"
+                    style="width: 64px; height: 22px; border-radius: var(--radius-badge)"
+                  ></span>
                 </div>
                 <div class="card-body">
                   <span class="sk sk-line" style="width: 40%"></span>
-                  <div class="meter" style="margin-top: 14px"><span class="sk" style="width: 60%; height: 100%"></span></div>
+                  <div class="meter" style="margin-top: 14px">
+                    <span class="sk" style="width: 60%; height: 100%"></span>
+                  </div>
                   <span class="sk sk-line" style="width: 70%; margin-top: 16px"></span>
                 </div>
               </div>
@@ -1986,13 +2267,19 @@
           <div style="margin-top: 24px">
             <p class="crumb">c · Couldn’t load billing (boundary down)</p>
             <div class="state err flat">
-              <span class="ico"><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg></span>
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+              ></span>
               <h4>Couldn’t load billing</h4>
               <p>
-                Something went wrong fetching this organization’s plan. Your subscription and credits
-                are safe — this is only the view. Try again in a moment.
+                Something went wrong fetching this organization’s plan. Your subscription and
+                credits are safe — this is only the view. Try again in a moment.
               </p>
-              <div class="actions"><button class="btn btn-secondary"><svg viewBox="0 0 24 24"><use href="#i-retry" /></svg> Retry</button></div>
+              <div class="actions">
+                <button class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24"><use href="#i-retry" /></svg> Retry
+                </button>
+              </div>
             </div>
           </div>
           <!-- cloud-only note -->
@@ -2000,9 +2287,9 @@
             <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
             <span>
               <strong>Cloud-only.</strong> Every surface in this asset is gated behind
-              <code>MOTIR_CLOUD</code>. A self-hosted (GPL-3.0) build shows no billing, no paywall and
-              no caps — Motir is unbounded and AI is reached via the self-hoster’s own connection.
-              None of these surfaces render when <code>MOTIR_CLOUD=false</code>.
+              <code>MOTIR_CLOUD</code>. A self-hosted (GPL-3.0) build shows no billing, no paywall
+              and no caps — Motir is unbounded and AI is reached via the self-hoster’s own
+              connection. None of these surfaces render when <code>MOTIR_CLOUD=false</code>.
             </span>
           </div>
         </div>
@@ -2012,77 +2299,289 @@
     <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
-        <g id="i-info" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
         </g>
-        <g id="i-coins" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" /><path d="M7 6h1v4" /><path d="m16.71 13.88.7.71-2.82 2.82" />
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
         </g>
-        <g id="i-card" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect width="20" height="14" x="2" y="5" rx="2" /><path d="M2 10h20" />
+        <g
+          id="i-card"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <path d="M2 10h20" />
         </g>
-        <g id="i-sparkle" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
         </g>
-        <g id="i-layers" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+        <g
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+          />
+          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
         </g>
-        <g id="i-box" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
+        <g
+          id="i-box"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+          />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
         </g>
-        <g id="i-folder" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
         </g>
-        <g id="i-database" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14a9 3 0 0 0 18 0V5" /><path d="M3 12a9 3 0 0 0 18 0" />
+        <g
+          id="i-database"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+          <path d="M3 12a9 3 0 0 0 18 0" />
         </g>
-        <g id="i-check" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M20 6 9 17l-5-5" />
         </g>
-        <g id="i-x" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
         </g>
-        <g id="i-external" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
         </g>
-        <g id="i-arrow-up" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m5 12 7-7 7 7" /><path d="M12 19V5" />
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
         </g>
-        <g id="i-zap" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
         </g>
-        <g id="i-crown" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z" /><path d="M5 21h14" />
+        <g
+          id="i-crown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"
+          />
+          <path d="M5 21h14" />
         </g>
-        <g id="i-alert" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" />
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
         </g>
-        <g id="i-pause" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="14" y="4" width="4" height="16" rx="1" /><rect x="6" y="4" width="4" height="16" rx="1" />
+        <g
+          id="i-pause"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+          <rect x="6" y="4" width="4" height="16" rx="1" />
         </g>
-        <g id="i-retry" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" />
+        <g
+          id="i-retry"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
         </g>
-        <g id="i-lock" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </g>
-        <g id="i-eye" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" />
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
         </g>
-        <g id="i-chevdown" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="m6 9 6 6 6-6" />
         </g>
-        <g id="i-chevright" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <g
+          id="i-chevright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="m9 18 6-6-6-6" />
         </g>
-        <g id="i-search" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
         </g>
-        <g id="i-users" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </g>
-        <g id="i-settings" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" />
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
         </g>
       </defs>
     </svg>
