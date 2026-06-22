@@ -7,13 +7,13 @@
 // against the real shell (Next + Postgres):
 //
 //   1. CREATE a leaf (Task) and pick `type = code` in the create modal — assert
-//      the executor control SEEDED to "Coding agent" (the 2.7.3 default map).
+//      the executor control SEEDED to "Agent" (the 2.7.3 default map).
 //      Create a second leaf, pick `type = manual` — assert it seeded to "Human",
-//      OVERRIDE it back to "Coding agent", assert the override sticks, create.
+//      OVERRIDE it back to "Agent", assert the override sticks, create.
 //      Read both back via the `_test` service route: the structured fields
 //      persisted (the override too).
 //   2. DETAIL rail — the first item shows the hued `code` type chip + the
-//      "Coding agent" executor indicator, both inline-editable (the picker opens
+//      "Agent" executor indicator, both inline-editable (the picker opens
 //      in place).
 //   3. LEAF-ONLY — open a create, switch kind to Story: the Work type control is
 //      ABSENT (type is carried only on task/subtask/bug, never epic/story).
@@ -144,7 +144,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
   const seed = await seedActiveProject(page, email, 'WIT');
   await page.goto('/items');
 
-  // ── 1a. CREATE a `code` task — executor DEFAULT-SEEDS to "Coding agent" ──────
+  // ── 1a. CREATE a `code` task — executor DEFAULT-SEEDS to "Agent" ──────
   await createTypedTask(page, {
     title: CODE_TITLE,
     workType: 'Code',
@@ -152,13 +152,13 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
       const exec = page.getByRole('group', { name: 'Executor' });
       await expect(exec).toBeVisible();
       await expect(
-        exec.getByRole('button', { name: 'Coding agent', pressed: true }),
+        exec.getByRole('button', { name: 'Agent', exact: true, pressed: true }),
         'code seeds executor → coding_agent',
       ).toBeVisible();
     },
   });
 
-  // ── 1b. CREATE a `manual` task — seeds "Human", then OVERRIDE to "Coding agent" ─
+  // ── 1b. CREATE a `manual` task — seeds "Human", then OVERRIDE to "Agent" ─
   await createTypedTask(page, {
     title: MANUAL_TITLE,
     workType: 'Manual',
@@ -169,9 +169,9 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
         'manual seeds executor → human',
       ).toBeVisible();
       // Override the seed — the seed is not a lock.
-      await exec.getByRole('button', { name: 'Coding agent' }).click();
+      await exec.getByRole('button', { name: 'Agent', exact: true }).click();
       await expect(
-        exec.getByRole('button', { name: 'Coding agent', pressed: true }),
+        exec.getByRole('button', { name: 'Agent', exact: true, pressed: true }),
         'override sticks → coding_agent',
       ).toBeVisible();
       await expect(exec.getByRole('button', { name: 'Human', pressed: false })).toBeVisible();
@@ -197,7 +197,7 @@ test('@smoke Story 2.7: create typed items (default-seed + override) → detail 
   await expect(page.getByRole('heading', { name: CODE_TITLE, level: 1 })).toBeVisible();
   // The type chip and executor indicator render the labels (glyphs aria-hidden).
   await expect(page.getByText('Code', { exact: true })).toBeVisible();
-  await expect(page.getByText('Coding agent', { exact: true })).toBeVisible();
+  await expect(page.getByText('Agent', { exact: true })).toBeVisible();
   // Inline-editable: the Work type cell opens its picker in place (autoOpen).
   await page.getByRole('button', { name: 'Edit Work type' }).click();
   await expect(page.getByRole('combobox', { name: 'Work type' })).toBeVisible();
