@@ -90,9 +90,10 @@ export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
       {...pageAttrs}
       data-testid="design-page"
       className="flex h-full min-h-0 flex-col bg-(--el-surface)"
-      aria-label={t('header')}
+      aria-label={t('title')}
     >
-      {/* Step bar — Motir's own chrome (NOT scoped). */}
+      {/* Step bar — Motir's own chrome (NOT scoped). Carries the page title (no
+          internal "pre-plan" jargon). */}
       <div className="flex flex-none items-center gap-3 border-b border-(--el-border) px-4 py-3">
         <Button
           variant="ghost"
@@ -102,9 +103,7 @@ export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
         >
           {t('back')}
         </Button>
-        <span className="grow font-mono text-xs font-semibold uppercase tracking-wide text-(--el-text-faint)">
-          {t('header')}
-        </span>
+        <h1 className="grow font-serif text-base font-semibold text-(--el-text)">{t('title')}</h1>
       </div>
 
       {/* Body — two columns that fill the width (no centered gutters): the
@@ -114,8 +113,7 @@ export function DesignStep({ onBack, onUseDesign }: DesignStepProps) {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* LEFT — the controls. */}
         <div className="min-h-0 overflow-y-auto px-6 py-6 lg:w-[28rem] lg:shrink-0 lg:border-r lg:border-(--el-border)">
-          <h1 className="font-serif text-2xl font-bold text-(--el-text)">{t('title')}</h1>
-          <p className="mt-1 text-sm text-(--el-text-secondary)">{t('lead')}</p>
+          <p className="text-sm text-(--el-text-secondary)">{t('lead')}</p>
 
           {/* The four controls — they drive the LOCAL project design. */}
           <div className="mt-5 flex flex-col">
