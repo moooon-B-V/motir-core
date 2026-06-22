@@ -40,7 +40,9 @@ function hubState(over: Partial<DiscoveryState> = {}): DiscoveryState {
 }
 
 describe('OnboardingCanvas', () => {
-  it('renders the stations + the idea node on the spatial canvas', () => {
+  // The canvas holds a loading state until the saved layout resolves (MOTIR-1253),
+  // so node assertions await the post-load render (`findBy*`).
+  it('renders the stations + the idea node on the spatial canvas', async () => {
     renderWithIntl(
       <OnboardingCanvas
         state={hubState()}
@@ -49,7 +51,7 @@ describe('OnboardingCanvas', () => {
         onOpenDesign={vi.fn()}
       />,
     );
-    expect(screen.getByText('Understanding your idea')).toBeTruthy();
+    expect(await screen.findByText('Understanding your idea')).toBeTruthy();
     expect(screen.getByText("What we'll build")).toBeTruthy();
     expect(screen.getByText('Design the look')).toBeTruthy();
     expect(screen.getByText('Plan → your epics')).toBeTruthy();
@@ -58,27 +60,44 @@ describe('OnboardingCanvas', () => {
     expect(screen.getByText('Type — startup')).toBeTruthy();
   });
 
-  it('draws the read-only dependency chain as edges', () => {
+  it('shows a loading state until the saved layout resolves (MOTIR-1253)', () => {
+    // A fetch that never resolves keeps `loaded` false → the spinner stays.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    );
+    renderWithIntl(
+      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
+    );
+    expect(screen.getByRole('status', { name: 'Loading your roadmap…' })).toBeTruthy();
+    // nodes are NOT painted yet (so they can't flash at the auto-layout first)
+    expect(screen.queryByText('Understanding your idea')).toBeNull();
+  });
+
+  it('draws the read-only dependency chain as edges', async () => {
     renderWithIntl(
       <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
     );
     // idea→discovery→vision→feasibility→validation→design→plan = 6 edges
-    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(6);
+    const edges = await screen.findByTestId('canvas-edges');
+    expect(edges.querySelectorAll('path')).toHaveLength(6);
   });
 
-  it('omits the idea node + its edge when there is no idea (resume)', () => {
+  it('omits the idea node + its edge when there is no idea (resume)', async () => {
     renderWithIntl(
       <OnboardingCanvas state={hubState()} idea={null} onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
     );
+    const edges = await screen.findByTestId('canvas-edges');
     expect(screen.queryByText('Your idea')).toBeNull();
-    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(5);
+    expect(edges.querySelectorAll('path')).toHaveLength(5);
   });
 
-  it('activating a produced tier opens its review; an upcoming station does not', () => {
+  it('activating a produced tier opens its review; an upcoming station does not', async () => {
     const onOpen = vi.fn();
     renderWithIntl(
       <OnboardingCanvas state={hubState()} idea={null} onOpen={onOpen} onOpenDesign={vi.fn()} />,
     );
+    await screen.findByTestId('canvas-edges');
     fireEvent.keyDown(document.querySelector('[data-node-id="discovery"]')!, { key: 'Enter' });
     expect(onOpen).toHaveBeenCalledWith('discovery');
     onOpen.mockClear();

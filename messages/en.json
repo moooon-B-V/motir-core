@@ -3728,7 +3728,8 @@
             "title": "Plan → your epics",
             "subtitle": "the roadmap continues here"
           }
-        }
+        },
+        "loading": "Loading your roadmap…"
       },
       "validate": {
         "title": "One call before we plan",

@@ -6,6 +6,7 @@ import {
   type CanvasEdge,
   type CanvasNode,
 } from '@/components/planning/PlanningCanvas';
+import { Spinner } from '@/components/ui/Spinner';
 import { IdeaCard, StationCard } from './StationNode';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
 import { type DiscoveryState } from '@/lib/onboarding/discoveryLoop';
@@ -41,7 +42,20 @@ export interface OnboardingCanvasProps {
 
 export function OnboardingCanvas({ state, idea, onOpen, onOpenDesign }: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
-  const { positions, savePosition } = useCanvasLayout();
+  const { positions, savePosition, loaded } = useCanvasLayout();
+
+  // Hold a loading state until the saved positions resolve, so nodes never paint
+  // at the auto-layout and then jump to the stored arrangement (MOTIR-1253).
+  if (!loaded) {
+    return (
+      <div
+        aria-busy="true"
+        className="flex h-full w-full items-center justify-center bg-(--el-surface-soft)"
+      >
+        <Spinner aria-label={t('loading')} />
+      </div>
+    );
+  }
 
   const stations = buildStations(state);
   const stationByKind = new Map<StationKind, StationView>(stations.map((s) => [s.kind, s]));
