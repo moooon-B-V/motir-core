@@ -3444,6 +3444,138 @@
   --el-sidebar-item-bg-hover: #24262c;
 }
 
+/* ── Palette: Candy Land (data-palette="candyland") — Subtask 8.8.34 (MOTIR-1252)
+   A sweet, playful PASTEL-CANDY re-skin led by a LIGHT bubblegum PINK. There is
+   no single brand for "candy land", so — to avoid inventing colours — EVERY value
+   is a documented **Radix Colors** step (@radix-ui/colors): Pink is the primary
+   ramp, Mauve the matched warm neutral, and Sky / Jade / Violet / Amber / Crimson
+   supply the candy rainbow of tints + type hues. Glossier Pink #F5DADF is the
+   pastel-pink MOOD reference; the actual values are Radix.
+
+   ⚠️ THE LIGHT-PINK TRAP: a light pink FILL cannot carry white text, so the CTA
+   is a light pink (Radix Pink-6 #efbfdd) with DARK berry-plum labels (Pink-12
+   #651249, ~7.6:1) — the same dark-on-light pattern Amber/Citrine use for gold.
+   --color-primary (pink AS text/icon on a surface) is the AA "text" step
+   Pink-11 #c2298a.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never a
+   shape/feel token (paletteRegistry.test.ts enforces it). Every --el-* role
+   clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/candyland.md. */
+[data-palette='candyland'] {
+  /* brand & primary — a LIGHT bubblegum pink (Radix Pink). FILL is a light pink
+     with DARK berry labels; --color-primary is the Pink-11 text step. */
+  --color-primary: #c2298a; /* Radix Pink-11 — pink text/icon (AA ~5.2:1 on white) */
+  --color-primary-foreground: #651249; /* Radix Pink-12 berry ink on the light-pink fill (~7.6:1) */
+  --color-primary-pressed: #e7acd0; /* Radix Pink-7 */
+  --color-primary-fill: #efbfdd; /* Radix Pink-6 — the light bubblegum pink */
+
+  /* surfaces — candy-paper pinks (Radix Pink-1/2/3) */
+  --color-background: #fffcfe; /* Radix Pink-1 — barely-pink candy white */
+  --color-foreground: #211f26; /* Radix Mauve-12 ink */
+  --color-surface: #fee9f5; /* Radix Pink-3 — candy-pink section */
+  --color-surface-soft: #fef7fb; /* Radix Pink-2 — quieter candy wash */
+
+  /* text scale — Radix Mauve neutral + a Pink-12 berry emphasis */
+  --color-ink: #211f26;
+  --color-charcoal: #651249; /* Pink-12 berry — emphasis / AA-safe text on tints */
+  --color-slate: #65636d; /* Mauve-11 — secondary text */
+  --color-steel: #65636d; /* Mauve-11 — tertiary (Radix Mauve has one AA text grey) */
+  --color-stone: #8e8c99; /* Mauve-9 — faint labels (decorative) */
+  --color-muted: #fee9f5;
+  --color-muted-foreground: #65636d; /* Mauve-11 — captions, AA on white + surfaces */
+
+  /* borders — soft candy-pink hairlines (Radix Pink-5/4/6) */
+  --color-hairline: #f6cee7; /* Pink-5 */
+  --color-hairline-soft: #fbdcef; /* Pink-4 */
+  --color-hairline-strong: #efbfdd; /* Pink-6 */
+  --color-border: #f6cee7;
+
+  /* accent secondary — a candy berry-plum highlight (Radix Plum-9), distinct
+     from the light-pink primary; the candy rainbow covers the type hues */
+  --color-accent: #ab4aba; /* Radix Plum-9 — berry highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 — candy honey */
+  --color-accent-teal: #208368; /* Radix Jade-11 — candy mint */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 — candy green */
+
+  /* card tints — Radix step-4 pastels: the candy rainbow (charcoal text AA ≥9:1) */
+  --color-tint-peach: #fbdcef; /* Pink-4 */
+  --color-tint-rose: #fedce7; /* Crimson-4 */
+  --color-tint-mint: #d6f1e3; /* Jade-4 */
+  --color-tint-lavender: #ebe4ff; /* Violet-4 */
+  --color-tint-sky: #d1f0fa; /* Sky-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix candy "text" steps (AA-safe) */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #cb1d63; /* Crimson-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #00749e; /* Sky-11 */
+
+  /* links — Radix Sky-11 candy blue, distinct from the pink primary */
+  --color-link: #00749e;
+  --color-link-pressed: #1d3e56; /* Sky-12 */
+
+  /* sidebar hover — one shade deeper than the candy-pink surface (Pink-4) */
+  --el-sidebar-item-bg-hover: #fbdcef;
+}
+
+/* Candy Land — dark companion. A pink-tinted near-black canvas (Radix Pink dark
+   1/2/3); the bubblegum pink brightens to read as text, the fill is a bright
+   candy pink with dark labels, and the rainbow tints become deep candy washes.
+   All values are documented Radix dark steps. */
+[data-palette='candyland'][data-theme='dark'] {
+  --color-background: #191117; /* Radix Pink dark-1 — pink-tinted black */
+  --color-foreground: #eeeef0; /* Mauve dark-12 */
+  --color-surface: #37172f; /* Pink dark-3 — candy-plum section */
+  --color-surface-soft: #21121d; /* Pink dark-2 — quieter division */
+
+  --color-ink: #eeeef0;
+  --color-charcoal: #fdd1ea; /* Pink dark-12 — pink emphasis / AA on dark tints */
+  --color-slate: #b5b2bc; /* Mauve dark-11 — secondary */
+  --color-steel: #b5b2bc; /* Mauve dark-11 — tertiary */
+  --color-stone: #6f6d78; /* Mauve dark-9 — faint */
+  --color-muted: #37172f;
+  --color-muted-foreground: #b5b2bc;
+
+  --color-hairline: #692955; /* Pink dark-6 */
+  --color-hairline-soft: #591c47; /* Pink dark-5 */
+  --color-hairline-strong: #833869; /* Pink dark-7 */
+  --color-border: #692955;
+
+  /* bubblegum pink brightened as text; fill a bright candy pink with dark labels */
+  --color-primary: #ff8dcc; /* Pink dark-11 */
+  --color-primary-foreground: #21121d; /* Pink dark-2 ink on the bright pink fill */
+  --color-primary-pressed: #de51a8; /* Pink dark-10 */
+  --color-primary-fill: #ff8dcc;
+
+  /* deep candy washes (Radix dark step-4) */
+  --color-tint-peach: #4b143d; /* Pink dark-4 */
+  --color-tint-rose: #4d122f; /* Crimson dark-4 */
+  --color-tint-mint: #0b3b2c; /* Jade dark-4 */
+  --color-tint-lavender: #33255b; /* Violet dark-4 */
+  --color-tint-sky: #113555; /* Sky dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-accent: #e796f3; /* Plum dark-11 — bright berry */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #1fd8a4; /* Jade dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff92ad; /* Crimson dark-11 */
+  --color-destructive-foreground: #191114; /* dark ink on the bright danger */
+  --color-info: #75c7f0; /* Sky dark-11 */
+
+  --color-link: #75c7f0;
+  --color-link-pressed: #c2f3ff; /* Sky dark-12 */
+
+  /* sidebar hover — one shade lighter than the candy-plum surface (Pink dark-4) */
+  --el-sidebar-item-bg-hover: #4b143d;
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk
