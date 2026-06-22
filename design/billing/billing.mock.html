@@ -1005,6 +1005,31 @@
         background: var(--el-tint-mint);
         color: var(--el-text-strong);
       }
+      /* current-subscription strip (the AI screen is pricing AND subscription) */
+      .curbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .curbar .cb-l {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .curbar .cb-l b {
+        font-weight: 600;
+      }
+
       /* cadence-driven price visibility — one toggle re-prices the whole store */
       .store[data-cadence='annual'] .cad-m {
         display: none;
@@ -1718,21 +1743,36 @@
 
     <!-- ════════════════ PANEL 5 — PLAN / PRICING COMPARISON (storefront) ══════ -->
     <div class="panel-label">
-      5 · Plan / pricing comparison — the storefront reached from “Change plan”. TWO independent
-      menus (decision §2): ① Motir (free ↔ scaled) and ② the Motir AI ladder (Free / Starter /
-      Standard / Pro / Max / Enterprise; Pro is the recommended anchor). Each card’s CTA starts
-      Stripe Checkout for that line; the current plan is marked. Prices are the plan FEE (a currency
-      is legitimate on the storefront).
+      5 · Motir AI — plans &amp; subscription (a SEPARATE screen, AI only). The two billed products
+      are independent (ADR §1), so the AI plan has its OWN screen: a user who already pays for seats
+      should not wade through the seat plan to change AI. Reached from the Motir-AI line’s “Change
+      plan” (panel 2) + the paywall (panel 7). Shows the CURRENT AI subscription + the ladder (Free
+      / Starter / Standard / Pro / Max / Enterprise; Pro = recommended anchor) with the
+      Monthly/Annual toggle. The Motir SEAT plan lives on its own screen (panel 6) — never shown
+      here.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
-          <span class="crumb">Organization · moooon · Billing &amp; plans · Change plan</span>
-          <h2>Choose your plans</h2>
+          <span class="crumb">Organization · moooon · Billing &amp; plans · Motir AI</span>
+          <h2>Motir AI — plans &amp; subscription</h2>
           <p class="sub">
-            Motir and Motir AI are billed separately — buy either, both or neither. A small team
-            within the free caps pays nothing for Motir and only for the AI it opts into.
+            Manage your organization’s AI plan — planning &amp; hosted agents. Billed
+            <b>separately</b> from your Motir seats, so this screen is AI only.
           </p>
+          <!-- current AI subscription — this screen is pricing AND subscription -->
+          <div class="curbar">
+            <span class="cb-l">
+              <span class="pill pill-tier">Standard</span>
+              <span class="pill pill-active"
+                ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+              >
+              <span>2,000 credits / mo · <b>1,420 left</b> · renews 1 Jul 2026</span>
+            </span>
+            <button class="btn btn-secondary btn-sm">
+              Manage plan &amp; payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+            </button>
+          </div>
           <!-- Monthly / Annual toggle — below the headline, above the cards (the
                single most impactful pricing control; default = Annual + visible
                savings; Monthly always available). -->
@@ -1757,103 +1797,13 @@
             </div>
           </div>
           <div class="twomenus store" data-cadence="annual" style="margin-top: 22px">
-            <!-- ① Motir (the PM tool) menu -->
+            <!-- Motir AI plans — the only menu on this screen (seats are panel 6) -->
             <div>
               <div class="menu-h">
-                <h4>① Motir</h4>
+                <h4>Choose your plan</h4>
                 <span class="mh-sub"
-                  >The PM tool — free for small teams, paid only when you scale.</span
-                >
-              </div>
-              <div class="tracker-grid">
-                <div class="plan cur">
-                  <div class="pn">
-                    Free <span class="pill pill-active" style="font-size: 11px">Current</span>
-                  </div>
-                  <div class="price">
-                    <span class="cad"
-                      ><span class="amt">$0</span><span class="per">/ mo</span></span
-                    >
-                  </div>
-                  <ul class="flist">
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 250 work items
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Up to 3 projects · 1
-                      workspace
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited members
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 10 MB / file · 2 GB
-                      total
-                    </li>
-                  </ul>
-                  <div class="pcta">
-                    <button class="btn btn-secondary is-disabled" disabled>
-                      Your current plan
-                    </button>
-                  </div>
-                </div>
-                <div class="plan">
-                  <div class="pn">Scaled</div>
-                  <div class="price">
-                    <span class="cad cad-m"
-                      ><span class="amt">$5</span><span class="per">/ seat / mo</span></span
-                    >
-                    <span class="cad cad-a"
-                      ><span class="amt">$3.33</span><span class="per">/ seat / mo</span></span
-                    >
-                  </div>
-                  <div class="billed cad cad-a">
-                    billed annually · $40 / seat / yr <span class="save">Save $20 / seat / yr</span>
-                  </div>
-                  <div class="billed cad cad-m">
-                    $60 / seat / yr · <span class="save">Save $20 with annual</span>
-                  </div>
-                  <div class="billed" style="margin-top: 8px; color: var(--el-text-secondary)">
-                    <svg viewBox="0 0 24 24" style="width: 13px; height: 13px">
-                      <use href="#i-users" />
-                    </svg>
-                    your 6 members ·
-                    <b class="cad cad-m" style="color: var(--el-text)">$30 / mo</b>
-                    <b class="cad cad-a" style="color: var(--el-text)">$20 / mo ($240 / yr)</b>
-                  </div>
-                  <ul class="flist">
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Unlimited work items
-                      &amp; projects
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Multiple workspaces
-                      &amp; orgs
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> 100 MB / file · 100 GB
-                      total
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Free
-                    </li>
-                  </ul>
-                  <div class="pcta">
-                    <button class="btn btn-primary">
-                      Upgrade Motir — <span class="cad cad-m">$30/mo</span
-                      ><span class="cad cad-a">$20/mo</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- ② Motir AI ladder -->
-            <div>
-              <div class="menu-h">
-                <h4>② Motir AI — planning &amp; agents</h4>
-                <span class="mh-sub"
-                  >An org-level monthly credit pool. Any org can buy it — paid Motir isn’t
-                  required.</span
+                  >An org-level monthly credit pool, billed separately from seats. Any org can buy
+                  it — a paid Motir seat plan is not required. Pro is the recommended anchor.</span
                 >
               </div>
               <div class="ai-grid">
@@ -2031,9 +1981,13 @@
           </div>
           <div class="note" style="margin-top: 22px">
             <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-            Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax
-            is calculated automatically at checkout. Credits are an internal usage allotment; the
-            price shown is the plan fee, billed by Stripe to the moooon organization.
+            <span
+              >Annual billing (the Stripe default) is shown — switch to Monthly above to compare.
+              Tax is applied automatically at checkout. Credits are an internal usage allotment; the
+              price shown is the AI plan fee, billed by Stripe to the moooon organization. Your
+              Motir <b>seats</b> are billed separately — manage them on the Motir plan screen (panel
+              6).</span
+            >
           </div>
         </div>
       </div>

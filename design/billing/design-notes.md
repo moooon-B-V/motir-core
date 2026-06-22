@@ -18,9 +18,9 @@ design GROUNDS in them and does not invent it. Built FROM the real design system
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no design→code gap.
 
-| Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · plan/pricing comparison (Monthly/Annual toggle) · seat-based scaled-Motir upgrade · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
+| Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
 
 ## What this area is
 
@@ -176,17 +176,33 @@ Two mini-surfaces side by side so the gate is visible:
   `--el-tint-lavender` icon) — **"Billing is managed by your org owner"** — with
   a **"Contact an owner"** secondary, never a dead billing control.
 
-### Panel 5 — plan / pricing comparison (the storefront, reached from "Change plan")
+### Panel 5 — Motir AI — plans & subscription (a SEPARATE, AI-ONLY screen)
 
-TWO independent menus (decision §2), under the `… · Change plan` breadcrumb.
+> **Why its own screen (Yue, 2026-06-22).** The two products are **independent**
+> (ADR §1 — "neither gates the other"), so the AI plan gets its **own screen**, not
+> a shared "choose your plans" page bundling seats. A user who **already pays for
+> seats** should not wade through the seat plan to change AI — and vice-versa. So:
+> **Motir AI lives here (panel 5); Motir seats live on their own screen (panel 6);
+> neither screen shows the other product.** The billing home (panel 2) is the hub
+> with one line per product, each routing to its own screen: the Motir-AI line's
+> **"Change plan"** → here; the Motir line's **"Upgrade Motir"** → panel 6.
 
-**Monthly / Annual cadence toggle (the SaaS-standard pricing control).** A
-`Segmented` ("Monthly" | "Annual") sits **below the headline, above the cards** —
-the single highest-impact control on a pricing page — and re-prices the **whole
-store** (both menus, one cadence). **Annual is the default** (the Stripe annual
-default; defaulting to annual lifts annual adoption ~25–35%) and carries a
-**"Save ~33%"** `seg-badge`; **Monthly is always available** (hiding it erodes
-trust). The pattern follows the verified SaaS convention (mirror below):
+Reached from the Motir-AI line's "Change plan" (panel 2) and the paywall (panel 7),
+under the `… · Motir AI` breadcrumb. The screen is **pricing AND subscription**:
+
+- **Current-subscription strip (`.curbar`).** At the top: the active AI plan — a
+  **"Standard"** tier `Pill` + **"Active"** status `Pill` + "2,000 credits / mo ·
+  1,420 left · renews 1 Jul 2026" + a **"Manage plan & payment"** (→ Portal)
+  button. So a returning subscriber sees their state first, then the ladder to
+  change it. (Omitted / replaced by a "no AI plan yet" line for a free-AI org.)
+- **Monthly / Annual cadence toggle (the SaaS-standard pricing control).** A
+  `Segmented` ("Monthly" | "Annual") sits **below the headline, above the cards** —
+  the single highest-impact control on a pricing page. **Annual is the default**
+  (the Stripe annual default; defaulting to annual lifts annual adoption ~25–35%)
+  with a **"Save ~33%"** `seg-badge`; **Monthly is always available** (hiding it
+  erodes trust). It re-prices the ladder (`setCadence()` flips
+  `.store[data-cadence]`; CSS shows `.cad-a` / `.cad-m`). The pattern follows the
+  verified SaaS convention (mirror below):
 
 - **Annual selected (default):** each paid card shows the **per-month equivalent**
   (`$50 / mo`, not the yearly lump) with a `billed annually · $600 / yr` subline
@@ -197,21 +213,12 @@ trust). The pattern follows the verified SaaS convention (mirror below):
   `$900 / yr · Save $300 with annual` nudge back toward annual.
 - The `$0` Free cards and the **Enterprise** (Custom) card are cadence-inert.
 
-The mock implements the toggle live (a `setCadence()` script flips
-`.store[data-cadence]`; CSS shows `.cad-a` / `.cad-m`) so a reviewer can flip it;
-the PNG captures the **Annual** default. 8.1.7 wires it to the two annual/monthly
-Stripe Prices per line (`*_annual` is each Product's default Price).
+The PNG captures the **Annual** default. 8.1.7 wires the toggle to the two
+annual/monthly Stripe Prices (`*_annual` is the Product's default Price).
 
-The cards:
+The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
 
-- **① Motir** — two `plan` cards: **Free** (`$0/mo`, marked **Current**, the
-  caps as a feature list) vs **Scaled** (`$5 / seat / mo` → annual `$3.33 / seat /
-mo`, `$40/yr`, save `$20/seat/yr`; caps lifted). The Scaled card resolves the
-  per-seat price to the org's **actual seat count** — a `your 6 members · $30 / mo`
-  line (annual `$20 / mo · $240 / yr`) and a CTA that carries the total
-  (**"Upgrade Motir — $30/mo"**) → Stripe Checkout for the seat subscription. (The
-  full seat review is panel 6.)
-- **② Motir AI ladder** — six `plan` cards (monthly → annual-per-month · yearly ·
+- **The Motir AI ladder** — six `plan` cards (monthly → annual-per-month · yearly ·
   save): **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
   (`$5` → `$3.33/mo` · $40/yr · save $20 · 300) / **Standard** (`$25` → `$16.67/mo`
   · $200/yr · save $100 · 2,000, marked **Current**) / **Pro** (`$75` → `$50/mo` ·
@@ -222,7 +229,8 @@ mo`, `$40/yr`, save `$20/seat/yr`; caps lifted). The Scaled card resolves the
   (off-features `i-x`, faint), and a per-tier CTA → Checkout. The current plan is
   accent-bordered + disabled CTA; the recommended Pro card is accent-bordered with
   a "Recommended" `Pill`. A footer `note` states annual-is-shown / switch-to-monthly,
-  tax-at-checkout and credits-vs-price.
+  tax-at-checkout, credits-vs-price, and that **seats are billed separately —
+  manage them on the Motir plan screen (panel 6)** (the only cross-product link).
 
 > **Mirror (rung 1 — cited).** The monthly/annual toggle is the SaaS-standard
 > pricing control: place it below the headline above the cards, **default to
@@ -232,7 +240,12 @@ mo`, `$40/yr`, save `$20/seat/yr`; caps lifted). The Scaled card resolves the
 > ([InfluenceFlow — SaaS pricing best practices 2026](https://influenceflow.io/resources/saas-pricing-page-best-practices-a-complete-2026-guide/);
 > [PipelineRoad — what converts in 2026](https://pipelineroad.com/agency/blog/saas-pricing-page-best-practices))
 
-### Panel 6 — seats: the scaled-Motir upgrade (seat = member, billed per-seat)
+### Panel 6 — Motir (seats) plan & upgrade screen (the seat-only counterpart to panel 5)
+
+This is the **Motir seat plan's own screen** — the parallel to the AI screen
+(panel 5), kept separate for the same reason: it shows seats only, never the AI
+plan. Reached from the Motir line's "Upgrade Motir" (panel 2). Seat = member,
+billed per-seat:
 
 Motir Scaled is billed **one seat per organization member** — the seat item's
 Stripe `quantity` syncs to membership (ADR §3). So the design **shows the seat
@@ -459,21 +472,23 @@ Tier-0 under `--el-*`) — verified.
   **"Plans and payment for the {org} organization are visible to owners and
   admins. Ask an organization owner to change the plan or buy AI credits."** /
   **"Contact an owner"**.
-- Storefront: **"Choose your plans"** / **"Motir and Motir AI are billed
-  separately — buy either, both or neither. A small team within the free caps
-  pays nothing for Motir and only for the AI it opts into."**; cadence toggle
-  **"Monthly"** / **"Annual"** + badge **"Save ~33%"**; **"① Motir"**
-  / **"The PM tool — free for small teams, paid only when you scale."**;
-  **"② Motir AI — planning & agents"** / **"An org-level monthly credit pool. Any
-  org can buy it — paid Motir isn't required."**; **"Current"** / **"Recommended"**
-  (Pro) / **"Your current plan"** / **"Current plan"** / **"Trial used"**; per-tier
-  CTAs **"Upgrade Motir"** / **"Choose Starter"** / **"Upgrade to Pro"** / **"Upgrade
-  to Max"** / **"Contact sales"**; the annual per-card sublines **"billed annually ·
+- AI screen (panel 5 — AI only): breadcrumb **"… · Motir AI"**; title **"Motir AI
+  — plans & subscription"** / **"Manage your organization's AI plan — planning &
+  hosted agents. Billed separately from your Motir seats, so this screen is AI
+  only."**; current-subscription strip **"{tier}"** / **"Active"** / **"{n} credits
+  / mo · {left} left · renews {date}"** / **"Manage plan & payment"**; cadence
+  toggle **"Monthly"** / **"Annual"** + badge **"Save ~33%"**; menu **"Choose your
+  plan"** / **"An org-level monthly credit pool, billed separately from seats. Any
+  org can buy it — a paid Motir seat plan is not required. Pro is the recommended
+  anchor."**; **"Current"** / **"Recommended"** (Pro) / **"Current plan"** / **"Trial
+  used"**; per-tier CTAs **"Choose Starter"** / **"Upgrade to Pro"** / **"Upgrade to
+  Max"** / **"Contact sales"**; the annual per-card sublines **"billed annually ·
   ${yr} / yr"** + **"Save ${n}/yr"**, the monthly sublines **"${yr} / yr · Save ${n}
   with annual"**; footer **"Annual billing (the Stripe default) is shown — switch to
-  Monthly above to compare. Tax is calculated automatically at checkout. Credits are
-  an internal usage allotment; the price shown is the plan fee, billed by Stripe to
-  the {org} organization."**
+  Monthly above to compare. Tax is applied automatically at checkout. Credits are an
+  internal usage allotment; the price shown is the AI plan fee, billed by Stripe to
+  the {org} organization. Your Motir seats are billed separately — manage them on the
+  Motir plan screen."**
 - Seats (panel 6 + the panel-2 preview): **"Scaling bills 1 seat per member — {n}
   today"** / **"{n} × ${seat} = ${total} / mo"** / **"Seats follow membership ·
   prorated automatically"**; review **"Scale up Motir"** / **"One seat per
