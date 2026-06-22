@@ -31,6 +31,42 @@ describe('buildStations', () => {
     ]);
   });
 
+  it('anchors the first step "active" in the empty/initial state — never an all-ghosted skeleton (MOTIR-1258)', () => {
+    // The state every never-onboarded project hydrates to: no tier produced,
+    // session still active. The canvas must still show a current position.
+    const s = buildStations(initialDiscoveryState());
+    const by = Object.fromEntries(s.map((x) => [x.kind, x.state]));
+    expect(by.discovery).toBe('active'); // "you are here" on the first step
+    expect(by.vision).toBe('upcoming');
+    expect(by.feasibility).toBe('upcoming');
+    expect(by.validation).toBe('upcoming');
+    expect(by.design).toBe('upcoming');
+    expect(by.plan).toBe('upcoming');
+    // Exactly one station is the current position — not zero (the bug), not many.
+    expect(s.filter((x) => x.state === 'active' || x.state === 'deciding')).toHaveLength(1);
+    // The active first step is not openable yet — there is no saved doc to re-open.
+    expect(s.find((x) => x.kind === 'discovery')!.openable).toBe(false);
+  });
+
+  it('reads the tier the conductor is mid-draft on as "active", not "upcoming" (MOTIR-1258)', () => {
+    // Discovery captured; the conductor is now drafting vision (no doc saved yet).
+    const s = buildStations(
+      stateOf(['discovery'], { working: { phase: 'drafting', tier: 'vision' } }),
+    );
+    const by = Object.fromEntries(s.map((x) => [x.kind, x.state]));
+    expect(by.discovery).toBe('done');
+    expect(by.vision).toBe('active'); // mid-draft → in progress, not upcoming
+    expect(by.feasibility).toBe('upcoming');
+    // Still a single current position.
+    expect(s.filter((x) => x.state === 'active' || x.state === 'deciding')).toHaveLength(1);
+  });
+
+  it('keeps the first step "active" while grounding before any tier exists (MOTIR-1258)', () => {
+    // Conductor is grounding with no tier yet — discovery still anchors the canvas.
+    const s = buildStations(state({ working: { phase: 'grounding', tier: null } }));
+    expect(s.find((x) => x.kind === 'discovery')!.state).toBe('active');
+  });
+
   it('marks produced tiers done, the frontier active, the rest upcoming', () => {
     const s = buildStations(stateOf(['discovery', 'vision'], { activeKind: 'vision' }));
     const by = Object.fromEntries(s.map((x) => [x.kind, x.state]));
