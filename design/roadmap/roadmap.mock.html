@@ -1010,11 +1010,11 @@
         (7.19), and the public project page.
       </p>
       <p style="margin-top: 8px">
-        <b>Sheets 1–5</b> spec the canvas. <b>Sheets 6–8</b> are an OPEN DECISION (Yue, 2026-06-22):
-        because the planner orders same-level work as a <b>chain</b> at every level (epic↔epic ·
-        story↔story · subtask↔subtask — `plan.md`’s dependency-arrow rule), the canvas must render
-        the <b>story-level and subtask-level chains</b>, not just the epic level. Three ways to
-        navigate between levels are drawn below — <b>pick one</b>.
+        <b>Sheets 1–5</b> spec the canvas. <b>Sheet 6</b> specs MULTI-LEVEL navigation: because the
+        planner orders same-level work as a <b>chain</b> at every level (epic↔epic · story↔story ·
+        subtask↔subtask — `plan.md`’s dependency-arrow rule), the canvas renders the
+        <b>story-level and subtask-level chains</b>, not just the epic level, via <b>drill-down</b>
+        (decided, Yue 2026-06-22).
       </p>
     </div>
 
@@ -1505,25 +1505,27 @@
       </div>
     </section>
 
-    <!-- ════ MULTI-LEVEL CHAINS — three navigation options (OPEN DECISION) ════ -->
+    <!-- ════ MULTI-LEVEL CHAINS — DRILL-DOWN (decided, Yue 2026-06-22) ════ -->
     <div class="optdivider">
-      <span class="pickflag">OPEN DECISION · pick one</span>
-      <h2>Multi-level chains — how the canvas surfaces the story &amp; subtask roadmaps</h2>
+      <span class="pickflag" style="color: #0f5e29; background: #dff0e2; border-color: #b6dcc1"
+        >DECIDED · drill-down</span
+      >
+      <h2>Multi-level chains — drill-down (self-similar)</h2>
       <p>
-        The plan is a chain (DAG) at EVERY level. Sheets 1–5 show the epic-level chain; these three
-        options show how you reach the <b>story-level</b> and <b>subtask-level</b> chains. Same
-        scenario in each (Plan ▸ Invoices ▸ Create invoice) for a fair comparison.
+        The plan is a chain (DAG) at EVERY level (epic↔epic · story↔story · subtask↔subtask —
+        `plan.md`’s dependency-arrow rule), so the canvas renders the <b>story-level</b> and
+        <b>subtask-level</b> chains too. The model is <b>drill-down</b>: click a node and the canvas
+        REFRESHES to that node’s children, laid out as their own chain; a breadcrumb + “Back” walks
+        you up. One level fills the screen, so each chain stays legible at any tree size. Below: the
+        three states as you drill Plan ▸ Invoices ▸ Create invoice.
       </p>
     </div>
 
-    <!-- OPTION A — drill-down (self-similar) -->
     <section class="sheet">
       <div class="sheethead">
         <span class="n">6</span>
-        <h2>Option A — Drill-down (self-similar)</h2>
-        <span class="cap"
-          >click a node → the canvas refreshes to that node’s children, as a chain</span
-        >
+        <h2>Drill-down — the canvas refreshes to each level’s chain</h2>
+        <span class="cap">epic chain → click → story chain → click → subtask chain</span>
       </div>
       <div class="crumbs"><span class="c here">Plan · epics</span></div>
       <div class="ocanvas" id="vpA1" style="height: 168px">
@@ -1552,76 +1554,13 @@
       </div>
       <div class="reuse">
         <b>One level fills the screen at a time</b> — each chain stays big + legible no matter how
-        large the tree (the completeness / scale axis). Trade-off: you don’t see a level and its
-        children at once; zoom-to-fit gives the whole-level overview. Extends the shipped spatial
-        canvas’s “self-similar at every level”. <b>(Recommended.)</b>
-      </div>
-    </section>
-
-    <!-- OPTION B — expand in place (nested clusters) -->
-    <section class="sheet">
-      <div class="sheethead">
-        <span class="n">7</span>
-        <h2>Option B — Expand in place (nested clusters)</h2>
-        <span class="cap"
-          >all levels on one canvas; an epic opens its stories inline, a story its subtasks</span
-        >
-      </div>
-      <div class="ocanvas" id="vpB" style="height: 472px">
-        <svg class="oedges" id="edB"></svg>
-        <div class="oworld" id="wB"></div>
-      </div>
-      <div class="reuse">
-        The whole multi-level shape is visible at once — great on a small tree, but a real
-        (hundreds-of-items) backlog crowds fast; collapse a cluster (▸) or zoom to manage density.
-        The cross-story <span style="color: #8a3d00">⚑ warning edge</span> stays legible as the only
-        non-neutral connector.
-      </div>
-    </section>
-
-    <!-- OPTION C — level toggle -->
-    <section class="sheet">
-      <div class="sheethead">
-        <span class="n">8</span>
-        <h2>Option C — Level toggle (view switch)</h2>
-        <span class="cap"
-          >an Epic / Story / Subtask switch + a scope filter picks which level’s chain to draw</span
-        >
-      </div>
-      <div class="crumbs" style="gap: 10px">
-        <div class="toggle">
-          <button class="on">Epics</button><button>Stories</button><button>Subtasks</button>
-        </div>
-        <span class="scope">Scope: <b>whole project</b></span>
-      </div>
-      <div class="ocanvas" id="vpC1" style="height: 160px">
-        <svg class="oedges" id="edC1"></svg>
-        <div class="oworld" id="wC1"></div>
-      </div>
-      <div class="crumbs" style="gap: 10px">
-        <div class="toggle">
-          <button>Epics</button><button class="on">Stories</button><button>Subtasks</button>
-        </div>
-        <span class="scope">Scope: Epic <b>Invoices ▾</b></span>
-      </div>
-      <div class="ocanvas" id="vpC2" style="height: 160px">
-        <svg class="oedges" id="edC2"></svg>
-        <div class="oworld" id="wC2"></div>
-      </div>
-      <div class="crumbs" style="gap: 10px">
-        <div class="toggle">
-          <button>Epics</button><button>Stories</button><button class="on">Subtasks</button>
-        </div>
-        <span class="scope">Scope: Story <b>Create invoice ▾</b></span>
-      </div>
-      <div class="ocanvas" id="vpC3" style="height: 160px">
-        <svg class="oedges" id="edC3"></svg>
-        <div class="oworld" id="wC3"></div>
-      </div>
-      <div class="reuse">
-        Simplest model; each view stays uncluttered. Trade-off: you only ever see ONE level — the
-        parent/child relationship lives in the scope dropdown, not on the canvas — so the “one
-        roadmap of the whole project” feel is weaker than drill-down or nesting.
+        large the tree (the completeness / scale axis). You drill DOWN into a node’s children and
+        Back UP via the breadcrumb; zoom-to-fit gives a whole-level overview. This EXTENDS the
+        shipped spatial canvas’s “self-similar at every level” — the same node + edge language (the
+        shipped <code>StationCard</code> / <code>PlanningCanvas</code>,
+        <code>--el-type-*</code> hues, neutral firm / dashed-pending edges + the cross-story warning
+        edge) renders at every level; only the per-level node + edge set is re-fed to the engine on
+        drill.
       </div>
     </section>
 
@@ -2418,264 +2357,6 @@
             kind: 'test',
             title: 'E2E: create invoice',
             sub: 'happy + error paths',
-            state: 'upcoming',
-          },
-        ],
-        [
-          ['d1', 'c1', 'firm'],
-          ['c1', 'c2', 'firm'],
-          ['c2', 't1', 'pending'],
-        ],
-      );
-
-      // ── Option B — expand in place: all levels nested on one canvas ──
-      orender(
-        'wB',
-        'edB',
-        [
-          {
-            id: 'e1',
-            x: 40,
-            y: 26,
-            kind: 'epic',
-            title: 'Foundation',
-            sub: 'auth · schema · CI',
-            state: 'done',
-          },
-          {
-            id: 'e2',
-            x: 336,
-            y: 26,
-            kind: 'epic',
-            title: 'Invoices',
-            sub: 'create · send · PDF',
-            state: 'active',
-          },
-          {
-            id: 'e3',
-            x: 632,
-            y: 26,
-            kind: 'epic',
-            title: 'Reminders',
-            sub: 'schedule · email',
-            state: 'upcoming',
-          },
-          {
-            id: 's1',
-            x: 78,
-            y: 178,
-            compact: 1,
-            kind: 'story',
-            title: 'Invoice schema',
-            sub: 'migration',
-            state: 'done',
-          },
-          {
-            id: 's2',
-            x: 344,
-            y: 178,
-            compact: 1,
-            kind: 'story',
-            title: 'Create invoice',
-            sub: 'form + API',
-            state: 'active',
-          },
-          {
-            id: 's3',
-            x: 610,
-            y: 178,
-            compact: 1,
-            kind: 'story',
-            title: 'Send invoice',
-            sub: 'email',
-            state: 'upcoming',
-          },
-          {
-            id: 'd1',
-            x: 112,
-            y: 358,
-            compact: 1,
-            kind: 'design',
-            title: 'Design form',
-            sub: 'mock',
-            state: 'done',
-          },
-          {
-            id: 'c1',
-            x: 378,
-            y: 358,
-            compact: 1,
-            kind: 'code',
-            title: 'Service + API',
-            sub: 'repo·svc·route',
-            state: 'done',
-          },
-          {
-            id: 'c2',
-            x: 644,
-            y: 358,
-            compact: 1,
-            kind: 'code',
-            title: 'Create UI',
-            sub: 'form',
-            state: 'active',
-          },
-        ],
-        [
-          ['e1', 'e2', 'firm'],
-          ['e2', 'e3', 'pending'],
-          ['e2', 's1', 'firm'],
-          ['s2', 'd1', 'firm'],
-          ['s1', 's2', 'firm'],
-          ['s2', 's3', 'pending'],
-          ['d1', 'c1', 'firm'],
-          ['c1', 'c2', 'firm'],
-          ['e3', 's3', 'cross'],
-        ],
-      );
-      document
-        .getElementById('wB')
-        .insertAdjacentHTML(
-          'afterbegin',
-          `<div class="cluster" style="left:58px;top:150px;width:772px;height:104px"><span class="clab">Invoices ▾ · stories</span></div>` +
-            `<div class="cluster" style="left:92px;top:330px;width:772px;height:104px"><span class="clab">Create invoice ▾ · subtasks</span></div>`,
-        );
-
-      // ── Option C — level toggle: same plan under each toggle setting ──
-      orender(
-        'wC1',
-        'edC1',
-        [
-          {
-            id: 'plan',
-            x: 24,
-            y: 56,
-            w: 150,
-            compact: 1,
-            kind: 'plan',
-            title: 'Plan',
-            sub: '3 epics',
-            state: 'done',
-          },
-          {
-            id: 'e1',
-            x: 250,
-            y: 42,
-            kind: 'epic',
-            title: 'Foundation',
-            sub: 'auth · schema · CI',
-            state: 'done',
-          },
-          {
-            id: 'e2',
-            x: 516,
-            y: 42,
-            kind: 'epic',
-            title: 'Invoices',
-            sub: 'create · send · PDF',
-            state: 'active',
-          },
-          {
-            id: 'e3',
-            x: 782,
-            y: 42,
-            kind: 'epic',
-            title: 'Reminders',
-            sub: 'schedule · email',
-            state: 'upcoming',
-          },
-        ],
-        [
-          ['plan', 'e1', 'firm'],
-          ['e1', 'e2', 'firm'],
-          ['e2', 'e3', 'pending'],
-        ],
-      );
-      orender(
-        'wC2',
-        'edC2',
-        [
-          {
-            id: 's1',
-            x: 24,
-            y: 42,
-            kind: 'story',
-            title: 'Invoice schema',
-            sub: 'model + migration',
-            state: 'done',
-          },
-          {
-            id: 's2',
-            x: 290,
-            y: 42,
-            kind: 'story',
-            title: 'Create invoice',
-            sub: 'form + API',
-            state: 'active',
-          },
-          {
-            id: 's3',
-            x: 556,
-            y: 42,
-            kind: 'story',
-            title: 'Send invoice',
-            sub: 'email + status',
-            state: 'upcoming',
-          },
-          {
-            id: 's4',
-            x: 822,
-            y: 42,
-            kind: 'story',
-            title: 'Invoice PDF',
-            sub: 'render + download',
-            state: 'upcoming',
-          },
-        ],
-        [
-          ['s1', 's2', 'firm'],
-          ['s2', 's3', 'pending'],
-          ['s3', 's4', 'pending'],
-        ],
-      );
-      orender(
-        'wC3',
-        'edC3',
-        [
-          {
-            id: 'd1',
-            x: 24,
-            y: 42,
-            kind: 'design',
-            title: 'Design the form',
-            sub: 'mock + notes',
-            state: 'done',
-          },
-          {
-            id: 'c1',
-            x: 290,
-            y: 42,
-            kind: 'code',
-            title: 'Invoice service + API',
-            sub: 'repo · service · route',
-            state: 'done',
-          },
-          {
-            id: 'c2',
-            x: 556,
-            y: 42,
-            kind: 'code',
-            title: 'Create-invoice UI',
-            sub: 'form + submit',
-            state: 'active',
-          },
-          {
-            id: 't1',
-            x: 822,
-            y: 42,
-            kind: 'test',
-            title: 'E2E: create invoice',
-            sub: 'happy + error',
             state: 'upcoming',
           },
         ],

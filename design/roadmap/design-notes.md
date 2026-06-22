@@ -24,8 +24,8 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `roadmap.mock.html` | the source of truth — a multi-panel mock built from the real tokens              |
 | `roadmap.png`       | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
 
-The mock is a **multi-panel review board** — eight sheets (5 spec + 3 multi-level
-navigation OPTIONS, below), every panel inspected (the multi-panel rule,
+The mock is a **multi-panel review board** — six sheets (5 spec + the multi-level
+drill-down sheet, below), every panel inspected (the multi-panel rule,
 `notes.html` #31).
 
 ---
@@ -99,39 +99,35 @@ canvas-spatial gate-rhythm rule).
 | **3** | **Post-plan** tree               | plan → epic → story → subtask; within-story dep arrow **vs.** the cross-story `blocked_by` warning edge + flag; migrate linking (linked-under-tier **and** standalone) |
 | **4** | **Node states** spec strip       | done / active-frontier / deciding / skippable(dotted) / upcoming(dashed) / drafting — each an icon + label + tint                                                      |
 | **5** | **Controls & states**            | filters (status / assignee / epic) · search-to-focus · density · empty / loading / error · the reuse note                                                              |
-| **6** | Multi-level — **Option A**       | drill-down (self-similar): click a node → the canvas refreshes to that node's children as a chain; breadcrumb + Back                                                   |
-| **7** | Multi-level — **Option B**       | expand-in-place: all levels on one canvas, an epic opens its stories inline, a story its subtasks (nested clusters)                                                    |
-| **8** | Multi-level — **Option C**       | level toggle: an Epic / Story / Subtask switch + scope filter picks which level's flat chain to draw                                                                   |
+| **6** | Multi-level — **drill-down**     | the chain at every level: click a node → the canvas refreshes to that node's children as a chain; breadcrumb + Back (3 states drawn)                                   |
 
 ---
 
-## ⚠️ MULTI-LEVEL CHAINS — an OPEN DECISION (sheets 6-8; Yue, 2026-06-22)
+## ⚠️ MULTI-LEVEL CHAINS — DRILL-DOWN (decided, Yue 2026-06-22; sheet 6)
 
 The planner orders same-level work as a **chain (DAG) at EVERY level** — epic↔epic, story↔story,
 subtask↔subtask (`plan.md`'s dependency-arrow rule: "genuinely sequential work → a chain"). So the
-roadmap must render the **story-level and subtask-level chains**, not only the epic level. Sheets 1-5
-draw the epic-level chain; the rows-inside-an-epic-card on sheet 3 are a SUMMARY, not the lower-level
-roadmaps. **How the one canvas lets you NAVIGATE between levels is an open product decision** — three
-options are drawn (same scenario, Plan ▸ Invoices ▸ Create invoice, for a fair comparison). **Pick one
-before the BUILD (`MOTIR-1194`).**
+roadmap renders the **story-level and subtask-level chains**, not only the epic level. (Sheet 3's
+rows-inside-an-epic-card stay as a compact SUMMARY of an epic's contents; the navigable lower-level
+**roadmaps** are this drill-down.)
 
-| Option                            | Model                                                                                              | ✅                                                                                                                           | ⚠️                                                                              |
-| --------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **A — Drill-down** (sheet 6)      | click a node → canvas **refreshes** to its children as a chain; breadcrumb + Back                  | each chain stays big + legible at any tree size (the scale axis); extends the spatial canvas's "self-similar at every level" | one level shown at a time (zoom-to-fit gives the overview)                      |
-| **B — Expand-in-place** (sheet 7) | epic opens its stories **inline / nested**; a story opens its subtasks — all levels on one surface | whole multi-level shape visible at once                                                                                      | crowds fast on a real (100s-of-items) backlog; needs collapse / zoom            |
-| **C — Level toggle** (sheet 8)    | an **Epic / Story / Subtask** switch + scope filter picks the level's flat chain                   | simplest model; every view uncluttered                                                                                       | hierarchy lives in the dropdown, not on the canvas — weakest whole-project feel |
+**The model is DRILL-DOWN (self-similar).** Click a node and the canvas **REFRESHES to that node's
+children**, laid out as their own chain; a breadcrumb (`Plan ▸ Invoices ▸ Create invoice`) + a
+**Back** control walks you up. One level fills the screen at a time, so each chain stays big + legible
+**at any tree size** — the completeness / scale axis. Zoom-to-fit still gives a whole-level overview.
+Sheet 6 draws the three drill states (epic chain → story chain → subtask chain).
 
-**Recommendation: Option A (drill-down).** It is the only model that stays legible on a real, large
-plan (the completeness / scale axis), reuses the shipped `PlanningCanvas` engine cleanly (same surface,
-re-fed nodes + edges per level), and EXTENDS — rather than overturns — the already-decided spatial-
-canvas "self-similar at every level" direction. A + a zoom-to-fit overview is one coherent product; B
-could later be added as a power-user affordance. **This section is provisional until Yue picks**; on
-selection, the chosen model becomes the spec, the other two sheets are dropped, and `MOTIR-1009`'s
-acceptance criteria + the build card `MOTIR-1194` are updated to require multi-level chains.
+**Why drill-down** (the chosen model over expand-in-place and a level toggle): it is the only one that
+stays legible on a real, large plan; it reuses the shipped `PlanningCanvas` engine cleanly (the **same
+surface**, re-fed the per-level nodes + edges on drill — no new engine); and it EXTENDS, rather than
+overturns, the already-decided spatial-canvas **"self-similar at every level"** direction. A
+power-user expand-in-place could be added later as an affordance, but drill-down is the core model.
 
-> All three options use the SAME node + edge language as sheets 1-5 (the shipped `StationCard` /
-> `PlanningCanvas` languages, `--el-type-*` hues, neutral firm / dashed pending edges + the cross-story
-> warning edge) — only the level-navigation interaction differs.
+> Drill-down reuses the SAME node + edge language as sheets 1-5 (the shipped `StationCard` /
+> `PlanningCanvas` languages, `--el-type-*` hues, neutral firm / dashed-pending edges + the cross-story
+> warning edge) — only the per-level node + edge SET changes on drill. Build (`MOTIR-1194`): the
+> consumer re-feeds the engine the children of the focused node + their same-level `blocked_by` edges,
+> and tracks the breadcrumb path; the engine is unchanged.
 
 ---
 
