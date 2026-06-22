@@ -84,7 +84,6 @@
       See design-notes.md for the per-surface primitive + copy + --el-* role spec.
     -->
     <style>
-
       /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
       :root {
         --color-primary: #5645d4;
@@ -1013,7 +1012,7 @@
         width: 14px;
         height: 14px;
       }
-    
+
       /* ════ Seat/billing affordances — NEW for 8.1.13 (built on the same tokens) ════ */
 
       /* Seat summary band — sits at the TOP of the People card body on a SCALED org.
@@ -1214,8 +1213,8 @@
       <div>
         <h1>Members-admin · seat &amp; billing affordances (scaled org)</h1>
         <p>
-          The seat/billing layer added onto the shipped org <strong>Members</strong> admin
-          (6.10 · <code>settings/organization/members</code>) for a SCALED org. Grounds in
+          The seat/billing layer added onto the shipped org <strong>Members</strong> admin (6.10 ·
+          <code>settings/organization/members</code>) for a SCALED org. Grounds in
           <code>design/billing</code> panel 6 (proration) + 8.1.12 (charge promptly via Stripe
           <code>always_invoice</code>). Cloud-only + scaled-only — a free org / self-host sees the
           page unchanged (panel 4). Story 8.1 · subtask 8.1.13 (MOTIR-1260).
@@ -1256,18 +1255,22 @@
               <!-- SEAT SUMMARY BAND — scaled org only; in-context at the top of the People card -->
               <div style="padding: 0 var(--spacing-card-padding)">
                 <div class="seatbar">
-                  <span class="sb-ico"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
+                  <span class="sb-ico"
+                    ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                  ></span>
                   <div class="sb-main">
                     <div class="sb-l1">
-                      <span class="sb-count">6 of 6 seats <span class="per">· $240 / yr</span></span>
+                      <span class="sb-count"
+                        >6 of 6 seats <span class="per">· $240 / yr</span></span
+                      >
                       <span class="pill pill-scaled"
                         ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg>Scaled</span
                       >
                       <span class="save">Annual · saves $120/yr</span>
                     </div>
                     <div class="sb-sub">
-                      Seats follow membership — 1 per active member ($40/seat/yr). Adding or removing
-                      a member adjusts your next invoice automatically (prorated).
+                      Seats follow membership — 1 per active member ($40/seat/yr). Adding or
+                      removing a member adjusts your next invoice automatically (prorated).
                     </div>
                   </div>
                   <div class="sb-act">
@@ -1393,8 +1396,8 @@
               <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
               <span
                 ><b>No pay-wall.</b> Inviting always works — the seat count and your next invoice
-                adjust automatically (Stripe proration). The notes here disclose the cost; they never
-                block the action.</span
+                adjust automatically (Stripe proration). The notes here disclose the cost; they
+                never block the action.</span
               >
             </div>
           </div>
@@ -1436,11 +1439,9 @@
               class="seatbar"
               style="margin: 4px 0 0; background: var(--el-tint-mint); border-color: transparent"
             >
-              <span
-                class="sb-ico"
-                style="background: var(--el-page-bg); color: var(--el-accent)"
-                ><svg viewBox="0 0 24 24"><use href="#i-user-plus" /></svg></span
-              >
+              <span class="sb-ico" style="background: var(--el-page-bg); color: var(--el-accent)"
+                ><svg viewBox="0 0 24 24"><use href="#i-user-plus" /></svg
+              ></span>
               <div class="sb-main">
                 <div class="costnote charge">
                   <span
@@ -1449,8 +1450,8 @@
                   >
                 </div>
                 <div class="sb-sub" style="margin-top: 6px">
-                  Seats follow membership — you’re not picking a plan. Stripe bills the prorated seat
-                  to your card on file; remove the member later for a prorated credit.
+                  Seats follow membership — you’re not picking a plan. Stripe bills the prorated
+                  seat to your card on file; remove the member later for a prorated credit.
                 </div>
               </div>
             </div>
@@ -1520,9 +1521,9 @@
                         <div class="costnote">
                           <svg viewBox="0 0 24 24"><use href="#i-user-minus" /></svg>
                           <span
-                            ><b>Frees a seat</b> (6 → 5). A prorated credit for the unused time posts
-                            to your next invoice — <b>no mid-term refund</b>. Your plan returns to
-                            $200 / yr at renewal.</span
+                            ><b>Frees a seat</b> (6 → 5). A prorated credit for the unused time
+                            posts to your next invoice — <b>no mid-term refund</b>. Your plan
+                            returns to $200 / yr at renewal.</span
                           >
                         </div>
                         <div class="costnote" style="margin-top: 8px">
@@ -1568,7 +1569,9 @@
                     <span class="memail">priya@motir.co</span>
                   </span>
                   <span class="ws-chips"
-                    ><span style="font-size: 12px; color: var(--el-text-faint)">No workspaces</span></span
+                    ><span style="font-size: 12px; color: var(--el-text-faint)"
+                      >No workspaces</span
+                    ></span
                   >
                   <span class="cbx role"
                     >Admin <svg viewBox="0 0 24 24" class="chev"><use href="#i-updown" /></svg
@@ -1665,10 +1668,18 @@
           <div class="page" style="padding: 22px 22px 26px">
             <span class="crumb">Free org · Invite (no cost note)</span>
             <div class="stack" style="margin-top: 10px">
-              <div class="modal" style="max-width: none; box-shadow: var(--shadow-card); border: 1px solid var(--el-border)">
+              <div
+                class="modal"
+                style="
+                  max-width: none;
+                  box-shadow: var(--shadow-card);
+                  border: 1px solid var(--el-border);
+                "
+              >
                 <h3>Invite to moooon</h3>
                 <p class="mdesc">
-                  They’ll get access to the workspaces you add them to. Choose the organization role.
+                  They’ll get access to the workspaces you add them to. Choose the organization
+                  role.
                 </p>
                 <div class="field">
                   <span class="flabel">Email address</span>
@@ -1730,13 +1741,20 @@
                 </button>
               </div>
               <div style="padding: 0 var(--spacing-card-padding)">
-                <div class="seatbar" style="background: var(--el-tint-yellow); border-color: transparent">
-                  <span class="sb-ico" style="background: var(--el-page-bg); color: var(--el-warning)"
+                <div
+                  class="seatbar"
+                  style="background: var(--el-tint-yellow); border-color: transparent"
+                >
+                  <span
+                    class="sb-ico"
+                    style="background: var(--el-page-bg); color: var(--el-warning)"
                     ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
                   ></span>
                   <div class="sb-main">
                     <div class="sb-l1">
-                      <span class="sb-count">6 of 6 seats <span class="per">· $240 / yr</span></span>
+                      <span class="sb-count"
+                        >6 of 6 seats <span class="per">· $240 / yr</span></span
+                      >
                       <span class="pill pill-pastdue"
                         ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>Past due</span
                       >
@@ -1789,8 +1807,8 @@
     <!-- ════════════════ PANEL 6 — non-admin (org ADMIN, billing owner-only) ════════════════ -->
     <div class="panel-label">
       6 · Non-admin for billing — an org ADMIN can manage membership but does NOT own the seat plan
-      (§7, owner-only). Seat count is read-only: no “Manage seats” CTA, a “managed by an owner” note.
-      (A plain org member never reaches this page — org-admin panel 5d forbidden.)
+      (§7, owner-only). Seat count is read-only: no “Manage seats” CTA, a “managed by an owner”
+      note. (A plain org member never reaches this page — org-admin panel 5d forbidden.)
     </div>
     <div class="panel">
       <div class="stage">
@@ -1816,10 +1834,14 @@
               </div>
               <div style="padding: 0 var(--spacing-card-padding)">
                 <div class="seatbar">
-                  <span class="sb-ico"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
+                  <span class="sb-ico"
+                    ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                  ></span>
                   <div class="sb-main">
                     <div class="sb-l1">
-                      <span class="sb-count">6 of 6 seats <span class="per">· $240 / yr</span></span>
+                      <span class="sb-count"
+                        >6 of 6 seats <span class="per">· $240 / yr</span></span
+                      >
                       <span class="pill pill-scaled"
                         ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg>Scaled</span
                       >
@@ -1870,7 +1892,7 @@
       </div>
     </div>
 
-<svg width="0" height="0" style="position: absolute" aria-hidden="true">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
         <g
           id="i-info"
@@ -2156,7 +2178,7 @@
           />
           <circle cx="12" cy="12" r="3" />
         </g>
-      
+
         <g
           id="i-plus"
           fill="none"
@@ -2178,10 +2200,52 @@
         >
           <path d="m15 18-6-6 6-6" />
         </g>
-        <g id="i-mail" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></g>
-        <g id="i-minus" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></g>
-        <g id="i-user-plus" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></g>
-        <g id="i-user-minus" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="22" x2="16" y1="11" y2="11"/></g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-user-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="19" x2="19" y1="8" y2="14" />
+          <line x1="22" x2="16" y1="11" y2="11" />
+        </g>
+        <g
+          id="i-user-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <line x1="22" x2="16" y1="11" y2="11" />
+        </g>
       </defs>
     </svg>
 
