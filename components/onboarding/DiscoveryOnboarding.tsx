@@ -48,6 +48,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     decideValidateEarly,
     openTier,
     openDesign,
+    saveDesign,
     back,
     dismissError,
   } = useDiscoveryChat({ initialIdea });
@@ -80,12 +81,20 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
   const idea = initialIdea ?? state.turns.find((turn) => turn.role === 'user')?.text ?? null;
 
   // The web-only full-page design step (MOTIR-1040) — styles its whole self via
-  // the shipped three-axis runtime; "Use this design" returns to the hub with the
-  // look applied (the plan exit is MOTIR-1041).
+  // the shipped three-axis runtime. It RESTORES the saved choice via `initialChoice`
+  // (7.3.81) and "Use this design" PERSISTS it (optimistic + best-effort) before
+  // returning to the hub (the plan exit is MOTIR-1041).
   if (state.view === 'design' && showDesign) {
     return (
       <div className="h-dvh w-full">
-        <DesignStep onBack={back} onUseDesign={back} />
+        <DesignStep
+          onBack={back}
+          initialChoice={state.session.designChoice}
+          onUseDesign={(choice) => {
+            saveDesign(choice);
+            back();
+          }}
+        />
       </div>
     );
   }
