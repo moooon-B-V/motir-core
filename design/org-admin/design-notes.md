@@ -7,9 +7,10 @@ truth for every UI subtask in Story 6.10. Built FROM the real design system
 the shipped `components/ui/*` primitives), so the code subtask composes the same
 primitives — no Pencil→code gap.
 
-| Surface                               | Asset                                   | Notes                                                                                                                                                                                                                                              |
-| ------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Org switcher + settings + members** | **`org-admin.mock.html`** (HTML mockup) | The whole org-admin surface — no `design/org-admin/` asset existed; the 6.10.1 design gate produces this. Multi-panel: switcher (single/multi-org) · settings · paginated members · role+invite · empty/loading/error/forbidden. **Gates 6.10.5.** |
+| Surface                                           | Asset                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Org switcher + settings + members**             | **`org-admin.mock.html`** (HTML mockup)       | The whole org-admin surface — no `design/org-admin/` asset existed; the 6.10.1 design gate produces this. Multi-panel: switcher (single/multi-org) · settings · paginated members · role+invite · empty/loading/error/forbidden. **Gates 6.10.5.**                                                                                                                                                                               |
+| **Members seat/billing affordances (scaled org)** | **`members-billing.mock.html`** (HTML mockup) | The **seat layer added onto the shipped Members page** for a SCALED org (Story 8.1 · 8.1.13 / MOTIR-1260): seat summary band, add-member prorated-charge note, remove-member prorated-credit confirm, free/self-host unchanged, `past_due`, non-admin. Cloud-only + scaled-only. **Gates 8.1.14 / MOTIR-1261.** See [§ Members seat / billing affordances](#members-seat--billing-affordances-scaled-org--story-81--8113) below. |
 
 ## What this area is
 
@@ -355,3 +356,246 @@ to confirm token parity (every colour flips through Tier-0 under `--el-*`).
 
 The full string set is added to the app's locale files (en + zh, the shipped
 locale set) by the 6.10.5 code subtask under the new `orgAdmin` namespace.
+
+---
+
+# Members seat / billing affordances (scaled org) — Story 8.1 · 8.1.13
+
+> **Asset:** `members-billing.mock.html` + `members-billing.png` (this section is
+> the third file of the THREE-file set). Subtask **8.1.13 (MOTIR-1260)**, the
+> design gate **8.1.14 / MOTIR-1261** (the UI code) is `blocked` behind.
+
+## What this is
+
+The **seat / billing affordances LAYERED ONTO the existing org Members admin**
+(6.10 · `settings/organization/members` · `OrgMembersClient`) for a **SCALED**
+org. The members page already ships with zero billing content;
+**8.1.12 (MOTIR-1256)** now keeps the Stripe seat `quantity` in sync with org
+membership (prorated, charged promptly via Stripe `always_invoice`), but its
+in-context UI was undesigned. Design-before-code (**Principle #13**) requires
+THIS asset before the UI lands. This **extends** the org-admin area — it does NOT
+replace the `org-admin.mock.html` roster; it adds the seat layer on top of it.
+
+### Grounded in (read at run time — NOT invented)
+
+- **`design/billing/design-notes.md` PANEL 6** — the seat model + proration copy:
+  one seat per org **member**; **annual default $40/seat/yr** (6 × $40 = **$240 /
+  yr**, ~$20/mo equiv); **add** a member → a **prorated CHARGE** for the rest of
+  the term; **remove** → a **prorated CREDIT** on the next invoice, **NO mid-term
+  refund**; seats track membership automatically (Linear's "seats = active
+  members, prorated" model).
+- **8.1.12 (MOTIR-1256) timing** — Stripe `proration_behavior: 'always_invoice'`
+  → the added seat's prorated share is invoiced **+ collected NOW** (charged
+  promptly), **NOT deferred to the annual renewal**. The add-member copy reads
+  "**~$X charged now**, prorated to your renewal" to reflect this exactly (the
+  default `create_prorations` would hold it to renewal = a free-seat loophole the
+  decision rejects).
+- **8.1.4c (MOTIR-1248)** — `Organization.scaledTrackerSubscription`
+  (`{ status: active|past_due|canceled, priceId, currentPeriodEnd }`) is the
+  **scaled-vs-free signal** every surface here gates on. `null` (free) → no seat
+  UI.
+- **`design/org-admin/design-notes.md`** (this file) — the members roster grammar
+  the seat layer extends.
+
+### Cloud-only + scaled-only (decision §6) · NO pay-wall (Linear-style)
+
+Every surface here is gated behind **`MOTIR_CLOUD`** _and_ an **active** scaled
+subscription. A **free** org and a **self-hosted** (GPL-3.0) build see the
+members page **UNCHANGED** — no seat band, no cost notes (panel 4 draws this).
+There is **no pay-wall**: inviting always works; the seat count and the next
+invoice adjust automatically — the cost note is **informational, never a gate**.
+
+### Permissions (decision §7)
+
+Billing **mutations are owner-only**; an org **admin** can still manage
+**membership** (add/remove — which moves seats) but does **not** own the seat
+plan. So the admin view shows the seat count **read-only**, drops the "Manage
+seats in Billing" CTA, and carries a "billing managed by an owner" note (panel
+6). A plain org **member** never reaches this admin page at all (the org-admin
+**panel 5d forbidden** state) — so "no cost actions for a non-billing-admin" is
+realised as the org-**admin** treatment here.
+
+## Design-against-shipped-reality (rendered, not redrawn)
+
+The surface mirrors the **shipped `OrgMembersClient.tsx` EXACTLY** — a `Card`
+with a head (`<h2>People</h2>` + a neutral count `Pill` left; a **secondary
+`Invite` `Button`** with a `Mail` icon right) and a foot (the at-scale pager);
+the body is a `<ul>` of member rows (avatar · name(+"(you)") · email · workspace
+chips · a per-row org-role `Combobox` — a `Pill` + disabled affordance for the
+self row · a ghost `Remove` `Button`). **Invite opens a `Modal`** (email `Input`
+
+- role `Combobox` + the `roleHelp.gatingNote` paragraph + Cancel / Send). The
+  seat layer is **added** to that reality; nothing is a redrawn stand-in. (The
+  older `org-admin.mock.html` panel 3 drew the invite as a `Combobox` trigger — the
+  SHIPPED component is a `Button`+`Modal`, which is what this asset matches.)
+
+## Panels (review EACH — mistake #31)
+
+### Panel 1 — scaled + active (the primary view + the access path)
+
+The Members page for a scaled org. The **access path IS the existing Members
+page** (crumb `Organization · {org} · Members`) — the door is the page itself; no
+new nav. The new element is a **seat-summary band** at the **top of the People
+card body** (above the roster), in-context where the seat count lives:
+
+- a lavender product glyph (`i-layers`, the Motir glyph from billing panel 2),
+- **"6 of 6 seats · $240 / yr"** (seats = active members), a **"Scaled"** mint
+  status `Pill`, an **"Annual · saves $120/yr"** `save` pill,
+- sub: _"Seats follow membership — 1 per active member ($40/seat/yr). Adding or
+  removing a member adjusts your next invoice automatically (prorated)."_,
+- a **"Manage seats in Billing"** `xlink` (`i-external`) → billing panel 6.
+
+Below, the shipped roster (6 members = 6 seats) + the pager. A closing **info
+`note`** states the **no-pay-wall** rule.
+
+### Panel 2 — add a member (prorated-charge note · always_invoice)
+
+The shipped Invite **`Modal`** (email `Input` filled, role `Combobox` "Member",
+the gating `fhint`), now carrying a **one-line cost note** (a mint band, `i-user-
+plus` accent glyph) directly above the footer:
+
+> **Adds a seat.** ~**$33 charged now**, prorated to your 1 Jul 2026 renewal. Your
+> plan goes from $240 to **$280 / yr** (7 seats).
+> _Seats follow membership — you're not picking a plan. Stripe bills the prorated
+> seat to your card on file; remove the member later for a prorated credit._
+
+"Charged now" reflects 8.1.12's `always_invoice`. Footer: **Cancel** (ghost) /
+**Send invite** (primary, `i-mail`). **No pay-wall** — Send always works.
+
+### Panel 3 — remove a member (prorated-credit confirm)
+
+The row's ghost **Remove** gains a **confirm popover** (a `Popover`, anchored to
+the button) that discloses the **credit** before the seat-affecting change — the
+shipped one-click remove is too consequential when it changes the bill:
+
+> **Remove Mo from moooon?**
+> _(i-user-minus)_ **Frees a seat** (6 → 5). A prorated credit for the unused time
+> posts to your next invoice — **no mid-term refund**. Your plan returns to $200 /
+> yr at renewal.
+> _(i-info)_ They lose access to every workspace under moooon.
+> [ Cancel ] [ **Remove** (danger) ]
+
+The target row gets a **surface highlight + accent inset bar** (`--el-surface-
+soft` + `box-shadow: inset 2px 0 0 --el-accent`) — **not** `opacity` (opacity
+would form a stacking context and bleed transparency into the popover child; the
+roster card's `overflow: hidden` also means the popover must float over rows
+_within_ the card, not past its edge — both are real-component constraints the
+8.1.14 code must respect, e.g. by portaling the Radix `Popover`). **A free org
+keeps the one-click remove** (no confirm, no cost — panel 4).
+
+### Panel 4 — free org + self-host (UNCHANGED · the gated difference)
+
+Side-by-side: (left) the free-org Members page — **same People card, NO seat
+band**, the roster, the pager; (right) the free-org Invite `Modal` — **NO cost
+note**. A `note` states self-host is identical: with `MOTIR_CLOUD` off or no
+active scaled subscription, the seat band and every cost note are gone — Motir is
+unbounded and free within its caps.
+
+### Panel 5 — past_due (dunning · seats still editable)
+
+The seat band's **warning variant** (a `--el-tint-yellow` band, `i-alert`
+`--el-warning` glyph, a **"Past due"** `pill-pastdue`): _"We couldn't charge your
+card for the Motir seat plan. Motir stays active while we retry over the next ~2
+weeks — **seats are still editable**. Update your payment method to avoid dropping
+to the free caps."_ + an **"Update payment"** primary (`i-card`). Roster controls
+stay fully editable. Grounds in **billing panel 3a** (keep-through-grace dunning).
+
+### Panel 6 — non-admin for billing (org admin · owner-only billing)
+
+An org **admin** (can manage membership, does NOT own the seat plan). The seat
+band is **read-only**: **"6 of 6 seats · $240 / yr"** + **"Scaled"** + a **"View
+only"** neutral `Pill` (`i-eye`), **no "Manage seats" CTA**, and a lock `costnote`
+(`i-lock`): _"Billing is managed by an owner. Adding or removing a member still
+adjusts the org's seats — the charge or credit is handled on the owner's plan."_
+The roster stays manageable (admins manage membership). The page subtitle states
+the split. _(A plain org member is gated out entirely — org-admin panel 5d.)_
+
+## Primitives composed (no hand-rolling)
+
+Every surface composes a shipped `components/ui/*` primitive (the same set the
+6.10 members page already uses), so 8.1.14 reuses the shipped code:
+
+- **`Card`** — the People card (head / body / foot), `--radius-card`,
+  `--shadow-card`, `--spacing-card-padding`; regions split by `--el-border-soft`.
+- **`Button`** — secondary `Invite` (`--height-btn-sm`, `i-mail`); ghost row
+  `Remove`; primary `Send invite` / `Update payment`; danger `Remove` (in the
+  confirm). Heights `--height-btn-{sm,md}`; padding `--spacing-btn-x[-sm]`.
+- **`Pill`** — the count (neutral), the **"Scaled"** (mint), **"Past due"**
+  (yellow), **"View only"** (neutral, `i-eye`), org-role chips (owner=lavender /
+  admin=sky / member=mint), workspace chips (peach). `--radius-badge`,
+  `--spacing-chip-*`; **hue in the tint BACKGROUND with `--el-text-strong`
+  (finding #35 — AA-safe), never a tinted page surface.**
+- **`Combobox`** — the per-row org-role select + the Modal's role select
+  (`--height-control`, `--radius-input`, `--spacing-control-*`).
+- **`Input`** — the Modal's email field (`--height-input`, `--spacing-input-*`,
+  `--radius-input`).
+- **`Modal`** — the Invite dialog (overlay `bg-black/40`; panel `--radius-modal`,
+  `--spacing-card-padding`, `--shadow-modal`; serif title).
+- **`Popover`** — the Remove confirm (`--radius-card` container,
+  `--shadow-elevated`). **Portal it** so the card's `overflow: hidden` can't clip
+  it (the portal-popover-in-overflow rule).
+- **Seat band / cost note** — a token-styled band reusing billing's `.seatcalc`
+  grammar (`--el-surface-soft`, `--radius-card`, `--el-border-soft`); the glyph
+  chip is `--radius-control`. No new primitive. The `save` pill reuses billing's
+  `.save` (`--el-tint-mint` + `--el-text-strong`). **8.1.14 sources the seat
+  count from membership** (the same source 8.1.12 syncs to Stripe), never a
+  hand-typed number; the `$` figures come from the scaled-subscription state.
+- **Pager** — the shipped at-scale list-foot pager (unchanged from 6.10).
+
+## Colour roles (`--el-*` — palette, not grey-only · finding #54)
+
+| Element                                  | Token                                                                                                        | Why                                                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **Seat band glyph chip**                 | `--el-tint-lavender` bg + `--el-text-strong`, `i-layers`                                                     | The Motir product glyph (matches billing panel 2's Motir line).               |
+| **Seat count / fee**                     | `--el-text` (count) · `--el-text-muted` (`· $240 / yr` unit)                                                 | Primary figure; the price reads quiet.                                        |
+| **Status: Scaled (active)**              | `--el-tint-mint` bg + `--el-text-strong`, `i-check`                                                          | Healthy / paid — success family.                                              |
+| **Status: Past due**                     | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`                                              | Warning, recoverable — keep-through-grace, not danger.                        |
+| **Annual-savings `save` pill**           | `--el-tint-mint` + `--el-text-strong`                                                                        | A positive saving, success family.                                            |
+| **Add-seat cost note**                   | `--el-tint-mint` band + `--el-text-strong`/`-secondary`, glyph `--el-accent`                                 | A charge that _adds_ a teammate — framed positive, not alarming; no pay-wall. |
+| **Past-due band**                        | `--el-tint-yellow` band + `--el-text-strong`, icon `--el-warning`                                            | Hue in the BANNER tint, never the page (finding #35).                         |
+| **Remove confirm**                       | neutral `Popover` (`--el-page-bg`), `i-user-minus`/`i-info` `--el-text-muted`, danger CTA `--el-danger-text` | A consequential but reversible-credit action — disclosed, not red-alarmed.    |
+| **Remove-target row**                    | `--el-surface-soft` + `inset 2px 0 0 --el-accent`                                                            | "This is the row" without opacity (which would fade the popover).             |
+| **"View only" pill (admin)**             | neutral `Pill` (`--el-surface` + `--el-text-secondary`), `i-eye`                                             | Read-only billing for a non-owner.                                            |
+| **Lock / owner-only note**               | `--el-text-muted`, `i-lock`                                                                                  | Billing mutations are owner-only (§7).                                        |
+| **Primary CTAs**                         | `--el-accent` + `--el-accent-text`                                                                           | Send invite / Update payment.                                                 |
+| **Cross-link (Manage seats in Billing)** | `--el-link`, `i-external`                                                                                    | Quiet inline nav to billing panel 6.                                          |
+| Text / surfaces / borders                | `--el-text*`, `--el-surface*`, `--el-border*`                                                                | Standard element tokens — never Tier-0 `--color-*`.                           |
+
+All shaped surfaces use the **`[data-display-style]` shape tokens**
+(`--radius-{btn,card,input,modal,control,badge}`,
+`--spacing-{btn,input,control,chip,card-padding}`, `--height-{btn-*,input,control}`,
+`--shadow-*`) — never the inert Tier-0 radius/spacing scale or a fixed raw
+utility. `rounded-full` (`9999px`, via `--radius-badge`) is used only for the
+round user avatar and pill caps. Toggling the mock's dark mode confirms token
+parity (every colour flips through Tier-0 under `--el-*`).
+
+## Copy strings (en — `orgAdmin` namespace additions for 8.1.14, `seat.*`)
+
+- Seat band: **"{n} of {n} seats"** · **"$ {total} / yr"**; **"Scaled"** /
+  **"Past due"** / **"View only"**; **"Annual · saves ${save}/yr"**; sub
+  **"Seats follow membership — 1 per active member (${seat}/seat/yr). Adding or
+  removing a member adjusts your next invoice automatically (prorated)."**;
+  **"Manage seats in Billing"**.
+- Add note (scaled only): **"Adds a seat."** / **"~${charge} charged now,
+  prorated to your {renewal} renewal. Your plan goes from ${cur} to ${next} / yr
+  ({n} seats)."** / **"Seats follow membership — you're not picking a plan. Stripe
+  bills the prorated seat to your card on file; remove the member later for a
+  prorated credit."**
+- Remove confirm (scaled only): **"Remove {name} from {org}?"** / **"Frees a seat
+  ({from} → {to}). A prorated credit for the unused time posts to your next
+  invoice — no mid-term refund. Your plan returns to ${next} / yr at renewal."** /
+  **"They lose access to every workspace under {org}."** / **"Cancel"** /
+  **"Remove"**.
+- Past due: **"We couldn't charge your card for the Motir seat plan. Motir stays
+  active while we retry over the next ~2 weeks — seats are still editable. Update
+  your payment method to avoid dropping to the free caps."** / **"Update
+  payment"**.
+- Non-admin: subtitle **"You're an admin of {org} — you can manage who's in the
+  organization. The seat plan and payment are managed by an owner."**; band note
+  **"Billing is managed by an owner. Adding or removing a member still adjusts the
+  org's seats — the charge or credit is handled on the owner's plan."**
+- Free / self-host: no seat strings render (the band + notes are absent).
+
+en is the source; keep it byte-stable as other locales are added (8.1.14 adds
+these under the existing `orgAdmin` namespace, alongside a `MOTIR_CLOUD` +
+scaled-flag gate).
