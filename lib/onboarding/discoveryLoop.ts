@@ -514,6 +514,22 @@ export function isTiersComplete(state: DiscoveryState): boolean {
   return state.session.status === 'tiers_complete';
 }
 
+/** Project platforms whose look the (web) design step does NOT apply to, so the
+ *  design phase is gated OUT (the mobile design path is deferred — 7.3.31). */
+const DESIGN_GATED_PLATFORMS = new Set(['mobile', 'other']);
+
+/**
+ * The design-phase gate (Subtask 7.3.69 / MOTIR-1102). Whether the onboarding
+ * design step (MOTIR-1040) is offered for this session's PROJECT platform — which
+ * the conductor infers and persists (`session.platform`, motir-ai). A web /
+ * desktop project (or a not-yet-inferred `null`, the web default) runs the design
+ * step; a mobile / other project skips it (its web design system doesn't apply).
+ * Reads the already-decided platform — it does not decide it.
+ */
+export function shouldShowDesignStep(platform: string | null): boolean {
+  return !DESIGN_GATED_PLATFORMS.has(platform ?? '');
+}
+
 /** The doc currently under review, if any. */
 export function activeDoc(state: DiscoveryState): DirectionDocView | null {
   return state.activeKind ? (state.docs[state.activeKind] ?? null) : null;

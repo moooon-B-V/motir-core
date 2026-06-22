@@ -10,6 +10,7 @@ import {
   isTiersComplete,
   normalizeFrame,
   reduceDiscovery,
+  shouldShowDesignStep,
   willRefreshKinds,
 } from '@/lib/onboarding/discoveryLoop';
 
@@ -487,5 +488,22 @@ describe('reduceDiscovery — feature catalog (folded into vision, 7.3.79)', () 
       catalog: null,
     });
     expect(cleared.catalog).toBeNull();
+  });
+});
+
+describe('shouldShowDesignStep (the 7.3.69 design-phase gate)', () => {
+  it('shows the design step for web / desktop projects', () => {
+    expect(shouldShowDesignStep('web')).toBe(true);
+    expect(shouldShowDesignStep('desktop')).toBe(true);
+  });
+
+  it('hides it for mobile / other projects', () => {
+    expect(shouldShowDesignStep('mobile')).toBe(false);
+    expect(shouldShowDesignStep('other')).toBe(false);
+  });
+
+  it('defaults to showing it when the platform is not yet inferred (null) or unknown', () => {
+    expect(shouldShowDesignStep(null)).toBe(true);
+    expect(shouldShowDesignStep('vr')).toBe(true);
   });
 });

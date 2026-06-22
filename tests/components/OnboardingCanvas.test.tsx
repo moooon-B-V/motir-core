@@ -119,4 +119,56 @@ describe('OnboardingCanvas', () => {
     expect(await screen.findByText('Revisiting')).toBeTruthy();
     expect(screen.getByText('Will refresh')).toBeTruthy();
   });
+
+  // The design-phase gate (7.3.69): the `design` station is dropped from a mobile /
+  // other project's roadmap, and the chain bridges validation → plan.
+  it('omits the design station for a mobile project and bridges the chain', async () => {
+    renderWithIntl(
+      <OnboardingCanvas
+        state={hubState({
+          session: { ...hubState().session, platform: 'mobile' },
+        })}
+        idea="x"
+        onOpen={vi.fn()}
+        onOpenDesign={vi.fn()}
+      />,
+    );
+    const edges = await screen.findByTestId('canvas-edges');
+    expect(screen.queryByText('Design the look')).toBeNull();
+    expect(document.querySelector('[data-node-id="design"]')).toBeNull();
+    // idea→discovery→vision→feasibility→validation→plan (design contracted) = 5 edges
+    expect(edges.querySelectorAll('path')).toHaveLength(5);
+    expect(screen.getByText('Plan → your epics')).toBeTruthy();
+  });
+
+  // Step 5: the design station is VISIBLE on a web roadmap from the start, but is
+  // not ENTERABLE (no CTA, click is inert) until the tiers are complete.
+  it('shows the design station upcoming but inert before the tiers complete (web)', async () => {
+    const onOpenDesign = vi.fn();
+    renderWithIntl(
+      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={onOpenDesign} />,
+    );
+    await screen.findByTestId('canvas-edges');
+    expect(screen.getByText('Design the look')).toBeTruthy(); // roadmap node visible
+    expect(document.querySelector('[data-node-id="design"]')).not.toBeNull();
+    expect(screen.queryByText('Design your look')).toBeNull(); // entry CTA absent
+    fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
+    expect(onOpenDesign).not.toHaveBeenCalled(); // click is inert
+  });
+
+  it('makes the design station enterable once the tiers are complete (web)', async () => {
+    const onOpenDesign = vi.fn();
+    renderWithIntl(
+      <OnboardingCanvas
+        state={hubState({ session: { ...hubState().session, status: 'tiers_complete' } })}
+        idea="x"
+        onOpen={vi.fn()}
+        onOpenDesign={onOpenDesign}
+      />,
+    );
+    await screen.findByTestId('canvas-edges');
+    expect(screen.getByText('Design your look')).toBeTruthy(); // entry CTA present
+    fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
+    expect(onOpenDesign).toHaveBeenCalled();
+  });
 });
