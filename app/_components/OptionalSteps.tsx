@@ -42,7 +42,7 @@ export function OptionalSteps() {
       tint: 'bg-(--el-tint-peach)',
       title: t('landing.optional.designTitle'),
       desc: t('landing.optional.designDesc'),
-      tag: t('landing.optional.webOnlyTag'),
+      tag: t('landing.optional.optionalTag'),
     },
   ];
 

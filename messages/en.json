@@ -3640,7 +3640,6 @@
         "summaryHint": "— Motir adds these only when they fit your project",
         "names": "reality check · market check · design",
         "optionalTag": "optional",
-        "webOnlyTag": "web only",
         "worthTitle": "Is it worth building?",
         "worthDesc": "A quick reality check — how big the market is and how hard it'll be to build.",
         "demandTitle": "Will people want it?",
