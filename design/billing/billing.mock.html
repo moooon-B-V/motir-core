@@ -1,0 +1,2748 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Billing / pricing / paywall surfaces — settings panel · plan comparison · AI
+      paywall (Epic 8 · Story 8.1 · subtask 8.1.3)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the BILLING / PRICING / PAYWALL surfaces — Story 8.1 (Stripe
+      billing + open-core tiering), subtask 8.1.3 (card MOTIR-1142). The motir-core UI code subtasks
+      8.1.7 (MOTIR-1148, billing settings + plan UI) and 8.1.8 (MOTIR-1149, AI-boundary paywall) are
+      `blocked` behind this design gate (Principle #13 / notes.html #31). This is the source of truth
+      they compose from — no design→code gap.
+
+      GROUNDED IN (read at run time, NOT invented):
+        · docs/decisions/billing-tiering.md (8.1.1 / MOTIR-1138, ACCEPTED 2026-06-21) — the locked
+          tiering model: TWO independent billed products (① Motir — the PM tool, free ↔ $5/seat when
+          scaled; ② Motir AI, an org-level monthly credit plan: Free-trial / Starter / Standard / Pro / Max /
+          Enterprise). Subscription states trialing/active/past_due/canceled. Owner mutates billing,
+          admin views, a member is routed to an owner. Credits are an internal ALLOTMENT, never a
+          currency in-product; plan FEES are shown in $ only on the storefront. Cloud-only behind the
+          MOTIR_CLOUD flag; self-host hides every surface here.
+        · design/ai-usage/design-notes.md + usage.mock.html (Story 7.2) — the SIBLING grammar this
+          composes alongside (NOT duplicating). The "Usage & cost" dashboard SHOWS spend; THIS
+          surface SHOWS the plan + sells. The ai-usage design drew a PASSIVE "out of credits" slot
+          (its panel 7b `.passive-slot`, shipped as OrgUsageClient `OutOfCreditsCard`); the 8.1.8
+          paywall here ACTIVATES that slot with a real Upgrade CTA.
+        · app/(authed)/settings/organization/page.tsx + _components/BillingPlaceholderCard.tsx — the
+          shipped org-settings stack (General · Billing(placeholder) · Workspace · Danger). The
+          billing panel REPLACES the passive placeholder card.
+        · motir-ai out_of_credits → HTTP 402 (src/problem.ts:16, OutOfCreditsError) surfaced over the
+          7.1 boundary; the shipped `OutOfCreditsCard` passive slot in OrgUsageClient.tsx.
+
+      Built FROM the real design system: the token block below is copied 1:1 from app/globals.css
+      (Tier-0 --color-* + Tier-3 --el-* + the [data-display-style] shape tokens), and the markup
+      composes ONLY shipped primitives — Card, Pill (status / tier / cap chips — hue in the tint
+      BACKGROUND with --el-text-strong text, AA-safe per finding #35), Button (primary / secondary /
+      ghost), a meter/bar (token-only), the EmptyState / ErrorState family, Skeleton (loading). No
+      new primitive is introduced; if 8.1.7/8.1.8 need one, that is a new design subtask.
+
+      CREDITS ARE AN INTERNAL UNIT (never $ in-product). The credit balance / allotment is labelled
+      "credits" everywhere. The ONLY place a currency appears is the PRICING STOREFRONT (the plan
+      FEE the org pays Stripe) and the panel's plan-fee line — that is a price, not a credit count.
+
+      Panels (review EACH — mistake #31):
+        (1) ACCESS PATH — FROM WHICH UI billing is reached: the org-settings stack with the live
+            Billing card replacing the passive placeholder (the door is drawn, not just named).
+        (2) BILLING SETTINGS PANEL — owner view, populated/active: the TWO billed lines (Motir
+            free↔scaled · Motir AI) with status Pills, allotment meter, renewal, Manage-plan→Portal +
+            Change-plan, the payment method + invoices (Stripe Customer Portal), and the
+            cross-link to Usage & cost.
+        (3) PANEL STATES — past_due / dunning warning, trialing (one-time trial), canceled→free.
+        (4) ROLE GATING (decision §7) — admin READ-ONLY view vs a plain member's "ask your owner".
+        (5) PLAN / PRICING COMPARISON — the storefront with a Monthly/Annual toggle (default Annual):
+            ① Motir free ↔ scaled, ② the Motir AI ladder (Free / Starter / Standard / Pro / Max /
+            Enterprise) with per-tier CTA → Checkout.
+        (6) SEATS — the scaled-Motir upgrade (Jira/Linear seat model): the seat-review step shows the
+            member→seat count + total before Checkout; the scaled state shows billed seats + Manage seats.
+        (7) PAYWALL AT THE AI BOUNDARY (8.1.8) — (a) out_of_credits 402 with an ACTIVE Upgrade CTA
+            (activates the ai-usage passive slot); (b) tier-gate "AI is a paid feature"; (c) the
+            non-billing-admin member variant ("ask your org owner").
+        (8) EMPTY / LOADING / ERROR — the billing-status fetch over the 7.1 boundary.
+      Toggle dark mode to confirm token parity. See design-notes.md for the per-surface primitive +
+      copy + --el-* role spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --color-warning: #f08c3a;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+      }
+      .grid-2.top {
+        align-items: start;
+      }
+      @media (max-width: 760px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ── Page shell — mirrors app/(authed)/settings/* (org-settings grammar) ── */
+      .page {
+        padding: 28px 28px 32px;
+      }
+      .crumb {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-bottom: 10px;
+      }
+      .page > h2 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page > .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+        max-width: 64ch;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: 22px;
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card.ghost {
+        box-shadow: none;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head .ttl {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .card-foot .fnote {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* head icon badge (the line's product glyph) */
+      .gico {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .gico svg {
+        width: 18px;
+        height: 18px;
+      }
+      .gico.tracker {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .gico.ai {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Pills (components/ui/Pill — hue in the tint BG + --el-text-strong) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-tier {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      /* subscription-status tones (decision §5) */
+      .pill-active {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-trial {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-pastdue {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill-canceled {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill-free {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-readonly {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* ── Plan line (a billed product row inside the panel) ────────────────── */
+      .line {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .line .meta {
+        flex: 1;
+        min-width: 0;
+      }
+      .line .row1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .line .pname {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .line .fee {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      .line .fee b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .line .desc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+      .line .acts {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .lsplit {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 18px 0;
+      }
+
+      /* allotment / cap meter (token-only) */
+      .meter {
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .meter > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+      .meterlbl {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 10px;
+      }
+      .meterlbl b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* caps grid (the tracker line's free-tier usage) */
+      .caps {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+      @media (max-width: 640px) {
+        .caps {
+          grid-template-columns: 1fr;
+        }
+      }
+      .cap {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+      }
+      .cap .ct {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-weight: 600;
+      }
+      .cap .ct svg {
+        width: 13px;
+        height: 13px;
+      }
+      .cap .cv {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-top: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* payment-method + invoices row (Stripe Customer Portal) */
+      .pay {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .pay .pm {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .pay .pm .brand {
+        width: 34px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .pay .pm .brand svg {
+        width: 15px;
+        height: 15px;
+      }
+      .pay .pm .digits {
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+      }
+      .pay .pm .exp {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+
+      /* ── Seat review (seats = members, billed per-seat · Jira/Linear) ────── */
+      .seatcalc {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        flex-wrap: wrap;
+      }
+      .seatcalc .sc-l {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .seatcalc .sc-total {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .seatcalc .sc-total .per {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--el-text-muted);
+      }
+      .avatars {
+        display: inline-flex;
+        flex: none;
+      }
+      .avatars span {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        border: 2px solid var(--el-page-bg);
+        margin-left: -6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .avatars span:first-child {
+        margin-left: 0;
+      }
+      /* key/value terms list (the upgrade review — what & when we charge) */
+      .terms {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .terms .trow {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 10px 14px;
+        font-size: 13px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .terms .trow:first-child {
+        border-top: 0;
+      }
+      .terms .tk {
+        color: var(--el-text-muted);
+        flex: none;
+        white-space: nowrap;
+      }
+      .terms .tv {
+        color: var(--el-text);
+        text-align: right;
+        line-height: 1.45;
+      }
+      .terms .tv b {
+        font-weight: 600;
+      }
+      .terms .tv .muted {
+        color: var(--el-text-muted);
+      }
+
+      .av1 {
+        background: var(--el-tint-lavender);
+      }
+      .av2 {
+        background: var(--el-tint-sky);
+      }
+      .av3 {
+        background: var(--el-tint-mint);
+      }
+      .av4 {
+        background: var(--el-tint-peach);
+      }
+      .av5 {
+        background: var(--el-tint-rose);
+      }
+      .av6 {
+        background: var(--el-tint-yellow);
+      }
+
+      /* a quiet inline cross-link (→ Usage & cost) */
+      .xlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .xlink svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* ── Banners (warning / info — hue in the BANNER, not the page · #35) ──── */
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+      }
+      .banner svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .banner .bt {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .banner .bt strong {
+        font-weight: 600;
+      }
+      .banner .bt .ba {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .banner-warn {
+        background: var(--el-tint-yellow);
+      }
+      .banner-warn svg {
+        color: var(--el-warning);
+      }
+      .banner-danger {
+        background: var(--el-tint-rose);
+      }
+      .banner-danger svg {
+        color: var(--el-danger-text);
+      }
+      .banner-info {
+        background: var(--el-tint-sky);
+      }
+      .banner-info svg {
+        color: var(--el-info);
+      }
+
+      /* dashed note (the cloud-only / lock / passive affordances) */
+      .note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+
+      /* ── Pricing storefront — plan cards ─────────────────────────────────── */
+      .twomenus {
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+      .menu-h {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .menu-h h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .menu-h .mh-sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .tracker-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .ai-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      @media (max-width: 880px) {
+        .ai-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      @media (max-width: 640px) {
+        .tracker-grid,
+        .ai-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .plan {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 18px;
+        background: var(--el-page-bg);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .plan.cur {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 1px var(--el-accent);
+      }
+      .plan.rec {
+        border-color: var(--el-accent);
+      }
+      .plan.feat {
+        background: var(--el-surface-soft);
+      }
+      .plan .pn {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .plan .price {
+        margin-top: 8px;
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+      }
+      .plan .price .amt {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--el-text);
+        letter-spacing: -0.01em;
+      }
+      .plan .price .per {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .plan .alot {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-top: 4px;
+      }
+      .plan .flist {
+        list-style: none;
+        margin: 12px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .plan .flist li {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.4;
+      }
+      .plan .flist li svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .plan .flist li.off svg {
+        color: var(--el-text-faint);
+      }
+      .plan .flist li.off {
+        color: var(--el-text-muted);
+      }
+      .plan .pcta {
+        margin-top: auto;
+        padding-top: 16px;
+      }
+      .plan .pcta .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      /* ── Monthly / Annual cadence toggle (Segmented primitive) ───────────── */
+      .store-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 14px;
+        border-radius: calc(var(--radius-btn) - 2px);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+      }
+      .seg-opt.active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      /* current-subscription strip (the AI screen is pricing AND subscription) */
+      .curbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .curbar .cb-l {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .curbar .cb-l b {
+        font-weight: 600;
+      }
+
+      /* ── Credit top-up (one-time overage purchase, $10 / 1,000) ──────────── */
+      .topup-bal {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-bottom: 4px;
+      }
+      .topup-bal b {
+        color: var(--el-text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .bundles {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin: 4px 0 2px;
+      }
+      .bundle {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 124px;
+        background: var(--el-page-bg);
+      }
+      .bundle.sel {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 1px var(--el-accent);
+        background: var(--el-surface-soft);
+      }
+      .bundle .bcr {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .bundle .bpr {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .bundle.custom {
+        align-items: center;
+        justify-content: center;
+        color: var(--el-text-secondary);
+        border-style: dashed;
+      }
+      .topup-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+      .topup-rate {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* cadence-driven price visibility — one toggle re-prices the whole store */
+      .store[data-cadence='annual'] .cad-m {
+        display: none;
+      }
+      .store[data-cadence='monthly'] .cad-a {
+        display: none;
+      }
+      .price .cad {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+      }
+      .billed {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 11px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+      .save {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+
+      /* ── EmptyState / ErrorState family (components/ui/EmptyState) ────────── */
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 40px 28px;
+      }
+      .state.flat {
+        box-shadow: none;
+      }
+      .state .ico {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        color: var(--el-text-muted);
+      }
+      .state.err .ico {
+        background: var(--el-tint-rose);
+        color: var(--el-danger-text);
+      }
+      .state.blocked .ico {
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .state.gate .ico {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .state .ico svg {
+        width: 22px;
+        height: 22px;
+      }
+      .state h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .state p {
+        margin-top: 8px;
+        max-width: 46ch;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+      .state .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .state .passive-note {
+        margin-top: 14px;
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Skeleton (components/ui/Skeleton) — loading ─────────────────────── */
+      .sk {
+        background: linear-gradient(
+          90deg,
+          var(--el-surface) 0%,
+          var(--el-muted) 50%,
+          var(--el-surface) 100%
+        );
+        border-radius: var(--radius-control);
+        display: block;
+      }
+      .sk-line {
+        height: 10px;
+      }
+
+      /* ── TopNav + org menu (the ACCESS PATH — mirrors TopNav.tsx + org-admin) ─ */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .trigger .ava {
+        width: 20px;
+        height: 20px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+      .uava {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .menu {
+        position: absolute;
+        top: 52px;
+        left: 20px;
+        width: 248px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 6px;
+        z-index: 5;
+      }
+      .menu .mlabel {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 8px 10px 4px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .opt.active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .opt.active svg {
+        color: var(--el-text-strong);
+      }
+      .opt .badge-soon {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--el-text-faint);
+      }
+      .opt .chev {
+        margin-left: auto;
+      }
+
+      /* compose-bar paywall (the AI entry point overlay) */
+      .composer {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .composer .cbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        opacity: 0.55;
+      }
+      .composer .cbar .fauxin {
+        flex: 1;
+        height: var(--height-input);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Billing · pricing · paywall — Story 8.1 (8.1.3)</h1>
+        <p>
+          The commercial surfaces gating Motir’s two billed products (Motir — the PM tool, free ↔
+          $5/seat scaled · Motir AI, an org-level credit plan). Grounded in the 8.1.1 ADR
+          (<code>docs/decisions/billing-tiering.md</code>) and composed alongside the shipped
+          ai-usage dashboard. Owner-mutates / admin-views / member-asks; credits are an allotment,
+          never a currency in-product; cloud-only (hidden on self-host). Source of truth for 8.1.7 +
+          8.1.8. Toggle dark mode to verify --el-* token parity.
+        </p>
+      </div>
+      <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
+    </div>
+
+    <!-- ════════════════ PANEL 1 — ACCESS PATH ════════════════════════════════ -->
+    <div class="panel-label">
+      1 · Access path — FROM WHICH UI billing is reached. The org menu (TopNav, the 6.10 org-admin
+      entry) carries a now-ACTIVE “Billing & plans” item (was “Coming soon”) alongside Settings /
+      Members / Usage &amp; cost; it opens the org-settings stack where the live Billing card
+      REPLACES the passive placeholder. The door is drawn, not just named.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topnav">
+          <div class="left">
+            <button class="trigger">
+              <span class="ava">m</span> moooon
+              <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+            </button>
+          </div>
+          <div class="right">
+            <button class="trigger" style="font-weight: 500">
+              <svg viewBox="0 0 24 24"><use href="#i-search" /></svg> Search
+            </button>
+            <span class="uava">YZ</span>
+          </div>
+        </div>
+        <div class="menu">
+          <div class="mlabel">moooon · organization</div>
+          <div class="opt">
+            <svg viewBox="0 0 24 24"><use href="#i-settings" /></svg> Settings
+          </div>
+          <div class="opt">
+            <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> Members
+          </div>
+          <div class="opt">
+            <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg> Usage &amp; cost
+          </div>
+          <div class="opt active">
+            <svg viewBox="0 0 24 24"><use href="#i-card" /></svg> Billing &amp; plans
+          </div>
+        </div>
+        <!-- the destination: the org-settings stack with the live Billing card -->
+        <div class="page" style="padding-top: 96px">
+          <span class="crumb">Organization · moooon · Settings</span>
+          <h2>Organization settings</h2>
+          <p class="sub">Manage the moooon organization, its plan and its workspace.</p>
+          <div class="stack">
+            <div class="card ghost">
+              <div class="card-head">
+                <div class="ttl"><h3>General</h3></div>
+                <span class="pill pill-neutral">2 workspaces · 6 members</span>
+              </div>
+            </div>
+            <!-- the LIVE Billing card (replaces BillingPlaceholderCard) — door highlighted -->
+            <div class="card" style="border-color: var(--el-accent)">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="gico ai"
+                    ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                  ></span>
+                  <div>
+                    <h3>Billing &amp; plans</h3>
+                    <div class="hsub">
+                      Your Motir plan, Motir AI plan, payment method and invoices.
+                    </div>
+                  </div>
+                </div>
+                <a class="btn btn-secondary btn-sm" href="#"
+                  >Open <svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                ></a>
+              </div>
+              <div class="card-body" style="display: flex; gap: 10px; flex-wrap: wrap">
+                <span class="pill pill-free">Motir · Free</span>
+                <span class="pill pill-tier">Motir AI · Standard</span>
+                <span class="pill pill-active"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+                >
+              </div>
+            </div>
+            <div class="card ghost">
+              <div class="card-head">
+                <div class="ttl"><h3>Default workspace</h3></div>
+              </div>
+            </div>
+            <div class="card ghost">
+              <div class="card-head">
+                <div class="ttl"><h3 style="color: var(--el-danger-text)">Danger zone</h3></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — BILLING SETTINGS PANEL (owner, active) ══════ -->
+    <div class="panel-label">
+      2 · Billing settings panel — owner view, populated &amp; active. The TWO billed lines: ① the
+      Motir (free here, within caps) and ② Motir AI (Standard, active) with its allotment meter,
+      renewal and Manage-plan → Stripe Portal / Change-plan. Plus the payment method + invoices (the
+      Customer Portal) and the cross-link to Usage &amp; cost. Credits = allotment; the only $ is
+      the plan FEE paid to Stripe.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <span class="crumb">Organization · moooon · Billing &amp; plans</span>
+          <h2>Billing &amp; plans</h2>
+          <p class="sub">
+            Your two Motir products are billed independently. Motir is free until your org outgrows
+            the free caps; Motir AI is an org-level credit plan you buy separately.
+          </p>
+          <div class="stack">
+            <!-- ① TRACKER LINE -->
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="gico tracker"
+                    ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                  ></span>
+                  <div>
+                    <h3>Motir</h3>
+                    <div class="hsub">
+                      The project-management tool — free for your team, paid only at scale.
+                    </div>
+                  </div>
+                </div>
+                <span class="pill pill-free">Free</span>
+              </div>
+              <div class="card-body">
+                <div class="line">
+                  <div class="meta">
+                    <div class="desc" style="margin-top: 0">
+                      You’re on free Motir — unlimited members, within the free caps below. You’ll
+                      only pay <b>$5 / seat / mo</b> if the org crosses a cap.
+                    </div>
+                    <div class="caps">
+                      <div class="cap">
+                        <span class="ct"
+                          ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg> Work items</span
+                        >
+                        <div class="cv">182 / 250</div>
+                        <div class="meter"><span style="width: 73%"></span></div>
+                      </div>
+                      <div class="cap">
+                        <span class="ct"
+                          ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg> Projects</span
+                        >
+                        <div class="cv">2 / 3</div>
+                        <div class="meter"><span style="width: 66%"></span></div>
+                      </div>
+                      <div class="cap">
+                        <span class="ct"
+                          ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg> Storage</span
+                        >
+                        <div class="cv">0.4 / 2 GB</div>
+                        <div class="meter"><span style="width: 20%"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- seat preview: scaling is billed per member (like Jira/Linear) -->
+                <div class="seatcalc" style="margin-top: 16px">
+                  <span class="sc-l">
+                    <span class="avatars">
+                      <span class="av1">YZ</span><span class="av2">JD</span
+                      ><span class="av3">AK</span> <span class="av4">MP</span
+                      ><span class="av5">RS</span><span class="av6">+1</span>
+                    </span>
+                    Scaling bills <b>1 seat per member</b> — 6 today
+                  </span>
+                  <span class="sc-total">6 × $5 = $30 <span class="per">/ mo</span></span>
+                </div>
+                <div
+                  class="acts"
+                  style="margin-top: 12px; display: flex; align-items: center; gap: 8px"
+                >
+                  <button class="btn btn-secondary">Upgrade Motir</button>
+                  <span class="xlink" style="cursor: default; color: var(--el-text-muted)">
+                    Seats follow membership · prorated automatically
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ② AI PLAN LINE -->
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="gico ai"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
+                  <div>
+                    <h3>Motir AI</h3>
+                    <div class="hsub">
+                      Planning &amp; hosted agents — an org-level monthly credit pool.
+                    </div>
+                  </div>
+                </div>
+                <span class="pill pill-active"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+                >
+              </div>
+              <div class="card-body">
+                <div class="line">
+                  <div class="meta">
+                    <div class="row1">
+                      <span class="pill pill-tier">Standard</span>
+                      <span class="pname">2,000 credits / mo</span>
+                      <span class="fee">Plan fee <b>$25 / mo</b></span>
+                    </div>
+                    <div class="meterlbl">
+                      <span>Allotment this month</span><b>1,420 of 2,000 credits left</b>
+                    </div>
+                    <div class="meter"><span style="width: 71%"></span></div>
+                    <div class="desc">
+                      Renews <b>1 Jul 2026</b> · credits are a usage allotment, not a bill — one
+                      planning run debits the tokens it used.
+                    </div>
+                  </div>
+                </div>
+                <div class="acts">
+                  <button class="btn btn-primary">Change plan</button>
+                  <button class="btn btn-secondary">
+                    Manage plan &amp; payment
+                    <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                  </button>
+                  <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
+                    <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg> View Usage &amp; cost
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- payment method + invoices (Stripe Customer Portal) -->
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl"><h3>Payment &amp; invoices</h3></div>
+                <button class="btn btn-secondary btn-sm">
+                  Stripe Customer Portal <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                </button>
+              </div>
+              <div class="card-body" style="display: flex; flex-direction: column; gap: 12px">
+                <div class="pay">
+                  <span class="pm">
+                    <span class="brand"
+                      ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                    ></span>
+                    <span class="digits">•••• 4242</span>
+                    <span class="exp">expires 08 / 28</span>
+                  </span>
+                  <button class="btn btn-ghost btn-sm" style="margin-left: auto">Update</button>
+                </div>
+                <div class="note">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  Payment method, invoices, VAT ID and cancellation are managed in Stripe’s secure
+                  Customer Portal. Tax is applied automatically at checkout.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 3 — PANEL STATES (past_due / trialing / canceled) -->
+    <div class="panel-label">
+      3 · Panel states — the non-happy subscription lifecycle (decision §5). past_due / dunning
+      keeps access through the grace window with a warning banner; trialing shows the one-time free
+      trial grant; canceled has dropped to the free allotment (data retained, never deleted).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="grid-2 top">
+            <!-- (a) past_due / dunning -->
+            <div>
+              <p class="crumb">a · past_due — payment failed, in grace</p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">Pro · 8,000 credits / mo</div>
+                    </div>
+                  </div>
+                  <span class="pill pill-pastdue"
+                    ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg> Past due</span
+                  >
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
+                  <div class="banner banner-warn">
+                    <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                    <span class="bt">
+                      <strong>We couldn’t charge your card.</strong> Your Motir AI plan stays active
+                      while we retry over the next ~2 weeks. Update your payment method to avoid
+                      dropping to the free allotment.
+                      <span class="ba">
+                        <button class="btn btn-primary btn-sm">
+                          Update payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                        </button>
+                      </span>
+                    </span>
+                  </div>
+                  <div class="meterlbl">
+                    <span>Allotment this month</span><b>3,100 of 8,000 credits left</b>
+                  </div>
+                  <div class="meter">
+                    <span style="width: 39%; background: var(--el-warning)"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- (b) trialing — one-time free trial grant -->
+            <div>
+              <p class="crumb">b · Free — the one-time trial grant</p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">Free — try planning once</div>
+                    </div>
+                  </div>
+                  <span class="pill pill-trial"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Free trial</span
+                  >
+                </div>
+                <div class="card-body">
+                  <div class="meterlbl">
+                    <span>One-time trial grant</span><b>185 of 300 credits left</b>
+                  </div>
+                  <div class="meter"><span style="width: 62%"></span></div>
+                  <div class="desc">
+                    Your 300 trial credits are granted once and don’t refresh. Pick a monthly Motir
+                    AI plan to keep planning when they run out.
+                  </div>
+                  <div class="acts">
+                    <button class="btn btn-primary">Choose a Motir AI plan</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- (c) canceled → dropped to free -->
+          <div style="margin-top: 24px">
+            <p class="crumb">c · canceled — dropped to free (data retained)</p>
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl">
+                  <span class="gico ai"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                  ></span>
+                  <div>
+                    <h3>Motir AI</h3>
+                    <div class="hsub">Free — your paid plan was canceled</div>
+                  </div>
+                </div>
+                <span class="pill pill-canceled"
+                  ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg> Canceled</span
+                >
+              </div>
+              <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
+                <div class="banner banner-danger">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  <span class="bt">
+                    <strong>Your Standard plan ended on 12 Jun 2026.</strong> The org is back on the
+                    free allotment — monthly credits and top-ups are off. Nothing was deleted; your
+                    plans, work items and usage history are all intact.
+                  </span>
+                </div>
+                <div class="acts"><button class="btn btn-primary">Resubscribe</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 4 — ROLE GATING (decision §7) ═══════════════════ -->
+    <div class="panel-label">
+      4 · Role gating (decision §7) — billing mutations are owner-only. An org ADMIN sees the same
+      panel read-only (no Change-plan / Portal buttons); a plain MEMBER doesn’t see billing at all
+      and is routed to an owner.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="grid-2 top">
+            <!-- admin: read-only -->
+            <div>
+              <p class="crumb">a · Org admin — view-only</p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">Standard · 2,000 credits / mo</div>
+                    </div>
+                  </div>
+                  <span class="pill pill-readonly"
+                    ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg> View only</span
+                  >
+                </div>
+                <div class="card-body">
+                  <div class="meterlbl">
+                    <span>Allotment this month</span><b>1,420 of 2,000 credits left</b>
+                  </div>
+                  <div class="meter"><span style="width: 71%"></span></div>
+                  <div class="note" style="margin-top: 16px">
+                    <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                    You can see the plan, usage and invoices. Changing the plan, payment method or
+                    cancelling is limited to the organization <strong>owner</strong>.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- member: ask your owner -->
+            <div>
+              <p class="crumb">b · Org member — no billing access</p>
+              <div class="state gate flat">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <h4>Billing is managed by your org owner</h4>
+                <p>
+                  Plans and payment for the <strong>moooon</strong> organization are visible to
+                  owners and admins. Ask an organization owner to change the plan or buy AI credits.
+                </p>
+                <div class="actions">
+                  <button class="btn btn-secondary">Contact an owner</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 — PLAN / PRICING COMPARISON (storefront) ══════ -->
+    <div class="panel-label">
+      5 · Motir AI — plans &amp; subscription (a SEPARATE screen, AI only). The two billed products
+      are independent (ADR §1), so the AI plan has its OWN screen: a user who already pays for seats
+      should not wade through the seat plan to change AI. Reached from the Motir-AI line’s “Change
+      plan” (panel 2) + the paywall (panel 7). Shows the CURRENT AI subscription + the ladder (Free
+      / Starter / Standard / Pro / Max / Enterprise; Pro = recommended anchor) with the
+      Monthly/Annual toggle. The Motir SEAT plan lives on its own screen (panel 6) — never shown
+      here.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <span class="crumb">Organization · moooon · Billing &amp; plans · Motir AI</span>
+          <h2>Motir AI — plans &amp; subscription</h2>
+          <p class="sub">
+            Manage your organization’s AI plan — planning &amp; hosted agents. Billed
+            <b>separately</b> from your Motir seats, so this screen is AI only.
+          </p>
+          <!-- current AI subscription — this screen is pricing AND subscription -->
+          <div class="curbar">
+            <span class="cb-l">
+              <span class="pill pill-tier">Standard</span>
+              <span class="pill pill-active"
+                ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+              >
+              <span>2,000 credits / mo · <b>1,420 left</b> · renews 1 Jul 2026</span>
+            </span>
+            <button class="btn btn-secondary btn-sm">
+              Manage plan &amp; payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+            </button>
+          </div>
+          <!-- Monthly / Annual toggle — below the headline, above the cards (the
+               single most impactful pricing control; default = Annual + visible
+               savings; Monthly always available). -->
+          <div class="store-toggle">
+            <div class="seg" role="group" aria-label="Billing cadence">
+              <button
+                class="seg-opt"
+                data-cad="monthly"
+                aria-pressed="false"
+                onclick="setCadence('monthly')"
+              >
+                Monthly
+              </button>
+              <button
+                class="seg-opt active"
+                data-cad="annual"
+                aria-pressed="true"
+                onclick="setCadence('annual')"
+              >
+                Annual <span class="seg-badge">Save ~33%</span>
+              </button>
+            </div>
+          </div>
+          <div class="twomenus store" data-cadence="annual" style="margin-top: 22px">
+            <!-- Motir AI plans — the only menu on this screen (seats are panel 6) -->
+            <div>
+              <div class="menu-h">
+                <h4>Choose your plan</h4>
+                <span class="mh-sub"
+                  >An org-level monthly credit pool, billed separately from seats. Any org can buy
+                  it — a paid Motir seat plan is not required. Pro is the recommended anchor.</span
+                >
+              </div>
+              <div class="ai-grid">
+                <div class="plan">
+                  <div class="pn">Free</div>
+                  <div class="price">
+                    <span class="cad"
+                      ><span class="amt">$0</span><span class="per">once</span></span
+                    >
+                  </div>
+                  <div class="alot">300 credits · one-time</div>
+                  <ul class="flist">
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Try planning once
+                    </li>
+                    <li class="off">
+                      <svg viewBox="0 0 24 24"><use href="#i-x" /></svg> No monthly refresh · no
+                      top-ups
+                    </li>
+                  </ul>
+                  <div class="pcta">
+                    <button class="btn btn-secondary is-disabled" disabled>Trial used</button>
+                  </div>
+                </div>
+                <div class="plan">
+                  <div class="pn">Starter</div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$5</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$3.33</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $40 / yr <span class="save">Save $20/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $60 / yr · <span class="save">Save $20 with annual</span>
+                  </div>
+                  <div class="alot">300 credits / mo</div>
+                  <ul class="flist">
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A recurring taste of
+                      planning
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
+                  </ul>
+                  <div class="pcta"><button class="btn btn-secondary">Choose Starter</button></div>
+                </div>
+                <div class="plan cur">
+                  <div class="pn">
+                    Standard <span class="pill pill-active" style="font-size: 11px">Current</span>
+                  </div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$25</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$16.67</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $200 / yr <span class="save">Save $100/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $300 / yr · <span class="save">Save $100 with annual</span>
+                  </div>
+                  <div class="alot">2,000 credits / mo</div>
+                  <ul class="flist">
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everyday planning
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
+                  </ul>
+                  <div class="pcta">
+                    <button class="btn btn-secondary is-disabled" disabled>Current plan</button>
+                  </div>
+                </div>
+                <div class="plan feat rec">
+                  <div class="pn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"
+                    >
+                      <use href="#i-zap" />
+                    </svg>
+                    Pro <span class="pill pill-tier" style="font-size: 11px">Recommended</span>
+                  </div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$75</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$50</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $600 / yr <span class="save">Save $300/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $900 / yr · <span class="save">Save $300 with annual</span>
+                  </div>
+                  <div class="alot">8,000 credits / mo</div>
+                  <ul class="flist">
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning + hosted
+                      coding
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
+                  </ul>
+                  <div class="pcta"><button class="btn btn-primary">Upgrade to Pro</button></div>
+                </div>
+                <div class="plan feat">
+                  <div class="pn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      style="width: 15px; height: 15px; color: var(--el-accent-on-surface)"
+                    >
+                      <use href="#i-crown" />
+                    </svg>
+                    Max
+                  </div>
+                  <div class="price">
+                    <span class="cad cad-m"
+                      ><span class="amt">$150</span><span class="per">/ mo</span></span
+                    >
+                    <span class="cad cad-a"
+                      ><span class="amt">$100</span><span class="per">/ mo</span></span
+                    >
+                  </div>
+                  <div class="billed cad cad-a">
+                    billed annually · $1,200 / yr <span class="save">Save $600/yr</span>
+                  </div>
+                  <div class="billed cad cad-m">
+                    $1,800 / yr · <span class="save">Save $600 with annual</span>
+                  </div>
+                  <div class="alot">30,000 credits / mo</div>
+                  <ul class="flist">
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Heavy agent — design,
+                      docs, coding
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                    </li>
+                  </ul>
+                  <div class="pcta"><button class="btn btn-secondary">Upgrade to Max</button></div>
+                </div>
+                <div class="plan">
+                  <div class="pn">Enterprise</div>
+                  <div class="price">
+                    <span class="cad"><span class="amt">Custom</span></span>
+                  </div>
+                  <div class="alot">Custom credit pool</div>
+                  <ul class="flist">
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoiced billing &amp;
+                      SSO
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Dedicated support
+                    </li>
+                  </ul>
+                  <div class="pcta"><button class="btn btn-secondary">Contact sales</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Credit top-up — one-time overage purchase, beyond the monthly plan -->
+          <div class="card" style="margin-top: 22px">
+            <div class="card-head">
+              <div class="ttl">
+                <span class="gico ai"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                ></span>
+                <div>
+                  <h3>Top up credits</h3>
+                  <div class="hsub">
+                    A one-time purchase on top of your plan — added to your balance right away, used
+                    after your monthly allotment.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="topup-bal">
+                <svg viewBox="0 0 24 24" style="width: 14px; height: 14px">
+                  <use href="#i-coins" />
+                </svg>
+                Balance <b>1,420 credits</b> · 580 of this month’s 2,000 allotment used
+              </div>
+              <div class="bundles">
+                <div class="bundle">
+                  <span class="bcr">1,000 credits</span><span class="bpr">$10</span>
+                </div>
+                <div class="bundle sel">
+                  <span class="bcr">5,000 credits</span><span class="bpr">$50</span>
+                </div>
+                <div class="bundle">
+                  <span class="bcr">10,000 credits</span><span class="bpr">$100</span>
+                </div>
+                <div class="bundle custom">
+                  <span class="bcr">Custom</span><span class="bpr">× 1,000</span>
+                </div>
+              </div>
+              <div class="topup-foot">
+                <button class="btn btn-primary">Buy 5,000 credits — $50</button>
+                <span class="topup-rate"
+                  >$10 per 1,000 credits · one-time · tax at checkout. Credits are an allotment, not
+                  currency — this is the price you pay Stripe.</span
+                >
+              </div>
+              <div class="note" style="margin-top: 14px">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  >Top-ups are available on a paid AI plan; the <b>Free</b> trial can’t top up
+                  (choose a plan above first). Owner-only, like every billing action.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="note" style="margin-top: 22px">
+            <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+            <span
+              >Annual billing (the Stripe default) is shown — switch to Monthly above to compare.
+              Tax is applied automatically at checkout. Credits are an internal usage allotment; the
+              price shown is the AI plan fee, billed by Stripe to the moooon organization. Your
+              Motir <b>seats</b> are billed separately — manage them on the Motir plan screen (panel
+              6).</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — SEATS: THE SCALED-MOTIR UPGRADE ════════════ -->
+    <div class="panel-label">
+      6 · The Motir seats subscription (scaled). Motir Scaled is billed one seat per organization
+      member (the Jira/Linear model: pay for active members; seat count = membership, prorated). (a)
+      BEFORE — the upgrade review counts member→seats before Checkout; (b) AFTER — the live Motir
+      subscription line (the analogue of the Motir-AI line in panel 2, but for the paid SEATS plan):
+      status, billed seats, plan fee, renewal, Manage-seats + Portal. This is the scaled counterpart
+      to panel 2's free-Motir line.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="stack" style="margin-top: 4px">
+            <!-- (a) BEFORE — upgrade review (a Checkout confirmation dialog) -->
+            <div>
+              <p class="crumb">a · Before — upgrade review (member → seats counted at Checkout)</p>
+              <div class="card" style="max-width: 660px">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico tracker"
+                      ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                    ></span>
+                    <div>
+                      <h3>Scale up Motir</h3>
+                      <div class="hsub">
+                        One seat per organization member — like Jira &amp; Linear.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
+                  <div class="seatcalc">
+                    <span class="sc-l">
+                      <span class="avatars">
+                        <span class="av1">YZ</span><span class="av2">JD</span
+                        ><span class="av3">AK</span> <span class="av4">MP</span
+                        ><span class="av5">RS</span><span class="av6">+1</span>
+                      </span>
+                      <span><b>6 members</b> → 6 seats</span>
+                    </span>
+                    <span class="sc-total">6 × $40 / yr = $240 <span class="per">/ yr</span></span>
+                  </div>
+                  <div class="terms">
+                    <div class="trow">
+                      <span class="tk">Billing</span>
+                      <span class="tv"
+                        ><b>Annual</b> — $240 / yr
+                        <span class="muted">($20 / mo equiv, the default)</span></span
+                      >
+                    </div>
+                    <div class="trow">
+                      <span class="tk">Due today</span>
+                      <span class="tv"
+                        ><b>$240</b>, <b>prorated</b> to your renewal date
+                        <span class="muted">(less for the days left this term)</span></span
+                      >
+                    </div>
+                    <div class="trow">
+                      <span class="tk">Add a member later</span>
+                      <span class="tv"
+                        >a prorated charge for the new seat, for the rest of the term</span
+                      >
+                    </div>
+                    <div class="trow">
+                      <span class="tk">Remove a member</span>
+                      <span class="tv"
+                        >a prorated <b>credit</b> on your next invoice
+                        <span class="muted">— no mid-term refund</span></span
+                      >
+                    </div>
+                  </div>
+                  <div class="note" style="border-style: solid; background: var(--el-surface-soft)">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span
+                      >Seats follow your membership automatically (Stripe proration). Prefer
+                      monthly? Switch at Checkout to pay $30 / mo.</span
+                    >
+                  </div>
+                  <div class="acts" style="display: flex; gap: 8px">
+                    <button class="btn btn-primary">Continue to Checkout — $240/yr</button>
+                    <button class="btn btn-ghost">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- (b) AFTER — the live Motir seats subscription (full-width, the scaled
+                 counterpart to panel 2's free-Motir line + Motir-AI line) -->
+            <div>
+              <p class="crumb">b · After — your Motir subscription (Scaled · seats billed)</p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico tracker"
+                      ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir</h3>
+                      <div class="hsub">
+                        The project-management tool — scaled seats subscription.
+                      </div>
+                    </div>
+                  </div>
+                  <span class="pill pill-active"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span
+                  >
+                </div>
+                <div class="card-body">
+                  <div class="line">
+                    <div class="meta">
+                      <div class="row1">
+                        <span class="pill pill-tier">Scaled</span>
+                        <span class="pname">6 seats</span>
+                        <span class="fee"
+                          >Plan fee <b>$240 / yr</b>
+                          <span class="save">Annual · saves $120/yr</span></span
+                        >
+                      </div>
+                      <div class="seatcalc" style="margin-top: 12px">
+                        <span class="sc-l">
+                          <span class="avatars">
+                            <span class="av1">YZ</span><span class="av2">JD</span
+                            ><span class="av3">AK</span> <span class="av4">MP</span
+                            ><span class="av5">RS</span><span class="av6">+1</span>
+                          </span>
+                          <span><b>6 seats</b> billed · 1 per member</span>
+                        </span>
+                        <span class="sc-total"
+                          >6 × $40 / yr = $240 <span class="per">/ yr</span></span
+                        >
+                      </div>
+                      <div class="desc">
+                        Billed <b>annually</b> · $20 / mo equiv · renews <b>1 Jul 2026</b>. All
+                        free-tier caps lifted (unlimited work items &amp; projects,
+                        multi-workspace). Seats track membership: adding a member adds a
+                        <b>prorated charge</b> for the rest of the term; removing one applies a
+                        <b>prorated credit</b> to your next invoice (no mid-term refund).
+                      </div>
+                    </div>
+                  </div>
+                  <div class="acts">
+                    <button class="btn btn-primary">
+                      Manage seats <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>
+                    </button>
+                    <button class="btn btn-secondary">
+                      Manage plan &amp; payment
+                      <svg viewBox="0 0 24 24"><use href="#i-external" /></svg>
+                    </button>
+                    <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
+                      Switch to monthly billing
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 7 — PAYWALL AT THE AI BOUNDARY (8.1.8) ══════════ -->
+    <div class="panel-label">
+      7 · Paywall at the AI boundary (8.1.8) — the in-product upsell when an org can’t use AI. (a)
+      out_of_credits (402 from motir-ai) ACTIVATES the passive “out of credits” slot the ai-usage
+      design drew, now with a real Upgrade CTA; (b) the tier-gate “AI is a paid feature”; (c) the
+      member who can’t buy gets “ask your owner”, never a dead CTA. Shown at the AI entry points
+      (chat composer / plan / generate).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <!-- (a) out of credits — 402, now with an ACTIVE upgrade CTA -->
+          <p class="crumb">a · out_of_credits (402) — at the planner composer, owner</p>
+          <div class="composer">
+            <div class="cbar">
+              <div class="fauxin"></div>
+              <button class="btn btn-primary is-disabled" disabled>
+                <svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg> Plan
+              </button>
+            </div>
+            <div class="state blocked flat" style="padding: 28px 24px">
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-pause" /></svg
+              ></span>
+              <h4>Planning is paused — you’re out of credits</h4>
+              <p>
+                The <strong>moooon</strong> organization has used all of this month’s 2,000 Standard
+                credits, so new planning runs are paused. Existing plans stay fully editable.
+              </p>
+              <div class="actions">
+                <button class="btn btn-primary">
+                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg> Upgrade plan
+                </button>
+                <button class="btn btn-secondary">
+                  Buy credit top-up
+                  <span style="color: var(--el-text-muted); font-weight: 400">· $10/1k</span>
+                </button>
+              </div>
+              <span class="passive-note">Renews 1 Jul · or upgrade now to keep planning.</span>
+            </div>
+          </div>
+
+          <div class="grid-2 top" style="margin-top: 24px">
+            <!-- (b) tier gate — AI is a paid feature (free org, never bought AI) -->
+            <div>
+              <p class="crumb">b · tier-gate — free org, AI not purchased</p>
+              <div class="state gate flat">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                ></span>
+                <h4>AI planning is a paid feature</h4>
+                <p>
+                  Generate and expand plans with AI by adding a Motir AI plan to the
+                  <strong>moooon</strong> organization. Start with 300 free trial credits.
+                </p>
+                <div class="actions">
+                  <button class="btn btn-primary">See Motir AI plans</button>
+                  <button class="btn btn-ghost">Maybe later</button>
+                </div>
+              </div>
+            </div>
+            <!-- (c) member variant — cannot buy, routed to owner -->
+            <div>
+              <p class="crumb">c · member — can’t buy, routed to owner</p>
+              <div class="state gate flat">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                ></span>
+                <h4>AI is out of credits for this org</h4>
+                <p>
+                  Planning is paused until the <strong>moooon</strong> organization’s plan is
+                  upgraded. Only an organization owner can change the plan or buy credits.
+                </p>
+                <div class="actions">
+                  <button class="btn btn-secondary">Ask an owner to upgrade</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 8 — EMPTY / LOADING / ERROR ════════════════════ -->
+    <div class="panel-label">
+      8 · Empty / loading / error — the billing-status fetch over the 7.1 boundary. First-run (no
+      Stripe customer yet) invites a first purchase; the loading skeleton holds the panel; the
+      fetch-failed state (motir-ai / Stripe boundary down) offers Retry — never a broken-looking
+      zero.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <div class="grid-2 top">
+            <!-- (a) empty / first-run -->
+            <div>
+              <p class="crumb">a · No subscription yet (first run)</p>
+              <div class="state flat">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                ></span>
+                <h4>You’re on the free plan</h4>
+                <p>
+                  The moooon organization has no paid subscription yet — Motir is free within its
+                  caps and Motir AI is on the one-time trial. Add a plan when you’re ready to scale.
+                </p>
+                <div class="actions"><button class="btn btn-primary">See plans</button></div>
+              </div>
+            </div>
+            <!-- (b) loading skeleton -->
+            <div>
+              <p class="crumb">b · Loading (fetching status over 7.1)</p>
+              <div class="card" aria-busy="true">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico ai" style="background: var(--el-muted)"></span>
+                    <div>
+                      <span class="sk sk-line" style="width: 90px"></span>
+                      <span class="sk sk-line" style="width: 150px; margin-top: 8px"></span>
+                    </div>
+                  </div>
+                  <span
+                    class="sk"
+                    style="width: 64px; height: 22px; border-radius: var(--radius-badge)"
+                  ></span>
+                </div>
+                <div class="card-body">
+                  <span class="sk sk-line" style="width: 40%"></span>
+                  <div class="meter" style="margin-top: 14px">
+                    <span class="sk" style="width: 60%; height: 100%"></span>
+                  </div>
+                  <span class="sk sk-line" style="width: 70%; margin-top: 16px"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- (c) error -->
+          <div style="margin-top: 24px">
+            <p class="crumb">c · Couldn’t load billing (boundary down)</p>
+            <div class="state err flat">
+              <span class="ico"
+                ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+              ></span>
+              <h4>Couldn’t load billing</h4>
+              <p>
+                Something went wrong fetching this organization’s plan. Your subscription and
+                credits are safe — this is only the view. Try again in a moment.
+              </p>
+              <div class="actions">
+                <button class="btn btn-secondary">
+                  <svg viewBox="0 0 24 24"><use href="#i-retry" /></svg> Retry
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- cloud-only note -->
+          <div class="note" style="margin-top: 24px">
+            <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+            <span>
+              <strong>Cloud-only.</strong> Every surface in this asset is gated behind
+              <code>MOTIR_CLOUD</code>. A self-hosted (GPL-3.0) build shows no billing, no paywall
+              and no caps — Motir is unbounded and AI is reached via the self-hoster’s own
+              connection. None of these surfaces render when <code>MOTIR_CLOUD=false</code>.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </g>
+        <g
+          id="i-card"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <path d="M2 10h20" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+        </g>
+        <g
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+          />
+          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+        </g>
+        <g
+          id="i-box"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+          />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        </g>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-database"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+          <path d="M3 12a9 3 0 0 0 18 0" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-zap"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+          />
+        </g>
+        <g
+          id="i-crown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"
+          />
+          <path d="M5 21h14" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-pause"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+          <rect x="6" y="4" width="4" height="16" rx="1" />
+        </g>
+        <g
+          id="i-retry"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-chevright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+      </defs>
+    </svg>
+
+    <script>
+      function toggleTheme() {
+        const h = document.documentElement;
+        h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+      }
+      function setCadence(c) {
+        document.querySelectorAll('.store').forEach((s) => (s.dataset.cadence = c));
+        document.querySelectorAll('.seg-opt').forEach((b) => {
+          const on = b.dataset.cad === c;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
+      }
+    </script>
+  </body>
+</html>
