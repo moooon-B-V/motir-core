@@ -2,7 +2,12 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { withOrgContext } from '@/lib/organizations/context';
 import { isOrgOwnerRole } from '@/lib/organizations/roles';
-import { createCheckoutSession, createPortalSession, getOrgUsage } from '@/lib/ai/motirAiClient';
+import {
+  createCheckoutSession,
+  createPortalSession,
+  getOrgSubscription,
+  getOrgUsage,
+} from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { BILLING_CATALOG, isKnownCheckoutPrice } from '@/lib/billing/catalog';
 import {
@@ -25,9 +30,9 @@ import type { BillingSessionDTO, BillingStatusDTO } from '@/lib/dto/billing';
 //
 // The two billed products (ADR §1) read from two stores: ① Motir (seats) is the
 // LOCAL `Organization.scaledTrackerSubscription` (written by 8.1.4c); ② Motir AI
-// is the `PlanTier` + balance folded from the existing `/v1/usage` read. The
-// Stripe AI-subscription lifecycle (status + renewal) needs a motir-ai read 8.1.5
-// did not ship — a seam carried in the DTO comment, not faked here.
+// is the `PlanTier` + balance folded from the `/v1/usage` read, plus the Stripe
+// subscription lifecycle (status + renewal) folded from the 8.1.13
+// `/v1/stripe/subscription` read (the seam 8.1.5 did not ship, now landed).
 
 interface OrgActorInput {
   organizationId: string;
@@ -75,16 +80,22 @@ export const billingService = {
     const scaledTrackerSubscription =
       (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
 
-    // (3) ② Motir AI — fold the tier + balance from the existing usage read (the
-    // card's blessed path). A motir-ai outage throws a MotirAiError the route maps
-    // to 502 (the design's "couldn't load billing" state), never a fake zero.
-    const usage = await getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' });
+    // (3) ② Motir AI — fold the tier + balance from the usage read AND the Stripe
+    // subscription lifecycle (status + renewal) from the 8.1.13 subscription read,
+    // so 8.1.7 renders the status `Pill` + "renews {date}". Both are over the
+    // boundary; a motir-ai outage throws a MotirAiError the route maps to 502 (the
+    // design's "couldn't load billing" state), never a fake zero. The subscription
+    // read returns an EMPTY shape (status: null) for a free org — not an error.
+    const [usage, subscription] = await Promise.all([
+      getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
+      getOrgSubscription({ coreOrganizationId: input.organizationId }),
+    ]);
 
     return {
       organizationId: input.organizationId,
       access: { role: access.role, canManageBilling: isOrgOwnerRole(access.role) },
       motir: { scaledTrackerSubscription },
-      motirAi: { tier: usage.tier, balance: usage.balance },
+      motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       catalog: BILLING_CATALOG,
     };
   },

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import type { RawUsageResponse } from '@/lib/ai/types';
+import type { RawSubscriptionResponse, RawUsageResponse } from '@/lib/ai/types';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 // Service test for billingService (Subtask 8.1.6) — the open-core billing
@@ -11,10 +11,12 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // (404 non-member), and the ADR §7 split (view = owner/admin, mutate = OWNER
 // only) — plus the DTO shape and the Checkout/Portal forwarding.
 const getOrgUsageMock = vi.fn<(q: unknown) => Promise<RawUsageResponse>>();
+const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResponse>>();
 const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
 const createPortalSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
+  getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
   createCheckoutSession: (i: unknown) => createCheckoutSessionMock(i),
   createPortalSession: (i: unknown) => createPortalSessionMock(i),
 }));
@@ -48,6 +50,23 @@ function rawUsage(over: Partial<RawUsageResponse> = {}): RawUsageResponse {
     ...over,
   };
 }
+
+function rawSubscription(over: Partial<RawSubscriptionResponse> = {}): RawSubscriptionResponse {
+  return {
+    status: 'active',
+    currentPeriodEnd: '2026-07-22T00:00:00.000Z',
+    priceId: 'price_standard',
+    planTier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
+    ...over,
+  };
+}
+
+const EMPTY_SUBSCRIPTION: RawSubscriptionResponse = {
+  status: null,
+  currentPeriodEnd: null,
+  priceId: null,
+  planTier: null,
+};
 
 const SCALED: ScaledTrackerSubscription = {
   status: 'active',
@@ -87,9 +106,11 @@ async function makeOrgWithRoles() {
 beforeEach(async () => {
   await truncateAuthTables();
   getOrgUsageMock.mockReset();
+  getOrgSubscriptionMock.mockReset();
   createCheckoutSessionMock.mockReset();
   createPortalSessionMock.mockReset();
   getOrgUsageMock.mockResolvedValue(rawUsage());
+  getOrgSubscriptionMock.mockResolvedValue(rawSubscription());
   createCheckoutSessionMock.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/cs_1' });
   createPortalSessionMock.mockResolvedValue({ url: 'https://billing.stripe.com/p/session/1' });
   process.env['MOTIR_CLOUD'] = 'true';
@@ -137,10 +158,50 @@ describe('billingService.getBillingStatus', () => {
     expect(dto.motirAi).toEqual({
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
       balance: 1420,
+      subscription: {
+        status: 'active',
+        currentPeriodEnd: '2026-07-22T00:00:00.000Z',
+        priceId: 'price_standard',
+        planTier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
+      },
     });
     expect(dto.motir.scaledTrackerSubscription).toBeNull();
     expect(dto.catalog.seatPlan.name).toBe('Motir');
     expect(dto.catalog.aiPlans.map((p) => p.key)).toContain('pro');
+  });
+
+  it('folds the Stripe subscription lifecycle (status + renewal) from the subscription read', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    getOrgSubscriptionMock.mockResolvedValueOnce(
+      rawSubscription({ status: 'past_due', currentPeriodEnd: '2026-08-01T00:00:00.000Z' }),
+    );
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(getOrgSubscriptionMock).toHaveBeenCalledWith({ coreOrganizationId: organizationId });
+    expect(dto.motirAi.subscription).toEqual({
+      status: 'past_due',
+      currentPeriodEnd: '2026-08-01T00:00:00.000Z',
+      priceId: 'price_standard',
+      planTier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
+    });
+  });
+
+  it('carries the EMPTY subscription shape (status: null) for a free / never-transacted org', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    getOrgSubscriptionMock.mockResolvedValueOnce(EMPTY_SUBSCRIPTION);
+
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(dto.motirAi.subscription).toEqual(EMPTY_SUBSCRIPTION);
+  });
+
+  it('propagates a motir-ai outage from the subscription read too', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    getOrgSubscriptionMock.mockRejectedValueOnce(new MotirAiUnavailableError('down'));
+    await expect(
+      billingService.getBillingStatus({ organizationId, actorUserId: owner.id }),
+    ).rejects.toBeInstanceOf(MotirAiUnavailableError);
   });
 
   it('lets an OWNER manage (canManageBilling true) and reflects the scaled-tracker state', async () => {
