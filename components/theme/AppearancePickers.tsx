@@ -262,7 +262,7 @@ const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
   sienna: '#fa520f',
   garnet: '#c30021',
   citrine: '#ffd02f',
-  candyland: '#efbfdd',
+  candy: '#efbfdd',
 };
 
 /** Palette (colour) — the 10-palette chip row, each with its accent swatch dot. */

@@ -139,14 +139,14 @@ export const PALETTE_REGISTRY = {
       'Miro — its whole Mirotone palette (every value a documented Mirotone step): Sunglow yellow #FFD02F (primary) + the action-blue #3859FF over the gray ramp + Stratos ink #050038, with the green/red semantic ramps.',
     designDoc: 'docs/palettes/citrine.md',
   },
-  candyland: {
-    id: 'candyland',
-    name: 'Candy Land',
+  candy: {
+    id: 'candy',
+    name: 'Candy',
     tagline:
       'Sweet and playful — a light bubblegum-pink primary over candy-paper pinks, with a full pastel-candy rainbow.',
     inspiration:
       'A candy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Pink primary + Mauve neutrals + a Sky/Jade/Violet/Amber/Crimson candy rainbow; Glossier Pink #F5DADF as the pastel-pink mood reference.',
-    designDoc: 'docs/palettes/candyland.md',
+    designDoc: 'docs/palettes/candy.md',
   },
 } satisfies Record<string, PaletteDefinition>;
 

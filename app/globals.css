@@ -3444,9 +3444,9 @@
   --el-sidebar-item-bg-hover: #24262c;
 }
 
-/* ── Palette: Candy Land (data-palette="candyland") — Subtask 8.8.34 (MOTIR-1252)
+/* ── Palette: Candy (data-palette="candy") — Subtask 8.8.34 (MOTIR-1252) ──────
    A sweet, playful PASTEL-CANDY re-skin led by a LIGHT bubblegum PINK. There is
-   no single brand for "candy land", so — to avoid inventing colours — EVERY value
+   no single brand for a "candy" concept, so — to avoid inventing colours — EVERY value
    is a documented **Radix Colors** step (@radix-ui/colors): Pink is the primary
    ramp, Mauve the matched warm neutral, and Sky / Jade / Violet / Amber / Crimson
    supply the candy rainbow of tints + type hues. Glossier Pink #F5DADF is the
@@ -3461,8 +3461,8 @@
    Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never a
    shape/feel token (paletteRegistry.test.ts enforces it). Every --el-* role
    clears WCAG AA in BOTH themes, verified numerically. See
-   docs/palettes/candyland.md. */
-[data-palette='candyland'] {
+   docs/palettes/candy.md. */
+[data-palette='candy'] {
   /* brand & primary — a LIGHT bubblegum pink (Radix Pink). FILL is a light pink
      with DARK berry labels; --color-primary is the Pink-11 text step. */
   --color-primary: #c2298a; /* Radix Pink-11 — pink text/icon (AA ~5.2:1 on white) */
@@ -3521,11 +3521,11 @@
   --el-sidebar-item-bg-hover: #fbdcef;
 }
 
-/* Candy Land — dark companion. A pink-tinted near-black canvas (Radix Pink dark
+/* Candy — dark companion. A pink-tinted near-black canvas (Radix Pink dark
    1/2/3); the bubblegum pink brightens to read as text, the fill is a bright
    candy pink with dark labels, and the rainbow tints become deep candy washes.
    All values are documented Radix dark steps. */
-[data-palette='candyland'][data-theme='dark'] {
+[data-palette='candy'][data-theme='dark'] {
   --color-background: #191117; /* Radix Pink dark-1 — pink-tinted black */
   --color-foreground: #eeeef0; /* Mauve dark-12 */
   --color-surface: #37172f; /* Pink dark-3 — candy-plum section */
