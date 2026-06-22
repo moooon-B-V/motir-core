@@ -100,9 +100,9 @@ export function CreateIssueLinksField({
       <SectionLabel label={t('links.section')} />
 
       {error ? (
-        <div className="bg-(--el-tint-rose) flex items-start gap-2 rounded-md px-3 py-2">
+        <div className="bg-(--el-danger-surface) flex items-start gap-2 rounded-md px-3 py-2">
           <CircleAlert className="text-(--el-danger) mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span className="text-(--el-text-strong) text-[13px]">{error}</span>
+          <span className="text-(--el-danger-surface-text) text-[13px]">{error}</span>
         </div>
       ) : null}
 

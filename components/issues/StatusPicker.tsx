@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
+import { statusDotColor } from '@/lib/workflows/statusColor';
 import type {
   WorkflowStatusDto,
   WorkflowTransitionDto,
@@ -16,19 +17,16 @@ import type {
 // `changeStatusAction` → `updateStatus` re-validates server-side (defense in
 // depth) and surfaces an inline error if a forged value slips through.
 
-const CATEGORY_VAR: Record<string, string> = {
-  todo: '--color-muted-foreground',
-  in_progress: '--color-info',
-  done: '--color-accent-green',
-};
-
 function statusDot(s: WorkflowStatusDto) {
-  const color = s.color ?? `var(${CATEGORY_VAR[s.category] ?? '--color-muted-foreground'})`;
+  // The dot hue routes through the swap layer via the shared `statusDotColor`
+  // (per-status el-status token, full strength), so it re-skins with the palette
+  // and differentiates in_review / blocked / cancelled. This dropped the old
+  // Tier-0 raw-token path — the only true swap-layer violation (MOTIR-1273).
   return (
     <span
       aria-hidden
       className="border-(--el-border) h-2.5 w-2.5 shrink-0 rounded-full border"
-      style={{ backgroundColor: color }}
+      style={{ backgroundColor: statusDotColor(s) }}
     />
   );
 }

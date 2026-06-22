@@ -33,6 +33,7 @@ import {
 } from '@/lib/issues/issueListAdvancedFilter';
 import type { FilterAst } from '@/lib/filters/ast';
 import { useAdvancedFilterPopover } from './AdvancedFilterContext';
+import { statusDotColor } from '@/lib/workflows/statusColor';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { cn } from '@/lib/utils/cn';
@@ -52,19 +53,14 @@ import { Avatar } from './issueCellPrimitives';
 // (buildIssueListHref, preserving the active view + sort), so the Server
 // Component re-reads the pruned, context-preserving tree (getProjectTree). The
 // popover stays open across selections (multi-select); "Clear filters" resets to
-// the full tree. The status dot mirrors StatusPicker (s.color ?? category var).
+// the full tree. The status dot mirrors StatusPicker via shared `statusDotColor`.
 
-// The status dot colour: a per-status hex override when set, else the category's
-// semantic --el-* token (per the design-notes — the swap-layer equivalents of
-// StatusPicker's category vars, so the dot re-skins with a palette change).
-const STATUS_CATEGORY_EL: Record<string, string> = {
-  todo: '--el-text-faint',
-  in_progress: '--el-info',
-  done: '--el-success',
-};
-
+// The status dot colour routes through the shared `statusDotColor` helper: a
+// per-status hex override, else the per-status `--el-status-*` token (keyed by
+// status KEY so in_review / blocked / cancelled differentiate; category
+// fallback), so the dot re-skins with a palette change (MOTIR-1273 · 1266.2).
 function StatusDot({ status }: { status: WorkflowStatusDto }) {
-  const color = status.color ?? `var(${STATUS_CATEGORY_EL[status.category] ?? '--el-text-faint'})`;
+  const color = statusDotColor(status);
   return (
     <span
       aria-hidden
