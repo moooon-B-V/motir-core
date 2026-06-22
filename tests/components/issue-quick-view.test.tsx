@@ -184,7 +184,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
   // The banner shows only for a TODO-category item with blockers.
   const TODO = { ...DATA, statusLabel: 'To Do', statusCategory: 'todo' as const };
 
-  it('blocked: renders the Blocked banner naming open blockers as ?peek= swap-peek links', () => {
+  it('blocked: renders the Blocked banner naming open blockers as new-tab detail links (8.8.32)', () => {
     searchParamsString = 'view=list&peek=PROD-7';
     render(
       <IssueQuickViewPanel
@@ -194,16 +194,17 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     );
     expect(screen.getByText('Blocked')).toBeTruthy();
     expect(screen.getByText(/Waiting on 2 work items/)).toBeTruthy();
-    // A blocker link SWAPS the peek (preserves view, swaps peek), staying in-list.
-    expect(screen.getByRole('link', { name: 'PROD-3' }).getAttribute('href')).toBe(
-      '/items?view=list&peek=PROD-3',
-    );
-    expect(screen.getByRole('link', { name: 'PROD-8' }).getAttribute('href')).toBe(
-      '/items?view=list&peek=PROD-8',
-    );
-    // 8.8.31 exclusion: a blocker link is an in-list peek SWAP, not a detail-page
-    // link, so it must NOT open in a new tab (only the four detail links do).
-    expect(screen.getByRole('link', { name: 'PROD-3' }).getAttribute('target')).not.toBe('_blank');
+    // 8.8.32 (overrides the 2.5.20 peek-swap + the 8.8.31 exclusion): each blocker
+    // link now points to the blocker's DETAIL page and opens in a NEW TAB, so a
+    // click leaves the current peek open in the original tab.
+    const b3 = screen.getByRole('link', { name: 'PROD-3' });
+    expect(b3.getAttribute('href')).toBe('/items/PROD-3');
+    expect(b3.getAttribute('target')).toBe('_blank');
+    expect(b3.getAttribute('rel')).toContain('noopener');
+    const b8 = screen.getByRole('link', { name: 'PROD-8' });
+    expect(b8.getAttribute('href')).toBe('/items/PROD-8');
+    expect(b8.getAttribute('target')).toBe('_blank');
+    expect(b8.getAttribute('rel')).toContain('noopener');
   });
 
   it('ready: renders "Ready to start" when the verdict is ready (all blockers resolved, OR none — bug-ready-banner-no-deps)', () => {

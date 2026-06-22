@@ -127,6 +127,8 @@ describe('ReadinessBadge (2.4.5)', () => {
     screen.getByText(/Waiting on 2 work items/);
     const lnk = screen.getByRole('link', { name: 'PROD-3' });
     expect(lnk.getAttribute('href')).toBe('/items/PROD-3');
+    // Opt-in default: without `blockerLinksNewTab`, links stay same-tab (8.8.32).
+    expect(lnk.getAttribute('target')).not.toBe('_blank');
   });
 
   it('singularizes "issue" for a single blocker', () => {
@@ -185,6 +187,13 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
     expect(blocker.getAttribute('href')).toBe('/items/PROD-3');
     expect(blocker.textContent).toContain('PROD-3');
     expect(blocker.textContent).toContain('To Do');
+
+    // The detail-page banner blocker link stays SAME-TAB (the opt-in default;
+    // ReadinessBadge here gets no `blockerLinksNewTab`, unlike the 8.8.32 quick
+    // modal): it navigates to /items/<KEY> with NO target=_blank.
+    const bannerBlocker = screen.getByRole('link', { name: 'PROD-3' });
+    expect(bannerBlocker.getAttribute('href')).toBe('/items/PROD-3');
+    expect(bannerBlocker.getAttribute('target')).not.toBe('_blank');
 
     expect(screen.getByRole('link', { name: /Downstream/ }).textContent).toContain('Done');
 
