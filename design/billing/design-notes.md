@@ -239,17 +239,25 @@ Stripe `quantity` syncs to membership (ADR §3). So the design **shows the seat
 count wherever the seat price appears**, never an abstract "$5/seat" alone. Two
 sub-surfaces:
 
-- **(a) Upgrade review (before Checkout).** A `Card` titled **"Scale up Motir"**
-  with a `.seatcalc`: the member **avatars** + **"6 members → 6 seats"** and the
-  resolved **"6 × $5 = $30 / mo"**, then a `note` — **charged now, prorated** for
-  the rest of the cycle; **seats follow membership** (add/remove a member → the
-  next invoice adjusts via Stripe proration); annual at Checkout pays $20/mo
-  ($240/yr). CTA **"Continue to Checkout — $30/mo"** + Cancel.
-- **(b) Scaled state (post-upgrade).** The Motir line once paying: a **"Scaled"**
-  status `Pill`, a `.seatcalc` reading **"6 seats billed · all caps lifted"** +
-  **"$30 / mo"**, **"Renews 1 Jul 2026 · seats update automatically as members
-  join or leave"**, and the actions **"Manage seats"** (`i-users`) + **"Manage
-  plan & payment"** (→ Portal).
+- **(a) BEFORE — upgrade review (before Checkout).** A width-constrained `Card`
+  (a confirmation dialog) titled **"Scale up Motir"** with a `.seatcalc`: the
+  member **avatars** + **"6 members → 6 seats"** and the resolved **"6 × $5 = $30 /
+  mo"**, then a `note` — **charged now, prorated** for the rest of the cycle;
+  **seats follow membership** (add/remove a member → the next invoice adjusts via
+  Stripe proration); annual at Checkout pays $20/mo ($240/yr). CTA **"Continue to
+  Checkout — $30/mo"** + Cancel.
+- **(b) AFTER — the live Motir seats subscription (full-width).** The **scaled
+  counterpart to panel 2's free-Motir line** — same `Card` grammar as the Motir-AI
+  line, so the paid Motir plan reads as a real subscription, not a fragment. Head:
+  the `i-layers` glyph, **"Motir"** / "scaled seats subscription", an **"Active"**
+  status `Pill`. Body: a `.row1` with a **"Scaled"** tier `Pill` + **"6 seats"** +
+  the right-aligned **"Plan fee $30 / mo"**; a `.seatcalc` (avatars + **"6 seats
+  billed · 1 per member"** + **"6 × $5 = $30 / mo"**); a `desc` — **"Renews 1 Jul
+  2026 · all free-tier caps lifted … seats update automatically as members join or
+  leave — changes are prorated."**; actions **"Manage seats"** (`i-users`),
+  **"Manage plan & payment"** (→ Portal), and a **"Switch to annual — save
+  $120/yr"** cross-link. (This is the surface the user lands on after subscribing;
+  panel 2 shows the same org's Motir-AI line + the *free* Motir line.)
 
 > **Mirror (rung 1 — cited).** Showing the billed seat count at upgrade is how
 > both reference PM tools work. **Linear** bills for the number of **active

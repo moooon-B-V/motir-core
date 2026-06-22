@@ -1767,19 +1767,21 @@
 
     <!-- ════════════════ PANEL 6 — SEATS: THE SCALED-MOTIR UPGRADE ════════════ -->
     <div class="panel-label">
-      6 · Seats — the scaled-Motir upgrade. Motir Scaled is billed one seat per organization member
-      (the Jira/Linear model: pay for active members; the seat count = membership, prorated). (a) the
-      seat-review step before Checkout shows the exact member→seat count + the resulting total; (b)
-      the scaled state once paying shows the billed seats + a Manage-seats affordance.
+      6 · The Motir seats subscription (scaled). Motir Scaled is billed one seat per organization
+      member (the Jira/Linear model: pay for active members; seat count = membership, prorated). (a)
+      BEFORE — the upgrade review counts member→seats before Checkout; (b) AFTER — the live Motir
+      subscription line (the analogue of the Motir-AI line in panel 2, but for the paid SEATS plan):
+      status, billed seats, plan fee, renewal, Manage-seats + Portal. This is the scaled counterpart
+      to panel 2's free-Motir line.
     </div>
     <div class="panel">
       <div class="stage">
         <div class="page">
-          <div class="grid-2 top">
-            <!-- (a) seat-review before checkout -->
+          <div class="stack" style="margin-top: 4px">
+            <!-- (a) BEFORE — upgrade review (a Checkout confirmation dialog) -->
             <div>
-              <p class="crumb">a · Upgrade review — seats counted before Checkout</p>
-              <div class="card">
+              <p class="crumb">a · Before — upgrade review (member → seats counted at Checkout)</p>
+              <div class="card" style="max-width: 580px">
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
@@ -1810,32 +1812,52 @@
                 </div>
               </div>
             </div>
-            <!-- (b) scaled state — seats billed, post-upgrade -->
+            <!-- (b) AFTER — the live Motir seats subscription (full-width, the scaled
+                 counterpart to panel 2's free-Motir line + Motir-AI line) -->
             <div>
-              <p class="crumb">b · Scaled — seats billed (post-upgrade)</p>
+              <p class="crumb">b · After — your Motir subscription (Scaled · seats billed)</p>
               <div class="card">
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico tracker"><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg></span>
-                    <div><h3>Motir</h3><div class="hsub">The project-management tool — scaled.</div></div>
+                    <div>
+                      <h3>Motir</h3>
+                      <div class="hsub">The project-management tool — scaled seats subscription.</div>
+                    </div>
                   </div>
-                  <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Scaled</span>
+                  <span class="pill pill-active"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Active</span>
                 </div>
                 <div class="card-body">
-                  <div class="seatcalc">
-                    <span class="sc-l">
-                      <span class="avatars">
-                        <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
-                        <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
-                      </span>
-                      <span><b>6 seats</b> billed · all caps lifted</span>
-                    </span>
-                    <span class="sc-total">$30 <span class="per">/ mo</span></span>
+                  <div class="line">
+                    <div class="meta">
+                      <div class="row1">
+                        <span class="pill pill-tier">Scaled</span>
+                        <span class="pname">6 seats</span>
+                        <span class="fee">Plan fee <b>$30 / mo</b></span>
+                      </div>
+                      <div class="seatcalc" style="margin-top: 12px">
+                        <span class="sc-l">
+                          <span class="avatars">
+                            <span class="av1">YZ</span><span class="av2">JD</span><span class="av3">AK</span>
+                            <span class="av4">MP</span><span class="av5">RS</span><span class="av6">+1</span>
+                          </span>
+                          <span><b>6 seats</b> billed · 1 per member</span>
+                        </span>
+                        <span class="sc-total">6 × $5 = $30 <span class="per">/ mo</span></span>
+                      </div>
+                      <div class="desc">
+                        Renews <b>1 Jul 2026</b> · all free-tier caps lifted (unlimited work items &amp;
+                        projects, multi-workspace). Seats update automatically as members join or
+                        leave — changes are prorated.
+                      </div>
+                    </div>
                   </div>
-                  <div class="desc">Renews <b>1 Jul 2026</b> · seats update automatically as members join or leave.</div>
                   <div class="acts">
-                    <button class="btn btn-secondary">Manage seats <svg viewBox="0 0 24 24"><use href="#i-users" /></svg></button>
+                    <button class="btn btn-primary">Manage seats <svg viewBox="0 0 24 24"><use href="#i-users" /></svg></button>
                     <button class="btn btn-secondary">Manage plan &amp; payment <svg viewBox="0 0 24 24"><use href="#i-external" /></svg></button>
+                    <a class="xlink" href="#" style="align-self: center; margin-left: 4px">
+                      Switch to annual — save $120 / yr
+                    </a>
                   </div>
                 </div>
               </div>
