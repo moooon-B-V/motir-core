@@ -10,6 +10,18 @@
 
 import { appendFilterParams, type IssueFilter } from '@/lib/issues/issueListFilter';
 
+/**
+ * The minimum width of the flexible **Title** track in the issue list/tree grid
+ * (bug MOTIR-1307). The Title column is `minmax(<this>, 1fr)` in every view
+ * (List · lazy Tree · static Tree) so that, under width pressure, the track
+ * never collapses to 0 and lets the title cell's non-shrinkable content (the
+ * type icon + `MOTIR-N` identifier) spill into — and overlap — the adjacent
+ * Type column. A `minmax(0,1fr)` floor of `0` is exactly what caused that
+ * overlap on narrow viewports; this floor clears the icon + identifier with a
+ * little title still showing. Single-sourced here so all three table views agree.
+ */
+export const ISSUE_TITLE_MIN_TRACK = '10rem';
+
 /** The two issue-list views the switcher toggles. Tree is the default. */
 export type IssueListView = 'tree' | 'list';
 

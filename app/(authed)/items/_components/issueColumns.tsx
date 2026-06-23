@@ -136,7 +136,10 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
     {
       key: 'estimate',
       header: t('issues.columns.estimate'),
-      width: 90,
+      // 72px (was 90) — the right-aligned mono duration ("10h 30m" ≈ 69px) fits,
+      // and the tighter footprint pushes back the width at which the row starts
+      // to clip (bug MOTIR-1307).
+      width: 72,
       align: 'end',
       sortColumn: 'estimate',
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only value
@@ -173,7 +176,10 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
     {
       key: 'status',
       header: t('issues.columns.status'),
-      width: 130,
+      // 108px (was 130) — the widest status Pill ("In Progress" ≈ 88px) fits
+      // with room to spare, and the tighter footprint pushes back the width at
+      // which the row starts to clip (bug MOTIR-1307).
+      width: 108,
       sortColumn: 'status',
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only Pill
       // otherwise. The cell owns its own category→tone rendering.

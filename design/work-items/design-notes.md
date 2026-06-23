@@ -317,18 +317,33 @@ three drawn columns — that shipped code is enforced reality, rung 2). The List
 **reuses that exact set and order**, so Tree↔List is column-identical and 2.5.8
 reuses the same `cell` render-props:
 
-| Column   | Width (px) | Cell                                                  | Sorts by                       |
-| -------- | ---------- | ----------------------------------------------------- | ------------------------------ |
-| Title    | `1fr`      | `IssueTypeIcon` (type hue) · mono identifier · title  | **issue key** (the default)    |
-| Priority | 120        | `PRIORITY_META` chip (`Pill` tone + direction icon)   | priority rank (highest→lowest) |
-| Assignee | 150        | initial-letter `Avatar` · name, or muted "Unassigned" | assignee name                  |
-| Reporter | 150        | initial-letter `Avatar` · name                        | reporter name                  |
-| Due      | 120        | formatted date, or muted `—`                          | due date                       |
-| Est.     | 90 (end)   | formatted duration, or muted `—` (right-aligned)      | estimate minutes               |
-| Status   | 130        | `Pill` by lifecycle category (the `STATUS_TONE` map)  | workflow status order          |
+| Column   | Width (px)   | Cell                                                  | Sorts by                       |
+| -------- | ------------ | ----------------------------------------------------- | ------------------------------ |
+| Title    | `≥10rem 1fr` | `IssueTypeIcon` (type hue) · mono identifier · title  | **issue key** (the default)    |
+| Priority | 120          | `PRIORITY_META` chip (`Pill` tone + direction icon)   | priority rank (highest→lowest) |
+| Assignee | 150          | initial-letter `Avatar` · name, or muted "Unassigned" | assignee name                  |
+| Reporter | 150          | initial-letter `Avatar` · name                        | reporter name                  |
+| Due      | 120          | formatted date, or muted `—`                          | due date                       |
+| Est.     | 72 (end)     | formatted duration, or muted `—` (right-aligned)      | estimate minutes               |
+| Status   | 108          | `Pill` by lifecycle category (the `STATUS_TONE` map)  | workflow status order          |
 
-Grid template (identical to `IssueTreeTable` / `IssueTreeSkeleton`):
-`minmax(0,1fr) 120px 150px 150px 120px 90px 130px`.
+Grid template (identical to `IssueTreeTable` / `IssueTreeSkeleton`; the live
+template also carries the later **Type** (116), **Points** (80), and **Actions**
+(76) columns added after this table was drawn):
+`minmax(10rem,1fr) 120px 150px 150px 120px 72px 108px`.
+
+**Narrow-viewport floor (bug MOTIR-1307).** The Title track is `minmax(10rem,1fr)`,
+**not** `minmax(0,1fr)`: a `0` floor let the flexible track collapse fully under
+width pressure (a viewport narrower than the fixed-column sum), and the Title
+cell's non-shrinkable content (the `IssueTypeIcon` + the mono `MOTIR-N`
+identifier, both `shrink-0`) then spilled into — and visually overlapped — the
+adjacent **Type** chip. The `10rem` floor clears the icon + identifier with a
+little title showing, so the columns never collide. Est. (90→72) and Status
+(130→108) were also trimmed to their content + a margin, shrinking the fixed
+footprint so the row starts to clip at a narrower width. (A full horizontal-scroll
+treatment for very narrow viewports is deferred: a naive `overflow-x-auto`
+wrapper conflicts with the List's `sticky` header and the Tree's page-level
+virtualization scroll model — it needs its own responsive-table design pass.)
 
 **Decision — no NEW "Updated" column (the card offered Priority/Updated as
 optional extras).** Priority is already a Tree column, and the seven existing

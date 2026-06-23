@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils/cn';
 import {
   buildIssueListHref,
   nextSort,
+  ISSUE_TITLE_MIN_TRACK,
   type IssueSort,
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
@@ -66,11 +67,13 @@ export function IssueListTable({
   // detail page via the link's real href.
   const onPeekClick = usePeekRowClick();
 
-  // The grid template mirrors the TreeTable: the Title column flexes, the rest
-  // take their fixed widths (Priority 120 · Assignee 150 · Reporter 150 · Due 120
-  // · Est. 90 · Status 130).
+  // The grid template mirrors the TreeTable: the Title column flexes (floored at
+  // ISSUE_TITLE_MIN_TRACK so it can't collapse onto the Type chip under width
+  // pressure — bug MOTIR-1307), the rest take their fixed widths (Type 116 ·
+  // Priority 120 · Assignee 150 · Reporter 150 · Due 120 · Est. 72 · Points 80 ·
+  // Status 108 · Actions 76).
   const gridTemplate = [
-    'minmax(0,1fr)',
+    `minmax(${ISSUE_TITLE_MIN_TRACK},1fr)`,
     ...columns.slice(1).map((c) => (c.width ? `${c.width}px` : 'max-content')),
   ].join(' ');
 
