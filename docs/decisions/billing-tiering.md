@@ -312,6 +312,31 @@ curve stays monotonic top-to-bottom.
 > seat fee fund credits (`notes.html` #10). COGS/margin figures live only in the
 > private `motir-meta/margin-analysis.md`.
 
+**The CODING comp — Cursor (rung 1, the AI-ladder mirror; June 2026).** Jira /
+Linear (the verified mirror above) bound the **PM** product; **Cursor** is the
+reference for the **AI-coding** use-case Pro / Max sell into, and its shape is
+near-identical to ours — a **dollar-denominated usage credit metered by model ×
+context × output**, the same per-credit mechanic as `credit-model.md` §2:
+
+- **Hobby $0** (limited) · **Pro $20** (~$20 of model usage included, ≈ 500
+  premium requests) · **Pro+ $60** (~$70 usage, ~3×) · **Ultra $200** (~$400
+  usage, ~20×) · Teams $40/seat · Enterprise custom. (~20% off annual.)
+  ([Cursor pricing](https://cursor.com/pricing), retrieved 2026-06-23.)
+
+**What it tells the AI ladder.** Cursor's coding ladder runs to **$200 / 20×**
+_for coding alone_ — real agent-coding burn is heavy, and the market prices a
+dedicated heavy tier for it. Motir AI **bundles planning + coding** into one pool,
+so **Pro ($75) and Max ($150) are read by a coding user against Cursor's $60 / $200**
+— and at the v1 pool sizes (Pro 8,000 / Max 30,000) a coding-heavy user gets less
+agent runway per dollar than Cursor's compute-at-cost passthrough. This does **not**
+change the v1 seed numbers here (the model-choice transparency + top-ups remain the
+release valve), but it is the **load-bearing input to the deferred pool-resize
+review** (Consequences): once Epic-9 coding has real per-task burn telemetry,
+re-benchmark Pro / Max against Cursor's included-usage and decide whether the pools
+(not the copy) must grow. The compute-per-dollar comparison vs our cost-plus markup
+is worked in the private `motir-meta/margin-analysis.md` (COGS stays out of this
+open repo).
+
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
 A paid org's subscription carries **two recurring items**: one **shared per-seat
@@ -655,6 +680,20 @@ gates the mutations. Self-host: N/A (no billing surface).
   Epic 7 internals beyond the already-shipped credit ledger it builds on.
 - **MOTIR-1106 (8.6.2)** is the same pricing-strategy decision in Epic 8.6 and is
   now redundant with this ADR — close it as a duplicate, pointing here.
+- **⚠️ Deferred — AI pool-size review once Epic-9 coding has burn telemetry (flagged
+  2026-06-23).** The v1 pool sizes (§2: Standard 2,000 / Pro 8,000 / Max 30,000) were
+  sized off **planning** burn (a pass ≈ 150–250 credits); **coding** burn is far
+  heavier and **unmeasured** (Epic 9 isn't built — `credit-model.md` meters the
+  planner only). The CODING-comp benchmark (§2, **Cursor** — a $20 → $60 → $200/20×
+  ladder for coding alone) shows the market prices a dedicated heavy tier for agent
+  coding, while Motir bundles planning + coding into one pool — so a coding-heavy
+  user reads Pro/Max against Cursor and may find the pools tight. This did NOT change
+  the v1 numbers (the storefront copy was corrected instead — 8.1.21 / MOTIR-1311 —
+  to promise _running_ the agent + top-ups, never "whole tasks"). **When Epic-9
+  coding ships real per-task burn, re-benchmark Pro/Max against Cursor's included
+  usage and decide whether the POOL SIZES must grow** (the margin headroom for that
+  is worked privately in `motir-meta/margin-analysis.md`). Owner: a future Epic-8/9
+  pricing re-tune subtask, not this story.
 - **Out of scope (named so they land in their owning story):** the actual Stripe
   account creation (a `manual/human` prerequisite of 8.1.2); platform-staff
   manual tier flips for Enterprise (Epic 10); the org-scoped usage/credit _view_
