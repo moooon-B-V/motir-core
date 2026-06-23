@@ -1,17 +1,18 @@
-// E2E: the Story-4.6 charts journey (the closing test Subtask 4.6.7) — the
-// burndown + velocity analytics over the real stack (Next routes + Postgres).
+// E2E: the Story-4.6 charts journey (the closing test Subtask 4.6.7; the
+// in-sprint chart reframed to the Linear CYCLE GRAPH by Story 8.14) — the cycle
+// graph + velocity analytics over the real stack (Next routes + Postgres).
 //
 // The per-subtask layers are proven in isolation already: the aggregates in
-// tests/integration/reports/* (4.6.3 / 4.6.4), the SVG primitives in
-// tests/components/charts.test.tsx (4.6.2), the mounted slots in
-// tests/components/{scrum-board,sprint-report}.test.tsx (4.6.5 / 4.6.6). THIS
-// spec proves them composed: a signed-in user sees the live in-sprint burndown
-// in the scrum header BESIDE the numeric remaining, watches the actual line
-// reflect a new burn, completes the sprint, and reads the completed-sprint
-// burndown + the velocity bars + the average on the sprint report — plus the
-// low-history (fresh project) and unestimated degraded states, rendered
-// without errors. The at-scale combined Scrum journey is Story 4.7's
-// (board-scrum-at-scale*), not duplicated here.
+// tests/integration/reports/* (8.14.3 / 4.6.4 + the 8.14.7 seam), the SVG
+// primitives in tests/components/charts.test.tsx (4.6.2), the mounted slots in
+// tests/components/{scrum-board,sprint-report,cycle-graph}.test.tsx. THIS spec
+// proves them composed: a signed-in user sees the live in-sprint cycle graph in
+// the scrum header BESIDE the numeric remaining (asserting the AUTHORITATIVE
+// cycle API body — scope vs completed), watches a new burn advance completed,
+// completes the sprint, and reads the completed-sprint cycle graph (the four
+// series) + the velocity bars + the average on the sprint report — plus the
+// low-history (fresh project) and unestimated degraded states, rendered without
+// errors. The at-scale combined Scrum journey is Story 4.7's, not duplicated.
 //
 // One seeded tenant (workers=1, serial — later tests build on earlier sprint
 // completions, the velocity history). The fixture seeds through the SHIPPED
@@ -110,17 +111,23 @@ test.describe('charts (4.6.7)', () => {
     seed = await seedScrumBoard(OWNER_EMAIL);
   });
 
-  test('the scrum header shows the live burndown beside the numeric remaining; a new done issue burns the actual line', async ({
+  test('the scrum header shows the live cycle graph beside the numeric remaining; a new done issue advances completed', async ({
     page,
   }) => {
     await signIn(page, seed.email, seed.password);
     await page.setViewportSize({ width: 1920, height: 1080 });
+
+    // AUTHORITATIVE signal (CLAUDE.md E2E discipline): await the cycle API
+    // response + body, never the optimistic chart. Arm it BEFORE navigation.
+    const cycleResp = page.waitForResponse(
+      (r) => /\/api\/sprints\/[^/]+\/burndown/.test(r.url()) && r.request().method() === 'GET',
+    );
     await page.goto(`/boards?board=${encodeURIComponent(seed.scrumBoardId)}`);
 
     const header = page.getByTestId('sprint-header');
     await expect(header).toBeVisible({ timeout: 30_000 });
 
-    // The burndown slot renders BESIDE the numeric summary — both visible at
+    // The cycle-graph slot renders BESIDE the numeric summary — both visible at
     // once (the 4.6.5 seam contract: the chart augments, never replaces).
     await expect(
       header.locator('[aria-label="Story points: 10 committed, 2 completed, 8 remaining"]'),
@@ -130,26 +137,33 @@ test.describe('charts (4.6.7)', () => {
     await expect(slot.getByText('Burndown', { exact: true })).toBeVisible();
     await expect(slot.getByText(/Day \d+ of \d+/)).toBeVisible();
     // The chart is a labelled role="img" SVG (the finding-#35 a11y contract).
-    await expect(slot.getByRole('img', { name: 'Burndown' })).toBeVisible();
+    await expect(slot.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible();
 
-    // The compact chart's data-table fallback carries the numbers: today's
-    // actual remaining is 8 (B's 2 of 10 burned before we arrived).
-    let table = await openDataTable(slot);
-    await expect(table.getByRole('row').filter({ hasText: '(today)' })).toContainText('8');
+    // The cycle DTO body is the burn-UP of LIVE scope vs completed: the last
+    // drawn day reconciles to the header (scope 10, completed 2).
+    const body = await (await cycleResp).json();
+    const drawn = body.days.filter((d: { scope: number | null }) => d.scope !== null);
+    const last = drawn[drawn.length - 1];
+    expect(last.scope).toBe(10);
+    expect(last.completed).toBe(2);
 
-    // Burn A (3 pts) through the real workflow → the sprint remaining drops to
-    // 5, and the redrawn actual line + table reflect it after a reload.
+    // Burn A (3 pts) through the real workflow → completed advances to 5, and the
+    // redrawn cycle graph reflects it after a reload (await the fresh response).
     await markDone(seed, seed.issueA.id);
+    const cycleResp2 = page.waitForResponse(
+      (r) => /\/api\/sprints\/[^/]+\/burndown/.test(r.url()) && r.request().method() === 'GET',
+    );
     await page.reload();
     await expect(header).toBeVisible({ timeout: 30_000 });
     await expect(
       header.locator('[aria-label="Story points: 10 committed, 5 completed, 5 remaining"]'),
     ).toBeVisible();
-    table = await openDataTable(page.getByTestId('sprint-burndown'));
-    await expect(table.getByRole('row').filter({ hasText: '(today)' })).toContainText('5');
+    const body2 = await (await cycleResp2).json();
+    const drawn2 = body2.days.filter((d: { scope: number | null }) => d.scope !== null);
+    expect(drawn2[drawn2.length - 1].completed).toBe(5);
   });
 
-  test('the completed sprint report shows the burndown; velocity shows the low-history state for a fresh project', async ({
+  test('the completed sprint report shows the cycle graph; velocity shows the low-history state for a fresh project', async ({
     page,
   }) => {
     // Complete Alpha through the shipped lifecycle (C carries to the backlog).
@@ -158,17 +172,20 @@ test.describe('charts (4.6.7)', () => {
     await signIn(page, seed.email, seed.password);
     await openReport(page, seed.sprintId, 'Sprint Alpha');
 
-    // The completed-sprint burndown renders in the report's chart seam: the
-    // section heading, the labelled SVG, and the data-table fallback whose
-    // Event column pins the start (committed 10) + completion markers.
+    // The completed-sprint cycle graph renders in the report's chart seam: the
+    // section heading (label stays "Burndown"), the labelled SVG, and the
+    // completed-shape <desc> + the data-table fallback (the four series).
     await expect(page.getByText('Burndown', { exact: true }).first()).toBeVisible();
-    const burndownImg = page.getByRole('img', { name: 'Burndown' });
-    await expect(burndownImg).toBeVisible();
+    const cycleImg = page.getByRole('img', { name: 'Sprint cycle graph' });
+    await expect(cycleImg).toBeVisible();
     // The <desc> reads as the completed-sprint sentence (not the live "as of
     // today" form) — the series switched to its completed shape.
-    await expect(burndownImg).toHaveAccessibleDescription(/Completed-sprint burndown/);
+    await expect(cycleImg).toHaveAccessibleDescription(/Completed-sprint cycle graph/);
     const table = await openDataTable(page.locator('section').filter({ hasText: 'Burndown' }));
-    await expect(table.getByRole('row').filter({ hasText: 'Sprint started' })).toContainText('10');
+    // The four cumulative series are the data-table columns (finding #35).
+    for (const col of ['Scope', 'Completed', 'Started', 'Target']) {
+      await expect(table.getByRole('columnheader', { name: col, exact: true })).toBeVisible();
+    }
 
     // ONE completed sprint = not enough velocity history — the low-history
     // empty state renders, never an axis-of-one.
@@ -215,10 +232,10 @@ test.describe('charts (4.6.7)', () => {
     await signIn(page, seed.email, seed.password);
     await openReport(page, gammaId, 'Sprint Gamma');
 
-    // The burndown renders on the issue-count axis (the degraded statistic),
-    // and the velocity window now spans 3 completed sprints with Gamma's 0s —
-    // every figure stays a number, never NaN, and no chart error state shows.
-    await expect(page.getByText('Work items remaining', { exact: true })).toBeVisible();
+    // The cycle graph renders on the degraded issue-count series (no point
+    // baseline anywhere), and the velocity window now spans 3 completed sprints
+    // with Gamma's 0s — every figure stays a number, never NaN, no error state.
+    await expect(page.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible();
     await expect(page.getByText('Last 3 completed sprints').first()).toBeVisible();
     await expect(page.getByText("Couldn't load the chart")).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('NaN');

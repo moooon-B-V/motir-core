@@ -278,16 +278,20 @@ test.describe('reports @smoke', () => {
     expect(sHref).toBe(`/sprints/${sprint.id}/report`);
     expect(new Set([bHref, vHref, sHref]).size).toBe(3); // three distinct URLs
 
-    // Burndown → its own page: the sprint picker + the full burndown chart.
+    // Burndown → its own page: the sprint picker + the full cycle-graph chart.
     await burndownLink.click();
     await page.waitForURL(/\/reports\/burndown\?sprint=/);
     await expect(page.getByRole('heading', { name: 'Burndown chart' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Sprint' })).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Burndown' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible({
+      timeout: 15_000,
+    });
     // The ?sprint= param round-trips on reload (a shareable/bookmarkable report).
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`sprint=${sprint.id}`));
-    await expect(page.getByRole('img', { name: 'Burndown' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Velocity → its own cross-sprint page (one started sprint = low-history
     // state, but the page chrome + title render — it is NOT a sprint URL).
