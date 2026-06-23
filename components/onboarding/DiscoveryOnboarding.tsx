@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { DiscoveryChatRail } from './DiscoveryChatRail';
 import { TierReviewGate } from './TierReviewGate';
 import { DesignStep } from './DesignStep';
+import { GenerationHandoff } from './GenerationHandoff';
 import { OnboardingCanvas } from './OnboardingCanvas';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
@@ -49,6 +50,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     decideValidateEarly,
     openTier,
     openDesign,
+    enterGeneration,
     saveDesign,
     back,
     dismissError,
@@ -99,6 +101,24 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
             saveDesign(choice);
             back();
           }}
+        />
+      </div>
+    );
+  }
+
+  // The pre-plan → generation HAND-OFF (Subtask 7.3.28 / MOTIR-1041) — the LAST
+  // 7.3 affordance, entered from the hub's "Plan → your project" exit once the
+  // tiers are complete. It freezes the already-persisted baseline as generation's
+  // input and hands off to 7.4; Back re-enters the loop (the baseline is revisable,
+  // not locked). It does NOT generate the tree — that is 7.4.
+  if (state.view === 'generation') {
+    return (
+      <div className="h-dvh w-full">
+        <GenerationHandoff
+          onBack={back}
+          reviewedCount={state.producedKinds.length}
+          designChoice={state.session.designChoice}
+          designApplied={showDesign}
         />
       </div>
     );
@@ -168,15 +188,16 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
             <div className="absolute right-4 bottom-4 max-w-[20rem] rounded-(--radius-card) border border-(--el-border) bg-(--el-tint-mint) px-4 py-4 shadow-(--shadow-card)">
               <p className="font-medium text-(--el-text-strong)">{t('completeTitle')}</p>
               <p className="mt-1 text-sm text-(--el-text-strong)">{t('completeBody')}</p>
-              {/* The "Go to plan phase" exit is Subtask 7.3.28 / MOTIR-1041 — drawn
-                  disabled here, wired by that card. */}
+              {/* The "Go to plan phase" exit (Subtask 7.3.28 / MOTIR-1041) — the
+                  LAST 7.3 affordance. Clicking IS the confirmation (no modal, no
+                  readiness gate): it enters the generation hand-off, freezing the
+                  baseline and handing off to 7.4. */}
               <Button
                 variant="primary"
                 size="sm"
                 className="mt-3"
-                disabled
                 rightIcon={<ArrowRight className="size-4" />}
-                title={t('goToPlanSoon')}
+                onClick={enterGeneration}
               >
                 {t('goToPlanLabel')}
               </Button>

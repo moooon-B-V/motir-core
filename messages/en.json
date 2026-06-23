@@ -4007,6 +4007,17 @@
       "footerNote": "This styles your project, not Motir — nothing locks, change it any time.",
       "reset": "Reset to default",
       "use": "Use this design"
+    },
+    "generation": {
+      "title": "Building your plan",
+      "back": "Back to planning",
+      "heading": "Your direction is set",
+      "lead": "Motir will turn it into a plan — epics, stories, and tasks for you to review next.",
+      "baselineTitle": "What we'll plan from",
+      "stepsReviewed": "{count, plural, one {# step reviewed} other {# steps reviewed}}",
+      "designLabel": "Design",
+      "designDefault": "Default look",
+      "revisableNote": "Nothing's locked. Go back any time to revise a step or the design — your plan will follow."
     }
   }
 }

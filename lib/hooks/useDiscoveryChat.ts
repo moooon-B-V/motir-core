@@ -61,6 +61,11 @@ export interface UseDiscoveryChat {
   openTier: (kind: DirectionDocKind) => void;
   /** Open the web-only full-page design step (Subtask 7.3.27 / MOTIR-1040). */
   openDesign: () => void;
+  /** Enter the pre-plan → generation hand-off (Subtask 7.3.28 / MOTIR-1041) — the
+   *  LAST 7.3 affordance, reachable once every tier is complete. It freezes the
+   *  already-persisted pre-plan baseline as the generation input and hands off to
+   *  7.4; it does NOT generate the tree. Back (the hub) keeps the baseline revisable. */
+  enterGeneration: () => void;
   /** Persist the chosen design (Subtask 7.3.81): update locally at once, then PATCH
    *  /api/ai/pre-plan best-effort (a failed save keeps the local choice). */
   saveDesign: (choice: DesignChoiceDTO) => void;
@@ -244,6 +249,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     [],
   );
   const openDesign = useCallback(() => dispatch({ type: 'openDesign' }), []);
+  const enterGeneration = useCallback(() => dispatch({ type: 'enterGeneration' }), []);
 
   // Persist the design choice (7.3.81). Update local state OPTIMISTICALLY so the
   // step restores the pick immediately, then PATCH best-effort: a failed save
@@ -271,6 +277,7 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
     decideValidateEarly,
     openTier,
     openDesign,
+    enterGeneration,
     saveDesign,
     back,
     dismissError,
