@@ -16,6 +16,7 @@ import { verificationRepository } from '@/lib/repositories/verificationRepositor
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import {
   AlreadyMemberError,
   InvalidEmailError,
@@ -302,6 +303,7 @@ export const workspaceInvitesService = {
       throw new InviteEmailMismatchError(payload.email);
     }
 
+    let organizationId: string | null = null;
     await db.$transaction(async (tx) => {
       try {
         await workspaceMembershipRepository.create(
@@ -333,6 +335,7 @@ export const workspaceInvitesService = {
       // same invariant.) Idempotent on an already-member.
       const workspace = await workspaceRepository.findByIdInTx(payload.workspaceId, tx);
       if (workspace) {
+        organizationId = workspace.organizationId;
         await organizationsService.ensureOrgMembership(
           sessionUser.id,
           workspace.organizationId,
@@ -341,6 +344,12 @@ export const workspaceInvitesService = {
       }
       await verificationRepository.deleteByIdentifier(INVITE_IDENTIFIER_PREFIX + token, tx);
     });
+
+    // Committed → resync the org's scaled-tracker seat quantity (8.1.12): a new
+    // invitee enrolling in the org grows its member count. Best-effort + OUTSIDE
+    // the tx (a billing failure must never fail the accept); idempotent absolute
+    // set, so it no-ops for an already-member or a non-scaled org.
+    if (organizationId) await enqueueScaledTrackerSeatSync(organizationId);
 
     return { workspaceId: payload.workspaceId };
   },

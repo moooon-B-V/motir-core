@@ -7,6 +7,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withOrgContext } from '@/lib/organizations/context';
+import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
@@ -297,6 +298,10 @@ export const organizationsService = {
       }
       throw err;
     }
+    // The membership committed (a duplicate threw above) → resync the org's
+    // scaled-tracker seat quantity (8.1.12). Best-effort + OUTSIDE the tx: a
+    // billing failure must never roll back or fail the add.
+    await enqueueScaledTrackerSeatSync(input.organizationId);
   },
 
   /**
@@ -389,6 +394,10 @@ export const organizationsService = {
         );
       },
     );
+    // The removal committed → resync the org's scaled-tracker seat quantity
+    // (8.1.12). Best-effort + OUTSIDE the tx (a billing failure must never fail
+    // the remove); idempotent absolute set, so a no-op remove resyncs harmlessly.
+    await enqueueScaledTrackerSeatSync(input.organizationId);
   },
 
   /**

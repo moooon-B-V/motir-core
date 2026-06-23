@@ -14,11 +14,21 @@ const getOrgUsageMock = vi.fn<(q: unknown) => Promise<RawUsageResponse>>();
 const getOrgSubscriptionMock = vi.fn<(q: unknown) => Promise<RawSubscriptionResponse>>();
 const createCheckoutSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
 const createPortalSessionMock = vi.fn<(i: unknown) => Promise<{ url: string }>>();
+const setSeatQuantityMock =
+  vi.fn<(i: { coreOrganizationId: string; quantity: number }) => Promise<unknown>>();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgUsage: (q: unknown) => getOrgUsageMock(q),
   getOrgSubscription: (q: unknown) => getOrgSubscriptionMock(q),
   createCheckoutSession: (i: unknown) => createCheckoutSessionMock(i),
   createPortalSession: (i: unknown) => createPortalSessionMock(i),
+  setSeatQuantity: (i: { coreOrganizationId: string; quantity: number }) => setSeatQuantityMock(i),
+}));
+// Silence the post-commit seat-sync ENQUEUE that org-membership writes now fire
+// (8.1.12) — this suite drives membership through the real services (which would
+// otherwise hit Inngest with MOTIR_CLOUD on); the enqueue→job wiring is covered
+// in billing-seat-sync.test.ts, and the sync BEHAVIOUR is tested directly below.
+vi.mock('@/lib/billing/seatSync', () => ({
+  enqueueScaledTrackerSeatSync: vi.fn(),
 }));
 
 const { billingService } = await import('@/lib/services/billingService');
@@ -109,10 +119,12 @@ beforeEach(async () => {
   getOrgSubscriptionMock.mockReset();
   createCheckoutSessionMock.mockReset();
   createPortalSessionMock.mockReset();
+  setSeatQuantityMock.mockReset();
   getOrgUsageMock.mockResolvedValue(rawUsage());
   getOrgSubscriptionMock.mockResolvedValue(rawSubscription());
   createCheckoutSessionMock.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/cs_1' });
   createPortalSessionMock.mockResolvedValue({ url: 'https://billing.stripe.com/p/session/1' });
+  setSeatQuantityMock.mockResolvedValue({ applied: true, outcome: 'updated' });
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['BETTER_AUTH_URL'] = APP_ORIGIN;
 });
@@ -297,5 +309,96 @@ describe('billingService.openPortal', () => {
       coreOrganizationId: organizationId,
       returnUrl: `${APP_ORIGIN}/settings/organization/billing`,
     });
+  });
+});
+
+describe('billingService.syncScaledTrackerSeatQuantity (Subtask 8.1.12)', () => {
+  it('sets the seat quantity to the live active-member count for an active scaled org', async () => {
+    // makeOrgWithRoles seeds owner + admin + member = 3 org members.
+    const { organizationId } = await makeOrgWithRoles();
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: SCALED,
+    });
+
+    const result = await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    // Absolute set: the recomputed count is sent over the boundary (no delta).
+    expect(setSeatQuantityMock).toHaveBeenCalledTimes(1);
+    expect(setSeatQuantityMock).toHaveBeenCalledWith({
+      coreOrganizationId: organizationId,
+      quantity: 3,
+    });
+    expect(result).toEqual({ applied: true, outcome: 'updated' });
+  });
+
+  it('re-derives the count from truth — rapid adds do not double-count (absolute set)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles(); // 3 members
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: SCALED,
+    });
+
+    // Two more members join concurrently; the absolute count is now 5.
+    const u1 = await createTestUser();
+    const u2 = await createTestUser();
+    await Promise.all([
+      organizationsService.addMember({
+        organizationId,
+        userId: u1.id,
+        role: 'member',
+        actorUserId: owner.id,
+      }),
+      organizationsService.addMember({
+        organizationId,
+        userId: u2.id,
+        role: 'member',
+        actorUserId: owner.id,
+      }),
+    ]);
+
+    await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    // Recompute-from-truth → exactly the final count, never an accumulated delta.
+    expect(setSeatQuantityMock).toHaveBeenLastCalledWith({
+      coreOrganizationId: organizationId,
+      quantity: 5,
+    });
+  });
+
+  it('no-ops (no boundary call) for a free org with no active scaled subscription', async () => {
+    const { organizationId } = await makeOrgWithRoles(); // never made scaled
+
+    const result = await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    expect(setSeatQuantityMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ applied: false, outcome: 'no_active_tracker_subscription' });
+  });
+
+  it('no-ops for a past_due (non-active) scaled subscription', async () => {
+    const { organizationId } = await makeOrgWithRoles();
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: { ...SCALED, status: 'past_due' },
+    });
+
+    const result = await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    expect(setSeatQuantityMock).not.toHaveBeenCalled();
+    expect(result.applied).toBe(false);
+  });
+
+  it('no-ops off-cloud — there is no billing self-hosted', async () => {
+    const { organizationId } = await makeOrgWithRoles();
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: SCALED,
+    });
+    delete process.env['MOTIR_CLOUD'];
+
+    const result = await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    expect(setSeatQuantityMock).not.toHaveBeenCalled();
+    expect(result.applied).toBe(false);
   });
 });

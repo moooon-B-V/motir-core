@@ -266,6 +266,45 @@ async function readSessionUrl(res: Response): Promise<{ url: string }> {
   return { url: sessionUrl };
 }
 
+// The motir-ai seat-sync response (Subtask 8.1.12): whether a Stripe write was
+// applied + why. The caller (the seat-sync job) uses it only for logging — the
+// durable effect is on the Stripe side.
+export interface SeatQuantityResult {
+  applied: boolean;
+  outcome:
+    | 'org_not_found'
+    | 'no_customer'
+    | 'no_active_tracker_subscription'
+    | 'unchanged'
+    | 'updated';
+}
+
+// POST /v1/stripe/seat-quantity — set the org's scaled-tracker seat `quantity` to
+// an ABSOLUTE target (the recomputed active-member count), prorated + invoiced
+// promptly (Subtask 8.1.12 → the 8.1.5/8.1.12 endpoint). motir-ai owns the Stripe
+// SDK + secret and resolves the tracker line itself; motir-core only passes the
+// org + count. A non-scaled org is a benign no-op `200` (never a 404), so the
+// caller fires this on any membership change. A transport failure / non-2xx maps
+// to a typed error the seat-sync job's retry budget absorbs.
+export async function setSeatQuantity(input: {
+  coreOrganizationId: string;
+  quantity: number;
+}): Promise<SeatQuantityResult> {
+  const { url, serviceToken } = config();
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/stripe/seat-quantity`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(input),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as SeatQuantityResult;
+}
+
 // GET /v1/preplan — the resumable pre-plan read surface (Subtask 7.3.25): the
 // session decisions/position/transcript + each artifact's forward revision log /
 // diffs. Read-through: the caller (the 7.3.5 gate / 7.3.9 resume) has already
