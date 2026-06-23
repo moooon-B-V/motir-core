@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
 import { Check, ChevronDown, Mail, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
@@ -23,6 +24,7 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
   const t = useTranslations('shell');
   const tl = useTranslations('labels');
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -39,8 +41,14 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
     startTransition(async () => {
       await switchWorkspaceAction(workspaceId);
       setOpen(false);
-      // Re-render server components against the new workspace context.
-      router.refresh();
+      // Switching workspace re-points the active project, so the current URL may
+      // be scoped to the OLD workspace and client islands won't re-seed on a bare
+      // refresh (MOTIR-1312). Land on the work-items surface — abandoning the
+      // stale deep URL + remounting islands — and only refresh in place when
+      // already there.
+      const target = afterContextSwitchTarget(pathname);
+      if (target) router.push(target);
+      else router.refresh();
     });
   }
 

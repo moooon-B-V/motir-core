@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
 import { Check, ChevronDown, Coins, CreditCard, Plus, Settings, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
@@ -45,6 +46,7 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const ts = useTranslations('shell');
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [createWsOpen, setCreateWsOpen] = useState(false);
@@ -65,7 +67,14 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
     startTransition(async () => {
       await switchOrganizationAction(orgId);
       setOpen(false);
-      router.refresh();
+      // Switching org re-points the active workspace + project (the 8.8.28
+      // cascade), so the current URL may be scoped to the OLD org and client
+      // islands won't re-seed on a bare refresh (MOTIR-1312). Land on the
+      // work-items surface — abandoning the stale deep URL + remounting islands
+      // — and only refresh in place when already there.
+      const target = afterContextSwitchTarget(pathname);
+      if (target) router.push(target);
+      else router.refresh();
     });
   }
 
