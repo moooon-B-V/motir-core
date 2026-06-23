@@ -7,6 +7,7 @@ import {
   MotirAiBadRequestError,
   MotirAiJobNotFoundError,
   MotirAiUnavailableError,
+  MotirAiOutOfCreditsError,
   type MotirAiError,
 } from '@/lib/ai/errors';
 
@@ -28,6 +29,7 @@ const CANONICAL_ERROR_CODES = [
   'permission_denied',
   'conflict',
   'rate_limited',
+  'out_of_credits',
   'ai_job_failed',
   'internal_error',
 ] as const;
@@ -54,6 +56,7 @@ const EXPECTED_MAPPING: Record<string, new (...args: never[]) => MotirAiError> =
   not_found: MotirAiJobNotFoundError,
   conflict: MotirAiBadRequestError, // 409 < 500 → bad-request fallback
   rate_limited: MotirAiUnavailableError,
+  out_of_credits: MotirAiOutOfCreditsError, // 402 → its own typed error (the 8.1.8 paywall)
   ai_job_failed: MotirAiUnavailableError,
   internal_error: MotirAiUnavailableError,
 };
@@ -65,7 +68,14 @@ function problemFor(code: string, status = 400): Problem {
 describe('contract: error taxonomy (§5)', () => {
   it('maps EVERY canonical code to its motir-core typed error', () => {
     for (const code of CANONICAL_ERROR_CODES) {
-      const status = code === 'conflict' ? 409 : code === 'not_found' ? 404 : 400;
+      const status =
+        code === 'conflict'
+          ? 409
+          : code === 'not_found'
+            ? 404
+            : code === 'out_of_credits'
+              ? 402
+              : 400;
       const err = errorFromProblem(problemFor(code, status));
       expect(err, `code ${code}`).toBeInstanceOf(EXPECTED_MAPPING[code]!);
     }

@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { ArrowRight, ListChecks, Lock, Send } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { AiPaywall, AI_OUT_OF_CREDITS_CODE, resolveAiPaywall } from '@/components/ai/AiPaywall';
+import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 import type { ChatTurn, ValidateEarlyAsk, WorkingState } from '@/lib/onboarding/discoveryLoop';
 
 // The discovery CHAT RAIL (Subtask 7.3.5 / MOTIR-833, design screen C/G2 right
@@ -27,6 +29,8 @@ export interface DiscoveryChatRailProps {
   /** Whether an optional check is still ahead (offer a Skip chat decision). */
   canSkip: boolean;
   error: { code: string; message: string | null } | null;
+  /** The member-safe AI entitlement (Subtask 8.1.8) — drives the boundary paywall. */
+  aiAccess?: AiAccessDTO | null;
   /** Forward a chat turn (free-form, a decision chip, or a skip) to the loop. */
   onSend: (text: string) => void;
   onDismissError: () => void;
@@ -39,22 +43,32 @@ export function DiscoveryChatRail({
   pendingAsk,
   canSkip,
   error,
+  aiAccess,
   onSend,
   onDismissError,
 }: DiscoveryChatRailProps) {
   const t = useTranslations('onboarding.chat');
   const [draft, setDraft] = useState('');
+  const [paywallDismissed, setPaywallDismissed] = useState(false);
+
+  // The AI-boundary paywall (8.1.8): a reactive out-of-credits refusal (the stream
+  // error frame's typed code) OR a proactive entitlement block (cloud + balance ≤
+  // 0). When active it REPLACES the generic error banner, the composer is gated,
+  // and the upsell carries the right owner/member · out-of-credits/tier-gate face.
+  const reactiveOutOfCredits = error?.code === AI_OUT_OF_CREDITS_CODE;
+  const paywall = resolveAiPaywall(aiAccess ?? null, reactiveOutOfCredits);
+  const showPaywall = paywall !== null && (reactiveOutOfCredits || !paywallDismissed);
 
   function submit(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || isStreaming) return;
+    if (!text || isStreaming || showPaywall) return;
     onSend(text);
     setDraft('');
   }
 
-  const showAsk = pendingAsk !== null && !isStreaming;
-  const showSkip = canSkip && !showAsk && !isStreaming;
+  const showAsk = pendingAsk !== null && !isStreaming && !showPaywall;
+  const showSkip = canSkip && !showAsk && !isStreaming && !showPaywall;
 
   return (
     <aside
@@ -83,7 +97,9 @@ export function DiscoveryChatRail({
           </div>
         )}
 
-        {error && (
+        {/* A non-paywall stream error keeps the generic banner; an out-of-credits
+            refusal becomes the paywall below instead. */}
+        {error && !reactiveOutOfCredits && (
           <div className="rounded-(--radius-card) bg-(--el-tint-rose) px-3 py-2 text-sm text-(--el-text-strong)">
             <p>{t('errorBody')}</p>
             <button
@@ -94,6 +110,14 @@ export function DiscoveryChatRail({
               {t('dismiss')}
             </button>
           </div>
+        )}
+
+        {showPaywall && (
+          <AiPaywall
+            access={aiAccess ?? null}
+            triggeredOutOfCredits={reactiveOutOfCredits}
+            onDismiss={reactiveOutOfCredits ? onDismissError : () => setPaywallDismissed(true)}
+          />
         )}
       </div>
 
@@ -140,16 +164,16 @@ export function DiscoveryChatRail({
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          disabled={isStreaming}
+          disabled={isStreaming || showPaywall}
           placeholder={t('composerPlaceholder')}
           aria-label={t('composerPlaceholder')}
-          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-60"
         />
         <Button
           type="submit"
           variant="primary"
           size="sm"
-          disabled={isStreaming || draft.trim().length === 0}
+          disabled={isStreaming || showPaywall || draft.trim().length === 0}
           aria-label={t('send')}
         >
           <Send className="size-4" aria-hidden="true" />

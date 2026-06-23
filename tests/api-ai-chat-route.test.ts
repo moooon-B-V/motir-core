@@ -41,15 +41,18 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 
 const streamJobMock = vi.fn<(jobId: string) => AsyncGenerator<JobStreamEvent>>();
 const submitJobMock = vi.fn();
+const getJobMock = vi.fn();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   streamJob: (jobId: string) => streamJobMock(jobId),
   submitJob: (...args: unknown[]) => submitJobMock(...args),
+  getJob: (jobId: string) => getJobMock(jobId),
 }));
 
 // Import the handlers AFTER the mocks are registered.
 const { GET } = await import('@/app/api/ai/chat/[jobId]/stream/route');
 const { POST } = await import('@/app/api/ai/chat/route');
-const { MotirAiJobNotFoundError, MotirAiUnavailableError } = await import('@/lib/ai/errors');
+const { MotirAiJobNotFoundError, MotirAiUnavailableError, MotirAiOutOfCreditsError } =
+  await import('@/lib/ai/errors');
 
 const BASE = 'http://localhost:3000';
 
@@ -124,6 +127,7 @@ beforeEach(() => {
   activeCtx.current = null;
   streamJobMock.mockReset();
   submitJobMock.mockReset();
+  getJobMock.mockReset();
 });
 afterEach(() => vi.clearAllMocks());
 afterAll(async () => {
@@ -179,6 +183,44 @@ describe('GET /api/ai/chat/:jobId/stream', () => {
     expect(body).toBe(sse(frames));
     // Terminal close releases the upstream reader exactly once.
     expect(returnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('appends the failure REASON as an SSE error frame after a terminal `failed` status (8.1.8)', async () => {
+    signIn();
+    activeCtx.current = {
+      userId: 'user_1',
+      workspaceId: 'ws_1',
+      projectId: 'pj_1',
+    } as ProjectContext;
+
+    const frames: JobStreamEvent[] = [
+      { event: 'status', data: { status: 'running' } },
+      { event: 'status', data: { status: 'failed' } },
+    ];
+    const { generator } = scriptedStream(frames.map((value) => ({ type: 'yield', value })));
+    streamJobMock.mockReturnValue(generator);
+    // The reason lives only on GET /v1/jobs/:id (JobView.error), not the stream.
+    getJobMock.mockResolvedValue({
+      jobId: 'job_oc',
+      status: 'failed',
+      result: null,
+      error: new MotirAiOutOfCreditsError('out of credits'),
+    });
+
+    const res = await streamReq('job_oc');
+    const body = await res.text();
+
+    // The error frame is inserted right after the failed status (before close), so
+    // the client learns it's out-of-credits → renders the paywall.
+    const expectedError: JobStreamEvent = {
+      event: 'error',
+      data: {
+        code: 'MOTIR_AI_OUT_OF_CREDITS',
+        message: 'motir-ai refused the job — out of credits: out of credits',
+      },
+    };
+    expect(body).toBe(sse([...frames, expectedError]));
+    expect(getJobMock).toHaveBeenCalledWith('job_oc');
   });
 
   it('priming surfaces an unknown job (MotirAiJobNotFoundError) as a real 404, not an SSE error frame', async () => {

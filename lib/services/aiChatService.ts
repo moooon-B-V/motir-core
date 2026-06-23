@@ -39,7 +39,9 @@ export const aiChatService = {
   // (assistant-turn tokens + progress + terminal status). A transport failure
   // throws a typed MotirAiError before the first yield (the route maps that to
   // an HTTP status); the generator ends when motir-ai closes the stream on a
-  // terminal state.
+  // terminal state. (The terminal-failure REASON — e.g. out-of-credits — is
+  // appended by the stream ROUTE, which owns the iterator so client-disconnect
+  // cancellation stays prompt; see lib/ai/jobStream.failureReasonFrame.)
   streamDiscovery(jobId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId);
   },

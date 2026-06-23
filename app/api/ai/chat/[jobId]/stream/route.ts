@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { aiChatService } from '@/lib/services/aiChatService';
+import { failureReasonFrame } from '@/lib/ai/jobStream';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
 
@@ -74,8 +75,19 @@ export async function GET(
     async start(controller) {
       try {
         let result = first;
+        let reasonEmitted = false;
         while (!result.done) {
           controller.enqueue(encoder.encode(formatFrame(result.value)));
+          // On a terminal `failed` status, append the failure REASON as an
+          // `error` frame (Subtask 8.1.8) so the client learns WHY — e.g.
+          // out-of-credits → the paywall — not just THAT it failed. Once only.
+          if (!reasonEmitted) {
+            const reason = await failureReasonFrame(jobId, result.value);
+            if (reason) {
+              reasonEmitted = true;
+              controller.enqueue(encoder.encode(formatFrame(reason)));
+            }
+          }
           result = await iterator.next();
         }
       } catch (err) {

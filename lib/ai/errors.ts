@@ -57,6 +57,22 @@ export class MotirAiJobNotFoundError extends MotirAiError {
   }
 }
 
+// The org is OUT OF CREDITS (402 `out_of_credits`, motir-ai's `OutOfCreditsError`,
+// src/problem.ts) — the credit gate refused a planning/generation job at balance
+// ≤ 0 (its pre-flight or per-turn check; Subtask 7.2.8). This is a distinct,
+// browser-reachable, NON-retryable condition: the remedy is to buy/top-up credits,
+// not to retry. It carries a stable `code` so the AI-boundary paywall (Subtask
+// 8.1.8) can branch the SSE terminal `error` frame to the upgrade prompt instead
+// of a generic "AI unavailable" error. Kept distinct from MotirAiUnavailableError
+// (which a default-mapped 402 would otherwise collapse into a bad-request).
+export class MotirAiOutOfCreditsError extends MotirAiError {
+  readonly code = 'MOTIR_AI_OUT_OF_CREDITS' as const;
+  constructor(detail: string) {
+    super(`motir-ai refused the job — out of credits: ${detail}`);
+    this.name = 'MotirAiOutOfCreditsError';
+  }
+}
+
 // A planning job itself failed (its terminal `error`). Carries the upstream
 // problem for diagnostics.
 export class MotirAiJobFailedError extends MotirAiError {
@@ -94,6 +110,8 @@ export function errorFromProblem(p: Problem): MotirAiError {
       return new MotirAiBadRequestError(p.detail ?? p.title);
     case 'not_found':
       return new MotirAiJobNotFoundError(p.jobId ?? '(unknown)');
+    case 'out_of_credits':
+      return new MotirAiOutOfCreditsError(p.detail ?? p.title);
     case 'rate_limited':
     case 'ai_job_failed':
     case 'internal_error':
