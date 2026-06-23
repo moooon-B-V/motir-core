@@ -407,7 +407,7 @@ function CarryRadio({
   return (
     <div
       className={`flex flex-col gap-2 rounded-(--radius-input) border px-(--spacing-control-x) py-(--spacing-control-y) ${
-        selected ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)'
+        selected ? 'border-(--el-accent) bg-(--el-selection-bg)' : 'border-(--el-border)'
       } ${disabled ? 'opacity-50' : ''}`}
     >
       <button

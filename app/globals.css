@@ -2444,6 +2444,30 @@
   --el-build-text: var(--color-charcoal); /* AA ~10:1 on the lavender tint, both themes */
   --el-build-glyph: var(--color-primary); /* the megaphone accent glyph */
 
+  /* ── Interaction / agile surfaces (MOTIR-1276 · 1266.5) ──────────────
+     Un-collapses the dnd / selection / overdue / accent meanings that all
+     rode --el-tint-lavender / --el-accent / --el-text, so a palette can tune a
+     drop target apart from a selected row apart from an overdue date. Each
+     maps to a --color-* → zero base-palette change AND every palette + dark
+     re-skins for free (§1; the chart/type ramp pattern). The previously
+     undifferentiated meanings (selection vs drop; overdue vs a future date)
+     now read distinctly; the rest default to today's exact value.
+     design/design-system/design-notes.md §G. */
+  --el-selection-bg: var(--color-tint-sky); /* selected row/card — sky, NOT the drop lavender */
+  --el-droptarget-bg: var(--color-tint-lavender); /* dnd drop-zone fill (shipped) */
+  --el-board-column-accent: var(--color-primary); /* drop ring / column border */
+  --el-overdue: var(--color-destructive); /* past-due date */
+  --el-due-soon: var(--color-warning); /* due today / within 3 days */
+  --el-sprint-accent: var(--color-tint-lavender); /* sprint-header emphasis (shipped) */
+  --el-epic-accent: var(--color-accent); /* pink epic identity (aliases --el-type-epic) */
+  --el-archived-pill-bg: var(--color-muted); /* inactive "Archived" badge fill */
+  --el-archived-pill-text: var(--color-slate); /* AA-safe ink on the muted fill */
+  --el-auth-wash: var(--color-tint-sky); /* sign-in background wash (text on the card) */
+  --el-tabnav-track: var(--color-surface); /* tab-bar track (Segmented / PublicTabNav) */
+  --el-tabnav-active: var(--color-primary); /* active-tab glyph (== --el-accent-on-surface) */
+  --el-card-icon-bg: var(--color-muted); /* hub/settings card icon tile */
+  --el-card-icon-fg: var(--color-primary); /* the icon inside that tile */
+
   /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);
   --el-code-text: var(--color-charcoal);

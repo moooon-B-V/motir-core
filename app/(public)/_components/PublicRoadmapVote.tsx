@@ -95,7 +95,7 @@ export function PublicRoadmapVote({
           size === 'lg' ? 'w-[54px] py-2.5' : 'w-[42px] py-1.5',
           voted
             ? 'border-(--el-vote-active-bg) bg-(--el-vote-active-bg) text-(--el-vote-active-text)'
-            : 'border-(--el-border) bg-(--el-page-bg) text-(--el-text-secondary) hover:border-(--el-accent)',
+            : 'border-(--el-border) bg-(--el-vote-bg) text-(--el-text-secondary) hover:border-(--el-accent)',
         )}
       >
         <ChevronUp

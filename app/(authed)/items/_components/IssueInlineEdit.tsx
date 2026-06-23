@@ -534,7 +534,7 @@ function InlineDueEditor({ row }: { row: IssueRowData }) {
       onOpen={() => setEditing(true)}
       disabled={pending}
     >
-      <DueValue label={label} />
+      <DueValue label={label} iso={dueIso} />
     </EditTrigger>
   );
 }
@@ -654,7 +654,7 @@ export function InlinePriorityCell({ row }: { row: IssueRowData }) {
 /** DUE cell — inline-editable inside a provider, else the read-only date. */
 export function InlineDueCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
-  if (!ctx) return <DueValue label={row.dueLabel} />;
+  if (!ctx) return <DueValue label={row.dueLabel} iso={row.dueDate} />;
   return <InlineDueEditor row={row} />;
 }
 

@@ -220,7 +220,7 @@ export function SwimlaneBoard({
                 // scroll viewport (bug 7.24, same as BoardColumn).
                 className={`${track} py-2 ${
                   isDropTarget
-                    ? 'rounded-(--radius-card) bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)'
+                    ? 'rounded-(--radius-card) bg-(--el-droptarget-bg) inset-ring-2 inset-ring-(--el-board-column-accent)'
                     : ''
                 }`}
               >

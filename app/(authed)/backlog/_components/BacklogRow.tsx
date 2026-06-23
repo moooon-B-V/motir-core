@@ -98,7 +98,7 @@ function BacklogRowBody({
         dragging
           ? 'border-dashed border-(--el-border-strong) opacity-40'
           : selected
-            ? 'border-(--el-accent) bg-(--el-tint-lavender)'
+            ? 'border-(--el-accent) bg-(--el-selection-bg)'
             : 'border-transparent hover:border-(--el-border-soft) hover:bg-(--el-surface-soft)'
       }`}
     >
