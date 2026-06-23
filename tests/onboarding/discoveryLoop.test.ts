@@ -223,6 +223,48 @@ describe('reduceDiscovery — validate-early ask + completion', () => {
   });
 });
 
+describe('reduceDiscovery — pre-plan → generation hand-off (7.3.28 / MOTIR-1041)', () => {
+  // Drive the loop to tiers-complete (the exit affordance shows here).
+  const complete = (): DiscoveryState =>
+    run([
+      {
+        type: 'frame',
+        frame: { event: 'docs', data: { docs: [{ id: 'd', kind: 'discovery', version: 1 }] } },
+      },
+      { type: 'docsLoaded', docs: [doc('discovery')] },
+      {
+        type: 'frame',
+        frame: { event: 'state', data: { status: 'tiers_complete', currentGate: null } },
+      },
+    ]);
+
+  it('enterGeneration opens the generation view once the tiers are complete', () => {
+    const s = run([{ type: 'enterGeneration' }], complete());
+    expect(s.view).toBe('generation');
+  });
+
+  it('is a no-op before completion (the exit is unreachable mid-flow)', () => {
+    const s = run([{ type: 'enterGeneration' }]);
+    expect(s.view).toBe('hub');
+  });
+
+  it('freezes nothing — the baseline (docs + session) is untouched, so it stays revisable', () => {
+    const before = complete();
+    const s = run([{ type: 'enterGeneration' }], before);
+    expect(s.docs).toEqual(before.docs);
+    expect(s.producedKinds).toEqual(before.producedKinds);
+    expect(s.session).toEqual(before.session);
+    expect(isTiersComplete(s)).toBe(true);
+  });
+
+  it('Back (one-click re-entry) returns from generation to the hub', () => {
+    const s = run([{ type: 'enterGeneration' }, { type: 'backToHub' }], complete());
+    expect(s.view).toBe('hub');
+    // …and the loop is still complete, so the exit can be taken again.
+    expect(isTiersComplete(s)).toBe(true);
+  });
+});
+
 describe('reduceDiscovery — revisions route the downstream cascade-back (1179)', () => {
   it('normalizeFrame parses the revisions `gate` (the route-back tier)', () => {
     expect(

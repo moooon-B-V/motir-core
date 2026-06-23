@@ -4007,6 +4007,17 @@
       "footerNote": "这只影响你的项目，不影响 Motir —— 不会锁定，随时可改。",
       "reset": "重置为默认",
       "use": "使用此设计"
+    },
+    "generation": {
+      "title": "生成你的计划",
+      "back": "返回规划",
+      "heading": "你的方向已确定",
+      "lead": "Motir 将据此生成计划——史诗、故事与任务，供你随后审阅。",
+      "baselineTitle": "将据此规划",
+      "stepsReviewed": "{count, plural, other {已审阅 # 步}}",
+      "designLabel": "设计",
+      "designDefault": "默认外观",
+      "revisableNote": "没有任何内容被锁定。你可以随时返回修改某一步或设计——计划会随之更新。"
     }
   }
 }

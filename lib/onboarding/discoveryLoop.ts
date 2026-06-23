@@ -196,7 +196,12 @@ export interface ValidateEarlyAsk {
 
 // 'design' is the web-only full-page design step (Subtask 7.3.27 / MOTIR-1040) —
 // reached from the hub, styling its WHOLE self via the shipped three-axis runtime.
-export type DiscoveryView = 'hub' | 'review' | 'design';
+// 'generation' is the pre-plan → generation HAND-OFF (Subtask 7.3.28 / MOTIR-1041)
+// — the LAST 7.3 affordance, entered from the hub once every tier is complete. It
+// freezes the (already-persisted) pre-plan baseline as the generation input and
+// hands off to 7.4's generation entry; it does NOT itself generate the work-item
+// tree (that is 7.4 / MOTIR-805). Back returns to the loop, so it stays revisable.
+export type DiscoveryView = 'hub' | 'review' | 'design' | 'generation';
 
 /**
  * An in-flight downstream-only cascade (design screen G3). Set when a chat
@@ -304,6 +309,7 @@ export type DiscoveryAction =
   | { type: 'streamError'; code: string; message?: string }
   | { type: 'openReview'; kind: DirectionDocKind }
   | { type: 'openDesign' }
+  | { type: 'enterGeneration' }
   | { type: 'setDesignChoice'; choice: DesignChoiceDTO }
   | { type: 'backToHub' }
   | { type: 'dismissError' };
@@ -420,6 +426,16 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
     case 'openDesign':
       return { ...state, view: 'design' };
 
+    case 'enterGeneration':
+      // The pre-plan → generation HAND-OFF (Subtask 7.3.28 / MOTIR-1041). Only
+      // reachable once every tier is complete (the exit affordance shows then);
+      // guard defensively so a stray dispatch mid-flow is a no-op. Nothing is
+      // persisted or locked here — the baseline is the already-saved
+      // `tiers_complete` snapshot (the 4 tier docs + catalog + design choice in
+      // motir-ai); Back (`backToHub`) returns to the loop, so it stays revisable.
+      if (state.session.status !== 'tiers_complete') return state;
+      return { ...state, view: 'generation' };
+
     case 'setDesignChoice':
       // Optimistic local update when the user presses "Use this design" — the
       // PATCH is best-effort (the hook degrades quietly on failure), so the choice
@@ -527,8 +543,9 @@ function reduceFrame(state: DiscoveryState, frame: DiscoveryFrame): DiscoverySta
 
 // ── Selectors the view layer reads ───────────────────────────────────────────
 
-/** All tiers complete + nothing parked — the loop has reached the plan handoff
- *  (the "Go to plan phase" exit is Subtask 7.3.28 / MOTIR-1041, not this card). */
+/** All tiers complete + nothing parked — the loop has reached the plan handoff:
+ *  the "Go to plan phase" exit (Subtask 7.3.28 / MOTIR-1041) shows, and pressing
+ *  it (`enterGeneration`) opens the `generation` view. */
 export function isTiersComplete(state: DiscoveryState): boolean {
   return state.session.status === 'tiers_complete';
 }
