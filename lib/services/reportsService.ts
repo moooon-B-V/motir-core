@@ -13,6 +13,7 @@ import {
   toAverageAgeDto,
   toBurndownSeriesDto,
   toCreatedVsResolvedDto,
+  toCycleGraphDto,
   toDistributionDto,
   toResolutionTimeDto,
   toVelocityDto,
@@ -45,6 +46,7 @@ import type {
   BurndownSeriesDto,
   BurndownStatisticDto,
   CreatedVsResolvedDto,
+  CycleGraphDto,
   DistributionDto,
   ReportScopeDto,
   ReportWidgetResultDto,
@@ -267,6 +269,123 @@ export const reportsService = {
       actualCutoff,
       dailyDeltas,
       anchorRemaining,
+    });
+  },
+
+  /**
+   * The in-sprint CYCLE GRAPH series (Story 8.14.4) — Linear's reframe of the
+   * burndown into a burn-UP of LIVE scope vs completed (linear.app/docs/cycle-graph).
+   * Returns, for a started sprint, three cumulative actual series (scope /
+   * completed / started) reconstructed from the 1.4.6 `work_item_revision` trail
+   * + an ideal `target` descent over the sprint's WORKING days.
+   *
+   * **NO `committedPoints`-snapshot dependence (resolves the MOTIR-1288 class).**
+   * Scope is the LIVE roll-up committed sum; `committedAtStart` is RECONSTRUCTED
+   * (`currentScope − Σ scopeDelta`), so a sprint started unestimated/empty still
+   * renders correctly (the MOTIR-1285/1288 scenarios). Each actual series is
+   * cumulated off its reconstructed start baseline (`current − Σ delta`), so the
+   * last drawn `scope` / `completed` land EXACTLY on `rollupForSprint().committed`
+   * / `.completed` — the chart reconciles with the scrum header.
+   *
+   * Statistic: the project's configured statistic, narrowed to `story_points`
+   * when the sprint has point work, else the `issue_count` fallback (the SAME
+   * `useCount` rule as the burndown) — current sums are read in that series unit,
+   * so an unestimated/time-estimate project degrades to counts, never `NaN`.
+   *
+   * Bounded (finding #57): one grouped per-day `$queryRaw` over the revision rows
+   * + a bounded roll-up + two O(1) current-sum reads — never an all-revisions or
+   * all-issues load. The day count is bounded by the sprint length.
+   *
+   * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint);
+   * `SprintNotStartedError` (409 — a planned sprint has no window to draw).
+   */
+  async getSprintCycleGraph(sprintId: string, ctx: ServiceContext): Promise<CycleGraphDto> {
+    // Tenancy gate (finding #26): a missing / cross-workspace sprint is an
+    // indistinguishable 404. Mirrors `getBurndownSeries`.
+    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    if (!sprint) throw new SprintNotFoundError(sprintId);
+
+    // A cycle graph needs a window: reject a not-yet-started (planned) sprint.
+    if (sprint.state === 'planned' || sprint.startDate === null) {
+      throw new SprintNotStartedError(sprintId);
+    }
+    const start = sprint.startDate;
+
+    // The configured statistic + the authoritative present roll-up (4.3.3) — the
+    // latter decides whether the sprint has POINTS work to draw (`committed > 0`).
+    const projectStatistic = await resolveStatistic(sprint.projectId);
+    const rollup = await estimationService.rollupForSprint(sprintId, ctx);
+
+    // Draw the POINTS cycle graph when the project measures points AND the sprint
+    // has point work; else degrade to the issue-count series (a non-points
+    // project, or a wholly unestimated sprint). NO `committedPoints` dependence —
+    // the live roll-up alone decides (the MOTIR-1285/1288 fix).
+    const useCount = projectStatistic !== 'story_points' || rollup.committed === 0;
+    const statistic: BurndownStatisticDto = useCount ? 'issue_count' : 'story_points';
+    const seriesStat: EstimationStatistic = statistic;
+
+    // The authoritative CURRENT values in the SERIES unit (so a degraded
+    // issue-count series anchors to counts, not points). Reuse the roll-up when
+    // it is already in the series unit; otherwise re-read the sums in that unit.
+    let currentScope: number;
+    let currentCompleted: number;
+    if (seriesStat === projectStatistic) {
+      currentScope = rollup.committed;
+      currentCompleted = rollup.completed;
+    } else {
+      const sums = await workItemRepository.sumPointsForSprint(
+        sprintId,
+        ctx.workspaceId,
+        seriesStat,
+      );
+      currentScope = sums.committed;
+      currentCompleted = sums.completed;
+    }
+    const currentStarted = await workItemRepository.sumStartedForSprint(
+      sprintId,
+      ctx.workspaceId,
+      seriesStat,
+    );
+
+    // Window. The axis ends at the planned end (else completedAt, else now); the
+    // ACTUAL series are drawn to completedAt (complete) or now (active). Mirrors
+    // `getBurndownSeries`.
+    const now = new Date();
+    const rawAxisEnd = sprint.endDate ?? sprint.completedAt ?? now;
+    const actualCutoff = sprint.state === 'complete' ? (sprint.completedAt ?? rawAxisEnd) : now;
+    const axisEnd = new Date(
+      Math.max(rawAxisEnd.getTime(), actualCutoff.getTime(), start.getTime()),
+    );
+
+    // The bounded per-day deltas (finding #57) — events up to the actual cutoff.
+    const dailyDeltas = await workItemRevisionRepository.aggregateSprintCycleByDay(
+      sprintId,
+      ctx.workspaceId,
+      { start, end: actualCutoff },
+      useCount,
+    );
+
+    // Reconstruct the start baselines: `current − Σ delta`. Cumulating each
+    // series from its baseline therefore lands EXACTLY on the live `current`
+    // value at the cutoff (the header-reconciliation identity), with NO
+    // dependence on the frozen `committedPoints` snapshot.
+    const sumDelta = (k: 'scopeDelta' | 'completedDelta' | 'startedDelta') =>
+      dailyDeltas.reduce((acc, r) => acc + r[k], 0);
+    const committedAtStart = currentScope - sumDelta('scopeDelta');
+    const completedAtStart = currentCompleted - sumDelta('completedDelta');
+    const startedAtStart = currentStarted - sumDelta('startedDelta');
+
+    return toCycleGraphDto({
+      sprintId,
+      state: sprint.state as 'active' | 'complete',
+      statistic,
+      start,
+      axisEnd,
+      actualCutoff,
+      committedAtStart,
+      completedAtStart,
+      startedAtStart,
+      dailyDeltas,
     });
   },
 

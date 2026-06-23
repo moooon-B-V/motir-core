@@ -3,13 +3,15 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { reportsService } from '@/lib/services/reportsService';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 
-// GET /api/sprints/[id]/burndown (Story 4.6 · Subtask 4.6.3) — the in-sprint
-// BURNDOWN series: the guideline (committed → 0 over the sprint window) + the
-// actual stepped remaining line reconstructed from the 4.4.2 committed baseline
-// and the 1.4.6 revision trail, plus the mid-sprint scope-change markers
-// (finding #57 — a bounded grouped per-day aggregate, never load-all). Works for
-// an active sprint (actual to "today") and a completed one (actual to
-// `completedAt`); the 4.6.5 scrum-header + sprint-report chart seams bind here.
+// GET /api/sprints/[id]/burndown (Story 4.6 · Subtask 4.6.3; reframed by Story
+// 8.14 · Subtask 8.14.4) — the in-sprint CYCLE GRAPH: Linear's burn-UP of LIVE
+// scope vs completed (scope / completed / started cumulative series + an ideal
+// `target` descent over working days), reconstructed from the 1.4.6 revision
+// trail (finding #57 — a bounded grouped per-day aggregate, never load-all) with
+// NO dependence on the immutable `committedPoints` snapshot (the MOTIR-1285/1288
+// fix). Works for an active sprint (actuals to "today") and a completed one
+// (to `completedAt`). The path/label stay "burndown"; the model is the cycle
+// graph. The scrum-header + sprint-report chart seams bind here.
 //
 // Thin HTTP layer per CLAUDE.md: workspace context, ONE service call, map the
 // typed errors. The service tenant-gates the sprint by workspace (a sprint
@@ -30,7 +32,7 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const series = await reportsService.getBurndownSeries(id, ctx);
+    const series = await reportsService.getSprintCycleGraph(id, ctx);
     return NextResponse.json(series);
   } catch (err) {
     if (err instanceof SprintNotFoundError) {
