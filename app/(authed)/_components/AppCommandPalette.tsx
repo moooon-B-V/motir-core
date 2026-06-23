@@ -1,7 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3,
@@ -29,6 +29,7 @@ import { ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/accountSettingsNav';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { ThemePattern } from '@/lib/theme/types';
+import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
 import { switchWorkspaceAction } from '../_actions';
 import { setActiveProjectAction } from '../_project-actions';
 import { useCommandPalette } from './CommandPaletteProvider';
@@ -79,6 +80,7 @@ export function AppCommandPalette({
   const { open, setOpen } = useCommandPalette();
   const { openCreateIssue, canCreate } = useCreateIssue();
   const router = useRouter();
+  const pathname = usePathname();
   const { pattern, setPattern } = useTheme();
   const [, startTransition] = useTransition();
 
@@ -95,7 +97,12 @@ export function AppCommandPalette({
     if (workspaceId === activeWorkspaceId) return;
     startTransition(async () => {
       await switchWorkspaceAction(workspaceId);
-      router.refresh();
+      // Land on the work-items surface after a workspace switch so a stale,
+      // old-workspace-scoped URL / client island doesn't linger (MOTIR-1312);
+      // refresh in place only when already there.
+      const target = afterContextSwitchTarget(pathname);
+      if (target) router.push(target);
+      else router.refresh();
     });
   }
 
