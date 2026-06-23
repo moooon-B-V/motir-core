@@ -239,15 +239,32 @@ export const reportsService = {
       useCount,
     );
 
-    // Reconstruct the start baselines: `current − Σ delta`. Cumulating each
-    // series from its baseline therefore lands EXACTLY on the live `current`
-    // value at the cutoff (the header-reconciliation identity), with NO
-    // dependence on the frozen `committedPoints` snapshot.
+    // Reconstruct each SERIES baseline: `current − Σ delta`. Cumulating a series
+    // from its baseline lands EXACTLY on the live `current` value at the cutoff
+    // (the header-reconciliation identity), with NO dependence on the frozen
+    // snapshot — this is what keeps `scope`/`completed` matching the scrum header.
     const sumDelta = (k: 'scopeDelta' | 'completedDelta' | 'startedDelta') =>
       dailyDeltas.reduce((acc, r) => acc + r[k], 0);
-    const committedAtStart = currentScope - sumDelta('scopeDelta');
+    const scopeAtStart = currentScope - sumDelta('scopeDelta');
     const completedAtStart = currentCompleted - sumDelta('completedDelta');
     const startedAtStart = currentStarted - sumDelta('startedDelta');
+
+    // The TARGET's origin (`committedAtStart`) is the committed scope as of start.
+    // It is DISTINCT from the series' `scopeAtStart`: reconstructing it from the
+    // trail wrongly yields ~0 when items were assigned to the sprint AFTER its
+    // `startDate` (the common start-then-populate flow), which collapses the
+    // target onto the x-axis. So prefer the immutable `startSprint` snapshot (the
+    // reliable scope-at-start), and when that is absent (started unestimated /
+    // empty — the MOTIR-1288 case) OR the reconstruction is non-positive, fall
+    // back to the live `currentScope` so the target is always a useful descending
+    // line. Floored at 0; an empty sprint (no scope at all) legitimately yields 0.
+    const snapshot = useCount
+      ? sprint.committedIssueCount
+      : sprint.committedPoints === null
+        ? null
+        : Number(sprint.committedPoints);
+    const committedAtStart =
+      scopeAtStart > 0 ? scopeAtStart : snapshot !== null && snapshot > 0 ? snapshot : currentScope;
 
     return toCycleGraphDto({
       sprintId,
@@ -256,6 +273,7 @@ export const reportsService = {
       start,
       axisEnd,
       actualCutoff,
+      scopeAtStart,
       committedAtStart,
       completedAtStart,
       startedAtStart,

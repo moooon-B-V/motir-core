@@ -157,6 +157,67 @@ describe('reportsService.getSprintCycleGraph — derivation', () => {
       }
     }
   });
+
+  it('keeps the target descending when items were assigned AFTER start (committedAtStart from the snapshot, not the trail)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Late' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
+    await place(a.id, sprint.id, 'todo', 5);
+    await place(b.id, sprint.id, 'todo', 7);
+    // The start-then-populate flow: a real committedPoints SNAPSHOT (12), but the
+    // trail records BOTH items joining the sprint AFTER startDate — so the
+    // reconstruction (currentScope − Σ scopeDelta) = 12 − 12 = 0. The target must
+    // NOT collapse onto the x-axis: committedAtStart falls back to the snapshot.
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 12),
+      completedAt: utcDay(2026, 6, 12),
+      committedPoints: 12,
+      committedIssueCount: 2,
+    });
+    await addRevision(a.id, fx.ownerId, utcDay(2026, 6, 3), {
+      sprintId: { from: null, to: sprint.id },
+    });
+    await addRevision(b.id, fx.ownerId, utcDay(2026, 6, 4), {
+      sprintId: { from: null, to: sprint.id },
+    });
+
+    const rollup = await estimationService.rollupForSprint(sprint.id, fx.ctx);
+    const cycle = await reportsService.getSprintCycleGraph(sprint.id, fx.ctx);
+
+    // committedAtStart is the SNAPSHOT (12), not the trail's spurious 0.
+    expect(cycle.committedAtStart).toBe(12);
+    // The target descends from 12 and reaches 0 — it does NOT lie on the x-axis.
+    expect(cycle.days[0]!.target).toBe(12);
+    expect(Math.min(...cycle.days.map((d) => d.target))).toBe(0);
+    // The scope SERIES still reconciles to the live roll-up at the cutoff.
+    const drawn = cycle.days.filter((d) => d.scope !== null);
+    expect(drawn[drawn.length - 1]!.scope).toBe(rollup.committed); // 12
+  });
+
+  it('falls back to the live scope for committedAtStart when there is no snapshot and the reconstruction is 0', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'NoSnap' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    await place(a.id, sprint.id, 'todo', 8);
+    await stampSprint(sprint.id, {
+      state: 'complete',
+      startDate: utcDay(2026, 6, 1),
+      endDate: utcDay(2026, 6, 12),
+      completedAt: utcDay(2026, 6, 12),
+      committedPoints: null, // no snapshot (MOTIR-1288)
+      committedIssueCount: null,
+    });
+    await addRevision(a.id, fx.ownerId, utcDay(2026, 6, 3), {
+      sprintId: { from: null, to: sprint.id }, // joined after start → reconstruction 0
+    });
+    const cycle = await reportsService.getSprintCycleGraph(sprint.id, fx.ctx);
+    expect(cycle.committedAtStart).toBe(8); // live scope, not 0
+    expect(cycle.days[0]!.target).toBe(8);
+    expect(Math.min(...cycle.days.map((d) => d.target))).toBe(0);
+  });
 });
 
 describe('reportsService.getSprintCycleGraph — active sprint', () => {

@@ -97,7 +97,20 @@ export interface CycleGraphInput {
   axisEnd: Date;
   /** Last day the actual series are drawn (now for active, `completedAt` for complete). */
   actualCutoff: Date;
-  /** Scope as of `start`, reconstructed (`currentScope − Σ scopeDelta`) — the target origin + creep denominator. */
+  /**
+   * The SCOPE series' day-0 baseline, reconstructed (`currentScope − Σ scopeDelta`)
+   * so the cumulated scope line lands EXACTLY on the live roll-up at the cutoff
+   * (header reconciliation). This is the live-derived origin of the gray line.
+   */
+  scopeAtStart: number;
+  /**
+   * The TARGET line's origin + the scope-creep denominator — the committed scope
+   * AS OF `start`. Resolved by the service from the immutable `startSprint`
+   * snapshot (falling back to the live scope), NOT the trail reconstruction:
+   * reconstructing it wrongly yields ~0 when items were assigned to the sprint
+   * after `startDate`, which collapses the target onto the x-axis. May differ
+   * from `scopeAtStart` (which the series needs for reconciliation).
+   */
   committedAtStart: number;
   /** Completed points as of `start` (`currentCompleted − Σ completedDelta`). */
   completedAtStart: number;
@@ -154,7 +167,7 @@ export function toCycleGraphDto(input: CycleGraphInput): CycleGraphDto {
   }
 
   const days: CycleGraphDayDto[] = [];
-  let scopeRunning = input.committedAtStart;
+  let scopeRunning = input.scopeAtStart;
   let completedRunning = input.completedAtStart;
   let startedRunning = input.startedAtStart;
   let workingDaysElapsed = 0; // working days seen so far (incl. today if working)
@@ -189,14 +202,17 @@ export function toCycleGraphDto(input: CycleGraphInput): CycleGraphDto {
     days.push({ date: key, scope, completed, started, target: round2(Math.max(0, target)) });
   }
 
-  // Scope creep: the fraction of scope added after start. `currentScope` is the
-  // baseline plus every day's net scope delta (= the live roll-up committed), so
-  // the creep is `Σ scopeDelta / committedAtStart`; no start scope → 0 (never
-  // `NaN` / Infinity). Rounded to 4 dp (a fraction the UI renders as a %).
+  // Scope creep: the fraction of scope added after the committed baseline.
+  // `currentScope` is the scope baseline plus every day's net scope delta (= the
+  // live roll-up committed); creep is `(currentScope − committedAtStart) /
+  // committedAtStart` — no committed scope → 0 (never `NaN` / Infinity). Rounded
+  // to 4 dp (a fraction the UI renders as a %).
   const totalScopeDelta = input.dailyDeltas.reduce((sum, r) => sum + r.scopeDelta, 0);
+  const currentScope = input.scopeAtStart + totalScopeDelta;
   const scopeCreepPct =
     input.committedAtStart > 0
-      ? Math.round((totalScopeDelta / input.committedAtStart) * 10000) / 10000
+      ? Math.round(((currentScope - input.committedAtStart) / input.committedAtStart) * 10000) /
+        10000
       : 0;
 
   return {

@@ -22,6 +22,7 @@ const baseInput: CycleGraphInput = {
   start: day('2025-06-02'),
   axisEnd: day('2025-06-13'),
   actualCutoff: day('2025-06-10'), // "today"
+  scopeAtStart: 42,
   committedAtStart: 42,
   completedAtStart: 0,
   startedAtStart: 6,
@@ -131,15 +132,16 @@ describe('toCycleGraphDto — cumulative actual series', () => {
 });
 
 describe('toCycleGraphDto — scope creep', () => {
-  it('is Σ scopeDelta / committedAtStart', () => {
+  it('is (currentScope − committedAtStart) / committedAtStart', () => {
     const dto = toCycleGraphDto(baseInput);
-    expect(dto.scopeCreepPct).toBeCloseTo(4 / 42, 4); // ≈ 0.0952
+    expect(dto.scopeCreepPct).toBeCloseTo(4 / 42, 4); // (46 − 42) / 42 ≈ 0.0952
     expect(dto.committedAtStart).toBe(42);
   });
 
-  it('is 0 (never NaN/Infinity) when there was no scope at start', () => {
+  it('is 0 (never NaN/Infinity) when there was no committed scope at start', () => {
     const dto = toCycleGraphDto({
       ...baseInput,
+      scopeAtStart: 0,
       committedAtStart: 0,
       completedAtStart: 0,
       startedAtStart: 0,
@@ -148,12 +150,38 @@ describe('toCycleGraphDto — scope creep', () => {
     expect(dto.scopeCreepPct).toBe(0);
     expect(Number.isFinite(dto.scopeCreepPct)).toBe(true);
   });
+
+  it('decouples the TARGET origin from the scope-series baseline so the target never collapses onto the x-axis', () => {
+    // The bug scenario (start-then-populate): the trail says ALL scope was added
+    // after start, so `scopeAtStart` reconstructs to 0 — but the service supplies
+    // a real `committedAtStart` (the startSprint snapshot / live scope), so the
+    // target still descends instead of lying flat at 0.
+    const dto = toCycleGraphDto({
+      ...baseInput,
+      scopeAtStart: 0, // the scope series legitimately starts at 0 (trail)
+      committedAtStart: 46, // the target's origin = the real committed scope
+      completedAtStart: 0,
+      startedAtStart: 0,
+      dailyDeltas: [{ day: '2025-06-04', scopeDelta: 46, completedDelta: 0, startedDelta: 0 }],
+    });
+    // The TARGET descends from 46 — NOT pinned to the x-axis.
+    expect(dto.days[0]!.target).toBe(46);
+    expect(dto.days[0]!.target).toBeGreaterThan(0);
+    expect(Math.min(...dto.days.map((d) => d.target))).toBe(0);
+    // The SCOPE series still cumulates from scopeAtStart (0) to currentScope (46).
+    expect(at(dto.days, '2025-06-02').scope).toBe(0);
+    expect(at(dto.days, '2025-06-04').scope).toBe(46);
+    // creep = (46 − 46) / 46 = 0 (no committed-baseline creep).
+    expect(dto.scopeCreepPct).toBe(0);
+    expect(dto.committedAtStart).toBe(46);
+  });
 });
 
 describe('toCycleGraphDto — degenerate / empty', () => {
   it('an empty sprint is flat 0 lines, never NaN', () => {
     const dto = toCycleGraphDto({
       ...baseInput,
+      scopeAtStart: 0,
       committedAtStart: 0,
       completedAtStart: 0,
       startedAtStart: 0,
