@@ -441,7 +441,12 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
   // A PLAIN click on the whole-row link opens the quick-view peek over the list
   // (MOTIR-1306) — it does NOT navigate; the URL gains ?peek and stays on /items.
   const rowLink = page.getByRole('link', { name: `${urgent.identifier} ${urgent.title}` });
-  await rowLink.click();
+  // Click the TITLE end of the stretched row link, not its dead-centre: the meta
+  // cells (assignee/status/…) are inline-edit triggers raised above the link
+  // (relative z-10) to intercept their own clicks, so a centre click can land on
+  // one of them depending on column widths (MOTIR-1307 narrowed the columns). The
+  // title end is always plain link surface.
+  await rowLink.click({ position: { x: 8, y: 8 } });
   const peek = page.getByRole('dialog');
   await expect(peek).toBeVisible();
   await expect(peek.getByTestId('quick-view-open-full')).toHaveAttribute(
