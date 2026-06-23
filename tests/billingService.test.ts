@@ -168,6 +168,14 @@ describe('billingService.getBillingStatus', () => {
     expect(dto.motir.scaledTrackerSubscription).toBeNull();
     expect(dto.catalog.seatPlan.name).toBe('Motir');
     expect(dto.catalog.aiPlans.map((p) => p.key)).toContain('pro');
+    expect(dto.isMeta).toBe(false);
+  });
+
+  it('flags the META org (moooon B.V.) so the page renders the Internal plan state', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+    expect(dto.isMeta).toBe(true);
   });
 
   it('folds the Stripe subscription lifecycle (status + renewal) from the subscription read', async () => {

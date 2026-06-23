@@ -191,6 +191,19 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
     );
   }
 
+  // The META org (moooon B.V.) is internal + unlimited + never billed — there is
+  // no plan to upgrade and no seat/AI checkout to start, so the storefront (and
+  // every CTA) is replaced by a single read-only "Internal plan" card.
+  if (data.isMeta) {
+    return (
+      <div className="flex flex-col gap-5">
+        {live}
+        <InternalPlanCard t={t} orgName={orgName} />
+        <CloudNote t={t} />
+      </div>
+    );
+  }
+
   const canManage = data.access.canManageBilling;
   const shared = {
     data,
@@ -340,6 +353,45 @@ function AvatarCluster({ count }: { count: number }) {
         <span className="ml-1 font-sans text-xs text-(--el-text-muted)">+{count - shown}</span>
       ) : null}
     </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The META org (moooon B.V.) state — internal, unlimited, never billed. No CTAs:
+// there is no plan to change and no checkout to start.
+function InternalPlanCard({ t, orgName }: { t: T; orgName: string }) {
+  return (
+    <Card
+      header={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
+              <Sparkles className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                {t('internal.title')}
+              </h2>
+              <p className="font-sans text-xs text-(--el-text-muted)">{t('internal.tagline')}</p>
+            </div>
+          </div>
+          <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
+            {t('internal.badge')}
+          </Pill>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="font-sans text-sm text-(--el-text)">
+          {t('internal.subtitle', { org: orgName })}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill tone="neutral">{t('internal.motirLine')}</Pill>
+          <Pill tone="neutral">{t('internal.aiLine')}</Pill>
+        </div>
+        <p className="font-sans text-xs text-(--el-text-muted)">{t('internal.usageNote')}</p>
+      </div>
+    </Card>
   );
 }
 

@@ -103,6 +103,7 @@ export const billingService = {
     return {
       organizationId: input.organizationId,
       access: { role: access.role, canManageBilling: isOrgOwnerRole(access.role) },
+      isMeta: org?.isMeta ?? false,
       motir: { scaledTrackerSubscription },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       catalog: BILLING_CATALOG,

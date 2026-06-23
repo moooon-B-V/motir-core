@@ -72,6 +72,10 @@ export interface MotirAiBillingDTO {
 export interface BillingStatusDTO {
   organizationId: string;
   access: BillingAccessDTO;
+  /** The META org (moooon B.V.) — internal, unlimited, never billed. When true the
+   *  page renders the "Internal plan" state instead of the storefront (no upgrade
+   *  / checkout CTAs); the two billed lines below are not meaningful for it. */
+  isMeta: boolean;
   /** ① Motir (seats): the scaled-tracker subscription, or `null` = free/unscaled. */
   motir: { scaledTrackerSubscription: ScaledTrackerSubscription | null };
   /** ② Motir AI: the credit plan tier + balance. */

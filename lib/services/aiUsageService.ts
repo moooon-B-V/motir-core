@@ -62,6 +62,7 @@ async function projectsOfWorkspaces(
 // accessible project) — rendered as the empty / limited state, never a call.
 function emptyDto(args: {
   isAdmin: boolean;
+  isMeta: boolean;
   org: { id: string; name: string };
   scope: UsageScope;
   drill: { workspaces: UsageScopeOption[]; projects: UsageScopeOption[] };
@@ -75,6 +76,7 @@ function emptyDto(args: {
     activeWorkspace: null,
     activeProject: null,
     drill: args.drill,
+    isMeta: args.isMeta,
     balance: 0,
     tier: null,
     totalSpend: 0,
@@ -118,6 +120,7 @@ export const aiUsageService = {
         }
         return {
           orgName: org?.name ?? '',
+          isMeta: org?.isMeta ?? false,
           orgWorkspaces: workspaces.map((w) => ({ id: w.id, name: w.name }) as UsageScopeOption),
           accessibleWorkspaceIds,
         };
@@ -190,6 +193,7 @@ export const aiUsageService = {
     if (scope === 'project' && !coreProjectId) {
       return emptyDto({
         isAdmin: access.isOrgAdmin,
+        isMeta: struct.isMeta,
         org,
         scope,
         drill: { workspaces: drillWorkspaces, projects: drillProjects },
@@ -240,6 +244,7 @@ export const aiUsageService = {
       activeWorkspace,
       activeProject,
       drill: { workspaces: drillWorkspaces, projects: drillProjects },
+      isMeta: struct.isMeta,
       balance: raw.balance,
       tier: raw.tier,
       totalSpend: raw.totalSpend,

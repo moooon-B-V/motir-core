@@ -51,6 +51,10 @@ export interface OrgUsageDTO {
   // only), and the projects in the active workspace (admin) or the member's own
   // accessible projects (non-admin).
   drill: { workspaces: UsageScopeOption[]; projects: UsageScopeOption[] };
+  // The META org (moooon B.V.) — internal, unlimited, never billed. When true the
+  // dashboard shows the balance as "Unlimited" instead of the numeric value (which
+  // still debits for internal cost visibility and can drift negative).
+  isMeta: boolean;
   // Balance + tier are ALWAYS org-level (one ledger per org).
   balance: number;
   tier: UsageTierDTO | null;

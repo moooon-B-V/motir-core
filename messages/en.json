@@ -3519,7 +3519,9 @@
       "monthlySpend": "Monthly spend",
       "monthlySpendSub": "Credits debited per month, org-wide. Last 6 months.",
       "creditsChip": "Credits",
-      "creditsUnit": "credits"
+      "creditsUnit": "credits",
+      "unlimited": "Unlimited",
+      "internal": "Internal"
     },
     "affordance": "Credits are an internal usage allotment — not a currency, and this is not a bill. One planning run debits credits by the tokens it consumed. Buying more credits and plan changes arrive with billing in a later release.",
     "drill": {
@@ -3657,6 +3659,15 @@
       "noPlanYet": "No paid AI plan — on the one-time free trial.",
       "choosePlan": "Choose a Motir AI plan"
     },
+    "internal": {
+      "badge": "Internal",
+      "title": "Internal organization",
+      "tagline": "Motir's own workspace — unlimited, never billed.",
+      "subtitle": "{org} is on Motir's internal plan. Every Motir and Motir AI feature is unlimited and there's nothing to bill — this organization is exempt from billing.",
+      "motirLine": "Motir · Unlimited",
+      "aiLine": "Motir AI · Unlimited",
+      "usageNote": "AI usage is still tracked for internal cost visibility on the Usage & cost page."
+    },
     "payment": {
       "title": "Payment & invoices",
       "portal": "Stripe Customer Portal",
@@ -3753,7 +3764,30 @@
       "manageSeats": "Manage seats",
       "switchMonthly": "Switch to monthly billing"
     },
-    "cloudNote": "Cloud-only. Every surface here is gated behind MOTIR_CLOUD. A self-hosted (GPL-3.0) build shows no billing, no paywall and no caps."
+    "cloudNote": "Cloud-only. Every surface here is gated behind MOTIR_CLOUD. A self-hosted (GPL-3.0) build shows no billing, no paywall and no caps.",
+    "paywall": {
+      "fallbackOrg": "current",
+      "outOfCredits": {
+        "title": "Planning is paused — you're out of credits",
+        "bodyNamed": "The {org} organization has used all of this month's {allotment, number} {tier} credits, so new planning runs are paused. Existing plans stay fully editable.",
+        "body": "The {org} organization has used all of this month's credits, so new planning runs are paused. Existing plans stay fully editable.",
+        "upgrade": "Upgrade plan",
+        "topUp": "Buy credit top-up",
+        "renewNote": "Renews {date} · or upgrade now to keep planning.",
+        "renewNoteUndated": "Upgrade now to keep planning."
+      },
+      "tierGate": {
+        "title": "AI planning is a paid feature",
+        "body": "Generate and expand plans with AI by adding a Motir AI plan to the {org} organization. Start with 300 free trial credits.",
+        "seePlans": "See Motir AI plans",
+        "maybeLater": "Maybe later"
+      },
+      "member": {
+        "title": "AI is out of credits for this org",
+        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner can change the plan or buy credits.",
+        "askOwner": "Ask an owner to upgrade"
+      }
+    }
   },
   "draftWithAi": {
     "button": "Draft with AI",
@@ -3956,31 +3990,6 @@
       "footerNote": "This styles your project, not Motir — nothing locks, change it any time.",
       "reset": "Reset to default",
       "use": "Use this design"
-    }
-  },
-  "billing": {
-    "paywall": {
-      "fallbackOrg": "current",
-      "outOfCredits": {
-        "title": "Planning is paused — you're out of credits",
-        "bodyNamed": "The {org} organization has used all of this month's {allotment, number} {tier} credits, so new planning runs are paused. Existing plans stay fully editable.",
-        "body": "The {org} organization has used all of this month's credits, so new planning runs are paused. Existing plans stay fully editable.",
-        "upgrade": "Upgrade plan",
-        "topUp": "Buy credit top-up",
-        "renewNote": "Renews {date} · or upgrade now to keep planning.",
-        "renewNoteUndated": "Upgrade now to keep planning."
-      },
-      "tierGate": {
-        "title": "AI planning is a paid feature",
-        "body": "Generate and expand plans with AI by adding a Motir AI plan to the {org} organization. Start with 300 free trial credits.",
-        "seePlans": "See Motir AI plans",
-        "maybeLater": "Maybe later"
-      },
-      "member": {
-        "title": "AI is out of credits for this org",
-        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner can change the plan or buy credits.",
-        "askOwner": "Ask an owner to upgrade"
-      }
     }
   }
 }

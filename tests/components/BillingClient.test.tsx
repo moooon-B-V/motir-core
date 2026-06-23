@@ -21,6 +21,7 @@ function activeStandard(): BillingStatusDTO {
   return {
     organizationId: 'org1',
     access: { role: 'owner', canManageBilling: true },
+    isMeta: false,
     motir: { scaledTrackerSubscription: null },
     motirAi: {
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
@@ -82,6 +83,21 @@ describe('BillingClient', () => {
     // The active tier + status render.
     expect(screen.getByText('Standard')).toBeTruthy();
     expect(screen.getByText('Active')).toBeTruthy();
+  });
+
+  it('renders the Internal plan card (no upgrade CTAs) for the META org', async () => {
+    const meta = { ...activeStandard(), isMeta: true };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(meta), { status: 200 })),
+    );
+    renderClient();
+
+    await waitFor(() => expect(screen.getByText('Internal organization')).toBeTruthy());
+    // The storefront + its CTAs are gone — no upgrade / change-plan / seats buttons.
+    expect(screen.queryByRole('button', { name: 'Upgrade Motir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Change plan' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Motir AI', level: 2 })).toBeNull();
   });
 
   it('shows the error state when the boundary fails', async () => {

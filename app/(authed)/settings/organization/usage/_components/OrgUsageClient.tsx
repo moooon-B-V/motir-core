@@ -157,12 +157,21 @@ export function OrgUsageClient({ orgId, orgName }: OrgUsageClientProps) {
     );
   }
 
-  const outOfCredits = data.balance <= 0;
+  // The META org (moooon B.V.) is unlimited + never billed: it can't be "out of
+  // credits" or "low", and there is no allotment bar — usage still debits (for
+  // internal cost visibility) so its balance can drift negative, but that number
+  // is never surfaced as a warning.
+  const outOfCredits = !data.isMeta && data.balance <= 0;
   const allotment = data.tier?.monthlyCreditAllotment ?? 0;
   const lowBalance =
-    !outOfCredits && allotment > 0 && data.balance / allotment < LOW_BALANCE_FRACTION;
+    !data.isMeta &&
+    !outOfCredits &&
+    allotment > 0 &&
+    data.balance / allotment < LOW_BALANCE_FRACTION;
   const remainingPct =
-    allotment > 0 ? Math.max(0, Math.min(100, Math.round((data.balance / allotment) * 100))) : null;
+    !data.isMeta && allotment > 0
+      ? Math.max(0, Math.min(100, Math.round((data.balance / allotment) * 100)))
+      : null;
 
   return (
     <div className="flex flex-col gap-5" aria-busy={status === 'loading'}>
@@ -301,14 +310,24 @@ function SummaryPanel({
             {t('summary.balance')}
           </span>
           <div className="mt-2 font-serif text-[2.125rem] leading-none text-(--el-text)">
-            {fmt(data.balance)}
-            <span className="ml-1 font-sans text-sm text-(--el-text-muted)">
-              {t('summary.creditsUnit')}
-            </span>
+            {data.isMeta ? (
+              t('summary.unlimited')
+            ) : (
+              <>
+                {fmt(data.balance)}
+                <span className="ml-1 font-sans text-sm text-(--el-text-muted)">
+                  {t('summary.creditsUnit')}
+                </span>
+              </>
+            )}
           </div>
           <div className="mt-2 flex items-center gap-2 font-sans text-xs text-(--el-text-muted)">
             <span>{data.org.name}</span>
-            {data.tier ? (
+            {data.isMeta ? (
+              <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
+                {t('summary.internal')}
+              </Pill>
+            ) : data.tier ? (
               <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
                 {t('summary.tier', { tier: data.tier.name })}
               </Pill>
