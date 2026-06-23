@@ -115,23 +115,26 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
 
 const WORKFLOW: WorkflowDto = { statuses: [], transitions: [], policyMode: 'open' };
 
-// The active sprint's in-sprint burndown — the 4.6.5 `SprintHeaderBurndown`
-// slot client-fetches GET /api/sprints/[id]/burndown when the header mounts.
-// The figures deliberately AVOID the header-points fixture values (34/12/22)
-// and render no "—", so the 4.5.3 header assertions stay unambiguous.
+// The active sprint's in-sprint cycle graph — the 4.6.5 `SprintHeaderBurndown`
+// slot client-fetches GET /api/sprints/[id]/burndown (the path stays "burndown";
+// the body is the cycle DTO, Story 8.14) when the header mounts. Every series
+// cell is a real number (no `null`/undefined → no "—"), so the 4.5.3 header's
+// three "—" assertions stay unambiguous.
 const headerBurndown = () => ({
   sprintId: 's1',
   state: 'active' as const,
   statistic: 'story_points' as const,
-  committed: 30,
+  committedAtStart: 30,
+  scopeCreepPct: 0,
   startDate: '2026-06-02T00:00:00.000Z',
   endDate: '2026-06-14T00:00:00.000Z',
+  // Series values deliberately AVOID the header-points fixture numbers (34/12/22)
+  // so the header's getByText('12') etc. stay single-match.
   days: [
-    { date: '2026-06-02', guideline: 30, remaining: 30 },
-    { date: '2026-06-06', guideline: 20, remaining: 18 },
-    { date: '2026-06-14', guideline: 0, remaining: 6 },
+    { date: '2026-06-02', scope: 30, completed: 0, started: 6, target: 30 },
+    { date: '2026-06-06', scope: 30, completed: 7, started: 19, target: 18 },
+    { date: '2026-06-14', scope: 30, completed: 25, started: 28, target: 6 },
   ],
-  scopeChanges: [],
 });
 
 function mockFetchOk(data: BoardProjectionDto) {
