@@ -154,13 +154,15 @@ export const reportsService = {
    * completed / started) reconstructed from the 1.4.6 `work_item_revision` trail
    * + an ideal `target` descent over the sprint's WORKING days.
    *
-   * **NO `committedPoints`-snapshot dependence (resolves the MOTIR-1288 class).**
-   * Scope is the LIVE roll-up committed sum; `committedAtStart` is RECONSTRUCTED
-   * (`currentScope − Σ scopeDelta`), so a sprint started unestimated/empty still
-   * renders correctly (the MOTIR-1285/1288 scenarios). Each actual series is
-   * cumulated off its reconstructed start baseline (`current − Σ delta`), so the
-   * last drawn `scope` / `completed` land EXACTLY on `rollupForSprint().committed`
-   * / `.completed` — the chart reconciles with the scrum header.
+   * The SERIES are snapshot-free (resolves the MOTIR-1288 class): each actual
+   * series is cumulated off its RECONSTRUCTED start baseline (`current − Σ
+   * delta`), so the last drawn `scope` / `completed` land EXACTLY on
+   * `rollupForSprint().committed` / `.completed` — the chart reconciles with the
+   * scrum header even when the sprint was started unestimated/empty. The TARGET's
+   * origin (`committedAtStart`) is resolved SEPARATELY from the immutable
+   * `startSprint` snapshot (falling back to the live scope), NOT the trail — the
+   * trail reconstruction wrongly yields ~0 when items are assigned to the sprint
+   * after `startDate`, which would collapse the target onto the x-axis.
    *
    * Statistic: the project's configured statistic, narrowed to `story_points`
    * when the sprint has point work, else the `issue_count` fallback (the SAME

@@ -134,10 +134,10 @@ test.describe('charts (4.6.7)', () => {
     ).toBeVisible();
     const slot = page.getByTestId('sprint-burndown');
     await expect(slot).toBeVisible();
-    await expect(slot.getByText('Burndown', { exact: true })).toBeVisible();
+    await expect(slot.getByText('Sprint graph', { exact: true })).toBeVisible();
     await expect(slot.getByText(/Day \d+ of \d+/)).toBeVisible();
     // The chart is a labelled role="img" SVG (the finding-#35 a11y contract).
-    await expect(slot.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible();
+    await expect(slot.getByRole('img', { name: 'Sprint graph' })).toBeVisible();
 
     // The cycle DTO body is the burn-UP of LIVE scope vs completed: the last
     // drawn day reconciles to the header (scope 10, completed 2).
@@ -175,13 +175,13 @@ test.describe('charts (4.6.7)', () => {
     // The completed-sprint cycle graph renders in the report's chart seam: the
     // section heading (label stays "Burndown"), the labelled SVG, and the
     // completed-shape <desc> + the data-table fallback (the four series).
-    await expect(page.getByText('Burndown', { exact: true }).first()).toBeVisible();
-    const cycleImg = page.getByRole('img', { name: 'Sprint cycle graph' });
+    await expect(page.getByText('Sprint graph', { exact: true }).first()).toBeVisible();
+    const cycleImg = page.getByRole('img', { name: 'Sprint graph' });
     await expect(cycleImg).toBeVisible();
     // The <desc> reads as the completed-sprint sentence (not the live "as of
     // today" form) — the series switched to its completed shape.
-    await expect(cycleImg).toHaveAccessibleDescription(/Completed-sprint cycle graph/);
-    const table = await openDataTable(page.locator('section').filter({ hasText: 'Burndown' }));
+    await expect(cycleImg).toHaveAccessibleDescription(/completed over/);
+    const table = await openDataTable(page.locator('section').filter({ hasText: 'Sprint graph' }));
     // The four cumulative series are the data-table columns (finding #35).
     for (const col of ['Scope', 'Completed', 'Started', 'Target']) {
       await expect(table.getByRole('columnheader', { name: col, exact: true })).toBeVisible();
@@ -235,7 +235,7 @@ test.describe('charts (4.6.7)', () => {
     // The cycle graph renders on the degraded issue-count series (no point
     // baseline anywhere), and the velocity window now spans 3 completed sprints
     // with Gamma's 0s — every figure stays a number, never NaN, no error state.
-    await expect(page.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Sprint graph' })).toBeVisible();
     await expect(page.getByText('Last 3 completed sprints').first()).toBeVisible();
     await expect(page.getByText("Couldn't load the chart")).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('NaN');

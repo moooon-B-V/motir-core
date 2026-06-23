@@ -127,7 +127,7 @@ test.describe('reports @smoke', () => {
     await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
 
     // Agile group — link cards into the shipped surfaces (never redrawn here).
-    await expect(page.getByText('Burndown chart')).toBeVisible();
+    await expect(page.getByText('Sprint graph')).toBeVisible();
     await expect(page.getByText('Velocity chart')).toBeVisible();
     // Analysis group — the two report pages this story builds.
     await expect(page.getByRole('link', { name: /Created vs Resolved/ })).toBeVisible();
@@ -264,7 +264,7 @@ test.describe('reports @smoke', () => {
 
     // The bug: all three Agile cards pointed at one `/sprints/[id]/report` URL.
     // Each must now link to its OWN report (Jira's three separate report pages).
-    const burndownLink = page.getByRole('link', { name: /Burndown chart/ });
+    const burndownLink = page.getByRole('link', { name: /Sprint graph/ });
     const velocityLink = page.getByRole('link', { name: /Velocity chart/ });
     const sprintReportLink = page.getByRole('link', { name: /Sprint report/ });
     const [bHref, vHref, sHref] = await Promise.all([
@@ -281,15 +281,15 @@ test.describe('reports @smoke', () => {
     // Burndown → its own page: the sprint picker + the full cycle-graph chart.
     await burndownLink.click();
     await page.waitForURL(/\/reports\/burndown\?sprint=/);
-    await expect(page.getByRole('heading', { name: 'Burndown chart' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sprint graph' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Sprint' })).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible({
+    await expect(page.getByRole('img', { name: 'Sprint graph' })).toBeVisible({
       timeout: 15_000,
     });
     // The ?sprint= param round-trips on reload (a shareable/bookmarkable report).
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`sprint=${sprint.id}`));
-    await expect(page.getByRole('img', { name: 'Sprint cycle graph' })).toBeVisible({
+    await expect(page.getByRole('img', { name: 'Sprint graph' })).toBeVisible({
       timeout: 15_000,
     });
 

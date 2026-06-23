@@ -115,8 +115,8 @@ describe('SprintReport (4.4.6)', () => {
     expect(viewAll[0]!.getAttribute('href')).toBe('/items?sprint=sp6');
     // The Story-4.6 burndown section (4.6.5): with no server-fed series, the
     // slot client-fetches and shows the loading skeleton first.
-    expect(screen.getByText('Burndown')).toBeTruthy();
-    expect(screen.getByRole('status', { name: /Loading the burndown chart/ })).toBeTruthy();
+    expect(screen.getByText('Sprint graph')).toBeTruthy();
+    expect(screen.getByRole('status', { name: /Loading the sprint graph/ })).toBeTruthy();
   });
 
   it('renders "—" for every point figure when the sprint was started unestimated', () => {
@@ -232,7 +232,7 @@ describe('SprintReport velocity (4.6.6)', () => {
     render(<SprintReport report={report()} sprint={sprint()} statusByKey={statusByKey} />);
     expect(screen.queryByText('Velocity')).toBeNull();
     // The burndown section is still there (the modal slot self-fetches).
-    expect(screen.getByText('Burndown')).toBeTruthy();
+    expect(screen.getByText('Sprint graph')).toBeTruthy();
   });
 });
 
@@ -289,6 +289,6 @@ describe('SprintReport cycle graph (8.14.6)', () => {
     expect(screen.getByText(/cumulative story points by day/i)).toBeTruthy();
     expect(screen.queryByText('NaN')).toBeNull();
     // Server-fed: no client fetch, so no loading skeleton.
-    expect(screen.queryByRole('status', { name: /Loading the burndown chart/ })).toBeNull();
+    expect(screen.queryByRole('status', { name: /Loading the sprint graph/ })).toBeNull();
   });
 });
