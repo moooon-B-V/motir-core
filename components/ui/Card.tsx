@@ -27,7 +27,7 @@ const cardVariants = cva(
   {
     variants: {
       tint: {
-        none: 'bg-(--el-page-bg)',
+        none: 'bg-(--el-card)',
         peach: 'bg-(--el-tint-peach) border-transparent',
         rose: 'bg-(--el-tint-rose) border-transparent',
         mint: 'bg-(--el-tint-mint) border-transparent',

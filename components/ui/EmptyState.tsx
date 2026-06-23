@@ -42,12 +42,12 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(function E
 ) {
   return (
     <Card ref={ref} className={cn('flex flex-col items-center text-center', className)} {...rest}>
-      <div className="text-(--el-text-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center">
+      <div className="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center">
         {icon ?? <Inbox className="h-12 w-12" aria-hidden />}
       </div>
       <h2 className="font-serif text-xl text-(--el-text)">{title}</h2>
       {description ? (
-        <p className="text-(--el-text-muted) mt-(--spacing-sm) max-w-prose font-sans text-sm">
+        <p className="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm">
           {description}
         </p>
       ) : null}

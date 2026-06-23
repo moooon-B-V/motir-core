@@ -148,7 +148,7 @@ export function BoardColumn({
       <header className="flex items-center gap-2 border-b border-(--el-border) px-3 py-2.5">
         <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
         <span
-          className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) text-xs font-semibold text-(--el-text-secondary)"
+          className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-xs font-semibold text-(--el-count-text)"
           data-testid={`board-count-${column.id}`}
         >
           {column.totalCount}

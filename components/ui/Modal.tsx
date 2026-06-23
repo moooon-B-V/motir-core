@@ -93,7 +93,7 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
   className?: string;
   /**
    * Extra classes merged onto the backdrop — e.g. the attachment preview
-   * lightbox (Subtask 5.2.6) deepens the default `bg-black/40` scrim to
+   * lightbox (Subtask 5.2.6) deepens the default `--el-overlay-scrim` to
    * `bg-black/80` per `design/work-items/attachments.mock.html` panel 6.
    */
   overlayClassName?: string;
@@ -128,7 +128,7 @@ function ModalRoot({
             point of a glass modal. Inert for every other style. */}
         <Dialog.Overlay
           data-surface="overlay"
-          className={cn('fixed inset-0 z-40 bg-black/40', overlayClassName)}
+          className={cn('fixed inset-0 z-40 bg-(--el-overlay-scrim)', overlayClassName)}
         />
         {/*
           PRODECT_FINDINGS #8: Radix checks for a describing element
@@ -161,7 +161,7 @@ function ModalRoot({
                 </Dialog.Title>
               ) : null}
               {description ? (
-                <Dialog.Description className="text-(--el-text-muted) mt-1 font-sans text-sm">
+                <Dialog.Description className="text-(--el-text-subtitle) mt-1 font-sans text-sm">
                   {description}
                 </Dialog.Description>
               ) : null}
@@ -176,7 +176,7 @@ function ModalRoot({
           {!hideClose ? (
             <Dialog.Close
               aria-label={tc('close')}
-              className="text-(--el-text-muted) hover:text-(--el-text) absolute right-3 top-3 rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              className="text-(--el-icon-muted) hover:text-(--el-text) absolute right-3 top-3 rounded-(--radius-control) p-(--spacing-icon-btn) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
             >
               <X className="h-4 w-4" />
             </Dialog.Close>

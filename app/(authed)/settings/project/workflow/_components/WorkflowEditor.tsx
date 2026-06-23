@@ -141,7 +141,7 @@ export function WorkflowEditor({
   return (
     <div className="flex flex-col gap-5">
       {/* Policy mode */}
-      <section className="border-(--el-border) bg-card flex flex-col gap-2 rounded-(--radius-card) border p-4">
+      <section className="border-(--el-border) bg-(--el-card) flex flex-col gap-2 rounded-(--radius-card) border p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="font-sans text-sm font-semibold text-(--el-text)">
@@ -220,7 +220,7 @@ export function WorkflowEditor({
               return (
                 <li
                   key={s.id}
-                  className="border-(--el-border) bg-card flex items-center gap-3 rounded-lg border p-3"
+                  className="border-(--el-border) bg-(--el-card) flex items-center gap-3 rounded-lg border p-3"
                 >
                   <span
                     aria-hidden
@@ -532,7 +532,7 @@ function ReassignModal({
           {t('workflow.reassignMoveTo')}
         </span>
         <select
-          className="border-(--el-border) bg-card text-(--el-text) rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="border-(--el-border) bg-(--el-card) text-(--el-text) rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
         >

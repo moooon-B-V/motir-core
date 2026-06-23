@@ -190,7 +190,7 @@ export function EditIssueForm({
       {stale ? (
         <div
           role="alert"
-          className="border-(--el-danger) bg-card text-(--el-text) flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+          className="border-(--el-danger) bg-(--el-card) text-(--el-text) flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
         >
           <span>{t('staleBanner')}</span>
           <Button type="button" variant="secondary" size="sm" onClick={() => router.refresh()}>

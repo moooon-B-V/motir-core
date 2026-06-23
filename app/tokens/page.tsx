@@ -95,6 +95,51 @@ const IDENTITY_HUE_GROUPS: { heading: string; tokens: [string, string][] }[] = [
   },
 ];
 
+// Icon + text roles and component-surface primitives (MOTIR-1275 · 1266.4) — the
+// families that split the --el-text-muted / --el-text / --el-surface / --el-border
+// overloads so a palette can tune an icon / overline / control surface apart from
+// body copy. Each row is a [token, label]; the swatch renders the resolved value
+// so a palette + dark swap is visible here. design/design-system/design-notes.md §E–F.
+const ICON_TEXT_SURFACE_GROUPS: { heading: string; tokens: [string, string][] }[] = [
+  {
+    heading: 'Icon roles (--el-icon-*)',
+    tokens: [
+      ['--el-icon-muted', 'icon muted'],
+      ['--el-icon-active', 'icon active'],
+      ['--el-icon-btn', 'icon button'],
+      ['--el-icon-heading', 'icon heading'],
+      ['--el-icon-field', 'icon field'],
+    ],
+  },
+  {
+    heading: 'Text roles (--el-text-*)',
+    tokens: [
+      ['--el-text-eyebrow', 'text eyebrow'],
+      ['--el-text-subtitle', 'text subtitle'],
+      ['--el-text-helper', 'text helper'],
+      ['--el-text-identifier', 'text identifier'],
+    ],
+  },
+  {
+    heading: 'Component surfaces (--el-tooltip/switch/option/chip/card/border/count)',
+    tokens: [
+      ['--el-tooltip-bg', 'tooltip bg'],
+      ['--el-tooltip-text', 'tooltip text'],
+      ['--el-switch-on', 'switch on'],
+      ['--el-switch-knob', 'switch knob'],
+      ['--el-option-active-bg', 'option active bg'],
+      ['--el-overlay-scrim', 'overlay scrim'],
+      ['--el-chip-bg', 'chip bg'],
+      ['--el-chip-border', 'chip border'],
+      ['--el-card', 'card'],
+      ['--el-input-border', 'input border'],
+      ['--el-button-border', 'button border'],
+      ['--el-count-bg', 'count bg'],
+      ['--el-count-text', 'count text'],
+    ],
+  },
+];
+
 /**
  * /tokens — the design system reference route.
  *
@@ -649,6 +694,58 @@ export default function TokensPage() {
                 >
                   {/* Decorative resolved-hue chip; the token name is visible text
                       below, so no aria-label (axe aria-prohibited-attr). */}
+                  <div
+                    aria-hidden
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      flex: 'none',
+                      borderRadius: 'var(--radius-badge)',
+                      backgroundColor: `var(${token})`,
+                      border: '1px solid var(--el-border)',
+                    }}
+                  />
+                  <div className="font-mono text-xs">
+                    <div style={{ color: 'var(--el-page-text)' }}>{label}</div>
+                    <div style={{ color: 'var(--el-page-text-muted)' }}>{token}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </Section>
+
+      <Section title="Icon · text roles · component surfaces (--el-icon-* / --el-text-{eyebrow,subtitle,helper,identifier} / surface primitives)">
+        {ICON_TEXT_SURFACE_GROUPS.map((group) => (
+          <div key={group.heading} style={{ marginBottom: 'var(--spacing-md)' }}>
+            <div
+              className="font-mono text-xs"
+              style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-sm)' }}
+            >
+              {group.heading}
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: 'var(--spacing-md)',
+              }}
+            >
+              {group.tokens.map(([token, label]) => (
+                <div
+                  key={token}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--spacing-sm)',
+                    padding: 'var(--spacing-sm)',
+                    border: '1px solid var(--el-border)',
+                    borderRadius: 'var(--radius-card)',
+                  }}
+                >
+                  {/* Decorative resolved-value chip; the token name is visible
+                      text below, so no aria-label (axe aria-prohibited-attr). */}
                   <div
                     aria-hidden
                     style={{

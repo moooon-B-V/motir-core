@@ -116,10 +116,10 @@ export function ValueChip({
         'inline-flex max-w-full items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium',
         option.tint
           ? cn(TINT_CHIP[option.tint], 'text-(--el-text-strong)')
-          : 'bg-(--el-surface) text-(--el-text-secondary) border border-(--el-border)',
+          : 'bg-(--el-chip-bg) text-(--el-text-secondary) border border-(--el-chip-border)',
       )}
     >
-      {Glyph ? <Glyph className="h-3 w-3 shrink-0 text-(--el-text-muted)" aria-hidden /> : null}
+      {Glyph ? <Glyph className="h-3 w-3 shrink-0 text-(--el-icon-muted)" aria-hidden /> : null}
       <span className="min-w-0 truncate">{option.label}</span>
       {onRemove ? (
         <button
@@ -131,7 +131,7 @@ export function ValueChip({
             '-mr-1 inline-flex items-center justify-center rounded-(--radius-badge) p-px focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             option.tint
               ? 'text-(--el-text-strong) opacity-65 hover:bg-(--el-text-strong)/10 hover:opacity-100'
-              : 'text-(--el-text-muted) hover:bg-(--el-muted) hover:text-(--el-text)',
+              : 'text-(--el-icon-muted) hover:bg-(--el-muted) hover:text-(--el-text)',
           )}
         >
           <X className="h-3 w-3" aria-hidden />
@@ -324,11 +324,11 @@ export function MultiSelectPicker({
                 onClick={() => commitRow(i)}
                 onMouseEnter={() => setActiveIndex(i)}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:outline-none',
-                  i === clampedActive && 'bg-(--el-surface)',
+                  'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-option-active-bg) focus-visible:outline-none',
+                  i === clampedActive && 'bg-(--el-option-active-bg)',
                 )}
               >
-                <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-text-muted)">
+                <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-icon-muted)">
                   {opt.tint ? (
                     <span
                       aria-hidden
@@ -364,8 +364,8 @@ export function MultiSelectPicker({
               onClick={() => commitRow(options.length)}
               onMouseEnter={() => setActiveIndex(options.length)}
               className={cn(
-                'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-surface) focus-visible:outline-none',
-                clampedActive === options.length && 'bg-(--el-surface)',
+                'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-option-active-bg) focus-visible:outline-none',
+                clampedActive === options.length && 'bg-(--el-option-active-bg)',
               )}
             >
               <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-accent-on-surface)">
@@ -395,7 +395,7 @@ export function MultiSelectPicker({
         </p>
       ) : null}
       {!error && hint ? (
-        <div className="mt-1.5 font-sans text-xs text-(--el-text-muted)">{hint}</div>
+        <div className="mt-1.5 font-sans text-xs text-(--el-text-helper)">{hint}</div>
       ) : null}
     </div>
   );

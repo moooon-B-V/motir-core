@@ -54,7 +54,7 @@ export function ColumnWipBadge({
     <span
       title={t('wipCountTitle', { count: totalCount, limit: wipLimit })}
       data-testid={`board-wip-${columnId}`}
-      className="inline-flex h-5 items-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) font-mono text-[11px] font-semibold text-(--el-text-secondary)"
+      className="inline-flex h-5 items-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) font-mono text-[11px] font-semibold text-(--el-count-text)"
     >
       {label}
     </span>

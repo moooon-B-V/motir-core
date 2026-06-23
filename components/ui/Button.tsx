@@ -38,7 +38,7 @@ export const buttonVariants = cva(
       variant: {
         primary: 'bg-(--el-accent) text-(--el-accent-text) hover:opacity-90',
         secondary:
-          'bg-transparent text-(--el-text) border border-(--el-border-strong) hover:bg-(--el-surface)',
+          'bg-transparent text-(--el-text) border border-(--el-button-border) hover:bg-(--el-surface)',
         ghost: 'bg-transparent text-(--el-text) hover:bg-(--el-surface)',
         danger: 'bg-(--el-danger) text-(--el-danger-text) hover:opacity-90',
       },

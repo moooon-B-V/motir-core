@@ -131,11 +131,11 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         aria-label={item.label}
         className={cn(
           'mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control)',
-          'text-(--el-text-muted) transition-colors',
+          'text-(--el-icon-muted) transition-colors',
           'hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           isActive &&
-            'bg-(--el-sidebar-item-bg-active) text-(--el-accent-on-surface) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
+            'bg-(--el-sidebar-item-bg-active) text-(--el-icon-active) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
         )}
       >
         {glyph}
@@ -188,7 +188,7 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         aria-hidden
         className={cn(
           'inline-flex shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px]',
-          isActive ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-muted)',
+          isActive ? 'text-(--el-icon-active)' : 'text-(--el-icon-muted)',
         )}
       >
         {item.icon}
@@ -232,12 +232,13 @@ function SidebarSectionFrame({
           )}
         >
           {/* Section captions sit on the sidebar surface (#f6f5f4), where the
-              default --el-text-muted undershoots WCAG AA at 11px; --el-text-secondary
-              is the AA-safe sidebar caption color. */}
+              default eyebrow ink (--el-text-eyebrow = --color-muted-foreground)
+              undershoots WCAG AA at 11px; --el-text-secondary is the AA-safe
+              sidebar caption color. */}
           <SectionLabel label={section.label} className="text-(--el-text-secondary)" />
           <ChevronDown
             aria-hidden
-            className="h-3.5 w-3.5 text-(--el-text-muted) transition-transform group-data-[state=closed]:-rotate-90"
+            className="h-3.5 w-3.5 text-(--el-icon-muted) transition-transform group-data-[state=closed]:-rotate-90"
           />
         </Collapsible.Trigger>
         <Collapsible.Content className="overflow-hidden data-[state=closed]:animate-out data-[state=open]:animate-in">

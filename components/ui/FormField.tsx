@@ -57,7 +57,7 @@ export function FormField({
           {error}
         </p>
       ) : helperText ? (
-        <p id={describedById} className="text-(--el-text-muted) font-sans text-xs">
+        <p id={describedById} className="text-(--el-text-helper) font-sans text-xs">
           {helperText}
         </p>
       ) : null}
