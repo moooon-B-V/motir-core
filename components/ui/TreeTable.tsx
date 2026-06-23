@@ -137,6 +137,15 @@ export interface TreeTableProps<Row> {
    * deterministically in tests). Return `null` to disable windowing (render all).
    */
   getScrollElement?: () => HTMLElement | null;
+  /**
+   * The CSS min-width of the flexible (first/tree) column's `minmax(<min>, 1fr)`
+   * track. Defaults to `'0'` (the track may collapse fully). Pass a floor (e.g.
+   * `'10rem'`) when the tree column holds non-shrinkable content that must not
+   * spill into the next column under width pressure — the issue list/tree passes
+   * `ISSUE_TITLE_MIN_TRACK` so the Title never collapses onto the Type chip
+   * (bug MOTIR-1307).
+   */
+  flexMin?: string;
   /** Extra classes on the outer container. */
   className?: string;
 }
@@ -220,6 +229,7 @@ export function TreeTable<Row>({
   getRowTestId,
   onRowActivate,
   getScrollElement,
+  flexMin = '0',
   className,
 }: TreeTableProps<Row>) {
   const isControlled = expandedIds !== undefined;
@@ -445,9 +455,11 @@ export function TreeTable<Row>({
 
   const treeColumn = columns[0];
   const restColumns = columns.slice(1);
-  // The grid template: the tree column flexes, the rest take their fixed widths.
+  // The grid template: the tree column flexes (floored at `flexMin` so it can't
+  // collapse its content into the next column under width pressure — bug
+  // MOTIR-1307), the rest take their fixed widths.
   const gridTemplate = [
-    'minmax(0,1fr)',
+    `minmax(${flexMin},1fr)`,
     ...restColumns.map((c) => (c.width ? `${c.width}px` : 'max-content')),
   ].join(' ');
 

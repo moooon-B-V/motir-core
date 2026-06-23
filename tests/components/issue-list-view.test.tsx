@@ -96,6 +96,24 @@ describe('IssueListTable — sortable headers', () => {
     );
   });
 
+  // Due is intentionally NOT a list/tree column (Yue) — removed from all three
+  // views. The other core columns still render; only Due is gone.
+  it('does not render a Due column', () => {
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
+      />,
+    );
+    expect(screen.queryByRole('columnheader', { name: /Due/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Due/ })).toBeNull();
+    // The sibling columns are unaffected.
+    expect(screen.getByRole('columnheader', { name: /Priority/ })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: /Status/ })).toBeTruthy();
+  });
+
   it('renders both issues as whole-row links to their detail page', () => {
     render(
       <IssueListTable
@@ -151,6 +169,28 @@ describe('IssueListTable — sortable headers', () => {
     fireEvent.click(screen.getByRole('button', { name: /Title/ }));
     expect(push).toHaveBeenCalledWith('/items?view=list&sort=key%3Adesc');
   });
+
+  // Bug MOTIR-1307: on a narrow viewport the flexible Title track collapsed to 0
+  // and the title cell's non-shrinkable icon + identifier spilled onto the Type
+  // chip. The fix FLOORS the Title track (`minmax(10rem,1fr)`, never the old
+  // `minmax(0,1fr)`) and trims the Est. (72) + Status (108) columns. The List
+  // and Tree share one column grid, so this asserts the List half (the Tree half
+  // is covered in issue-tree-lazy).
+  it('floors the Title track and trims Est./Status so the title cannot collapse onto the Type chip', () => {
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
+      />,
+    );
+    const template = screen.getByTestId('issue-row-PROD-1').style.gridTemplateColumns;
+    expect(template).toMatch(/minmax\(\s*10rem/);
+    expect(template).not.toMatch(/minmax\(\s*0[\s,]/);
+    expect(template).toContain('72px'); // Est. (was 90)
+    expect(template).toContain('108px'); // Status (was 130)
+  });
 });
 
 // The work-Type column (Subtask 8.8.9) — surfaces each leaf's `type` via the
@@ -170,8 +210,8 @@ describe('IssueListTable — work-Type column (Subtask 8.8.9)', () => {
 
   // The cells render in column order: Title · Type · Priority · … — so the Type
   // cell is index 1. (Targeting it by position is robust: the muted "—" empty
-  // glyph is shared by the Due / Est. / Points cells, so a row-wide text query
-  // for "—" would be ambiguous.)
+  // glyph is shared by the Est. / Points cells, so a row-wide text query for "—"
+  // would be ambiguous.)
   const typeCellOf = (identifier: string) =>
     within(screen.getByTestId(`issue-row-${identifier}`)).getAllByRole('cell')[1]!;
 

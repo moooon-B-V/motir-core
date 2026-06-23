@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { TreeTable, type TreeTableColumn, type TreeTableRow } from '@/components/ui/TreeTable';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { ISSUE_TITLE_MIN_TRACK } from '@/lib/issues/issueListView';
 import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { usePeekRowClick } from './IssueQuickView';
@@ -55,6 +56,7 @@ export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStati
     <TreeTable
       label={t('issues.list.tableLabel')}
       columns={columns}
+      flexMin={ISSUE_TITLE_MIN_TRACK}
       rows={rows}
       expandedIds={expandedIds}
       onExpandedChange={setExpandedIds}

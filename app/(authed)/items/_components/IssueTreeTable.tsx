@@ -19,6 +19,7 @@ import {
   buildIssueListHref,
   nextSort,
   serializeSort,
+  ISSUE_TITLE_MIN_TRACK,
   type IssueSort,
   type IssueSortColumn,
 } from '@/lib/issues/issueListView';
@@ -318,6 +319,7 @@ export function IssueTreeTable({
       <TreeTable
         label={t('issues.list.tableLabel')}
         columns={columns}
+        flexMin={ISSUE_TITLE_MIN_TRACK}
         rows={rows}
         expandedIds={expanded}
         onExpandedChange={onExpandedChange}

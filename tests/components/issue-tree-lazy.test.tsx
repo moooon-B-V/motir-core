@@ -131,11 +131,17 @@ describe('IssueTreeTable — lazy + sortable', () => {
     const dataTemplate = dataRow.style.gridTemplateColumns;
 
     // The fixed widths from buildIssueColumns are present — not collapsed to
-    // content-sized tracks that drift per row.
+    // content-sized tracks that drift per row (Est. 72 + Status 108 are the
+    // MOTIR-1307 trims).
     expect(headerTemplate).not.toContain('max-content');
-    for (const px of ['120px', '150px', '90px', '130px']) {
+    for (const px of ['120px', '150px', '72px', '108px']) {
       expect(headerTemplate).toContain(px);
     }
+    // The flexible Title track is FLOORED (bug MOTIR-1307) so it can't collapse
+    // to 0 and spill the title cell's icon + identifier onto the Type chip on a
+    // narrow viewport — `minmax(10rem,1fr)`, never the old `minmax(0,1fr)`.
+    expect(headerTemplate).toMatch(/minmax\(\s*10rem/);
+    expect(headerTemplate).not.toMatch(/minmax\(\s*0[\s,]/);
     // Header and data share ONE column grid → columns line up under headers.
     expect(dataTemplate).toBe(headerTemplate);
   });
