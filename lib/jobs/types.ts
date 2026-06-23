@@ -214,6 +214,21 @@ export interface FilterSubscriptionDeliverData {
 }
 
 /**
+ * The `system.billing-seat-sync` event payload (Story 8.1 · Subtask 8.1.12) —
+ * one per org-membership add/remove, enqueued best-effort AFTER the membership tx
+ * commits (`enqueueScaledTrackerSeatSync`). The consumer
+ * (billingService.syncScaledTrackerSeatQuantity) re-derives the org's active-
+ * member count and sets the scaled-tracker Stripe seat `quantity` over the
+ * boundary. SYSTEM-scoped (no `workspaceId`): an org spans workspaces, so the job
+ * runs under `withSystemContext`, like every `system.*` job — and the `system.*`
+ * namespace keeps it out of `WorkspaceScopedEventName` / `sendEvent` (it carries
+ * no workspace id, so it is enqueued via `inngest.send` directly).
+ */
+export interface BillingSeatSyncData {
+  organizationId: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -230,6 +245,7 @@ export interface JobEventDataMap {
   'system.attachment-gc': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
+  'system.billing-seat-sync': BillingSeatSyncData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;

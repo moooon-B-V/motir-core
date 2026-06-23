@@ -11,6 +11,7 @@ import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { entitlementsService } from '@/lib/services/entitlementsService';
+import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import {
   AlreadyMemberError,
   LastMemberError,
@@ -486,9 +487,10 @@ export const workspacesService = {
     workspaceId: string;
     role?: MemberRole;
   }): Promise<WorkspaceMembership> {
+    let organizationId: string | null = null;
     try {
-      return await db.$transaction(async (tx) => {
-        const membership = await workspaceMembershipRepository.create(
+      const membership = await db.$transaction(async (tx) => {
+        const created = await workspaceMembershipRepository.create(
           {
             userId: input.userId,
             workspaceId: input.workspaceId,
@@ -500,14 +502,22 @@ export const workspacesService = {
         // the user into its org if they aren't a member already.
         const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
         if (workspace) {
+          organizationId = workspace.organizationId;
           await organizationsService.ensureOrgMembership(
             input.userId,
             workspace.organizationId,
             tx,
           );
         }
-        return membership;
+        return created;
       });
+      // Committed → resync the org's scaled-tracker seat quantity (8.1.12): the
+      // upward auto-join may have grown the org's member count. Best-effort +
+      // OUTSIDE the tx (a billing failure must never fail the workspace add);
+      // idempotent absolute set, so it no-ops when the user was already an org
+      // member or the org isn't scaled.
+      if (organizationId) await enqueueScaledTrackerSeatSync(organizationId);
+      return membership;
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new AlreadyMemberError(input.userId, input.workspaceId);

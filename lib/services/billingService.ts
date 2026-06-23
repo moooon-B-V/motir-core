@@ -1,14 +1,17 @@
 import { organizationsService } from '@/lib/services/organizationsService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { withOrgContext } from '@/lib/organizations/context';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { isOrgOwnerRole } from '@/lib/organizations/roles';
 import {
   createCheckoutSession,
   createPortalSession,
   getOrgSubscription,
   getOrgUsage,
+  setSeatQuantity,
+  type SeatQuantityResult,
 } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { BILLING_CATALOG, isKnownCheckoutPrice } from '@/lib/billing/catalog';
@@ -233,6 +236,45 @@ export const billingService = {
     if (!isOrgOwnerRole(access.role)) {
       throw new BillingForbiddenError('Managing billing is limited to the organization owner.');
     }
+  },
+
+  /**
+   * Resync an org's scaled-tracker Stripe seat `quantity` to its current
+   * active-member count (Subtask 8.1.12). The background half of the
+   * membership → seat-quantity sync: the `system.billing-seat-sync` Inngest job
+   * calls this after an org-membership add/remove commits (best-effort enqueue
+   * via `enqueueScaledTrackerSeatSync`), so a failed Stripe call NEVER rolls back
+   * or blocks the membership change.
+   *
+   * Has no actor — it runs as a background job — so it reads the org + member
+   * count under `withSystemContext`. Gated twice: off-cloud there is no billing
+   * (no-op), and only an org whose `scaledTrackerSubscription.status === 'active'`
+   * has seats to bill (every other org is a no-op — the read is cheap).
+   *
+   * The quantity is the recomputed count read HERE, at run time — an ABSOLUTE
+   * target, never a delta. Combined with the endpoint's idempotent skip-if-equal,
+   * this makes the sync converge with no drift under concurrent membership writes
+   * (rapid adds can't double-count: each job re-derives the live committed count,
+   * and the last membership change's job always reads the final count) AND makes
+   * this method itself the reconcile primitive — re-running it re-derives truth.
+   */
+  async syncScaledTrackerSeatQuantity(organizationId: string): Promise<SeatQuantityResult> {
+    // Off-cloud there is no billing at all — nothing to bill is the honest shape.
+    if (!isCloudBilling()) return { applied: false, outcome: 'no_active_tracker_subscription' };
+
+    const { isScaledActive, memberCount } = await withSystemContext(async (tx) => {
+      const org = await organizationRepository.findByIdInTx(organizationId, tx);
+      const scaled = (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+      const count = await organizationMembershipRepository.countByOrg(organizationId, tx);
+      return { isScaledActive: scaled?.status === 'active', memberCount: count };
+    });
+
+    // Only an active scaled-tracker org has seats to bill; everything else is a
+    // benign no-op (a free org, a past_due/canceled one — its caps are already
+    // handled by the webhook flag, not the seat count).
+    if (!isScaledActive) return { applied: false, outcome: 'no_active_tracker_subscription' };
+
+    return setSeatQuantity({ coreOrganizationId: organizationId, quantity: memberCount });
   },
 };
 
