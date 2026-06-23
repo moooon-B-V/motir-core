@@ -328,6 +328,13 @@ describe('billingService.getAiAccess (the member-safe 8.1.8 paywall read)', () =
     expect(typeof access.organizationName).toBe('string');
   });
 
+  it('is not applicable for the META org (moooon B.V.) — the AI paywall never renders', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
+    expect(access.applicable).toBe(false);
+  });
+
   it('an OWNER on a paid (active) plan → hasPaidAiPlan true, canManageBilling true, renewsAt set', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
     const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });

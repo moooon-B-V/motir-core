@@ -160,25 +160,34 @@ export const organizationMembershipRepository = {
 
   /**
    * The orgs a user OWNS or ADMINS, each with its scaled-tracker subscription
-   * state — the input to the §4.5 org-creation gate (8.1.11): a 2nd+ org requires
-   * the user to own/admin ≥1 org with an ACTIVE scaled-tracker subscription, and
-   * an empty result means "this is the user's first org" (always free). Joins
-   * `organization_membership → organization` so one read yields both the count
-   * and the per-org subscription. Takes `tx` so it runs in the create's
-   * transaction. Raw SQL keeps it context-independent (it spans orgs the active
-   * GUC doesn't scope to).
+   * state AND its `isMeta` flag — the input to the §4.5 org-creation gate
+   * (8.1.11): a 2nd+ org requires the user to own/admin ≥1 org that is either
+   * scaled-active OR the meta org, and an empty result means "this is the user's
+   * first org" (always free). Joins `organization_membership → organization` so
+   * one read yields the count, the per-org subscription, and the exemption flag.
+   * Takes `tx` so it runs in the create's transaction. Raw SQL keeps it
+   * context-independent (it spans orgs the active GUC doesn't scope to).
    */
   async findOwnerAdminOrgsWithSubscription(
     userId: string,
     tx: Prisma.TransactionClient,
   ): Promise<
-    Array<{ organizationId: string; scaledTrackerSubscription: Prisma.JsonValue | null }>
+    Array<{
+      organizationId: string;
+      scaledTrackerSubscription: Prisma.JsonValue | null;
+      isMeta: boolean;
+    }>
   > {
     return tx.$queryRaw<
-      Array<{ organizationId: string; scaledTrackerSubscription: Prisma.JsonValue | null }>
+      Array<{
+        organizationId: string;
+        scaledTrackerSubscription: Prisma.JsonValue | null;
+        isMeta: boolean;
+      }>
     >`
       SELECT m."organizationId" AS "organizationId",
-             o."scaledTrackerSubscription" AS "scaledTrackerSubscription"
+             o."scaledTrackerSubscription" AS "scaledTrackerSubscription",
+             o."isMeta" AS "isMeta"
       FROM "organization_membership" m
       JOIN "organization" o ON o."id" = m."organizationId"
       WHERE m."userId" = ${userId} AND m."role" IN ('owner', 'admin')

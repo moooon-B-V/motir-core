@@ -1,21 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the boundary client (no network). The chat service receives an
-// already-resolved ProjectContext, so there is no project resolver to mock — the
-// only extra read is the workspace ORG (7.2.16): withWorkspaceContext is stubbed
-// to invoke its callback with a fake tx so the org read is a plain mocked repo
-// call (same shape as aiJobsService.test).
+// Mock the boundary client (no network) + the shared org/meta resolver. The chat
+// service receives an already-resolved ProjectContext; the only extra read is the
+// workspace ORG + its `isMeta` flag (7.2.16), which resolveTenantOrg owns (covered
+// by tenantOrg.test.ts).
 vi.mock('@/lib/ai/motirAiClient', () => ({ submitJob: vi.fn(), streamJob: vi.fn() }));
-vi.mock('@/lib/repositories/workspaceRepository', () => ({
-  workspaceRepository: { findByIdInTx: vi.fn() },
-}));
-vi.mock('@/lib/workspaces/context', () => ({
-  withWorkspaceContext: vi.fn(async (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({})),
-}));
+vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 
 import { aiChatService } from '@/lib/services/aiChatService';
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
-import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 
@@ -30,18 +24,36 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('aiChatService.submitDiscoveryTurn', () => {
   it('resolves the workspace org and submits a discovery job with the tenant + prompt + actor', async () => {
-    vi.mocked(workspaceRepository.findByIdInTx).mockResolvedValue({
-      organizationId: 'org_1',
-    } as Awaited<ReturnType<typeof workspaceRepository.findByIdInTx>>);
+    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
 
     const out = await aiChatService.submitDiscoveryTurn('build me a tracker', ctx);
 
     expect(out).toEqual({ jobId: 'job_1' });
-    expect(workspaceRepository.findByIdInTx).toHaveBeenCalledWith('ws_1', expect.anything());
+    expect(resolveTenantOrg).toHaveBeenCalledWith({ userId: 'user_1', workspaceId: 'ws_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'discovery',
-      { organizationId: 'org_1', workspaceId: 'ws_1', projectId: 'pj_1', projectKey: 'MOTIR' },
+      {
+        organizationId: 'org_1',
+        isMeta: false,
+        workspaceId: 'ws_1',
+        projectId: 'pj_1',
+        projectKey: 'MOTIR',
+      },
+      { prompt: 'build me a tracker' },
+      { userId: 'user_1' },
+    );
+  });
+
+  it('threads the META flag onto the tenant', async () => {
+    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: true });
+    vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
+
+    await aiChatService.submitDiscoveryTurn('build me a tracker', ctx);
+
+    expect(submitJob).toHaveBeenCalledWith(
+      'discovery',
+      expect.objectContaining({ isMeta: true }),
       { prompt: 'build me a tracker' },
       { userId: 'user_1' },
     );

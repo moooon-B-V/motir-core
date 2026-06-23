@@ -1,19 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the boundary client (no network), mirroring aiChatService.test. The
-// service receives a resolved ProjectContext; the only extra read is the
-// workspace ORG (7.2.16), so withWorkspaceContext is stubbed to a fake tx.
+// Mock the boundary client (no network) + the shared org/meta resolver, mirroring
+// aiChatService.test. The service receives a resolved ProjectContext; the only
+// extra read is the workspace ORG + its `isMeta` flag (7.2.16), owned by
+// resolveTenantOrg (covered by tenantOrg.test.ts).
 vi.mock('@/lib/ai/motirAiClient', () => ({ submitJob: vi.fn(), streamJob: vi.fn() }));
-vi.mock('@/lib/repositories/workspaceRepository', () => ({
-  workspaceRepository: { findByIdInTx: vi.fn() },
-}));
-vi.mock('@/lib/workspaces/context', () => ({
-  withWorkspaceContext: vi.fn(async (_ctx: unknown, fn: (tx: unknown) => unknown) => fn({})),
-}));
+vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 
 import { aiExplanationService } from '@/lib/services/aiExplanationService';
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
-import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 
@@ -28,9 +24,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('aiExplanationService.submitExplanationDraft', () => {
   beforeEach(() => {
-    vi.mocked(workspaceRepository.findByIdInTx).mockResolvedValue({
-      organizationId: 'org_1',
-    } as Awaited<ReturnType<typeof workspaceRepository.findByIdInTx>>);
+    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
   });
 
@@ -47,10 +41,16 @@ describe('aiExplanationService.submitExplanationDraft', () => {
     );
 
     expect(out).toEqual({ jobId: 'job_1' });
-    expect(workspaceRepository.findByIdInTx).toHaveBeenCalledWith('ws_1', expect.anything());
+    expect(resolveTenantOrg).toHaveBeenCalledWith({ userId: 'user_1', workspaceId: 'ws_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'generate_explanation',
-      { organizationId: 'org_1', workspaceId: 'ws_1', projectId: 'pj_1', projectKey: 'MOTIR' },
+      {
+        organizationId: 'org_1',
+        isMeta: false,
+        workspaceId: 'ws_1',
+        projectId: 'pj_1',
+        projectKey: 'MOTIR',
+      },
       {
         explanation: {
           title: 'OAuth account merge',

@@ -159,6 +159,12 @@ export const billingService = {
       getOrgSubscription({ coreOrganizationId: input.organizationId }),
     ]);
 
+    // The META org (moooon B.V.) is exempt from the AI paywall: `applicable:
+    // false` makes the upsell never render (the same shape as a self-host build —
+    // useAiAccess only blocks when `applicable === true`). The motir-ai credit
+    // gate is bypassed in parallel (the org's `isMeta` rides the job envelope).
+    if (org?.isMeta) return notApplicableAiAccess();
+
     return {
       applicable: true,
       organizationId: input.organizationId,

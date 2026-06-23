@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { isCloudBilling } from '@/lib/billing/availability';
-import { entitlementsFor, pmTierFromScaledTracker, type PmTier } from '@/lib/billing/entitlements';
+import { entitlementsFor, pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
 import { EntitlementExceededError } from '@/lib/billing/errors';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
@@ -28,21 +28,23 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // caller MUST run the assert INSIDE the same transaction as the create it guards.
 //
 // ── How an org's tier is resolved ──────────────────────────────────────────
-// The PM caps key off `Organization.scaledTrackerSubscription` (§4 — NOT the AI
-// PlanTier): an ACTIVE subscription is `scaled` (caps lifted), anything else is
-// `free`. A missing/hidden org collapses to `free` (safe default: caps apply).
+// `pmTierForOrg` resolves from the org's full cap context: the META org
+// (`Organization.isMeta` — moooon B.V.) short-circuits to the internal `meta`
+// tier (every cap lifted); any other org keys off `scaledTrackerSubscription`
+// (§4 — NOT the AI PlanTier): an ACTIVE subscription is `scaled` (caps lifted),
+// anything else is `free`. A missing/hidden org collapses to `free` (safe
+// default: caps apply). Resolving here means every cap below — and any future
+// cap — honours the meta exemption through this one chokepoint.
 
 async function tierForOrgInTx(
   organizationId: string,
   tx: Prisma.TransactionClient,
 ): Promise<PmTier> {
-  const sub = await organizationRepository.findScaledTrackerStateInTx(organizationId, tx);
-  return pmTierFromScaledTracker(sub);
+  return pmTierForOrg(await organizationRepository.findCapContextInTx(organizationId, tx));
 }
 
 async function tierForOrg(organizationId: string): Promise<PmTier> {
-  const sub = await organizationRepository.findScaledTrackerState(organizationId);
-  return pmTierFromScaledTracker(sub);
+  return pmTierForOrg(await organizationRepository.findCapContext(organizationId));
 }
 
 function isScaledActive(sub: ScaledTrackerSubscription | null): boolean {
@@ -119,10 +121,14 @@ export const entitlementsService = {
       tx,
     );
     if (orgs.length === 0) return; // the first org — always free
-    const hasPaidOrg = orgs.some((o) =>
-      isScaledActive((o.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null),
+    // A scaled-active OR the META org (moooon B.V.) clears the gate — meta is
+    // treated as paid so its owners can freely spin up orgs/workspaces.
+    const hasUncappedOrg = orgs.some(
+      (o) =>
+        o.isMeta ||
+        isScaledActive((o.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null),
     );
-    if (!hasPaidOrg) {
+    if (!hasUncappedOrg) {
       throw new EntitlementExceededError('organizations', { limit: orgs.length });
     }
   },

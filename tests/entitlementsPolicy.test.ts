@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest';
+import {
+  PM_ENTITLEMENTS,
+  entitlementsFor,
+  pmTierForOrg,
+  pmTierFromScaledTracker,
+} from '@/lib/billing/entitlements';
+import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
+
+// Pure-policy tests for the §4 tier resolver (no DB) — the meta-org exemption + the
+// tier→caps table. The DB-backed enforcement lives in entitlementsService.test.ts.
+
+const ACTIVE: ScaledTrackerSubscription = {
+  status: 'active',
+  priceId: 'tracker_annual',
+  currentPeriodEnd: 1893456000,
+};
+
+describe('pmTierForOrg', () => {
+  it('resolves the META org to the `meta` tier regardless of subscription', () => {
+    expect(pmTierForOrg({ isMeta: true, scaledTrackerSubscription: null })).toBe('meta');
+    expect(pmTierForOrg({ isMeta: true, scaledTrackerSubscription: ACTIVE })).toBe('meta');
+  });
+
+  it('defers to the scaled-tracker state for a non-meta org', () => {
+    expect(pmTierForOrg({ isMeta: false, scaledTrackerSubscription: null })).toBe('free');
+    expect(pmTierForOrg({ isMeta: false, scaledTrackerSubscription: ACTIVE })).toBe('scaled');
+    // Mirrors pmTierFromScaledTracker exactly when not meta.
+    expect(pmTierForOrg({ isMeta: false, scaledTrackerSubscription: ACTIVE })).toBe(
+      pmTierFromScaledTracker(ACTIVE),
+    );
+  });
+});
+
+describe('PM_ENTITLEMENTS.meta', () => {
+  it('lifts every scale cap (its own row, distinct from enterprise)', () => {
+    const meta = entitlementsFor('meta');
+    expect(meta.maxWorkItems).toBeNull();
+    expect(meta.maxProjects).toBeNull();
+    expect(meta.maxWorkspaces).toBeNull();
+    expect(meta.maxTotalStorageBytes).toBeNull();
+    expect(PM_ENTITLEMENTS.meta).toBe(meta);
+  });
+});

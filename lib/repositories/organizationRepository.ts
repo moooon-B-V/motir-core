@@ -9,6 +9,25 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // file is data access only — each method is one Prisma call, writes require
 // `tx`. Mirrors `workspaceRepository`.
 
+/** The two signals `pmTierForOrg` (8.1.11) resolves an org's §4 tier from: the
+ *  `isMeta` exemption flag and the scaled-tracker subscription. */
+export interface OrgCapContext {
+  isMeta: boolean;
+  scaledTrackerSubscription: ScaledTrackerSubscription | null;
+}
+
+/** Normalise a selected org row (or a missing/hidden one) into an `OrgCapContext`.
+ *  Absent → the safe default (`isMeta: false`, no subscription → bounded `free`). */
+function toCapContext(
+  org: { isMeta: boolean; scaledTrackerSubscription: Prisma.JsonValue } | null,
+): OrgCapContext {
+  return {
+    isMeta: org?.isMeta ?? false,
+    scaledTrackerSubscription:
+      (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null,
+  };
+}
+
 export const organizationRepository = {
   async findById(id: string): Promise<Organization | null> {
     return db.organization.findUnique({ where: { id } });
@@ -39,7 +58,7 @@ export const organizationRepository = {
 
   async update(
     id: string,
-    data: { name?: string; slug?: string },
+    data: { name?: string; slug?: string; isMeta?: boolean },
     tx: Prisma.TransactionClient,
   ): Promise<Organization> {
     return tx.organization.update({ where: { id }, data });
@@ -64,35 +83,32 @@ export const organizationRepository = {
   },
 
   /**
-   * Read just the org's scaled-tracker subscription state (the §4 cap tier
-   * signal, 8.1.11) inside the caller's transaction. Returns `null` when the org
-   * is absent/hidden OR has no subscription — both collapse to the bounded `free`
-   * tier (`pmTierFromScaledTracker`), so the cap path treats a missing org the
-   * same as an unsubscribed one (safe-by-default: caps apply).
+   * Read the org's §4 cap context (8.1.11) inside the caller's transaction — the
+   * `isMeta` exemption flag + the scaled-tracker subscription, the two signals
+   * `pmTierForOrg` resolves the tier from. A missing/hidden org collapses to
+   * `{ isMeta: false, scaledTrackerSubscription: null }` (safe-by-default: the
+   * bounded `free` tier, caps apply).
    */
-  async findScaledTrackerStateInTx(
-    id: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<ScaledTrackerSubscription | null> {
+  async findCapContextInTx(id: string, tx: Prisma.TransactionClient): Promise<OrgCapContext> {
     const org = await tx.organization.findUnique({
       where: { id },
-      select: { scaledTrackerSubscription: true },
+      select: { isMeta: true, scaledTrackerSubscription: true },
     });
-    return (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+    return toCapContext(org);
   },
 
   /**
-   * Read-only (db-singleton) variant of {@link findScaledTrackerStateInTx} for
-   * the §4 upload path (8.1.11), which checks the per-file + total-storage caps
-   * as a standalone read BEFORE the blob round-trip — no create transaction to
-   * thread. Null when absent/hidden → the bounded `free` tier (safe default).
+   * Read-only (db-singleton) variant of {@link findCapContextInTx} for the §4
+   * upload path (8.1.11), which checks the per-file + total-storage caps as a
+   * standalone read BEFORE the blob round-trip — no create transaction to thread.
+   * Missing/hidden org → the safe default (bounded `free` tier, caps apply).
    */
-  async findScaledTrackerState(id: string): Promise<ScaledTrackerSubscription | null> {
+  async findCapContext(id: string): Promise<OrgCapContext> {
     const org = await db.organization.findUnique({
       where: { id },
-      select: { scaledTrackerSubscription: true },
+      select: { isMeta: true, scaledTrackerSubscription: true },
     });
-    return (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+    return toCapContext(org);
   },
 
   /**
