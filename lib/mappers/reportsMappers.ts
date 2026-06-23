@@ -7,6 +7,8 @@ import type {
   BurndownStatisticDto,
   CreatedVsResolvedBucketDto,
   CreatedVsResolvedDto,
+  CycleGraphDayDto,
+  CycleGraphDto,
   DistributionDto,
   DistributionSegmentDto,
   ReportAgeBucketDto,
@@ -180,6 +182,152 @@ export function toBurndownSeriesDto(input: BurndownSeriesInput): BurndownSeriesD
     endDate: input.axisEnd.toISOString(),
     days,
     scopeChanges,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Story 8.14 · Subtask 8.14.2 — the Linear-style CYCLE GRAPH assembler.
+// Burn-UP of LIVE scope vs completed: three cumulative actual series (scope /
+// completed / started) reconstructed from per-day revision-trail deltas off the
+// reconstructed start baselines, + an ideal `target` descent over WORKING days.
+// PURE — no I/O; the service resolves all I/O (the live roll-up, the window, the
+// trail deltas) and hands them in.
+// ---------------------------------------------------------------------------
+
+/** Mon–Fri (UTC) is a working day; Sat/Sun hold the target flat (Linear). */
+function isWorkingDay(dayMs: number): boolean {
+  const dow = new Date(dayMs).getUTCDay();
+  return dow !== 0 && dow !== 6;
+}
+
+/**
+ * The raw inputs the service hands the cycle-graph assembler. All I/O — the
+ * sprint window, the reconstructed start baselines (each `current − Σ delta`, so
+ * the cumulated series land EXACTLY on the live roll-up at the cutoff), and the
+ * per-day deltas from `workItemRevisionRepository.aggregateSprintCycleByDay` — is
+ * resolved upstream; this function is pure math over them.
+ */
+export interface CycleGraphInput {
+  sprintId: string;
+  state: 'active' | 'complete';
+  statistic: BurndownStatisticDto;
+  /** Sprint window start (the series' origin + the target's first day). */
+  start: Date;
+  /** Axis end — the target reaches 0 here (planned `endDate`, else `completedAt`/now). */
+  axisEnd: Date;
+  /** Last day the actual series are drawn (now for active, `completedAt` for complete). */
+  actualCutoff: Date;
+  /** Scope as of `start`, reconstructed (`currentScope − Σ scopeDelta`) — the target origin + creep denominator. */
+  committedAtStart: number;
+  /** Completed points as of `start` (`currentCompleted − Σ completedDelta`). */
+  completedAtStart: number;
+  /** Started (left-`todo`) points as of `start` (`currentStarted − Σ startedDelta`). */
+  startedAtStart: number;
+  /** Per-UTC-day signed deltas from `aggregateSprintCycleByDay`. */
+  dailyDeltas: Array<{
+    day: string;
+    scopeDelta: number;
+    completedDelta: number;
+    startedDelta: number;
+  }>;
+}
+
+/**
+ * Assemble a `CycleGraphDto` (the Linear cycle graph). The three ACTUAL series
+ * are stepped cumulative lines built from the reconstructed start baselines +
+ * the per-day deltas, drawn day by day and floored at 0; days AFTER
+ * `actualCutoff` are `null` (the future of a live sprint). Because each baseline
+ * is `current − Σ delta`, the last drawn `scope` / `completed` land EXACTLY on
+ * the live roll-up's committed / completed — the chart and the scrum header never
+ * disagree. The `target` line is the ideal even descent from `committedAtStart`
+ * to 0 across the window's WORKING days, holding flat across weekends; it spans
+ * the whole window (never `null`). `scopeCreepPct` is the fraction of scope added
+ * after start. PURE — no I/O.
+ */
+export function toCycleGraphDto(input: CycleGraphInput): CycleGraphDto {
+  const deltaByDay = new Map<
+    string,
+    { scopeDelta: number; completedDelta: number; startedDelta: number }
+  >();
+  for (const row of input.dailyDeltas) {
+    deltaByDay.set(row.day, {
+      scopeDelta: row.scopeDelta,
+      completedDelta: row.completedDelta,
+      startedDelta: row.startedDelta,
+    });
+  }
+
+  const startMs = utcMidnight(input.start);
+  // The axis spans whole days from start to axisEnd inclusive (≥ 1 day). A
+  // misconfigured end before start collapses to the single start day.
+  const endMs = Math.max(startMs, utcMidnight(input.axisEnd));
+  const cutoffMs = Math.max(startMs, utcMidnight(input.actualCutoff));
+  const dayCount = Math.round((endMs - startMs) / DAY_MS) + 1;
+
+  // Total working days in the window — the denominator of the ideal descent. The
+  // target loses an equal slice of `committedAtStart` each working day, reaching
+  // 0 on the LAST working day, and holds flat across weekends. A window with ≤ 1
+  // working day has no descent to draw → the target sits flat at the baseline.
+  let totalWorkingDays = 0;
+  for (let i = 0; i < dayCount; i++) {
+    if (isWorkingDay(startMs + i * DAY_MS)) totalWorkingDays++;
+  }
+
+  const days: CycleGraphDayDto[] = [];
+  let scopeRunning = input.committedAtStart;
+  let completedRunning = input.completedAtStart;
+  let startedRunning = input.startedAtStart;
+  let workingDaysElapsed = 0; // working days seen so far (incl. today if working)
+
+  for (let i = 0; i < dayCount; i++) {
+    const dayMs = startMs + i * DAY_MS;
+    const key = dayKey(new Date(dayMs));
+    if (isWorkingDay(dayMs)) workingDaysElapsed++;
+
+    // Target: linear committed → 0 across the working days; a weekend holds the
+    // most-recent working day's value (so `workingDaysElapsed` doesn't advance);
+    // clamp the rank to ≥ 1 so a weekend-at-start sits at the baseline, not above.
+    const rank = Math.max(1, workingDaysElapsed);
+    const target =
+      totalWorkingDays <= 1
+        ? input.committedAtStart
+        : input.committedAtStart * (1 - (rank - 1) / (totalWorkingDays - 1));
+
+    let scope: number | null = null;
+    let completed: number | null = null;
+    let started: number | null = null;
+    if (dayMs <= cutoffMs) {
+      const d = deltaByDay.get(key);
+      scopeRunning += d?.scopeDelta ?? 0;
+      completedRunning += d?.completedDelta ?? 0;
+      startedRunning += d?.startedDelta ?? 0;
+      scope = round2(Math.max(0, scopeRunning));
+      completed = round2(Math.max(0, completedRunning));
+      started = round2(Math.max(0, startedRunning));
+    }
+
+    days.push({ date: key, scope, completed, started, target: round2(Math.max(0, target)) });
+  }
+
+  // Scope creep: the fraction of scope added after start. `currentScope` is the
+  // baseline plus every day's net scope delta (= the live roll-up committed), so
+  // the creep is `Σ scopeDelta / committedAtStart`; no start scope → 0 (never
+  // `NaN` / Infinity). Rounded to 4 dp (a fraction the UI renders as a %).
+  const totalScopeDelta = input.dailyDeltas.reduce((sum, r) => sum + r.scopeDelta, 0);
+  const scopeCreepPct =
+    input.committedAtStart > 0
+      ? Math.round((totalScopeDelta / input.committedAtStart) * 10000) / 10000
+      : 0;
+
+  return {
+    sprintId: input.sprintId,
+    state: input.state,
+    statistic: input.statistic,
+    committedAtStart: round2(input.committedAtStart),
+    scopeCreepPct,
+    startDate: input.start.toISOString(),
+    endDate: input.axisEnd.toISOString(),
+    days,
   };
 }
 

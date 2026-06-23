@@ -123,6 +123,87 @@ export interface BurndownSeriesDto {
 }
 
 // ---------------------------------------------------------------------------
+// Story 8.14 · Subtask 8.14.2 — the Linear-style sprint CYCLE GRAPH read
+// (`reportsService.getSprintCycleGraph`). REFRAMES the burndown (above) into
+// Linear's cycle-graph model (linear.app/docs/cycle-graph): a burn-UP of LIVE
+// scope vs completed, derived LIVE from the 1.4.6 revision trail so it no longer
+// depends on the fragile immutable `committedPoints` snapshot (MOTIR-1285/1288).
+// ---------------------------------------------------------------------------
+
+/**
+ * Which statistic the cycle graph is measured in — same narrowing the burndown
+ * uses (`story_points` when the project measures points and the sprint has point
+ * work, else the `issue_count` fallback); the UI labels the Y axis off this.
+ */
+export type CycleGraphStatisticDto = BurndownStatisticDto;
+
+/**
+ * One calendar day on the cycle graph's X axis. The three ACTUAL series are
+ * CUMULATIVE points by day, drawn only up to the actual cutoff (today for a live
+ * sprint, `completedAt` for a complete one) — `null` for the future days of a
+ * live sprint (the chart leaves them undrawn). `target` is the ideal-remaining
+ * line and spans the WHOLE window (it is the planned descent, not an actual), so
+ * it is never `null`.
+ *
+ * - `scope` — the LIVE total estimate in the sprint by this day (the gray
+ *   ceiling); RISES when an item is added or re-estimated up, FALLS on removal.
+ * - `completed` — points in a `done`-category status by this day (the blue
+ *   burn-UP line); reconciles to `rollupForSprint().completed` at the cutoff.
+ * - `started` — points that have LEFT the `todo` category by this day (in
+ *   progress OR done); always ≥ `completed`, ≤ `scope` (the amber band between
+ *   `completed` and `started` is the in-progress work).
+ * - `target` — the ideal even descent from the start scope to 0 across the
+ *   sprint's REMAINING WORKING days, holding FLAT across weekends (Linear's
+ *   working-day target). Compare the actual remaining (`scope − completed`) to it.
+ */
+export interface CycleGraphDayDto {
+  /** UTC calendar day, `YYYY-MM-DD`. */
+  date: string;
+  scope: number | null;
+  completed: number | null;
+  started: number | null;
+  target: number;
+}
+
+/**
+ * The in-sprint CYCLE GRAPH read (`reportsService.getSprintCycleGraph`, 8.14.4).
+ * A pure LIVE-scope read over data Stories 4.1 / 4.3 / 4.4 / 1.4.6 already ship
+ * — NO new write model, NO migration, and crucially NO dependence on the
+ * immutable `committedPoints` snapshot (the MOTIR-1285/1288 fragility): scope is
+ * the live `rollupForSprint` committed sum and `committedAtStart` is
+ * RECONSTRUCTED (`currentScope − Σ scopeDelta`), so a sprint started unestimated
+ * or empty still renders correctly.
+ *
+ * `committedAtStart` is the scope as of `startDate` (the target line's origin +
+ * the scope-creep denominator); `scopeCreepPct` is `(currentScope −
+ * committedAtStart) / committedAtStart` (the fraction of scope added after start,
+ * `0` when there was no start scope). `days` is one row per calendar day from
+ * `startDate` to the axis end. The end-of-actual `completed` reconciles with
+ * `rollupForSprint().completed` and `scope` with its `committed`, so the chart
+ * agrees with the scrum header.
+ *
+ * Degraded / edge states are first-class (never `NaN`): a wholly unestimated
+ * sprint comes back as the `issue_count` series; an empty sprint as flat 0
+ * lines. A planned (not-started) sprint is rejected upstream
+ * (`SprintNotStartedError`) — it has no window to draw.
+ */
+export interface CycleGraphDto {
+  sprintId: string;
+  /** `active` (actuals drawn to "today") or `complete` (drawn to `completedAt`). */
+  state: 'active' | 'complete';
+  statistic: CycleGraphStatisticDto;
+  /** Scope as of `startDate`, reconstructed live — the scope-creep denominator. */
+  committedAtStart: number;
+  /** `(currentScope − committedAtStart) / committedAtStart`; `0` when no start scope. */
+  scopeCreepPct: number;
+  /** Sprint window start (ISO 8601). */
+  startDate: string;
+  /** Axis end (ISO 8601) — the planned `endDate`, else `completedAt`/now. */
+  endDate: string;
+  days: CycleGraphDayDto[];
+}
+
+// ---------------------------------------------------------------------------
 // Story 6.3 · Subtask 6.3.2 — the widget / report-page data reads
 // ---------------------------------------------------------------------------
 
