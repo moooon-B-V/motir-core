@@ -466,7 +466,9 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
   // modified click on an <a href>, not app code — and not deterministic to
   // observe in headless chromium, so we don't assert on a popup.)
   await expect(rowLink).toHaveAttribute('href', `/items/${urgent.identifier}`);
-  await rowLink.click({ modifiers: ['ControlOrMeta'] });
+  // Same title-end click (see above) — dead-centre lands on a z-10 inline-edit
+  // trigger after the MOTIR-1307 column reflow.
+  await rowLink.click({ modifiers: ['ControlOrMeta'], position: { x: 8, y: 8 } });
   await expect(peek).toBeHidden();
   await expect(page).not.toHaveURL(/[?&]peek=/);
   expect(new URL(page.url()).pathname).toBe('/items');
