@@ -402,3 +402,74 @@ describe('billingService.syncScaledTrackerSeatQuantity (Subtask 8.1.12)', () => 
     expect(result.applied).toBe(false);
   });
 });
+
+describe('billingService.getAiAccess (the member-safe 8.1.8 paywall read)', () => {
+  it('is not applicable off-cloud (self-host) — no boundary calls', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    delete process.env['MOTIR_CLOUD'];
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
+    expect(access.applicable).toBe(false);
+    expect(getOrgUsageMock).not.toHaveBeenCalled();
+    expect(getOrgSubscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it('hides the org from a non-member (the no-leak rule)', async () => {
+    const { organizationId, outsider } = await makeOrgWithRoles();
+    await expect(
+      billingService.getAiAccess({ organizationId, actorUserId: outsider.id }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
+  });
+
+  it('ADMITS a plain member (unlike getBillingStatus) with canManageBilling false', async () => {
+    const { organizationId, member } = await makeOrgWithRoles();
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: member.id });
+    expect(access.applicable).toBe(true);
+    expect(access.canManageBilling).toBe(false);
+    expect(access.balance).toBe(1420);
+    expect(access.tierName).toBe('Standard');
+    expect(access.tierAllotment).toBe(2000);
+    expect(typeof access.organizationName).toBe('string');
+  });
+
+  it('an OWNER on a paid (active) plan → hasPaidAiPlan true, canManageBilling true, renewsAt set', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
+    expect(access.canManageBilling).toBe(true);
+    expect(access.hasPaidAiPlan).toBe(true);
+    expect(access.renewsAt).toBe('2026-07-22T00:00:00.000Z');
+  });
+
+  it('past_due still counts as a paid plan (grace period — out-of-credits, not tier-gate)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    getOrgSubscriptionMock.mockResolvedValueOnce(rawSubscription({ status: 'past_due' }));
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
+    expect(access.hasPaidAiPlan).toBe(true);
+  });
+
+  it('a trialing org is NOT a paid plan → the tier-gate path (hasPaidAiPlan false)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    getOrgSubscriptionMock.mockResolvedValueOnce(
+      rawSubscription({ status: 'trialing', planTier: null }),
+    );
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
+    expect(access.hasPaidAiPlan).toBe(false);
+  });
+
+  it('a never-transacted org (no subscription, zero balance) → tier-gate, balance 0', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    getOrgUsageMock.mockResolvedValueOnce(rawUsage({ balance: 0, tier: null }));
+    getOrgSubscriptionMock.mockResolvedValueOnce(EMPTY_SUBSCRIPTION);
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
+    expect(access.hasPaidAiPlan).toBe(false);
+    expect(access.balance).toBe(0);
+    expect(access.tierName).toBeNull();
+    expect(access.renewsAt).toBeNull();
+  });
+
+  it('an admin can read (applicable) but cannot buy (canManageBilling false)', async () => {
+    const { organizationId, admin } = await makeOrgWithRoles();
+    const access = await billingService.getAiAccess({ organizationId, actorUserId: admin.id });
+    expect(access.applicable).toBe(true);
+    expect(access.canManageBilling).toBe(false);
+  });
+});

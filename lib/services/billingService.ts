@@ -1,8 +1,9 @@
 import { organizationsService } from '@/lib/services/organizationsService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { withOrgContext } from '@/lib/organizations/context';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { isOrgOwnerRole } from '@/lib/organizations/roles';
 import {
   createCheckoutSession,
@@ -22,6 +23,13 @@ import {
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import type { BillingSessionDTO, BillingStatusDTO } from '@/lib/dto/billing';
+import type { AiAccessDTO } from '@/lib/dto/aiAccess';
+
+// A paid Motir AI plan = a live Stripe subscription that grants the monthly
+// allotment (decision §5). `trialing` (the one-time free grant), `canceled`
+// (dropped to free) and "no subscription" are NOT paid — they take the tier-gate
+// paywall ("AI is a paid feature"), not the out-of-credits one.
+const PAID_AI_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
 
 // The OPEN-CORE side of billing (Story 8.1.6). motir-core holds NO ledger and NO
 // Stripe key (the open-core invariant): it READS the org's plan over the boundary
@@ -101,6 +109,70 @@ export const billingService = {
       motir: { scaledTrackerSubscription },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       catalog: BILLING_CATALOG,
+    };
+  },
+
+  /**
+   * The MEMBER-SAFE AI entitlement read that drives the 8.1.8 paywall. Unlike
+   * `getBillingStatus` (owner/admin VIEW gate), this admits ANY org member —
+   * because the paywall must render its variant for everyone, and a plain member
+   * gets the "ask an owner" state rather than a 403. It exposes only the upsell's
+   * needs (blocked? can-buy? paid-plan vs tier-gate? org name + tier), never the
+   * financial detail.
+   *
+   * - Off-cloud (`MOTIR_CLOUD=false`) → `applicable: false`: a self-host build is
+   *   uncapped and never metered, so there is no paywall. The caller renders
+   *   nothing.
+   * - On cloud → verifies org membership (`resolveOrgAccess`; a non-member throws
+   *   OrganizationNotFoundError, the no-leak rule), then folds the AI tier +
+   *   balance (usage read) and the Stripe subscription lifecycle into the entitlement.
+   *   A motir-ai outage propagates as a MotirAiError (the route degrades to
+   *   "not applicable" so a transient boundary blip never flashes a false gate).
+   */
+  /**
+   * The AI entitlement for the actor's ACTIVE PROJECT context (the form the AI
+   * entry points have — they hold a `ProjectContext`, not an org id). Resolves
+   * the workspace's org RLS-aware (the same seam aiChatService uses) then folds
+   * the entitlement. Off-cloud short-circuits BEFORE any read.
+   */
+  async getAiAccessForContext(input: {
+    actorUserId: string;
+    workspaceId: string;
+  }): Promise<AiAccessDTO> {
+    if (!isCloudBilling()) return notApplicableAiAccess();
+    const organizationId = await resolveOrganizationId(input.actorUserId, input.workspaceId);
+    return this.getAiAccess({ actorUserId: input.actorUserId, organizationId });
+  },
+
+  async getAiAccess(input: OrgActorInput): Promise<AiAccessDTO> {
+    if (!isCloudBilling()) return notApplicableAiAccess();
+
+    // Membership gate ONLY (any role) — NOT the owner/admin VIEW gate. Owner vs
+    // member just selects the paywall variant (canManageBilling), never access.
+    const access = await organizationsService.resolveOrgAccess(
+      input.actorUserId,
+      input.organizationId,
+    );
+
+    const [org, usage, subscription] = await Promise.all([
+      withOrgContext({ userId: input.actorUserId, organizationId: input.organizationId }, (tx) =>
+        organizationRepository.findByIdInTx(input.organizationId, tx),
+      ),
+      getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
+      getOrgSubscription({ coreOrganizationId: input.organizationId }),
+    ]);
+
+    return {
+      applicable: true,
+      organizationId: input.organizationId,
+      organizationName: org?.name ?? null,
+      canManageBilling: isOrgOwnerRole(access.role),
+      hasPaidAiPlan:
+        subscription.status !== null && PAID_AI_SUBSCRIPTION_STATUSES.has(subscription.status),
+      balance: usage.balance,
+      tierName: usage.tier?.name ?? null,
+      tierAllotment: usage.tier?.monthlyCreditAllotment ?? null,
+      renewsAt: subscription.currentPeriodEnd,
     };
   },
 
@@ -198,3 +270,31 @@ export const billingService = {
     return setSeatQuantity({ coreOrganizationId: organizationId, quantity: memberCount });
   },
 };
+
+// Resolve the active workspace's organization id — RLS-aware (the workspace
+// policy admits the self-read under the non-bypass app role). Mirrors
+// aiChatService.resolveOrganizationId so the AI paywall reads the SAME org the
+// AI jobs are metered against.
+async function resolveOrganizationId(actorUserId: string, workspaceId: string): Promise<string> {
+  return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+    const workspace = await workspaceRepository.findByIdInTx(workspaceId, tx);
+    if (!workspace) throw new Error(`workspace ${workspaceId} not found`);
+    return workspace.organizationId;
+  });
+}
+
+// The "no paywall here" entitlement — a self-host build (or any non-cloud
+// context). Every flag is inert so the client renders nothing.
+function notApplicableAiAccess(): AiAccessDTO {
+  return {
+    applicable: false,
+    organizationId: null,
+    organizationName: null,
+    canManageBilling: false,
+    hasPaidAiPlan: false,
+    balance: 0,
+    tierName: null,
+    tierAllotment: null,
+    renewsAt: null,
+  };
+}
