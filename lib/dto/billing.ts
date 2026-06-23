@@ -88,3 +88,35 @@ export interface BillingStatusDTO {
 export interface BillingSessionDTO {
   url: string;
 }
+
+/**
+ * The members-page SEAT summary (Story 8.1.14, design/org-admin
+ * members-billing) — the in-context seat/billing layer the org Members admin
+ * renders for a SCALED org. `null` (the service returns it, not this shape)
+ * means NO seat UI: a self-host build (`MOTIR_CLOUD` off), a free org (no
+ * scaled-tracker subscription), or a canceled one — the members page is
+ * UNCHANGED. This card RENDERS the seat state; it never writes Stripe (8.1.12
+ * owns the seat-quantity sync). The seat COUNT is the org membership count, read
+ * client-side from the roster total (the same source 8.1.12 syncs to Stripe), so
+ * it tracks add/remove live; this DTO carries only the pricing + lifecycle the
+ * count is priced against.
+ */
+export interface SeatSummaryDTO {
+  /** Scaled-tracker lifecycle — only `active` / `past_due` reach the UI (a
+   *  `canceled`/absent subscription resolves to `null`, the unchanged page). */
+  status: 'active' | 'past_due';
+  /** Billing cadence, derived from the subscription's `tracker_*` price id. */
+  cadence: 'monthly' | 'annual';
+  /** Per-seat fee for the active cadence (whole USD), from `BILLING_CATALOG`. */
+  perSeatUsd: number;
+  /** The monthly per-seat fee — feeds the "annual saves $X/yr" figure. */
+  monthlyPerSeatUsd: number;
+  /** The annual per-seat fee. */
+  annualPerSeatUsd: number;
+  /** Stripe `current_period_end` (unix epoch SECONDS) — the renewal the
+   *  prorated add-charge / remove-credit copy targets. */
+  currentPeriodEnd: number;
+  /** True only for an org OWNER — may manage the seat plan (ADR §7). An admin
+   *  manages membership but sees the seat band READ-ONLY (no manage CTA). */
+  canManageBilling: boolean;
+}

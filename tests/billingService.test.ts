@@ -488,3 +488,87 @@ describe('billingService.getAiAccess (the member-safe 8.1.8 paywall read)', () =
     expect(access.canManageBilling).toBe(false);
   });
 });
+
+// The members-page seat summary (Subtask 8.1.14) — the gating + the derived
+// pricing the in-context seat band reads. The seat COUNT is the membership count
+// (resolved client-side), so this only proves the pricing/lifecycle + the three
+// "no seat UI" (→ null) gates: self-host, free/canceled, and the owner-vs-admin
+// canManageBilling split.
+describe('billingService.getSeatSummary', () => {
+  async function setScaled(organizationId: string, sub: ScaledTrackerSubscription | null) {
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: sub,
+    });
+  }
+
+  it('returns null off-cloud (self-host shows no seat UI)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await setScaled(organizationId, SCALED);
+    delete process.env['MOTIR_CLOUD'];
+    expect(
+      await billingService.getSeatSummary({ organizationId, actorUserId: owner.id }),
+    ).toBeNull();
+  });
+
+  it('returns null for a free org (no scaled-tracker subscription)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    expect(
+      await billingService.getSeatSummary({ organizationId, actorUserId: owner.id }),
+    ).toBeNull();
+  });
+
+  it('returns null for a canceled subscription (page is unchanged)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await setScaled(organizationId, { ...SCALED, status: 'canceled' });
+    expect(
+      await billingService.getSeatSummary({ organizationId, actorUserId: owner.id }),
+    ).toBeNull();
+  });
+
+  it('returns null for a plain member (defensive — page already forbids them)', async () => {
+    const { organizationId, member } = await makeOrgWithRoles();
+    await setScaled(organizationId, SCALED);
+    expect(
+      await billingService.getSeatSummary({ organizationId, actorUserId: member.id }),
+    ).toBeNull();
+  });
+
+  it('gives an OWNER the scaled summary with canManageBilling true + catalog pricing', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await setScaled(organizationId, SCALED); // tracker_annual
+    const summary = await billingService.getSeatSummary({ organizationId, actorUserId: owner.id });
+    expect(summary).toEqual({
+      status: 'active',
+      cadence: 'annual',
+      perSeatUsd: 40,
+      monthlyPerSeatUsd: 5,
+      annualPerSeatUsd: 40,
+      currentPeriodEnd: SCALED.currentPeriodEnd,
+      canManageBilling: true,
+    });
+  });
+
+  it('gives an ADMIN the summary READ-ONLY (canManageBilling false — ADR §7)', async () => {
+    const { organizationId, admin } = await makeOrgWithRoles();
+    await setScaled(organizationId, SCALED);
+    const summary = await billingService.getSeatSummary({ organizationId, actorUserId: admin.id });
+    expect(summary?.canManageBilling).toBe(false);
+    expect(summary?.status).toBe('active');
+  });
+
+  it('surfaces past_due (seats stay editable — dunning)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await setScaled(organizationId, { ...SCALED, status: 'past_due' });
+    const summary = await billingService.getSeatSummary({ organizationId, actorUserId: owner.id });
+    expect(summary?.status).toBe('past_due');
+  });
+
+  it('maps a monthly price id to the monthly cadence + fee', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    await setScaled(organizationId, { ...SCALED, priceId: 'tracker_monthly' });
+    const summary = await billingService.getSeatSummary({ organizationId, actorUserId: owner.id });
+    expect(summary?.cadence).toBe('monthly');
+    expect(summary?.perSeatUsd).toBe(5);
+  });
+});
