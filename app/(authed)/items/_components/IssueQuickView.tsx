@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, type MouseEvent, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
@@ -41,8 +41,8 @@ function shallowPush(href: string) {
  * work item by setting `?peek=<identifier>` on the current URL (preserving every
  * other param — view/sort/filter/page) via shallow routing. The peek is
  * URL-driven — shareable, reload-safe, and closed by `usePeekClose`. Shared by
- * the issue-list row `QuickViewTrigger`, the board (Subtask 3.2.2), and the
- * /ready list: all open the SAME peek surface, so the open wiring lives here.
+ * the issue-list rows (List + Tree), the board (Subtask 3.2.2), and the /ready
+ * list: all open the SAME peek surface, so the open wiring lives here.
  */
 export function usePeekOpen() {
   const pathname = usePathname();
@@ -54,6 +54,32 @@ export function usePeekOpen() {
       shallowPush(`${pathname}?${params.toString()}`);
     },
     [pathname, searchParams],
+  );
+}
+
+/**
+ * Returns a stable `(event, identifier) => void` for a whole-row / relationship
+ * LINK that should open the quick-view peek on a PLAIN primary click while
+ * keeping its real `/items/<id>` href intact. A plain left-click is intercepted
+ * (`preventDefault` + open the peek); a modifier / secondary / middle click is
+ * left to the browser, so ⌘/ctrl/middle-click still opens the full detail page
+ * in a new tab. This is the SINGLE peek-on-click guard, shared by the
+ * relationships-panel `RelationshipPeekLink` (MOTIR-8.8.31) and the /items row
+ * links — the List's stretched anchor and the Tree's `TreeTable` row link
+ * (MOTIR-1306, replacing the per-row eye `QuickViewTrigger`). Keyboard Enter on
+ * an anchor fires an unmodified click, so it routes here too.
+ */
+export function usePeekRowClick() {
+  const openPeek = usePeekOpen();
+  return useCallback(
+    (e: MouseEvent, identifier: string) => {
+      // Let the browser handle modifier / secondary clicks natively (open in a
+      // new tab/window); only an unmodified primary click opens the peek.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault();
+      openPeek(identifier);
+    },
+    [openPeek],
   );
 }
 

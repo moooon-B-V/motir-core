@@ -115,6 +115,14 @@ export interface TreeTableProps<Row> {
   /** Accessible label for the row link — REQUIRED whenever getRowHref is set. */
   getRowLabel?: (row: Row) => string;
   /**
+   * Intercept a click on the whole-row LINK (the stretched `getRowHref` anchor)
+   * — e.g. to open a quick-view peek on a plain click while leaving the real
+   * href for ⌘/ctrl/middle-click (MOTIR-1306). The handler owns the
+   * `preventDefault` decision; the primitive stays navigation-only and unaware
+   * of what the click does. Ignored when `getRowHref` is unset.
+   */
+  onRowLinkClick?: (e: React.MouseEvent<HTMLAnchorElement>, row: Row) => void;
+  /**
    * Activate a NON-link row (no `getRowHref`) on Enter / click — e.g. the lazy
    * "Load more children" row (2.5.14). Keyboard Enter on the row + a mouse click
    * on the row both route here. Link rows ignore this (Enter clicks the link).
@@ -208,6 +216,7 @@ export function TreeTable<Row>({
   defaultExpandedIds,
   getRowHref,
   getRowLabel,
+  onRowLinkClick,
   getRowTestId,
   onRowActivate,
   getScrollElement,
@@ -548,6 +557,7 @@ export function TreeTable<Row>({
                         href={href}
                         aria-label={rowLabel}
                         tabIndex={-1}
+                        onClick={onRowLinkClick ? (e) => onRowLinkClick(e, row.data) : undefined}
                         className="absolute inset-0 z-0 focus:outline-none"
                       />
                     ) : null}
