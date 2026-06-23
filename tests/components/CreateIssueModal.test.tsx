@@ -25,7 +25,12 @@ const { refresh, createIssueActionSpy, listCreateLinkCandidatesSpy } = vi.hoiste
   listCreateLinkCandidatesSpy: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh, push: vi.fn() }),
+  // AppCommandPalette (rendered by the ⌘K test) reads usePathname for its
+  // post-switch navigation (MOTIR-1312); provide it so the render doesn't throw.
+  usePathname: () => '/dashboard',
+}));
 vi.mock('@/app/(authed)/items/actions', () => ({
   createIssueAction: createIssueActionSpy,
   // The modal now renders ParentPicker, which fetches candidates on mount.
