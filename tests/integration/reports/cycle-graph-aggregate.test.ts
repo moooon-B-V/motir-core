@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -179,5 +180,59 @@ describe('aggregateSprintCycleByDay', () => {
       false,
     );
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe('workItemRepository.sumStartedForSprint', () => {
+  it('sums the non-todo (in-progress + done) work in each statistic; the todo item is excluded', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Started' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A done' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B in progress' });
+    const c = await createTestWorkItem(fx, { kind: 'task', title: 'C todo (excluded)' });
+    // points + minutes set so each statistic resolves to a number.
+    await db.workItem.update({
+      where: { id: a.id },
+      data: { sprintId: sprint.id, status: 'done', storyPoints: 5, estimateMinutes: 50 },
+    });
+    await db.workItem.update({
+      where: { id: b.id },
+      data: { sprintId: sprint.id, status: 'in_progress', storyPoints: 8, estimateMinutes: 80 },
+    });
+    await db.workItem.update({
+      where: { id: c.id },
+      data: { sprintId: sprint.id, status: 'todo', storyPoints: 3, estimateMinutes: 30 },
+    });
+
+    // story_points: A + B (non-todo) = 13; C (todo) excluded.
+    expect(
+      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'story_points'),
+    ).toBe(13);
+    // issue_count: 2 started items.
+    expect(
+      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'issue_count'),
+    ).toBe(2);
+    // time_estimate: A + B minutes = 130 (the third statistic branch).
+    expect(
+      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'time_estimate'),
+    ).toBe(130);
+  });
+
+  it('is 0 for an empty / all-todo sprint and workspace-gated (never NaN)', async () => {
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Empty' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A todo' });
+    await db.workItem.update({
+      where: { id: a.id },
+      data: { sprintId: sprint.id, status: 'todo', storyPoints: 5 },
+    });
+    expect(
+      await workItemRepository.sumStartedForSprint(sprint.id, fx.workspaceId, 'story_points'),
+    ).toBe(0);
+    // wrong tenant sees nothing.
+    expect(
+      await workItemRepository.sumStartedForSprint(sprint.id, other.workspaceId, 'story_points'),
+    ).toBe(0);
   });
 });

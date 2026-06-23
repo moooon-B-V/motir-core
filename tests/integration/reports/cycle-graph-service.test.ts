@@ -159,6 +159,50 @@ describe('reportsService.getSprintCycleGraph — derivation', () => {
   });
 });
 
+describe('reportsService.getSprintCycleGraph — active sprint', () => {
+  it('draws actuals to "today" with null future days; the target spans the whole window', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Live' }, fx.ctx);
+    const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
+    await place(a.id, sprint.id, 'done', 5);
+    await place(b.id, sprint.id, 'in_progress', 3);
+    // An ACTIVE window straddling now (start 4 days ago, end 4 days ahead), so
+    // there ARE future days after the actual cutoff ("now").
+    const DAY = 24 * 60 * 60 * 1000;
+    const midnight = (ms: number) => {
+      const d = new Date(ms);
+      return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    };
+    const start = midnight(Date.now() - 4 * DAY);
+    await stampSprint(sprint.id, {
+      state: 'active',
+      startDate: start,
+      endDate: midnight(Date.now() + 4 * DAY),
+      completedAt: null,
+      committedPoints: null,
+      committedIssueCount: null,
+    });
+    await addRevision(a.id, fx.ownerId, midnight(Date.now() - 2 * DAY), {
+      status: { from: 'todo', to: 'done' },
+    });
+
+    const rollup = await estimationService.rollupForSprint(sprint.id, fx.ctx);
+    const cycle = await reportsService.getSprintCycleGraph(sprint.id, fx.ctx);
+    expect(cycle.state).toBe('active');
+    // The actual series stop at "today" (some days drawn, some null in the future);
+    // the target is always a number across the whole window.
+    const drawn = cycle.days.filter((d) => d.scope !== null);
+    const future = cycle.days.filter((d) => d.scope === null);
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(future.length).toBeGreaterThan(0); // future days exist (active sprint)
+    for (const d of cycle.days) expect(typeof d.target).toBe('number');
+    // The last drawn day reconciles to the live roll-up.
+    expect(drawn[drawn.length - 1]!.scope).toBe(rollup.committed);
+    expect(drawn[drawn.length - 1]!.completed).toBe(rollup.completed);
+  });
+});
+
 describe('reportsService.getSprintCycleGraph — guards', () => {
   it('rejects a not-yet-started (planned) sprint with SprintNotStartedError', async () => {
     const fx = await makeWorkItemFixture();
