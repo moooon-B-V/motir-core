@@ -59,6 +59,8 @@ export const aiExplanationService = {
   // (token frames + the terminal `explanation` frame + status). A transport
   // failure throws a typed MotirAiError before the first yield (the route maps
   // that to an HTTP status); the generator ends when motir-ai closes the stream.
+  // (The terminal-failure REASON — e.g. out-of-credits — is appended by the
+  // stream ROUTE; see lib/ai/jobStream.failureReasonFrame.)
   streamExplanation(jobId: string): AsyncGenerator<JobStreamEvent> {
     return streamJob(jobId);
   },

@@ -11,6 +11,7 @@ import { OnboardingCanvas } from './OnboardingCanvas';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
 import { useDiscoveryChat } from '@/lib/hooks/useDiscoveryChat';
+import { useAiAccess } from '@/lib/hooks/useAiAccess';
 import {
   activeDoc,
   activeRevisions,
@@ -52,6 +53,10 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
     back,
     dismissError,
   } = useDiscoveryChat({ initialIdea });
+
+  // The org's AI entitlement (Subtask 8.1.8) — drives the boundary paywall in the
+  // chat rail (proactive tier-gate / out-of-credits block; reactive on a refusal).
+  const { access: aiAccess } = useAiAccess();
 
   // The loop seeds the first turn from the preserved idea (the 7.3.14 cookie);
   // clear that cookie once, on mount, so it can't re-seed a later visit.
@@ -187,6 +192,7 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
           pendingAsk={state.pendingAsk}
           canSkip={canSkip}
           error={state.error}
+          aiAccess={aiAccess}
           onSend={send}
           onDismissError={dismissError}
         />

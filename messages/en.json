@@ -3796,5 +3796,30 @@
       "reset": "Reset to default",
       "use": "Use this design"
     }
+  },
+  "billing": {
+    "paywall": {
+      "fallbackOrg": "current",
+      "outOfCredits": {
+        "title": "Planning is paused — you're out of credits",
+        "bodyNamed": "The {org} organization has used all of this month's {allotment, number} {tier} credits, so new planning runs are paused. Existing plans stay fully editable.",
+        "body": "The {org} organization has used all of this month's credits, so new planning runs are paused. Existing plans stay fully editable.",
+        "upgrade": "Upgrade plan",
+        "topUp": "Buy credit top-up",
+        "renewNote": "Renews {date} · or upgrade now to keep planning.",
+        "renewNoteUndated": "Upgrade now to keep planning."
+      },
+      "tierGate": {
+        "title": "AI planning is a paid feature",
+        "body": "Generate and expand plans with AI by adding a Motir AI plan to the {org} organization. Start with 300 free trial credits.",
+        "seePlans": "See Motir AI plans",
+        "maybeLater": "Maybe later"
+      },
+      "member": {
+        "title": "AI is out of credits for this org",
+        "body": "Planning is paused until the {org} organization's plan is upgraded. Only an organization owner can change the plan or buy credits.",
+        "askOwner": "Ask an owner to upgrade"
+      }
+    }
   }
 }

@@ -335,7 +335,11 @@ export function EditIssueForm({
       />
       {!aiConfigured ? <DraftGateNotice /> : null}
       {draft.phase === 'error' ? (
-        <DraftErrorNotice onRetry={draft.start} onDismiss={draft.dismissError} />
+        <DraftErrorNotice
+          onRetry={draft.start}
+          onDismiss={draft.dismissError}
+          errorCode={draft.error?.code}
+        />
       ) : null}
 
       <div className="text-(--el-text-muted) font-sans text-xs">
