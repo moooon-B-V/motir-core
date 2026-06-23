@@ -188,7 +188,7 @@ test.describe('sprint lifecycle (4.4.7)', () => {
     // scrolling INSIDE the modal body (Modal.Body owns the overflow-y-auto
     // recipe). Before the fix it was clipped by the panel's overflow-hidden cap
     // with nothing scrollable, so scrollIntoViewIfNeeded could not surface it.
-    const burndownHeading = reportDialog.getByText('Burndown', { exact: true });
+    const burndownHeading = reportDialog.getByText('Sprint graph', { exact: true });
     await burndownHeading.scrollIntoViewIfNeeded();
     expect(
       await burndownHeading.evaluate((el) => {

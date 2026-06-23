@@ -2407,6 +2407,15 @@
   --el-chart-surplus: var(--color-success); /* fill where resolved > created */
   --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
   --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
+  /* Sprint CYCLE GRAPH series (Story 8.14 — Linear scope-vs-completed). A
+     collision-free --el-chart-cycle-* family: the bare --el-chart-completed /
+     -started / -target names are taken (velocity / old burndown), so reusing
+     them would silently re-skin those charts. The --el-chart-plot/grid/axis
+     scaffold is reused unchanged. */
+  --el-chart-cycle-scope: var(--color-stone); /* live total scope (gray) */
+  --el-chart-cycle-started: var(--color-warning); /* started / in progress (amber) */
+  --el-chart-cycle-completed: var(--color-info); /* completed (solid blue) */
+  --el-chart-cycle-target: var(--color-info); /* ideal remaining (blue, dotted) */
 
   /* ── Public projects (Story 6.12 · public read-only view) ──────────
      New --el-* roles 6.12.4/6.12.6/6.12.7 add here, each mapped to an

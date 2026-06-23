@@ -11,8 +11,8 @@ import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { loadFilterReferents, workItemsService } from '@/lib/services/workItemsService';
 import {
   toAverageAgeDto,
-  toBurndownSeriesDto,
   toCreatedVsResolvedDto,
+  toCycleGraphDto,
   toDistributionDto,
   toResolutionTimeDto,
   toVelocityDto,
@@ -42,9 +42,9 @@ import type { EstimationStatisticDto } from '@/lib/dto/estimation';
 import type { PagedIssueListDto } from '@/lib/dto/workItems';
 import type {
   AverageAgeDto,
-  BurndownSeriesDto,
   BurndownStatisticDto,
   CreatedVsResolvedDto,
+  CycleGraphDto,
   DistributionDto,
   ReportScopeDto,
   ReportWidgetResultDto,
@@ -59,7 +59,8 @@ import type {
 // Stories 4.1 / 4.3 / 4.4 / 1.4.6 already ship: NO new write model, NO
 // migration. It is the home Epic 6.3 (dashboards & reports) extends. Subtask
 // 4.6.4 added the cross-sprint VELOCITY aggregate (`getVelocity`); Subtask 4.6.3
-// added the in-sprint BURNDOWN (`getBurndownSeries`) to this same service.
+// added the in-sprint burndown, reframed by Story 8.14 into the LIVE-scope CYCLE
+// GRAPH (`getSprintCycleGraph`) — the burndown read is retired.
 //
 // 4-layer (CLAUDE.md): reads only, so no transaction — the service composes
 // bounded repository reads + the shipped `estimationService.rollupForSprint`
@@ -147,70 +148,84 @@ export const reportsService = {
   },
 
   /**
-   * The in-sprint BURNDOWN series (Story 4.6.3) — the analytics view of how fast
-   * the committed work is being completed. Returns, for a started sprint, the
-   * GUIDELINE (the ideal straight descent from the committed baseline to 0 over
-   * the sprint window) and the ACTUAL stepped remaining line, reconstructed from
-   * the immutable 4.4.2 committed baseline + the 1.4.6 `work_item_revision`
-   * trail (completions burn it down, scope-adds + reopens raise it), plus the
-   * mid-sprint scope-change markers.
+   * The in-sprint CYCLE GRAPH series (Story 8.14.4) — Linear's reframe of the
+   * burndown into a burn-UP of LIVE scope vs completed (linear.app/docs/cycle-graph).
+   * Returns, for a started sprint, three cumulative actual series (scope /
+   * completed / started) reconstructed from the 1.4.6 `work_item_revision` trail
+   * + an ideal `target` descent over the sprint's WORKING days.
    *
-   * The actual line's end-of-series value reconciles with
-   * `estimationService.rollupForSprint().remaining` (4.3.3 — the SAME `category
-   * = 'done'` predicate) — pinned to it for the points / issue-count series so
-   * the chart never disagrees with the numeric remaining the scrum header +
-   * sprint report show.
+   * The SERIES are snapshot-free (resolves the MOTIR-1288 class): each actual
+   * series is cumulated off its RECONSTRUCTED start baseline (`current − Σ
+   * delta`), so the last drawn `scope` / `completed` land EXACTLY on
+   * `rollupForSprint().committed` / `.completed` — the chart reconciles with the
+   * scrum header even when the sprint was started unestimated/empty. The TARGET's
+   * origin (`committedAtStart`) is resolved SEPARATELY from the immutable
+   * `startSprint` snapshot (falling back to the live scope), NOT the trail — the
+   * trail reconstruction wrongly yields ~0 when items are assigned to the sprint
+   * after `startDate`, which would collapse the target onto the x-axis.
    *
-   * Statistic: the project's configured estimation statistic, narrowed to what
-   * `startSprint` actually snapshots — `story_points` (the `committedPoints`
-   * baseline) when there IS point data, else `issue_count` (the
-   * `committedIssueCount` baseline). A `time_estimate` project, or a wholly
-   * unestimated sprint, degrades to the issue-count series, never `NaN`; an empty
-   * sprint is a flat guideline at 0.
+   * Statistic: the project's configured statistic, narrowed to `story_points`
+   * when the sprint has point work, else the `issue_count` fallback (the SAME
+   * `useCount` rule as the burndown) — current sums are read in that series unit,
+   * so an unestimated/time-estimate project degrades to counts, never `NaN`.
    *
    * Bounded (finding #57): one grouped per-day `$queryRaw` over the revision rows
-   * + one O(1) baseline read + one bounded roll-up — never an all-revisions or
+   * + a bounded roll-up + two O(1) current-sum reads — never an all-revisions or
    * all-issues load. The day count is bounded by the sprint length.
    *
    * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint);
    * `SprintNotStartedError` (409 — a planned sprint has no window to draw).
    */
-  async getBurndownSeries(sprintId: string, ctx: ServiceContext): Promise<BurndownSeriesDto> {
+  async getSprintCycleGraph(sprintId: string, ctx: ServiceContext): Promise<CycleGraphDto> {
     // Tenancy gate (finding #26): a missing / cross-workspace sprint is an
-    // indistinguishable 404. Mirrors `estimationService.rollupForSprint`.
+    // indistinguishable 404 (finding #26).
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
 
-    // A burndown needs a window: reject a not-yet-started (planned) sprint rather
-    // than draw an empty axis (Jira shows none for a future sprint).
+    // A cycle graph needs a window: reject a not-yet-started (planned) sprint.
     if (sprint.state === 'planned' || sprint.startDate === null) {
       throw new SprintNotStartedError(sprintId);
     }
     const start = sprint.startDate;
 
-    // The configured statistic (the same default `rollupForSprint` resolves).
+    // The configured statistic + the authoritative present roll-up (4.3.3) — the
+    // latter decides whether the sprint has POINTS work to draw (`committed > 0`).
     const projectStatistic = await resolveStatistic(sprint.projectId);
-    const committedPoints = sprint.committedPoints === null ? null : Number(sprint.committedPoints);
-
-    // The authoritative present roll-up (4.3.3) — drives both the end anchor AND
-    // whether the sprint has any POINTS work to burn (which decides the series).
     const rollup = await estimationService.rollupForSprint(sprintId, ctx);
 
-    // Draw the POINTS burndown whenever the project measures points AND the sprint
-    // actually has points work (`rollup.committed > 0`) — EVEN IF the immutable
-    // `committedPoints` start-snapshot is missing or zero (MOTIR-1285: a sprint
-    // made active without a snapshot — e.g. via a path that didn't run
-    // `startSprint` — must still anchor to the real remaining instead of silently
-    // falling onto a unitless issue-count series that never reconciles to the
-    // points the scrum header shows). Degrade to issue-count only for a non-points
-    // project, or a sprint with NO points work at all (a wholly unestimated sprint
-    // — a points burndown there would be a flat line at 0).
+    // Draw the POINTS cycle graph when the project measures points AND the sprint
+    // has point work; else degrade to the issue-count series (a non-points
+    // project, or a wholly unestimated sprint). NO `committedPoints` dependence —
+    // the live roll-up alone decides (the MOTIR-1285/1288 fix).
     const useCount = projectStatistic !== 'story_points' || rollup.committed === 0;
     const statistic: BurndownStatisticDto = useCount ? 'issue_count' : 'story_points';
+    const seriesStat: EstimationStatistic = statistic;
+
+    // The authoritative CURRENT values in the SERIES unit (so a degraded
+    // issue-count series anchors to counts, not points). Reuse the roll-up when
+    // it is already in the series unit; otherwise re-read the sums in that unit.
+    let currentScope: number;
+    let currentCompleted: number;
+    if (seriesStat === projectStatistic) {
+      currentScope = rollup.committed;
+      currentCompleted = rollup.completed;
+    } else {
+      const sums = await workItemRepository.sumPointsForSprint(
+        sprintId,
+        ctx.workspaceId,
+        seriesStat,
+      );
+      currentScope = sums.committed;
+      currentCompleted = sums.completed;
+    }
+    const currentStarted = await workItemRepository.sumStartedForSprint(
+      sprintId,
+      ctx.workspaceId,
+      seriesStat,
+    );
 
     // Window. The axis ends at the planned end (else completedAt, else now); the
-    // ACTUAL line is drawn to completedAt (complete) or now (active). The axis
-    // always covers the drawn actual (an overran active sprint extends it).
+    // ACTUAL series are drawn to completedAt (complete) or now (active).
     const now = new Date();
     const rawAxisEnd = sprint.endDate ?? sprint.completedAt ?? now;
     const actualCutoff = sprint.state === 'complete' ? (sprint.completedAt ?? rawAxisEnd) : now;
@@ -219,54 +234,52 @@ export const reportsService = {
     );
 
     // The bounded per-day deltas (finding #57) — events up to the actual cutoff.
-    const dailyDeltas = await workItemRevisionRepository.aggregateSprintBurndownByDay(
+    const dailyDeltas = await workItemRevisionRepository.aggregateSprintCycleByDay(
       sprintId,
       ctx.workspaceId,
       { start, end: actualCutoff },
       useCount,
     );
 
-    // Anchor the last drawn actual point to the authoritative remaining ONLY when
-    // the burndown is measured in the same unit as the roll-up (a degraded
-    // issue-count series over a points/time project must not be pinned to a
-    // points/minutes figure).
-    const anchorRemaining = statistic === projectStatistic ? rollup.remaining : null;
+    // Reconstruct each SERIES baseline: `current − Σ delta`. Cumulating a series
+    // from its baseline lands EXACTLY on the live `current` value at the cutoff
+    // (the header-reconciliation identity), with NO dependence on the frozen
+    // snapshot — this is what keeps `scope`/`completed` matching the scrum header.
+    const sumDelta = (k: 'scopeDelta' | 'completedDelta' | 'startedDelta') =>
+      dailyDeltas.reduce((acc, r) => acc + r[k], 0);
+    const scopeAtStart = currentScope - sumDelta('scopeDelta');
+    const completedAtStart = currentCompleted - sumDelta('completedDelta');
+    const startedAtStart = currentStarted - sumDelta('startedDelta');
 
-    // The committed baseline (the guideline + the chart's "Committed" annotation):
-    //  • issue-count series → the locked issue-count snapshot;
-    //  • points series WITH a real locked snapshot → that snapshot;
-    //  • points series WITHOUT a snapshot (`committedPoints` null/0 but points
-    //    exist) → the not-`done`-at-start work, derived from the authoritative
-    //    remaining minus the net of the drawn deltas — the SAME identity
-    //    `toBurndownSeriesDto` uses for the actual line's origin, so the guideline
-    //    and the actual line share a starting point.
-    let committed: number;
-    if (useCount) {
-      committed = sprint.committedIssueCount ?? 0;
-    } else if (committedPoints && committedPoints > 0) {
-      committed = committedPoints;
-    } else {
-      // No snapshot: the not-`done`-at-start work = remaining − net deltas. But a
-      // sprint started EMPTY or with UNESTIMATED items (then estimated/populated
-      // later) has 0 such points, which would make `committed === 0` — the chart's
-      // "nothing committed" EMPTY state, i.e. a blank burndown despite real
-      // remaining work. Floor the baseline at the current remaining so the points
-      // series always renders (and never sits below where the actual line lands).
-      const netRemainingDelta = dailyDeltas.reduce((sum, d) => sum + d.remainingDelta, 0);
-      const notDoneAtStart = Math.max(0, rollup.remaining - netRemainingDelta);
-      committed = Math.max(notDoneAtStart, rollup.remaining);
-    }
+    // The TARGET's origin (`committedAtStart`) is the committed scope as of start.
+    // It is DISTINCT from the series' `scopeAtStart`: reconstructing it from the
+    // trail wrongly yields ~0 when items were assigned to the sprint AFTER its
+    // `startDate` (the common start-then-populate flow), which collapses the
+    // target onto the x-axis. So prefer the immutable `startSprint` snapshot (the
+    // reliable scope-at-start), and when that is absent (started unestimated /
+    // empty — the MOTIR-1288 case) OR the reconstruction is non-positive, fall
+    // back to the live `currentScope` so the target is always a useful descending
+    // line. Floored at 0; an empty sprint (no scope at all) legitimately yields 0.
+    const snapshot = useCount
+      ? sprint.committedIssueCount
+      : sprint.committedPoints === null
+        ? null
+        : Number(sprint.committedPoints);
+    const committedAtStart =
+      scopeAtStart > 0 ? scopeAtStart : snapshot !== null && snapshot > 0 ? snapshot : currentScope;
 
-    return toBurndownSeriesDto({
+    return toCycleGraphDto({
       sprintId,
       state: sprint.state as 'active' | 'complete',
       statistic,
-      committed,
       start,
       axisEnd,
       actualCutoff,
+      scopeAtStart,
+      committedAtStart,
+      completedAtStart,
+      startedAtStart,
       dailyDeltas,
-      anchorRemaining,
     });
   },
 

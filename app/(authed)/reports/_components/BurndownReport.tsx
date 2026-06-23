@@ -5,17 +5,17 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { ReportBurndownSection } from '@/app/(authed)/backlog/_components/ReportBurndownSection';
-import type { BurndownSeriesDto } from '@/lib/dto/reports';
+import type { CycleGraphDto } from '@/lib/dto/reports';
 import type { SprintStateDto } from '@/lib/dto/sprints';
 
 // The standalone /reports/burndown page body (bug-reports-hub-agile-cards-collapse) —
-// the focused, project-level burndown report Jira's Reports menu lists separately
-// (mirror-product rung 1). Mirrors the created-vs-resolved page split: the Server
-// Component reads the sprint list + the picked sprint's series, this client body
-// owns the URL-driven SPRINT PICKER (each pick NAVIGATES, so the report is
-// shareable / reloads to the picked sprint), and mounts the FULL 4.6.5 burndown
-// via `ReportBurndownSection` (server-fed `burndown` prop → no client refetch).
-// The chart is referenced, never redrawn — the 4.6 seam rule.
+// the focused, project-level report Jira's Reports menu lists separately
+// (mirror-product rung 1; the label stays "Burndown", the chart is the Linear
+// CYCLE GRAPH since Story 8.14). Mirrors the created-vs-resolved page split: the
+// Server Component reads the sprint list + the picked sprint's cycle graph, this
+// client body owns the URL-driven SPRINT PICKER (each pick NAVIGATES, so the
+// report is shareable / reloads to the picked sprint), and mounts the FULL chart
+// via `ReportBurndownSection` (server-fed `cycle` prop → no client refetch).
 
 export interface BurndownPickerSprint {
   id: string;
@@ -26,13 +26,13 @@ export interface BurndownPickerSprint {
 export function BurndownReport({
   sprints,
   selectedSprintId,
-  burndown,
+  cycle,
 }: {
   /** The project's STARTED sprints (active + completed), active first. */
   sprints: BurndownPickerSprint[];
   selectedSprintId: string;
-  /** The server-fetched series for the picked sprint (undefined → client-fetch fallback). */
-  burndown?: BurndownSeriesDto;
+  /** The server-fetched cycle graph for the picked sprint (undefined → client-fetch fallback). */
+  cycle?: CycleGraphDto;
 }) {
   const t = useTranslations('reports');
   const router = useRouter();
@@ -66,7 +66,7 @@ export function BurndownReport({
         </div>
       </div>
 
-      <ReportBurndownSection sprintId={selectedSprintId} burndown={burndown} />
+      <ReportBurndownSection sprintId={selectedSprintId} cycle={cycle} />
     </div>
   );
 }

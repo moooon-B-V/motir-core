@@ -42,6 +42,14 @@ export const chartColor = {
   age: 'var(--el-chart-age)',
   /** Resolution-time report — the vertical-bar fill (8.8.13). */
   resolution: 'var(--el-chart-resolution)',
+  /** Sprint cycle graph — the live total scope line (gray, 8.14). */
+  cycleScope: 'var(--el-chart-cycle-scope)',
+  /** Sprint cycle graph — the started / in-progress line (amber, 8.14). */
+  cycleStarted: 'var(--el-chart-cycle-started)',
+  /** Sprint cycle graph — the completed burn-up line (blue, 8.14). */
+  cycleCompleted: 'var(--el-chart-cycle-completed)',
+  /** Sprint cycle graph — the ideal-remaining target line (blue dotted, 8.14). */
+  cycleTarget: 'var(--el-chart-cycle-target)',
 } as const;
 
 export type ChartColor = (typeof chartColor)[keyof typeof chartColor];

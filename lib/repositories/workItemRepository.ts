@@ -2376,6 +2376,40 @@ export const workItemRepository = {
   },
 
   /**
+   * The BOUNDED current STARTED sum of a sprint (Story 8.14.4) — the configured
+   * `statistic` summed over a sprint's non-archived issues whose status has LEFT
+   * the `todo` category (i.e. is in an `in_progress`- OR `done`-category status —
+   * "started" in Linear's cycle-graph sense). An aggregate `FILTER` over the
+   * LEFT-joined `workflow_status`; a NULL category (no status row) is the initial
+   * not-yet-started state and is excluded. The `workspaceId` gate keeps it
+   * tenant-scoped; the sum `COALESCE`s to 0 (the single aggregate row always
+   * exists). Used to ANCHOR the cycle graph's started series to the live present
+   * (`startedAtStart = currentStarted − Σ startedDelta`). NEVER loads the rows.
+   */
+  async sumStartedForSprint(
+    sprintId: string,
+    workspaceId: string,
+    statistic: EstimationStatistic,
+  ): Promise<number> {
+    const startedFilter = Prisma.sql` FILTER (WHERE ws."category" IS NOT NULL AND ws."category" <> 'todo')`;
+    const expr =
+      statistic === 'issue_count'
+        ? Prisma.sql`COUNT(*)${startedFilter}`
+        : statistic === 'story_points'
+          ? Prisma.sql`COALESCE(SUM(w."storyPoints")${startedFilter}, 0)`
+          : Prisma.sql`COALESCE(SUM(w."estimateMinutes")${startedFilter}, 0)`;
+    const rows = await db.$queryRaw<Array<{ started: number }>>`
+      SELECT ${expr}::float8 AS "started"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" ws
+               ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE w."sprintId" = ${sprintId}
+         AND w."workspaceId" = ${workspaceId}
+         AND w."archivedAt" IS NULL`;
+    return rows[0]?.started ?? 0;
+  },
+
+  /**
    * The BOUNDED per-STATUS points breakdown of a sprint (Story 4.5.2) — the
    * configured `statistic` summed over the sprint's non-archived issues, GROUPED
    * by `work_item.status`, in ONE grouped aggregate (never a load-all + client

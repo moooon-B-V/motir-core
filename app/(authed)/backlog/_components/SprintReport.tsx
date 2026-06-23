@@ -14,7 +14,7 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
-import type { BurndownSeriesDto, VelocityDto } from '@/lib/dto/reports';
+import type { CycleGraphDto, VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import { StatusValue } from '../../items/_components/issueCellPrimitives';
 import type { StatusByKey } from './backlogShared';
@@ -76,12 +76,12 @@ export interface SprintReportProps {
    */
   velocity?: VelocityDto;
   /**
-   * The completed-sprint burndown read (4.6.3 `getBurndownSeries`) — present on
-   * the standalone report page, which fetches it server-side. When absent (the
-   * complete-modal success state), the burndown slot fetches it client-side for
-   * the just-completed sprint (see `ReportBurndownSection`).
+   * The sprint CYCLE GRAPH read (8.14.4 `getSprintCycleGraph`) — present on the
+   * standalone report page, which fetches it server-side. When absent (the
+   * complete-modal success state), the chart slot fetches it client-side for the
+   * just-completed sprint (see `ReportBurndownSection`).
    */
-  burndown?: BurndownSeriesDto;
+  cycle?: CycleGraphDto;
 }
 
 export function SprintReport({
@@ -90,7 +90,7 @@ export function SprintReport({
   statusByKey,
   carryOverLabel,
   velocity,
-  burndown,
+  cycle,
 }: SprintReportProps) {
   const t = useTranslations('backlog');
   const locale = useLocale();
@@ -182,7 +182,7 @@ export function SprintReport({
             <TrendingUp className="h-4 w-4 shrink-0 text-(--el-warning)" aria-hidden />
             {t('sprintReport.burndown')}
           </span>
-          <ReportBurndownSection sprintId={report.sprintId} burndown={burndown} />
+          <ReportBurndownSection sprintId={report.sprintId} cycle={cycle} />
         </section>
 
         {velocity ? (

@@ -6,15 +6,16 @@ import { reportsService } from '@/lib/services/reportsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 import { EmptyState } from '@/components/ui/EmptyState';
-import type { BurndownSeriesDto } from '@/lib/dto/reports';
+import type { CycleGraphDto } from '@/lib/dto/reports';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
 import { BurndownReport, type BurndownPickerSprint } from '../_components/BurndownReport';
 
 // The standalone Burndown report page (bug-reports-hub-agile-cards-collapse) —
-// the focused per-sprint burndown Jira's Reports menu lists as its own page
-// (mirror-product rung 1), replacing the hub's old "all three agile cards →
+// the focused per-sprint report Jira's Reports menu lists as its own page
+// (mirror-product rung 1; the label stays "Burndown", the chart is the Linear
+// CYCLE GRAPH since Story 8.14), replacing the hub's old "all three agile cards →
 // /sprints/[id]/report" collapse. Composes EXISTING primitives only (the 4.6.5
-// `ReportBurndownSection` / 4.6.2 `BurndownChart`, the 4.6.3 `getBurndownSeries`
+// `ReportBurndownSection` / `CycleGraphChart`, the 8.14.4 `getSprintCycleGraph`
 // read) in their documented variants — no new design surface, no new
 // service/DTO. Server Component (services-only, 4-layer): it resolves the active
 // project, lists its started sprints, picks one (URL `?sprint=`, default active
@@ -80,8 +81,8 @@ export default async function BurndownReportPage({
   const requested = searchParams ? (await searchParams).sprint : undefined;
   const selected = pickerSprints.find((s) => s.id === requested) ?? defaultSprint;
 
-  const burndown: BurndownSeriesDto | undefined = await reportsService
-    .getBurndownSeries(selected.id, accessCtx)
+  const cycle: CycleGraphDto | undefined = await reportsService
+    .getSprintCycleGraph(selected.id, accessCtx)
     .catch((err) => {
       // Defensive: the picker only offers started sprints, so neither should fire
       // — degrade to the slot's client-fetch/error path rather than 500 the page.
@@ -100,7 +101,7 @@ export default async function BurndownReportPage({
       title={t('burndown.title')}
       subLine={subLine}
     >
-      <BurndownReport sprints={pickerSprints} selectedSprintId={selected.id} burndown={burndown} />
+      <BurndownReport sprints={pickerSprints} selectedSprintId={selected.id} cycle={cycle} />
     </ReportPageChrome>
   );
 }

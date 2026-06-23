@@ -229,6 +229,55 @@ describe('LineChart — 4.6.7 branch pass', () => {
     expect(fills.length).toBe(1);
   });
 
+  it('derives the legend + data table when both are omitted: a SOLID ref line, no x-title, a null point, an off-tick x', () => {
+    const { container } = render(
+      <LineChart
+        // No x.title (→ the `?? 'x'` caption/column fallback); ticks cover only
+        // x=0, so x=2/3 use the `?? String(value)` row-header fallback.
+        x={{ domain: [0, 3], ticks: [{ value: 0, label: 'D0' }] }}
+        y={{
+          domain: [0, 10],
+          ticks: [
+            { value: 0, label: '0' },
+            { value: 10, label: '10' },
+          ],
+        }}
+        series={[
+          {
+            id: 's',
+            label: 'S',
+            color: chartColor.actual,
+            points: [
+              { x: 0, y: 5 },
+              { x: 2, y: null }, // a null point → the data table's "—" branch
+              { x: 3, y: 8 },
+            ],
+          },
+        ]}
+        description="Derived legend + table fallback."
+        // A SOLID (non-dashed) reference line with a legendLabel → the
+        // `ref.dashed ? 'dash' : 'line'` ELSE branch in deriveLegend.
+        referenceLines={[
+          { orientation: 'horizontal', value: 6, color: chartColor.average, legendLabel: 'Ref' },
+        ]}
+      />,
+    );
+    // The DERIVED legend (no explicit `legend` prop) carries the series + the
+    // non-dashed reference line entry.
+    const legend = container.querySelector('ul');
+    const legendScope = within(legend as HTMLElement);
+    expect(legendScope.getByText('S')).toBeTruthy();
+    expect(legendScope.getByText('Ref')).toBeTruthy();
+    // The DERIVED data table (no explicit `dataTable` prop): the null point reads
+    // "—", and the off-tick x values fall back to their String(value) headers.
+    const table = container.querySelector('table');
+    const tableScope = within(table as HTMLElement);
+    expect(tableScope.getByText('—')).toBeTruthy();
+    expect(tableScope.getByText('D0')).toBeTruthy();
+    expect(tableScope.getByText('2')).toBeTruthy();
+    expect(tableScope.getByText('3')).toBeTruthy();
+  });
+
   it('falls back to the description as the accessible name when no ariaLabel is given', () => {
     render(
       <LineChart

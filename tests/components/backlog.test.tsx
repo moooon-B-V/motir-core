@@ -352,11 +352,11 @@ describe('BacklogContainer — sprint completion refreshes destination regions (
           sprintId: 'active1',
           state: 'complete',
           statistic: 'story_points',
-          committed: 5,
+          committedAtStart: 5,
+          scopeCreepPct: 0,
           startDate: '2026-06-09T00:00:00.000Z',
           endDate: '2026-06-22T00:00:00.000Z',
           days: [],
-          scopeChanges: [],
         });
       if (url.includes('/complete') && init?.method === 'POST') {
         completed = true;
