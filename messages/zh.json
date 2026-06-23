@@ -3753,7 +3753,30 @@
       "manageSeats": "管理席位",
       "switchMonthly": "切换为按月计费"
     },
-    "cloudNote": "仅限云端。此处的每个界面都受 MOTIR_CLOUD 控制。自托管（GPL-3.0）版本不显示任何账单、付费墙或上限。"
+    "cloudNote": "仅限云端。此处的每个界面都受 MOTIR_CLOUD 控制。自托管（GPL-3.0）版本不显示任何账单、付费墙或上限。",
+    "paywall": {
+      "fallbackOrg": "当前",
+      "outOfCredits": {
+        "title": "规划已暂停 —— 额度已用尽",
+        "bodyNamed": "{org} 组织本月的 {allotment, number} 个 {tier} 额度已全部用完，新的规划运行已暂停。既有计划仍可完整编辑。",
+        "body": "{org} 组织已用完本月全部额度，新的规划运行已暂停。既有计划仍可完整编辑。",
+        "upgrade": "升级套餐",
+        "topUp": "购买额度加油包",
+        "renewNote": "{date} 续期 · 或立即升级以继续规划。",
+        "renewNoteUndated": "立即升级以继续规划。"
+      },
+      "tierGate": {
+        "title": "AI 规划为付费功能",
+        "body": "为 {org} 组织添加 Motir AI 套餐，即可使用 AI 生成和扩展计划。首次可获 300 个免费试用额度。",
+        "seePlans": "查看 Motir AI 套餐",
+        "maybeLater": "以后再说"
+      },
+      "member": {
+        "title": "本组织的 AI 额度已用尽",
+        "body": "在 {org} 组织升级套餐前，规划将保持暂停。只有组织所有者可以变更套餐或购买额度。",
+        "askOwner": "请联系所有者升级"
+      }
+    }
   },
   "draftWithAi": {
     "button": "用AI起草",
@@ -3956,31 +3979,6 @@
       "footerNote": "这只影响你的项目，不影响 Motir —— 不会锁定，随时可改。",
       "reset": "重置为默认",
       "use": "使用此设计"
-    }
-  },
-  "billing": {
-    "paywall": {
-      "fallbackOrg": "当前",
-      "outOfCredits": {
-        "title": "规划已暂停 —— 额度已用尽",
-        "bodyNamed": "{org} 组织本月的 {allotment, number} 个 {tier} 额度已全部用完，新的规划运行已暂停。既有计划仍可完整编辑。",
-        "body": "{org} 组织已用完本月全部额度，新的规划运行已暂停。既有计划仍可完整编辑。",
-        "upgrade": "升级套餐",
-        "topUp": "购买额度加油包",
-        "renewNote": "{date} 续期 · 或立即升级以继续规划。",
-        "renewNoteUndated": "立即升级以继续规划。"
-      },
-      "tierGate": {
-        "title": "AI 规划为付费功能",
-        "body": "为 {org} 组织添加 Motir AI 套餐，即可使用 AI 生成和扩展计划。首次可获 300 个免费试用额度。",
-        "seePlans": "查看 Motir AI 套餐",
-        "maybeLater": "以后再说"
-      },
-      "member": {
-        "title": "本组织的 AI 额度已用尽",
-        "body": "在 {org} 组织升级套餐前，规划将保持暂停。只有组织所有者可以变更套餐或购买额度。",
-        "askOwner": "请联系所有者升级"
-      }
     }
   }
 }
