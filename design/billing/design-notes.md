@@ -265,25 +265,31 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
   1. **Tier name** (+ `i-zap` / `i-crown` accent glyph for Pro / Max, + the
      "Current" / "Recommended" `Pill`).
   2. **A per-tier USE-CASE line (`.use`, who it's for)** — the new top-of-card
-     line, secondary colour, ~2-line `min-height` so the price rows align across
-     cards: **Free** "Try it out — a one-time taste of Motir AI." / **Starter**
-     "Light planning — a recurring taste, every month." / **Standard** "Heavy
-     planning, plus light agent tasks." / **Pro** "Frequent planning, plus serious
-     agent tasks." / **Max** "Heavy agent throughput for a busy team." /
-     **Enterprise** "Custom volume, plus organization controls."
+     line, secondary colour, ~3-line `min-height` so the price rows align across
+     cards. The ladder is **planning DEPTH then agent USAGE**: planning depth tops
+     out at Standard (whole project, in detail); Pro and Max only scale agent work.
+     **Free** "Trying Motir AI out." / **Starter** "Light, structure-level
+     planning." / **Standard** "Detailed planning, plus a taste of agent." / **Pro**
+     "Detailed planning, plus real agent work." / **Max** "Detailed planning, plus
+     heavy agent work." / **Enterprise** "Custom volume, plus org controls."
   3. **The cadence-aware price** (serif `.amt`) + the billed/save subline.
-  4. **The credit allotment** (`.alot`, the load-bearing figure, bold).
-  5. **A CUMULATIVE `i-check` feature list** — each paid tier opens with a flush-left
-     `.flead` caption **"Everything in {previous tier}, plus"** (no glyph), then its
-     incremental extras: **Starter** → "300 credits refreshed monthly" · "Metered
-     top-ups"; **Standard** (everything in Starter) → "2,000 credits / mo (~10
-     planning passes)" · "Headroom for light agent tasks"; **Pro** (everything in
-     Standard) → "8,000 credits / mo" · "Planning + a run of hosted coding"; **Max**
-     (everything in Pro) → "30,000 credits / mo" · "Design, docs & coding across
-     epics"; **Enterprise** (everything in Max) → "Invoiced billing & SSO" ·
-     "Dedicated support". **Free** is the base (no "Everything in"): "Full planning,
-     design & coding agents" + an `off` (`i-x`, faint) "No monthly refresh · no
-     top-ups".
+  4. **The credit allotment** (`.alot`, the load-bearing figure, bold) — the credit
+     COUNT lives here, so the feature bullets stay capability-focused (no count
+     duplication).
+  5. **A CUMULATIVE `i-check` feature list** — the cumulative chain starts at the
+     first PAID tier (**Starter**), so each tier from Standard up opens with a
+     flush-left `.flead` caption **"Everything in {previous tier}, plus"** (no
+     glyph), then its incremental extras. The deltas map to the depth→usage ladder:
+     **Starter** (base of the ladder, NO "Everything in" — Free is just a trial,
+     not the rung below) → "Credits refreshed every month" · "Metered top-ups when
+     you need more"; **Standard** (everything in Starter, plus) → "Plan the whole
+     project, in detail" · "Room to try agent tasks"; **Pro** (everything in
+     Standard, plus) → "Cover whole tasks with the agent" · "Headroom for regular
+     agent runs"; **Max** (everything in Pro, plus) → "Run many agent tasks at
+     once" · "Throughput for a busy team"; **Enterprise** (everything in Max, plus)
+     → "Invoiced billing & SSO" · "Dedicated support". **Free** is a standalone
+     trial (no "Everything in"): "A one-time taste of every agent" + an `off`
+     (`i-x`, faint) "No monthly refresh · no top-ups".
   6. **A per-tier CTA → Checkout** (pinned to the bottom via `margin-top:auto`).
 
   Tiers: **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
