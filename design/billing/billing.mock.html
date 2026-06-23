@@ -867,19 +867,29 @@
         grid-template-columns: 1fr 1fr;
         gap: 16px;
       }
+      /* Tall, equal-height tier cards in ONE row — the standard SaaS storefront
+         pattern (Linear / Vercel / Stripe). `align-items: stretch` equalises the
+         card heights; `flex-wrap: nowrap` keeps all six tiers on a single row.
+         RESPONSIVE RULE (drawn): below the row's natural width the container
+         SCROLLS HORIZONTALLY (`overflow-x: auto`) rather than wrapping or
+         dropping tiers — the six stay one comparable ladder at every width, with
+         scroll-snap so a card always lands flush. */
       .ai-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        gap: 12px;
+        overflow-x: auto;
+        padding-bottom: 6px;
+        scroll-snap-type: x proximity;
       }
-      @media (max-width: 880px) {
-        .ai-grid {
-          grid-template-columns: 1fr 1fr;
-        }
+      .ai-grid .plan {
+        flex: 1 0 0;
+        min-width: 158px;
+        scroll-snap-align: start;
       }
       @media (max-width: 640px) {
-        .tracker-grid,
-        .ai-grid {
+        .tracker-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -932,6 +942,27 @@
         font-weight: 600;
         color: var(--el-text-strong);
         margin-top: 4px;
+      }
+      /* per-tier USE-CASE line (who it's for) — sits at the TOP, under the name.
+         A min-height of ~3 lines keeps the PRICE row aligned across all cards
+         regardless of how many lines a tier's use-case copy wraps to. */
+      .plan .use {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.35;
+        margin-top: 3px;
+        min-height: 49px;
+      }
+      /* cumulative feature lead — "Everything in {prev}, plus" — a flush-left
+         caption that introduces the incremental bullets (no check glyph). */
+      .plan .flist li.flead {
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        gap: 0;
+        margin-bottom: 1px;
+      }
+      .plan .flist li.flead svg {
+        display: none;
       }
       .plan .flist {
         list-style: none;
@@ -1829,8 +1860,11 @@
       should not wade through the seat plan to change AI. Reached from the Motir-AI line’s “Change
       plan” (panel 2) + the paywall (panel 7). Shows the CURRENT AI subscription + the ladder (Free
       / Starter / Standard / Pro / Max / Enterprise; Pro = recommended anchor) with the
-      Monthly/Annual toggle. The Motir SEAT plan lives on its own screen (panel 6) — never shown
-      here.
+      Monthly/Annual toggle. The ladder is the standard SaaS pricing pattern (Linear / Vercel /
+      Stripe): TALL, equal-height cards in ONE row (horizontal scroll below the row’s natural width
+      — the drawn responsive rule), each opening with a per-tier USE-CASE line (who it’s for) and a
+      CUMULATIVE feature list (“Everything in {previous tier}, plus …”). The Motir SEAT plan lives
+      on its own screen (panel 6) — never shown here.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1890,6 +1924,7 @@
               <div class="ai-grid">
                 <div class="plan">
                   <div class="pn">Free</div>
+                  <div class="use">Trying Motir AI out.</div>
                   <div class="price">
                     <span class="cad"
                       ><span class="amt">$0</span><span class="per">once</span></span
@@ -1898,7 +1933,8 @@
                   <div class="alot">300 credits · one-time</div>
                   <ul class="flist">
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Try planning once
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A one-time taste of
+                      every agent
                     </li>
                     <li class="off">
                       <svg viewBox="0 0 24 24"><use href="#i-x" /></svg> No monthly refresh · no
@@ -1911,6 +1947,7 @@
                 </div>
                 <div class="plan">
                   <div class="pn">Starter</div>
+                  <div class="use">Light, structure-level planning.</div>
                   <div class="price">
                     <span class="cad cad-m"
                       ><span class="amt">$5</span><span class="per">/ mo</span></span
@@ -1928,11 +1965,12 @@
                   <div class="alot">300 credits / mo</div>
                   <ul class="flist">
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A recurring taste of
-                      planning
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Credits refreshed every
+                      month
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups when
+                      you need more
                     </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-secondary">Choose Starter</button></div>
@@ -1941,6 +1979,7 @@
                   <div class="pn">
                     Standard <span class="pill pill-active" style="font-size: 11px">Current</span>
                   </div>
+                  <div class="use">Detailed planning, plus a taste of agent.</div>
                   <div class="price">
                     <span class="cad cad-m"
                       ><span class="amt">$25</span><span class="per">/ mo</span></span
@@ -1957,11 +1996,16 @@
                   </div>
                   <div class="alot">2,000 credits / mo</div>
                   <ul class="flist">
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everyday planning
+                    <li class="flead">
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Starter,
+                      plus
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Plan the whole project,
+                      in detail
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Room to try agent tasks
                     </li>
                   </ul>
                   <div class="pcta">
@@ -1978,6 +2022,7 @@
                     </svg>
                     Pro <span class="pill pill-tier" style="font-size: 11px">Recommended</span>
                   </div>
+                  <div class="use">Detailed planning, plus real agent work.</div>
                   <div class="price">
                     <span class="cad cad-m"
                       ><span class="amt">$75</span><span class="per">/ mo</span></span
@@ -1994,12 +2039,17 @@
                   </div>
                   <div class="alot">8,000 credits / mo</div>
                   <ul class="flist">
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Planning + hosted
-                      coding
+                    <li class="flead">
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Standard,
+                      plus
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Cover whole tasks with
+                      the agent
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Headroom for regular
+                      agent runs
                     </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-primary">Upgrade to Pro</button></div>
@@ -2014,6 +2064,7 @@
                     </svg>
                     Max
                   </div>
+                  <div class="use">Detailed planning, plus heavy agent work.</div>
                   <div class="price">
                     <span class="cad cad-m"
                       ><span class="amt">$150</span><span class="per">/ mo</span></span
@@ -2030,23 +2081,31 @@
                   </div>
                   <div class="alot">30,000 credits / mo</div>
                   <ul class="flist">
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Heavy agent — design,
-                      docs, coding
+                    <li class="flead">
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Pro, plus
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Run many agent tasks at
+                      once
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Throughput for a busy
+                      team
                     </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-secondary">Upgrade to Max</button></div>
                 </div>
                 <div class="plan">
                   <div class="pn">Enterprise</div>
+                  <div class="use">Custom volume, plus org controls.</div>
                   <div class="price">
                     <span class="cad"><span class="amt">Custom</span></span>
                   </div>
                   <div class="alot">Custom credit pool</div>
                   <ul class="flist">
+                    <li class="flead">
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Max, plus
+                    </li>
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Invoiced billing &amp;
                       SSO
@@ -2133,10 +2192,12 @@
     <div class="panel-label">
       6 · The Motir seats subscription (scaled). Motir Scaled is billed one seat per organization
       member (the Jira/Linear model: pay for active members; seat count = membership, prorated). (a)
-      BEFORE — the upgrade review counts member→seats before Checkout; (b) AFTER — the live Motir
-      subscription line (the analogue of the Motir-AI line in panel 2, but for the paid SEATS plan):
-      status, billed seats, plan fee, renewal, Manage-seats + Portal. This is the scaled counterpart
-      to panel 2's free-Motir line.
+      BEFORE — the upgrade review counts member→seats before Checkout, now with the same
+      Monthly/Annual Segmented toggle the AI storefront uses (it re-prices the seat total, terms
+      &amp; CTA; Annual default with a “Saves $120/yr” badge, Monthly always available); (b) AFTER —
+      the live Motir subscription line (the analogue of the Motir-AI line in panel 2, but for the
+      paid SEATS plan): status, billed seats, plan fee, renewal, Manage-seats + Portal. This is the
+      scaled counterpart to panel 2's free-Motir line.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2145,7 +2206,7 @@
             <!-- (a) BEFORE — upgrade review (a Checkout confirmation dialog) -->
             <div>
               <p class="crumb">a · Before — upgrade review (member → seats counted at Checkout)</p>
-              <div class="card" style="max-width: 660px">
+              <div class="card store" data-cadence="annual" style="max-width: 660px">
                 <div class="card-head">
                   <div class="ttl">
                     <span class="gico tracker"
@@ -2160,6 +2221,33 @@
                   </div>
                 </div>
                 <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
+                  <!-- Monthly / Annual cadence toggle — the same Segmented control the AI
+                       storefront uses (panel 5), now on the SEAT screen (it hardcoded annual
+                       before). Default = Annual + the visible saving; Monthly always available.
+                       Re-prices the seat total, terms & CTA via setCadence(). -->
+                  <div class="store-toggle" style="justify-content: flex-start; margin: 0">
+                    <span style="font-size: 13px; font-weight: 500; color: var(--el-text-secondary)"
+                      >Billing</span
+                    >
+                    <div class="seg" role="group" aria-label="Billing cadence">
+                      <button
+                        class="seg-opt"
+                        data-cad="monthly"
+                        aria-pressed="false"
+                        onclick="setCadence('monthly')"
+                      >
+                        Monthly
+                      </button>
+                      <button
+                        class="seg-opt active"
+                        data-cad="annual"
+                        aria-pressed="true"
+                        onclick="setCadence('annual')"
+                      >
+                        Annual <span class="seg-badge">Save ~33%</span>
+                      </button>
+                    </div>
+                  </div>
                   <div class="seatcalc">
                     <span class="sc-l">
                       <span class="avatars">
@@ -2169,22 +2257,40 @@
                       </span>
                       <span><b>6 members</b> → 6 seats</span>
                     </span>
-                    <span class="sc-total">6 × $40 / yr = $240 <span class="per">/ yr</span></span>
+                    <span class="sc-total">
+                      <span class="cad-a">6 × $40 / yr = $240 <span class="per">/ yr</span></span>
+                      <span class="cad-m">6 × $5 / mo = $30 <span class="per">/ mo</span></span>
+                    </span>
                   </div>
                   <div class="terms">
                     <div class="trow">
                       <span class="tk">Billing</span>
-                      <span class="tv"
-                        ><b>Annual</b> — $240 / yr
-                        <span class="muted">($20 / mo equiv, the default)</span></span
-                      >
+                      <span class="tv">
+                        <span class="cad-a"
+                          ><b>Annual</b> — $240 / yr
+                          <span class="muted">($20 / mo equiv, the default)</span>
+                          <span class="save">Saves $120/yr vs monthly</span></span
+                        >
+                        <span class="cad-m"
+                          ><b>Monthly</b> — $30 / mo
+                          <span class="muted"
+                            >($360 / yr — switch to annual to save $120)</span
+                          ></span
+                        >
+                      </span>
                     </div>
                     <div class="trow">
                       <span class="tk">Due today</span>
-                      <span class="tv"
-                        ><b>$240</b>, <b>prorated</b> to your renewal date
-                        <span class="muted">(less for the days left this term)</span></span
-                      >
+                      <span class="tv">
+                        <span class="cad-a"
+                          ><b>$240</b>, <b>prorated</b> to your renewal date
+                          <span class="muted">(less for the days left this term)</span></span
+                        >
+                        <span class="cad-m"
+                          ><b>$30</b>, <b>prorated</b> to your renewal date
+                          <span class="muted">(less for the days left this cycle)</span></span
+                        >
+                      </span>
                     </div>
                     <div class="trow">
                       <span class="tk">Add a member later</span>
@@ -2203,12 +2309,16 @@
                   <div class="note" style="border-style: solid; background: var(--el-surface-soft)">
                     <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
                     <span
-                      >Seats follow your membership automatically (Stripe proration). Prefer
-                      monthly? Switch at Checkout to pay $30 / mo.</span
+                      >Seats follow your membership automatically (Stripe proration) — adding or
+                      removing a member adjusts your next invoice, never a surprise charge. Pick
+                      Monthly or Annual above before you continue.</span
                     >
                   </div>
                   <div class="acts" style="display: flex; gap: 8px">
-                    <button class="btn btn-primary">Continue to Checkout — $240/yr</button>
+                    <button class="btn btn-primary">
+                      <span class="cad-a">Continue to Checkout — $240/yr</span>
+                      <span class="cad-m">Continue to Checkout — $30/mo</span>
+                    </button>
                     <button class="btn btn-ghost">Cancel</button>
                   </div>
                 </div>
@@ -2442,16 +2552,6 @@
                 </button>
               </div>
             </div>
-          </div>
-          <!-- cloud-only note -->
-          <div class="note" style="margin-top: 24px">
-            <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
-            <span>
-              <strong>Cloud-only.</strong> Every surface in this asset is gated behind
-              <code>MOTIR_CLOUD</code>. A self-hosted (GPL-3.0) build shows no billing, no paywall
-              and no caps — Motir is unbounded and AI is reached via the self-hoster’s own
-              connection. None of these surfaces render when <code>MOTIR_CLOUD=false</code>.
-            </span>
           </div>
         </div>
       </div>
