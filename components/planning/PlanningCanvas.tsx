@@ -297,7 +297,11 @@ export function PlanningCanvas({
                 key={`${edge.from}~${edge.to}~${i}`}
                 d={edgePath(rectOf(a), rectOf(b))}
                 fill="none"
-                className={pending ? 'stroke-(--el-border)' : 'stroke-(--el-border-strong)'}
+                className={
+                  pending
+                    ? 'stroke-(--el-canvas-edge-pending)'
+                    : 'stroke-(--el-canvas-edge-committed)'
+                }
                 strokeWidth={2}
                 strokeLinecap="round"
                 strokeDasharray={pending ? '2 7' : undefined}

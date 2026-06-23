@@ -2432,6 +2432,29 @@
   --el-roadmap-planned: var(--color-tint-lavender);
   --el-roadmap-progress: var(--color-tint-sky);
   --el-roadmap-done: var(--color-tint-mint);
+  /* ── Onboarding / canvas (Story 1266.6 · MOTIR-1277) ───────────────
+     Per-element hues for the onboarding canvas: revision-diff kind chips
+     (RevisionDiff), the discovery chat bubbles (DiscoveryChatRail), the
+     planning-canvas edges (PlanningCanvas), and the station tier tile
+     (StationNode). Each maps to the exact Tier-0 --color-* it renders
+     today (zero visual change vs the borrowed --el-tint-* / --el-accent /
+     --el-border), so a palette re-skins them via its --color-* override
+     and [data-theme="dark"] flips them — no per-palette / dark entry.
+     Per design/design-system/design-notes.md §H. NB: the card's "wire
+     --el-roadmap-* into StationNode" is corrected there — roadmap stays
+     scoped to the PUBLIC roadmap; the canvas gets its own
+     --el-station-tier-* family (a different semantic concept). */
+  --el-diff-added: var(--color-tint-mint);
+  --el-diff-removed: var(--color-tint-rose);
+  --el-diff-moved: var(--color-tint-sky);
+  --el-chat-bubble-user: var(--color-primary-fill); /* text stays --el-accent-text */
+  --el-chat-bubble-ai: var(--color-surface-soft); /* text stays --el-text */
+  --el-canvas-edge-pending: var(--color-border); /* dashed, not-yet-committed edge */
+  --el-canvas-edge-committed: var(--color-hairline-strong); /* solid, settled edge */
+  --el-station-tier-discovery: var(--color-tint-sky);
+  --el-station-tier-vision: var(--color-tint-lavender);
+  --el-station-tier-feasibility: var(--color-tint-mint);
+  --el-station-tier-validation: var(--color-tint-peach);
   /* the Overview hero's soft corner washes (decorative tints only; all text
      sits on --el-page-bg, never on the wash, so AA holds — finding #35) */
   --el-hero-wash-a: var(--color-tint-lavender);

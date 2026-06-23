@@ -42,11 +42,16 @@ const ICON: Record<StationKind, LucideIcon> = {
   plan: Network,
 };
 
+// The tier tile takes its OWN per-tier element token (Story 1266.6 / MOTIR-1277)
+// rather than borrowing the generic `--el-tint-*` pool — so a palette can give
+// each onboarding tier a distinct hue. Defaults map to today's exact tints
+// (zero visual change). NB: NOT `--el-roadmap-*` — that family is the public
+// roadmap, a different concept (see design/design-system/design-notes.md §H).
 const TIER_TINT: Record<DirectionDocKind, string> = {
-  discovery: 'bg-(--el-tint-sky)',
-  vision: 'bg-(--el-tint-lavender)',
-  feasibility: 'bg-(--el-tint-mint)',
-  validation: 'bg-(--el-tint-peach)',
+  discovery: 'bg-(--el-station-tier-discovery)',
+  vision: 'bg-(--el-station-tier-vision)',
+  feasibility: 'bg-(--el-station-tier-feasibility)',
+  validation: 'bg-(--el-station-tier-validation)',
 };
 
 function isTierKind(kind: StationKind): kind is DirectionDocKind {

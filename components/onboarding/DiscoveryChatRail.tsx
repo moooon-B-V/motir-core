@@ -191,8 +191,8 @@ function Bubble({ turn, assistantInitial }: { turn: ChatTurn; assistantInitial: 
       <div
         className={
           isUser
-            ? 'rounded-(--radius-card) bg-(--el-accent) px-3 py-2 text-sm text-(--el-accent-text)'
-            : 'rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text)'
+            ? 'rounded-(--radius-card) bg-(--el-chat-bubble-user) px-3 py-2 text-sm text-(--el-accent-text)'
+            : 'rounded-(--radius-card) bg-(--el-chat-bubble-ai) px-3 py-2 text-sm text-(--el-text)'
         }
       >
         {turn.text}
