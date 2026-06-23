@@ -287,9 +287,9 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
      **Standard** (base of the paid ladder, NO "Everything in" — Free is just a
      trial, not the rung below) → "Plan the whole project, in detail" · "Credits
      refresh monthly · metered top-ups" · "Room to try agent tasks"; **Pro**
-     (everything in Standard, plus) → "Cover whole tasks with the agent" · "Headroom
-     for regular agent runs"; **Max** (everything in Pro, plus) → "Run many agent
-     tasks at once" · "Throughput for a busy team"; **Enterprise** (everything in
+     (everything in Standard, plus) → "Run the coding agent on real tasks" · "Top up
+     anytime for heavier runs"; **Max** (everything in Pro, plus) → "Headroom for
+     sustained agent work" · "Throughput for a busy team"; **Enterprise** (everything in
      Max, plus) → "Invoiced billing & SSO" · "Dedicated support". **Free** is a
      standalone trial (no "Everything in"): "A one-time taste of every agent" + an
      `off` (`i-x`, faint) "No monthly refresh · no top-ups".
@@ -303,8 +303,20 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
   accent) / **Enterprise** (Custom). The current plan is accent-bordered + disabled
   CTA; the recommended Pro card is accent-bordered (`feat rec`) with a "Recommended"
   `Pill`. A footer `note` states annual-is-shown / switch-to-monthly,
-  tax-at-checkout, credits-vs-price, and that **seats are billed separately —
-  manage them on the Motir plan screen (panel 6)** (the only cross-product link).
+  tax-at-checkout, credits-vs-price, an **expectation-setter that agent / coding
+  work burns more credits than planning and heavier models burn faster (top up
+  anytime)**, and that **seats are billed separately — manage them on the Motir
+  plan screen (panel 6)** (the only cross-product link).
+
+  > **Copy honesty (Yue, 2026-06-23):** the per-tier feature bullets must NOT
+  > promise a completeness the credit pool can't back. A coding-agent task burns
+  > far more than a planning pass (a pass ≈ 150–250 credits; a whole coding task
+  > can run 1,000s on a premium model), so Pro's 8,000/mo ≈ a few tasks, not
+  > "cover whole tasks." Bullets are framed around _running_ the agent + top-ups,
+  > NOT a task count — and the footer note sets the burn expectation. Matches the
+  > ADR, which scopes Pro as "planning + **a run** of hosted coding." When Epic-9
+  > coding has real telemetry, revisit whether the pool SIZES (not just the copy)
+  > need tuning — the margin headroom allows more generous pools.
 
 **Credit top-up (the one-time overage purchase — `creditService.topUp()`).** Below
 the ladder, a **"Top up credits"** `Card`: the recurring plan covers the monthly
