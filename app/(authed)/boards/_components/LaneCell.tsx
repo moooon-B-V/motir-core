@@ -92,7 +92,7 @@ export function LaneCell({
         // same as BoardColumn). An inset ring stays inside the box. Don't revert.
         className={`flex min-h-[28px] w-72 shrink-0 items-center justify-center rounded-(--radius-card) border border-dashed px-2.5 py-4 text-center text-xs transition-colors ${
           isOver
-            ? 'border-(--el-accent) bg-(--el-tint-lavender) text-(--el-text-strong) inset-ring-2 inset-ring-(--el-accent)'
+            ? 'border-(--el-board-column-accent) bg-(--el-droptarget-bg) text-(--el-text-strong) inset-ring-2 inset-ring-(--el-board-column-accent)'
             : 'border-(--el-border) text-(--el-text-muted)'
         }`}
       >
@@ -107,7 +107,7 @@ export function LaneCell({
       data-testid={`lane-cell-${columnId}-${laneKey}`}
       data-over={isOver ? 'true' : undefined}
       className={`w-72 shrink-0 rounded-(--radius-card) transition-colors ${
-        isOver ? 'bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)' : ''
+        isOver ? 'bg-(--el-droptarget-bg) inset-ring-2 inset-ring-(--el-board-column-accent)' : ''
       }`}
     >
       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>

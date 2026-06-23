@@ -104,6 +104,12 @@ const pillVariants = cva(
         // Dedicated `--el-privacy-private` token (MOTIR-1274 · 1266.3); the
         // matching `--el-privacy-public` is defined ahead of a "public" badge.
         private: 'bg-(--el-privacy-private) text-(--el-text-strong) border-transparent',
+        // Inactive "Archived" badge (MOTIR-1276 · 1266.5) — a QUIET muted fill
+        // with slate ink, not a hued tint: archived is an inactive state, not a
+        // severity. Dedicated `--el-archived-pill-*` tokens so a palette can tune
+        // the inactive badge apart from the neutral chip; AA-safe (slate on muted
+        // clears AA both themes).
+        archived: 'bg-(--el-archived-pill-bg) text-(--el-archived-pill-text) border-transparent',
       },
     },
     defaultVariants: {},

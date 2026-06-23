@@ -97,8 +97,10 @@ export function ProjectSwitcher({
               </span>
               {isArchived ? (
                 // "Archived" is a muted inactive state, not an info severity —
-                // neutral tone (AA-safe; #35).
-                <Pill tone="neutral" className="shrink-0">
+                // the dedicated `archived` tone (MOTIR-1276 · 1266.5), so a
+                // palette can tune the inactive badge apart from neutral chips
+                // (AA-safe; #35).
+                <Pill tone="archived" className="shrink-0">
                   {t('projectSwitcher.archived')}
                 </Pill>
               ) : null}

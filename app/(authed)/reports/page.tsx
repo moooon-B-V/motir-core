@@ -186,7 +186,11 @@ function HubCard({
         muted ? 'bg-(--el-surface-soft)' : 'bg-(--el-page-bg)',
       )}
     >
-      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-surface) text-(--el-text-secondary)">
+      {/* Coloured icon tile (MOTIR-1276 · 1266.5) — the report hub card's icon
+          takes a dedicated `--el-card-icon-*` pair so a palette can tint the
+          tile + glyph (the accent on muted) rather than a flat grey-on-surface
+          square (finding #54). */}
+      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control) bg-(--el-card-icon-bg) text-(--el-card-icon-fg)">
         {icon}
       </span>
       <span className="flex flex-col gap-1">

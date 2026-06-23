@@ -141,7 +141,7 @@ export function BoardColumn({
       data-board-col-panel=""
       className={`flex h-[calc(100dvh-12rem)] w-72 shrink-0 flex-col rounded-(--radius-card) border bg-(--el-surface) transition-colors ${
         isOver
-          ? 'border-(--el-accent) bg-(--el-tint-lavender) inset-ring-2 inset-ring-(--el-accent)'
+          ? 'border-(--el-board-column-accent) bg-(--el-droptarget-bg) inset-ring-2 inset-ring-(--el-board-column-accent)'
           : 'border-(--el-border)'
       }`}
     >
