@@ -1,6 +1,5 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
-import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 
@@ -36,9 +35,13 @@ export const aiExplanationService = {
     input: ExplanationDraftInput,
     ctx: ProjectContext,
   ): Promise<{ jobId: string }> {
-    const organizationId = await resolveOrganizationId(ctx);
+    const { organizationId, isMeta } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const tenant = {
       organizationId,
+      isMeta,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
@@ -65,13 +68,3 @@ export const aiExplanationService = {
     return streamJob(jobId);
   },
 };
-
-// Resolve the active workspace's organization id — the billing entity the
-// job-submit tenant carries (7.2.16). RLS-aware, mirroring aiChatService.
-async function resolveOrganizationId(ctx: ProjectContext): Promise<string> {
-  return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
-    const workspace = await workspaceRepository.findByIdInTx(ctx.workspaceId, tx);
-    if (!workspace) throw new Error(`workspace ${ctx.workspaceId} not found`);
-    return workspace.organizationId;
-  });
-}

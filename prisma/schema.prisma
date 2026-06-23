@@ -335,6 +335,17 @@ model Organization {
   /// this is plain propagated state.
   scaledTrackerSubscription Json?
 
+  /// The internal dogfood org (moooon B.V.) — the META org. Resolves to the
+  /// `meta` entitlement tier (every §4 cap lifted) and disables the AI paywall.
+  /// DISTINCT from the future commercial `enterprise` tier: `meta` is never
+  /// billed and is excluded from revenue (they share "unlimited" today only by
+  /// coincidence and will diverge). Set on the live moooon row by the
+  /// add_organization_is_meta data-flip migration (WHERE slug = 'moooon'); seed
+  /// sets it for dev. The §4 cap reader (entitlementsService) and the 8.1.8 AI
+  /// paywall (billingService.getAiAccess) consume it; it is also propagated to
+  /// motir-ai on the job-submit envelope so the AI credit gate honours it too.
+  isMeta Boolean @default(false)
+
   memberships OrganizationMembership[]
   workspaces  Workspace[]
 

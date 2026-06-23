@@ -3519,7 +3519,9 @@
       "monthlySpend": "每月消耗",
       "monthlySpendSub": "全组织每月扣减的额度。最近 6 个月。",
       "creditsChip": "额度",
-      "creditsUnit": "额度"
+      "creditsUnit": "额度",
+      "unlimited": "无限制",
+      "internal": "内部"
     },
     "affordance": "额度是内部用量配额 —— 不是货币，这也不是账单。每次规划运行按其消耗的 token 扣减额度。购买更多额度与变更套餐将在后续版本随计费功能推出。",
     "drill": {
@@ -3656,6 +3658,15 @@
       "viewUsage": "查看用量与费用",
       "noPlanYet": "暂无付费 AI 套餐 —— 正在使用一次性免费试用。",
       "choosePlan": "选择 Motir AI 套餐"
+    },
+    "internal": {
+      "badge": "内部",
+      "title": "内部组织",
+      "tagline": "Motir 自有工作区 —— 无限制，永不计费。",
+      "subtitle": "{org} 使用 Motir 内部方案。Motir 与 Motir AI 的所有功能均无限制，也无需计费 —— 本组织已豁免计费。",
+      "motirLine": "Motir · 无限制",
+      "aiLine": "Motir AI · 无限制",
+      "usageNote": "AI 用量仍会记录，便于在「用量与费用」页面查看内部成本。"
     },
     "payment": {
       "title": "支付与发票",

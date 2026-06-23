@@ -18,6 +18,7 @@ import {
 
 const tenant = {
   organizationId: 'org_1',
+  isMeta: false,
   workspaceId: 'ws_1',
   projectId: 'pj_1',
   projectKey: 'MOTIR',

@@ -3519,7 +3519,9 @@
       "monthlySpend": "Monthly spend",
       "monthlySpendSub": "Credits debited per month, org-wide. Last 6 months.",
       "creditsChip": "Credits",
-      "creditsUnit": "credits"
+      "creditsUnit": "credits",
+      "unlimited": "Unlimited",
+      "internal": "Internal"
     },
     "affordance": "Credits are an internal usage allotment — not a currency, and this is not a bill. One planning run debits credits by the tokens it consumed. Buying more credits and plan changes arrive with billing in a later release.",
     "drill": {
@@ -3656,6 +3658,15 @@
       "viewUsage": "View Usage & cost",
       "noPlanYet": "No paid AI plan — on the one-time free trial.",
       "choosePlan": "Choose a Motir AI plan"
+    },
+    "internal": {
+      "badge": "Internal",
+      "title": "Internal organization",
+      "tagline": "Motir's own workspace — unlimited, never billed.",
+      "subtitle": "{org} is on Motir's internal plan. Every Motir and Motir AI feature is unlimited and there's nothing to bill — this organization is exempt from billing.",
+      "motirLine": "Motir · Unlimited",
+      "aiLine": "Motir AI · Unlimited",
+      "usageNote": "AI usage is still tracked for internal cost visibility on the Usage & cost page."
     },
     "payment": {
       "title": "Payment & invoices",

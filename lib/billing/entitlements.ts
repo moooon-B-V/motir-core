@@ -20,7 +20,7 @@
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 /** The PM-core scale tier an org is on (Axis B — §1/§4). */
-export type PmTier = 'free' | 'scaled' | 'enterprise';
+export type PmTier = 'free' | 'scaled' | 'enterprise' | 'meta';
 
 /**
  * The kind of entitlement a create/upload hit — the machine-readable
@@ -83,6 +83,19 @@ export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
     maxUploadBytes: 100 * MB,
     maxTotalStorageBytes: null,
   },
+  // The INTERNAL dogfood tier (moooon B.V., the meta org) — every cap lifted.
+  // Kept as its OWN row (not an alias of `enterprise`) so the two can diverge:
+  // `enterprise` is a future COMMERCIAL custom deal (negotiated/finite caps, a
+  // real subscription, counts as revenue), whereas `meta` is never billed and
+  // permanently unlimited. They coincide today; the separate row keeps a later
+  // enterprise cap change from silently re-capping the meta org.
+  meta: {
+    maxWorkItems: null,
+    maxProjects: null,
+    maxWorkspaces: null,
+    maxUploadBytes: 100 * MB,
+    maxTotalStorageBytes: null,
+  },
 };
 
 /** The caps for a tier. */
@@ -98,4 +111,20 @@ export function entitlementsFor(tier: PmTier): PmEntitlements {
  */
 export function pmTierFromScaledTracker(sub: ScaledTrackerSubscription | null): PmTier {
   return sub?.status === 'active' ? 'scaled' : 'free';
+}
+
+/**
+ * Resolve an org's PM tier from its full cap context. The META org (moooon B.V.,
+ * `isMeta`) short-circuits to the internal `meta` tier — every cap lifted —
+ * regardless of subscription; any other org defers to its scaled-tracker state
+ * (`pmTierFromScaledTracker`). This is the SINGLE chokepoint the cap-enforcement
+ * service resolves through, so the meta exemption (and every present/future §4
+ * cap) is honoured here once rather than re-checked per gate.
+ */
+export function pmTierForOrg(input: {
+  isMeta: boolean;
+  scaledTrackerSubscription: ScaledTrackerSubscription | null;
+}): PmTier {
+  if (input.isMeta) return 'meta';
+  return pmTierFromScaledTracker(input.scaledTrackerSubscription);
 }

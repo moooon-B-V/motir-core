@@ -41,6 +41,11 @@ async function setTier(organizationId: string, sub: ScaledTrackerSubscription): 
   });
 }
 
+/** Flag the org as the META org (moooon B.V.) — the `meta` tier, every cap lifted. */
+async function setMeta(organizationId: string): Promise<void> {
+  await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+}
+
 /** Bulk-seed `count` top-level task rows in the fixture's project (one INSERT —
  *  fast even at the 250 cap). `archived` stamps `archivedAt` so the §4
  *  "archived items still count" divergence is testable. */
@@ -120,6 +125,17 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     const fx = await makeWorkItemFixture();
     const orgId = await orgIdOf(fx.workspaceId);
     await setTier(orgId, SCALED);
+    await seedWorkItems(fx, 250);
+
+    await expect(
+      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+    ).resolves.toBeUndefined();
+  });
+
+  it('lifts the cap for the META org (moooon B.V.) even with NO subscription', async () => {
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await setMeta(orgId); // the `meta` tier — every cap lifted, never billed
     await seedWorkItems(fx, 250);
 
     await expect(
@@ -291,6 +307,26 @@ describe('entitlementsService — org-creation gate (§4.5)', () => {
     delete process.env['MOTIR_CLOUD'];
     const user = await createTestUser();
     await workspacesService.createWorkspace({ name: 'First', ownerUserId: user.id });
+    await expect(
+      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+    ).resolves.toBeUndefined();
+  });
+
+  it('owning the META org clears the gate (treated as paid)', async () => {
+    const user = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'First',
+      ownerUserId: user.id,
+    });
+    const orgId = await orgIdOf(workspace.id);
+
+    // Without meta/paid → a 2nd org is gated.
+    await expect(
+      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+    ).rejects.toMatchObject({ entitlement: 'organizations' });
+
+    // Flag the org meta → the owner can now create more orgs.
+    await setMeta(orgId);
     await expect(
       db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
     ).resolves.toBeUndefined();

@@ -87,10 +87,27 @@ describe('aiUsageService.getUsage', () => {
     expect(res.hasUsage).toBe(true);
     // The run's project id was enriched with the motir-core project NAME.
     expect(res.recentRuns.runs[0]?.projectName).toBe(project.name);
+    expect(res.isMeta).toBe(false);
     // The org admin's call to motir-ai used the org scope.
     expect(getOrgUsageMock).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'org', coreOrganizationId: workspace.organizationId }),
     );
+  });
+
+  it('flags the META org (moooon B.V.) so the dashboard shows the balance as Unlimited', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    await db.organization.update({
+      where: { id: workspace.organizationId },
+      data: { isMeta: true },
+    });
+    getOrgUsageMock.mockResolvedValue(rawResponse({}));
+
+    const res = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+
+    expect(res.isMeta).toBe(true);
   });
 
   it('narrows a non-admin member to their own project scope server-side', async () => {

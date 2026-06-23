@@ -72,6 +72,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -271,6 +272,11 @@ async function main() {
   // clear pass deletes the org first, cascading its memberships.
   const organizationId = workspace.organizationId;
   await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    // The seed `moooon` org IS moooon B.V. — the META org: exempt from the §4
+    // entitlement caps + the AI paywall. The prod row is flipped by the
+    // add_organization_is_meta migration (WHERE slug = 'moooon'); that one-time
+    // UPDATE does not re-run on reseed, so the seed sets it explicitly each time.
+    await organizationRepository.update(organizationId, { isMeta: true }, tx);
     for (let i = 0; i < SEED_USERS.length; i++) {
       const email = SEED_USERS[i]!.email;
       if (email === OWNER_EMAIL) continue; // already the org owner via createWorkspace

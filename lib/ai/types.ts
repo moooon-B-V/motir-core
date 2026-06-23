@@ -26,6 +26,10 @@ export interface Tenant {
   // a project's workspace's org and sends it (Subtask 7.2.16); motir-ai keys its
   // org-level credit ledger (7.2.6) to it. Required on every submit.
   organizationId: string;
+  // Whether the org is the META org (moooon B.V., `Organization.isMeta`).
+  // Propagated so motir-ai's credit gate (out-of-credits) bypasses it — the meta
+  // org is never billed. Defaults to false for any non-meta / self-host caller.
+  isMeta: boolean;
   workspaceId: string;
   projectId: string;
   projectKey: string;

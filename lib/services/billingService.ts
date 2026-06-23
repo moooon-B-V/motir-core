@@ -103,6 +103,7 @@ export const billingService = {
     return {
       organizationId: input.organizationId,
       access: { role: access.role, canManageBilling: isOrgOwnerRole(access.role) },
+      isMeta: org?.isMeta ?? false,
       motir: { scaledTrackerSubscription },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       catalog: BILLING_CATALOG,
@@ -158,6 +159,12 @@ export const billingService = {
       getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
       getOrgSubscription({ coreOrganizationId: input.organizationId }),
     ]);
+
+    // The META org (moooon B.V.) is exempt from the AI paywall: `applicable:
+    // false` makes the upsell never render (the same shape as a self-host build —
+    // useAiAccess only blocks when `applicable === true`). The motir-ai credit
+    // gate is bypassed in parallel (the org's `isMeta` rides the job envelope).
+    if (org?.isMeta) return notApplicableAiAccess();
 
     return {
       applicable: true,

@@ -1,7 +1,7 @@
 import { submitJob, getJob } from '@/lib/ai/motirAiClient';
 import { projectsService } from '@/lib/services/projectsService';
-import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
-import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { type WorkspaceContext } from '@/lib/workspaces/context';
 import type { JobView } from '@/lib/ai/errors';
 
 // The dispatch side of the boundary (Subtask 7.1.7): motir-core SUBMITS jobs to
@@ -17,9 +17,13 @@ export const aiJobsService = {
   // client. Returns the jobId.
   async submitNoopJob(projectKey: string, ctx: WorkspaceContext): Promise<{ jobId: string }> {
     const project = await projectsService.getByKey(projectKey, ctx);
-    const organizationId = await resolveOrganizationId(ctx);
+    const { organizationId, isMeta } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const tenant = {
       organizationId,
+      isMeta,
       workspaceId: ctx.workspaceId,
       projectId: project.id,
       projectKey: project.identifier,
@@ -32,15 +36,3 @@ export const aiJobsService = {
     return getJob(jobId);
   },
 };
-
-// Resolve the active workspace's organization id — the billing entity the
-// job-submit tenant carries (7.2.16). RLS-aware: the read runs inside
-// `withWorkspaceContext` so the workspace policy admits the row under the
-// non-bypass app role (the same pattern projectsService.getByKey uses).
-async function resolveOrganizationId(ctx: WorkspaceContext): Promise<string> {
-  return withWorkspaceContext(ctx, async (tx) => {
-    const workspace = await workspaceRepository.findByIdInTx(ctx.workspaceId, tx);
-    if (!workspace) throw new Error(`workspace ${ctx.workspaceId} not found`);
-    return workspace.organizationId;
-  });
-}
