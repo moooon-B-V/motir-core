@@ -162,4 +162,54 @@ describe('BillingClient', () => {
       priceLookupKey: 'pro_pool_annual',
     });
   });
+
+  it('seats screen: Monthly/Annual toggle reprices and drives the Checkout price (8.1.16)', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.endsWith('/billing')) {
+        return new Response(JSON.stringify(activeStandard()), { status: 200 });
+      }
+      expect(init?.method).toBe('POST');
+      return new Response(JSON.stringify({ url: 'https://stripe.test/checkout/seat' }), {
+        status: 200,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    // Enter the seats (scale-up) screen.
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade Motir' }));
+    await waitFor(() => expect(screen.getByText('Scale up Motir')).toBeTruthy());
+
+    // Default annual → 6 members × $40/yr = $240 / yr.
+    expect(screen.getByText('6 × $40/yr = $240 / yr')).toBeTruthy();
+
+    // Toggle to Monthly → reprices to 6 × $5/mo = $30 / mo.
+    fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+    await waitFor(() => expect(screen.getByText('6 × $5/mo = $30 / mo')).toBeTruthy());
+
+    // Start Checkout on the monthly cadence → POSTs the MONTHLY seat price.
+    fireEvent.click(screen.getByRole('button', { name: /Continue to Checkout/ }));
+    await waitFor(() =>
+      expect(hrefSetter).toHaveBeenCalledWith('https://stripe.test/checkout/seat'),
+    );
+    const checkoutCall = fetchMock.mock.calls.find(
+      ([u]) => typeof u === 'string' && u.endsWith('/checkout'),
+    );
+    expect(checkoutCall).toBeTruthy();
+    expect(JSON.parse((checkoutCall![1] as RequestInit).body as string)).toEqual({
+      priceLookupKey: 'tracker_monthly',
+    });
+  });
+
+  it('no longer renders the redundant cloud-only note (8.1.16)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(activeStandard()), { status: 200 })),
+    );
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    expect(screen.queryByText(/Cloud-only/)).toBeNull();
+  });
 });
