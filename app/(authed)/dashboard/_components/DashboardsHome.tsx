@@ -103,7 +103,14 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
       <h2 className="mb-2 text-xs font-semibold tracking-wide text-(--el-text-muted) uppercase">
         {title}
       </h2>
-      <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
+      {/* `data-surface="card"` opts this list into the surface-MATERIAL layer
+          (neumorphism mould, glassmorphism frost, aurora glow) — like the board
+          / widget cards. Without it the /dashboard list stayed flat under those
+          styles (MOTIR-1314). Inert under non-material styles. */}
+      <div
+        data-surface="card"
+        className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
+      >
         {children}
       </div>
     </section>
