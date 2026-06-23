@@ -2342,6 +2342,55 @@
   --el-model-haiku: var(--color-success);
   --el-model-deepseek: var(--color-accent-teal); /* was --el-type-subtask */
 
+  /* ── Icon + text roles (MOTIR-1275 · 1266.4 — split the --el-text-muted /
+     --el-text triple-duty) ──
+     Icons and overlines/subtitles were borrowing the body-copy text tokens
+     (--el-text-muted for every icon + caption, --el-text for the tooltip fill),
+     so a palette could not tune an icon apart from prose. These give each role
+     its own token mapped to the SAME Tier-0 neutral it resolves to today, so
+     every palette + the dark block re-skin them for free (the gold-standard
+     --el-chart-* / --el-type-* indirection — no per-palette block). icon-btn /
+     icon-heading are defined AHEAD of an explicit consumer (the spec's
+     "NEW (no impl)" pattern; buttons inherit currentColor today).
+     design/design-system/design-notes.md §E. */
+  --el-icon-muted: var(--color-muted-foreground); /* inactive nav / chevron / close */
+  --el-icon-active: var(--color-primary); /* active nav icon (was --el-accent-on-surface) */
+  --el-icon-btn: var(--color-foreground); /* explicit button-icon ink (usually currentColor) */
+  --el-icon-heading: var(--color-charcoal); /* an icon beside a heading */
+  --el-icon-field: var(--color-muted-foreground); /* search / chevron / calendar in inputs */
+  --el-text-eyebrow: var(--color-muted-foreground); /* uppercase-mono overline */
+  --el-text-subtitle: var(--color-slate); /* lead paragraph (Modal / EmptyState desc) */
+  --el-text-helper: var(--color-muted-foreground); /* form hint (was --el-text-muted) */
+  --el-text-identifier: var(--color-slate); /* monospace MOTIR-123 keys (was --el-text-secondary) */
+
+  /* ── Component-surface primitives (MOTIR-1275 · 1266.4) ──
+     Names the control surfaces that were overloading --el-surface (option
+     highlight / chip fill / switch knob), --el-border(-strong) (control vs
+     panel edge) and --el-text (tooltip fill). Each defaults to the exact
+     Tier-0 --color-* the component renders today → zero visual change in the
+     motir base; a palette can now tune each apart. Two deliberate
+     spec-vs-shipped reconciliations (rung-2), documented in §F of the notes:
+     (1) --el-count-bg maps to --color-muted, NOT the spec's tentative
+     --color-surface — board count badges render ON an --el-surface column, so
+     surface would erase them; muted is the shipped fill (and identical to
+     surface in dark). (2) --el-overlay-scrim is the lone concrete-value token
+     (no --color-* base), so it carries an explicit dark companion below; light
+     == today's bg-black/40, dark DEEPENS to ~65% for a legible scrim.
+     design/design-system/design-notes.md §F. */
+  --el-tooltip-bg: var(--color-foreground); /* inverted tooltip fill (was --el-text) */
+  --el-tooltip-text: var(--color-background); /* text on the tooltip (was --el-text-inverted) */
+  --el-switch-on: var(--color-primary-fill); /* checked track (was --el-accent) */
+  --el-switch-knob: var(--color-surface); /* the thumb (was --el-surface) */
+  --el-option-active-bg: var(--color-muted); /* highlighted listbox option (was --el-surface) */
+  --el-overlay-scrim: #00000066; /* modal/dialog scrim — concrete (light); dark companion below */
+  --el-chip-bg: var(--color-surface); /* neutral chip fill (tinted chips keep their tint) */
+  --el-chip-border: var(--color-border); /* neutral chip edge */
+  --el-card: var(--color-background); /* untinted card surface — fixes the bg-card orphan */
+  --el-input-border: var(--color-hairline-strong); /* input outline (was --el-border-strong) */
+  --el-button-border: var(--color-hairline-strong); /* secondary-button outline */
+  --el-count-bg: var(--color-muted); /* count-badge fill (shipped value; see note above) */
+  --el-count-text: var(--color-slate); /* count-badge ink (was --el-text-secondary) */
+
   /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
   /* The colour the UI was missing: each issue type renders its icon in its
      own hue, matching ISSUE_TYPE_META.colorToken. */
@@ -2514,6 +2563,11 @@
    one-shade-darker. */
 [data-theme='dark'] {
   --el-sidebar-item-bg-hover: #222222;
+  /* The modal scrim deepens in dark (MOTIR-1275 · 1266.4): on a near-black
+     canvas a 40% scrim barely separates the dialog, so dark uses ~65% — the
+     other concrete-hex --el-* alongside the sidebar hover. Light value (40%,
+     == the prior bg-black/40) lives in the :root block above. */
+  --el-overlay-scrim: #000000a6;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

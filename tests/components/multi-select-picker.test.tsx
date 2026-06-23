@@ -158,8 +158,11 @@ describe('ValueChip', () => {
     // · 1266.3); `sky` is the 5th tint → `--el-label-5` (zero visual change).
     expect(tinted?.className).toContain('bg-(--el-label-5)');
     expect(tinted?.className).toContain('text-(--el-text-strong)');
-    expect(neutral?.className).toContain('bg-(--el-surface)');
-    expect(neutral?.className).toContain('border-(--el-border)');
+    // The neutral chip routes through the dedicated --el-chip-bg / --el-chip-border
+    // (MOTIR-1275 · 1266.4 — they default to --color-surface / --color-border, so
+    // zero visual change; a palette can now tune the neutral chip apart).
+    expect(neutral?.className).toContain('bg-(--el-chip-bg)');
+    expect(neutral?.className).toContain('border-(--el-chip-border)');
   });
 
   it('renders the remove × with its accessible name only when removable', () => {

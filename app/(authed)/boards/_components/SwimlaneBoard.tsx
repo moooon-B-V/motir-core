@@ -95,7 +95,7 @@ export function SwimlaneBoard({
           <div key={column.id} className="flex w-72 shrink-0 items-center gap-2">
             <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
             <span
-              className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) text-xs font-semibold text-(--el-text-secondary)"
+              className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-xs font-semibold text-(--el-count-text)"
               data-testid={`board-count-${column.id}`}
             >
               {column.totalCount}
@@ -184,7 +184,7 @@ export function SwimlaneBoard({
                 />
                 <LaneLabel lane={lane} isCatchAll={isCatchAll} />
                 <span
-                  className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-text-secondary)"
+                  className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                   data-testid={`swimlane-count-${lane.key}`}
                 >
                   {lane.count}

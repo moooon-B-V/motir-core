@@ -97,7 +97,7 @@ const pillVariants = cva(
         member: 'bg-(--el-org-role-member) text-(--el-text-strong) border-transparent',
       },
       tone: {
-        neutral: 'bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)',
+        neutral: 'bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)',
         // Epic-level privacy "Not public" badge (Story 6.14 · design
         // epic-privacy panels 1/2/6b) — lavender tint, charcoal text, the same
         // AA-safe recipe as `status="planned"` / `memberRole="admin"` (≈9.7:1).

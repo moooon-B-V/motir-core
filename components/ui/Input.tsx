@@ -62,12 +62,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           'px-(--spacing-input-x)',
           'transition-colors',
           'focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:ring-offset-2 focus-within:ring-offset-background',
-          hasError ? 'border-(--el-danger)' : 'border-(--el-border-strong)',
+          hasError ? 'border-(--el-danger)' : 'border-(--el-input-border)',
           disabled && 'cursor-not-allowed opacity-50',
         )}
       >
         {addonStart ? (
-          <span aria-hidden className="text-(--el-text-muted) inline-flex">
+          <span aria-hidden className="text-(--el-icon-field) inline-flex">
             {addonStart}
           </span>
         ) : null}
@@ -85,7 +85,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {...rest}
         />
         {addonEnd ? (
-          <span aria-hidden className="text-(--el-text-muted) inline-flex">
+          <span aria-hidden className="text-(--el-icon-field) inline-flex">
             {addonEnd}
           </span>
         ) : null}

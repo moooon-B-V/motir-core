@@ -263,7 +263,7 @@ export function DatePicker({
               aria-label={ariaLabel}
               className="flex flex-1 items-center gap-2 truncate bg-transparent text-left text-sm outline-none disabled:cursor-not-allowed"
             >
-              <Calendar className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+              <Calendar className="h-4 w-4 shrink-0 text-(--el-icon-field)" aria-hidden />
               <span
                 className={cn(
                   'flex-1 truncate',

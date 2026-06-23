@@ -460,7 +460,7 @@ export function Combobox<T extends string>({
                 <div
                   key={`group-${opt.group}`}
                   role="presentation"
-                  className="px-(--spacing-control-x) pt-2 pb-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-faint) uppercase"
+                  className="px-(--spacing-control-x) pt-2 pb-1 font-mono text-[11px] font-semibold tracking-wider text-(--el-text-eyebrow) uppercase"
                 >
                   {opt.group}
                 </div>
@@ -476,20 +476,29 @@ export function Combobox<T extends string>({
                   onClick={() => commit(i)}
                   className={cn(
                     'flex cursor-pointer items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-sm',
-                    isActive ? 'bg-(--el-surface) text-(--el-text)' : 'text-(--el-text)',
+                    isActive ? 'bg-(--el-option-active-bg) text-(--el-text)' : 'text-(--el-text)',
                   )}
                 >
                   {opt.icon ? <span aria-hidden>{opt.icon}</span> : null}
                   <span className="truncate">{opt.label}</span>
                   {opt.secondary ? (
-                    // --el-text-secondary, not -muted: muted (#787671) fails AA
-                    // (4.16:1) on the panel surface (#f6f5f4) at this 12px size
-                    // (the sidebar-caption contrast lesson) — secondary clears it.
-                    <span className="text-(--el-text-secondary) ml-auto truncate text-xs">
+                    // --el-text-identifier (= --color-slate, the -secondary
+                    // weight), NOT -muted: muted (#787671) fails AA (4.16:1) on
+                    // the panel surface (#f6f5f4) at this 12px size (the
+                    // sidebar-caption contrast lesson) — identifier/slate clears it.
+                    <span className="text-(--el-text-identifier) ml-auto truncate text-xs">
                       {opt.secondary}
                     </span>
                   ) : null}
-                  {isSelected ? <Check className="ml-1 h-4 w-4 shrink-0" aria-hidden /> : null}
+                  {isSelected ? (
+                    // The selected-row check uses the accent (matching
+                    // MultiSelectPicker) — unifies the check-icon colour across
+                    // the two pickers (was bare ink here, accent there).
+                    <Check
+                      className="ml-1 h-4 w-4 shrink-0 text-(--el-accent-on-surface)"
+                      aria-hidden
+                    />
+                  ) : null}
                 </div>
               </Fragment>
             );
@@ -562,8 +571,8 @@ export function Combobox<T extends string>({
             {selected.icon ? <span aria-hidden>{selected.icon}</span> : null}
             <span className="text-(--el-text) truncate">{selected.label}</span>
             {selected.secondary ? (
-              // -secondary, not -muted: AA on the trigger surface at 12px (as above).
-              <span className="text-(--el-text-secondary) ml-auto truncate text-xs">
+              // identifier (= slate, the -secondary weight): AA on the trigger surface at 12px (as above).
+              <span className="text-(--el-text-identifier) ml-auto truncate text-xs">
                 {selected.secondary}
               </span>
             ) : null}
@@ -571,7 +580,7 @@ export function Combobox<T extends string>({
         ) : (
           <span className="text-(--el-text-muted) truncate">{placeholder}</span>
         )}
-        <ChevronsUpDown className="text-(--el-text-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
+        <ChevronsUpDown className="text-(--el-icon-muted) ml-auto h-4 w-4 shrink-0" aria-hidden />
       </button>
 
       {open ? (inDialog ? menu : mounted ? createPortal(menu, document.body) : null) : null}
