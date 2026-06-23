@@ -10,7 +10,6 @@ import {
   InlineStatusCell,
   InlineAssigneeCell,
   InlinePriorityCell,
-  InlineDueCell,
   InlineEstimateCell,
 } from './IssueInlineEdit';
 import { WorkItemRowActions } from './WorkItemRowActions';
@@ -27,8 +26,9 @@ type Translator = ReturnType<typeof useTranslations>;
 // flat sortable List table (`IssueListTable`) renders them un-nested with
 // sortable headers — so a cell renders IDENTICALLY in either view
 // (design/work-items/tree.png + list.mock.html). Extracted here so neither
-// table re-declares the cells; the columns are Title · Priority · Assignee ·
-// Reporter · Due · Est. · Status, the set the detail page's core-fields surface.
+// table re-declares the cells; the columns are Title · Type · Priority ·
+// Assignee · Reporter · Est. · Points · Status (Due is intentionally not a
+// list/tree column — see the note where it used to sit).
 
 // The STATUS_TONE map, the row `Avatar`, and the status/assignee cell VALUE
 // renderers now live in the leaf `issueCellPrimitives` module, so the inline-edit
@@ -124,15 +124,12 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
         </span>
       ),
     },
-    {
-      key: 'due',
-      header: t('issues.columns.due'),
-      width: 120,
-      sortColumn: 'due',
-      // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only date
-      // otherwise.
-      cell: (r) => <InlineDueCell row={r} />,
-    },
+    // No Due column — due dates aren't a meaningful list/tree axis for Motir's
+    // work (Yue): the column is removed from all three views (List · lazy Tree ·
+    // static Tree). Due is still editable on the detail page's core-fields rail
+    // and remains a filter field + the `due` sort axis in the contract — only the
+    // table column is dropped. Removing it also frees ~136px, helping narrow
+    // viewports (bug MOTIR-1307).
     {
       key: 'estimate',
       header: t('issues.columns.estimate'),

@@ -9,15 +9,18 @@
 // delta between the Tree skeleton and the List skeleton (the List is un-nested).
 
 import { useTranslations } from 'next-intl';
+import { ISSUE_TITLE_MIN_TRACK } from '@/lib/issues/issueListView';
 
-// TITLE · PRIORITY · ASSIGNEE · REPORTER · DUE · EST. · STATUS.
-const GRID = 'minmax(0,1fr) 120px 150px 150px 120px 90px 130px';
+// TITLE · PRIORITY · ASSIGNEE · REPORTER · EST. · STATUS. The Title track is
+// FLOORED (`minmax(10rem,1fr)`, never `minmax(0,1fr)`) and Est./Status are
+// trimmed, matching the real table so there's no settle-time jump (bug
+// MOTIR-1307); Due was removed as a list column.
+const GRID = `minmax(${ISSUE_TITLE_MIN_TRACK},1fr) 120px 150px 150px 72px 108px`;
 const HEADER_KEYS = [
   'colTitle',
   'colPriority',
   'colAssignee',
   'colReporter',
-  'colDue',
   'colEst',
   'colStatus',
 ] as const;
@@ -88,8 +91,6 @@ export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
               />
               <Bar w={64} />
             </span>
-            {/* Due */}
-            <Bar w={64} />
             {/* Estimate (right-aligned) */}
             <span className="flex justify-end">
               <Bar w={36} />

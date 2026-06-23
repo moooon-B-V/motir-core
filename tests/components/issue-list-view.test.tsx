@@ -96,6 +96,24 @@ describe('IssueListTable — sortable headers', () => {
     );
   });
 
+  // Due is intentionally NOT a list/tree column (Yue) — removed from all three
+  // views. The other core columns still render; only Due is gone.
+  it('does not render a Due column', () => {
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+        pagination={{ total: ROWS.length, page: 1, pageSize: 50 }}
+      />,
+    );
+    expect(screen.queryByRole('columnheader', { name: /Due/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Due/ })).toBeNull();
+    // The sibling columns are unaffected.
+    expect(screen.getByRole('columnheader', { name: /Priority/ })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: /Status/ })).toBeTruthy();
+  });
+
   it('renders both issues as whole-row links to their detail page', () => {
     render(
       <IssueListTable
@@ -192,8 +210,8 @@ describe('IssueListTable — work-Type column (Subtask 8.8.9)', () => {
 
   // The cells render in column order: Title · Type · Priority · … — so the Type
   // cell is index 1. (Targeting it by position is robust: the muted "—" empty
-  // glyph is shared by the Due / Est. / Points cells, so a row-wide text query
-  // for "—" would be ambiguous.)
+  // glyph is shared by the Est. / Points cells, so a row-wide text query for "—"
+  // would be ambiguous.)
   const typeCellOf = (identifier: string) =>
     within(screen.getByTestId(`issue-row-${identifier}`)).getAllByRole('cell')[1]!;
 

@@ -323,14 +323,18 @@ reuses the same `cell` render-props:
 | Priority | 120          | `PRIORITY_META` chip (`Pill` tone + direction icon)   | priority rank (highest→lowest) |
 | Assignee | 150          | initial-letter `Avatar` · name, or muted "Unassigned" | assignee name                  |
 | Reporter | 150          | initial-letter `Avatar` · name                        | reporter name                  |
-| Due      | 120          | formatted date, or muted `—`                          | due date                       |
 | Est.     | 72 (end)     | formatted duration, or muted `—` (right-aligned)      | estimate minutes               |
 | Status   | 108          | `Pill` by lifecycle category (the `STATUS_TONE` map)  | workflow status order          |
+
+**No Due column (Yue).** Due dates aren't a meaningful list/tree axis for Motir's
+work, so the Due column is not drawn in any of the three views. Due is still
+editable on the detail page's core-fields rail, stays a filter field, and the
+`due` sort axis remains in the contract — only the table column is dropped.
 
 Grid template (identical to `IssueTreeTable` / `IssueTreeSkeleton`; the live
 template also carries the later **Type** (116), **Points** (80), and **Actions**
 (76) columns added after this table was drawn):
-`minmax(10rem,1fr) 120px 150px 150px 120px 72px 108px`.
+`minmax(10rem,1fr) 120px 150px 150px 72px 108px`.
 
 **Narrow-viewport floor (bug MOTIR-1307).** The Title track is `minmax(10rem,1fr)`,
 **not** `minmax(0,1fr)`: a `0` floor let the flexible track collapse fully under
