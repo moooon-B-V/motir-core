@@ -18,6 +18,29 @@ design GROUNDS in them and does not invent it. Built FROM the real design system
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no design→code gap.
 
+> **Refined by 8.1.15 / MOTIR-1302 (2026-06-23)** against the SHIPPED storefront
+> (`app/(authed)/settings/organization/billing/_components/BillingClient.tsx`, built
+> by 8.1.7 / MOTIR-1148) — three changes, each grounded in that component +
+> `billing-tiering.md`, NOT invented:
+>
+> 1. **Seat upgrade screen (panel 6a, shipped `SeatsView`) gains a Monthly/Annual
+>    `Segmented`.** `SeatsView` hardcoded annual (`checkout(seat.annual…)`, all-annual
+>    terms); the catalog already carries `seatPlan.prices.monthly` (`$5`) +
+>    `.annual` (`$40`), so the toggle re-prices the seat total, terms & CTA exactly
+>    like the AI storefront's `PlansView`.
+> 2. **The on-page cloud-only note (shipped `CloudNote`) is dropped.** The page is
+>    `notFound()` off-cloud (`isCloudBilling()`), so it ONLY renders on cloud — the
+>    banner is redundant. Self-host behaviour stays documented here in prose (the
+>    "Self-host" section below), never as an on-page banner.
+> 3. **The Motir AI pricing blocks (panel 5, shipped `PlanCard`) are redesigned**
+>    from short cards (name + price + one credits line) to the standard SaaS tier
+>    pattern (Linear / Vercel / Stripe): tall, equal-height cards in ONE row, each
+>    with a per-tier use-case line + a cumulative "Everything in {previous}, plus …"
+>    feature list.
+>
+> Code follow-ups blocked on this asset: **8.1.16 / MOTIR-1303** (seat toggle +
+> drop the note) and **8.1.17 / MOTIR-1304** (pricing blocks).
+
 | Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face). |
@@ -108,6 +131,13 @@ render** — no Billing card, no paywall, no caps; Motir is unbounded and AI
 is reached via the self-hoster's own connection. 8.1.7/8.1.8 MUST gate every
 surface here behind `MOTIR_CLOUD` (a note states this on panel 7). This flag is
 **distinct from** `isAiPlanningConfigured` (which gates whether AI is reachable).
+
+> **No on-page "Cloud-only" banner (8.1.15 / MOTIR-1302).** Because the billing
+> page already `notFound()`s off-cloud (`isCloudBilling()`), it ONLY ever renders
+> on cloud — so a per-page "Cloud-only" banner (the old `CloudNote`) told the
+> on-cloud reader something that is always true and never reaches the self-host
+> reader at all. It is dropped from every panel. **This section is the canonical
+> record of the self-host behaviour** — do not re-add an on-page banner.
 
 ---
 
@@ -224,17 +254,46 @@ annual/monthly Stripe Prices (`*_annual` is the Product's default Price).
 
 The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
 
-- **The Motir AI ladder** — six `plan` cards (monthly → annual-per-month · yearly ·
-  save): **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
+- **The Motir AI ladder — the standard SaaS pricing-tier pattern** (rung 1 —
+  Linear / Vercel / Stripe). Six `plan` cards that are **TALL, equal-height, and laid
+  out in ONE row** (the `.ai-grid` is a `display:flex` row, `align-items:stretch`
+  equalising height so the CTAs sit on a common baseline; `flex:1 0 0` +
+  `min-width:158px` per card). **Responsive rule (drawn):** below the row's natural
+  width the container **scrolls horizontally** (`overflow-x:auto`, scroll-snap) —
+  the six tiers stay one comparable ladder, never wrapping to a second row or
+  dropping tiers. Each card, top → bottom:
+  1. **Tier name** (+ `i-zap` / `i-crown` accent glyph for Pro / Max, + the
+     "Current" / "Recommended" `Pill`).
+  2. **A per-tier USE-CASE line (`.use`, who it's for)** — the new top-of-card
+     line, secondary colour, ~2-line `min-height` so the price rows align across
+     cards: **Free** "Try it out — a one-time taste of Motir AI." / **Starter**
+     "Light planning — a recurring taste, every month." / **Standard** "Heavy
+     planning, plus light agent tasks." / **Pro** "Frequent planning, plus serious
+     agent tasks." / **Max** "Heavy agent throughput for a busy team." /
+     **Enterprise** "Custom volume, plus organization controls."
+  3. **The cadence-aware price** (serif `.amt`) + the billed/save subline.
+  4. **The credit allotment** (`.alot`, the load-bearing figure, bold).
+  5. **A CUMULATIVE `i-check` feature list** — each paid tier opens with a flush-left
+     `.flead` caption **"Everything in {previous tier}, plus"** (no glyph), then its
+     incremental extras: **Starter** → "300 credits refreshed monthly" · "Metered
+     top-ups"; **Standard** (everything in Starter) → "2,000 credits / mo (~10
+     planning passes)" · "Headroom for light agent tasks"; **Pro** (everything in
+     Standard) → "8,000 credits / mo" · "Planning + a run of hosted coding"; **Max**
+     (everything in Pro) → "30,000 credits / mo" · "Design, docs & coding across
+     epics"; **Enterprise** (everything in Max) → "Invoiced billing & SSO" ·
+     "Dedicated support". **Free** is the base (no "Everything in"): "Full planning,
+     design & coding agents" + an `off` (`i-x`, faint) "No monthly refresh · no
+     top-ups".
+  6. **A per-tier CTA → Checkout** (pinned to the bottom via `margin-top:auto`).
+
+  Tiers: **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
   (`$5` → `$3.33/mo` · $40/yr · save $20 · 300) / **Standard** (`$25` → `$16.67/mo`
   · $200/yr · save $100 · 2,000, marked **Current**) / **Pro** (`$75` → `$50/mo` ·
   $600/yr · save $300 · 8,000, `i-zap` accent, marked **Recommended** — the anchor
   tier) / **Max** (`$150` → `$100/mo` · $1,200/yr · save $600 · 30,000, `i-crown`
-  accent) / **Enterprise** (Custom). Each card: name, the cadence-aware **price**
-  (serif) + billed/save subline, credit **allotment**, a `i-check` feature list
-  (off-features `i-x`, faint), and a per-tier CTA → Checkout. The current plan is
-  accent-bordered + disabled CTA; the recommended Pro card is accent-bordered with
-  a "Recommended" `Pill`. A footer `note` states annual-is-shown / switch-to-monthly,
+  accent) / **Enterprise** (Custom). The current plan is accent-bordered + disabled
+  CTA; the recommended Pro card is accent-bordered (`feat rec`) with a "Recommended"
+  `Pill`. A footer `note` states annual-is-shown / switch-to-monthly,
   tax-at-checkout, credits-vs-price, and that **seats are billed separately —
   manage them on the Motir plan screen (panel 6)** (the only cross-product link).
 
@@ -273,22 +332,36 @@ count wherever the seat price appears**, never an abstract "$5/seat" alone. Two
 sub-surfaces:
 
 - **(a) BEFORE — upgrade review (before Checkout).** A width-constrained `Card`
-  (a confirmation dialog) titled **"Scale up Motir"** with a `.seatcalc` (member
-  **avatars** + **"6 members → 6 seats"** + the resolved annual total **"6 × $40/yr
-  = $240 / yr"**), then a **`.terms` key/value list that spells out what & when we
-  charge** — the part a narrow note couldn't carry:
-  - **Billing** — Annual, $240/yr ($20/mo equiv, the default).
-  - **Due today** — $240, **prorated** to the renewal date (less for the days left
-    this term).
+  (a confirmation dialog) titled **"Scale up Motir"**. **A Monthly/Annual
+  `Segmented` cadence toggle sits at the top of the body** (8.1.15 — the seat screen
+  hardcoded annual before; this is the same control the AI storefront uses, labelled
+  "Billing", **Annual default** with a "Save ~33%" `seg-badge`, **Monthly always
+  available**). It re-prices everything below it (`setCadence()` flips
+  `.store[data-cadence]`; the cadence-tagged `.cad-a` / `.cad-m` spans show/hide —
+  the catalog carries `seatPlan.prices.monthly` `$5` + `.annual` `$40`). Then a
+  `.seatcalc` (member **avatars** + **"6 members → 6 seats"** + the cadence-aware
+  total — **"6 × $40/yr = $240 / yr"** annual / **"6 × $5/mo = $30 / mo"** monthly),
+  then a **`.terms` key/value list that spells out what & when we charge** — the part
+  a narrow note couldn't carry:
+  - **Billing** — _annual:_ Annual, $240/yr ($20/mo equiv, the default), with a green
+    **"Saves $120/yr vs monthly"** `save` badge; _monthly:_ Monthly, $30/mo ($360/yr
+    — switch to annual to save $120).
+  - **Due today** — _annual:_ $240, **prorated** to the renewal date (less for the
+    days left this term); _monthly:_ $30, **prorated** to the renewal date.
   - **Add a member later** — a **prorated charge** for the new seat, for the rest of
     the term.
   - **Remove a member** — a **prorated credit** on the next invoice — **no mid-term
     refund**.
 
-  Then a short `note` (Stripe proration; "prefer monthly? switch at Checkout for
-  $30/mo") and the CTA **"Continue to Checkout — $240/yr"** + Cancel. (Implementation
+  Then a short `note` (seats follow membership automatically via Stripe proration;
+  pick Monthly/Annual above before continuing — the old "switch at Checkout" line is
+  obsolete now the toggle is in-page) and the **cadence-aware CTA** (**"Continue to
+  Checkout — $240/yr"** annual / **"— $30/mo"** monthly) + Cancel. (Implementation
   note: a `.note` is `display:flex`; its text MUST be wrapped in ONE `<span>` — bare
-  text + inline `<b>` become separate flex items and shred into narrow columns.)
+  text + inline `<b>` become separate flex items and shred into narrow columns. The
+  cadence variants use bare `.cad-a` / `.cad-m` hooks — the visibility rule keys on
+  those classes, not on `.cad`, so they stay plain inline spans, no `.price`
+  inline-flex.)
 
 - **(b) AFTER — the live Motir seats subscription (full-width).** The **scaled
   counterpart to panel 2's free-Motir line** — same `Card` grammar as the Motir-AI
@@ -399,11 +472,21 @@ workaround.
 - **`Button`** — primary (Upgrade / Change plan / Resubscribe), secondary (Manage
   plan / Portal / Retry / Contact owner), ghost (Maybe later / Update). Heights
   `--height-btn-md` / `--height-btn-sm`; padding `--spacing-btn-x[-sm]`.
-- **`Segmented`** — the **Monthly / Annual** cadence toggle (panel 5): the shipped
-  `components/ui/Segmented.tsx` grammar — an `--el-surface` track (`--radius-btn`,
-  2px inset), each option `calc(--radius-btn - 2px)` so it nests at any style, the
-  active option `--el-page-bg` + `--shadow-subtle`. A `aria-pressed` group; the
-  Annual option carries the `Save ~33%` badge. Reuse it — do not hand-roll.
+- **`Segmented`** — the **Monthly / Annual** cadence toggle, now on **BOTH** the AI
+  storefront (panel 5) **and the seat upgrade screen (panel 6a — 8.1.15)**: the
+  shipped `components/ui/Segmented.tsx` grammar — an `--el-surface` track
+  (`--radius-btn`, 2px inset), each option `calc(--radius-btn - 2px)` so it nests at
+  any style, the active option `--el-page-bg` + `--shadow-subtle`. A `aria-pressed`
+  group; the Annual option carries the `Save ~33%` badge. Reuse it — do not
+  hand-roll. (Both screens hold a local `BillingCadence` state defaulting to
+  `'annual'`; `SeatsView` gains it, mirroring `PlansView`.)
+- **Plan-card use-case + cumulative-feature lines (panel 5 — token-only, NO new
+  primitive)** — the per-tier `.use` line is `--el-text-secondary` at the card top
+  (a `min-height` aligns the price rows); the cumulative `.flead` lead
+  ("Everything in {prev}, plus") is a flush-left `--el-text-secondary` caption (its
+  `i-check` glyph hidden) introducing the `i-check` (`--el-success`) incremental
+  bullets. Both are plain styled text inside the existing `.plan` card — no new
+  component.
 - **`EmptyState` / `ErrorState` family** — the member gate (4b), the tier-gate +
   member paywall (6b/6c), empty/error (7a/7c).
 - **`Skeleton`** — the loading panel (7b).
