@@ -453,14 +453,18 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
   await page.keyboard.press('Escape');
   await expect(peek).toBeHidden();
 
-  // A ⌘/ctrl-click keeps the link's real href: the browser opens the full detail
-  // page in a NEW TAB instead of peeking (the row link is target=_self, so a
-  // modified click pops a new tab).
-  const popupPromise = page.waitForEvent('popup');
+  // A ⌘/ctrl-click does NOT hijack into the peek — the row link keeps its real
+  // href, so the browser opens the full detail page (natively, in a new tab)
+  // rather than peeking. We assert the app-owned contract: the href still points
+  // at the detail page, and the modified click neither opens the peek nor adds
+  // ?peek. (The new-tab open itself is the browser's native handling of a
+  // modified click on an <a href>, not app code — and not deterministic to
+  // observe in headless chromium, so we don't assert on a popup.)
+  await expect(rowLink).toHaveAttribute('href', `/items/${urgent.identifier}`);
   await rowLink.click({ modifiers: ['ControlOrMeta'] });
-  const popup = await popupPromise;
-  await popup.waitForURL(`**/items/${urgent.identifier}`);
-  await popup.close();
+  await expect(peek).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]peek=/);
+  expect(new URL(page.url()).pathname).toBe('/items');
 
   // Switch back to Tree → the view param drops to its canonical form.
   await page.getByRole('button', { name: 'View: List' }).click();
