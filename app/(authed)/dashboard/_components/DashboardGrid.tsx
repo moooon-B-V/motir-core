@@ -533,7 +533,7 @@ function EditColumn({ column, children }: { column: number; children: React.Reac
       data-testid={`dashboard-column-${column}`}
       className={`flex min-h-32 flex-col gap-4 rounded-(--radius-card) p-1 ${
         isOver
-          ? 'bg-(--el-tint-lavender) outline-2 -outline-offset-2 outline-dashed outline-(--el-accent)'
+          ? 'bg-(--el-droptarget-bg) outline-2 -outline-offset-2 outline-dashed outline-(--el-board-column-accent)'
           : ''
       }`}
     >

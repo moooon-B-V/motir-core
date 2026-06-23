@@ -140,6 +140,49 @@ const ICON_TEXT_SURFACE_GROUPS: { heading: string; tokens: [string, string][] }[
   },
 ];
 
+// Interaction / agile surfaces (MOTIR-1276 · 1266.5) — the dedicated --el-*
+// families that un-collapsed the dnd / selection / overdue / accent meanings
+// off the shared --el-tint-lavender / --el-accent pool. Each row is a
+// [token, label]; the specimen renders the resolved hue so a palette swap is
+// visible here. design/design-system/design-notes.md §G.
+const INTERACTION_AGILE_GROUPS: { heading: string; tokens: [string, string][] }[] = [
+  {
+    heading: 'Drag · drop · selection',
+    tokens: [
+      ['--el-selection-bg', 'selection bg'],
+      ['--el-droptarget-bg', 'drop-target bg'],
+      ['--el-board-column-accent', 'column accent'],
+    ],
+  },
+  {
+    heading: 'Due dates',
+    tokens: [
+      ['--el-overdue', 'overdue'],
+      ['--el-due-soon', 'due soon'],
+    ],
+  },
+  {
+    heading: 'Agile accents',
+    tokens: [
+      ['--el-sprint-accent', 'sprint accent'],
+      ['--el-epic-accent', 'epic accent'],
+      ['--el-archived-pill-bg', 'archived pill bg'],
+      ['--el-archived-pill-text', 'archived pill text'],
+    ],
+  },
+  {
+    heading: 'Tab nav · auth wash · card icon · vote',
+    tokens: [
+      ['--el-tabnav-track', 'tabnav track'],
+      ['--el-tabnav-active', 'tabnav active'],
+      ['--el-auth-wash', 'auth wash'],
+      ['--el-card-icon-bg', 'card-icon bg'],
+      ['--el-card-icon-fg', 'card-icon fg'],
+      ['--el-vote-bg', 'vote bg'],
+    ],
+  },
+];
+
 /**
  * /tokens — the design system reference route.
  *
@@ -746,6 +789,58 @@ export default function TokensPage() {
                 >
                   {/* Decorative resolved-value chip; the token name is visible
                       text below, so no aria-label (axe aria-prohibited-attr). */}
+                  <div
+                    aria-hidden
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      flex: 'none',
+                      borderRadius: 'var(--radius-badge)',
+                      backgroundColor: `var(${token})`,
+                      border: '1px solid var(--el-border)',
+                    }}
+                  />
+                  <div className="font-mono text-xs">
+                    <div style={{ color: 'var(--el-page-text)' }}>{label}</div>
+                    <div style={{ color: 'var(--el-page-text-muted)' }}>{token}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </Section>
+
+      <Section title="Interaction / agile (--el-selection-bg / --el-droptarget-bg / --el-overdue / --el-sprint-accent / --el-tabnav-* / --el-card-icon-* …)">
+        {INTERACTION_AGILE_GROUPS.map((group) => (
+          <div key={group.heading} style={{ marginBottom: 'var(--spacing-md)' }}>
+            <div
+              className="font-mono text-xs"
+              style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-sm)' }}
+            >
+              {group.heading}
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                gap: 'var(--spacing-md)',
+              }}
+            >
+              {group.tokens.map(([token, label]) => (
+                <div
+                  key={token}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--spacing-sm)',
+                    padding: 'var(--spacing-sm)',
+                    border: '1px solid var(--el-border)',
+                    borderRadius: 'var(--radius-card)',
+                  }}
+                >
+                  {/* Decorative resolved-hue chip; the token name is visible text
+                      below, so no aria-label (axe aria-prohibited-attr). */}
                   <div
                     aria-hidden
                     style={{

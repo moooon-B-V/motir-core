@@ -56,7 +56,7 @@ export function Segmented<T extends string>({
       role="group"
       aria-label={label}
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) p-0.5',
+        'inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5',
         className,
       )}
     >
@@ -83,7 +83,7 @@ export function Segmented<T extends string>({
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active
-                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-accent-on-surface) [&_.seg-trail]:text-(--el-accent-on-surface)'
+                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-tabnav-active) [&_.seg-trail]:text-(--el-tabnav-active)'
                 : 'text-(--el-text-secondary) hover:text-(--el-text) [&_.seg-ic]:text-(--el-text-faint) [&_.seg-trail]:text-(--el-text-faint)',
             )}
           >

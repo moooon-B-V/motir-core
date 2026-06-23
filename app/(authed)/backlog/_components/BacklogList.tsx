@@ -248,7 +248,7 @@ export function BacklogRows({
   }, [hasMore, loadingMore, loadMore]);
 
   const dropClass = isOver
-    ? 'rounded-(--radius-card) outline outline-2 outline-(--el-accent) bg-(--el-tint-lavender)'
+    ? 'rounded-(--radius-card) outline outline-2 outline-(--el-board-column-accent) bg-(--el-droptarget-bg)'
     : '';
 
   if (status === 'loading') {

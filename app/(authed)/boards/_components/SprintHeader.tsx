@@ -57,7 +57,7 @@ function PointStat({
   return (
     <div
       className={`flex min-w-[64px] flex-col items-center gap-0.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) ${
-        emphasis ? 'bg-(--el-tint-lavender)' : 'bg-(--el-muted)'
+        emphasis ? 'bg-(--el-sprint-accent)' : 'bg-(--el-muted)'
       }`}
     >
       <span className="text-lg leading-none font-bold tabular-nums text-(--el-text-strong)">

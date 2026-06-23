@@ -58,7 +58,7 @@ export async function PublicTabNav({
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-(--el-border) px-(--spacing-card-padding) py-2.5">
       <nav
         aria-label={t('viewsLabel')}
-        className="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) p-0.5"
+        className="inline-flex items-center gap-0.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-tabnav-track) p-0.5"
       >
         {tabs.map((tab) => {
           const on = tab.key === active;
@@ -71,7 +71,7 @@ export async function PublicTabNav({
                 'inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors',
                 'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
                 on
-                  ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_svg]:text-(--el-accent-on-surface)'
+                  ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_svg]:text-(--el-tabnav-active)'
                   : 'text-(--el-text-secondary) hover:text-(--el-text) [&_svg]:text-(--el-text-faint)',
               )}
             >

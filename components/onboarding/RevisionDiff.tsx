@@ -18,8 +18,9 @@ import {
 // human-readable path into the doc + the before→after value. An empty / malformed
 // diff renders the "nothing changed" line (a revision can touch nothing).
 //
-// Purely presentational. Colour routes through `--el-*` tints with
-// `--el-text-strong` (AA per finding #35); shape through element-semantic tokens.
+// Purely presentational. Colour routes through the dedicated `--el-diff-*`
+// element tokens with `--el-text-strong` (AA per finding #35); shape through
+// element-semantic tokens.
 
 export interface RevisionDiffProps {
   /** The opaque per-revision diff from the read seam (`PreplanRevisionDTO.diff`). */
@@ -47,9 +48,9 @@ const KIND_STYLE: Record<
   DocDiffKind,
   { tint: string; labelKey: 'diffAdded' | 'diffRemoved' | 'diffChanged' }
 > = {
-  added: { tint: 'bg-(--el-tint-mint)', labelKey: 'diffAdded' },
-  removed: { tint: 'bg-(--el-tint-rose)', labelKey: 'diffRemoved' },
-  changed: { tint: 'bg-(--el-tint-sky)', labelKey: 'diffChanged' },
+  added: { tint: 'bg-(--el-diff-added)', labelKey: 'diffAdded' },
+  removed: { tint: 'bg-(--el-diff-removed)', labelKey: 'diffRemoved' },
+  changed: { tint: 'bg-(--el-diff-moved)', labelKey: 'diffChanged' },
 };
 
 function KindGlyph({ kind }: { kind: DocDiffKind }) {
