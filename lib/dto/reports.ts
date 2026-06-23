@@ -6,9 +6,9 @@ import type { EstimationStatisticDto } from '@/lib/dto/estimation';
 // Story 6.3 (dashboards & reports) reuses these shapes.
 //
 // This file is the shared `reports` DTO home: Subtask 4.6.4 added the cross-sprint
-// VELOCITY read (`VelocityDto` / `VelocitySprintDto`); Subtask 4.6.3 added the
-// in-sprint BURNDOWN read (`BurndownSeriesDto`). The two are distinct reads
-// sharing one module.
+// VELOCITY read (`VelocityDto` / `VelocitySprintDto`); Subtask 4.6.3's in-sprint
+// burndown read was reframed by Story 8.14 into the LIVE-scope CYCLE GRAPH
+// (`CycleGraphDto`). The two are distinct reads sharing one module.
 
 /**
  * One completed sprint's velocity datum — a single category on the velocity
@@ -48,83 +48,20 @@ export interface VelocityDto {
 }
 
 /**
- * Which statistic the burndown series is measured in. The burndown supports
- * only `story_points` (the `committedPoints` baseline + the `storyPoints`
- * per-issue deltas) and `issue_count` (the `committedIssueCount` baseline +
- * 1-per-issue deltas) — the two figures `startSprint` (4.4.2) actually
- * snapshots. A project configured for `time_estimate`, or a sprint with no
- * committed point data (wholly unestimated), degrades to the `issue_count`
- * series (there is no committed-time baseline to anchor a time burndown — a
- * future refinement when a committed-minutes snapshot lands). So the wire form
- * narrows the three-value `EstimationStatisticDto` to the two the chart can
- * draw — the UI labels the Y axis ("points" vs "issues") off this.
+ * Which statistic the in-sprint chart (the cycle graph; aliased as
+ * `CycleGraphStatisticDto`) is measured in. Supports `story_points` and
+ * `issue_count`. A project configured for `time_estimate`, or a sprint with no
+ * point work (wholly unestimated), degrades to the `issue_count` series (there
+ * is no committed-time baseline — a future refinement when committed-minutes
+ * lands). So the wire form narrows the three-value `EstimationStatisticDto` to
+ * the two the chart can draw — the UI labels the Y axis ("points" vs "issues")
+ * off this.
  */
 export type BurndownStatisticDto = 'story_points' | 'issue_count';
 
-/**
- * One calendar day on the burndown's X axis. `guideline` is the ideal-line value
- * for the day (a straight descent from the committed baseline at the sprint's
- * first day to 0 at its last). `remaining` is the ACTUAL remaining reconstructed
- * from the 1.4.6 revision trail — `null` for days AFTER the actual cutoff (the
- * future days of a live sprint, or days past `completedAt`), so the chart draws
- * the actual line only up to "today" / completion and leaves the rest to the
- * guideline.
- */
-export interface BurndownDayDto {
-  /** UTC calendar day, `YYYY-MM-DD`. */
-  date: string;
-  guideline: number;
-  remaining: number | null;
-}
-
-/**
- * A mid-sprint scope change the chart marks on the actual line — a day on which
- * issues were added to (`delta > 0`) or removed from (`delta < 0`) the sprint
- * after it started, measured in the series statistic. The burndown's actual line
- * RISES on a positive-delta day and DROPS on a negative one (distinct from a
- * completion drop). One entry per day that had a net scope change.
- */
-export interface BurndownScopeChangeDto {
-  /** UTC calendar day, `YYYY-MM-DD`. */
-  date: string;
-  delta: number;
-}
-
-/**
- * The in-sprint burndown read (`reportsService.getBurndownSeries`). A pure read
- * over data Stories 4.1 / 4.3 / 4.4 / 1.4.6 already ship — NO new write model,
- * NO migration.
- *
- * `committed` is the t=0 baseline (the immutable `startSprint` snapshot in the
- * `statistic`); `days` is one row per calendar day from `startDate` to the axis
- * end (the guideline spans them all; the actual line stops at the cutoff with
- * `null`s after); `scopeChanges` are the mid-sprint add/remove markers. The
- * end-of-actual value reconciles with `estimationService.rollupForSprint(...)
- * .remaining` (4.3.3 — the SAME `category = 'done'` predicate), so the chart and
- * the numeric remaining the scrum header / sprint report show always agree.
- *
- * Degraded / edge states are first-class (never `NaN` / a broken axis): a wholly
- * unestimated sprint comes back as the `issue_count` series; an empty sprint as a
- * flat guideline at 0. A planned (not-started) sprint is rejected upstream
- * (`SprintNotStartedError`) — it has no window to draw.
- */
-export interface BurndownSeriesDto {
-  sprintId: string;
-  /** `active` (actual drawn to "today") or `complete` (drawn to `completedAt`). */
-  state: 'active' | 'complete';
-  statistic: BurndownStatisticDto;
-  committed: number;
-  /** Sprint window start (ISO 8601). */
-  startDate: string;
-  /** Burndown axis end (ISO 8601) — the planned `endDate`, else `completedAt`/now. */
-  endDate: string;
-  days: BurndownDayDto[];
-  scopeChanges: BurndownScopeChangeDto[];
-}
-
 // ---------------------------------------------------------------------------
 // Story 8.14 · Subtask 8.14.2 — the Linear-style sprint CYCLE GRAPH read
-// (`reportsService.getSprintCycleGraph`). REFRAMES the burndown (above) into
+// (`reportsService.getSprintCycleGraph`). REFRAMES the old in-sprint burndown into
 // Linear's cycle-graph model (linear.app/docs/cycle-graph): a burn-UP of LIVE
 // scope vs completed, derived LIVE from the 1.4.6 revision trail so it no longer
 // depends on the fragile immutable `committedPoints` snapshot (MOTIR-1285/1288).
