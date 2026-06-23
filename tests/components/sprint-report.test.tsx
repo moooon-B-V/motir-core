@@ -5,7 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { SprintReport } from '@/app/(authed)/backlog/_components/SprintReport';
 import type { StatusByKey } from '@/app/(authed)/backlog/_components/backlogShared';
 import type { SprintDto, SprintReportDto } from '@/lib/dto/sprints';
-import type { BurndownSeriesDto, VelocityDto } from '@/lib/dto/reports';
+import type { CycleGraphDto, VelocityDto } from '@/lib/dto/reports';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { RankedIssuePageDto } from '@/lib/dto/backlog';
 
@@ -236,69 +236,57 @@ describe('SprintReport velocity (4.6.6)', () => {
   });
 });
 
-// The burndown chart in the report's analytics row (Story 4.6 · Subtask 4.6.5) —
-// the 4.6.2 LineChart bound to the 4.6.3 `getBurndownSeries` read, filling the
-// seam 4.4.6 reserved per design/reports/charts.mock.html panels 1 + 5. The
-// full form: dashed guideline + stepped actual, the committed-baseline and
-// end-point annotations, the scope-change diamond, and the data-table fallback
-// (finding #35). Deep state coverage (unestimated / empty / active) is 4.6.7's.
+// The CYCLE GRAPH in the report's analytics row (Story 4.6 · Subtask 4.6.5;
+// reframed to the Linear cycle graph by Story 8.14 · 8.14.6) — the LineChart
+// bound to the 8.14.4 `getSprintCycleGraph` read, filling the seam 4.4.6
+// reserved per design/reports/cycle-graph.mock.html. The full form: the four
+// series (scope / completed / started / target), the scope-creep chip, and the
+// data-table fallback (finding #35).
 
-function burndown(over: Partial<BurndownSeriesDto> = {}): BurndownSeriesDto {
+function cycle(over: Partial<CycleGraphDto> = {}): CycleGraphDto {
   return {
     sprintId: 'sp6',
     state: 'complete',
     statistic: 'story_points',
-    committed: 40,
+    committedAtStart: 36,
+    scopeCreepPct: 4 / 36, // ≈ 0.111 → "11%"
     startDate: '2026-06-09T00:00:00.000Z',
     endDate: '2026-06-13T00:00:00.000Z',
     days: [
-      { date: '2026-06-09', guideline: 40, remaining: 40 },
-      { date: '2026-06-10', guideline: 30, remaining: 32 },
-      { date: '2026-06-11', guideline: 20, remaining: 36 },
-      { date: '2026-06-12', guideline: 10, remaining: 24 },
-      { date: '2026-06-13', guideline: 0, remaining: 12 },
+      { date: '2026-06-09', scope: 36, completed: 0, started: 8, target: 36 },
+      { date: '2026-06-10', scope: 36, completed: 8, started: 16, target: 27 },
+      { date: '2026-06-11', scope: 40, completed: 16, started: 24, target: 18 },
+      { date: '2026-06-12', scope: 40, completed: 24, started: 32, target: 9 },
+      { date: '2026-06-13', scope: 40, completed: 30, started: 36, target: 0 },
     ],
-    scopeChanges: [{ date: '2026-06-11', delta: 4 }],
     ...over,
   };
 }
 
-describe('SprintReport burndown (4.6.5)', () => {
-  it('renders the completed-sprint burndown — legend, annotations, and the data-table fallback', () => {
+describe('SprintReport cycle graph (8.14.6)', () => {
+  it('renders the completed-sprint cycle graph — the four series, scope-creep, and the data-table fallback', () => {
     render(
       <SprintReport
         report={report()}
         sprint={sprint()}
         statusByKey={statusByKey}
-        burndown={burndown()}
+        cycle={cycle()}
       />,
     );
 
-    // The TEXT legend names every series (finding #35) — the guideline, the
-    // actual remaining, and the scope marker.
-    // (each appears in the legend AND as a data-table column header)
-    expect(screen.getAllByText('Guideline').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('Remaining').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Scope added')).toBeTruthy();
-    // The muted chart-sub line (window · state · committed) — the velocity
-    // chart has its own sub-line; without this the side-by-side plots
-    // misaligned vertically (bug-sprint-report-burndown-missing-chart-sub).
-    // Assert the TZ-independent tail (the window dates depend on the runner TZ).
-    expect(screen.getByText(/· completed · 40 pts committed/)).toBeTruthy();
-    // The committed baseline + end-point annotations and the scope label.
-    expect(screen.getByText('40 committed')).toBeTruthy();
-    expect(screen.getByText('12 left')).toBeTruthy();
-    expect(screen.getByText('+4 scope')).toBeTruthy();
-    // The data-table fallback re-expresses the series as numbers, with the
-    // start + scope-change events.
-    expect(screen.getByText(/story points remaining by day/i)).toBeTruthy();
-    const tables = screen.getAllByRole('table');
-    const burndownTable = tables.find((el) =>
-      within(el).queryByText(/Sprint started · 40 committed/),
-    )!;
-    expect(burndownTable).toBeTruthy();
-    expect(within(burndownTable).getByText('+4 scope change')).toBeTruthy();
-    expect(within(burndownTable).getByText('Sprint completed')).toBeTruthy();
+    // The TEXT legend names every series (finding #35) — each appears in the
+    // legend AND as a data-table column header.
+    expect(screen.getAllByText('Scope').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Started').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Target').length).toBeGreaterThanOrEqual(2);
+    // The scope-creep chip (4 of 36 → 11%).
+    expect(screen.getByText(/11% scope creep/i)).toBeTruthy();
+    // The muted chart-sub line (window · state · scope) — assert the
+    // TZ-independent tail (the window dates depend on the runner TZ).
+    expect(screen.getByText(/· completed · 40 pts scope/)).toBeTruthy();
+    // The data-table fallback re-expresses the series as numbers.
+    expect(screen.getByText(/cumulative story points by day/i)).toBeTruthy();
     expect(screen.queryByText('NaN')).toBeNull();
     // Server-fed: no client fetch, so no loading skeleton.
     expect(screen.queryByRole('status', { name: /Loading the burndown chart/ })).toBeNull();

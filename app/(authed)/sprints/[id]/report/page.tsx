@@ -45,19 +45,19 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
   if (!sprint) notFound();
 
   // The report's analytics reads, fetched server-side (loading/error ride the
-  // page scaffold — Server Component): the velocity (4.6.4) and the
-  // completed-sprint burndown (4.6.3) the Story-4.6 seam presents together
-  // (Subtasks 4.6.5 + 4.6.6). Both are bounded reads. A never-started sprint
-  // has no burndown window (`SprintNotStartedError`) — the slot then falls back
-  // to its client fetch and shows the chart error state.
-  const [report, workflow, velocity, burndown] = await Promise.all([
+  // page scaffold — Server Component): the velocity (4.6.4) and the sprint CYCLE
+  // GRAPH (8.14.4) the Story-4.6 seam presents together (Subtasks 4.6.5 + 4.6.6).
+  // Both are bounded reads. A never-started sprint has no window
+  // (`SprintNotStartedError`) — the slot then falls back to its client fetch and
+  // shows the chart error state.
+  const [report, workflow, velocity, cycle] = await Promise.all([
     sprintsService.getSprintReport(id, {}, accessCtx).catch((err) => {
       if (err instanceof SprintNotFoundError) return null;
       throw err;
     }),
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
     reportsService.getVelocity({ projectId: ctx.projectId }, accessCtx),
-    reportsService.getBurndownSeries(id, accessCtx).catch((err) => {
+    reportsService.getSprintCycleGraph(id, accessCtx).catch((err) => {
       if (err instanceof SprintNotStartedError) return undefined;
       throw err;
     }),
@@ -86,7 +86,7 @@ export default async function SprintReportPage({ params }: { params: Promise<{ i
         sprint={sprint}
         statusByKey={statusByKey}
         velocity={velocity}
-        burndown={burndown}
+        cycle={cycle}
       />
     </div>
   );
