@@ -14,7 +14,7 @@ import {
   type SeatQuantityResult,
 } from '@/lib/ai/motirAiClient';
 import { isCloudBilling } from '@/lib/billing/availability';
-import { BILLING_CATALOG, isKnownCheckoutPrice } from '@/lib/billing/catalog';
+import { BILLING_CATALOG, isKnownCheckoutPrice, type BillingCadence } from '@/lib/billing/catalog';
 import {
   BillingForbiddenError,
   BillingNotAvailableError,
@@ -22,7 +22,7 @@ import {
 } from '@/lib/billing/errors';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
-import type { BillingSessionDTO, BillingStatusDTO } from '@/lib/dto/billing';
+import type { BillingSessionDTO, BillingStatusDTO, SeatSummaryDTO } from '@/lib/dto/billing';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 
 // A paid Motir AI plan = a live Stripe subscription that grants the monthly
@@ -110,6 +110,50 @@ export const billingService = {
       motir: { scaledTrackerSubscription },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       catalog: BILLING_CATALOG,
+    };
+  },
+
+  /**
+   * The members-page SEAT summary (Story 8.1.14) — the in-context seat/billing
+   * layer the org Members admin renders for a SCALED org. Returns `null` (→ NO
+   * seat UI, the unchanged members page) for the three gated-out cases:
+   *   • a self-host build (`MOTIR_CLOUD` off — ADR §6),
+   *   • a non-owner/admin actor (the no-leak default; the members page already
+   *     forbids non-admins, so this is belt-and-braces),
+   *   • a free or `canceled` org (no scaled-tracker subscription).
+   * When scaled+`active`/`past_due`, returns the pricing (from `BILLING_CATALOG`),
+   * cadence (from the `tracker_*` price id), renewal (`currentPeriodEnd`) and the
+   * owner-only `canManageBilling` flag. This is a pure READ — it never writes
+   * Stripe (8.1.12 owns the seat-quantity sync); the seat COUNT is the membership
+   * count, read client-side from the roster total.
+   */
+  async getSeatSummary(input: OrgActorInput): Promise<SeatSummaryDTO | null> {
+    if (!isCloudBilling()) return null;
+
+    const access = await organizationsService.resolveOrgAccess(
+      input.actorUserId,
+      input.organizationId,
+    );
+    if (!access.isOrgAdmin) return null;
+
+    const org = await withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      (tx) => organizationRepository.findByIdInTx(input.organizationId, tx),
+    );
+    const sub = (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
+    // Free (null) or a wound-down (`canceled`) subscription → the page is unchanged.
+    if (!sub || sub.status === 'canceled') return null;
+
+    const cadence: BillingCadence = sub.priceId === 'tracker_annual' ? 'annual' : 'monthly';
+    const seatPrices = BILLING_CATALOG.seatPlan.prices;
+    return {
+      status: sub.status,
+      cadence,
+      perSeatUsd: seatPrices[cadence].amountUsd,
+      monthlyPerSeatUsd: seatPrices.monthly.amountUsd,
+      annualPerSeatUsd: seatPrices.annual.amountUsd,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      canManageBilling: isOrgOwnerRole(access.role),
     };
   },
 

@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server';
 import { Lock } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { billingService } from '@/lib/services/billingService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -62,19 +63,31 @@ export default async function OrganizationMembersPage() {
     );
   }
 
-  const initialPage = await organizationsService.listMembers({
-    organizationId: org.id,
-    actorUserId: session.user.id,
-    limit: ORG_ROSTER_PAGE_SIZE,
-  });
+  // The roster + the in-context seat/billing state (Story 8.1.14). `seat` is
+  // `null` for a self-host build, a free org, or a non-owner/admin — the members
+  // page then renders unchanged. Cloud + scaled → the seat band + cost notes.
+  const [initialPage, seat] = await Promise.all([
+    organizationsService.listMembers({
+      organizationId: org.id,
+      actorUserId: session.user.id,
+      limit: ORG_ROSTER_PAGE_SIZE,
+    }),
+    billingService.getSeatSummary({ organizationId: org.id, actorUserId: session.user.id }),
+  ]);
+
+  // Panel-6 (design/org-admin members-billing): a scaled-org ADMIN (manages
+  // membership, does NOT own the seat plan) gets the billing-owned-by-an-owner
+  // subtitle; an owner / free org keeps the standard one.
+  const subtitle =
+    seat && !seat.canManageBilling
+      ? t('seat.subtitleAdmin', { org: org.name })
+      : t('members.subtitle', { org: org.name });
 
   return (
     <div className="mx-auto flex max-w-[48rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('members.title')}</h1>
-        <p className="text-(--el-text-muted) font-sans text-sm">
-          {t('members.subtitle', { org: org.name })}
-        </p>
+        <p className="text-(--el-text-muted) font-sans text-sm">{subtitle}</p>
       </header>
 
       <OrgMembersClient
@@ -82,6 +95,7 @@ export default async function OrganizationMembersPage() {
         orgName={org.name}
         currentUserId={session.user.id}
         initialPage={initialPage}
+        seat={seat}
       />
     </div>
   );
