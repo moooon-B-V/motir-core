@@ -2993,7 +2993,7 @@
       "ariaLabel": "组织菜单",
       "settings": "设置",
       "members": "成员",
-      "billing": "账单与用量",
+      "billing": "账单与套餐",
       "comingSoon": "即将推出",
       "newWorkspace": "新建工作区",
       "switchOrg": "切换组织",
@@ -3593,6 +3593,167 @@
       "errorDescription": "获取该组织用量时出错。数据暂时不可用 —— 你的额度是安全的。",
       "loading": "正在加载用量…"
     }
+  },
+  "billing": {
+    "breadcrumb": "组织 · {org} · 账单与套餐",
+    "title": "账单与套餐",
+    "subtitle": "你的两个 Motir 产品分别独立计费。Motir 在超出免费额度上限前一直免费；Motir AI 是按组织购买的额度套餐。",
+    "card": {
+      "title": "账单与套餐",
+      "subtitle": "你的 Motir 套餐、Motir AI 套餐、支付方式与发票。",
+      "open": "打开",
+      "summaryMotir": "Motir · {state}",
+      "summaryAi": "Motir AI · {tier}"
+    },
+    "states": {
+      "loading": "正在加载账单…",
+      "errorTitle": "无法加载账单",
+      "errorDescription": "获取该组织的套餐信息时出错。你的订阅与额度都安全无虞 —— 出错的只是此视图。请稍后重试。",
+      "retry": "重试",
+      "checkoutPending": "正在完成变更…新套餐会在 Stripe 确认后显示（以 webhook 为准）。",
+      "checkoutCanceled": "结账已取消 —— 你的套餐未做任何变更。"
+    },
+    "member": {
+      "gateTitle": "账单由你的组织所有者管理",
+      "gateDescription": "{org} 组织的套餐与支付仅对所有者和管理员可见。如需变更套餐或购买 AI 额度，请联系组织所有者。",
+      "contactOwner": "联系所有者"
+    },
+    "admin": {
+      "viewOnly": "仅可查看",
+      "lockNote": "你可以查看套餐、用量与发票。变更套餐、支付方式或取消订阅仅限组织所有者操作。"
+    },
+    "motir": {
+      "name": "Motir",
+      "tagline": "项目管理工具 —— 对你的团队免费，仅在规模扩大时付费。",
+      "free": "免费",
+      "scaled": "已扩容",
+      "freeExplainer": "你正在使用免费版 Motir —— 成员数不限，且在下方免费额度上限之内。仅当组织超出某项上限时，才会按每席位每月 ${seat} 收费。",
+      "capWorkItems": "工作项",
+      "capProjects": "项目",
+      "capStorage": "存储",
+      "capWorkItemsValue": "上限 {limit}",
+      "capProjectsValue": "上限 {limit}",
+      "capStorageValue": "上限 {limit} GB",
+      "seatPreview": "扩容按每位成员 1 个席位计费 —— 今天共 {n} 位",
+      "seatTotalMo": "{n} × ${seat} = ${total} / 月",
+      "upgrade": "升级 Motir",
+      "seatsFollow": "席位随成员变动 · 自动按比例计费",
+      "manageSeats": "管理席位"
+    },
+    "ai": {
+      "name": "Motir AI",
+      "tagline": "规划与托管智能体 —— 按组织的每月额度池。",
+      "creditsPerMo": "{n} 额度 / 月",
+      "planFee": "套餐费用",
+      "feePerMo": "${n} / 月",
+      "allotmentThisMonth": "本月配额",
+      "creditsLeft": "{total} 额度中还剩 {left}",
+      "creditsAvailable": "可用额度 {n}",
+      "renews": "{date} 续订",
+      "creditsNote": "额度是用量配额，不是账单 —— 每次规划运行按其消耗的 token 扣减。",
+      "changePlan": "变更套餐",
+      "managePlan": "管理套餐与支付",
+      "viewUsage": "查看用量与费用",
+      "noPlanYet": "暂无付费 AI 套餐 —— 正在使用一次性免费试用。",
+      "choosePlan": "选择 Motir AI 套餐"
+    },
+    "payment": {
+      "title": "支付与发票",
+      "portal": "Stripe 客户门户",
+      "note": "支付方式、发票、税号与取消订阅均在 Stripe 安全客户门户中管理。结账时自动计税。"
+    },
+    "status": {
+      "active": "生效中",
+      "trialing": "免费试用",
+      "past_due": "逾期未付",
+      "canceled": "已取消",
+      "none": "免费"
+    },
+    "pastDue": {
+      "banner": "我们未能成功扣款。在约 2 周的重试期内，你的 Motir AI 套餐仍保持生效。请更新支付方式，以免降回免费配额。",
+      "cta": "更新支付方式"
+    },
+    "trial": {
+      "label": "一次性试用额度",
+      "note": "你的试用额度仅发放一次，不会刷新。请选择按月的 Motir AI 套餐，以便额度用尽后继续规划。",
+      "cta": "选择 Motir AI 套餐"
+    },
+    "canceled": {
+      "banner": "你的套餐已结束。组织已降回免费配额 —— 每月额度与加购额度均已关闭。没有任何数据被删除；你的方案、工作项与用量历史都完好无损。",
+      "cta": "重新订阅"
+    },
+    "plans": {
+      "breadcrumb": "组织 · {org} · Motir AI",
+      "title": "Motir AI —— 套餐与订阅",
+      "subtitle": "管理你组织的 AI 套餐 —— 规划与托管智能体。与 Motir 席位分开计费，因此本页仅含 AI。",
+      "back": "返回账单",
+      "currentStrip": "{n} 额度 / 月 · 剩余 {left} · {date} 续订",
+      "managePlan": "管理套餐与支付",
+      "cadenceLabel": "计费周期",
+      "monthly": "按月",
+      "annual": "按年",
+      "saveBadge": "约省 33%",
+      "chooseTitle": "选择你的套餐",
+      "chooseSub": "按组织的每月额度池，与席位分开计费。任何组织都可购买 —— 无需付费的 Motir 席位套餐。Pro 是推荐的锚定套餐。",
+      "current": "当前",
+      "recommended": "推荐",
+      "trialUsed": "试用已用",
+      "creditsAllotment": "{n} 额度 / 月",
+      "perMoEquiv": "${n} / 月",
+      "annualSub": "按年计费 · ${yr} / 年",
+      "annualSave": "每年省 ${n}",
+      "monthlySub": "${yr} / 年 · 改按年再省 ${n}",
+      "freePrice": "免费",
+      "customPrice": "定制",
+      "once": "一次性",
+      "ctaChoose": "选择 {plan}",
+      "ctaUpgrade": "升级到 {plan}",
+      "ctaContactSales": "联系销售",
+      "ctaCurrent": "当前套餐",
+      "ctaTrialUsed": "试用已用",
+      "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。"
+    },
+    "topup": {
+      "title": "加购额度",
+      "subtitle": "在套餐之外的一次性购买 —— 立即计入余额，在每月配额用尽后使用。",
+      "balance": "余额 {n} 额度",
+      "bundleCredits": "{n} 额度",
+      "bundlePrice": "${n}",
+      "custom": "定制",
+      "perUnit": "× {n}",
+      "buy": "购买 {n} 额度 —— ${total}",
+      "rate": "每 {credits} 额度 ${unit} · 一次性 · 结账时计税。额度是配额而非货币 —— 这是你向 Stripe 支付的价格。",
+      "gate": "加购额度需付费 AI 套餐；免费试用无法加购（请先在上方选择套餐）。与所有账单操作一样，仅限所有者。"
+    },
+    "seats": {
+      "breadcrumb": "组织 · {org} · Motir",
+      "title": "扩容 Motir",
+      "subtitle": "每位组织成员 1 个席位 —— 与 Jira、Linear 一致。",
+      "back": "返回账单",
+      "membersToSeats": "{n} 位成员 → {n} 个席位",
+      "annualTotal": "{n} × ${seat}/年 = ${total} / 年",
+      "termsTitle": "收费内容与时点",
+      "termBilling": "计费",
+      "termBillingValue": "按年，${yr}/年（约合 ${mo}/月，默认）。",
+      "termDueToday": "今日应付",
+      "termDueTodayValue": "${yr}，按比例计至续订日（本期剩余天数相应减免）。",
+      "termAddMember": "之后新增成员",
+      "termAddMemberValue": "为新席位按本期剩余时间产生一笔按比例计费。",
+      "termRemoveMember": "移除成员",
+      "termRemoveMemberValue": "在下一张发票上按比例抵扣 —— 期中不退款。",
+      "prorationNote": "通过 Stripe 按比例立即扣费。偏好按月？可在结账时切换为 ${mTotal} / 月。",
+      "continueCheckout": "继续结账 —— ${yr}/年",
+      "cancel": "取消",
+      "scaledSub": "已扩容席位订阅",
+      "seatsCount": "{n} 个席位",
+      "planFeeYr": "套餐费用 ${yr} / 年",
+      "annualSaves": "按年 · 每年省 ${n}",
+      "seatsBilled": "计费 {n} 个席位 · 每位成员 1 个",
+      "scaledDesc": "按年计费 · 约合 ${mo}/月 · {date} 续订。已解除全部免费上限。席位随成员变动：新增成员会按本期剩余时间产生按比例计费；移除成员会在下一张发票上按比例抵扣（期中不退款）。",
+      "manageSeats": "管理席位",
+      "switchMonthly": "切换为按月计费"
+    },
+    "cloudNote": "仅限云端。此处的每个界面都受 MOTIR_CLOUD 控制。自托管（GPL-3.0）版本不显示任何账单、付费墙或上限。"
   },
   "draftWithAi": {
     "button": "用AI起草",

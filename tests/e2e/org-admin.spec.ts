@@ -101,10 +101,13 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   await expect(orgSettingsLink).toBeVisible();
   await expect(page.locator('a[href="/settings/organization/members"]')).toBeVisible();
   await expect(page.getByRole('button', { name: /New workspace/ })).toBeVisible();
-  // The billing entry is a PASSIVE placeholder (7.12.5 / Epic 8) — present as a
-  // "Coming soon" affordance, never an active control.
-  await expect(page.getByText('Billing & usage')).toBeVisible();
-  await expect(page.getByText('Coming soon')).toBeVisible();
+  // Billing is CLOUD-ONLY now (Story 8.1.7, ADR §6): the "Billing & plans" menu
+  // row renders only on a Motir cloud build (MOTIR_CLOUD). The E2E webServer runs
+  // OFF-cloud (no MOTIR_CLOUD), so the row — and the old "Coming soon" placeholder
+  // — are absent here. The cloud-on billing surface (checkout / paywall / gates)
+  // is covered by the dedicated 8.1.10 billing E2E.
+  await expect(page.locator('a[href="/settings/organization/billing"]')).toHaveCount(0);
+  await expect(page.getByText('Coming soon')).toHaveCount(0);
   // Single org → no switch-org section.
   await expect(page.getByText('Switch organization')).toHaveCount(0);
 
