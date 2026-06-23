@@ -53,6 +53,9 @@ export interface TopNavProps {
    * two are mutually exclusive by construction (a project is either public or
    * not), so the slot renders exactly ONE — never both, never empty. */
   buildingInPublic: boolean;
+  /** True on a Motir cloud build (`MOTIR_CLOUD`) — gates the org menu's
+   *  "Billing & plans" row (Story 8.1.7). Resolved server-side in the layout. */
+  cloudBilling: boolean;
 }
 
 export async function TopNav({
@@ -64,6 +67,7 @@ export async function TopNav({
   initialUnreadCount,
   buildInPublicProjectKey,
   buildingInPublic,
+  cloudBilling,
 }: TopNavProps) {
   const t = await getTranslations('shell');
   return (
@@ -87,6 +91,7 @@ export async function TopNav({
             orgs={orgs}
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
+            cloudBilling={cloudBilling}
           />
         </div>
         <div className="flex items-center gap-2">

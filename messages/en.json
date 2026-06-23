@@ -2993,7 +2993,7 @@
       "ariaLabel": "Organization menu",
       "settings": "Settings",
       "members": "Members",
-      "billing": "Billing & usage",
+      "billing": "Billing & plans",
       "comingSoon": "Coming soon",
       "newWorkspace": "New workspace",
       "switchOrg": "Switch organization",
@@ -3593,6 +3593,167 @@
       "errorDescription": "Something went wrong fetching this organization's usage. The figures are temporarily unavailable — your credits are safe.",
       "loading": "Loading usage…"
     }
+  },
+  "billing": {
+    "breadcrumb": "Organization · {org} · Billing & plans",
+    "title": "Billing & plans",
+    "subtitle": "Your two Motir products are billed independently. Motir is free until your org outgrows the free caps; Motir AI is an org-level credit plan you buy separately.",
+    "card": {
+      "title": "Billing & plans",
+      "subtitle": "Your Motir plan, Motir AI plan, payment method and invoices.",
+      "open": "Open",
+      "summaryMotir": "Motir · {state}",
+      "summaryAi": "Motir AI · {tier}"
+    },
+    "states": {
+      "loading": "Loading billing…",
+      "errorTitle": "Couldn't load billing",
+      "errorDescription": "Something went wrong fetching this organization's plan. Your subscription and credits are safe — this is only the view. Try again in a moment.",
+      "retry": "Retry",
+      "checkoutPending": "Finishing your change… your new plan appears once Stripe confirms it (the webhook is the source of truth).",
+      "checkoutCanceled": "Checkout canceled — no change was made to your plan."
+    },
+    "member": {
+      "gateTitle": "Billing is managed by your org owner",
+      "gateDescription": "Plans and payment for the {org} organization are visible to owners and admins. Ask an organization owner to change the plan or buy AI credits.",
+      "contactOwner": "Contact an owner"
+    },
+    "admin": {
+      "viewOnly": "View only",
+      "lockNote": "You can see the plan, usage and invoices. Changing the plan, payment method or cancelling is limited to the organization owner."
+    },
+    "motir": {
+      "name": "Motir",
+      "tagline": "The project-management tool — free for your team, paid only at scale.",
+      "free": "Free",
+      "scaled": "Scaled",
+      "freeExplainer": "You're on free Motir — unlimited members, within the free caps below. You'll only pay ${seat} / seat / mo if the org crosses a cap.",
+      "capWorkItems": "Work items",
+      "capProjects": "Projects",
+      "capStorage": "Storage",
+      "capWorkItemsValue": "Up to {limit}",
+      "capProjectsValue": "Up to {limit}",
+      "capStorageValue": "Up to {limit} GB",
+      "seatPreview": "Scaling bills 1 seat per member — {n} today",
+      "seatTotalMo": "{n} × ${seat} = ${total} / mo",
+      "upgrade": "Upgrade Motir",
+      "seatsFollow": "Seats follow membership · prorated automatically",
+      "manageSeats": "Manage seats"
+    },
+    "ai": {
+      "name": "Motir AI",
+      "tagline": "Planning & hosted agents — an org-level monthly credit pool.",
+      "creditsPerMo": "{n} credits / mo",
+      "planFee": "Plan fee",
+      "feePerMo": "${n} / mo",
+      "allotmentThisMonth": "Allotment this month",
+      "creditsLeft": "{left} of {total} credits left",
+      "creditsAvailable": "{n} credits available",
+      "renews": "Renews {date}",
+      "creditsNote": "Credits are a usage allotment, not a bill — one planning run debits the tokens it used.",
+      "changePlan": "Change plan",
+      "managePlan": "Manage plan & payment",
+      "viewUsage": "View Usage & cost",
+      "noPlanYet": "No paid AI plan — on the one-time free trial.",
+      "choosePlan": "Choose a Motir AI plan"
+    },
+    "payment": {
+      "title": "Payment & invoices",
+      "portal": "Stripe Customer Portal",
+      "note": "Payment method, invoices, VAT ID and cancellation are managed in Stripe's secure Customer Portal. Tax is applied automatically at checkout."
+    },
+    "status": {
+      "active": "Active",
+      "trialing": "Free trial",
+      "past_due": "Past due",
+      "canceled": "Canceled",
+      "none": "Free"
+    },
+    "pastDue": {
+      "banner": "We couldn't charge your card. Your Motir AI plan stays active while we retry over the next ~2 weeks. Update your payment method to avoid dropping to the free allotment.",
+      "cta": "Update payment"
+    },
+    "trial": {
+      "label": "One-time trial grant",
+      "note": "Your trial credits are granted once and don't refresh. Pick a monthly Motir AI plan to keep planning when they run out.",
+      "cta": "Choose a Motir AI plan"
+    },
+    "canceled": {
+      "banner": "Your plan ended. The org is back on the free allotment — monthly credits and top-ups are off. Nothing was deleted; your plans, work items and usage history are all intact.",
+      "cta": "Resubscribe"
+    },
+    "plans": {
+      "breadcrumb": "Organization · {org} · Motir AI",
+      "title": "Motir AI — plans & subscription",
+      "subtitle": "Manage your organization's AI plan — planning & hosted agents. Billed separately from your Motir seats, so this screen is AI only.",
+      "back": "Back to billing",
+      "currentStrip": "{n} credits / mo · {left} left · renews {date}",
+      "managePlan": "Manage plan & payment",
+      "cadenceLabel": "Billing cadence",
+      "monthly": "Monthly",
+      "annual": "Annual",
+      "saveBadge": "Save ~33%",
+      "chooseTitle": "Choose your plan",
+      "chooseSub": "An org-level monthly credit pool, billed separately from seats. Any org can buy it — a paid Motir seat plan is not required. Pro is the recommended anchor.",
+      "current": "Current",
+      "recommended": "Recommended",
+      "trialUsed": "Trial used",
+      "creditsAllotment": "{n} credits / mo",
+      "perMoEquiv": "${n} / mo",
+      "annualSub": "billed annually · ${yr} / yr",
+      "annualSave": "Save ${n}/yr",
+      "monthlySub": "${yr} / yr · Save ${n} with annual",
+      "freePrice": "Free",
+      "customPrice": "Custom",
+      "once": "once",
+      "ctaChoose": "Choose {plan}",
+      "ctaUpgrade": "Upgrade to {plan}",
+      "ctaContactSales": "Contact sales",
+      "ctaCurrent": "Current plan",
+      "ctaTrialUsed": "Trial used",
+      "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen."
+    },
+    "topup": {
+      "title": "Top up credits",
+      "subtitle": "A one-time purchase on top of your plan — added to your balance right away, used after your monthly allotment.",
+      "balance": "Balance {n} credits",
+      "bundleCredits": "{n} credits",
+      "bundlePrice": "${n}",
+      "custom": "Custom",
+      "perUnit": "× {n}",
+      "buy": "Buy {n} credits — ${total}",
+      "rate": "${unit} per {credits} credits · one-time · tax at checkout. Credits are an allotment, not currency — this is the price you pay Stripe.",
+      "gate": "Top-ups are available on a paid AI plan; the Free trial can't top up (choose a plan above first). Owner-only, like every billing action."
+    },
+    "seats": {
+      "breadcrumb": "Organization · {org} · Motir",
+      "title": "Scale up Motir",
+      "subtitle": "One seat per organization member — like Jira & Linear.",
+      "back": "Back to billing",
+      "membersToSeats": "{n} members → {n} seats",
+      "annualTotal": "{n} × ${seat}/yr = ${total} / yr",
+      "termsTitle": "What & when we charge",
+      "termBilling": "Billing",
+      "termBillingValue": "Annual, ${yr}/yr (${mo}/mo equiv, the default).",
+      "termDueToday": "Due today",
+      "termDueTodayValue": "${yr}, prorated to the renewal date (less for the days left this term).",
+      "termAddMember": "Add a member later",
+      "termAddMemberValue": "A prorated charge for the new seat, for the rest of the term.",
+      "termRemoveMember": "Remove a member",
+      "termRemoveMemberValue": "A prorated credit on the next invoice — no mid-term refund.",
+      "prorationNote": "Charged now via Stripe proration. Prefer monthly? Switch at Checkout to pay ${mTotal} / mo.",
+      "continueCheckout": "Continue to Checkout — ${yr}/yr",
+      "cancel": "Cancel",
+      "scaledSub": "scaled seats subscription",
+      "seatsCount": "{n} seats",
+      "planFeeYr": "Plan fee ${yr} / yr",
+      "annualSaves": "Annual · saves ${n}/yr",
+      "seatsBilled": "{n} seats billed · 1 per member",
+      "scaledDesc": "Billed annually · ${mo}/mo equiv · renews {date}. All free-tier caps lifted. Seats track membership: adding a member adds a prorated charge for the rest of the term; removing one applies a prorated credit to the next invoice (no mid-term refund).",
+      "manageSeats": "Manage seats",
+      "switchMonthly": "Switch to monthly billing"
+    },
+    "cloudNote": "Cloud-only. Every surface here is gated behind MOTIR_CLOUD. A self-hosted (GPL-3.0) build shows no billing, no paywall and no caps."
   },
   "draftWithAi": {
     "button": "Draft with AI",

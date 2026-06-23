@@ -8,10 +8,11 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
+import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
-import { BillingPlaceholderCard } from './_components/BillingPlaceholderCard';
+import { BillingCard } from './_components/BillingCard';
 import { WorkspaceConfigCard } from './_components/WorkspaceConfigCard';
 import { DangerZoneCard } from './_components/DangerZoneCard';
 
@@ -96,7 +97,10 @@ export default async function OrganizationSettingsPage() {
         memberCount={memberCount}
       />
 
-      <BillingPlaceholderCard />
+      {/* The live billing "door" (8.1.7, design/billing panel 1) replaces the
+          passive placeholder — cloud-only (ADR §6): off-cloud there is no
+          billing surface at all, so the card simply doesn't render. */}
+      {isCloudBilling() ? <BillingCard /> : null}
 
       {orgWorkspaces.length <= 1 ? (
         <WorkspaceConfigCard workspaceCount={orgWorkspaces.length} />
