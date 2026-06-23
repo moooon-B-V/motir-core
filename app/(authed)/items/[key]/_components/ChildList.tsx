@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { ContentSectionCard } from './ContentSectionCard';
+import { RelationshipPeekLink } from './RelationshipPeekLink';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 
@@ -14,6 +14,14 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // child's type icon + identifier + title + status pill + assignee — the same
 // fields a list row shows. A leaf (no children) renders NOTHING — no empty
 // scaffold (the AC: "an item with no children shows nothing").
+//
+// Each row uses `RelationshipPeekLink` (MOTIR-1305) — the same primitive the
+// relationships panel uses — so a PLAIN primary click opens the SHARED
+// quick-view peek (`?peek=<id>`, rendered by the IssueQuickViewController the
+// detail/edit pages already mount) instead of navigating away from the item the
+// user is reading; ⌘/ctrl/middle-click still opens the child's full page in a
+// new tab natively, and keyboard Enter opens the peek. The real `/items/<id>`
+// href stays on the anchor (shareable + accessible).
 //
 // Status tone reuses the lifecycle mapping (category → Pill variant); children
 // share the item's project, so the bundled `workflow` classifies their status
@@ -62,8 +70,8 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
             : undefined;
           return (
             <li key={child.id}>
-              <Link
-                href={`/items/${child.identifier}`}
+              <RelationshipPeekLink
+                identifier={child.identifier}
                 className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-md px-2 py-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 <IssueTypeIcon type={child.kind} className="h-4 w-4 shrink-0" />
@@ -86,7 +94,7 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
                     <Avatar name={assignee.name || assignee.email} />
                   </span>
                 ) : null}
-              </Link>
+              </RelationshipPeekLink>
             </li>
           );
         })}

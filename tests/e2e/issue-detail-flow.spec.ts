@@ -176,10 +176,15 @@ test('@smoke tree navigation: breadcrumb walks up, child list walks down', async
   await page.waitForURL(`**/items/${task.identifier}`);
   await expect(page.getByRole('heading', { name: 'The Task', level: 1 })).toBeVisible();
 
-  // The Task's child list links DOWN to the subtask.
-  const childLink = page.getByRole('link', { name: /The Subtask/ });
-  await expect(childLink).toBeVisible();
-  await childLink.click();
+  // The Task's child row walks DOWN to the subtask's full detail page. Since
+  // MOTIR-1305 a PLAIN click peeks (covered by the dedicated peek test below),
+  // so the full-page navigation is the modified-click path (⌘/ctrl) — a real
+  // browser opens it in a new tab; Playwright performs the navigation in-page.
+  // The anchor still carries the real href.
+  const childRow = page.getByRole('link', { name: /The Subtask/ });
+  await expect(childRow).toBeVisible();
+  await expect(childRow).toHaveAttribute('href', `/items/${sub.identifier}`);
+  await childRow.click({ modifiers: ['Meta'] });
   await page.waitForURL(`**/items/${sub.identifier}`);
   await expect(page.getByRole('heading', { name: 'The Subtask', level: 1 })).toBeVisible();
 });
@@ -415,6 +420,64 @@ test('@smoke relationships: a plain click on a linked row opens the quick-view p
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`/items/${a.identifier}$`));
   await expect(page.getByRole('heading', { level: 1, name: 'The item being read' })).toBeVisible();
+});
+
+test('@smoke child list: a plain click on a child row opens the quick-view peek; a modified click does not (MOTIR-1305)', async ({
+  page,
+}) => {
+  const email = 'e2e-detail-child-peek@example.com';
+  await signUp(page, email);
+  const projectId = await seedActiveProject(email, 'CPEEK');
+  const parent = await mk(page, projectId, { kind: 'story', title: 'The parent story' });
+  const child = await mk(page, projectId, {
+    kind: 'task',
+    title: 'The peeked child',
+    parentId: parent.id,
+  });
+
+  await page.goto(`/items/${parent.identifier}`);
+  const row = page.getByRole('link', { name: /The peeked child/ });
+  await expect(row).toBeVisible();
+  // The anchor still carries the real detail-page href (shareable + ⌘/middle-
+  // click → new tab); a plain click is intercepted to open the peek instead.
+  await expect(row).toHaveAttribute('href', `/items/${child.identifier}`);
+
+  // A MODIFIED (⌘/ctrl) click is NOT intercepted — the handler returns early and
+  // the browser navigates to the child's FULL page (a real browser opens a new
+  // tab; Playwright navigates in-page). The key assertion: it is a full-page
+  // navigation, NOT a `?peek` quick-view.
+  await row.click({ modifiers: ['Meta'] });
+  await page.waitForURL(`**/items/${child.identifier}`);
+  expect(page.url()).not.toContain('peek');
+  await expect(page.getByRole('heading', { level: 1, name: 'The peeked child' })).toBeVisible();
+
+  // A PLAIN primary click opens the shared quick-view peek for the child WITHOUT
+  // leaving the parent's page. Arm the authoritative signal (the peek controller
+  // fetches the child's fields from /api/work-items/peek) BEFORE the click.
+  await page.goto(`/items/${parent.identifier}`);
+  const plainRow = page.getByRole('link', { name: /The peeked child/ });
+  const peekResponse = page.waitForResponse(
+    (r) =>
+      r.url().includes(`/api/work-items/peek?key=${child.identifier}`) &&
+      r.request().method() === 'GET',
+  );
+  await plainRow.click();
+  expect((await peekResponse).status()).toBe(200);
+
+  await expect(page).toHaveURL(
+    new RegExp(`/items/${parent.identifier}\\?peek=${child.identifier}`),
+  );
+  const dialog = page.getByRole('dialog', {
+    name: new RegExp(`Quick view: ${child.identifier}`),
+  });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText('The peeked child')).toBeVisible();
+  // The peek's own "Open full page" link targets the child's detail page (it
+  // opens in a new tab — target="_blank").
+  await expect(dialog.getByTestId('quick-view-open-full')).toHaveAttribute(
+    'href',
+    `/items/${child.identifier}`,
+  );
 });
 
 test('@smoke link management — remove a blocked-by link (confirm) flips back to Ready', async ({
