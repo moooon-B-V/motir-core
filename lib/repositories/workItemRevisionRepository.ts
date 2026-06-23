@@ -312,6 +312,130 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * The BOUNDED per-day event aggregate that drives the Linear-style CYCLE
+   * GRAPH (Story 8.14.3) — the burn-UP of LIVE scope vs completed. In ONE
+   * grouped `$queryRaw` (finding #57 — never a load-all + JS reduce) over the
+   * `work_item_revision` trail scoped to (the sprint window) ∧ (this sprint's
+   * issues OR a sprint-association change touching this sprint), it emits, per
+   * UTC calendar day, three signed deltas the assembler cumulates into the three
+   * actual series:
+   *   • `scopeDelta` — the change to the LIVE total estimate in the sprint:
+   *       a NOT-current-membership sprint ADD (`+stat`) / REMOVE (`−stat`), AND
+   *       a `storyPoints` EDIT of a CURRENT sprint member (`to − from`). Scope is
+   *       the total estimate REGARDLESS of status (a done item still counts), so
+   *       — unlike the burndown — there is NO done-gate here. This live derivation
+   *       is exactly what frees the chart from the immutable `committedPoints`
+   *       snapshot (the MOTIR-1288 root cause). In count mode a re-estimate is a
+   *       no-op (`0`); an add/remove is `±1`.
+   *   • `completedDelta` — `+stat` on a transition INTO a `done`-category status
+   *       (from a non-done one), `−stat` on a transition OUT of done (a reopen).
+   *       Cumulates to `rollupForSprint().completed` (the SAME category predicate),
+   *       so the chart reconciles with the scrum header.
+   *   • `startedDelta` — `+stat` when an item LEAVES the `todo` category (into
+   *       in-progress OR done — i.e. it has "started"), `−stat` when it returns to
+   *       `todo`. The cumulative `started` line is therefore always ≥ `completed`
+   *       and ≤ `scope` (the amber band between completed and started is the
+   *       in-progress work). The default workflow has no todo→done edge, so every
+   *       completion is first a start; the boundary rule generalises that safely.
+   *
+   * `stat` is the per-issue statistic: `COALESCE(storyPoints, 0)` for points, or
+   * `1` for the issue-count series (`useCount`). Status is resolved by joining
+   * `workflow_status` on the diff's `from`/`to` KEYS (the 1.4.6 trail stores keys)
+   * and reading `category` — the SAME predicate `aggregateSprintBurndownByDay` /
+   * `sumPointsForSprint` use. Status/`storyPoints` events are scoped to issues
+   * CURRENTLY in the sprint (matching the roll-up's current-members basis); add/
+   * remove events match on the diff regardless of current membership.
+   * `workspaceId` gates the read (finding #26); the result is bounded by the
+   * sprint length (one row per day with events). Read-only path → `db` singleton.
+   *
+   * A sprint with no qualifying revisions returns no rows (the assembler derives
+   * a flat-at-baseline series).
+   */
+  async aggregateSprintCycleByDay(
+    sprintId: string,
+    workspaceId: string,
+    window: { start: Date; end: Date },
+    useCount: boolean,
+  ): Promise<
+    Array<{ day: string; scopeDelta: number; completedDelta: number; startedDelta: number }>
+  > {
+    // The per-issue statistic value — an internal literal expression, never user
+    // input (mirrors `aggregateSprintBurndownByDay`).
+    const stat = useCount ? Prisma.sql`1` : Prisma.sql`COALESCE(w."storyPoints", 0)`;
+    // Status events (completed / started) are scoped to CURRENT sprint members.
+    const isStatusEvent = Prisma.sql`r."diff" -> 'status' IS NOT NULL AND w."sprintId" = ${sprintId}`;
+    // Completed: into a done-category status (+) / out of done on a reopen (−).
+    const intoDone = Prisma.sql`${isStatusEvent} AND ts."category" = 'done' AND (fs."category" IS NULL OR fs."category" <> 'done')`;
+    const outOfDone = Prisma.sql`${isStatusEvent} AND (ts."category" IS NULL OR ts."category" <> 'done') AND fs."category" = 'done'`;
+    // Started: crossing the `todo` boundary. Entering = from todo/initial to a
+    // non-todo category (+); leaving = from a non-todo category back to todo (−).
+    // A NULL `from` category is the initial (todo) status.
+    const startedEnter = Prisma.sql`${isStatusEvent} AND (fs."category" IS NULL OR fs."category" = 'todo') AND ts."category" IS NOT NULL AND ts."category" <> 'todo'`;
+    const startedLeave = Prisma.sql`${isStatusEvent} AND fs."category" IS NOT NULL AND fs."category" <> 'todo' AND ts."category" = 'todo'`;
+    // Scope: sprint association add/remove (matched on the diff, any membership),
+    // counting ALL points (no done-gate — scope is the total live estimate).
+    const scopeUp = Prisma.sql`(r."diff" -> 'sprintId' ->> 'to') = ${sprintId} AND COALESCE(r."diff" -> 'sprintId' ->> 'from', '') <> ${sprintId}`;
+    const scopeDown = Prisma.sql`(r."diff" -> 'sprintId' ->> 'from') = ${sprintId} AND COALESCE(r."diff" -> 'sprintId' ->> 'to', '') <> ${sprintId}`;
+    // Scope: a `storyPoints` re-estimate of a CURRENT sprint member moves live
+    // scope by `to − from` (each NULL = 0). In count mode a re-estimate is a no-op.
+    const isPointsEdit = Prisma.sql`r."diff" -> 'storyPoints' IS NOT NULL AND w."sprintId" = ${sprintId}`;
+    const pointsEditDelta = useCount
+      ? Prisma.sql`0`
+      : Prisma.sql`(COALESCE((r."diff" -> 'storyPoints' ->> 'to')::numeric, 0) - COALESCE((r."diff" -> 'storyPoints' ->> 'from')::numeric, 0))`;
+
+    return db.$queryRaw<
+      Array<{ day: string; scopeDelta: number; completedDelta: number; startedDelta: number }>
+    >`
+      SELECT
+        to_char(date_trunc('day', r."changedAt"), 'YYYY-MM-DD') AS "day",
+        COALESCE(SUM(
+          CASE
+            WHEN ${scopeUp} THEN (${stat})
+            WHEN ${scopeDown} THEN -1 * (${stat})
+            WHEN ${isPointsEdit} THEN (${pointsEditDelta})
+            ELSE 0
+          END
+        ), 0)::float8 AS "scopeDelta",
+        COALESCE(SUM(
+          CASE
+            WHEN ${intoDone} THEN (${stat})
+            WHEN ${outOfDone} THEN -1 * (${stat})
+            ELSE 0
+          END
+        ), 0)::float8 AS "completedDelta",
+        COALESCE(SUM(
+          CASE
+            WHEN ${startedEnter} THEN (${stat})
+            WHEN ${startedLeave} THEN -1 * (${stat})
+            ELSE 0
+          END
+        ), 0)::float8 AS "startedDelta"
+      FROM "work_item_revision" r
+      JOIN "work_item" w
+        ON w."id" = r."workItemId"
+       AND w."workspaceId" = ${workspaceId}
+       AND w."archivedAt" IS NULL
+      LEFT JOIN "workflow_status" fs
+        ON fs."project_id" = w."projectId"
+       AND fs."key" = (r."diff" -> 'status' ->> 'from')
+      LEFT JOIN "workflow_status" ts
+        ON ts."project_id" = w."projectId"
+       AND ts."key" = (r."diff" -> 'status' ->> 'to')
+      WHERE r."changeKind" = 'updated'
+        AND r."changedAt" >= ${window.start}
+        AND r."changedAt" <= ${window.end}
+        AND (
+              ${isStatusEvent}
+              OR (r."diff" -> 'sprintId' ->> 'to') = ${sprintId}
+              OR (r."diff" -> 'sprintId' ->> 'from') = ${sprintId}
+              OR ${isPointsEdit}
+            )
+      GROUP BY 1
+      ORDER BY 1
+    `;
+  },
+
+  /**
    * The RESOLVED series of the created-vs-resolved report (Story 6.3 ·
    * Subtask 6.3.2): per `date_trunc(period, changedAt)` bucket, the NET
    * count of status transitions into a `done`-CATEGORY status — `+1` for a
