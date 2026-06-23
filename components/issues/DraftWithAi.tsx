@@ -5,6 +5,7 @@ import { Sparkles, RotateCcw, Square, TriangleAlert, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
+import { AiPaywall, AI_OUT_OF_CREDITS_CODE } from '@/components/ai/AiPaywall';
 import type { DraftPhase } from '@/lib/hooks/useExplanationDraft';
 
 // The shared "Draft with AI" affordance (Subtask 8.8.12) — the button + its
@@ -117,13 +118,23 @@ export function DraftGateNotice() {
 export interface DraftErrorNoticeProps {
   onRetry: () => void;
   onDismiss: () => void;
+  /** The failed draft's typed code (useExplanationDraft `error.code`). An
+   *  out-of-credits refusal renders the 8.1.8 paywall instead of the generic
+   *  retry notice — Draft-with-AI is an AI entry point, so it must surface the
+   *  upgrade prompt, not "try again" (a retry can't fix an empty balance). */
+  errorCode?: string;
 }
 
 // 3B · Stream failed — shown below the editor after a draft errors. A rose tint
 // callout with an alert glyph + Try again / Dismiss. Whatever text streamed in
 // before the failure is kept in the editor (the hook never clears it on error).
-export function DraftErrorNotice({ onRetry, onDismiss }: DraftErrorNoticeProps) {
+// An out-of-credits refusal (8.1.8) swaps in the AI-boundary paywall, which
+// self-resolves the owner/member · out-of-credits/tier-gate variant.
+export function DraftErrorNotice({ onRetry, onDismiss, errorCode }: DraftErrorNoticeProps) {
   const t = useTranslations('draftWithAi');
+  if (errorCode === AI_OUT_OF_CREDITS_CODE) {
+    return <AiPaywall triggeredOutOfCredits onDismiss={onDismiss} />;
+  }
   return (
     <Card tint="rose" className="flex items-start gap-2.5 p-3" role="alert">
       <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-(--el-danger-text)" aria-hidden />

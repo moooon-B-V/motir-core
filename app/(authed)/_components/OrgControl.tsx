@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Coins, CreditCard, Plus, Settings, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
-import { Pill } from '@/components/ui/Pill';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
@@ -29,16 +28,20 @@ export interface OrgControlProps {
   activeOrg: OrgControlActiveOrg | null;
   /** Every org the signed-in user belongs to — the switch-org list shows only when ≥2. */
   orgs: OrganizationDTO[];
+  /** True on a Motir cloud build (`MOTIR_CLOUD`) — gates the "Billing & plans"
+   *  menu row (Story 8.1.7, design/billing panel 1). Off-cloud the commercial
+   *  surface does not exist, so the row is hidden entirely (ADR §6). */
+  cloudBilling: boolean;
 }
 
 // The organization control in the app shell (Story 6.10.5, design/org-admin
 // panel 1). The ORG is ALWAYS the top-left anchor (progressive disclosure: the
 // org is permanent chrome — an OPC is just an org of one). It is a menu button,
-// not only a switcher: the menu carries Settings · Members · Billing & usage
-// (Coming soon) · New workspace, then — only when the account is in ≥2 orgs — a
-// "Switch organization" section. The WORKSPACE switcher (rendered alongside by
-// the shell only at ≥2 workspaces) is a separate control.
-export function OrgControl({ activeOrg, orgs }: OrgControlProps) {
+// not only a switcher: the menu carries Settings · Members · Usage & cost ·
+// Billing & plans (cloud only, Story 8.1.7) · New workspace, then — only when the
+// account is in ≥2 orgs — a "Switch organization" section. The WORKSPACE switcher
+// (rendered alongside by the shell only at ≥2 workspaces) is a separate control.
+export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const ts = useTranslations('shell');
   const router = useRouter();
@@ -108,18 +111,18 @@ export function OrgControl({ activeOrg, orgs }: OrgControlProps) {
                 {t('menu.usage')}
               </MenuLink>
             </li>
-            <li>
-              {/* Passive billing placeholder — 7.12.5 / Epic 8. Disabled, with a
-                  "Coming soon" pill; no active control (design panel 2). */}
-              <div
-                className="flex w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left font-sans text-sm text-(--el-text-muted)"
-                aria-disabled
-              >
-                <CreditCard className="h-4 w-4" aria-hidden />
-                <span className="flex-1">{t('menu.billing')}</span>
-                <Pill tone="neutral">{t('menu.comingSoon')}</Pill>
-              </div>
-            </li>
+            {cloudBilling ? (
+              <li>
+                {/* Billing & plans — the org's commercial home (Story 8.1.7,
+                    design/billing panel 1). The row the ai-usage design left as a
+                    passive "Coming soon" is now ACTIVE. Cloud-only (ADR §6): on a
+                    self-hosted build it is hidden entirely (no billing surface). */}
+                <MenuLink href="/settings/organization/billing" onNavigate={() => setOpen(false)}>
+                  <CreditCard className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+                  {t('menu.billing')}
+                </MenuLink>
+              </li>
+            ) : null}
             <li>
               <button
                 type="button"

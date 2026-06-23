@@ -11,6 +11,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
+import { isCloudBilling } from '@/lib/billing/availability';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -76,6 +77,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
       }
     : null;
   const orgs = currentOrg ? await organizationsService.listUserOrganizations(session.user.id) : [];
+  // Whether this is a Motir cloud build — gates the org menu's "Billing & plans"
+  // row (Story 8.1.7); off-cloud the commercial surface does not exist (ADR §6).
+  const cloudBilling = isCloudBilling();
   const scopedWorkspaceModels = activeOrg
     ? workspaceModels.filter((w) => w.organizationId === activeOrg.id)
     : workspaceModels;
@@ -195,6 +199,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     initialUnreadCount={initialUnreadCount}
                     buildInPublicProjectKey={buildInPublicProjectKey}
                     buildingInPublic={buildingInPublic}
+                    cloudBilling={cloudBilling}
                   />
                 }
                 sidebar={
@@ -223,6 +228,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     orgs={orgs}
                     workspaces={workspaces}
                     activeWorkspaceId={activeWorkspaceId}
+                    cloudBilling={cloudBilling}
                   />
                 }
               >

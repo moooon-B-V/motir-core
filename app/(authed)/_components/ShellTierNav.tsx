@@ -22,6 +22,9 @@ export interface ShellTierNavProps {
   orgs: OrganizationDTO[];
   workspaces: WorkspaceSummaryDTO[];
   activeWorkspaceId: string | null;
+  /** True on a Motir cloud build — gates the org menu's "Billing & plans" row
+   *  (Story 8.1.7). Resolved server-side and threaded down to OrgControl. */
+  cloudBilling: boolean;
 }
 
 export function ShellTierNav({
@@ -29,11 +32,12 @@ export function ShellTierNav({
   orgs,
   workspaces,
   activeWorkspaceId,
+  cloudBilling,
 }: ShellTierNavProps) {
   const showWorkspaceSwitcher = workspaces.length >= 2;
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <OrgControl activeOrg={activeOrg} orgs={orgs} />
+      <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} />
       {showWorkspaceSwitcher ? (
         <>
           <span aria-hidden className="text-(--el-text-faint) px-0.5 text-sm">
