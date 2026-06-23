@@ -73,8 +73,9 @@ MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
     the org crosses a cap. The scaled state is a **motir-core org subscription
     flag**, NOT the AI tier.
   - **② Motir AI** (planning + agents) — an **org-level monthly credit plan**, prices
-    firm from the Stripe sandbox catalog (8.1.2 / MOTIR-1141): **Free** (300
-    credits, one-time trial, $0) / **Starter** ($5/mo · $40/yr, 300/mo) /
+    firm from the Stripe sandbox catalog (8.1.2 / MOTIR-1141; `starter` removed
+    by the 2026-06-23 amendment, 8.1.18 / MOTIR-1311): **Free** (300
+    credits, one-time trial, $0) /
     **Standard** ($25/mo · $200/yr, 2,000/mo) / **Pro** ($75/mo · $600/yr,
     8,000/mo — the **recommended anchor**, `pro_pool_annual` is the Stripe default
     Price) / **Max** ($150/mo · $1,200/yr, 30,000/mo) / **Enterprise** (custom).
@@ -255,12 +256,15 @@ annual/monthly Stripe Prices (`*_annual` is the Product's default Price).
 The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
 
 - **The Motir AI ladder — the standard SaaS pricing-tier pattern** (rung 1 —
-  Linear / Vercel / Stripe). Six `plan` cards that are **TALL, equal-height, and laid
+  Linear / Vercel / Stripe). **Five** `plan` cards — the **Free** trial + the four
+  named paid tiers **Standard / Pro / Max / Enterprise** (`starter` removed by the
+  2026-06-23 amendment, 8.1.18 / MOTIR-1311) — that are **TALL, equal-height, and laid
   out in ONE row** (the `.ai-grid` is a `display:flex` row, `align-items:stretch`
   equalising height so the CTAs sit on a common baseline; `flex:1 0 0` +
-  `min-width:158px` per card). **Responsive rule (drawn):** below the row's natural
+  `min-width:158px` per card; five cards fill the row more generously than the prior
+  six). **Responsive rule (drawn):** below the row's natural
   width the container **scrolls horizontally** (`overflow-x:auto`, scroll-snap) —
-  the six tiers stay one comparable ladder, never wrapping to a second row or
+  the five cards stay one comparable ladder, never wrapping to a second row or
   dropping tiers. Each card, top → bottom:
   1. **Tier name** (+ `i-zap` / `i-crown` accent glyph for Pro / Max, + the
      "Current" / "Recommended" `Pill`).
@@ -268,33 +272,32 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
      line, secondary colour, ~3-line `min-height` so the price rows align across
      cards. The ladder is **planning DEPTH then agent USAGE**: planning depth tops
      out at Standard (whole project, in detail); Pro and Max only scale agent work.
-     **Free** "Trying Motir AI out." / **Starter** "Light, structure-level
-     planning." / **Standard** "Detailed planning, plus a taste of agent." / **Pro**
-     "Detailed planning, plus real agent work." / **Max** "Detailed planning, plus
-     heavy agent work." / **Enterprise** "Custom volume, plus org controls."
+     **Free** "Trying Motir AI out." / **Standard** "Detailed planning, plus a taste
+     of agent." / **Pro** "Detailed planning, plus real agent work." / **Max**
+     "Detailed planning, plus heavy agent work." / **Enterprise** "Custom volume,
+     plus org controls."
   3. **The cadence-aware price** (serif `.amt`) + the billed/save subline.
   4. **The credit allotment** (`.alot`, the load-bearing figure, bold) — the credit
      COUNT lives here, so the feature bullets stay capability-focused (no count
      duplication).
   5. **A CUMULATIVE `i-check` feature list** — the cumulative chain starts at the
-     first PAID tier (**Starter**), so each tier from Standard up opens with a
-     flush-left `.flead` caption **"Everything in {previous tier}, plus"** (no
-     glyph), then its incremental extras. The deltas map to the depth→usage ladder:
-     **Starter** (base of the ladder, NO "Everything in" — Free is just a trial,
-     not the rung below) → "Credits refreshed every month" · "Metered top-ups when
-     you need more"; **Standard** (everything in Starter, plus) → "Plan the whole
-     project, in detail" · "Room to try agent tasks"; **Pro** (everything in
-     Standard, plus) → "Cover whole tasks with the agent" · "Headroom for regular
-     agent runs"; **Max** (everything in Pro, plus) → "Run many agent tasks at
-     once" · "Throughput for a busy team"; **Enterprise** (everything in Max, plus)
-     → "Invoiced billing & SSO" · "Dedicated support". **Free** is a standalone
-     trial (no "Everything in"): "A one-time taste of every agent" + an `off`
-     (`i-x`, faint) "No monthly refresh · no top-ups".
+     first PAID tier (**Standard**, now the entry rung), so each tier from Pro up
+     opens with a flush-left `.flead` caption **"Everything in {previous tier}, plus"**
+     (no glyph), then its incremental extras. The deltas map to the depth→usage ladder:
+     **Standard** (base of the paid ladder, NO "Everything in" — Free is just a
+     trial, not the rung below) → "Plan the whole project, in detail" · "Credits
+     refresh monthly · metered top-ups" · "Room to try agent tasks"; **Pro**
+     (everything in Standard, plus) → "Cover whole tasks with the agent" · "Headroom
+     for regular agent runs"; **Max** (everything in Pro, plus) → "Run many agent
+     tasks at once" · "Throughput for a busy team"; **Enterprise** (everything in
+     Max, plus) → "Invoiced billing & SSO" · "Dedicated support". **Free** is a
+     standalone trial (no "Everything in"): "A one-time taste of every agent" + an
+     `off` (`i-x`, faint) "No monthly refresh · no top-ups".
   6. **A per-tier CTA → Checkout** (pinned to the bottom via `margin-top:auto`).
 
-  Tiers: **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Starter**
-  (`$5` → `$3.33/mo` · $40/yr · save $20 · 300) / **Standard** (`$25` → `$16.67/mo`
-  · $200/yr · save $100 · 2,000, marked **Current**) / **Pro** (`$75` → `$50/mo` ·
+  Tiers: **Free** (`$0` once · 300 credits · one-time, "Trial used") / **Standard**
+  (`$25` → `$16.67/mo`
+  · $200/yr · save $100 · 2,000, marked **Current** — the entry paid tier) / **Pro** (`$75` → `$50/mo` ·
   $600/yr · save $300 · 8,000, `i-zap` accent, marked **Recommended** — the anchor
   tier) / **Max** (`$150` → `$100/mo` · $1,200/yr · save $600 · 30,000, `i-crown`
   accent) / **Enterprise** (Custom). The current plan is accent-bordered + disabled
@@ -591,7 +594,7 @@ Tier-0 under `--el-*`) — verified.
   plan"** / **"An org-level monthly credit pool, billed separately from seats. Any
   org can buy it — a paid Motir seat plan is not required. Pro is the recommended
   anchor."**; **"Current"** / **"Recommended"** (Pro) / **"Current plan"** / **"Trial
-  used"**; per-tier CTAs **"Choose Starter"** / **"Upgrade to Pro"** / **"Upgrade to
+  used"**; per-tier CTAs **"Current plan"** (Standard) / **"Upgrade to Pro"** / **"Upgrade to
   Max"** / **"Contact sales"**; the annual per-card sublines **"billed annually ·
   ${yr} / yr"** + **"Save ${n}/yr"**, the monthly sublines **"${yr} / yr · Save ${n}
   with annual"**; footer **"Annual billing (the Stripe default) is shown — switch to
