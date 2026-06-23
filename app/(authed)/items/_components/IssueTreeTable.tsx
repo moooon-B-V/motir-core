@@ -28,6 +28,7 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
+import { usePeekRowClick } from './IssueQuickView';
 import { makeRowShaper, type IssueRowData } from './issueRows';
 import { listChildIssuesAction, listRootIssuesAction } from '../actions';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
@@ -83,6 +84,10 @@ export function IssueTreeTable({
   const router = useRouter();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
+  // A plain click on an issue row opens the quick-view peek (the per-row eye was
+  // removed in MOTIR-1306); ⌘/ctrl/middle-click still opens the detail page via
+  // the row link's real href. Synthetic rows (loading / load-more) carry no href.
+  const onPeekClick = usePeekRowClick();
   const sortParam = serializeSort(sort);
   const shape = useMemo(
     () => makeRowShaper(workflow, members, locale),
@@ -321,6 +326,9 @@ export function IssueTreeTable({
         getRowLabel={(node) =>
           node.kind === 'issue' ? `${node.row.identifier} ${node.row.title}` : ''
         }
+        onRowLinkClick={(e, node) => {
+          if (node.kind === 'issue') onPeekClick(e, node.row.identifier);
+        }}
         getRowTestId={(node) =>
           node.kind === 'issue' ? `issue-row-${node.row.identifier}` : undefined
         }

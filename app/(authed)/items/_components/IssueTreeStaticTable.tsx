@@ -7,6 +7,7 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
+import { usePeekRowClick } from './IssueQuickView';
 import type { IssueRowData } from './issueRows';
 
 // The STATIC (non-lazy) /items tree — used ONLY for the FILTERED view, where
@@ -27,6 +28,9 @@ export interface IssueTreeStaticTableProps {
 
 export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStaticTableProps) {
   const t = useTranslations();
+  // A plain row click opens the quick-view peek (the per-row eye was removed in
+  // MOTIR-1306); ⌘/ctrl/middle-click still opens the detail page via the href.
+  const onPeekClick = usePeekRowClick();
   const columns: TreeTableColumn<IssueRowData>[] = buildIssueColumns(t).map(
     ({ key, header, width, align, cell, sortColumn }) => ({
       key,
@@ -56,6 +60,7 @@ export function IssueTreeStaticTable({ rows, workflow, members }: IssueTreeStati
       onExpandedChange={setExpandedIds}
       getRowHref={(r) => `/items/${r.identifier}`}
       getRowLabel={(r) => `${r.identifier} ${r.title}`}
+      onRowLinkClick={(e, r) => onPeekClick(e, r.identifier)}
       getRowTestId={(r) => `issue-row-${r.identifier}`}
     />
   );

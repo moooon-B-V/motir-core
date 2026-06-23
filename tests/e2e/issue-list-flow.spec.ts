@@ -97,7 +97,7 @@ async function renderedRowIds(page: Page): Promise<string[]> {
 
 // ───────────────────────────── render · expand · navigate ─────────────────────
 
-test('@smoke nested tree renders project-scoped + lazily expands/collapses, row → detail', async ({
+test('@smoke nested tree renders project-scoped + lazily expands/collapses, row → peek', async ({
   page,
 }) => {
   const seed = await seedProject(page, 'e2e-issue-list-render@example.com', 'REN');
@@ -130,7 +130,9 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
   // expand, ArrowLeft to collapse, Enter to activate the row link). This is the
   // documented WAI-ARIA treegrid interaction and is robust against pointer
   // hit-testing — the tiny chevron sits among same-row z-10 inline-edit controls,
-  // so a coordinate click on it is interception-prone in a dense row.
+  // so a coordinate click on it is interception-prone in a dense row. Enter fires
+  // an unmodified click on the row's stretched link, which now opens the
+  // quick-view peek (MOTIR-1306) rather than navigating.
 
   // Expand the epic → the story streams in at level 2 (lazy fetch on expand).
   await epicRow.press('ArrowRight');
@@ -152,10 +154,19 @@ test('@smoke nested tree renders project-scoped + lazily expands/collapses, row 
   await expect(page.getByTestId(`issue-row-${story.identifier}`)).toHaveCount(0);
   await expect(page.getByTestId(`issue-row-${sub.identifier}`)).toHaveCount(0);
 
-  // Activating the row (Enter) follows the whole-row link to the issue detail.
+  // Activating the row (Enter) opens the quick-view peek over the list — a plain
+  // activation of the whole-row link, intercepted to set ?peek (MOTIR-1306). The
+  // full detail page stays reachable via the peek's "Open full page" affordance
+  // and ⌘/ctrl/middle-click (asserted in the List view test below).
   await page.getByTestId(`issue-row-${bug.identifier}`).press('Enter');
-  await page.waitForURL(`**/items/${bug.identifier}`);
-  await expect(page.getByRole('heading', { name: bug.title, level: 1 })).toBeVisible();
+  const peek = page.getByRole('dialog');
+  await expect(peek).toBeVisible();
+  await expect(peek.getByTestId('quick-view-open-full')).toHaveAttribute(
+    'href',
+    `/items/${bug.identifier}`,
+  );
+  await expect(page).toHaveURL(new RegExp(`[?&]peek=${bug.identifier}`));
+  expect(new URL(page.url()).pathname).toBe('/items');
 });
 
 // ─────────────────────────── quick-view peek (8.8.2) ───────────────────────────
@@ -176,10 +187,11 @@ test('@smoke quick-view peek opens over the list and closes back to it (bug 8.8.
   const row = page.getByTestId(`issue-row-${epic.identifier}`);
   await expect(row).toBeVisible();
 
-  // Open the peek: the modal frame appears, "Open full page" is live, and the
-  // item's fields stream in (client fetch of /api/work-items/peek). The URL gains
-  // ?peek WITHOUT leaving /items.
-  await row.getByRole('button', { name: `Quick view ${epic.identifier}: ${epic.title}` }).click();
+  // Open the peek by activating the whole-row link (Enter — MOTIR-1306 removed
+  // the per-row eye; a plain row activation now opens the peek): the modal frame
+  // appears, "Open full page" is live, and the item's fields stream in (client
+  // fetch of /api/work-items/peek). The URL gains ?peek WITHOUT leaving /items.
+  await row.press('Enter');
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('quick-view-open-full')).toHaveAttribute(
@@ -426,12 +438,31 @@ test('@smoke the [Tree ▾] switcher round-trips Tree↔List through ?view=, lis
   const descFirst = (await renderedRowIds(page))[0];
   expect(ascFirst).not.toBe(descFirst); // the order genuinely flipped
 
-  // The whole-row link still navigates in List.
-  await page.getByRole('link', { name: `${urgent.identifier} ${urgent.title}` }).click();
-  await page.waitForURL(`**/items/${urgent.identifier}`);
+  // A PLAIN click on the whole-row link opens the quick-view peek over the list
+  // (MOTIR-1306) — it does NOT navigate; the URL gains ?peek and stays on /items.
+  const rowLink = page.getByRole('link', { name: `${urgent.identifier} ${urgent.title}` });
+  await rowLink.click();
+  const peek = page.getByRole('dialog');
+  await expect(peek).toBeVisible();
+  await expect(peek.getByTestId('quick-view-open-full')).toHaveAttribute(
+    'href',
+    `/items/${urgent.identifier}`,
+  );
+  await expect(page).toHaveURL(new RegExp(`[?&]peek=${urgent.identifier}`));
+  expect(new URL(page.url()).pathname).toBe('/items');
+  await page.keyboard.press('Escape');
+  await expect(peek).toBeHidden();
+
+  // A ⌘/ctrl-click keeps the link's real href: the browser opens the full detail
+  // page in a NEW TAB instead of peeking (the row link is target=_self, so a
+  // modified click pops a new tab).
+  const popupPromise = page.waitForEvent('popup');
+  await rowLink.click({ modifiers: ['ControlOrMeta'] });
+  const popup = await popupPromise;
+  await popup.waitForURL(`**/items/${urgent.identifier}`);
+  await popup.close();
 
   // Switch back to Tree → the view param drops to its canonical form.
-  await page.goBack();
   await page.getByRole('button', { name: 'View: List' }).click();
   await page.getByRole('menuitemradio', { name: 'Tree' }).click();
   await page.waitForURL((url) => url.searchParams.get('view') !== 'list');

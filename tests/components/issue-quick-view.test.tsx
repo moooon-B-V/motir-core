@@ -21,7 +21,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(searchParamsString),
 }));
 
-import { QuickViewTrigger } from '@/app/(authed)/items/_components/QuickViewTrigger';
 import { QuickViewCloseButton } from '@/app/(authed)/items/_components/QuickViewCloseButton';
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 
@@ -63,24 +62,12 @@ const DATA: QuickViewData = {
   readiness: null,
 };
 
-describe('QuickViewTrigger — opens the peek via ?peek', () => {
-  it('sets ?peek=<key>, preserving the current view/sort params', () => {
-    searchParamsString = 'view=list&sort=key:asc';
-    render(<QuickViewTrigger identifier="PROD-7" title="Email + password sign-in" />);
-    fireEvent.click(screen.getByRole('button', { name: /Quick view PROD-7/ }));
-    expect(historyPush).toHaveBeenCalledWith(
-      null,
-      '',
-      '/items?view=list&sort=key%3Aasc&peek=PROD-7',
-    );
-  });
-
-  it('adds ?peek to a bare /items URL', () => {
-    render(<QuickViewTrigger identifier="PROD-7" title="X" />);
-    fireEvent.click(screen.getByRole('button', { name: /Quick view PROD-7/ }));
-    expect(historyPush).toHaveBeenCalledWith(null, '', '/items?peek=PROD-7');
-  });
-});
+// The /items row peek-on-click (the per-row eye `QuickViewTrigger` was removed
+// in MOTIR-1306 — a plain row click now opens the peek). The shared
+// plain-click→peek guard (`usePeekRowClick`) is exercised through
+// `RelationshipPeekLink` in relationships-panel.test.tsx, and the row-link wiring
+// (List + Tree: plain click → peek, ⌘/ctrl-click → detail page) is covered
+// end-to-end by issue-list-flow.spec.ts.
 
 describe('IssueQuickViewPanel — populated (ready)', () => {
   it('renders the item title + status + assignee', () => {

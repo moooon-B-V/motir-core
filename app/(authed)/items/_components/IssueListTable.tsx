@@ -18,6 +18,7 @@ import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { buildIssueColumns } from './issueColumns';
 import { IssueInlineEditProvider } from './IssueInlineEdit';
 import { IssueListPager } from './IssueListPager';
+import { usePeekRowClick } from './IssueQuickView';
 import type { IssueRowData } from './issueRows';
 
 // The flat, sortable LIST table (Subtask 2.5.8) — the `view=list` rendering the
@@ -60,6 +61,10 @@ export function IssueListTable({
   const pathname = usePathname();
   const t = useTranslations();
   const columns = buildIssueColumns(t);
+  // A plain click on the whole-row link opens the quick-view peek (the eye
+  // trigger was removed in MOTIR-1306); ⌘/ctrl/middle-click still opens the
+  // detail page via the link's real href.
+  const onPeekClick = usePeekRowClick();
 
   // The grid template mirrors the TreeTable: the Title column flexes, the rest
   // take their fixed widths (Priority 120 · Assignee 150 · Reporter 150 · Due 120
@@ -190,6 +195,7 @@ export function IssueListTable({
                     <Link
                       href={`/items/${row.identifier}`}
                       aria-label={`${row.identifier} ${row.title}`}
+                      onClick={(e) => onPeekClick(e, row.identifier)}
                       className="absolute inset-0 z-0 focus:outline-none"
                     />
                   ) : null}
