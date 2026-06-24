@@ -39,8 +39,13 @@ import { IssueQuickViewController } from './_components/IssueQuickViewController
 // 4-layer: the page calls only services (via getActiveProject + the section's
 // service reads) — never Prisma directly. View/sort are parsed through the
 // `issueListView` whitelist so an unknown column never reaches the read. The
-// <Suspense> is keyed by view+sort so a switch/sort re-shows the skeleton while
-// the new order streams. Unauthenticated → /sign-in; no active project → a hint.
+// <Suspense> is keyed by PROJECT + view+sort so a switch/sort re-shows the
+// skeleton while the new order streams — and an org/workspace SWITCH that lands
+// here in place (afterContextSwitchTarget → router.refresh, MOTIR-1312/bug 12)
+// re-keys on the NEW projectId, remounting the lazy-tree client island so it
+// re-seeds from the new tenant's roots instead of showing the old org's items
+// (the page-state client-island contract in CLAUDE.md). Unauthenticated →
+// /sign-in; no active project → a hint.
 
 export default async function IssuesPage({
   searchParams,
@@ -207,7 +212,7 @@ export default async function IssuesPage({
           </IssueAppliedFilterBar>
 
           <Suspense
-            key={`${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
+            key={`${ctx.projectId}:${view}:${serializeSort(sort)}:${JSON.stringify(filter)}:${page}`}
             fallback={<IssueTreeSkeleton flat={view === 'list'} />}
           >
             <IssueTreeSection
