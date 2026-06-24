@@ -54,16 +54,23 @@ vi.mock('@/components/ui/MarkdownEditor', () => ({
     value,
     onChange,
     label,
+    labelHidden,
   }: {
     value: string;
     onChange: (v: string) => void;
     label?: string;
+    labelHidden?: boolean;
   }) => (
-    <textarea
-      aria-label={label ?? 'Description'}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <>
+      {/* Mirror the real editor: a VISIBLE label span unless labelHidden, plus
+          an always-present aria-label on the field (MOTIR-1313). */}
+      {labelHidden ? null : <span>{label}</span>}
+      <textarea
+        aria-label={label ?? 'Description'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </>
   ),
 }));
 vi.mock('@/lib/blob/uploadClient', () => ({ uploadIssueAttachment: vi.fn() }));
@@ -209,6 +216,20 @@ describe('CreateIssueModal — validation + submit', () => {
     expect(createIssueActionSpy).toHaveBeenCalledWith(
       expect.objectContaining({ explanationMd: 'Why it matters: fewer drop-offs.' }),
     );
+  });
+
+  // MOTIR-1313 — the expanded explanation section showed "Explanation" twice
+  // (the disclosure toggle header AND the editor's own visible label). The editor
+  // label is now hidden (the toggle supplies the visible label), so exactly one
+  // visible "Explanation" renders, while the editor keeps its accessible name.
+  it('renders the "Explanation" label only once when the section is expanded', () => {
+    openModal();
+    fireEvent.click(screen.getByRole('button', { name: 'Explanation' }));
+
+    // One VISIBLE "Explanation" — the disclosure header (not the editor's label).
+    expect(screen.getAllByText('Explanation')).toHaveLength(1);
+    // The explanation editor is still reachable by its accessible name.
+    expect(screen.getByLabelText('Explanation')).toBeTruthy();
   });
 
   it('threads a chosen Due date through as a UTC ISO string; a plain create omits it', async () => {
