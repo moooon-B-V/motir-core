@@ -36,6 +36,7 @@ import { signUp, createFirstProject, createWorkspace } from './_helpers/shell-se
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { workItemsService } from '@/lib/services/workItemsService';
 
 // The shell's useShortcut resolves `Mod` to ⌘ on Apple platforms and Ctrl
 // elsewhere, keyed off the BROWSER's navigator.platform. Read the same signal
@@ -580,5 +581,80 @@ test.describe('@smoke shell journeys', () => {
     const projectSwitcher = page.getByRole('button', { name: 'Switch project' });
     await expect(projectSwitcher).toContainText('Relay');
     await expect(projectSwitcher).not.toContainText('Keystone');
+  });
+
+  // ── 13. Switching org WHILE ON /items refreshes the list (bug 12 / MOTIR-1319) ──
+  // The reported defect: switching the active org (or workspace) on the Work
+  // Items page leaves the list showing the PREVIOUS tenant's items. MOTIR-1312
+  // made the switchers NAVIGATE to /items from a deep URL (which remounts the
+  // lazy-tree client island), but when you are ALREADY on /items the helper
+  // returns null and the switcher falls back to router.refresh() — which re-runs
+  // the Server Component but CANNOT re-seed the `IssueTreeTable` island's
+  // mount-once `useState(initialLevel)` (the page-state client-island contract).
+  // The fix project-keys the /items <Suspense> + the lazy tree, so the in-place
+  // refresh remounts the island and it re-reads the NEW tenant's roots. This
+  // exercises the exact in-place path: start ON /items, switch, assert the list
+  // SWAPS — never reload (a reload would mask the bug by re-mounting from scratch).
+  test('switching org on the Work Items page swaps the list to the new org (no stale items)', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const email = 'e2e-shell-flows-items-switch@example.com';
+    await signUp(page, email);
+    await createFirstProject(page, 'Aurora');
+    await page.goto('/dashboard');
+
+    // A SECOND org with its own workspace + project, seeded server-side (a
+    // single-org account has no UI path to org #2). Two orgs → the org switcher
+    // reveals.
+    const user = await db.user.findFirstOrThrow({ where: { email } });
+    const beacon = await organizationsService.createOrganization({
+      name: 'Beacon',
+      actorUserId: user.id,
+    });
+    const { workspace: crew } = await workspacesService.createWorkspace({
+      name: 'Crew',
+      ownerUserId: user.id,
+      organizationId: beacon.id,
+    });
+    await projectsService.createProject({
+      workspaceId: crew.id,
+      actorUserId: user.id,
+      name: 'Pinnacle',
+    });
+
+    // One DISTINCT root work item in each org's project, through the real
+    // create service — the titles are the load-bearing signal that the list
+    // re-read after the switch (they appear ONLY in the items list).
+    const aurora = await db.project.findFirstOrThrow({ where: { name: 'Aurora' } });
+    const pinnacle = await db.project.findFirstOrThrow({
+      where: { name: 'Pinnacle', workspaceId: crew.id },
+    });
+    await workItemsService.createWorkItem(
+      { projectId: aurora.id, kind: 'story', title: 'Aurora alpha task' },
+      { userId: user.id, workspaceId: aurora.workspaceId },
+    );
+    await workItemsService.createWorkItem(
+      { projectId: pinnacle.id, kind: 'story', title: 'Pinnacle beta task' },
+      { userId: user.id, workspaceId: crew.id },
+    );
+
+    // Land ON the Work Items list in the FIRST org (Aurora is active). Its item
+    // shows; the other org's does not.
+    await page.reload();
+    await page.goto('/items');
+    await expect(page.getByText('Aurora alpha task')).toBeVisible();
+    await expect(page.getByText('Pinnacle beta task')).toHaveCount(0);
+
+    // Switch the active ORG to Beacon WHILE on /items. switchOrganization waits
+    // on the org-control trigger reflecting "Beacon" — the authoritative settle
+    // signal that switchOrganizationAction committed + the in-place refresh ran.
+    await switchOrganization(page, 'Beacon');
+
+    // The list re-read the NEW org's project: Pinnacle's item is now shown and
+    // Aurora's is gone — the in-place refresh remounted the lazy tree. Before the
+    // fix, the stale island kept "Aurora alpha task" and never showed Pinnacle's.
+    await expect(page.getByText('Pinnacle beta task')).toBeVisible();
+    await expect(page.getByText('Aurora alpha task')).toHaveCount(0);
   });
 });
