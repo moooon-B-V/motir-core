@@ -262,6 +262,15 @@ jobs:
             args: '--grep "epic6-at-scale"'
             seed_reporting_items: '1000'
             seed_reporting_rich_items: '200'
+          # Story 8.1 — the billing journeys (Subtask 8.1.10), CLOUD-ON. Billing is
+          # MOTIR_CLOUD-gated and turning it on globally would break unrelated specs
+          # (the §4 caps + the billing menu row), so it runs as its OWN lane with
+          # its OWN cloud-on server (playwright.billing.config.ts: MOTIR_CLOUD=true +
+          # E2E_TEST_BILLING boundary mock, isolated ports). The bulk legs never see
+          # billing-cloud.spec.ts (testIgnore'd from the main config); the off-cloud
+          # self-host spec (billing-selfhost) rides a normal bulk shard.
+          - id: billing-cloud
+            args: '--config playwright.billing.config.ts'
     services:
       postgres:
         image: postgres:16-alpine

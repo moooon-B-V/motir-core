@@ -27,6 +27,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:billing": "playwright test --config playwright.billing.config.ts",
     "prepare": "husky",
     "postinstall": "prisma generate"
   },
