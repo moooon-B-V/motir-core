@@ -115,7 +115,7 @@ async function seedReadyTenant(): Promise<ReadyTenant> {
   return { owner, member, project, aHigh, blocked, blocker };
 }
 
-test('@smoke /ready: badge · highest-first sort · copy command · peek · live recompute', async ({
+test('@smoke /ready: highest-first sort · copy command · peek · live recompute', async ({
   page,
   context,
 }) => {
@@ -128,11 +128,12 @@ test('@smoke /ready: badge · highest-first sort · copy command · peek · live
 
   await signIn(page, owner.email, TEST_PASSWORD);
 
-  // (2) Sidebar shows "Ready" between Issues and Boards, badge = 3 (> 0).
+  // (2) Sidebar shows "Ready" between Issues and Boards. No count badge — the
+  // readiness count is a computed scan, so it's resolved only on the /ready page,
+  // never on every authed route (MOTIR-1284); the nav entry carries no number.
   const rail = page.getByRole('navigation', { name: 'Primary' });
   const readyLink = rail.getByRole('link', { name: 'Ready' });
   await expect(readyLink).toBeVisible();
-  await expect(readyLink).toContainText('3');
 
   // (3) Open /ready; the list renders the 3 ready items and the FIRST row is the
   // highest-priority one (all 3 are the same type, so priority orders within the
@@ -176,9 +177,6 @@ test('@smoke /ready: badge · highest-first sort · copy command · peek · live
   await page.reload();
   await expect(rows).toHaveCount(4);
   await expect(list).toContainText(blocked.identifier);
-
-  // (7) The sidebar badge tracks the new count (3 → 4) on reload.
-  await expect(rail.getByRole('link', { name: 'Ready' })).toContainText('4');
 });
 
 test('@smoke /ready is a workspace-member surface, not PM-only', async ({ page, context }) => {
@@ -193,14 +191,13 @@ test('@smoke /ready is a workspace-member surface, not PM-only', async ({ page, 
   await signIn(page, member.email, TEST_PASSWORD);
 
   // The member — NOT the project manager — sees the same ready surface: the
-  // sidebar badge (3) and the list with the highest-priority row first (all
+  // sidebar "Ready" entry and the list with the highest-priority row first (all
   // same type → priority orders within the bucket). /ready is gated on workspace
   // membership, not on being the PM.
   const readyLink = page
     .getByRole('navigation', { name: 'Primary' })
     .getByRole('link', { name: 'Ready' });
   await expect(readyLink).toBeVisible();
-  await expect(readyLink).toContainText('3');
 
   await readyLink.click();
   await expect(page).toHaveURL(/\/ready(\?|$)/);

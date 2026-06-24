@@ -172,6 +172,17 @@ export type ReadyCandidateRow = WorkItem & {
 };
 
 /**
+ * One row of a ready-set LAYER (Subtask 7.0.13) — a `ReadyCandidateRow` plus
+ * `hasChildren`, the bit the top-down traversal needs to decide DESCEND (a
+ * planned container) vs COLLECT (a childless, dispatchable leaf). Unlike
+ * `findReadyCandidates` (which scanned the whole project's leaves), the layered
+ * read fetches one parent level at a time and does NOT pre-filter to
+ * `todo`/leaf — the service decides per row — so `statusCategory` is the live
+ * category (possibly non-`todo` for a container we still descend into).
+ */
+export type ReadyLayerRow = ReadyCandidateRow & { hasChildren: boolean };
+
+/**
  * One row of the triage QUEUE read (Subtask 6.11.3) — the FULL `work_item` row
  * (so the mapper consumes its `triagedAt` / `snoozedUntil` columns directly)
  * PLUS the bits the SAME single read resolves so the service doesn't re-query:
@@ -555,6 +566,56 @@ export const workItemRepository = {
           AND (${where})
         ORDER BY ${kindRankSql} ASC, w."priority" DESC, w."key" ASC
         LIMIT ${filter.limit}`;
+  },
+
+  /**
+   * One LAYER of the top-down ready traversal (Subtask 7.0.13): the project's
+   * non-archived, non-triage work items at a single parent level — the ROOTS
+   * (`parentIds === null` → `parentId IS NULL`) or the direct children of a set
+   * of parents (`parentId = ANY(parentIds)`). Each row carries its live status
+   * `category` and a `hasChildren` flag, so the service can decide per row:
+   * DESCEND into a ready container (`hasChildren`), or COLLECT a ready childless
+   * `todo` leaf into the dispatch set.
+   *
+   * This is the read that replaces the whole-table `findReadyCandidates` scan in
+   * the ready LIST path: the traversal only ever fetches the children of nodes
+   * already known to be ready, so a not-ready or fully-planned-out branch is
+   * never read. No status/leaf pre-filter here (the service applies the
+   * cascade + leaf rule); only the structural + tenant + archive/triage gates.
+   * `workspaceId` is filtered explicitly (finding #26 — RLS inert under the
+   * dev/CI superuser). Read-only → `db` singleton. Empty `parentIds` short-
+   * circuits to `[]` (no degenerate `= ANY('{}')`).
+   */
+  async findReadyLayer(
+    projectId: string,
+    workspaceId: string,
+    parentIds: string[] | null,
+  ): Promise<ReadyLayerRow[]> {
+    if (parentIds !== null && parentIds.length === 0) return [];
+    const parentPred =
+      parentIds === null
+        ? Prisma.sql`w."parentId" IS NULL`
+        : Prisma.sql`w."parentId" = ANY(${parentIds})`;
+    return db.$queryRaw<ReadyLayerRow[]>`
+      SELECT w.*,
+             ws."category"::text AS "statusCategory",
+             au."name"           AS "assigneeName",
+             au."email"          AS "assigneeEmail",
+             au."image"          AS "assigneeImage",
+             EXISTS (
+               SELECT 1 FROM "work_item" c
+                WHERE c."parentId" = w."id"
+                  AND c."archivedAt" IS NULL
+             )                   AS "hasChildren"
+        FROM "work_item" w
+        LEFT JOIN "workflow_status" ws
+              ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+        LEFT JOIN "user" au ON au."id" = w."assigneeId"
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL
+          AND ${notInTriageSql('w')}
+          AND ${parentPred}`;
   },
 
   /**
