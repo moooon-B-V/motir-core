@@ -5,9 +5,10 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { OnboardingCanvas } from '@/components/onboarding/OnboardingCanvas';
 import { type DiscoveryState, initialDiscoveryState } from '@/lib/onboarding/discoveryLoop';
 
-// The onboarding canvas shows the WHOLE project: when the active project already
-// has a produced work-item tree (read from `/api/projects/[key]/roadmap`), the
-// epics hang under the plan station — drilling "Plan → your epics" reveals them.
+// The onboarding canvas shows the WHOLE project: the pre-plan stations PLUS the
+// produced work-item roots, read ONE LEVEL AT A TIME from the per-level roadmap
+// endpoint (`/api/projects/[key]/roadmap?parentId=`). The epics show at the top
+// level beside the stations.
 
 function hubState(): DiscoveryState {
   return {
@@ -18,7 +19,7 @@ function hubState(): DiscoveryState {
   };
 }
 
-const roadmap = {
+const rootLevel = {
   nodes: [
     {
       id: 'e1',
@@ -28,19 +29,18 @@ const roadmap = {
       title: 'Billing epic',
       status: 'todo',
       isDone: false,
-      children: [],
+      hasChildren: true,
     },
   ],
+  edges: [],
 };
 
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (String(url).includes('/roadmap')) {
-        return { ok: true, json: async () => roadmap };
-      }
-      return { ok: true, json: async () => ({ layout: { positions: [] } }) };
+      if (String(url).includes('/roadmap')) return { ok: true, json: async () => rootLevel };
+      return { ok: true, json: async () => ({ layout: { positions: [] } }) }; // canvas-layout
     }),
   );
 });
@@ -49,7 +49,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('OnboardingCanvas — produced work-item tree', () => {
+describe('OnboardingCanvas — produced work-item tree (per level)', () => {
   it('shows the produced epics at the top level beside the stations', async () => {
     renderWithIntl(
       <OnboardingCanvas
@@ -60,11 +60,8 @@ describe('OnboardingCanvas — produced work-item tree', () => {
         onOpenDesign={vi.fn()}
       />,
     );
-    // Stations paint after the layout load…
+    // The root level resolves: stations + the produced epic, both at the top level.
     expect(await screen.findByText('Plan → your epics')).toBeTruthy();
-    // …and once the roadmap read resolves, the epic is VISIBLE at the top level
-    // (a root beside the stations) — not hidden behind a drill. The canvas is now
-    // searchable too.
     expect(await screen.findByText('Billing epic')).toBeTruthy();
     expect(document.querySelector('[data-node-id="e1"]')).not.toBeNull();
     expect(document.querySelector('[data-node-id="plan"]')).not.toBeNull();

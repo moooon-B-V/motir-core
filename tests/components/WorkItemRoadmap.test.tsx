@@ -1,64 +1,84 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
-import { WorkItemRoadmap, type WorkItemForestItem } from '@/components/planning/WorkItemRoadmap';
+import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
-const items: WorkItemForestItem[] = [
-  {
-    id: 'E1',
-    identifier: 'MOTIR-1',
-    title: 'Epic one',
-    kind: 'epic',
-    status: 'in_progress',
-    parentId: null,
-  },
-  {
-    id: 'S1',
-    identifier: 'MOTIR-2',
-    title: 'Story one',
-    kind: 'story',
-    status: 'todo',
-    parentId: 'E1',
-  },
-  {
-    id: 'T1a',
-    identifier: 'MOTIR-4',
-    title: 'Build the engine',
-    kind: 'subtask',
-    status: 'done',
-    parentId: 'S1',
-  },
-];
+// The per-level roadmap endpoint, served from a tiny in-memory tree:
+//   roots → [Epic one (drillable)];  E1's children → [Story one (leaf)].
+const root = {
+  nodes: [
+    {
+      id: 'E1',
+      parentId: null,
+      kind: 'epic',
+      identifier: 'MOTIR-1',
+      title: 'Epic one',
+      status: 'in_progress',
+      isDone: false,
+      hasChildren: true,
+    },
+  ],
+  edges: [],
+};
+const e1Children = {
+  nodes: [
+    {
+      id: 'S1',
+      parentId: 'E1',
+      kind: 'story',
+      identifier: 'MOTIR-2',
+      title: 'Story one',
+      status: 'done',
+      isDone: true,
+      hasChildren: false,
+    },
+  ],
+  edges: [],
+};
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+      return { ok: true, json: async () => root };
+    }),
+  );
+});
 
 function el(id: string) {
   return document.querySelector(`[data-node-id="${id}"]`);
 }
 
 describe('WorkItemRoadmap', () => {
-  it('renders the epic at the top level and drills into its stories', () => {
-    render(<WorkItemRoadmap items={items} />);
-    expect(el('E1')).toBeTruthy();
-    expect(screen.getByText('Epic one')).toBeTruthy();
+  it('renders the root level and drills into a node, fetching its children', async () => {
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    expect(await screen.findByText('Epic one')).toBeTruthy();
     fireEvent.keyDown(el('E1')!, { key: 'Enter' });
-    expect(el('S1')).toBeTruthy();
-    expect(screen.getByText('Story one')).toBeTruthy();
+    expect(await screen.findByText('Story one')).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy(); // S1 status pill
   });
 
-  it('selects a leaf subtask instead of drilling, and shows its status', () => {
+  it('selects a leaf instead of drilling', async () => {
     const onSelect = vi.fn();
-    render(<WorkItemRoadmap items={items} onSelect={onSelect} />);
+    render(<WorkItemRoadmap projectKey="MOTIR" onSelect={onSelect} />);
+    await screen.findByText('Epic one');
     fireEvent.keyDown(el('E1')!, { key: 'Enter' });
-    fireEvent.keyDown(el('S1')!, { key: 'Enter' });
-    expect(screen.getByText('Done')).toBeTruthy(); // T1a status pill
-    fireEvent.keyDown(el('T1a')!, { key: 'Enter' });
-    expect(onSelect).toHaveBeenCalledWith('T1a');
+    await screen.findByText('Story one');
+    fireEvent.keyDown(el('S1')!, { key: 'Enter' }); // S1 is a leaf
+    expect(onSelect).toHaveBeenCalledWith('S1');
   });
 
-  it('offers the search overlay (the roadmap is searchable)', () => {
-    render(<WorkItemRoadmap items={items} />);
+  it('offers the search overlay', async () => {
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
     expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
   });
 });

@@ -30,6 +30,9 @@ export interface ProjectCanvasNode {
   /** Shown as this node's breadcrumb crumb when it is the drill focus (defaults to
    *  `searchText`). */
   crumbLabel?: string;
+  /** Has children → activating it DRILLS into the next level (the canvas fetches
+   *  it). A non-drillable node is a leaf → `onSelect`. */
+  drillable?: boolean;
   /** Explicit world position (fixed stations own theirs); else the deterministic
    *  auto-layout places the node. */
   x?: number;
@@ -42,8 +45,9 @@ export interface ProjectCanvasNode {
 export interface ProjectCanvasDep {
   from: string;
   to: string;
-  /** within-parent variant; ignored when the edge is reclassified `cross`. */
-  variant?: 'firm' | 'pending';
+  /** `firm` = a settled dependency (solid); `pending` = not-yet-done (dashed);
+   *  `cross` = a story/parent-boundary crossing (the bad-plan flag). */
+  variant?: 'firm' | 'pending' | 'cross';
 }
 
 export type CanvasEdgeVariant = 'firm' | 'pending' | 'cross';

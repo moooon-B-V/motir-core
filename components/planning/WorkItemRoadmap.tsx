@@ -1,79 +1,91 @@
 'use client';
 
-import { useMemo } from 'react';
-import { ProjectRoadmapCanvas } from '@/components/planning/ProjectRoadmapCanvas';
-import { WorkItemNode, type WorkItemNodeData } from '@/components/planning/WorkItemNode';
+import { useCallback, useRef } from 'react';
+import {
+  ProjectRoadmapCanvas,
+  type RoadmapLevel,
+} from '@/components/planning/ProjectRoadmapCanvas';
+import { WorkItemNode } from '@/components/planning/WorkItemNode';
+import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 
 // The WORK-ITEM consumer of the reusable `ProjectRoadmapCanvas` (Subtask 7.20.2 /
-// MOTIR-1194) — maps a work-item forest (epic → story → subtask) + its
-// `blocked_by` edges into the foundation's content-agnostic node model, rendering
-// each node as a `WorkItemNode`. This is the adapter the persistent roadmap
-// (MOTIR-1011) and the planning workspace (MOTIR-1193) mount; the onboarding
-// canvas is the OTHER consumer of the same foundation (stations as nodes). It owns
-// no fetching — the forest + edges + saved positions arrive as DATA.
+// MOTIR-1194) — the adapter the persistent roadmap (MOTIR-1011) + the planning
+// workspace (MOTIR-1193) mount. It reads the project roadmap ONE LEVEL AT A TIME
+// from the per-level endpoint (MOTIR-1010) and renders each node as a
+// `WorkItemNode`: the roots, then a node's children on drill, with the level's
+// `blocked_by` edges drawn. The onboarding canvas is the OTHER consumer of the same
+// foundation (stations + roots at the top level).
 
-export interface WorkItemForestItem extends WorkItemNodeData {
-  /** The parent work item's id, or null for a roadmap root (an epic). */
-  parentId: string | null;
-}
-
-export interface WorkItemBlockedBy {
-  /** The item that cannot start until `blockerId` is done. */
-  blockedId: string;
-  blockerId: string;
-}
+const ROOT_KEY = '__root__';
 
 export interface WorkItemRoadmapProps {
-  items: WorkItemForestItem[];
-  dependencies?: WorkItemBlockedBy[];
+  /** The project's `PROD`/`MOTIR` key — the per-level roadmap read source. */
+  projectKey: string;
   positions?: Record<string, { x: number; y: number }>;
   onNodeMove?: (id: string, x: number, y: number) => void;
+  /** A LEAF work item (no children) was activated. */
   onSelect?: (id: string) => void;
-  initialFocusId?: string | null;
   ariaLabel?: string;
 }
 
 export function WorkItemRoadmap({
-  items,
-  dependencies = [],
+  projectKey,
   positions,
   onNodeMove,
   onSelect,
-  initialFocusId = null,
   ariaLabel = 'Work-item roadmap',
 }: WorkItemRoadmapProps) {
-  const nodes: ProjectCanvasNode[] = useMemo(() => {
-    const hasChild = new Set(items.filter((i) => i.parentId).map((i) => i.parentId!));
-    return items.map((item) => ({
-      id: item.id,
-      parentId: item.parentId,
-      searchText: `${item.identifier} ${item.title}`,
-      crumbLabel: item.identifier,
-      content: <WorkItemNode item={item} drillable={hasChild.has(item.id)} />,
-    }));
-  }, [items]);
+  // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
+  // project+parent (a ref — mutable — so a new key just misses; no reset needed).
+  const cacheRef = useRef(new Map<string, RoadmapLevelData>());
 
-  // The blocker is settled (`firm`) once it is done; else the dependency is
-  // `pending`. A cross-parent edge is reclassified `cross` by the foundation.
-  const deps: ProjectCanvasDep[] = useMemo(() => {
-    const byId = new Map(items.map((i) => [i.id, i]));
-    return dependencies.map((d) => ({
-      from: d.blockerId,
-      to: d.blockedId,
-      variant: byId.get(d.blockerId)?.status === 'done' ? ('firm' as const) : ('pending' as const),
-    }));
-  }, [items, dependencies]);
+  const loadLevel = useCallback(
+    async (parentId: string | null): Promise<RoadmapLevel> => {
+      const key = `${projectKey}:${parentId ?? ROOT_KEY}`;
+      let wi = cacheRef.current.get(key);
+      if (!wi) {
+        wi = await fetchRoadmapLevel(projectKey, parentId);
+        cacheRef.current.set(key, wi);
+      }
+      const statusById = new Map(wi.items.map((i) => [i.id, i.status]));
+      const deps: ProjectCanvasDep[] = wi.edges.map((e) => ({
+        from: e.blockerId,
+        to: e.blockedId,
+        variant: statusById.get(e.blockerId) === 'done' ? 'firm' : 'pending',
+      }));
+      const nodes: ProjectCanvasNode[] = wi.items.map((item) => ({
+        id: item.id,
+        parentId: item.parentId,
+        searchText: `${item.identifier} ${item.title}`,
+        crumbLabel: item.identifier,
+        drillable: item.hasChildren,
+        content: (
+          <WorkItemNode
+            item={{
+              id: item.id,
+              identifier: item.identifier,
+              title: item.title,
+              kind: item.kind,
+              status: item.status,
+            }}
+            drillable={item.hasChildren}
+          />
+        ),
+      }));
+      return { nodes, deps };
+    },
+    [projectKey],
+  );
 
   return (
     <ProjectRoadmapCanvas
-      nodes={nodes}
-      deps={deps}
+      loadLevel={loadLevel}
       positions={positions}
       onNodeMove={onNodeMove}
       onSelect={onSelect}
       searchable
-      initialFocusId={initialFocusId}
+      rootLabel="Roadmap"
       ariaLabel={ariaLabel}
     />
   );

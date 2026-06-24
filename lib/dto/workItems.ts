@@ -410,21 +410,39 @@ export interface RoadmapNodeDto {
   identifier: string;
   title: string;
   status: string;
+  /** This node's OWN done-ness (a `done`-category status other than `cancelled`). */
   isDone: boolean;
-  depth: number;
-  progress: RoadmapProgressDto | null;
-  children: RoadmapNodeDto[];
+  /** Has at least one non-archived child → the canvas can DRILL into it. Computed
+   *  lazily (an `EXISTS`), so the read never loads the subtree. */
+  hasChildren: boolean;
 }
 
 /**
- * The project roadmap read (Subtask 7.19.2): the whole non-archived issue
- * forest nested into {@link RoadmapNodeDto}s with per-container progress
- * roll-ups, from ONE recursive-CTE round-trip (the same scale path as the
- * `/items` tree — finding #57, no N+1; the virtualized view windows over this
- * client-side). An empty project → `{ nodes: [] }`.
+ * One `is_blocked_by` dependency EDGE on the roadmap (Subtask 7.20.2 /
+ * MOTIR-1194): `blockedId` cannot start until `blockerId` is done. The canvas
+ * draws these between visible nodes — a within-parent arrow, or the cross-parent
+ * "bad-plan" flag when the two ends sit under different parents. Only edges whose
+ * BOTH ends are in this project's forest are returned (a cross-project blocker is
+ * dropped — there is no node to anchor it to).
+ */
+export interface RoadmapEdgeDto {
+  blockedId: string;
+  blockerId: string;
+}
+
+/**
+ * ONE LEVEL of the project roadmap (Subtask 7.20.4 re-plan, MOTIR-1010): the
+ * roots (`parentId = null`) OR one parent's direct children, each with a lazy
+ * `hasChildren` drill flag, PLUS the `is_blocked_by` {@link RoadmapEdgeDto}s FROM
+ * those nodes. The canvas (MOTIR-1194) displays one level at a time and fetches
+ * the next on drill — so the read is per-level (reusing `findProjectTreeLevel`),
+ * never a whole-tree round-trip (mistake #91). Per-container progress meters are
+ * MOTIR-1013's work (they need the subtree, which a level read deliberately
+ * avoids). An empty level → `{ nodes: [], edges: [] }`.
  */
 export interface ProjectRoadmapDto {
   nodes: RoadmapNodeDto[];
+  edges: RoadmapEdgeDto[];
 }
 
 /**
