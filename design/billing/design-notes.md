@@ -67,7 +67,7 @@ MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
 > label. This asset labels its two lines "Motir" and "Motir AI".
 
 - **TWO billed products** (decision §1), largely independent with **ONE bundle: a
-  paid AI plan includes 1 tracker seat** (8.1.22 / MOTIR-1316). Your bill = ① + ②:
+  paid AI plan includes 1 Motir seat** (8.1.22 / MOTIR-1316). Your bill = ① + ②:
   - **① Motir** (the PM tool) — **free** for any team within the caps,
     **$5 / seat / mo** ($40 / seat / yr — the annual default, ~33% off) only when
     the org crosses a cap. The scaled state is a **motir-core org subscription
@@ -80,7 +80,7 @@ MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
     8,000/mo — the **recommended anchor**, `pro_pool_annual` is the Stripe default
     Price) / **Max** ($150/mo · $1,200/yr, 30,000/mo) / **Enterprise** (custom).
     This is the motir-ai `PlanTier`. Any org — free- or scaled-Motir — can buy it.
-    **Each PAID plan includes 1 tracker seat → the org's §4 caps are lifted** (the
+    **Each PAID plan includes 1 Motir seat → the org's §4 caps are lifted** (the
     solo plan-with-AI case is never walled at 250 items; members beyond the first
     bill at $5/seat). The Free trial does NOT include a seat. Overage **credit
     top-up is $10 / 1,000** (one-time at Checkout).
@@ -283,12 +283,12 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
   4. **The credit allotment** (`.alot`, the load-bearing figure, bold) — the credit
      COUNT lives here, so the feature bullets stay capability-focused (no count
      duplication).
-     4b. **The bundled tracker seat** (`.seat`, `i-users` glyph; 8.1.22 / MOTIR-1316) —
-     every PAID plan includes 1 tracker seat, so the line reads **"+ 1 tracker seat ·
+     4b. **The bundled Motir seat** (`.seat`, `i-users` glyph; 8.1.22 / MOTIR-1316) —
+     every PAID plan includes 1 Motir seat, so the line reads **"+ 1 Motir seat ·
      work items uncapped"** (Standard / Pro / Max) — the value point that the AI plan
-     lifts the §4 work-item caps for the solo case. **Enterprise** → "Tracker seats
+     lifts the §4 work-item caps for the solo case. **Enterprise** → "Motir seats
      included (custom)". **Free** uses the `.off` variant (`--el-text-faint`) — **"No
-     tracker seat · 250-item cap"** — stating the absence so the contrast is the
+     Motir seat · 250-item cap"** — stating the absence so the contrast is the
      upgrade reason. Sits directly under `.alot`.
   5. **A CUMULATIVE `i-check` feature list** — the cumulative chain starts at the
      first PAID tier (**Standard**, now the entry rung), so each tier from Pro up
