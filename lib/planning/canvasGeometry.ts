@@ -86,6 +86,25 @@ export function fitView(bounds: Bounds, viewport: { w: number; h: number }, padd
   };
 }
 
+/**
+ * The view that CENTRES a single world `rect` in the `viewport` at the current
+ * `scale` (the scale is left untouched — a pan, not a zoom). Used by
+ * search-to-focus: locate a node, then pan it to the middle of the screen.
+ */
+export function centerOn(rect: Rect, viewport: { w: number; h: number }, scale: number): View {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  return { scale, tx: viewport.w / 2 - cx * scale, ty: viewport.h / 2 - cy * scale };
+}
+
+/** The world-space midpoint between two node rects (anchors a between-edge badge). */
+export function edgeMidpoint(a: Rect, b: Rect): { x: number; y: number } {
+  return {
+    x: (a.x + a.w / 2 + (b.x + b.w / 2)) / 2,
+    y: (a.y + a.h / 2 + (b.y + b.h / 2)) / 2,
+  };
+}
+
 /** Convert a SCREEN delta (px) to a WORLD delta — used when dragging a node. */
 export function screenDeltaToWorld(
   dx: number,

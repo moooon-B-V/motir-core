@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_SCALE,
   MIN_SCALE,
+  centerOn,
   clampScale,
+  edgeMidpoint,
   edgePath,
   fitView,
   nodesBounds,
@@ -10,6 +12,28 @@ import {
   screenToWorld,
   zoomToward,
 } from '@/lib/planning/canvasGeometry';
+
+describe('centerOn', () => {
+  it('pans a node to the viewport centre, preserving scale', () => {
+    const rect = { x: 100, y: 200, w: 280, h: 132 };
+    const viewport = { w: 1000, h: 600 };
+    const v = centerOn(rect, viewport, 1.5);
+    expect(v.scale).toBe(1.5);
+    // the node centre, transformed by the returned view, lands on the viewport centre
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    expect(v.tx + cx * v.scale).toBeCloseTo(viewport.w / 2);
+    expect(v.ty + cy * v.scale).toBeCloseTo(viewport.h / 2);
+  });
+});
+
+describe('edgeMidpoint', () => {
+  it('is the midpoint between two node centres', () => {
+    const a = { x: 0, y: 0, w: 100, h: 100 };
+    const b = { x: 200, y: 400, w: 100, h: 100 };
+    expect(edgeMidpoint(a, b)).toEqual({ x: 150, y: 250 });
+  });
+});
 
 describe('clampScale', () => {
   it('bounds the zoom range', () => {
