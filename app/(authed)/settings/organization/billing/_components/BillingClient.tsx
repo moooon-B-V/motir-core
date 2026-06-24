@@ -1239,8 +1239,12 @@ function SeatsView({
   const seat = data.catalog.seatPlan.prices;
   const annualSeat = seat.annual.amountUsd;
   const monthlySeat = seat.monthly.amountUsd;
-  const annualTotal = memberCount * annualSeat;
-  const monthlyTotal = memberCount * monthlySeat;
+  // A PAID Motir AI plan bundles the first seat (8.1.22 / 8.1.25): the org is
+  // billed for members BEYOND the included one, so the seat totals net it out.
+  const aiIncludedSeat = data.motir.aiIncludedSeat;
+  const billableSeats = aiIncludedSeat ? Math.max(0, memberCount - 1) : memberCount;
+  const annualTotal = billableSeats * annualSeat;
+  const monthlyTotal = billableSeats * monthlySeat;
   const annualMoEquiv = Math.round(annualTotal / 12);
   const annualSave = monthlyTotal * 12 - annualTotal;
   const renews = fmtDate(sub?.currentPeriodEnd ?? null);
@@ -1266,6 +1270,13 @@ function SeatsView({
           {t('seats.breadcrumb', { org: orgName })}
         </p>
       </header>
+
+      {aiIncludedSeat ? (
+        <p className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-mint) p-(--spacing-card-padding) font-sans text-xs text-(--el-text-strong)">
+          <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {t('seats.includedSeatNote', { n: billableSeats })}
+        </p>
+      ) : null}
 
       {scaled ? (
         <Card

@@ -107,7 +107,7 @@ export const billingService = {
       organizationId: input.organizationId,
       access: { role: access.role, canManageBilling: isOrgOwnerRole(access.role) },
       isMeta: org?.isMeta ?? false,
-      motir: { scaledTrackerSubscription },
+      motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       catalog: BILLING_CATALOG,
     };
@@ -306,11 +306,15 @@ export const billingService = {
     // Off-cloud there is no billing at all — nothing to bill is the honest shape.
     if (!isCloudBilling()) return { applied: false, outcome: 'no_active_tracker_subscription' };
 
-    const { isScaledActive, memberCount } = await withSystemContext(async (tx) => {
+    const { isScaledActive, memberCount, aiIncludedSeat } = await withSystemContext(async (tx) => {
       const org = await organizationRepository.findByIdInTx(organizationId, tx);
       const scaled = (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null;
       const count = await organizationMembershipRepository.countByOrg(organizationId, tx);
-      return { isScaledActive: scaled?.status === 'active', memberCount: count };
+      return {
+        isScaledActive: scaled?.status === 'active',
+        memberCount: count,
+        aiIncludedSeat: org?.aiIncludedSeat ?? false,
+      };
     });
 
     // Only an active scaled-tracker org has seats to bill; everything else is a
@@ -318,7 +322,13 @@ export const billingService = {
     // handled by the webhook flag, not the seat count).
     if (!isScaledActive) return { applied: false, outcome: 'no_active_tracker_subscription' };
 
-    return setSeatQuantity({ coreOrganizationId: organizationId, quantity: memberCount });
+    // A PAID Motir AI plan BUNDLES the first seat (ADR §4, amended 2026-06-24 /
+    // 8.1.22): net it out of the billed scaled-tracker quantity so the org pays
+    // for members BEYOND the included one. Floors at 0 (a 1-member org never bills
+    // a seat). An org WITHOUT the AI seat bills every member, as before.
+    const billableSeats = aiIncludedSeat ? Math.max(0, memberCount - 1) : memberCount;
+
+    return setSeatQuantity({ coreOrganizationId: organizationId, quantity: billableSeats });
   },
 };
 

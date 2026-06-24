@@ -340,6 +340,24 @@ describe('billingService.syncScaledTrackerSeatQuantity (Subtask 8.1.12)', () => 
     expect(result).toEqual({ applied: true, outcome: 'updated' });
   });
 
+  it('nets the bundled AI seat — bills members − 1 when the org holds a paid AI plan (8.1.25)', async () => {
+    const { organizationId } = await makeOrgWithRoles(); // 3 members
+    await billingPropagationService.setScaledTrackerState({
+      organizationId,
+      scaledTrackerSubscription: SCALED,
+    });
+    // A paid AI plan bundles the first seat.
+    await billingPropagationService.setAiIncludedSeat({ organizationId, included: true });
+
+    await billingService.syncScaledTrackerSeatQuantity(organizationId);
+
+    // 3 members − 1 included = 2 billed seats.
+    expect(setSeatQuantityMock).toHaveBeenLastCalledWith({
+      coreOrganizationId: organizationId,
+      quantity: 2,
+    });
+  });
+
   it('re-derives the count from truth — rapid adds do not double-count (absolute set)', async () => {
     const { organizationId, owner } = await makeOrgWithRoles(); // 3 members
     await billingPropagationService.setScaledTrackerState({
