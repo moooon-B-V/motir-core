@@ -877,7 +877,8 @@
       "ready": "可以开始",
       "allResolved": "所有阻塞已解决",
       "blocked": "受阻",
-      "waiting": "正在等待 {count, plural, other {# 个工作项}}"
+      "waiting": "正在等待 {count, plural, other {# 个工作项}}",
+      "waitingOnParent": "正在等待上级工作项"
     },
     "sprintPicker": {
       "label": "Sprint",

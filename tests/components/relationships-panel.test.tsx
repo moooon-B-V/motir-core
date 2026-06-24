@@ -104,7 +104,7 @@ const EMPTY: Omit<React.ComponentProps<typeof RelationshipsPanel>, 'readiness' |
   // the only gate is the category, not the blocker count (bug-ready-banner-no-deps).
   currentStatus: 'todo',
 };
-const READY: ReadinessVerdictDto = { ready: true, openBlockers: [] };
+const READY: ReadinessVerdictDto = { ready: true, openBlockers: [], blockedByAncestor: null };
 
 describe('ReadinessBadge (2.4.5)', () => {
   it('renders the state as TEXT (not colour alone) — "Ready to start" when ready', () => {
@@ -136,6 +136,48 @@ describe('ReadinessBadge (2.4.5)', () => {
       <ReadinessBadge ready={false} blockers={[{ identifier: 'PROD-3', href: '/items/PROD-3' }]} />,
     );
     screen.getByText(/Waiting on 1 work item —/);
+  });
+
+  it('names the blocked ANCESTOR when there are no own blockers (cascade cause, 7.0.13)', () => {
+    render(
+      <ReadinessBadge
+        ready={false}
+        blockers={[]}
+        blockedByAncestor={{ identifier: 'PROD-8', href: '/items/PROD-8', title: '7.19 Roadmap' }}
+      />,
+    );
+    screen.getByText('Blocked');
+    screen.getByText(/Waiting on a parent item —/);
+    const lnk = screen.getByRole('link', { name: 'PROD-8' });
+    expect(lnk.getAttribute('href')).toBe('/items/PROD-8');
+    screen.getByText(/· 7.19 Roadmap/);
+  });
+
+  it('own blockers take precedence over the ancestor line', () => {
+    render(
+      <ReadinessBadge
+        ready={false}
+        blockers={[{ identifier: 'PROD-3', href: '/items/PROD-3' }]}
+        blockedByAncestor={{ identifier: 'PROD-8', href: '/items/PROD-8', title: '7.19 Roadmap' }}
+      />,
+    );
+    screen.getByText(/Waiting on 1 work item —/);
+    expect(screen.queryByText(/Waiting on a parent item/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'PROD-8' })).toBeNull();
+  });
+
+  it('opens the ancestor link in a new tab when blockerLinksNewTab is set (peek)', () => {
+    render(
+      <ReadinessBadge
+        ready={false}
+        blockers={[]}
+        blockedByAncestor={{ identifier: 'PROD-8', href: '/items/PROD-8', title: '7.19' }}
+        blockerLinksNewTab
+      />,
+    );
+    const lnk = screen.getByRole('link', { name: 'PROD-8' });
+    expect(lnk.getAttribute('target')).toBe('_blank');
+    expect(lnk.getAttribute('rel')).toContain('noopener');
   });
 });
 
@@ -170,6 +212,7 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
         readiness={{
           ready: false,
           openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })],
+          blockedByAncestor: null,
         }}
         currentStatus="todo"
         workflow={workflow}
@@ -206,7 +249,7 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
       <RelationshipsPanel
         {...EMPTY}
         blockedBy={[link({ id: 'b', identifier: 'PROD-3', status: 'done' })]}
-        readiness={{ ready: true, openBlockers: [] }}
+        readiness={{ ready: true, openBlockers: [], blockedByAncestor: null }}
         workflow={workflow}
       />,
     );
@@ -221,7 +264,11 @@ describe('RelationshipsPanel (2.4.5 read-only)', () => {
       <RelationshipsPanel
         {...EMPTY}
         blockedBy={[link({ id: 'b', identifier: 'PROD-3', title: 'Upstream', status: 'todo' })]}
-        readiness={{ ready: false, openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })] }}
+        readiness={{
+          ready: false,
+          openBlockers: [summary({ id: 'b', identifier: 'PROD-3' })],
+          blockedByAncestor: null,
+        }}
         currentStatus="done"
         workflow={workflow}
       />,

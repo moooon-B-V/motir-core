@@ -877,7 +877,8 @@
       "ready": "Ready to start",
       "allResolved": "All blockers resolved",
       "blocked": "Blocked",
-      "waiting": "Waiting on {count, plural, one {# work item} other {# work items}}"
+      "waiting": "Waiting on {count, plural, one {# work item} other {# work items}}",
+      "waitingOnParent": "Waiting on a parent item"
     },
     "sprintPicker": {
       "label": "Sprint",

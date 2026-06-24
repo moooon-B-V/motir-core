@@ -292,3 +292,91 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
     expect(page.items.map((i) => i.id)).toContain(ready.id);
   });
 });
+
+describe('getIssueDetail readiness.blockedByAncestor — the cascade cause (Subtask 7.0.13)', () => {
+  // The detail/quick-view readiness banner needs to NAME why a cascade-blocked
+  // item is blocked: own blockers are clear but a blocked ancestor holds it out.
+  // getReadiness already computes this; getIssueDetail surfaces the nearest
+  // own-blocked ancestor as a summary so the shared ReadinessBadge can render it.
+  async function tree() {
+    const fx = await makeWorkItemFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'E' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'S', parentId: epic.id },
+      fx.ctx,
+    );
+    const subtask = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'T', parentId: story.id },
+      fx.ctx,
+    );
+    return { fx, epic, story, subtask };
+  }
+  async function blockWith(
+    fromId: string,
+    fx: { projectId: string; ctx: Parameters<typeof workItemsService.isReady>[1] },
+  ) {
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'BLK' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    return blocker;
+  }
+
+  it('names the nearest own-blocked ancestor when the item has no own blocker', async () => {
+    const { fx, story, subtask } = await tree();
+    await blockWith(story.id, fx);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(false);
+    expect(detail.readiness.openBlockers).toEqual([]); // no OWN blockers
+    expect(detail.readiness.blockedByAncestor?.id).toBe(story.id); // the parent is the cause
+    expect(detail.readiness.blockedByAncestor?.identifier).toBe(story.identifier);
+  });
+
+  it('surfaces the NEAREST own-blocked ancestor when both parent and grandparent are blocked', async () => {
+    const { fx, epic, story, subtask } = await tree();
+    await blockWith(epic.id, fx);
+    await blockWith(story.id, fx);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    // The parent (story) is nearer than the grandparent (epic).
+    expect(detail.readiness.blockedByAncestor?.id).toBe(story.id);
+  });
+
+  it('is null when the item has its OWN open blocker (own blockers take precedence)', async () => {
+    const { fx, subtask } = await tree();
+    const own = await blockWith(subtask.id, fx);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(false);
+    expect(detail.readiness.openBlockers.map((b) => b.id)).toEqual([own.id]);
+    expect(detail.readiness.blockedByAncestor).toBeNull();
+  });
+
+  it('is null when the item is ready (chain clear)', async () => {
+    const { fx, subtask } = await tree();
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(true);
+    expect(detail.readiness.blockedByAncestor).toBeNull();
+  });
+
+  it('clears once the ancestor blocker is resolved', async () => {
+    const { fx, story, subtask } = await tree();
+    const blocker = await blockWith(story.id, fx);
+
+    let detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness.blockedByAncestor?.id).toBe(story.id);
+
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(true);
+    expect(detail.readiness.blockedByAncestor).toBeNull();
+  });
+});

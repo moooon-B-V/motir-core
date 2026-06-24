@@ -76,6 +76,15 @@ export interface QuickViewData {
    * banner once the item leaves the `todo` category (see `statusCategory`):
    * "can I start this?" is moot for an item already in progress or done. `null`
    * only when the read carried no readiness verdict at all.
+   *
+   * `blockedByAncestor` (Subtask 7.0.13) is the nearest blocked ANCESTOR when the
+   * item's OWN blockers are clear but a blocked parent / grandparent holds it out
+   * of the ready set (the readiness cascade). The banner falls back to naming it
+   * so a cascade-blocked item isn't a bare "Blocked"; `null` otherwise.
    */
-  readiness: { ready: boolean; blockers: string[] } | null;
+  readiness: {
+    ready: boolean;
+    blockers: string[];
+    blockedByAncestor: { identifier: string; title: string } | null;
+  } | null;
 }

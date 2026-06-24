@@ -279,6 +279,15 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 identifier,
                 href: `/items/${identifier}`,
               }))}
+              blockedByAncestor={
+                data.readiness.blockedByAncestor
+                  ? {
+                      identifier: data.readiness.blockedByAncestor.identifier,
+                      title: data.readiness.blockedByAncestor.title,
+                      href: `/items/${data.readiness.blockedByAncestor.identifier}`,
+                    }
+                  : null
+              }
               blockerLinksNewTab
               className="mt-4"
             />

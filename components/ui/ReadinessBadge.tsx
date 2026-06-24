@@ -32,6 +32,15 @@ export interface ReadinessBadgeProps {
    * a transient overlay opens the blocker's detail page beside the open peek).
    */
   blockerLinksNewTab?: boolean;
+  /**
+   * The nearest blocked ANCESTOR (Subtask 7.0.13) — set when the item's OWN
+   * blockers are clear but a blocked parent / grandparent holds it out of the
+   * ready set (the readiness cascade). Named as the blocked reason ONLY when
+   * there are no own `blockers` to show (own blockers take precedence); honours
+   * `blockerLinksNewTab` for its link the same way. Without it, a cascade-blocked
+   * item would render a bare "Blocked" with nothing to point at.
+   */
+  blockedByAncestor?: { identifier: string; href: string; title: string } | null;
   className?: string;
 }
 
@@ -39,6 +48,7 @@ export function ReadinessBadge({
   ready,
   blockers = [],
   blockerLinksNewTab = false,
+  blockedByAncestor = null,
   className,
 }: ReadinessBadgeProps) {
   const t = useTranslations('ui');
@@ -93,6 +103,21 @@ export function ReadinessBadge({
                 </Link>
               </span>
             ))}
+          </span>
+        ) : blockedByAncestor ? (
+          // Cascade cause (7.0.13): own blockers are clear, but a blocked
+          // ancestor holds it out of the ready set — name the parent so the
+          // reason is legible instead of a bare "Blocked".
+          <span className="text-(--el-text-strong) font-sans text-[13px]">
+            {t('readiness.waitingOnParent')} —{' '}
+            <Link
+              href={blockedByAncestor.href}
+              {...(blockerLinksNewTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              className="text-(--el-text-strong) font-mono text-xs underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              {blockedByAncestor.identifier}
+            </Link>{' '}
+            <span className="text-(--el-text-strong)">· {blockedByAncestor.title}</span>
           </span>
         ) : null}
       </div>
