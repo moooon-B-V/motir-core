@@ -212,4 +212,27 @@ describe('BillingClient', () => {
     await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
     expect(screen.queryByText(/Cloud-only/)).toBeNull();
   });
+
+  it('four-tier storefront: no Starter, paid cards show the bundled Motir seat + use-case (8.1.17)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(activeStandard()), { status: 200 })),
+    );
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    await waitFor(() => expect(screen.getByText('Motir AI — plans & subscription')).toBeTruthy());
+
+    // Starter is gone — its CTA never renders.
+    expect(screen.queryByRole('button', { name: 'Choose Starter' })).toBeNull();
+    // Paid cards carry the bundled Motir seat; Free states the absence (never "tracker").
+    expect(
+      screen.getAllByText('+ 1 Motir seat · work items uncapped').length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('No Motir seat · 250-item cap')).toBeTruthy();
+    expect(screen.queryByText(/tracker seat/i)).toBeNull();
+    // Per-tier use-case copy + the cumulative "Everything in {prev}" lead render.
+    expect(screen.getByText('Detailed planning, plus real agent work.')).toBeTruthy();
+    expect(screen.getByText('Everything in Standard, plus')).toBeTruthy();
+  });
 });

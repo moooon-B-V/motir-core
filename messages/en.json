@@ -3762,7 +3762,42 @@
       "ctaContactSales": "Contact sales",
       "ctaCurrent": "Current plan",
       "ctaTrialUsed": "Trial used",
-      "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen."
+      "footer": "Annual billing (the Stripe default) is shown — switch to Monthly above to compare. Tax is applied automatically at checkout. Credits are an internal usage allotment; the price shown is the AI plan fee, billed by Stripe to the {org} organization. Your Motir seats are billed separately — manage them on the Motir plan screen.",
+      "seatIncluded": "+ 1 Motir seat · work items uncapped",
+      "seatNone": "No Motir seat · 250-item cap",
+      "seatCustom": "Motir seats included (custom)",
+      "customPool": "Custom credit pool",
+      "everythingIn": "Everything in {prev}, plus",
+      "tiers": {
+        "free": {
+          "useCase": "Trying Motir AI out.",
+          "features": ["A one-time taste of every agent"],
+          "featuresOff": ["No monthly refresh · no top-ups"]
+        },
+        "standard": {
+          "useCase": "Detailed planning, plus a taste of agent.",
+          "features": [
+            "Plan the whole project, in detail",
+            "Credits refresh monthly · metered top-ups",
+            "Room to try agent tasks"
+          ]
+        },
+        "pro": {
+          "useCase": "Detailed planning, plus real agent work.",
+          "prev": "Standard",
+          "features": ["Run the coding agent on real tasks", "Top up anytime for heavier runs"]
+        },
+        "max": {
+          "useCase": "Detailed planning, plus heavy agent work.",
+          "prev": "Pro",
+          "features": ["Headroom for sustained agent work", "Throughput for a busy team"]
+        },
+        "enterprise": {
+          "useCase": "Custom volume, plus org controls.",
+          "prev": "Max",
+          "features": ["Invoiced billing & SSO", "Dedicated support"]
+        }
+      }
     },
     "topup": {
       "title": "Top up credits",
