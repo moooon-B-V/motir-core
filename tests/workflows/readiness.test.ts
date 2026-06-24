@@ -250,4 +250,45 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
     await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
     expect(await inReady()).toBe(true);
   });
+
+  it('listReady FILLS its window past not-ready candidates — a non-empty count never renders an empty list (count/list agree)', async () => {
+    const fx = await makeWorkItemFixture();
+    // An OPEN, NON-candidate blocker: `in_progress` is not terminal (so it
+    // blocks) and is itself excluded from the ready set (candidates are
+    // todo-category only) — so it can't slip into the ready window as a red
+    // herring.
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'B' },
+      fx.ctx,
+    );
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'in_progress' } });
+    // Two NOT-ready tasks created FIRST (lower keys → they sort AHEAD under
+    // `(type, priority, key)`), each blocked by the in-progress task.
+    for (const title of ['NR1', 'NR2']) {
+      const nr = await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title },
+        fx.ctx,
+      );
+      await workItemsService.linkWorkItems(
+        { fromId: nr.id, toId: blocker.id, kind: 'is_blocked_by' },
+        fx.ctx,
+      );
+    }
+    // One READY task created LAST → highest key → sorts AFTER the not-ready ones.
+    const ready = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'READY' },
+      fx.ctx,
+    );
+
+    // A small window (limit 2) whose FIRST candidate page is entirely not-ready
+    // (NR1, NR2). Before the window-fill, listReady returned that empty page →
+    // the /ready page showed its empty state while the count badge said 1. Now
+    // listReady walks past them to surface READY, so the two agree.
+    const page = await workItemsService.listReady(fx.projectId, { limit: 2 }, fx.ctx);
+    const count = await workItemsService.countReady(fx.projectId, {}, fx.ctx);
+
+    expect(count.count).toBe(1);
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items.map((i) => i.id)).toContain(ready.id);
+  });
 });

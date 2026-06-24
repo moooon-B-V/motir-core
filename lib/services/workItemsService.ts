@@ -2714,22 +2714,47 @@ export const workItemsService = {
    * `getReadinessForItems` — no N+1).
    *
    * Tenant gate first (cross-workspace / missing project → `ProjectNotFoundError`
-   * → 404, no existence leak). Then ONE candidate read narrows by the cheap SQL
+   * → 404, no existence leak). Then candidate reads narrow by the cheap SQL
    * facets (kind / assignee / priority / todo-status) under the
-   * `(type asc, priority desc, key asc)` sort + the cursor seek-after, fetching `limit + 1`
-   * to detect a next page; readiness is applied over that bounded window. **A page
-   * may be SHORTER than `limit`** when blocked candidates fall inside the window —
-   * the cursor still advances past the whole window, so the agent walks the FULL
-   * set deterministically across pages. A malformed cursor throws
-   * `InvalidReadyCursorError` (→ 400); a valid cursor past the tail returns `[]`.
+   * `(type asc, priority desc, key asc)` sort + the cursor seek-after; readiness
+   * is applied over each window (the batched `getReadinessForItems` — no N+1).
+   *
+   * **The page FILLS its window with READY items.** Readiness is computed AFTER
+   * the SQL paging, so a single candidate window can come back with few/zero
+   * ready rows when not-ready candidates (todo leaves with an open blocker, or —
+   * post-7.0.13 — a leaf held by a not-ready ANCESTOR) outrank the ready ones.
+   * Returning just that one window made `/ready` render its EMPTY state while the
+   * count badge (`countReady`, which walks deeper) showed a positive number — a
+   * count/list contradiction. So we WALK candidate pages, accumulating ready rows
+   * until the window holds `limit` of them or the candidate set is exhausted (the
+   * same loop `getNextReady` / `countReady` use). `nextCursor` is the seek-after
+   * of the last candidate examined, so paging stays gapless and deterministic; a
+   * valid cursor past the tail returns `[]`, and the list is empty ONLY when the
+   * project truly has no ready work. A malformed cursor throws
+   * `InvalidReadyCursorError` (→ 400).
    */
   async listReady(
     projectId: string,
     filter: ReadyListFilter,
     ctx: ServiceContext,
   ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
-    const { rows, nextCursor } = await pageReadyCandidates(projectId, filter, ctx);
-    return { items: rows.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
+    const limit = clampReadyLimit(filter.limit);
+    const collected: ReadyCandidateRow[] = [];
+    let cursor = filter.cursor;
+    let nextCursor: string | null = null;
+    // Bounded by the finite candidate set — `pageReadyCandidates` advances the
+    // cursor every window and returns `nextCursor: null` at the tail.
+    for (;;) {
+      const page = await pageReadyCandidates(projectId, { ...filter, cursor, limit }, ctx);
+      collected.push(...page.rows);
+      nextCursor = page.nextCursor;
+      if (collected.length >= limit || page.nextCursor === null) break;
+      cursor = page.nextCursor;
+    }
+    return {
+      items: collected.map((r) => toReadyItemDto(r, rowReadyContext(r))),
+      nextCursor,
+    };
   },
 
   /**
