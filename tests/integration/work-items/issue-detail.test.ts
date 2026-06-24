@@ -225,7 +225,7 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
     expect(detail.relatesTo).toEqual([]);
     expect(detail.duplicates).toEqual([]);
     expect(detail.clones).toEqual([]);
-    expect(detail.readiness).toEqual({ ready: true, openBlockers: [] });
+    expect(detail.readiness).toEqual({ ready: true, openBlockers: [], blockedByAncestor: null });
   });
 
   it('a cross-workspace or unknown identifier → WorkItemNotFoundError (no existence leak)', async () => {
@@ -355,7 +355,11 @@ describe('workItemsService.getQuickView (8.8.2 — the peek payload)', () => {
     expect(peek.reporterName).toBe('Owner');
     // Readiness passes through: a todo story with an open (non-terminal) blocker
     // → blocked, the open blocker NAMED for the panel's ?peek= swap-link.
-    expect(peek.readiness).toEqual({ ready: false, blockers: [blocker.identifier] });
+    expect(peek.readiness).toEqual({
+      ready: false,
+      blockers: [blocker.identifier],
+      blockedByAncestor: null,
+    });
 
     // A missing / cross-workspace key throws WorkItemNotFoundError — which the
     // route maps to the no-leak 404 → the controller's not-found panel.
