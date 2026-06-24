@@ -218,6 +218,30 @@ to `excludeIds`.
 with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, and
 `runCommand` (`motir run <key>`).
 
+#### `claim_next_ready`
+
+ATOMICALLY **claim** the next ready Subtask in the project's **active sprint**
+for dispatch, and return the same dispatch payload as `next_ready`. Unlike
+`next_ready` (which only READS), this is the race-safe write that two concurrent
+`motir run` sessions use: in one transaction it locks the highest-ranked ready
+item in the active sprint (`SELECT … FOR UPDATE SKIP LOCKED`), transitions it to
+**In Progress**, and returns it. Two concurrent callers therefore never claim the
+same item — the loser takes the next-best, or gets an empty result and **retries**.
+The claim **IS** the dispatch status flip, so do NOT call `transition_status`
+afterwards. The active sprint is resolved server-side (one active sprint per
+project), so no sprint id is passed.
+
+| Input        | Type   | Required | Notes        |
+| ------------ | ------ | -------- | ------------ |
+| `projectKey` | string | yes      | Project key. |
+
+**Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null, reason? }`.
+On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
+`status` now in the `in_progress` category). When nothing could be claimed,
+`item` is `null` and `reason` is `"no_active_sprint"` (run `motir plan sprint`
+first) or `"none_ready"` (retry, or repair the sprint's ready set). Scope:
+`work_items:write` (it flips status).
+
 #### `get_work_item`
 
 Read one work item by identifier as the full issue-detail aggregate — the same
