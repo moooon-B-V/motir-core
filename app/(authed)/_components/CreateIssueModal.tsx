@@ -355,6 +355,10 @@ export function CreateIssueModal({
               <>
                 <MarkdownEditor
                   label={t('createIssue.explanation')}
+                  // The disclosure toggle above already shows the visible
+                  // "Explanation" header — hide the editor's own label so it
+                  // isn't rendered twice (MOTIR-1313). aria-label is retained.
+                  labelHidden
                   value={explanation}
                   onChange={setExplanation}
                   size="min"
