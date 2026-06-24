@@ -35,5 +35,5 @@ export default async function OnboardingPage() {
 
   const initialIdea = await readPendingIdea();
 
-  return <DiscoveryOnboarding initialIdea={initialIdea} />;
+  return <DiscoveryOnboarding initialIdea={initialIdea} projectKey={ctx.project.identifier} />;
 }
