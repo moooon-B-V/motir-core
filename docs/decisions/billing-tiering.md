@@ -334,6 +334,49 @@ curve stays monotonic top-to-bottom.
 > seat fee fund credits (`notes.html` #10). COGS/margin figures live only in the
 > private `motir-meta/margin-analysis.md`.
 
+**The CODING comp — Cursor (rung 1, the AI-ladder mirror; June 2026).** Jira /
+Linear (the verified mirror above) bound the **PM** product; **Cursor** is the
+reference for the **AI-coding** use-case Pro / Max sell into, and its shape is
+near-identical to ours — a **dollar-denominated usage credit metered by model ×
+context × output**, the same per-credit mechanic as `credit-model.md` §2:
+
+- **Hobby $0** (limited) · **Pro $20** (~$20 of model usage included, ≈ 500
+  premium requests) · **Pro+ $60** (~$70 usage, ~3×) · **Ultra $200** (~$400
+  usage, ~20×) · Teams $40/seat · Enterprise custom. (~20% off annual.)
+  ([Cursor pricing](https://cursor.com/pricing), retrieved 2026-06-23.)
+
+**What it tells the AI ladder.** Cursor's ladder runs to **$200 / 20×** _for the
+agent alone_, passing model compute **near cost** — real agent burn is heavy and the
+market prices it near-cost. At Motir's v1 credit markup a coding-heavy user gets far
+less agent runway per dollar; the moat that justifies the gap is the **automatic
+agent loop** (plan → execute autonomously), not price or model-choice (Cursor has a
+model picker + transparent metering too — that "transparent model choice" win holds
+only vs the PM tools above, not vs Cursor).
+
+> **DECISION (Yue, 2026-06-23) — a two-lane credit margin (planning hi / agent
+> near-cost).** The credit markup is split by **use-case lane**, not just by model:
+>
+> - **Planning lane** — keeps the high markup (the value is the planning
+>   intelligence; compute is tiny; no price anchor).
+> - **Agent lane** — the **hosted autonomous agent loop**, which is **not only
+>   coding**: it runs **doc writing, design, manual-task assistance, and future task
+>   types** too. This lane is metered at a **small margin (~20%, near-cost)** so
+>   agent credits burn far slower and Motir stays **within Cursor's ballpark — never
+>   ~10× pricier**. The ~20% (not 0%) must cover **provider tokens + agent HOSTING**
+>   (sandbox/compute time), so it is sized over fully-loaded COGS, not tokens alone.
+>
+> This **supersedes** the earlier "defer a pool-resize" framing: the lever is the
+> agent-lane **rate**, not (only) bigger pools. **No code ships in 8.1** — the rate
+> is effective-dated config (`ModelCreditRate`, a per-row `marginMultiplier`), and
+> nothing meters the agent loop until Epic 9 (MOTIR-673). **Epic 9 owns the
+> implementation**: add a **use-case dimension to `ModelCreditRate`** (or meter the
+> agent under a distinct model-key — zero-migration) and **calibrate the ~20%
+> against measured token + hosting cost**; BYO-API-key is a secondary lever for the
+> heaviest users. The §-COGS / compute-per-dollar math stays in the private
+> `motir-meta/margin-analysis.md` (out of this open repo). The 8.1.21 / MOTIR-1311
+> copy fix (promise _running_ the agent + top-ups, never "whole tasks") is the
+> interim guard until the lane ships.
+
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
 A paid org's subscription carries **two recurring items**: one **shared per-seat
@@ -681,6 +724,21 @@ gates the mutations. Self-host: N/A (no billing surface).
   Epic 7 internals beyond the already-shipped credit ledger it builds on.
 - **MOTIR-1106 (8.6.2)** is the same pricing-strategy decision in Epic 8.6 and is
   now redundant with this ADR — close it as a duplicate, pointing here.
+- **⚠️ DECIDED — a two-lane credit margin; the AGENT lane runs near-cost (Yue,
+  2026-06-23; §2).** The v1 pool sizes (Standard 2,000 / Pro 8,000 / Max 30,000) were
+  sized off **planning** burn (a pass ≈ 150–250 credits); **agent** burn (coding +
+  doc-writing + design + manual-task assist + future types) is far heavier, and at
+  the v1 credit markup a user reads it against Cursor's near-cost compute and finds
+  it ~8–10× pricier. **Decision:** keep the high **planning** margin; meter the
+  **agent lane at ~20% (near-cost, over tokens + hosting)** so credits burn slowly
+  and stay within Cursor's ballpark (never ~10× pricier) — the moat is the **automatic
+  agent loop**, not price. **No code in 8.1** (the rate is effective-dated config;
+  nothing meters the agent loop until Epic 9). **Owner: Epic 9 (MOTIR-673)** —
+  implement the lane (a use-case dimension on `ModelCreditRate`, or an agent
+  model-key) and calibrate the ~20% against measured token + hosting cost; pool-size
+  growth and BYO-API-key are secondary levers if needed. The 8.1.21 / MOTIR-1311 copy
+  fix (promise _running_ the agent + top-ups, never "whole tasks") is the interim
+  guard. Detail in the private `motir-meta/margin-analysis.md` §9.
 - **Out of scope (named so they land in their owning story):** the actual Stripe
   account creation (a `manual/human` prerequisite of 8.1.2); platform-staff
   manual tier flips for Enterprise (Epic 10); the org-scoped usage/credit _view_

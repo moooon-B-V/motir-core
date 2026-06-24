@@ -17,8 +17,9 @@
       GROUNDED IN (read at run time, NOT invented):
         · docs/decisions/billing-tiering.md (8.1.1 / MOTIR-1138, ACCEPTED 2026-06-21) — the locked
           tiering model: TWO independent billed products (① Motir — the PM tool, free ↔ $5/seat when
-          scaled; ② Motir AI, an org-level monthly credit plan: Free-trial / Starter / Standard / Pro / Max /
-          Enterprise). Subscription states trialing/active/past_due/canceled. Owner mutates billing,
+          scaled; ② Motir AI, an org-level monthly credit plan: Free-trial / Standard / Pro / Max /
+          Enterprise — `starter` removed by the 2026-06-23 amendment, 8.1.18). Subscription states
+          trialing/active/past_due/canceled. Owner mutates billing,
           admin views, a member is routed to an owner. Credits are an internal ALLOTMENT, never a
           currency in-product; plan FEES are shown in $ only on the storefront. Cloud-only behind the
           MOTIR_CLOUD flag; self-host hides every surface here.
@@ -54,7 +55,7 @@
         (3) PANEL STATES — past_due / dunning warning, trialing (one-time trial), canceled→free.
         (4) ROLE GATING (decision §7) — admin READ-ONLY view vs a plain member's "ask your owner".
         (5) PLAN / PRICING COMPARISON — the storefront with a Monthly/Annual toggle (default Annual):
-            ① Motir free ↔ scaled, ② the Motir AI ladder (Free / Starter / Standard / Pro / Max /
+            ① Motir free ↔ scaled, ② the Motir AI ladder (Free / Standard / Pro / Max /
             Enterprise) with per-tier CTA → Checkout.
         (6) SEATS — the scaled-Motir upgrade (Jira/Linear seat model): the seat-review step shows the
             member→seat count + total before Checkout; the scaled state shows billed seats + Manage seats.
@@ -869,10 +870,12 @@
       }
       /* Tall, equal-height tier cards in ONE row — the standard SaaS storefront
          pattern (Linear / Vercel / Stripe). `align-items: stretch` equalises the
-         card heights; `flex-wrap: nowrap` keeps all six tiers on a single row.
+         card heights; `flex-wrap: nowrap` keeps all five cards on a single row
+         (Free trial + the four named paid tiers Standard/Pro/Max/Enterprise —
+         `starter` removed by the 2026-06-23 ADR amendment, 8.1.18 / MOTIR-1311).
          RESPONSIVE RULE (drawn): below the row's natural width the container
          SCROLLS HORIZONTALLY (`overflow-x: auto`) rather than wrapping or
-         dropping tiers — the six stay one comparable ladder at every width, with
+         dropping tiers — the five stay one comparable ladder at every width, with
          scroll-snap so a card always lands flush. */
       .ai-grid {
         display: flex;
@@ -942,6 +945,29 @@
         font-weight: 600;
         color: var(--el-text-strong);
         margin-top: 4px;
+      }
+      /* bundled Motir seat line (8.1.22 / MOTIR-1316) — every PAID plan includes
+         1 seat, which lifts the work-item caps. The Free trial's variant (`.off`)
+         states the absence in faint text so the contrast is the upgrade reason. */
+      .plan .seat {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        margin-top: 4px;
+      }
+      .plan .seat svg {
+        width: 13px;
+        height: 13px;
+        flex-shrink: 0;
+        color: var(--el-accent-on-surface);
+      }
+      .plan .seat.off {
+        color: var(--el-text-faint);
+      }
+      .plan .seat.off svg {
+        color: var(--el-text-faint);
       }
       /* per-tier USE-CASE line (who it's for) — sits at the TOP, under the name.
          A min-height of ~3 lines keeps the PRICE row aligned across all cards
@@ -1859,12 +1885,12 @@
       are independent (ADR §1), so the AI plan has its OWN screen: a user who already pays for seats
       should not wade through the seat plan to change AI. Reached from the Motir-AI line’s “Change
       plan” (panel 2) + the paywall (panel 7). Shows the CURRENT AI subscription + the ladder (Free
-      / Starter / Standard / Pro / Max / Enterprise; Pro = recommended anchor) with the
-      Monthly/Annual toggle. The ladder is the standard SaaS pricing pattern (Linear / Vercel /
-      Stripe): TALL, equal-height cards in ONE row (horizontal scroll below the row’s natural width
-      — the drawn responsive rule), each opening with a per-tier USE-CASE line (who it’s for) and a
-      CUMULATIVE feature list (“Everything in {previous tier}, plus …”). The Motir SEAT plan lives
-      on its own screen (panel 6) — never shown here.
+      / Standard / Pro / Max / Enterprise; Pro = recommended anchor) with the Monthly/Annual toggle.
+      The ladder is the standard SaaS pricing pattern (Linear / Vercel / Stripe): TALL, equal-height
+      cards in ONE row (horizontal scroll below the row’s natural width — the drawn responsive
+      rule), each opening with a per-tier USE-CASE line (who it’s for) and a CUMULATIVE feature list
+      (“Everything in {previous tier}, plus …”). The Motir SEAT plan lives on its own screen (panel
+      6) — never shown here.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1931,6 +1957,10 @@
                     >
                   </div>
                   <div class="alot">300 credits · one-time</div>
+                  <div class="seat off">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> No Motir seat · 250-item
+                    cap
+                  </div>
                   <ul class="flist">
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A one-time taste of
@@ -1944,36 +1974,6 @@
                   <div class="pcta">
                     <button class="btn btn-secondary is-disabled" disabled>Trial used</button>
                   </div>
-                </div>
-                <div class="plan">
-                  <div class="pn">Starter</div>
-                  <div class="use">Light, structure-level planning.</div>
-                  <div class="price">
-                    <span class="cad cad-m"
-                      ><span class="amt">$5</span><span class="per">/ mo</span></span
-                    >
-                    <span class="cad cad-a"
-                      ><span class="amt">$3.33</span><span class="per">/ mo</span></span
-                    >
-                  </div>
-                  <div class="billed cad cad-a">
-                    billed annually · $40 / yr <span class="save">Save $20/yr</span>
-                  </div>
-                  <div class="billed cad cad-m">
-                    $60 / yr · <span class="save">Save $20 with annual</span>
-                  </div>
-                  <div class="alot">300 credits / mo</div>
-                  <ul class="flist">
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Credits refreshed every
-                      month
-                    </li>
-                    <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Metered top-ups when
-                      you need more
-                    </li>
-                  </ul>
-                  <div class="pcta"><button class="btn btn-secondary">Choose Starter</button></div>
                 </div>
                 <div class="plan cur">
                   <div class="pn">
@@ -1995,14 +1995,18 @@
                     $300 / yr · <span class="save">Save $100 with annual</span>
                   </div>
                   <div class="alot">2,000 credits / mo</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> + 1 Motir seat · work
+                    items uncapped
+                  </div>
                   <ul class="flist">
-                    <li class="flead">
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Starter,
-                      plus
-                    </li>
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Plan the whole project,
                       in detail
+                    </li>
+                    <li>
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Credits refresh monthly
+                      · metered top-ups
                     </li>
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Room to try agent tasks
@@ -2038,18 +2042,22 @@
                     $900 / yr · <span class="save">Save $300 with annual</span>
                   </div>
                   <div class="alot">8,000 credits / mo</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> + 1 Motir seat · work
+                    items uncapped
+                  </div>
                   <ul class="flist">
                     <li class="flead">
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Standard,
                       plus
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Cover whole tasks with
-                      the agent
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Run the coding agent on
+                      real tasks
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Headroom for regular
-                      agent runs
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Top up anytime for
+                      heavier runs
                     </li>
                   </ul>
                   <div class="pcta"><button class="btn btn-primary">Upgrade to Pro</button></div>
@@ -2080,13 +2088,17 @@
                     $1,800 / yr · <span class="save">Save $600 with annual</span>
                   </div>
                   <div class="alot">30,000 credits / mo</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> + 1 Motir seat · work
+                    items uncapped
+                  </div>
                   <ul class="flist">
                     <li class="flead">
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Pro, plus
                     </li>
                     <li>
-                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Run many agent tasks at
-                      once
+                      <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Headroom for sustained
+                      agent work
                     </li>
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Throughput for a busy
@@ -2102,6 +2114,10 @@
                     <span class="cad"><span class="amt">Custom</span></span>
                   </div>
                   <div class="alot">Custom credit pool</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> Motir seats included
+                    (custom)
+                  </div>
                   <ul class="flist">
                     <li class="flead">
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Max, plus
@@ -2179,9 +2195,10 @@
             <span
               >Annual billing (the Stripe default) is shown — switch to Monthly above to compare.
               Tax is applied automatically at checkout. Credits are an internal usage allotment; the
-              price shown is the AI plan fee, billed by Stripe to the moooon organization. Your
-              Motir <b>seats</b> are billed separately — manage them on the Motir plan screen (panel
-              6).</span
+              price shown is the AI plan fee, billed by Stripe to the moooon organization.
+              <b>Agent / coding work uses more credits than planning</b>, and heavier models burn
+              faster — top up anytime if you run out. Your Motir <b>seats</b> are billed separately
+              — manage them on the Motir plan screen (panel 6).</span
             >
           </div>
         </div>
