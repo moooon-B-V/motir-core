@@ -95,6 +95,12 @@ process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
  */
 export default defineConfig({
   testDir: 'tests/e2e',
+  // The cloud-on billing journeys (Subtask 8.1.10) run in their own MOTIR_CLOUD
+  // lane (playwright.billing.config.ts) — excluded here so this off-cloud suite
+  // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
+  // would break unrelated at-scale/menu specs). The self-host-ABSENT billing spec
+  // (billing-selfhost) is off-cloud and DOES run in this lane.
+  testIgnore: ['**/billing-cloud.spec.ts'],
   // Each spec has its own truncate + sign-up flow; 30s is plenty for the
   // longest path (request reset → poll file outbox → follow link → set
   // new password).
