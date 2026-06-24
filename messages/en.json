@@ -3779,7 +3779,7 @@
     "seats": {
       "breadcrumb": "Organization · {org} · Motir",
       "title": "Scale up Motir",
-      "subtitle": "One seat per organization member — like Jira & Linear.",
+      "subtitle": "One seat per organization member.",
       "back": "Back to billing",
       "membersToSeats": "{n} members → {n} seats",
       "annualTotal": "{n} × ${seat}/yr = ${total} / yr",
