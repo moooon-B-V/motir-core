@@ -70,6 +70,7 @@ import {
   toWorkItemSummaryDto,
   toWorkItemSubtreeDto,
   toWorkItemTreeNodeDto,
+  toRoadmapNodeDto,
   toWorkItemListItemDto,
   toWorkItemTreeRowDto,
   toArchivedWorkItemDto,
@@ -128,7 +129,11 @@ import type {
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
   TreeLevelDto,
+  ProjectRoadmapDto,
+  RoadmapNodeDto,
+  RoadmapProgressDto,
 } from '@/lib/dto/workItems';
+import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   LinkWorkItemsInput,
   RelationshipKind,
@@ -469,6 +474,98 @@ function assembleProjectForest(rows: WorkItemForestRow[], prune: boolean): WorkI
     if (node) forest.push(node);
   }
   return forest;
+}
+
+/**
+ * The default terminal `cancelled` status — a category-`done` status that is a
+ * sealed "won't do / duplicate", EXCLUDED from a roadmap progress meter's done
+ * AND total counts (so a container whose only remnants are cancelled is not
+ * held permanently incomplete). It is a PROTECTED default key (can't be
+ * renamed / recategorised — `lib/workflows/defaultWorkflow.ts`), so the literal
+ * is stable; a project's CUSTOM `done` statuses still count as done by category
+ * (no project-specific cancel detection is attempted). Mirrors the public
+ * roadmap's `ROADMAP_EXCLUDED_DONE_KEY` (publicProjectsService).
+ */
+const ROADMAP_CANCELLED_KEY = 'cancelled';
+
+/** The status keys that count as DONE on a roadmap meter: every `done`-category
+ *  status except `cancelled`. */
+function roadmapDoneStatusKeys(statuses: WorkflowStatusDto[]): Set<string> {
+  return new Set(
+    statuses
+      .filter((s) => s.category === 'done' && s.key !== ROADMAP_CANCELLED_KEY)
+      .map((s) => s.key),
+  );
+}
+
+/**
+ * Nest a flat `findProjectForest` projection into the roadmap forest (Subtask
+ * 7.19.2), computing each container's done/total progress in the SAME single
+ * in-memory pass. Roots and every sibling set are `key`-asc (the stable PROD-N
+ * order — same comparator as {@link assembleProjectForest}).
+ *
+ * The roll-up is over DESCENDANT LEAVES (a leaf = a node with no children — the
+ * executable units), so a container sums the contributions of its children and
+ * never double-counts the intermediate containers. A leaf contributes
+ * `{ done: isDone ? 1 : 0, total: cancelled ? 0 : 1 }` — a `cancelled` leaf is
+ * sealed and counts toward neither. `progress` is attached ONLY to containers
+ * (children present); a leaf carries `null` (no meter of its own). `isDone` is
+ * the node's OWN done-ness, independent of its meter.
+ *
+ * The forest is read UNFILTERED (every non-archived item), so — unlike
+ * `assembleProjectForest` — there is no pruning: every row maps to a node.
+ */
+function assembleProjectRoadmap(
+  rows: WorkItemForestRow[],
+  doneStatusKeys: ReadonlySet<string>,
+): RoadmapNodeDto[] {
+  const childrenByParent = new Map<string, WorkItemForestRow[]>();
+  const roots: WorkItemForestRow[] = [];
+  for (const row of rows) {
+    if (row.parentId === null) {
+      roots.push(row);
+    } else {
+      const group = childrenByParent.get(row.parentId);
+      if (group) group.push(row);
+      else childrenByParent.set(row.parentId, [row]);
+    }
+  }
+  const byKey = (a: WorkItemForestRow, b: WorkItemForestRow): number => a.key - b.key;
+  roots.sort(byKey);
+  for (const group of childrenByParent.values()) group.sort(byKey);
+
+  // Returns the node AND its contribution to an ancestor's meter, so the meter
+  // is computed bottom-up in one walk (no second pass, no N+1).
+  const build = (
+    row: WorkItemForestRow,
+  ): { node: RoadmapNodeDto; contribution: RoadmapProgressDto } => {
+    const built = (childrenByParent.get(row.id) ?? []).map(build);
+    const children = built.map((b) => b.node);
+    const isDone = doneStatusKeys.has(row.status);
+
+    let contribution: RoadmapProgressDto;
+    let progress: RoadmapProgressDto | null;
+    if (children.length === 0) {
+      // Leaf: its own contribution. A cancelled leaf counts toward neither.
+      contribution = {
+        done: isDone ? 1 : 0,
+        total: row.status === ROADMAP_CANCELLED_KEY ? 0 : 1,
+      };
+      progress = null;
+    } else {
+      contribution = built.reduce(
+        (acc, b) => ({
+          done: acc.done + b.contribution.done,
+          total: acc.total + b.contribution.total,
+        }),
+        { done: 0, total: 0 },
+      );
+      progress = { done: contribution.done, total: contribution.total };
+    }
+    return { node: toRoadmapNodeDto(row, children, isDone, progress), contribution };
+  };
+
+  return roots.map((root) => build(root).node);
 }
 
 /** Default + max children fetched per lazy tree level (Subtask 2.5.13). The
@@ -1858,6 +1955,43 @@ export const workItemsService = {
     );
 
     return assembleProjectForest(rows, repoFilterIsActive(repoFilter));
+  },
+
+  /**
+   * The project ROADMAP read (Subtask 7.19.2) — the whole non-archived issue
+   * forest (epics → stories → subtasks) nested into {@link RoadmapNodeDto}s
+   * with per-container done/total progress roll-ups, the data the planning-
+   * canvas roadmap (Story 7.19) renders and its virtualized view (7.19.3)
+   * windows over.
+   *
+   * Reuses the SAME single recursive-CTE forest read as {@link getProjectTree}
+   * — one round-trip, no N+1 (finding #57) — read UNFILTERED (the roadmap shows
+   * the whole project). The progress meters are then computed in ONE in-memory
+   * pass over that already-fetched forest (not a per-node rollup query): for
+   * each container, done/total over its descendant LEAVES, with `cancelled`
+   * leaves excluded from both. Done-ness resolves by workflow CATEGORY (every
+   * `done`-category status except `cancelled`), not a hardcoded key, so a
+   * project's custom done statuses count — the same convention boards / reports
+   * / the public roadmap use.
+   *
+   * Tenant gate (finding #26): the project must resolve AND belong to the
+   * active workspace, else `ProjectNotFoundError` (→ 404, no existence leak);
+   * the forest read also carries an explicit `workspaceId`. Browse-gated like
+   * `getProjectTree`. An empty project → `{ nodes: [] }`.
+   */
+  async getProjectRoadmap(projectId: string, ctx: ServiceContext): Promise<ProjectRoadmapDto> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    const [rows, statuses] = await Promise.all([
+      workItemRepository.findProjectForest(projectId, project.workspaceId, {}),
+      workflowsService.listStatusesByProject(projectId, project.workspaceId),
+    ]);
+
+    return { nodes: assembleProjectRoadmap(rows, roadmapDoneStatusKeys(statuses)) };
   },
 
   /**
