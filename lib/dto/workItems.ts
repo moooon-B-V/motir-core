@@ -358,6 +358,66 @@ export interface WorkItemTreeNodeDto {
 }
 
 /**
+ * The done/total progress roll-up for a CONTAINER node on the project roadmap
+ * (Subtask 7.19.2) — counted over the container's DESCENDANT LEAF work items
+ * (the executable units; a leaf is a node with no children), so a deep epic
+ * aggregates every subtask under all its stories WITHOUT double-counting the
+ * intermediate story/epic containers.
+ *
+ * `total` EXCLUDES `cancelled` leaves (a sealed "won't do / duplicate" — the
+ * same exclusion the public roadmap applies via `ROADMAP_EXCLUDED_DONE_KEY`),
+ * so a container whose only remnants are cancelled is not held permanently
+ * below 100%. `done` counts the leaves whose status is a `done`-category
+ * workflow status OTHER than `cancelled`. A container with no countable leaves
+ * (empty, or all-cancelled) is `{ done: 0, total: 0 }` — the view renders an
+ * empty meter.
+ */
+export interface RoadmapProgressDto {
+  done: number;
+  total: number;
+}
+
+/**
+ * One node of the project ROADMAP forest (Subtask 7.19.2) — the epic → story →
+ * subtask tree the planning-canvas roadmap (Story 7.19) renders, windowed over
+ * by the virtualized roadmap view (Subtask 7.19.3). A trimmed sibling of
+ * {@link WorkItemTreeNodeDto}: only the fields a roadmap node draws (no
+ * priority / assignee / estimate / filter metadata), plus the per-node
+ * `isDone` flag and, on containers, a `progress` roll-up.
+ *
+ * Roots and every sibling set come back `key`-asc (the stable PROD-N order).
+ * `progress` is non-null EXACTLY on container nodes (those with `children` —
+ * epics and stories, plus any task that has subtasks); leaves carry `null`.
+ * `isDone` is `true` when the node's OWN `status` resolves to a `done`-category
+ * status other than `cancelled` (the node's status, independent of its meter).
+ */
+export interface RoadmapNodeDto {
+  id: string;
+  parentId: string | null;
+  kind: WorkItemKindDto;
+  type: WorkItemTypeDto | null;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  isDone: boolean;
+  depth: number;
+  progress: RoadmapProgressDto | null;
+  children: RoadmapNodeDto[];
+}
+
+/**
+ * The project roadmap read (Subtask 7.19.2): the whole non-archived issue
+ * forest nested into {@link RoadmapNodeDto}s with per-container progress
+ * roll-ups, from ONE recursive-CTE round-trip (the same scale path as the
+ * `/items` tree — finding #57, no N+1; the virtualized view windows over this
+ * client-side). An empty project → `{ nodes: [] }`.
+ */
+export interface ProjectRoadmapDto {
+  nodes: RoadmapNodeDto[];
+}
+
+/**
  * One row of the flat, sortable List view (Subtask 2.5.8) — the same per-item
  * render fields as a tree node, but WITHOUT the tree metadata (`depth` /
  * `hasChildren` / `matched` / `children`). The List is the project's issues

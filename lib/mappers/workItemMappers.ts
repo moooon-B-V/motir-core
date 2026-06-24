@@ -8,6 +8,8 @@ import type {
 } from '@/lib/repositories/workItemRepository';
 import type {
   ArchivedWorkItemDto,
+  RoadmapNodeDto,
+  RoadmapProgressDto,
   WorkItemDto,
   WorkItemListItemDto,
   WorkItemSummaryDto,
@@ -143,6 +145,36 @@ export function toWorkItemTreeNodeDto(
     depth: row.depth,
     hasChildren: children.length > 0,
     matched: row.matched,
+    children,
+  };
+}
+
+/**
+ * Roadmap-node DTO (Subtask 7.19.2). Maps one `findProjectForest` projection
+ * row plus its ALREADY-BUILT `children` into a {@link RoadmapNodeDto}. The
+ * per-node `isDone` flag and the container `progress` roll-up are the service's
+ * tree work (workItemsService.getProjectRoadmap walks descendant leaves to
+ * compute them) — this mapper just shapes the node from the row + the handed-in
+ * computed fields, the same division of labour as `toWorkItemTreeNodeDto`.
+ */
+export function toRoadmapNodeDto(
+  row: WorkItemForestRow,
+  children: RoadmapNodeDto[],
+  isDone: boolean,
+  progress: RoadmapProgressDto | null,
+): RoadmapNodeDto {
+  return {
+    id: row.id,
+    parentId: row.parentId,
+    kind: row.kind,
+    type: row.type,
+    key: row.key,
+    identifier: row.identifier,
+    title: row.title,
+    status: row.status,
+    isDone,
+    depth: row.depth,
+    progress,
     children,
   };
 }
