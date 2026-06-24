@@ -342,13 +342,14 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 **Asset:** `planning-workspace.mock.html` (source) + `planning-workspace.png`
 (full-page export). A five-sheet review board:
 
-| Sheet | What it shows                                                                                                                                 |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                             |
-| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                           |
-| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                |
-| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating "M" universal AI callout; context → mode adapts |
-| **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)     |
+| Sheet | What it shows                                                                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                               |
+| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                             |
+| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                  |
+| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating "M" universal AI callout; context → mode adapts   |
+| **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)       |
+| **6** | Opening & exiting — a full-screen overlay ON TOP of the app; Close (✕ / Esc / "Back to …") + the confirm-to-persist guard on close-with-pending |
 
 ### ⚠️ SCOPE — this designs the SHELL + ENTRANCE, NOT the canvas pane
 
@@ -510,6 +511,27 @@ affordance opens the workspace in the mode for the **current context**:
   (The authed roadmap + toggle are owned by 7.19/`MOTIR-1011` and not shipped yet
   — only the public roadmap exists today; that door reuses this launcher when
   1011 lands.)
+
+### ⚠️ Opening & exiting — a full-screen overlay ON TOP of the app (sheet 6)
+
+The workspace **covers the screen** (the canvas + chat need the room) but it is a
+**full-screen overlay LAYERED ON TOP of the PM app — not a route change**. The app
+stays mounted, dimmed + inert, behind it; the overlay sits with a slight inset +
+drop shadow so the reader SEES it is a layer on top. **Closing returns you to the
+exact screen you launched from** (same route, scroll, filters) with **no reload or
+lost state** — so it is "full-screen" for working AND "on top" for context.
+
+**The shell carries its OWN exit chrome** (it has no app nav to leave through):
+
+- **Close** — a `✕ Close` control **top-left** of the workspace (it can name the
+  origin, e.g. "↩ Back to board"), drawn on the shell in every sheet.
+- **`Esc`** — closes from anywhere in the workspace (keyboard).
+- **Close-with-pending guard** — because **confirm-to-persist** means nothing is
+  saved until Confirm, dismissing with proposed (pending) cards opens a guard:
+  **Discard N proposed · Keep planning · Confirm & add** — never a silent loss.
+
+**Onboarding is the one exception** — a genuine full-page first-run _route_ (a
+dedicated journey), not this dismissable overlay.
 
 ### Primitives composed (no hand-rolling)
 

@@ -1410,6 +1410,195 @@
         text-shadow: 0 0 6px #ffffffb0;
       }
 
+      /* ── workspace exit chrome (the close affordance on the shell) ── */
+      .wclose {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .wclose .x {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1;
+      }
+      .wclose kbd {
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--faint);
+      }
+
+      /* ── sheet 6: opening on top of the app + exiting ── */
+      .exitrow {
+        display: grid;
+        grid-template-columns: 1.45fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .ontop {
+        position: relative;
+        height: 318px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--hub);
+      }
+      /* the PM app, sitting BEHIND the workspace */
+      .appback {
+        position: absolute;
+        inset: 0;
+        padding: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 9px;
+        filter: saturate(0.9);
+      }
+      .appback .col {
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 9px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .appback .col b {
+        font-size: 9px;
+        color: var(--faint);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .appback .card {
+        height: 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: #1b1733cc;
+        backdrop-filter: blur(1.5px);
+      }
+      /* the workspace overlay ON TOP (inset so the app shows it's beneath) */
+      .wsoverlay {
+        position: absolute;
+        inset: 16px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: 0 30px 70px -18px #00000073;
+        display: grid;
+        grid-template-columns: 1fr 150px;
+      }
+      .wsoverlay .wcanvas {
+        position: relative;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 20px 20px,
+          var(--hub);
+      }
+      .wsoverlay .wtop {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wsoverlay .wrail {
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .wsoverlay .wrail .rl {
+        font:
+          600 8px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--faint);
+      }
+      .exitcol {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .panel .ph {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--strong);
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .panel .pb {
+        padding: 13px;
+      }
+      .exitopt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        color: var(--secondary);
+        padding: 6px 0;
+      }
+      .exitopt + .exitopt {
+        border-top: 1px solid var(--hair);
+      }
+      .exitopt .k {
+        flex: none;
+      }
+      /* the unsaved-proposals guard dialog */
+      .guard {
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 12px 30px -10px #5645d440;
+        overflow: hidden;
+      }
+      .guard .gt {
+        padding: 12px 13px 4px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .guard .gd {
+        padding: 0 13px 11px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .guard .ga {
+        display: flex;
+        gap: 7px;
+        padding: 11px 13px;
+        border-top: 1px solid var(--hair);
+        background: var(--soft);
+        flex-wrap: wrap;
+      }
+
       svg.edge {
         position: absolute;
         inset: 0;
@@ -1456,8 +1645,11 @@
             <div class="canvas" id="canvas1">
               <svg class="edge" id="edge1"></svg>
               <div class="ov ov-top">
-                <span class="crumb">Roadmap <span class="muted">· PayFlow</span></span>
-                <span class="searchbox">⌕ Find a work item <kbd>/</kbd></span>
+                <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                <span class="crumb">Plan with AI <span class="muted">· PayFlow</span></span>
+                <span class="searchbox" style="margin-left: auto"
+                  >⌕ Find a work item <kbd>/</kbd></span
+                >
               </div>
               <div class="ov zoomctl">
                 <button>−</button><span class="pct">80%</span><button>+</button><button>⤢</button>
@@ -1507,10 +1699,12 @@
         <b>Shipped shell, reused.</b> The frame is
         <code>components/planning/PlanningWorkspace.tsx</code> —
         <code>grid h-dvh grid-cols-[1fr_22rem]</code>, canvas left + chat right,
-        <b>no app shell / nav</b> (this is a focused full-screen surface). The chat rail mirrors the
-        shipped <code>DiscoveryChatRail.tsx</code> (the <code>Motir AI</code> rail label + success
-        dot, the bubble + avatar language, the composer). The <b>only</b> thing each mode changes is
-        the canvas content + the chat driver — the structure is identical everywhere.
+        <b>no app shell / nav</b> (a focused full-screen surface) — but it carries its
+        <b>own exit chrome</b>: a <b>Close</b> (✕ / <kbd>Esc</kbd>) top-left, because it opens as an
+        overlay <b>on top</b> of the app (sheet 6). The chat rail mirrors the shipped
+        <code>DiscoveryChatRail.tsx</code> (the <code>Motir AI</code> rail label + success dot, the
+        bubble + avatar language, the composer). The <b>only</b> thing each mode changes is the
+        canvas content + the chat driver — the structure is identical everywhere.
       </div>
     </section>
 
@@ -1535,6 +1729,7 @@
             <div class="canvas" id="canvas2">
               <svg class="edge" id="edge2"></svg>
               <div class="ov ov-top">
+                <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
                 <span class="crumb">Proposing <span class="muted">· 5 new</span></span>
               </div>
               <div class="ov zoomctl">
@@ -2024,6 +2219,116 @@
         a palette swap re-tints every style’s treatment; a style swap re-shapes it.
         <b>AA holds in each</b> — label text sits over the accent-dominant region (and Cybercore
         renders its native dark register).
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 6 — opening on top of the app + exiting ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>Opening &amp; exiting — a full-screen overlay ON TOP of the app, with a clear close</h2>
+        <span class="cap">layer, not a route change</span>
+      </div>
+      <div class="sheetbody">
+        <p class="lead" style="margin-bottom: 16px">
+          The workspace covers the screen (the canvas + chat need the room) but it is a
+          <b>full-screen overlay LAYERED ON TOP of the PM app</b> — not a navigation away. The app
+          stays mounted, dimmed, behind it;
+          <b>closing returns you to the exact screen you launched from</b> (same scroll, same
+          filters), with no reload. So it is &ldquo;full-screen&rdquo; for working
+          <b>and</b> &ldquo;on top&rdquo; for context.
+        </p>
+        <div class="exitrow">
+          <!-- it opens on top of the app -->
+          <div>
+            <div class="ontop">
+              <div class="appback">
+                <div class="col">
+                  <b>To do</b>
+                  <span class="card"></span><span class="card"></span>
+                </div>
+                <div class="col">
+                  <b>In progress</b>
+                  <span class="card"></span>
+                </div>
+                <div class="col">
+                  <b>In review</b>
+                  <span class="card"></span><span class="card"></span>
+                </div>
+                <div class="col">
+                  <b>Done</b>
+                  <span class="card"></span>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="wsoverlay">
+                <div class="wcanvas">
+                  <div class="wtop">
+                    <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                    <span class="crumb" style="font-size: 11px; padding: 4px 8px"
+                      >Plan with AI <span class="muted">· PayFlow</span></span
+                    >
+                  </div>
+                </div>
+                <div class="wrail">
+                  <span class="rl">✦ Motir AI</span>
+                  <div class="minibub ai" style="font-size: 9px">How can I help plan?</div>
+                </div>
+              </div>
+            </div>
+            <p class="desc" style="margin-top: 10px">
+              Launched from the header pill or the floating <b>M</b>, the workspace
+              <b>animates in over the app</b> (the board here, dimmed + inert behind). The slight
+              inset + drop shadow show it&rsquo;s a <b>layer on top</b>, not a new page — so
+              dismissing it is instant and lossless.
+            </p>
+          </div>
+
+          <!-- how to exit + the guard -->
+          <div class="exitcol">
+            <div class="panel">
+              <div class="ph">How to exit</div>
+              <div class="pb">
+                <div class="exitopt">
+                  <span class="wclose k"><span class="x">✕</span> Close</span>
+                  <span>the close control, top-left of the workspace</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k"><kbd class="">Esc</kbd></span>
+                  <span>keyboard — closes from anywhere in the workspace</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k" style="font-size: 12px; color: var(--accent); font-weight: 600"
+                    >↩ Back to board</span
+                  >
+                  <span>the close is labelled with where you came from</span>
+                </div>
+              </div>
+            </div>
+            <div class="guard">
+              <div class="gt">Closing with proposed work items?</div>
+              <div class="gd">
+                Nothing is saved until <b>Confirm</b> (confirm-to-persist), so closing with pending
+                cards asks first — never a silent loss.
+              </div>
+              <div class="ga">
+                <span class="btn ghost sm">Discard 5 proposed</span>
+                <span class="btn sm">Keep planning</span>
+                <span class="btn primary sm">Confirm &amp; add</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Why an overlay, not a route.</b> The summoned planner is a
+        <b>session on top of your work</b>, not a place you navigate to — so it mounts as a
+        full-screen layer above the current route (the app inert behind), and closing restores that
+        route instantly with no reload or lost state. The close lives in the workspace&rsquo;s own
+        top-left chrome (✕ + <kbd>Esc</kbd>, labelled with the origin); a dismissal with unconfirmed
+        proposals hits the confirm-to-persist guard (Discard / Keep planning / Confirm &amp; add).
+        Onboarding is the one case that is a genuine full-page route (a dedicated first-run
+        journey), not this dismissable overlay.
       </div>
     </section>
 
