@@ -541,6 +541,15 @@ lost state** — so it is "full-screen" for working AND "on top" for context.
   saved until Confirm, dismissing with proposed (pending) cards opens a guard:
   **Discard N proposed · Keep planning · Confirm & add** — never a silent loss.
 
+**No browser / window chrome** — it is an in-app overlay, not a browser mock; the
+only chrome is the workspace's own top-left controls.
+
+**The canvas title is a drill-down breadcrumb (Yue, 2026-06-24).** The button-
+shaped chip top-left is the project **root** (`PayFlow`); drilling into a node
+grows it to **`PayFlow › Epic 1 › Story 1`** and walks back up — the **canvas's
+own drill-down breadcrumb** (reused from the canvas design, `MOTIR-1009` sheet 6),
+not a "plan" action.
+
 **Onboarding is the one exception** — a genuine full-page first-run _route_ (a
 dedicated journey), not this dismissable overlay.
 
