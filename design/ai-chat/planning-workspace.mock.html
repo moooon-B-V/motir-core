@@ -1,0 +1,1775 @@
+<!doctype html>
+<!--
+  THE REUSABLE AI PLANNING WORKSPACE — shell + universal entrance (MOTIR-1193 / 7.20.1).
+  A design artifact (not the shipped component) pinning the ONE planning interface
+  every AI-planning MODE composes: a full-screen canvas (left) + chat (right) shell,
+  the on-canvas one-by-one proposed-card placement, the confirm-to-persist gate, the
+  four MODES as states of the one surface, and the universal "Plan with AI" entrance
+  drawn IN SITU on every host surface.
+
+  The canvas pane is NOT redrawn here — it is the standalone WorkItemCanvas
+  (MOTIR-1194; design @ design/roadmap/, MOTIR-1009). This asset composes it and
+  designs only the workspace AROUND it + the entrance. The shell is the shipped
+  components/planning/PlanningWorkspace.tsx; the chat rail mirrors the shipped
+  components/onboarding/DiscoveryChatRail.tsx; the global launcher composes the
+  shipped components/ui/CommandPalette.tsx.
+
+  Colours are the real Motir light palette (globals.css --el-* values, inlined).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reusable AI planning workspace — shell + universal entrance</title>
+    <style>
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #54514b;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --accent: #5645d4;
+        --accent-soft: #ece9fb;
+        --accent-text: #ffffff;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --info: #0075de;
+        --danger: #e03131;
+        --sky: #dcecfa;
+        --lavender: #e6e0f5;
+        --mint: #d9f3e1;
+        --peach: #ffe8d4;
+        --rose: #fce4ea;
+        --yellow: #fbf2cc;
+        --pink: #ff64c8;
+        /* work-item type hues (--el-type-*) */
+        --type-epic: #ff64c8;
+        --type-story: #1aae39;
+        --type-task: #0075de;
+        --type-bug: #e03131;
+        --type-subtask: #2a9d99;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f1efec;
+        color: var(--text);
+        padding: 30px 22px 60px;
+      }
+      .page-head {
+        max-width: 1150px;
+        margin: 0 auto 22px;
+      }
+      .page-head h1 {
+        font-size: 21px;
+        margin: 0 0 7px;
+        color: var(--strong);
+        letter-spacing: -0.01em;
+      }
+      .page-head p {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--muted);
+        max-width: 920px;
+        margin: 0;
+      }
+      .page-head .ref {
+        color: var(--accent);
+        font:
+          600 12px ui-monospace,
+          monospace;
+      }
+
+      /* ── review-board sheet (the roadmap/ house style) ── */
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .sheetbody {
+        padding: 20px 18px 22px;
+      }
+      .note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--secondary);
+        margin: 14px 18px 0;
+        padding: 10px 12px;
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 10px;
+      }
+      .note b {
+        color: var(--strong);
+      }
+      .note code,
+      .sheethead code {
+        font:
+          600 11.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+
+      /* ── a framed "screen" (the app at full bleed) ── */
+      .screen {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px #0000000f;
+        background: var(--surface);
+      }
+      .browserbar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        background: var(--soft);
+        border-bottom: 1px solid var(--hair);
+      }
+      .browserbar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #d8d4cd;
+        display: inline-block;
+      }
+      .browserbar .url {
+        margin-left: 8px;
+        font:
+          500 11px ui-monospace,
+          monospace;
+        color: var(--muted);
+      }
+      .browserbar .tag {
+        margin-left: auto;
+        font:
+          600 10px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+
+      /* the two-pane PlanningWorkspace frame */
+      .frame {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        height: 520px;
+      }
+      .frame.tall {
+        height: 560px;
+      }
+
+      /* ── canvas pane (composed standalone WorkItemCanvas) ── */
+      .canvas {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
+          var(--hub);
+      }
+      .world {
+        position: absolute;
+        inset: 0;
+      }
+      .edges {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .ov {
+        position: absolute;
+        z-index: 5;
+      }
+      .ov-top {
+        top: 12px;
+        left: 14px;
+        right: 14px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .crumb .muted {
+        color: var(--faint);
+        font-weight: 500;
+      }
+      .searchbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: 12px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .searchbox kbd {
+        font:
+          600 10px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--faint);
+      }
+      .zoomctl {
+        bottom: 12px;
+        left: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 3px;
+        box-shadow: 0 1px 3px #0000000f;
+      }
+      .zoomctl button {
+        width: 26px;
+        height: 26px;
+        border: 0;
+        background: transparent;
+        border-radius: 6px;
+        color: var(--secondary);
+        font-size: 14px;
+        cursor: default;
+        display: grid;
+        place-items: center;
+      }
+      .zoomctl .pct {
+        font-size: 11px;
+        color: var(--muted);
+        padding: 0 6px;
+        min-width: 40px;
+        text-align: center;
+      }
+      .legend {
+        position: absolute;
+        left: 14px;
+        bottom: 54px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 11px;
+        font-size: 10.5px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+        max-width: 220px;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 16px;
+        height: 0;
+        border-top: 2px solid var(--border);
+        display: inline-block;
+        flex: none;
+      }
+      .legend i.firm {
+        border-top: 2px solid #b8b3aa;
+      }
+      .legend i.pending {
+        border-top: 2px dashed var(--accent);
+      }
+      .legend i.cross {
+        border-top: 2px solid var(--warning);
+      }
+
+      /* ── canvas node (StationCard language) ── */
+      .node {
+        position: absolute;
+        width: 210px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        padding: 11px 12px;
+        box-shadow: 0 2px 6px #0000000f;
+        z-index: 2;
+      }
+      .node.sm {
+        width: 178px;
+        padding: 9px 11px;
+        border-radius: 13px;
+      }
+      .node.upcoming {
+        opacity: 0.66;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .node.active {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px #5645d426,
+          0 4px 12px #5645d41f;
+      }
+      .node.proposed {
+        border: 1.5px dashed var(--accent);
+        background: #faf9ff;
+        box-shadow: 0 2px 8px #5645d414;
+      }
+      .nhead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .tile {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 14px;
+      }
+      .ntitle {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.18;
+      }
+      .nsub {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .pill {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill.reviewed {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.here {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.deciding {
+        background: var(--peach);
+        color: #8a3d00;
+      }
+      .pill.proposed {
+        background: var(--accent-soft);
+        color: #3a2d8a;
+      }
+      .pill.done {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .capt {
+        margin-top: 9px;
+        padding-top: 8px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .capt div {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        font-size: 11px;
+        color: var(--secondary);
+      }
+
+      /* ── chat rail (mirrors DiscoveryChatRail.tsx) ── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .railhead .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+      .railhead .lbl {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--secondary);
+      }
+      .railhead .mode {
+        margin-left: auto;
+        font:
+          600 10px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+      .log {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        padding: 14px 14px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.user {
+        flex-direction: row-reverse;
+      }
+      .avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+      }
+      .avatar.ai {
+        background: var(--accent);
+        color: #fff;
+      }
+      .avatar.user {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .bubble {
+        border-radius: 13px;
+        padding: 8px 11px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        max-width: 232px;
+      }
+      .bubble.ai {
+        background: var(--soft);
+        color: var(--text);
+      }
+      .bubble.user {
+        background: var(--accent);
+        color: #fff;
+      }
+      .drafting {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--soft);
+        border-radius: 13px;
+        padding: 8px 11px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .spin {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        border: 2px solid #d8d4cd;
+        border-top-color: var(--accent);
+      }
+      .composer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--border);
+        padding: 11px 12px;
+      }
+      .composer .inp {
+        flex: 1;
+        min-width: 0;
+        height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 0 11px;
+        font-size: 12px;
+        color: var(--faint);
+        display: flex;
+        align-items: center;
+      }
+      .composer .send {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 14px;
+      }
+
+      /* ── the confirm-to-persist gate bar ── */
+      .persistbar {
+        position: absolute;
+        left: 50%;
+        bottom: 14px;
+        transform: translateX(-50%);
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--surface);
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        padding: 9px 11px 9px 14px;
+        box-shadow: 0 6px 22px #5645d422;
+        white-space: nowrap;
+      }
+      .persistbar .txt {
+        font-size: 12px;
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .persistbar .txt small {
+        display: block;
+        font-weight: 500;
+        color: var(--muted);
+        font-size: 10.5px;
+      }
+      .btn {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--surface);
+        color: var(--secondary);
+        cursor: default;
+        white-space: nowrap;
+      }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn.ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn.sm {
+        padding: 4px 9px;
+        font-size: 11px;
+      }
+
+      /* ── modes grid (sheet 3) ── */
+      .modes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .modecard {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .modecard .mh {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .modecard .mh h3 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--strong);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .modecard .mh .door {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .modecard .mh .door b {
+        color: var(--accent);
+      }
+      .miniframe {
+        display: grid;
+        grid-template-columns: 1fr 132px;
+        height: 188px;
+      }
+      .miniframe .canvas {
+        font-size: 0;
+      }
+      .miniframe .minirail {
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .miniframe .minirail .mlbl {
+        font:
+          600 9px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--faint);
+      }
+      .minibub {
+        font-size: 10px;
+        line-height: 1.4;
+        border-radius: 9px;
+        padding: 6px 8px;
+      }
+      .minibub.ai {
+        background: var(--soft);
+        color: var(--secondary);
+      }
+      .minibub.user {
+        background: var(--accent);
+        color: #fff;
+        align-self: flex-end;
+        max-width: 92%;
+      }
+      .mininode {
+        position: absolute;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        font-size: 9px;
+        font-weight: 600;
+        color: var(--strong);
+        padding: 5px 7px;
+        box-shadow: 0 1px 4px #0000000d;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        z-index: 2;
+      }
+      .mininode .dt {
+        width: 8px;
+        height: 8px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .mininode.prop {
+        border: 1.5px dashed var(--accent);
+        background: #faf9ff;
+      }
+      .mininode.done {
+        opacity: 0.85;
+      }
+      .mininode.lock {
+        background: var(--soft);
+        color: var(--muted);
+      }
+
+      /* ── entrance: host-surface mini-frames (sheet 4) ── */
+      .hosts {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .host {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .host .hh {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .host .hh h3 {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--strong);
+      }
+      .host .hh .mode {
+        margin-left: auto;
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+      .host .hb {
+        padding: 12px;
+      }
+      /* a generic app top-toolbar inside a host */
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 11px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        flex-wrap: wrap;
+      }
+      .toolbar .title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .toolbar .spacer {
+        margin-left: auto;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--secondary);
+        background: var(--soft);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 4px 9px;
+      }
+      .plan-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        padding: 5px 11px;
+        box-shadow: 0 0 0 3px #5645d41f;
+        white-space: nowrap;
+      }
+      .plan-cta .ai {
+        font-size: 13px;
+      }
+      .plan-cta.menu {
+        color: var(--accent);
+        background: var(--accent-soft);
+        border-color: #d9d2f6;
+        box-shadow: none;
+      }
+      .desc {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 9px 2px 0;
+        line-height: 1.45;
+      }
+      .desc b {
+        color: var(--secondary);
+      }
+      /* a tiny segmented (Board / Roadmap) */
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg span {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        color: var(--muted);
+      }
+      .seg span.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      /* an actions kebab menu (work-item detail) */
+      .menu {
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        box-shadow: 0 6px 20px #00000014;
+        padding: 5px;
+        width: 210px;
+      }
+      .menu .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--secondary);
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+      .menu .row.hi {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .menu .sep {
+        height: 1px;
+        background: var(--hair);
+        margin: 4px 2px;
+      }
+      /* the ⌘K command palette */
+      .palette {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 10px 30px #00000018;
+        overflow: hidden;
+      }
+      .palette .psearch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--hair);
+        font-size: 12px;
+        color: var(--faint);
+      }
+      .palette .pgroup {
+        font:
+          600 9px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--faint);
+        padding: 9px 13px 3px;
+      }
+      .palette .prow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        color: var(--secondary);
+        padding: 7px 13px;
+      }
+      .palette .prow.hi {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .palette .prow .kbd {
+        margin-left: auto;
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: var(--faint);
+      }
+      svg.edge {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+        z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-head">
+      <h1>The reusable AI planning workspace — shell + universal entrance</h1>
+      <p>
+        <span class="ref">MOTIR-1193 · 7.20.1</span> — the ONE shared planning interface. Every
+        AI-planning surface (generation review <b>7.4</b>, re-planning <b>7.11</b>, contextual
+        planning <b>7.12</b>, the persistent roadmap <b>7.19</b>, and onboarding <b>7.3</b>)
+        composes the <b>same</b> full-screen <b>canvas (left) + chat (right)</b> shell — they are
+        <b>MODES</b> (states) of this one surface, not separate UIs. This asset designs the
+        <b>workspace shell + its behaviours + the universal entrance</b>. The canvas pane is the
+        standalone <span class="ref">WorkItemCanvas</span> (MOTIR-1194; design @
+        <span class="ref">design/roadmap/</span>) — <b>composed here, never redrawn</b>.
+      </p>
+    </div>
+
+    <!-- ════════════════ SHEET 1 — the reusable shell ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>The shell — full-screen two-pane workspace (canvas left · chat right)</h2>
+        <span class="cap"><code>PlanningWorkspace</code> · no app nav</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="browserbar">
+            <i></i><i></i><i></i>
+            <span class="url">motir.app / moooon / payflow · plan with ai</span>
+            <span class="tag">grid-cols-[1fr_22rem]</span>
+          </div>
+          <div class="frame" id="frame1">
+            <div class="canvas" id="canvas1">
+              <svg class="edge" id="edge1"></svg>
+              <div class="ov ov-top">
+                <span class="crumb">Roadmap <span class="muted">· PayFlow</span></span>
+                <span class="searchbox">⌕ Find a work item <kbd>/</kbd></span>
+              </div>
+              <div class="ov zoomctl">
+                <button>−</button><span class="pct">80%</span><button>+</button><button>⤢</button>
+              </div>
+              <div class="legend">
+                <span><i class="firm"></i> depends-on (within story)</span>
+                <span><i class="cross"></i> cross-story blocked_by</span>
+                <span><i class="pending"></i> proposed (pending)</span>
+              </div>
+            </div>
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">re-plan</span>
+              </div>
+              <div class="log">
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Here’s PayFlow’s current plan on the canvas. Tell me what to add, expand or
+                    re-sequence — I’ll place it as you go.
+                  </div>
+                </div>
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">
+                    Add recurring invoices, blocked by the invoice model.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Adding a “Recurring invoices” story under Billing, linked after “Invoice model”.
+                    Placing it now…
+                  </div>
+                </div>
+              </div>
+              <div class="composer">
+                <span class="inp">Describe what to plan…</span>
+                <span class="send">➤</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Shipped shell, reused.</b> The frame is
+        <code>components/planning/PlanningWorkspace.tsx</code> —
+        <code>grid h-dvh grid-cols-[1fr_22rem]</code>, canvas left + chat right,
+        <b>no app shell / nav</b> (this is a focused full-screen surface). The chat rail mirrors the
+        shipped <code>DiscoveryChatRail.tsx</code> (the <code>Motir AI</code> rail label + success
+        dot, the bubble + avatar language, the composer). The <b>only</b> thing each mode changes is
+        the canvas content + the chat driver — the structure is identical everywhere.
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 2 — chat-to-plan + on-canvas placement + confirm ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>
+          Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until you
+          confirm
+        </h2>
+        <span class="cap">confirm-to-persist</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="browserbar">
+            <i></i><i></i><i></i>
+            <span class="url">motir.app / moooon / payflow · plan with ai</span>
+            <span class="tag">nothing written until Confirm</span>
+          </div>
+          <div class="frame tall" id="frame2">
+            <div class="canvas" id="canvas2">
+              <svg class="edge" id="edge2"></svg>
+              <div class="ov ov-top">
+                <span class="crumb">Proposing <span class="muted">· 5 new</span></span>
+              </div>
+              <div class="ov zoomctl">
+                <button>−</button><span class="pct">90%</span><button>+</button><button>⤢</button>
+              </div>
+              <div class="persistbar">
+                <span class="txt"
+                  >5 proposed work items<small
+                    >Nothing saved yet — review on the canvas</small
+                  ></span
+                >
+                <span class="btn ghost sm">Discard</span>
+                <span class="btn primary">Confirm &amp; add to project</span>
+              </div>
+            </div>
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">generation</span>
+              </div>
+              <div class="log">
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">Plan the billing area for PayFlow.</div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    I’ll draft a Billing epic. Watch the canvas — each card appears as I propose it,
+                    with its dependency edges.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Placed: <b>Invoice model</b> → <b>Create invoice</b> → <b>Send invoice</b>, plus
+                    <b>Recurring invoices</b> (after the model) and <b>Payment reminders</b>.
+                  </div>
+                </div>
+                <div class="drafting"><span class="spin"></span> Drafting the next story…</div>
+              </div>
+              <div class="composer">
+                <span class="inp">Reply, or refine a card…</span>
+                <span class="send">➤</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>On-canvas incremental placement.</b> Proposed work items appear on the standalone canvas
+        <b>one by one</b> as the conductor proposes them, each drawn with its
+        <b>relationship edges</b> — parent→child, the within-story <code>depends_on</code> arrow,
+        and the cross-story <code>blocked_by</code> warning edge — using the canvas’s own node +
+        edge language (the <code>StationCard</code> + <code>PlanningCanvas</code> conventions from
+        <code>design/roadmap/</code>). <b>Confirm-to-persist:</b> the proposed set is a
+        <b>STATE of the canvas</b> — pending nodes (dashed accent border + a
+        <code>proposed</code> pill) and pending edges (dashed).
+        <b>Nothing is written to the DB until the user presses Confirm</b>; Discard drops the whole
+        proposal. This is the diff/review surface — no separate review screen.
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 3 — the four MODES = states of ONE surface ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>The planning MODES — states of the one surface, each opened by an entrance door</h2>
+        <span class="cap">not separate screens</span>
+      </div>
+      <div class="sheetbody">
+        <div class="modes">
+          <!-- generation 7.4 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >✦</span
+                >
+                Generation review — 7.4
+              </h3>
+              <div class="door">
+                Door: a project surface with <b>no plan yet</b> → generate the first fresh tree →
+                review → confirm.
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_gen"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · generation</span>
+                <div class="minibub user">Build PayFlow.</div>
+                <div class="minibub ai">
+                  Drafting epics → stories → subtasks. Confirm to persist.
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- re-plan 7.11 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >↻</span
+                >
+                Augment / re-plan — 7.11
+              </h3>
+              <div class="door">
+                Door: a project surface <b>with a plan</b> → expand / re-sequence; done work is
+                completion-aware (locked).
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_replan"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · re-plan</span>
+                <div class="minibub user">Add a reminders story.</div>
+                <div class="minibub ai">
+                  Existing tree stays; new card proposed after “Invoices”.
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- contextual 7.12 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >◎</span
+                >
+                Contextual planning — 7.12
+              </h3>
+              <div class="door">
+                Door: <b>from a specific work item</b> (detail page / row action) → planning scoped
+                to that item’s subtree.
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_ctx"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · contextual</span>
+                <div class="minibub ai">
+                  Scoped to <b>Create invoice</b>. Breaking it into subtasks…
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- roadmap-read 7.19 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >⌖</span
+                >
+                Roadmap read + augment — 7.19
+              </h3>
+              <div class="door">
+                Door: the <b>Board ↔ Roadmap</b> toggle → the persistent roadmap; read the whole
+                tree, augment in place.
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_road"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · roadmap</span>
+                <div class="minibub ai">The live roadmap. Ask me to plan the next phase.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>One surface, four states.</b> Generation (7.4), augment/re-plan (7.11), contextual (7.12)
+        and roadmap-read (7.19) differ <b>only</b> in (a) what the canvas is seeded with — empty vs
+        an existing tree vs one item’s subtree — and (b) the chat driver’s framing. The shell, the
+        on-canvas placement, and the confirm-to-persist gate are identical. Onboarding (7.3) is the
+        one specialization that wraps this shell in its gated per-tier pre-plan review loop (see
+        <code>onboarding.mock.html</code>). Each state is reached through the entrance door called
+        out above — drawn in sheet 4.
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 4 — the universal "Plan with AI" entrance ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>The universal entrance — “Plan with AI”, in situ on every host surface</h2>
+        <span class="cap">one affordance · the door sets the mode</span>
+      </div>
+      <div class="sheetbody">
+        <div class="hosts">
+          <!-- 1 work-items list -->
+          <div class="host">
+            <div class="hh">
+              <h3>Work items list <code>/items</code></h3>
+              <span class="mode">→ re-plan</span>
+            </div>
+            <div class="hb">
+              <div class="toolbar">
+                <span class="chip">Filter</span>
+                <span class="chip">Saved</span>
+                <span class="chip">Tree ▾</span>
+                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+                <span class="btn primary sm">+ New issue</span>
+              </div>
+              <p class="desc">
+                In <code>IssueListToolbar</code>, left of <b>+ New issue</b>. A project surface with
+                a plan → <b>augment / re-plan</b> (7.11); generation (7.4) if the project has no
+                plan yet.
+              </p>
+            </div>
+          </div>
+
+          <!-- 2 backlog -->
+          <div class="host">
+            <div class="hh">
+              <h3>Backlog <code>/backlog</code></h3>
+              <span class="mode">→ re-plan</span>
+            </div>
+            <div class="hb">
+              <div class="toolbar">
+                <span class="chip">View all</span>
+                <span class="chip">Filter</span>
+                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+                <span class="btn primary sm">+ New issue</span>
+              </div>
+              <p class="desc">
+                In <code>BacklogFilterControls</code>’ row, before <b>+ New issue</b> — plan the
+                backlog: <b>augment / expand</b> the tree (7.11).
+              </p>
+            </div>
+          </div>
+
+          <!-- 3 board -->
+          <div class="host">
+            <div class="hh">
+              <h3>Board <code>/boards</code></h3>
+              <span class="mode">→ re-plan</span>
+            </div>
+            <div class="hb">
+              <div class="toolbar">
+                <span class="chip">Board ▾</span>
+                <span class="chip">Group</span>
+                <span class="chip">Filter</span>
+                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+                <span class="btn primary sm">+ New issue</span>
+              </div>
+              <p class="desc">
+                In the board header (after <code>BoardFilterControls</code>), before
+                <b>+ New issue</b> → <b>augment / re-plan</b> (7.11).
+              </p>
+            </div>
+          </div>
+
+          <!-- 4 work-item detail -->
+          <div class="host">
+            <div class="hh">
+              <h3>Work-item detail <code>/items/[key]</code></h3>
+              <span class="mode">→ contextual</span>
+            </div>
+            <div class="hb">
+              <div class="toolbar">
+                <span class="chip">👁 Watching</span>
+                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+                <span class="chip">⋯</span>
+              </div>
+              <div class="menu" style="margin: 10px 0 0">
+                <div class="row hi">
+                  <span>✦</span> Plan with AI
+                  <span style="margin-left: auto; color: var(--faint); font-weight: 500"
+                    >scoped here</span
+                  >
+                </div>
+                <div class="sep"></div>
+                <div class="row"><span>✎</span> Edit details</div>
+                <div class="row"><span>🔗</span> Copy link</div>
+                <div class="row"><span>▢</span> Archive</div>
+              </div>
+              <p class="desc">
+                In the item’s action cluster (after <b>Watch</b>) <b>and</b> inside the
+                <code>⋯</code>
+                actions menu (<code>WorkItemActionsMenu</code>). Launched from an item →
+                <b>contextual planning scoped to that item</b> (7.12). This is the affordance
+                <b>MOTIR-910</b> (the detail-panel door) adopts — not a separate invention.
+              </p>
+            </div>
+          </div>
+
+          <!-- 5 project header / global top nav -->
+          <div class="host">
+            <div class="hh">
+              <h3>Project header — global top nav</h3>
+              <span class="mode">→ generation / re-plan</span>
+            </div>
+            <div class="hb">
+              <div class="toolbar">
+                <span class="chip">+ Create</span>
+                <span class="chip">⌘K</span>
+                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+                <span class="chip">Report</span>
+                <span class="chip">☾</span>
+                <span class="chip">🔔</span>
+                <span
+                  class="chip"
+                  style="
+                    border-radius: 50%;
+                    width: 26px;
+                    height: 26px;
+                    justify-content: center;
+                    padding: 0;
+                  "
+                  >Y</span
+                >
+              </div>
+              <p class="desc">
+                In <code>TopNav</code>’s right cluster (after <b>Report</b>). The always-present
+                project-level door → <b>re-plan</b> the project (or <b>generation</b> 7.4 when the
+                project is still empty).
+              </p>
+            </div>
+          </div>
+
+          <!-- 6 command palette -->
+          <div class="host">
+            <div class="hh">
+              <h3>Global command menu <code>⌘K</code></h3>
+              <span class="mode">→ context-aware</span>
+            </div>
+            <div class="hb">
+              <div class="palette">
+                <div class="psearch">⌕ plan…</div>
+                <div class="pgroup">Plan</div>
+                <div class="prow hi"><span>✦</span> Plan with AI <span class="kbd">G P</span></div>
+                <div class="pgroup">Create</div>
+                <div class="prow"><span>＋</span> New issue <span class="kbd">⌘C</span></div>
+              </div>
+              <p class="desc">
+                A <b>Plan with AI</b> command in <code>AppCommandPalette</code> (the wired ⌘K
+                palette). Opens the workspace in the mode for wherever you invoked it from (current
+                item → contextual; project → re-plan / generation).
+              </p>
+            </div>
+          </div>
+
+          <!-- 7 roadmap toggle (planned, 7.19) -->
+          <div class="host">
+            <div class="hh">
+              <h3>Roadmap view — Board ↔ Roadmap</h3>
+              <span class="mode">→ roadmap read + augment</span>
+            </div>
+            <div class="hb">
+              <div class="toolbar">
+                <span class="seg"><span>Board</span><span class="on">Roadmap</span></span>
+                <span class="spacer"></span>
+                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+              </div>
+              <p class="desc">
+                The <b>Board ↔ Roadmap</b> toggle is the door — entering the roadmap opens
+                <b>roadmap read + augment</b> (7.19). <b>Planned surface:</b> the authed roadmap +
+                toggle are owned by <b>7.19 / MOTIR-1011</b> (not shipped yet — only the public
+                roadmap exists today); this door reuses the same launcher when 1011 lands.
+              </p>
+            </div>
+          </div>
+
+          <!-- consistency callout -->
+          <div class="host" style="background: var(--soft)">
+            <div class="hh" style="background: var(--accent-soft)">
+              <h3 style="color: var(--accent)">One affordance — same everywhere</h3>
+            </div>
+            <div class="hb">
+              <p class="desc" style="margin-top: 0">
+                <b>Consistency.</b> Same label (<b>“Plan with AI”</b>), same <b>✦</b> icon, same
+                accent treatment, same placement language on every surface — a
+                <b>primary button</b> in toolbars / nav, a <b>menu item</b> in the ⋯ menu and ⌘K.
+                Built once as the reusable <code>PlanWithAILauncher</code> (<b>MOTIR-1299</b>,
+                <code>blocked_by</code> this design); each surface mounts it, the detail (910) +
+                roadmap (1011) doors adopt it. Composes <code>components/ui/*</code> (Button /
+                Popover / CommandPalette) — <code>--el-*</code>
+                colour + semantic shape tokens only; AA + keyboard-reachable.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>The door determines the MODE.</b> From a <b>specific work item</b> → contextual (7.12);
+        from a <b>project surface with no item</b> → re-plan (7.11), or generation (7.4) if no plan
+        exists; from the <b>roadmap</b> → roadmap read + augment (7.19). The launcher passes the
+        originating context to the workspace, which opens in the matching state from sheet 3.
+      </div>
+    </section>
+
+    <script>
+      // ── shared node + edge rendering for the embedded canvas panes ──
+      // (The real surface uses the shipped PlanningCanvas; here we statically
+      //  place nodes + draw edges so the composed canvas reads faithfully — it
+      //  is the design/roadmap/ canvas language, not a re-drawn canvas.)
+      const TYPE = {
+        epic: '#ff64c8',
+        story: '#1aae39',
+        task: '#0075de',
+        subtask: '#2a9d99',
+        bug: '#e03131',
+      };
+      function tint(hex) {
+        return hex + '22';
+      }
+
+      // Place a full StationCard-language node; returns the element for edge routing.
+      function addNode(host, n) {
+        const el = document.createElement('div');
+        el.className = 'node' + (n.cls ? ' ' + n.cls : '') + (n.sm ? ' sm' : '');
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        const hue = TYPE[n.type] || '#5645d4';
+        const pill = n.pill ? `<span class="pill ${n.pill[0]}">${n.pill[1]}</span>` : '';
+        const capt = n.capt
+          ? '<div class="capt">' + n.capt.map((c) => `<div>${c}</div>`).join('') + '</div>'
+          : '';
+        el.innerHTML =
+          `<div class="nhead"><span class="tile" style="background:${tint(hue)};color:${hue}">${n.glyph || '▦'}</span>` +
+          `<div><div class="ntitle">${n.t}</div>${n.sub ? `<div class="nsub">${n.sub}</div>` : ''}</div>${pill}</div>${capt}`;
+        host.appendChild(el);
+        return el;
+      }
+
+      // Place a compact mini-node (the mode + entrance mini-canvases).
+      function addMini(host, n) {
+        const el = document.createElement('div');
+        el.className = 'mininode' + (n.cls ? ' ' + n.cls : '');
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        const hue = TYPE[n.type] || '#5645d4';
+        el.innerHTML = `<span class="dt" style="background:${hue}"></span>${n.t}`;
+        host.appendChild(el);
+        return el;
+      }
+
+      // Curved edge between two elements; anchors chosen by dominant axis so a
+      // child below its parent routes top↔bottom, a child to the right left↔right.
+      function drawEdge(svg, a, b, variant) {
+        const sr = svg.getBoundingClientRect();
+        const ar = a.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        const acx = ar.left + ar.width / 2 - sr.left,
+          acy = ar.top + ar.height / 2 - sr.top;
+        const bcx = br.left + br.width / 2 - sr.left,
+          bcy = br.top + br.height / 2 - sr.top;
+        let x1, y1, x2, y2, c1x, c1y, c2x, c2y;
+        if (Math.abs(bcx - acx) >= Math.abs(bcy - acy)) {
+          // horizontal-dominant: exit the side facing B
+          const toRight = bcx >= acx;
+          x1 = (toRight ? ar.right : ar.left) - sr.left;
+          y1 = acy;
+          x2 = (toRight ? br.left : br.right) - sr.left;
+          y2 = bcy;
+          const mx = (x1 + x2) / 2;
+          c1x = mx;
+          c1y = y1;
+          c2x = mx;
+          c2y = y2;
+        } else {
+          // vertical-dominant: exit top/bottom
+          const toDown = bcy >= acy;
+          x1 = acx;
+          y1 = (toDown ? ar.bottom : ar.top) - sr.top;
+          x2 = bcx;
+          y2 = (toDown ? br.top : br.bottom) - sr.top;
+          const my = (y1 + y2) / 2;
+          c1x = x1;
+          c1y = my;
+          c2x = x2;
+          c2y = my;
+        }
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', `M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}`);
+        p.setAttribute('fill', 'none');
+        const stroke =
+          variant === 'cross' ? '#dd5b00' : variant === 'pending' ? '#5645d4' : '#b8b3aa';
+        p.setAttribute('stroke', stroke);
+        p.setAttribute('stroke-width', variant === 'cross' ? '2' : '1.7');
+        if (variant === 'pending') p.setAttribute('stroke-dasharray', '5 4');
+        svg.appendChild(p);
+      }
+
+      function render() {
+        // ── Sheet 1: an existing plan + one proposed card ──
+        (function () {
+          const c = document.getElementById('canvas1');
+          const svg = document.getElementById('edge1');
+          const plan = addNode(c, {
+            x: 26,
+            y: 232,
+            type: 'epic',
+            glyph: '◆',
+            t: 'Plan · PayFlow',
+            sub: 'your project',
+            pill: ['done', '✓ live'],
+          });
+          const billing = addNode(c, {
+            x: 268,
+            y: 232,
+            type: 'story',
+            glyph: '▤',
+            t: 'Billing',
+            sub: 'epic · 6 items',
+            pill: ['here', 'you are here'],
+          });
+          const model = addNode(c, {
+            x: 512,
+            y: 110,
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Invoice model',
+            sub: 'subtask · done',
+            pill: ['done', '✓'],
+          });
+          const create = addNode(c, {
+            x: 512,
+            y: 318,
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Create invoice',
+            sub: 'subtask',
+          });
+          const rec = addNode(c, {
+            x: 540,
+            y: 446,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '＋',
+            t: 'Recurring invoices',
+            pill: ['proposed', 'proposed'],
+          });
+          requestAnimationFrame(() => {
+            drawEdge(svg, plan, billing, 'firm');
+            drawEdge(svg, billing, model, 'firm');
+            drawEdge(svg, billing, create, 'firm');
+            drawEdge(svg, model, rec, 'pending');
+          });
+        })();
+
+        // ── Sheet 2: a fresh tree proposed one-by-one (all pending) ──
+        (function () {
+          const c = document.getElementById('canvas2');
+          const svg = document.getElementById('edge2');
+          const epic = addNode(c, {
+            x: 28,
+            y: 150,
+            cls: 'proposed',
+            type: 'epic',
+            glyph: '◆',
+            t: 'Billing',
+            sub: 'epic',
+            pill: ['proposed', 'new'],
+          });
+          const model = addNode(c, {
+            x: 286,
+            y: 60,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Invoice model',
+          });
+          const create = addNode(c, {
+            x: 286,
+            y: 168,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Create invoice',
+          });
+          const send = addNode(c, {
+            x: 522,
+            y: 168,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Send invoice',
+          });
+          const rec = addNode(c, {
+            x: 286,
+            y: 300,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Recurring invoices',
+          });
+          const remind = addNode(c, {
+            x: 522,
+            y: 300,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Payment reminders',
+          });
+          requestAnimationFrame(() => {
+            drawEdge(svg, epic, model, 'pending');
+            drawEdge(svg, epic, create, 'pending');
+            drawEdge(svg, create, send, 'pending');
+            drawEdge(svg, model, rec, 'pending');
+            drawEdge(svg, create, remind, 'pending');
+          });
+        })();
+
+        // ── Sheet 3 mode mini-canvases ──
+        function mini(id, build) {
+          const c = document.getElementById(id);
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('class', 'edge');
+          c.appendChild(svg);
+          const edges = build(c);
+          requestAnimationFrame(() => edges.forEach((e) => drawEdge(svg, e[0], e[1], e[2])));
+        }
+        mini('m_gen', (c) => {
+          const e = addMini(c, { x: 14, y: 78, cls: 'prop', type: 'epic', t: 'Billing' });
+          const a = addMini(c, { x: 150, y: 28, cls: 'prop', type: 'subtask', t: 'Invoice model' });
+          const b = addMini(c, {
+            x: 150,
+            y: 120,
+            cls: 'prop',
+            type: 'subtask',
+            t: 'Create invoice',
+          });
+          const d = addMini(c, { x: 300, y: 120, cls: 'prop', type: 'subtask', t: 'Send' });
+          return [
+            [e, a, 'pending'],
+            [e, b, 'pending'],
+            [b, d, 'pending'],
+          ];
+        });
+        mini('m_replan', (c) => {
+          const a = addMini(c, { x: 14, y: 78, cls: 'done', type: 'story', t: 'Invoices ✓' });
+          const b = addMini(c, { x: 165, y: 30, type: 'story', t: 'Payments' });
+          const d = addMini(c, { x: 165, y: 122, cls: 'prop', type: 'story', t: 'Reminders' });
+          return [
+            [a, b, 'firm'],
+            [a, d, 'pending'],
+          ];
+        });
+        mini('m_ctx', (c) => {
+          const f = addMini(c, { x: 12, y: 78, type: 'subtask', t: 'Create invoice' });
+          f.style.outline = '2px solid #5645d4';
+          f.style.outlineOffset = '1px';
+          const a = addMini(c, { x: 175, y: 24, cls: 'prop', type: 'subtask', t: 'Build form' });
+          const b = addMini(c, { x: 175, y: 80, cls: 'prop', type: 'subtask', t: 'Validate' });
+          const d = addMini(c, { x: 175, y: 136, cls: 'prop', type: 'subtask', t: 'Persist' });
+          return [
+            [f, a, 'pending'],
+            [f, b, 'pending'],
+            [f, d, 'pending'],
+          ];
+        });
+        mini('m_road', (c) => {
+          const p = addMini(c, { x: 10, y: 78, cls: 'lock', type: 'epic', t: 'Plan' });
+          const a = addMini(c, { x: 110, y: 78, cls: 'done', type: 'epic', t: 'Epic 1 ✓' });
+          const b = addMini(c, { x: 215, y: 30, type: 'epic', t: 'Epic 2' });
+          const d = addMini(c, { x: 215, y: 122, cls: 'lock', type: 'epic', t: 'Epic 3' });
+          return [
+            [p, a, 'firm'],
+            [a, b, 'firm'],
+            [a, d, 'firm'],
+          ];
+        });
+      }
+      window.addEventListener('load', render);
+    </script>
+  </body>
+</html>

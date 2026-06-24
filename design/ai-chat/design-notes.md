@@ -326,3 +326,178 @@ Invoices`, `Foundation → Reminders`) — but it is **not a hard rule**, so ind
 (pan/zoom/drag/fit + node + read-only edge rendering — MOTIR-1236), per-user layout
 persistence (MOTIR-1237), composed by the onboarding shell (MOTIR-840) and reused by
 generation review (7.4) and the persistent roadmap (7.19).
+
+---
+
+## ⭐ The reusable AI planning workspace — shell + universal entrance (MOTIR-1193 / 7.20.1)
+
+**THE ONE SHARED PLANNING INTERFACE.** Every AI-planning surface uses the SAME
+structure — a full-screen **canvas (left) + chat (right)** workspace. Onboarding
+(above) is one specialization; **generation review (7.4), re-planning (7.11),
+contextual planning (7.12) and the persistent roadmap (7.19) REUSE this same
+surface** as MODES (states), not separate UIs. This is the SINGLE design for it —
+it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
+`7.12.1`/`MOTIR-907`.
+
+**Asset:** `planning-workspace.mock.html` (source) + `planning-workspace.png`
+(full-page export). A four-sheet review board:
+
+| Sheet | What it shows                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                              |
+| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)            |
+| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door |
+| **4** | The universal "Plan with AI" entrance, drawn IN SITU on every host surface, with the mode each door opens                      |
+
+### ⚠️ SCOPE — this designs the SHELL + ENTRANCE, NOT the canvas pane
+
+The canvas pane is the **standalone work-item canvas** — already designed +
+owned elsewhere; this asset **COMPOSES it, it does NOT redesign it**:
+
+- **The canvas DESIGN** = **MOTIR-1009** (`7.3.76`, done) → the three-file asset
+  at **`design/roadmap/`** (the deterministic auto-layout, the work-item tree,
+  the dependency edges — within-story arrow vs the cross-story warning edge —
+  zoom / fit, search-to-focus, filters, node states, drill-down, empty/loading/
+  error). This asset READS it and reuses its node + edge language; it does **not**
+  re-draw the tree / edges / zoom / search.
+- **The canvas COMPONENT** = **MOTIR-1194** (`7.3.77`, the reusable
+  `WorkItemCanvas`) → the code this workspace's canvas pane MOUNTS. A FOUNDATION
+  (it does not depend on this design); this workspace is one of its consumers.
+
+So the mock's canvas panes are the `design/roadmap/` canvas language reproduced
+faithfully (the `StationCard` node + the `PlanningCanvas` neutral firm /
+dashed-pending edges + the cross-story `--el-warning` edge), **never a new
+canvas**.
+
+### ⭐ Built on SHIPPED REALITY (design-against-shipped-reality)
+
+The shell is **already shipped** and reused, not reinvented:
+
+- **The shell** = `components/planning/PlanningWorkspace.tsx` — the full-screen
+  two-pane frame: `grid h-dvh w-full grid-cols-1 md:grid-cols-[1fr_22rem]`
+  (canvas left, a **22rem** chat rail right), **no app shell / sidebar / top
+  nav** — a focused planning surface. The mock mirrors this exactly.
+- **The chat rail** = `components/onboarding/DiscoveryChatRail.tsx` — the mock
+  reproduces its real markup: the rail header (a `--el-success` status dot + the
+  mono uppercase **"Motir AI"** label), the `Bubble` + `Avatar` language
+  (AI = `--el-accent` avatar + soft bubble; user = accent bubble), the drafting
+  `Spinner` indicator, and the composer (`Input` + a primary `Send` button).
+  The one new rail element is a small **mode chip** (mono, accent tint) naming
+  the active mode — the only per-mode difference in the rail.
+- **The global launcher** composes `components/ui/CommandPalette.tsx` (the wired
+  ⌘K palette, app composition in `(authed)/_components/AppCommandPalette.tsx`):
+  a **"Plan with AI"** command in a `Plan` group.
+
+### Chat-to-plan, on-canvas incremental placement & confirm-to-persist (sheet 2)
+
+- **The chat drives; the conductor proposes work.** Free-form chat in the rail
+  → the conductor proposes work items.
+- **On-canvas incremental placement.** Proposed work items appear on the
+  standalone canvas **one by one**, each drawn with its **relationship edges** —
+  parent→child, the within-story `depends_on` arrow, and the cross-story
+  `blocked_by` warning edge — in the canvas's own node + edge language.
+- **Confirm-to-persist.** The proposed set is a **STATE of the canvas** —
+  pending nodes (a dashed `--el-accent` border + a `proposed` `Pill`) and
+  pending edges (dashed). **Nothing is written to the DB until the user presses
+  Confirm**; **Discard** drops the whole proposal. This IS the diff/review
+  surface — there is no separate review screen. The gate is a floating bar:
+  _"N proposed work items · Nothing saved yet"_ + **Discard** / **Confirm & add
+  to project**.
+
+### The MODES — states of the one surface, each opened by a door (sheet 3)
+
+All four differ ONLY in (a) what the canvas is seeded with and (b) the chat
+driver's framing — the shell, the placement, and the confirm gate are identical.
+**Grounded in the workflow-defining stories** (design TO the spec, never invent
+the flow):
+
+- **Generation review — 7.4 (`MOTIR-805`).** Door: a project surface with **no
+  plan yet** → generate the first fresh tree from the frozen baseline → review →
+  Confirm persists. (7.4 is fresh, empty-skeleton generation.)
+- **Augment / re-plan — 7.11 (`MOTIR-811`).** Door: a project surface **with a
+  plan** → expand / re-sequence; **completion-aware** — done work stays locked,
+  new cards propose around it.
+- **Contextual planning — 7.12 (`MOTIR-812`).** Door: **from a specific work
+  item** (detail page / row action) → planning **scoped to that item's subtree**
+  (the canvas focuses that item; proposals are its children).
+- **Roadmap read + augment — 7.19 (`MOTIR-1008`).** Door: the **Board ↔
+  Roadmap** toggle → the persistent roadmap; read the whole tree, augment in
+  place.
+
+Onboarding (7.3) is the one specialization that wraps this shell in its gated
+per-tier pre-plan review loop (see `onboarding.mock.html`).
+
+### ⚠️ The universal entrance — "Plan with AI", in situ on every surface (sheet 4)
+
+The planner is **summonable from anywhere** via **one consistent affordance** —
+same label (**"Plan with AI"**), same `sparkles`/`✦` icon, same accent
+treatment, same placement language everywhere: a **primary `Button`** in
+toolbars / nav, a **menu item** in the `⋯` menu and the ⌘K palette. **The door
+determines the MODE.** Drawn IN SITU on each host (verified against shipped
+reality):
+
+| Host surface                        | Where the affordance sits                                                     | Mode it opens                                            |
+| ----------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Work items list** `/items`        | `IssueListToolbar`, left of **+ New issue**                                   | re-plan (7.11); generation (7.4) if no plan              |
+| **Backlog** `/backlog`              | `BacklogFilterControls` row, before **+ New issue**                           | augment / expand (7.11)                                  |
+| **Board** `/boards`                 | board header (after `BoardFilterControls`), before **+ New issue**            | augment / re-plan (7.11)                                 |
+| **Work-item detail** `/items/[key]` | the action cluster (after **Watch**) AND inside the `⋯` `WorkItemActionsMenu` | contextual, scoped to the item (7.12)                    |
+| **Project header — global top nav** | `TopNav` right cluster (after **Report**)                                     | re-plan, or generation (7.4) if empty                    |
+| **Global command menu ⌘K**          | a `Plan with AI` command in `AppCommandPalette`                               | context-aware (item → contextual; project → re-plan/gen) |
+| **Roadmap view — Board ↔ Roadmap**  | the view toggle is the door                                                   | roadmap read + augment (7.19)                            |
+
+- **The work-item detail door** (`MOTIR-910`) and the **roadmap toggle**
+  (`MOTIR-1011`) **adopt** this same affordance — they are specializations of
+  the one entrance, not separate inventions.
+- **Planned-surface note:** the authed **Board ↔ Roadmap** toggle + roadmap view
+  are owned by **7.19 / `MOTIR-1011`** and are **not shipped yet** (only the
+  PUBLIC roadmap exists today). This door is drawn as the entrance that surface
+  will carry — the launcher reuses the same affordance when 1011 lands.
+- **Implementation** is the reusable **`PlanWithAILauncher`** subtask
+  (**`MOTIR-1299`** / `7.20.3`), which is `blocked_by` this design; it builds the
+  affordance once and mounts it across surfaces, mapping context → mode.
+
+### Primitives composed (no hand-rolling)
+
+| Element                                            | Built from                                                                                                                                                 |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the workspace shell                                | the shipped `PlanningWorkspace` (`grid-cols-[1fr_22rem]`)                                                                                                  |
+| canvas pane (nodes + edges + zoom + search)        | the standalone `WorkItemCanvas` (`MOTIR-1194`; design `design/roadmap/`) over the shipped `PlanningCanvas` — composed, never redrawn                       |
+| chat rail (header + bubbles + drafting + composer) | the shipped `DiscoveryChatRail` language — `Card`/`Avatar`/`Input`/`Spinner`/`Button`                                                                      |
+| proposed (pending) node + edge                     | the canvas's `StationCard` + `PlanningCanvas` edge language in a `proposed` state (dashed `--el-accent`)                                                   |
+| confirm-to-persist bar                             | `Card` (accent border) + `Button` (Confirm primary, Discard ghost)                                                                                         |
+| "Plan with AI" launcher                            | NEW reusable affordance from `components/ui/*` — `Button` (toolbars/nav) · menu row (`⋯` + ⌘K) · `Popover`/`CommandPalette`                                |
+| host-surface toolbars (sheet 4)                    | the real shipped `IssueListToolbar` / `BacklogFilterControls` / `BoardFilterControls` / `WorkItemActionsMenu` / `TopNav` / `AppCommandPalette` action rows |
+| icons                                              | lucide-react (`Sparkles` for the launcher)                                                                                                                 |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*` (the mock inlines the real light-palette
+  values, as the sibling canvas mocks do); the launcher uses `--el-accent` /
+  `--el-accent-text`; the proposed state uses `--el-accent` border over a faint
+  accent-tinted surface; the cross-story edge is `--el-warning`. Work-item type
+  hues are `--el-type-{epic,story,subtask,…}`; type dots/tiles put the hue in a
+  tint with strong text (finding #35, AA).
+- **Shape** strictly via element-semantic tokens (node = `--radius-card`, pills =
+  `--radius-badge`, buttons = `--radius-btn`, menu/list rows = `--radius-control`,
+  the palette = `--radius-modal`; shadows = `--shadow-{subtle,card,modal}`) so a
+  `[data-style]` swap reshapes the whole surface. `rounded-full` only on dots /
+  avatars.
+- **Not colour alone** — the proposed state pairs the dashed border + a
+  `proposed` pill + a label; pending edges are dashed (not just tinted); each
+  mode pairs an icon + label; the launcher pairs the `✦` icon + the "Plan with
+  AI" text everywhere.
+- **A11y** — the canvas + chat are labelled regions (`role="application"` /
+  `aria-label`, shipped on `PlanningCanvas` / the rail); the launcher is a real
+  `Button` / menu `option`, keyboard-reachable; the ⌘K command follows the
+  shipped palette's combobox/listbox pattern; decorative icons are
+  `aria-hidden`.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface:
+`design-notes.md` (this section) · `planning-workspace.mock.html` (source) ·
+`planning-workspace.png` (full-page export, Playwright chromium — light,
+`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
+`7.4`/`7.11`/`7.12`/`7.19` (the modes) + `7.20.3`/`MOTIR-1299` (the launcher it
+gates); supersedes `MOTIR-898` + `MOTIR-907`.
