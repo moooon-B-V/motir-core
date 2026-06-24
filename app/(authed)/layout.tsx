@@ -8,7 +8,6 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { workItemsService } from '@/lib/services/workItemsService';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { isCloudBilling } from '@/lib/billing/availability';
@@ -156,19 +155,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
       ).unreadCount
     : null;
 
-  // The "Ready" nav badge's readiness count (Subtask 7.0.6) — resolved ONCE
-  // here and threaded into both the rail and the drawer SidebarNav, so the badge
-  // never double-fetches. Bounded count (see workItemsService.countReady); null
-  // when there's no active project (the project-scoped nav is hidden anyway).
-  const readyCount =
-    ctx && activeProject
-      ? await workItemsService.countReady(
-          activeProject.id,
-          {},
-          { userId: ctx.userId, workspaceId: ctx.workspaceId },
-        )
-      : null;
-
   return (
     <ToastProvider>
       {/* CommandPaletteProvider owns the ⌘K palette + `?` cheatsheet open state
@@ -207,7 +193,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     activeProject={activeProject}
                     projects={projects}
                     variant="rail"
-                    readyCount={readyCount}
                     settingsAccess={settingsAccess}
                     user={{ name: session.user.name, email: session.user.email }}
                   />
@@ -236,7 +221,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   activeProject={activeProject}
                   projects={projects}
                   variant="drawer"
-                  readyCount={readyCount}
                   settingsAccess={settingsAccess}
                   user={{ name: session.user.name, email: session.user.email }}
                 />

@@ -1,4 +1,4 @@
-import { Prisma, type WorkItem } from '@prisma/client';
+import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
 import { db } from '@/lib/db';
 import {
   astHasEpic5Conditions,
@@ -87,6 +87,7 @@ import type {
   WorkItemTreeRow,
   RepoIssueFilter,
   ReadyCandidateRow,
+  ReadyLayerRow,
 } from '@/lib/repositories/workItemRepository';
 import { ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import type { IssueSort } from '@/lib/issues/issueListView';
@@ -99,12 +100,12 @@ import {
 } from '@/lib/mappers/readyMappers';
 import {
   type ReadyListFilter,
+  type ReadyCursor,
   clampReadyLimit,
   decodeReadyCursor,
   encodeReadyCursor,
-  READY_COUNT_CAP,
-  READY_COUNT_MAX_PAGES,
-  READY_MAX_LIMIT,
+  READY_KIND_RANK,
+  READY_PRIORITY_ASC,
 } from '@/lib/workItems/readyFilter';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type {
@@ -2273,28 +2274,46 @@ export const workItemsService = {
     inheritedSessionBranch: string | null;
     conflictingSessionBranches: string[];
   }> {
+    // The node's OWN-blocker verdict + the rich open-blocker / session-branch
+    // detail. (`openBlockerIds` stays the node's OWN blockers — the relationships
+    // banner highlights those; a parent-not-ready reason is conveyed by the tree,
+    // not invented as a phantom blocker here. Card 7.0.13: surfacing it is "may".)
     const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
-    if (blockers.length === 0) {
-      return {
-        ready: true,
-        openBlockerIds: new Set(),
-        inheritedSessionBranch: null,
-        conflictingSessionBranches: [],
-      };
+    let ownReady = true;
+    let openBlockerIds = new Set<string>();
+    let inheritedSessionBranch: string | null = null;
+    let conflictingSessionBranches: string[] = [];
+    if (blockers.length > 0) {
+      const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+        blockers.map((b) => b.projectId),
+        ctx.workspaceId,
+      );
+      const cls = classifyBlockerReadiness(blockers, terminalByProject);
+      ownReady = cls.ready;
+      openBlockerIds = new Set(
+        blockers.filter((b) => isOpenBlocker(b, terminalByProject)).map((b) => b.id),
+      );
+      inheritedSessionBranch = cls.inheritedSessionBranch;
+      conflictingSessionBranches = cls.conflicting ? cls.sessionBranches : [];
     }
-    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-      blockers.map((b) => b.projectId),
+    // Cascade (Subtask 7.0.13): also gate on the ANCESTOR chain — ready only when
+    // every ancestor is ready too. Checked even when the node has no own blocker,
+    // because an unready ancestor still holds it out of the ready set.
+    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
+      [workItemId],
       ctx.workspaceId,
     );
-    const cls = classifyBlockerReadiness(blockers, terminalByProject);
-    const openBlockerIds = new Set(
-      blockers.filter((b) => isOpenBlocker(b, terminalByProject)).map((b) => b.id),
-    );
+    const ancestors = ancestorsByItem.get(workItemId) ?? [];
+    let ancestorsReady = true;
+    if (ancestors.length > 0) {
+      const ownReadyAnc = await computeOwnBlockerReadiness(ancestors, ctx);
+      ancestorsReady = ancestors.every((a) => ownReadyAnc.get(a) !== false);
+    }
     return {
-      ready: cls.ready,
+      ready: ownReady && ancestorsReady,
       openBlockerIds,
-      inheritedSessionBranch: cls.inheritedSessionBranch,
-      conflictingSessionBranches: cls.conflicting ? cls.sessionBranches : [],
+      inheritedSessionBranch,
+      conflictingSessionBranches,
     };
   },
 
@@ -2313,22 +2332,25 @@ export const workItemsService = {
   ): Promise<Map<string, boolean>> {
     const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
     if (itemIds.length === 0) return ready;
-    const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
-    if (blockers.length === 0) return ready;
-    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-      blockers.map((b) => b.projectId),
+    // Cascade (Subtask 7.0.13): a node is ready ⟺ its OWN sibling blockers are
+    // done AND every ANCESTOR is ready. Resolve the ancestor chains, compute
+    // OWN-blocker readiness over the union (items + ancestors) in ONE batch
+    // (no N+1), then AND the chain in. The flat per-node blocker rule still
+    // holds at each level; an unready ancestor (its own open blocker, or ITS
+    // ancestor unready) holds the whole subtree out of the ready set — the
+    // mirror of 7.0.10 (a parent-with-children is excluded; its children wait
+    // until it is ready).
+    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
+      itemIds,
       ctx.workspaceId,
     );
-    // Group each item's blockers, then classify per item (an item is ready iff
-    // it has no open blocker AND its integrated deps don't span >1 branch).
-    const byItem = new Map<string, BlockerReadinessState[]>();
-    for (const b of blockers) {
-      const arr = byItem.get(b.fromId);
-      if (arr) arr.push(b);
-      else byItem.set(b.fromId, [b]);
-    }
-    for (const [fromId, itemBlockers] of byItem) {
-      ready.set(fromId, classifyBlockerReadiness(itemBlockers, terminalByProject).ready);
+    const union = new Set<string>(itemIds);
+    for (const chain of ancestorsByItem.values()) for (const a of chain) union.add(a);
+    const ownReady = await computeOwnBlockerReadiness([...union], ctx);
+    for (const id of itemIds) {
+      const selfReady = ownReady.get(id) !== false;
+      const chainReady = (ancestorsByItem.get(id) ?? []).every((a) => ownReady.get(a) !== false);
+      ready.set(id, selfReady && chainReady);
     }
     return ready;
   },
@@ -2684,115 +2706,93 @@ export const workItemsService = {
   },
 
   /**
-   * The READY SET of a project (Subtask 7.0.2) — the AI dispatch surface's list
-   * read, cursor-paginated, returning the 7.0.3 `ReadyItemDto`s. A work item is
-   * "ready" when (a) its own status is in the `todo` category (not-yet-started —
-   * a ready item is one to START, so `in_progress` and `done` are both excluded)
-   * AND (b) every one of its `is_blocked_by` blockers is terminal in ITS OWN
-   * project (the 2.4.5 / finding #21 predicate, via the batched
-   * `getReadinessForItems` — no N+1).
+   * The READY SET of a project (Subtask 7.0.2 + 7.0.13) — the AI dispatch
+   * surface's list read, cursor-paginated, returning the 7.0.3 `ReadyItemDto`s.
    *
-   * Tenant gate first (cross-workspace / missing project → `ProjectNotFoundError`
-   * → 404, no existence leak). Then ONE candidate read narrows by the cheap SQL
-   * facets (kind / assignee / priority / todo-status) under the
-   * `(type asc, priority desc, key asc)` sort + the cursor seek-after, fetching `limit + 1`
-   * to detect a next page; readiness is applied over that bounded window. **A page
-   * may be SHORTER than `limit`** when blocked candidates fall inside the window —
-   * the cursor still advances past the whole window, so the agent walks the FULL
-   * set deterministically across pages. A malformed cursor throws
-   * `InvalidReadyCursorError` (→ 400); a valid cursor past the tail returns `[]`.
+   * A work item is in the ready set when it is a DISPATCHABLE LEAF that is READY:
+   *   - **Leaf** — it has NO children. A childed story/epic is *planned* (broken
+   *     down), so it is never listed; a childless story/epic IS listed ("ready to
+   *     plan"), a childless subtask/task/bug "ready to do" (Subtask 7.0.10).
+   *   - **`todo` status** — a ready item is one to START (`in_progress`/`done`
+   *     excluded).
+   *   - **Ready (cascade, 7.0.13)** — its own `is_blocked_by` blockers are all
+   *     terminal in their own project AND every ANCESTOR is ready.
+   *
+   * Computed TOP-DOWN, by layer (NOT a whole-table scan): start at the roots,
+   * keep the ready ones, descend ONLY into ready containers, collect ready
+   * childless `todo` leaves — so a not-ready or fully-planned-out branch is never
+   * read (`collectReadyLeaves`). The full ready-leaf set is then sorted
+   * `(type asc, priority desc, key asc)` and sliced by the cursor seek-after.
+   * Tenant gate first (cross-workspace / missing → `ProjectNotFoundError` → 404).
+   * A malformed cursor throws `InvalidReadyCursorError` (→ 400); a cursor past the
+   * tail returns `[]`. The list is empty ONLY when the project has no ready work
+   * — count and list can never disagree (the 7.0.13 empty-list-with-count fix).
    */
   async listReady(
     projectId: string,
     filter: ReadyListFilter,
     ctx: ServiceContext,
   ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
-    const { rows, nextCursor } = await pageReadyCandidates(projectId, filter, ctx);
-    return { items: rows.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    const limit = clampReadyLimit(filter.limit);
+    const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
+    const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter);
+    const start = cursor ? all.findIndex((r) => isAfterReadyCursor(r, cursor)) : 0;
+    const begin = start === -1 ? all.length : start;
+    const window = all.slice(begin, begin + limit);
+    const more = begin + window.length < all.length;
+    const last = window.at(-1);
+    const nextCursor =
+      more && last
+        ? encodeReadyCursor({ kind: last.kind, priority: last.priority, key: last.key })
+        : null;
+    return { items: window.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
   },
 
   /**
-   * Dispatch ONE ready item (Subtask 7.0.2) — the BYOK `motir run` /
-   * coding-agent consumer of `POST /api/ready/next`. Returns the FIRST ready
-   * item under the `(type asc, priority desc, key asc)` sort that is NOT in `excludeIds`,
-   * as the full `ReadyItemDispatchDto` (body + parsed context refs + resolved
-   * blocker keys + parent key + run command), or `null` when the filtered ready
-   * set is exhausted.
-   *
-   * It walks `listReady`'s candidate pages (SAME predicate + sort — the page and
-   * the agent can never disagree) until it finds a non-excluded item or runs out
-   * of cursor. In practice `excludeIds` is small and the top of the first page
-   * answers. Read-only: no claim row, no audit (those land with stub 7.6).
+   * Dispatch ONE ready item (Subtask 7.0.2) — the BYOK `motir run` consumer of
+   * `POST /api/ready/next`. The FIRST ready leaf under `(type asc, priority desc,
+   * key asc)` not in `excludeIds`, as the full `ReadyItemDispatchDto`, or `null`
+   * when the filtered ready set is exhausted. Same top-down ready set as
+   * `listReady` (they can never disagree).
    */
   async getNextReady(
     projectId: string,
     filter: Omit<ReadyListFilter, 'limit' | 'cursor'> & { excludeIds?: string[] },
     ctx: ServiceContext,
   ): Promise<ReadyItemDispatchDto | null> {
-    const exclude = new Set(filter.excludeIds ?? []);
-    let cursor: string | undefined;
-    // Bounded by the finite candidate set — the cursor advances every iteration
-    // and `pageReadyCandidates` returns `nextCursor: null` at the tail.
-    for (;;) {
-      const { rows, nextCursor }: { rows: ReadyCandidateRow[]; nextCursor: string | null } =
-        await pageReadyCandidates(
-          projectId,
-          {
-            kinds: filter.kinds,
-            assigneeId: filter.assigneeId,
-            priority: filter.priority,
-            cursor,
-          },
-          ctx,
-        );
-      const chosen = rows.find((r) => !exclude.has(r.id));
-      if (chosen) return buildReadyDispatchDto(chosen, ctx);
-      if (!nextCursor) return null;
-      cursor = nextCursor;
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
     }
+    const exclude = new Set(filter.excludeIds ?? []);
+    const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter);
+    const chosen = all.find((r) => !exclude.has(r.id));
+    return chosen ? buildReadyDispatchDto(chosen, ctx) : null;
   },
 
   /**
-   * The READY COUNT for the sidebar badge (Subtask 7.0.6) — how many work items
-   * are currently ready to start in the project, under the SAME predicate
-   * `listReady` uses (so the badge can never disagree with the /ready page).
-   * Reuses the `pageReadyCandidates` machinery: walk candidate pages, sum the
-   * ready rows. Tenant-gated by `pageReadyCandidates` (cross-workspace project →
-   * `ProjectNotFoundError`).
-   *
-   * Bounded by design (see `READY_COUNT_CAP` / `READY_COUNT_MAX_PAGES`): the
-   * badge renders on every authed route and readiness is a computed predicate,
-   * so the scan stops at the cap (badge shows "{cap}+") and after a fixed number
-   * of candidate pages. `hasMore` makes either short-circuit visible — never a
-   * silent truncation (finding #57: don't ship a "load all rows" read; here the
-   * count is the only thing that must examine the set, and it's bounded).
+   * The READY COUNT (Subtask 7.0.6) — how many work items are ready to start in
+   * the project, under the SAME top-down predicate `listReady` uses, so the count
+   * can never disagree with the list (the bug the 7.0.13 rework fixed). Resolved
+   * only when the /ready page loads — the every-authed-route sidebar badge was
+   * removed (the count was a computed scan on every navigation). Exact (the
+   * layered traversal is bounded by tree depth), so `hasMore` is always false.
    */
   async countReady(
     projectId: string,
     filter: Omit<ReadyListFilter, 'limit' | 'cursor'>,
     ctx: ServiceContext,
   ): Promise<{ count: number; hasMore: boolean }> {
-    let count = 0;
-    let cursor: string | undefined;
-    for (let page = 0; page < READY_COUNT_MAX_PAGES; page++) {
-      const { rows, nextCursor }: { rows: ReadyCandidateRow[]; nextCursor: string | null } =
-        await pageReadyCandidates(
-          projectId,
-          {
-            kinds: filter.kinds,
-            assigneeId: filter.assigneeId,
-            priority: filter.priority,
-            cursor,
-            limit: READY_MAX_LIMIT,
-          },
-          ctx,
-        );
-      count += rows.length;
-      if (count >= READY_COUNT_CAP) return { count: READY_COUNT_CAP, hasMore: true };
-      if (!nextCursor) return { count, hasMore: false };
-      cursor = nextCursor;
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
     }
-    return { count, hasMore: true };
+    const all = await collectReadyLeaves(projectId, project.workspaceId, ctx, filter);
+    return { count: all.length, hasMore: false };
   },
 
   /**
@@ -2893,50 +2893,90 @@ async function assertCanManageProject(
 // source them from the service.
 export { QUICK_SEARCH_DEFAULT_LIMIT, QUICK_SEARCH_MAX_LIMIT, QUICK_SEARCH_MIN_QUERY_LENGTH };
 
+/** Max layers `collectReadyLeaves` descends (Subtask 7.0.13). The kind-parent
+ *  matrix caps real tree depth at 5 (epic→story→task→bug→subtask); the generous
+ *  bound is a backstop against a malformed cycle, never reached normally. */
+const READY_MAX_TREE_DEPTH = 8;
+
 /**
- * Fetch ONE cursor-paginated window of READY candidate rows (Subtask 7.0.2) —
- * the shared core of `listReady` (which maps the rows to list DTOs) and
- * `getNextReady` (which needs the raw rows to build the dispatch DTO). Tenant-
- * gates the project, fetches `limit + 1` candidates under the deterministic
- * sort + cursor seek-after, then readiness-filters the bounded window via the
- * batched `getReadinessForItems` (no N+1). `nextCursor` encodes the window's
- * LAST candidate (ready or not), so paging advances past the whole window and a
- * short ready page never strands the rest of the set.
+ * The project's dispatchable ready leaves, computed TOP-DOWN by layer (Subtask
+ * 7.0.13) — the single source `listReady` / `getNextReady` / `countReady` derive
+ * from (so they can never disagree). Start at the ROOTS; each layer, keep the
+ * OWN-ready nodes (their own blockers done — `computeOwnBlockerReadiness`),
+ * DESCEND into the ready CONTAINERS (fetch their children = the next layer) and
+ * COLLECT the ready, childless, `todo` leaves. Because we only ever fetch the
+ * children of nodes already known ready, a not-ready or fully-planned-out branch
+ * is NEVER read (the cost win over the old whole-table candidate scan), and a
+ * leaf is reached only via an all-ready ancestor chain — the cascade, equivalent
+ * to the bottom-up `getReadinessForItems` the board/detail use per-item. The
+ * faceted axes (kind / assignee / priority) narrow the COLLECTED leaves only —
+ * the traversal ignores them so a matching leaf under a non-matching ancestor is
+ * still reachable. Returned sorted `(type asc, priority desc, key asc)`.
  */
-async function pageReadyCandidates(
+async function collectReadyLeaves(
   projectId: string,
-  filter: ReadyListFilter,
+  workspaceId: string,
   ctx: ServiceContext,
-): Promise<{ rows: ReadyCandidateRow[]; nextCursor: string | null }> {
-  const project = await projectRepository.findById(projectId);
-  if (!project || project.workspaceId !== ctx.workspaceId) {
-    throw new ProjectNotFoundError(projectId);
+  facets: { kinds?: WorkItemKind[]; assigneeId?: string | null; priority?: WorkItemPriority[] },
+): Promise<ReadyLayerRow[]> {
+  const leaves: ReadyLayerRow[] = [];
+  let frontier = await workItemRepository.findReadyLayer(projectId, workspaceId, null);
+  for (let depth = 0; depth < READY_MAX_TREE_DEPTH && frontier.length > 0; depth++) {
+    const ownReady = await computeOwnBlockerReadiness(
+      frontier.map((r) => r.id),
+      ctx,
+    );
+    const descend: string[] = [];
+    for (const row of frontier) {
+      if (ownReady.get(row.id) === false) continue; // not ready → prune the subtree
+      if (row.hasChildren)
+        descend.push(row.id); // ready container → descend
+      else if (row.statusCategory === 'todo') leaves.push(row); // ready, childless, to-start
+    }
+    frontier = descend.length
+      ? await workItemRepository.findReadyLayer(projectId, workspaceId, descend)
+      : [];
   }
-  const limit = clampReadyLimit(filter.limit);
-  const cursor = filter.cursor ? decodeReadyCursor(filter.cursor) : undefined;
+  let out = leaves;
+  if (facets.kinds && facets.kinds.length > 0) {
+    const set = new Set<string>(facets.kinds);
+    out = out.filter((r) => set.has(r.kind));
+  }
+  if (facets.priority && facets.priority.length > 0) {
+    const set = new Set<string>(facets.priority);
+    out = out.filter((r) => set.has(r.priority));
+  }
+  if (facets.assigneeId === null) out = out.filter((r) => r.assigneeId === null);
+  else if (facets.assigneeId !== undefined) {
+    out = out.filter((r) => r.assigneeId === facets.assigneeId);
+  }
+  out.sort(compareReadyRows);
+  return out;
+}
 
-  const candidates = await workItemRepository.findReadyCandidates(projectId, project.workspaceId, {
-    kinds: filter.kinds,
-    assigneeId: filter.assigneeId,
-    priority: filter.priority,
-    cursor,
-    limit: limit + 1,
-  });
+/** Order two ready leaves under the dispatch sort `(type asc, priority desc, key
+ *  asc)`: `READY_KIND_RANK` (subtask first … epic last) is primary, priority
+ *  (highest first) breaks the type tie, `key` breaks the rest. The ONE comparator
+ *  the list slice and the cursor seek-after share, so they can't drift. */
+function compareReadyRows(
+  a: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
+  b: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
+): number {
+  const dk = READY_KIND_RANK[a.kind] - READY_KIND_RANK[b.kind];
+  if (dk !== 0) return dk;
+  const dp = READY_PRIORITY_ASC.indexOf(b.priority) - READY_PRIORITY_ASC.indexOf(a.priority);
+  if (dp !== 0) return dp;
+  return a.key - b.key;
+}
 
-  const hasMore = candidates.length > limit;
-  const windowRows = hasMore ? candidates.slice(0, limit) : candidates;
-  const readyMap = await workItemsService.getReadinessForItems(
-    windowRows.map((r) => r.id),
-    ctx,
-  );
-  const rows = windowRows.filter((r) => readyMap.get(r.id) === true);
-
-  const last = windowRows.at(-1);
-  const nextCursor =
-    hasMore && last
-      ? encodeReadyCursor({ kind: last.kind, priority: last.priority, key: last.key })
-      : null;
-  return { rows, nextCursor };
+/** True when `row` sorts STRICTLY AFTER `cursor` under {@link compareReadyRows} —
+ *  the seek-after that resumes the next page just past the cursor's
+ *  (kind, priority, key). */
+function isAfterReadyCursor(
+  row: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
+  cursor: ReadyCursor,
+): boolean {
+  return compareReadyRows(row, cursor) > 0;
 }
 
 /** The resolved status-category + assignee bits the 7.0.3 mapper needs beyond
@@ -3055,4 +3095,41 @@ export function classifyBlockerReadiness(
     inheritedSessionBranch,
     conflicting,
   };
+}
+
+/**
+ * OWN-blocker readiness for a set of items (Subtask 7.0.13) — `id → ready` where
+ * ready means "this node's own `is_blocked_by` blockers are all satisfied"
+ * (terminal or integrated-awaiting-review), with NO ancestor cascade. This is
+ * the per-node leg the readiness verdict is built from: `getReadinessForItems`
+ * (batch) and `getReadiness` (single) call it over the item ∪ ancestor set, then
+ * AND each node with its ancestor chain to get the cascaded verdict. Extracted
+ * so the two entry points share ONE blocker classification (no drift). One
+ * blocker query + one terminal-set query regardless of item count (no N+1); an
+ * item with no blockers stays `true`.
+ */
+async function computeOwnBlockerReadiness(
+  itemIds: string[],
+  ctx: ServiceContext,
+): Promise<Map<string, boolean>> {
+  const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
+  if (itemIds.length === 0) return ready;
+  const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
+  if (blockers.length === 0) return ready;
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    blockers.map((b) => b.projectId),
+    ctx.workspaceId,
+  );
+  // Group each item's blockers, then classify per item (an item is ready iff it
+  // has no open blocker AND its integrated deps don't span >1 branch).
+  const byItem = new Map<string, BlockerReadinessState[]>();
+  for (const b of blockers) {
+    const arr = byItem.get(b.fromId);
+    if (arr) arr.push(b);
+    else byItem.set(b.fromId, [b]);
+  }
+  for (const [fromId, itemBlockers] of byItem) {
+    ready.set(fromId, classifyBlockerReadiness(itemBlockers, terminalByProject).ready);
+  }
+  return ready;
 }

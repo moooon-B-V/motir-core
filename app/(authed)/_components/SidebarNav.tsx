@@ -71,13 +71,6 @@ export interface SidebarNavProps {
   projects: ProjectDTO[];
   variant?: 'rail' | 'drawer';
   /**
-   * The active project's readiness count for the "Ready" entry's badge
-   * (Subtask 7.0.6). Resolved once in the (authed) layout and threaded here, so
-   * the badge never double-fetches. `hasMore` renders the bounded-count "{cap}+"
-   * cap; a zero count hides the badge.
-   */
-  readyCount?: { count: number; hasMore: boolean } | null;
-  /**
    * The actor's settings-area capabilities (Subtask 6.5.2), resolved once in the
    * (authed) layout via `projectAccessService.getSettingsCapabilities`. Drives
    * the settings-nav registry's per-entry `access` filter when the rail is in the
@@ -109,21 +102,10 @@ function SoonChip({ label }: { label: string }) {
   );
 }
 
-/** The "Ready" entry's count badge — the neutral rail-badge grammar (7.0.1
- *  design-notes): muted fill, secondary text, hairline border, badge radius. */
-function ReadyBadge({ count, hasMore }: { count: number; hasMore: boolean }) {
-  return (
-    <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-muted) px-(--spacing-kbd-x) py-(--spacing-kbd-y) text-center font-sans text-[11px] font-semibold tabular-nums text-(--el-text-secondary)">
-      {hasMore ? `${count}+` : count}
-    </span>
-  );
-}
-
 export function SidebarNav({
   activeProject,
   projects,
   variant = 'rail',
-  readyCount,
   settingsAccess,
   user,
 }: SidebarNavProps) {
@@ -219,16 +201,13 @@ export function SidebarNav({
         {
           // The AI dispatch surface (Subtask 7.0.6) — sits BETWEEN Issues and
           // Boards. `CirclePlay` (run/dispatch) is the 7.0.1-locked glyph (Zap
-          // is taken by the epic issue type). The badge is the readiness count;
-          // hidden when zero.
+          // is taken by the epic issue type). No count badge: the readiness set
+          // is a computed predicate that scanned on EVERY authed route, so the
+          // count is resolved only when you land on /ready (MOTIR-1284).
           icon: <CirclePlay />,
           label: t('nav.ready'),
           href: '/ready',
           active: isActive(pathname, '/ready'),
-          badge:
-            readyCount && readyCount.count > 0 ? (
-              <ReadyBadge count={readyCount.count} hasMore={readyCount.hasMore} />
-            ) : undefined,
         },
         {
           icon: <Columns3 />,
