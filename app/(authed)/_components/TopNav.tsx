@@ -5,6 +5,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from './NotificationBell';
 import { CommandPaletteTrigger } from './CommandPaletteTrigger';
 import { CreateIssueButton } from './CreateIssueButton';
+import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 import { BuildInPublicButton } from './build-in-public/BuildInPublicButton';
 import { BuildingInPublicHeaderLink } from './build-in-public/BuildingInPublicHeaderLink';
 import { ReportButton } from './ReportButton';
@@ -56,6 +57,11 @@ export interface TopNavProps {
   /** True on a Motir cloud build (`MOTIR_CLOUD`) — gates the org menu's
    *  "Billing & plans" row (Story 8.1.7). Resolved server-side in the layout. */
   cloudBilling: boolean;
+  /** Whether to show the "Plan with AI" hero launcher (MOTIR-1299) — the
+   *  universal entrance to the AI planning workspace. True only when AI planning
+   *  is configured (the cloud/self-host gate, `isMotirAiConfigured`) AND there's
+   *  an active project to plan into. Resolved server-side in the layout. */
+  showPlanWithAi: boolean;
 }
 
 export async function TopNav({
@@ -68,6 +74,7 @@ export async function TopNav({
   buildInPublicProjectKey,
   buildingInPublic,
   cloudBilling,
+  showPlanWithAi,
 }: TopNavProps) {
   const t = await getTranslations('shell');
   return (
@@ -102,6 +109,12 @@ export async function TopNav({
           />
         </div>
         <div className="flex items-center gap-2">
+          {/* The "Plan with AI" hero launcher (MOTIR-1299) — the universal
+              entrance to the AI planning workspace, present on every screen as
+              the leading hero of the right cluster. The header context is
+              project-scoped; the detail panel (MOTIR-910) + roadmap toggle
+              (MOTIR-1011) reuse the same component with their own context. */}
+          {showPlanWithAi ? <PlanWithAILauncher context={{ kind: 'project' }} /> : null}
           {/* The single stateful build-in-public slot (design §6.17.6 · Panel
               12): the admin "Build in public" CTA when the project is NOT
               public, OR the all-members "Building in public" linked indicator

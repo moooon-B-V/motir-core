@@ -446,11 +446,15 @@
       "switchTo": "切换到 {name}",
       "current": "当前",
       "goToBacklog": "前往待办列表",
-      "goToFilters": "前往筛选器"
+      "goToFilters": "前往筛选器",
+      "aiHeading": "AI"
     },
     "shortcuts": {
       "title": "键盘快捷键",
       "description": "在应用任意位置均可使用的快捷键。"
+    },
+    "planWithAI": {
+      "label": "用 AI 规划"
     }
   },
   "issueViews": {

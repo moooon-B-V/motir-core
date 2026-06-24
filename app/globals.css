@@ -3936,3 +3936,25 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   "Plan with AI" launcher — the hero pill's shimmer sweep (MOTIR-1299)
+   ═══════════════════════════════════════════════════════════════════════
+   A periodic light band sweeping across the gradient pill (the sweep colour is
+   palette-derived — the accent's white ink — set on the element itself). The
+   animation is GATED behind prefers-reduced-motion, matching the aurora /
+   immersive-menu pattern above, so a motion-sensitive user gets the static
+   pill (the band stays clipped off the left edge, never sweeping). */
+@keyframes plan-with-ai-shimmer {
+  0% {
+    transform: translateX(0) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(420%) skewX(-12deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-with-ai-shimmer {
+    animation: plan-with-ai-shimmer 4.5s ease-in-out 1.2s infinite;
+  }
+}

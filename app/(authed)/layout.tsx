@@ -141,6 +141,14 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
+  // The "Plan with AI" universal launcher (MOTIR-1299) — the hero entrance to
+  // the AI planning workspace. Shown only when AI planning is wired (the
+  // cloud/self-host gate, the same `isMotirAiConfigured` probe the create
+  // modal's "Draft with AI" uses) AND there's an active project to plan into.
+  // A server-side boolean so the client launcher needs no `server-only` read.
+  const aiPlanningConfigured = isMotirAiConfigured();
+  const showPlanWithAi = aiPlanningConfigured && Boolean(activeProject);
+
   // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
   // partial-index aggregate (5.7.4 getUnreadCount), resolved once here and
   // threaded into TopNav so the badge paints without a client round-trip; the
@@ -186,6 +194,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     buildInPublicProjectKey={buildInPublicProjectKey}
                     buildingInPublic={buildingInPublic}
                     cloudBilling={cloudBilling}
+                    showPlanWithAi={showPlanWithAi}
                   />
                 }
                 sidebar={
@@ -236,6 +245,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 activeProjectId={activeProject?.id ?? null}
                 hasProject={Boolean(activeProject)}
                 settingsAccess={settingsAccess}
+                aiPlanningConfigured={aiPlanningConfigured}
               />
             </ReportProvider>
           </ProjectAccessProvider>
