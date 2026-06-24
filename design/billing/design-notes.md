@@ -66,21 +66,24 @@ MOTIR-1138, **Accepted 2026-06-21**). The load-bearing facts:
 > `tracker_monthly` / `tracker_annual` Stripe price lookup keys — never as a UI
 > label. This asset labels its two lines "Motir" and "Motir AI".
 
-- **TWO independent billed products** (decision §1). Your bill = ① + ②, and they
-  do not gate each other:
+- **TWO billed products** (decision §1), largely independent with **ONE bundle: a
+  paid AI plan includes 1 tracker seat** (8.1.22 / MOTIR-1316). Your bill = ① + ②:
   - **① Motir** (the PM tool) — **free** for any team within the caps,
     **$5 / seat / mo** ($40 / seat / yr — the annual default, ~33% off) only when
     the org crosses a cap. The scaled state is a **motir-core org subscription
     flag**, NOT the AI tier.
   - **② Motir AI** (planning + agents) — an **org-level monthly credit plan**, prices
     firm from the Stripe sandbox catalog (8.1.2 / MOTIR-1141; `starter` removed
-    by the 2026-06-23 amendment, 8.1.18 / MOTIR-1311): **Free** (300
+    by the 2026-06-23 amendment, 8.1.18 / MOTIR-1308): **Free** (300
     credits, one-time trial, $0) /
     **Standard** ($25/mo · $200/yr, 2,000/mo) / **Pro** ($75/mo · $600/yr,
     8,000/mo — the **recommended anchor**, `pro_pool_annual` is the Stripe default
     Price) / **Max** ($150/mo · $1,200/yr, 30,000/mo) / **Enterprise** (custom).
     This is the motir-ai `PlanTier`. Any org — free- or scaled-Motir — can buy it.
-    Overage **credit top-up is $10 / 1,000** (one-time at Checkout).
+    **Each PAID plan includes 1 tracker seat → the org's §4 caps are lifted** (the
+    solo plan-with-AI case is never walled at 250 items; members beyond the first
+    bill at $5/seat). The Free trial does NOT include a seat. Overage **credit
+    top-up is $10 / 1,000** (one-time at Checkout).
 - **Free-tier caps** (decision §4, drawn in the Motir line, panel 2): **≤ 250
   work items** (archived + active), **≤ 3 projects**, **1 workspace**, **10 MB /
   file**, **2 GB total**, **unlimited members**.
@@ -280,6 +283,13 @@ The cards (AI ladder only — the Motir seat plan is panel 6, never shown here):
   4. **The credit allotment** (`.alot`, the load-bearing figure, bold) — the credit
      COUNT lives here, so the feature bullets stay capability-focused (no count
      duplication).
+     4b. **The bundled tracker seat** (`.seat`, `i-users` glyph; 8.1.22 / MOTIR-1316) —
+     every PAID plan includes 1 tracker seat, so the line reads **"+ 1 tracker seat ·
+     work items uncapped"** (Standard / Pro / Max) — the value point that the AI plan
+     lifts the §4 work-item caps for the solo case. **Enterprise** → "Tracker seats
+     included (custom)". **Free** uses the `.off` variant (`--el-text-faint`) — **"No
+     tracker seat · 250-item cap"** — stating the absence so the contrast is the
+     upgrade reason. Sits directly under `.alot`.
   5. **A CUMULATIVE `i-check` feature list** — the cumulative chain starts at the
      first PAID tier (**Standard**, now the entry rung), so each tier from Pro up
      opens with a flush-left `.flead` caption **"Everything in {previous tier}, plus"**

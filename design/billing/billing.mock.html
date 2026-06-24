@@ -946,6 +946,29 @@
         color: var(--el-text-strong);
         margin-top: 4px;
       }
+      /* bundled tracker seat line (8.1.22 / MOTIR-1316) — every PAID plan includes
+         1 seat, which lifts the work-item caps. The Free trial's variant (`.off`)
+         states the absence in faint text so the contrast is the upgrade reason. */
+      .plan .seat {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        margin-top: 4px;
+      }
+      .plan .seat svg {
+        width: 13px;
+        height: 13px;
+        flex-shrink: 0;
+        color: var(--el-accent-on-surface);
+      }
+      .plan .seat.off {
+        color: var(--el-text-faint);
+      }
+      .plan .seat.off svg {
+        color: var(--el-text-faint);
+      }
       /* per-tier USE-CASE line (who it's for) — sits at the TOP, under the name.
          A min-height of ~3 lines keeps the PRICE row aligned across all cards
          regardless of how many lines a tier's use-case copy wraps to. */
@@ -1934,6 +1957,10 @@
                     >
                   </div>
                   <div class="alot">300 credits · one-time</div>
+                  <div class="seat off">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> No tracker seat ·
+                    250-item cap
+                  </div>
                   <ul class="flist">
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> A one-time taste of
@@ -1968,6 +1995,10 @@
                     $300 / yr · <span class="save">Save $100 with annual</span>
                   </div>
                   <div class="alot">2,000 credits / mo</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> + 1 tracker seat · work
+                    items uncapped
+                  </div>
                   <ul class="flist">
                     <li>
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Plan the whole project,
@@ -2011,6 +2042,10 @@
                     $900 / yr · <span class="save">Save $300 with annual</span>
                   </div>
                   <div class="alot">8,000 credits / mo</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> + 1 tracker seat · work
+                    items uncapped
+                  </div>
                   <ul class="flist">
                     <li class="flead">
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Standard,
@@ -2053,6 +2088,10 @@
                     $1,800 / yr · <span class="save">Save $600 with annual</span>
                   </div>
                   <div class="alot">30,000 credits / mo</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> + 1 tracker seat · work
+                    items uncapped
+                  </div>
                   <ul class="flist">
                     <li class="flead">
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Pro, plus
@@ -2075,6 +2114,10 @@
                     <span class="cad"><span class="amt">Custom</span></span>
                   </div>
                   <div class="alot">Custom credit pool</div>
+                  <div class="seat">
+                    <svg viewBox="0 0 24 24"><use href="#i-users" /></svg> Tracker seats included
+                    (custom)
+                  </div>
                   <ul class="flist">
                     <li class="flead">
                       <svg viewBox="0 0 24 24"><use href="#i-check" /></svg> Everything in Max, plus
