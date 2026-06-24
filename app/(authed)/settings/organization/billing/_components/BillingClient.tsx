@@ -199,7 +199,6 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
       <div className="flex flex-col gap-5">
         {live}
         <InternalPlanCard t={t} orgName={orgName} />
-        <CloudNote t={t} />
       </div>
     );
   }
@@ -229,8 +228,6 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
       ) : null}
       {view === 'plans' ? <PlansView {...shared} back={() => setView('home')} /> : null}
       {view === 'seats' ? <SeatsView {...shared} back={() => setView('home')} /> : null}
-
-      <CloudNote t={t} />
     </div>
   );
 }
@@ -1187,6 +1184,12 @@ function SeatsView({
   const annualSave = monthlyTotal * 12 - annualTotal;
   const renews = fmtDate(sub?.currentPeriodEnd ?? null);
 
+  // Checkout-screen cadence (the non-scaled upgrade flow), default annual — drives
+  // the total line, the terms rows, the CTA, and the seat price Checkout starts on
+  // (8.1.16). The scaled branch shows the EXISTING subscription, so it has no toggle.
+  const [cadence, setCadence] = useState<BillingCadence>('annual');
+  const isAnnual = cadence === 'annual';
+
   return (
     <>
       <header className="flex flex-col gap-1">
@@ -1303,17 +1306,39 @@ function SeatsView({
           }
         >
           <div className="mx-auto flex max-w-[34rem] flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <Segmented<BillingCadence>
+                label={t('plans.cadenceLabel')}
+                value={cadence}
+                onChange={setCadence}
+                options={[
+                  { value: 'monthly', label: t('plans.monthly') },
+                  { value: 'annual', label: t('plans.annual') },
+                ]}
+              />
+              {isAnnual && annualSave > 0 ? (
+                <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
+                  {t('seats.annualSaves', { n: fmt(annualSave) })}
+                </Pill>
+              ) : null}
+            </div>
             <div className="flex items-center gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-card-padding)">
               <AvatarCluster count={memberCount} />
               <span className="font-sans text-sm text-(--el-text)">
                 {t('seats.membersToSeats', { n: memberCount })}
               </span>
               <span className="ml-auto font-serif text-lg text-(--el-text)">
-                {t('seats.annualTotal', {
-                  n: memberCount,
-                  seat: annualSeat,
-                  total: fmt(annualTotal),
-                })}
+                {isAnnual
+                  ? t('seats.annualTotal', {
+                      n: memberCount,
+                      seat: annualSeat,
+                      total: fmt(annualTotal),
+                    })
+                  : t('seats.monthlyTotal', {
+                      n: memberCount,
+                      seat: monthlySeat,
+                      total: fmt(monthlyTotal),
+                    })}
               </span>
             </div>
 
@@ -1323,19 +1348,25 @@ function SeatsView({
               </p>
               <TermRow
                 k={t('seats.termBilling')}
-                v={t('seats.termBillingValue', { yr: fmt(annualTotal), mo: annualMoEquiv })}
+                v={
+                  isAnnual
+                    ? t('seats.termBillingValue', { yr: fmt(annualTotal), mo: annualMoEquiv })
+                    : t('seats.termBillingValueMonthly', { mo: fmt(monthlyTotal) })
+                }
               />
               <TermRow
                 k={t('seats.termDueToday')}
-                v={t('seats.termDueTodayValue', { yr: fmt(annualTotal) })}
+                v={
+                  isAnnual
+                    ? t('seats.termDueTodayValue', { yr: fmt(annualTotal) })
+                    : t('seats.termDueTodayValueMonthly', { mo: fmt(monthlyTotal) })
+                }
               />
               <TermRow k={t('seats.termAddMember')} v={t('seats.termAddMemberValue')} />
               <TermRow k={t('seats.termRemoveMember')} v={t('seats.termRemoveMemberValue')} />
             </dl>
 
-            <p className="font-sans text-xs text-(--el-text-muted)">
-              {t('seats.prorationNote', { mTotal: fmt(monthlyTotal) })}
-            </p>
+            <p className="font-sans text-xs text-(--el-text-muted)">{t('seats.prorationNote')}</p>
 
             {canManage ? (
               <div className="flex flex-wrap items-center gap-2">
@@ -1343,9 +1374,11 @@ function SeatsView({
                   variant="primary"
                   size="md"
                   loading={redirecting}
-                  onClick={() => checkout(seat.annual.priceLookupKey)}
+                  onClick={() => checkout(seat[cadence].priceLookupKey)}
                 >
-                  {t('seats.continueCheckout', { yr: fmt(annualTotal) })}
+                  {isAnnual
+                    ? t('seats.continueCheckout', { yr: fmt(annualTotal) })
+                    : t('seats.continueCheckoutMonthly', { mo: fmt(monthlyTotal) })}
                 </Button>
                 <Button variant="ghost" size="md" onClick={back}>
                   {t('seats.cancel')}
@@ -1403,15 +1436,6 @@ function ReturnBanner({
       >
         <X className="h-4 w-4" aria-hidden />
       </button>
-    </div>
-  );
-}
-
-function CloudNote({ t }: { t: T }) {
-  return (
-    <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
-      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-      <p className="font-sans text-xs text-(--el-text-muted)">{t('cloudNote')}</p>
     </div>
   );
 }
