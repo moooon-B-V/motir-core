@@ -347,7 +347,7 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 | **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                              |
 | **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)            |
 | **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door |
-| **4** | The universal "Plan with AI" entrance, drawn IN SITU on every host surface, with the mode each door opens                      |
+| **4** | The universal "Plan with AI" entrance — ONE global hero affordance (header control OR floating button), context → mode adapts  |
 
 ### ⚠️ SCOPE — this designs the SHELL + ENTRANCE, NOT the canvas pane
 
@@ -427,57 +427,89 @@ the flow):
 Onboarding (7.3) is the one specialization that wraps this shell in its gated
 per-tier pre-plan review loop (see `onboarding.mock.html`).
 
-### ⚠️ The universal entrance — "Plan with AI", in situ on every surface (sheet 4)
+### ⚠️ The universal entrance — ONE global hero affordance (sheet 4)
 
-The planner is **summonable from anywhere** via **one consistent affordance** —
-same label (**"Plan with AI"**), same `sparkles`/`✦` icon, same accent
-treatment, same placement language everywhere: a **primary `Button`** in
-toolbars / nav, a **menu item** in the `⋯` menu and the ⌘K palette. **The door
-determines the MODE.** Drawn IN SITU on each host (verified against shipped
-reality):
+**Corrected 2026-06-24 (Yue): NOT one door per screen.** The global **header**
+(`TopNav`) and the **⌘K** command menu are present on **every** PM screen, so the
+planner needs **ONE entrance**, not a per-surface button. And because this is the
+**product's headline feature / selling point**, the affordance is a **hero
+control** — gradient fill, a soft glow / aura, a `Sparkles` mark, a subtle
+shimmer — **never a plain toolbar button**. (This supersedes the earlier
+per-surface in-situ grid, which multiplied a regular button across seven
+surfaces — wrong on both counts.)
 
-| Host surface                        | Where the affordance sits                                                     | Mode it opens                                            |
-| ----------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Work items list** `/items`        | `IssueListToolbar`, left of **+ New issue**                                   | re-plan (7.11); generation (7.4) if no plan              |
-| **Backlog** `/backlog`              | `BacklogFilterControls` row, before **+ New issue**                           | augment / expand (7.11)                                  |
-| **Board** `/boards`                 | board header (after `BoardFilterControls`), before **+ New issue**            | augment / re-plan (7.11)                                 |
-| **Work-item detail** `/items/[key]` | the action cluster (after **Watch**) AND inside the `⋯` `WorkItemActionsMenu` | contextual, scoped to the item (7.12)                    |
-| **Project header — global top nav** | `TopNav` right cluster (after **Report**)                                     | re-plan, or generation (7.4) if empty                    |
-| **Global command menu ⌘K**          | a `Plan with AI` command in `AppCommandPalette`                               | context-aware (item → contextual; project → re-plan/gen) |
-| **Roadmap view — Board ↔ Roadmap**  | the view toggle is the door                                                   | roadmap read + augment (7.19)                            |
+**Two placement OPTIONS** (either one IS the single universal entrance — the user
+picks; ⌘K always opens the same workspace too):
 
-- **The work-item detail door** (`MOTIR-910`) and the **roadmap toggle**
-  (`MOTIR-1011`) **adopt** this same affordance — they are specializations of
-  the one entrance, not separate inventions.
-- **Planned-surface note:** the authed **Board ↔ Roadmap** toggle + roadmap view
-  are owned by **7.19 / `MOTIR-1011`** and are **not shipped yet** (only the
-  PUBLIC roadmap exists today). This door is drawn as the entrance that surface
-  will carry — the launcher reuses the same affordance when 1011 lands.
-- **Implementation** is the reusable **`PlanWithAILauncher`** subtask
-  (**`MOTIR-1299`** / `7.20.3`), which is `blocked_by` this design; it builds the
-  affordance once and mounts it across surfaces, mapping context → mode.
+- **Option A — Header hero control (RECOMMENDED).** A gradient pill **"✦ Plan
+  with AI"** in `TopNav`'s right cluster, present on every screen, always one tap
+  away, never covering content; the gradient + glow make it read as the primary
+  AI action among the neutral nav icons. Recommended: consistent, discoverable,
+  scales.
+- **Option B — Floating action button.** A glowing orb anchored bottom-right,
+  floating above content on every screen, **expanding to a labelled pill on hover
+  / focus**. Maximum "the AI lives here" presence, at the cost of floating over
+  content. The **same** hero affordance, just docked.
+
+**The anatomy of the hero control** (drawn in the sheet-4 close-up):
+
+- **Gradient fill** — `--el-accent` → an `--el-highlight`-derived violet/pink;
+  white label text sits over the **accent-dominant** region so **AA holds** (the
+  brand pink lives only in the glow/aura, never under text).
+- **Aura / outer glow** — a soft pink + violet halo so it lifts off the chrome.
+- **Sparkle mark** (lucide `Sparkles`) + a **shimmer sweep** (a slow loop in the
+  build) — the living, AI feel.
+- An optional **conic-gradient ring** for a premium rim (shown on the close-up).
+- This is a **sanctioned "feature surface" exception** to the flat-button norm
+  (like the surface-material styles): the gradient + glow are **palette-DERIVED**
+  (`color-mix()` / `var(--el-accent | --el-highlight)`, **no raw hex hue**), so a
+  `data-palette` swap re-tints the hero and a `data-style` swap leaves its hue
+  alone. Shape (radius/padding) still flows through semantic tokens.
+
+**ONE door that ADAPTS — context → mode** (not seven doors). The single
+affordance opens the workspace in the mode for the **current context**:
+
+| Current context                                | Mode it opens                            | Story |
+| ---------------------------------------------- | ---------------------------------------- | ----- |
+| viewing a **work item**                        | contextual planning, scoped to that item | 7.12  |
+| a **project surface** (board / backlog / list) | augment / re-plan                        | 7.11  |
+| an **empty project** (no plan yet)             | generation                               | 7.4   |
+| the **roadmap**                                | roadmap read + augment                   | 7.19  |
+
+- **Implementation** = the reusable **`PlanWithAILauncher`** (**`MOTIR-1299`** /
+  `7.20.3`, `blocked_by` this design): it renders the hero control (header or
+  FAB), opens the `PlanningWorkspace`, and passes the originating context so it
+  lands in the matching state (sheet 3).
+- The **work-item detail door** (`MOTIR-910`) and the **Board ↔ Roadmap toggle**
+  (`MOTIR-1011`) are **the same launcher in context**, not separate inventions.
+  (The authed roadmap + toggle are owned by 7.19/`MOTIR-1011` and not shipped yet
+  — only the public roadmap exists today; that door reuses this launcher when
+  1011 lands.)
 
 ### Primitives composed (no hand-rolling)
 
-| Element                                            | Built from                                                                                                                                                 |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the workspace shell                                | the shipped `PlanningWorkspace` (`grid-cols-[1fr_22rem]`)                                                                                                  |
-| canvas pane (nodes + edges + zoom + search)        | the standalone `WorkItemCanvas` (`MOTIR-1194`; design `design/roadmap/`) over the shipped `PlanningCanvas` — composed, never redrawn                       |
-| chat rail (header + bubbles + drafting + composer) | the shipped `DiscoveryChatRail` language — `Card`/`Avatar`/`Input`/`Spinner`/`Button`                                                                      |
-| proposed (pending) node + edge                     | the canvas's `StationCard` + `PlanningCanvas` edge language in a `proposed` state (dashed `--el-accent`)                                                   |
-| confirm-to-persist bar                             | `Card` (accent border) + `Button` (Confirm primary, Discard ghost)                                                                                         |
-| "Plan with AI" launcher                            | NEW reusable affordance from `components/ui/*` — `Button` (toolbars/nav) · menu row (`⋯` + ⌘K) · `Popover`/`CommandPalette`                                |
-| host-surface toolbars (sheet 4)                    | the real shipped `IssueListToolbar` / `BacklogFilterControls` / `BoardFilterControls` / `WorkItemActionsMenu` / `TopNav` / `AppCommandPalette` action rows |
-| icons                                              | lucide-react (`Sparkles` for the launcher)                                                                                                                 |
+| Element                                            | Built from                                                                                                                                                                 |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the workspace shell                                | the shipped `PlanningWorkspace` (`grid-cols-[1fr_22rem]`)                                                                                                                  |
+| canvas pane (nodes + edges + zoom + search)        | the standalone `WorkItemCanvas` (`MOTIR-1194`; design `design/roadmap/`) over the shipped `PlanningCanvas` — composed, never redrawn                                       |
+| chat rail (header + bubbles + drafting + composer) | the shipped `DiscoveryChatRail` language — `Card`/`Avatar`/`Input`/`Spinner`/`Button`                                                                                      |
+| proposed (pending) node + edge                     | the canvas's `StationCard` + `PlanningCanvas` edge language in a `proposed` state (dashed `--el-accent`)                                                                   |
+| confirm-to-persist bar                             | `Card` (accent border) + `Button` (Confirm primary, Discard ghost)                                                                                                         |
+| "Plan with AI" hero launcher                       | NEW reusable affordance — a `Button`-based gradient pill (header) OR a floating orb (FAB), palette-derived gradient + glow + `Sparkles` + shimmer; ⌘K via `CommandPalette` |
+| host context (sheet 4)                             | the real shipped `TopNav` (Option A host) + the global `AppCommandPalette` (⌘K); the FAB docks into any route                                                              |
+| icons                                              | lucide-react (`Sparkles` for the launcher)                                                                                                                                 |
 
 ### Token / a11y discipline
 
 - **Colour** strictly via `--el-*` (the mock inlines the real light-palette
-  values, as the sibling canvas mocks do); the launcher uses `--el-accent` /
-  `--el-accent-text`; the proposed state uses `--el-accent` border over a faint
-  accent-tinted surface; the cross-story edge is `--el-warning`. Work-item type
-  hues are `--el-type-{epic,story,subtask,…}`; type dots/tiles put the hue in a
-  tint with strong text (finding #35, AA).
+  values, as the sibling canvas mocks do). The **hero launcher** is a
+  palette-DERIVED gradient (`--el-accent` → `--el-highlight`) + glow — a
+  sanctioned feature-surface exception (no raw hex), with the white label kept
+  over the **accent-dominant** region so **AA holds** and the brand pink confined
+  to the glow/aura. The proposed state uses `--el-accent` border over a faint
+  accent-tinted surface + a soft pink glow; the cross-story edge is
+  `--el-warning`. Work-item type hues are `--el-type-{epic,story,subtask,…}`; type
+  dots/tiles put the hue in a tint with strong text (finding #35, AA).
 - **Shape** strictly via element-semantic tokens (node = `--radius-card`, pills =
   `--radius-badge`, buttons = `--radius-btn`, menu/list rows = `--radius-control`,
   the palette = `--radius-modal`; shadows = `--shadow-{subtle,card,modal}`) so a

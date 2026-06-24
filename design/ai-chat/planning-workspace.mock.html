@@ -5,7 +5,8 @@
   every AI-planning MODE composes: a full-screen canvas (left) + chat (right) shell,
   the on-canvas one-by-one proposed-card placement, the confirm-to-persist gate, the
   four MODES as states of the one surface, and the universal "Plan with AI" entrance
-  drawn IN SITU on every host surface.
+  as ONE global hero affordance (header control or floating button) — the header /
+  command menu is on every screen, so one entrance is summonable from anywhere.
 
   The canvas pane is NOT redrawn here — it is the standalone WorkItemCanvas
   (MOTIR-1194; design @ design/roadmap/, MOTIR-1009). This asset composes it and
@@ -376,8 +377,10 @@
       }
       .node.proposed {
         border: 1.5px dashed var(--accent);
-        background: #faf9ff;
-        box-shadow: 0 2px 8px #5645d414;
+        background: linear-gradient(180deg, #fbfaff, #f6f3ff);
+        box-shadow:
+          0 2px 10px #5645d41f,
+          0 0 16px -2px #ff64c855;
       }
       .nhead {
         display: flex;
@@ -468,10 +471,11 @@
         border-bottom: 1px solid var(--hair);
       }
       .railhead .dot {
-        width: 8px;
-        height: 8px;
+        width: 9px;
+        height: 9px;
         border-radius: 50%;
-        background: var(--success);
+        background: linear-gradient(135deg, #5645d4, #ff64c8);
+        box-shadow: 0 0 7px #ff64c885;
       }
       .railhead .lbl {
         font:
@@ -480,6 +484,10 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: var(--secondary);
+      }
+      .railhead .lbl::before {
+        content: '✦ ';
+        color: var(--accent);
       }
       .railhead .mode {
         margin-left: auto;
@@ -629,9 +637,13 @@
         white-space: nowrap;
       }
       .btn.primary {
-        background: var(--accent);
-        border-color: var(--accent);
+        background: linear-gradient(135deg, #6a4ef2, #5645d4 50%, #9450ef);
+        border-color: transparent;
         color: #fff;
+        box-shadow:
+          inset 0 1px 0 #ffffff4d,
+          0 4px 12px -4px #5645d4cc,
+          0 0 16px -3px #ff64c870;
       }
       .btn.ghost {
         background: transparent;
@@ -749,198 +761,365 @@
         color: var(--muted);
       }
 
-      /* ── entrance: host-surface mini-frames (sheet 4) ── */
-      .hosts {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
+      /* ════ the universal entrance (sheet 4) — ONE global HERO affordance ════ */
+      .lead {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--secondary);
+        margin: 0 0 18px;
+        max-width: 1000px;
       }
-      .host {
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        overflow: hidden;
-        background: var(--surface);
-      }
-      .host .hh {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding: 9px 12px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
-      }
-      .host .hh h3 {
-        margin: 0;
-        font-size: 12.5px;
+      .lead b {
         color: var(--strong);
       }
-      .host .hh .mode {
-        margin-left: auto;
+      .lead code {
         font:
-          600 9.5px ui-monospace,
+          600 11.5px ui-monospace,
           monospace;
         color: var(--accent);
         background: var(--accent-soft);
-        padding: 2px 6px;
+        padding: 1px 5px;
         border-radius: 5px;
       }
-      .host .hb {
-        padding: 12px;
-      }
-      /* a generic app top-toolbar inside a host */
-      .toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 9px 11px;
-        border: 1px solid var(--border);
-        border-radius: 9px;
-        background: var(--surface);
-        flex-wrap: wrap;
-      }
-      .toolbar .title {
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--strong);
-      }
-      .toolbar .spacer {
-        margin-left: auto;
-      }
-      .chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 11px;
-        color: var(--secondary);
-        background: var(--soft);
-        border: 1px solid var(--border);
-        border-radius: 7px;
-        padding: 4px 9px;
-      }
-      .plan-cta {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11.5px;
-        font-weight: 600;
-        color: #fff;
-        background: var(--accent);
-        border: 1px solid var(--accent);
-        border-radius: 8px;
-        padding: 5px 11px;
-        box-shadow: 0 0 0 3px #5645d41f;
-        white-space: nowrap;
-      }
-      .plan-cta .ai {
-        font-size: 13px;
-      }
-      .plan-cta.menu {
-        color: var(--accent);
-        background: var(--accent-soft);
-        border-color: #d9d2f6;
-        box-shadow: none;
-      }
       .desc {
-        font-size: 11px;
+        font-size: 11.5px;
         color: var(--muted);
-        margin: 9px 2px 0;
-        line-height: 1.45;
+        margin: 0;
+        line-height: 1.5;
       }
       .desc b {
         color: var(--secondary);
       }
-      /* a tiny segmented (Board / Roadmap) */
-      .seg {
-        display: inline-flex;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-      .seg span {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 4px 10px;
-        color: var(--muted);
-      }
-      .seg span.on {
-        background: var(--accent-soft);
-        color: var(--accent);
-      }
-      /* an actions kebab menu (work-item detail) */
-      .menu {
-        border: 1px solid var(--border);
-        border-radius: 9px;
-        background: var(--surface);
-        box-shadow: 0 6px 20px #00000014;
-        padding: 5px;
-        width: 210px;
-      }
-      .menu .row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--secondary);
-        padding: 6px 8px;
-        border-radius: 6px;
-      }
-      .menu .row.hi {
-        background: var(--accent-soft);
-        color: var(--accent);
-        font-weight: 600;
-      }
-      .menu .sep {
-        height: 1px;
-        background: var(--hair);
-        margin: 4px 2px;
-      }
-      /* the ⌘K command palette */
-      .palette {
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: var(--surface);
-        box-shadow: 0 10px 30px #00000018;
-        overflow: hidden;
-      }
-      .palette .psearch {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 13px;
-        border-bottom: 1px solid var(--hair);
-        font-size: 12px;
-        color: var(--faint);
-      }
-      .palette .pgroup {
+      .desc code {
         font:
-          600 9px ui-monospace,
+          600 11px ui-monospace,
           monospace;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--faint);
-        padding: 9px 13px 3px;
+        color: var(--accent);
       }
-      .palette .prow {
+      .entrance {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .optcard {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--surface);
+        display: flex;
+        flex-direction: column;
+      }
+      .optcard .opt-h {
         display: flex;
         align-items: center;
         gap: 9px;
-        font-size: 12px;
-        color: var(--secondary);
-        padding: 7px 13px;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
       }
-      .palette .prow.hi {
-        background: var(--accent-soft);
-        color: var(--accent);
-        font-weight: 600;
+      .optcard .opt-h h3 {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--strong);
       }
-      .palette .prow .kbd {
+      .reco-badge {
         margin-left: auto;
+        font:
+          700 9.5px ui-monospace,
+          monospace;
+        letter-spacing: 0.04em;
+        color: #fff;
+        background: linear-gradient(135deg, #5645d4, #9450ef);
+        padding: 3px 9px;
+        border-radius: 999px;
+        box-shadow: 0 0 12px -2px #ff64c870;
+      }
+      .optcard .opt-b {
+        padding: 13px 14px 15px;
+        border-top: 1px solid var(--hair);
+      }
+      /* a stage that lets the glow read */
+      .stage {
+        position: relative;
+        flex: 1;
+        padding: 30px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(
+          120% 150% at 82% -20%,
+          #efeafd 0%,
+          #f7f6fb 46%,
+          var(--surface) 80%
+        );
+      }
+      /* the real global top nav (Option A host) */
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        padding: 9px 13px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 3px 12px -3px #0000001a;
+      }
+      .topnav .brand {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: var(--strong);
+      }
+      .topnav .brand b {
+        color: var(--accent);
+        font-weight: 800;
+      }
+      .topnav .spacer {
+        margin-left: auto;
+      }
+      .icbtn {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        background: var(--soft);
+        border: 1px solid var(--border);
+        font-size: 12px;
+      }
+      .avatarchip {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--mutedfill);
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      /* ⭐ THE HERO control — gradient + glow + shimmer + sparkle (NOT a plain button) */
+      .hero-cta {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 16px 8px 13px;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 650;
+        white-space: nowrap;
+        background: linear-gradient(135deg, #6a4ef2 0%, #5645d4 46%, #9450ef 100%);
+        box-shadow:
+          inset 0 1px 0 #ffffff5e,
+          inset 0 0 0 1px #ffffff2e,
+          0 6px 18px -5px #5645d4cc,
+          0 0 22px -3px #ff64c885;
+        overflow: hidden;
+      }
+      .hero-cta .spark {
+        font-size: 14px;
+        line-height: 1;
+        filter: drop-shadow(0 0 5px #ffffffd6);
+      }
+      .hero-cta::after {
+        content: '';
+        position: absolute;
+        top: -12%;
+        left: -45%;
+        width: 38%;
+        height: 130%;
+        background: linear-gradient(100deg, transparent, #ffffff9c, transparent);
+        transform: skewX(-18deg);
+      }
+      .hero-cta.big {
+        font-size: 16px;
+        padding: 12px 24px 12px 19px;
+        gap: 9px;
+      }
+      .hero-cta.big .spark {
+        font-size: 19px;
+      }
+      /* a premium conic ring for the anatomy close-up */
+      .ringwrap {
+        position: relative;
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2.5px;
+        background: conic-gradient(from 200deg, #5645d4, #ff64c8, #6a4ef2, #9450ef, #5645d4);
+        box-shadow:
+          0 0 30px -3px #ff64c885,
+          0 10px 30px -8px #5645d4cc;
+      }
+
+      /* ⭐ THE FAB — floating orb that expands to a pill (Option B) */
+      .fabstage {
+        position: relative;
+        width: 100%;
+        height: 196px;
+        border-radius: 11px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background:
+          radial-gradient(circle at 1px 1px, #e6e3de 1px, transparent 0) 0 0 / 22px 22px,
+          var(--soft);
+      }
+      .fabstage .faux {
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .fabstage .faux i {
+        display: block;
+        height: 10px;
+        border-radius: 5px;
+        background: #ebe8e3;
+      }
+      .fab {
+        position: absolute;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 21px;
+        background: radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd);
+        box-shadow:
+          inset 0 1px 0 #ffffff6e,
+          0 10px 24px -5px #5645d4cc,
+          0 0 34px -3px #ff64c895;
+      }
+      .fab .spark {
+        filter: drop-shadow(0 0 6px #ffffffd6);
+      }
+      .fab::before {
+        content: '';
+        position: absolute;
+        inset: -12px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #ff64c855, transparent 66%);
+        z-index: -1;
+      }
+      .fab.collapsed {
+        right: 18px;
+        bottom: 18px;
+      }
+      .fab.expanded {
+        right: 18px;
+        bottom: 84px;
+        width: auto;
+        height: 46px;
+        border-radius: 999px;
+        grid-auto-flow: column;
+        gap: 8px;
+        padding: 0 18px 0 15px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .fab.expanded .lbl {
+        white-space: nowrap;
+      }
+      .fab-hint {
+        position: absolute;
+        right: 84px;
+        bottom: 28px;
+        font-size: 10.5px;
+        color: var(--faint);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 7px;
+      }
+
+      /* anatomy close-up */
+      .anatomy {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 20px;
+        align-items: center;
+        margin-top: 18px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .anatomy .ashow {
+        position: relative;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 34px 18px;
+        background:
+          radial-gradient(80% 90% at 30% 20%, #ece6fb 0%, transparent 60%),
+          radial-gradient(70% 80% at 80% 90%, #fbe2f0 0%, transparent 62%), #fafafa;
+        border-right: 1px solid var(--hair);
+      }
+      .anatomy ul {
+        margin: 0;
+        padding: 16px 18px 16px 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .anatomy li {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--secondary);
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+      }
+      .anatomy li b {
+        color: var(--strong);
+      }
+      .anatomy li .dotk {
+        margin-top: 5px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: none;
+        background: linear-gradient(135deg, #5645d4, #ff64c8);
+      }
+
+      /* context-aware strip — ONE entrance, mode adapts */
+      .modemap {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 11px;
+        margin-top: 18px;
+      }
+      .modemap .mm {
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 11px 12px;
+        background: var(--surface);
+      }
+      .modemap .mm .where {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .modemap .mm .arrow {
+        margin: 3px 0;
+        font-size: 13px;
+        color: var(--accent);
+      }
+      .modemap .mm .what {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .modemap .mm .ref {
         font:
           600 9.5px ui-monospace,
           monospace;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 1px 5px;
         color: var(--faint);
       }
       svg.edge {
@@ -1279,214 +1458,163 @@
       </div>
     </section>
 
-    <!-- ════════════════ SHEET 4 — the universal "Plan with AI" entrance ═══════════════ -->
+    <!-- ════════════════ SHEET 4 — the universal entrance (ONE global hero affordance) ═══════════════ -->
     <section class="sheet">
       <div class="sheethead">
         <span class="n">4</span>
-        <h2>The universal entrance — “Plan with AI”, in situ on every host surface</h2>
-        <span class="cap">one affordance · the door sets the mode</span>
+        <h2>The universal entrance — ONE global affordance, summonable from anywhere</h2>
+        <span class="cap">two options · the product’s hero control</span>
       </div>
       <div class="sheetbody">
-        <div class="hosts">
-          <!-- 1 work-items list -->
-          <div class="host">
-            <div class="hh">
-              <h3>Work items list <code>/items</code></h3>
-              <span class="mode">→ re-plan</span>
-            </div>
-            <div class="hb">
-              <div class="toolbar">
-                <span class="chip">Filter</span>
-                <span class="chip">Saved</span>
-                <span class="chip">Tree ▾</span>
-                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
-                <span class="btn primary sm">+ New issue</span>
-              </div>
-              <p class="desc">
-                In <code>IssueListToolbar</code>, left of <b>+ New issue</b>. A project surface with
-                a plan → <b>augment / re-plan</b> (7.11); generation (7.4) if the project has no
-                plan yet.
-              </p>
-            </div>
-          </div>
+        <p class="lead">
+          The global <b>header</b> (<code>TopNav</code>) and the <b>⌘K</b> command menu are present
+          on <b>every</b> PM screen — so the planner needs <b>ONE entrance</b>, not a separate door
+          per surface. It is the product’s <b>headline feature</b>, so the affordance is a
+          <b>hero control</b> — a gradient fill, a soft glow / aura, a sparkle, a subtle shimmer —
+          never a plain toolbar button. Two placement options (either one is the single universal
+          entrance; <b>⌘K</b> always opens the same workspace too):
+        </p>
 
-          <!-- 2 backlog -->
-          <div class="host">
-            <div class="hh">
-              <h3>Backlog <code>/backlog</code></h3>
-              <span class="mode">→ re-plan</span>
+        <div class="entrance">
+          <!-- Option A — header hero -->
+          <div class="optcard">
+            <div class="opt-h">
+              <h3>Option A — Header hero control</h3>
+              <span class="reco-badge">Recommended</span>
             </div>
-            <div class="hb">
-              <div class="toolbar">
-                <span class="chip">View all</span>
-                <span class="chip">Filter</span>
-                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
-                <span class="btn primary sm">+ New issue</span>
-              </div>
-              <p class="desc">
-                In <code>BacklogFilterControls</code>’ row, before <b>+ New issue</b> — plan the
-                backlog: <b>augment / expand</b> the tree (7.11).
-              </p>
-            </div>
-          </div>
-
-          <!-- 3 board -->
-          <div class="host">
-            <div class="hh">
-              <h3>Board <code>/boards</code></h3>
-              <span class="mode">→ re-plan</span>
-            </div>
-            <div class="hb">
-              <div class="toolbar">
-                <span class="chip">Board ▾</span>
-                <span class="chip">Group</span>
-                <span class="chip">Filter</span>
-                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
-                <span class="btn primary sm">+ New issue</span>
-              </div>
-              <p class="desc">
-                In the board header (after <code>BoardFilterControls</code>), before
-                <b>+ New issue</b> → <b>augment / re-plan</b> (7.11).
-              </p>
-            </div>
-          </div>
-
-          <!-- 4 work-item detail -->
-          <div class="host">
-            <div class="hh">
-              <h3>Work-item detail <code>/items/[key]</code></h3>
-              <span class="mode">→ contextual</span>
-            </div>
-            <div class="hb">
-              <div class="toolbar">
-                <span class="chip">👁 Watching</span>
-                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
-                <span class="chip">⋯</span>
-              </div>
-              <div class="menu" style="margin: 10px 0 0">
-                <div class="row hi">
-                  <span>✦</span> Plan with AI
-                  <span style="margin-left: auto; color: var(--faint); font-weight: 500"
-                    >scoped here</span
-                  >
-                </div>
-                <div class="sep"></div>
-                <div class="row"><span>✎</span> Edit details</div>
-                <div class="row"><span>🔗</span> Copy link</div>
-                <div class="row"><span>▢</span> Archive</div>
-              </div>
-              <p class="desc">
-                In the item’s action cluster (after <b>Watch</b>) <b>and</b> inside the
-                <code>⋯</code>
-                actions menu (<code>WorkItemActionsMenu</code>). Launched from an item →
-                <b>contextual planning scoped to that item</b> (7.12). This is the affordance
-                <b>MOTIR-910</b> (the detail-panel door) adopts — not a separate invention.
-              </p>
-            </div>
-          </div>
-
-          <!-- 5 project header / global top nav -->
-          <div class="host">
-            <div class="hh">
-              <h3>Project header — global top nav</h3>
-              <span class="mode">→ generation / re-plan</span>
-            </div>
-            <div class="hb">
-              <div class="toolbar">
-                <span class="chip">+ Create</span>
-                <span class="chip">⌘K</span>
-                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
-                <span class="chip">Report</span>
-                <span class="chip">☾</span>
-                <span class="chip">🔔</span>
-                <span
-                  class="chip"
-                  style="
-                    border-radius: 50%;
-                    width: 26px;
-                    height: 26px;
-                    justify-content: center;
-                    padding: 0;
-                  "
-                  >Y</span
-                >
-              </div>
-              <p class="desc">
-                In <code>TopNav</code>’s right cluster (after <b>Report</b>). The always-present
-                project-level door → <b>re-plan</b> the project (or <b>generation</b> 7.4 when the
-                project is still empty).
-              </p>
-            </div>
-          </div>
-
-          <!-- 6 command palette -->
-          <div class="host">
-            <div class="hh">
-              <h3>Global command menu <code>⌘K</code></h3>
-              <span class="mode">→ context-aware</span>
-            </div>
-            <div class="hb">
-              <div class="palette">
-                <div class="psearch">⌕ plan…</div>
-                <div class="pgroup">Plan</div>
-                <div class="prow hi"><span>✦</span> Plan with AI <span class="kbd">G P</span></div>
-                <div class="pgroup">Create</div>
-                <div class="prow"><span>＋</span> New issue <span class="kbd">⌘C</span></div>
-              </div>
-              <p class="desc">
-                A <b>Plan with AI</b> command in <code>AppCommandPalette</code> (the wired ⌘K
-                palette). Opens the workspace in the mode for wherever you invoked it from (current
-                item → contextual; project → re-plan / generation).
-              </p>
-            </div>
-          </div>
-
-          <!-- 7 roadmap toggle (planned, 7.19) -->
-          <div class="host">
-            <div class="hh">
-              <h3>Roadmap view — Board ↔ Roadmap</h3>
-              <span class="mode">→ roadmap read + augment</span>
-            </div>
-            <div class="hb">
-              <div class="toolbar">
-                <span class="seg"><span>Board</span><span class="on">Roadmap</span></span>
+            <div class="stage">
+              <div class="topnav">
+                <span class="brand">moooon · <b>PayFlow</b></span>
                 <span class="spacer"></span>
-                <span class="plan-cta"><span class="ai">✦</span> Plan with AI</span>
+                <span class="icbtn">＋</span>
+                <span class="icbtn">⌘K</span>
+                <span class="hero-cta"><span class="spark">✦</span> Plan with AI</span>
+                <span class="icbtn">☾</span>
+                <span class="icbtn">🔔</span>
+                <span class="avatarchip">Y</span>
               </div>
+            </div>
+            <div class="opt-b">
               <p class="desc">
-                The <b>Board ↔ Roadmap</b> toggle is the door — entering the roadmap opens
-                <b>roadmap read + augment</b> (7.19). <b>Planned surface:</b> the authed roadmap +
-                toggle are owned by <b>7.19 / MOTIR-1011</b> (not shipped yet — only the public
-                roadmap exists today); this door reuses the same launcher when 1011 lands.
+                Lives in the right cluster of <code>TopNav</code> — <b>present on every screen</b>,
+                always one tap away, never covers content. The gradient + glow make it read as the
+                primary AI action among the neutral nav icons. <b>Recommended:</b> consistent,
+                discoverable, scales.
               </p>
             </div>
           </div>
 
-          <!-- consistency callout -->
-          <div class="host" style="background: var(--soft)">
-            <div class="hh" style="background: var(--accent-soft)">
-              <h3 style="color: var(--accent)">One affordance — same everywhere</h3>
+          <!-- Option B — floating action button -->
+          <div class="optcard">
+            <div class="opt-h">
+              <h3>Option B — Floating action button</h3>
             </div>
-            <div class="hb">
-              <p class="desc" style="margin-top: 0">
-                <b>Consistency.</b> Same label (<b>“Plan with AI”</b>), same <b>✦</b> icon, same
-                accent treatment, same placement language on every surface — a
-                <b>primary button</b> in toolbars / nav, a <b>menu item</b> in the ⋯ menu and ⌘K.
-                Built once as the reusable <code>PlanWithAILauncher</code> (<b>MOTIR-1299</b>,
-                <code>blocked_by</code> this design); each surface mounts it, the detail (910) +
-                roadmap (1011) doors adopt it. Composes <code>components/ui/*</code> (Button /
-                Popover / CommandPalette) — <code>--el-*</code>
-                colour + semantic shape tokens only; AA + keyboard-reachable.
+            <div class="stage" style="padding: 16px">
+              <div class="fabstage">
+                <div class="faux">
+                  <i style="width: 46%"></i>
+                  <i style="width: 88%"></i>
+                  <i style="width: 70%"></i>
+                  <i style="width: 80%"></i>
+                  <i style="width: 58%"></i>
+                </div>
+                <span class="fab-hint">hover / focus →</span>
+                <span class="fab expanded"
+                  ><span class="spark">✦</span><span class="lbl">Plan with AI</span></span
+                >
+                <span class="fab collapsed"><span class="spark">✦</span></span>
+              </div>
+            </div>
+            <div class="opt-b">
+              <p class="desc">
+                A glowing orb anchored bottom-right, floating above the content on every screen;
+                <b>expands to a labelled pill</b> on hover / focus. Maximum presence — unmistakably
+                “the AI lives here” — at the cost of floating over content. The <b>same</b> hero
+                affordance, just docked instead of in the bar.
               </p>
             </div>
           </div>
         </div>
+
+        <!-- anatomy close-up -->
+        <div class="anatomy">
+          <div class="ashow">
+            <span class="ringwrap"
+              ><span class="hero-cta big"><span class="spark">✦</span> Plan with AI</span></span
+            >
+          </div>
+          <ul>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Gradient fill</b>, accent → violet (<code>--el-accent</code> →
+                <code>--el-highlight</code>-derived) — AA-safe white text over the accent-dominant
+                region; the pink lives only in the glow.</span
+              >
+            </li>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Aura / outer glow</b> — a soft pink + violet halo so it lifts off the chrome and
+                reads as “special”.</span
+              >
+            </li>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Sparkle mark</b> (lucide <code>Sparkles</code>) + a <b>shimmer sweep</b> — the
+                living, AI feel (a slow loop in the build).</span
+              >
+            </li>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Conic ring</b> (close-up) for an optional premium rim; <b>⌘K</b> opens the same
+                workspace from the keyboard.</span
+              >
+            </li>
+          </ul>
+        </div>
+
+        <!-- ONE entrance, mode adapts to context -->
+        <div class="modemap">
+          <div class="mm">
+            <div class="where">On a work item</div>
+            <div class="arrow">↓</div>
+            <div class="what">Contextual planning</div>
+            <div class="ref">7.12</div>
+          </div>
+          <div class="mm">
+            <div class="where">On a project surface</div>
+            <div class="arrow">↓</div>
+            <div class="what">Augment / re-plan</div>
+            <div class="ref">7.11</div>
+          </div>
+          <div class="mm">
+            <div class="where">Empty project (no plan)</div>
+            <div class="arrow">↓</div>
+            <div class="what">Generation</div>
+            <div class="ref">7.4</div>
+          </div>
+          <div class="mm">
+            <div class="where">On the roadmap</div>
+            <div class="arrow">↓</div>
+            <div class="what">Roadmap read + augment</div>
+            <div class="ref">7.19</div>
+          </div>
+        </div>
       </div>
       <div class="note">
-        <b>The door determines the MODE.</b> From a <b>specific work item</b> → contextual (7.12);
-        from a <b>project surface with no item</b> → re-plan (7.11), or generation (7.4) if no plan
-        exists; from the <b>roadmap</b> → roadmap read + augment (7.19). The launcher passes the
-        originating context to the workspace, which opens in the matching state from sheet 3.
+        <b>ONE door that ADAPTS — not seven doors.</b> The single hero affordance opens the
+        workspace in the mode for the <b>current context</b> (the strip above) — viewing an item →
+        contextual; a project surface → re-plan, or generation if no plan exists; the roadmap →
+        roadmap read + augment. Built once as the reusable
+        <code>PlanWithAILauncher</code> (<b>MOTIR-1299</b>, <code>blocked_by</code> this design): it
+        renders the hero control (header or FAB), opens the <code>PlanningWorkspace</code>, and
+        passes the originating context so it lands in the matching state from sheet 3. The
+        detail-panel door (MOTIR-910) + the roadmap toggle (MOTIR-1011) are the same launcher in
+        context, not separate inventions. <code>--el-*</code> palette-derived colour + semantic
+        shape tokens; AA holds; keyboard-reachable (⌘K + focusable).
       </div>
     </section>
 
