@@ -879,7 +879,10 @@ function PlansView({
         ) : null}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Tall, equal-height cards in ONE row (the SaaS storefront pattern); below
+          the row's natural width the container scrolls horizontally (scroll-snap)
+          rather than wrapping — the tiers stay one comparable ladder (design 8.1.21). */}
+      <div className="flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1.5">
         {aiPlans.map((plan) => (
           <PlanCard
             key={plan.key}
@@ -1032,10 +1035,32 @@ function PlanCard({
     );
   }
 
+  // Per-tier copy (keyed by plan.key in messages; arrays via t.raw). The cumulative
+  // "Everything in {prev}, plus" lead shows only on tiers that name a `prev`.
+  const tierBase = `plans.tiers.${plan.key}`;
+  const features = (t.raw(`${tierBase}.features`) as string[] | undefined) ?? [];
+  const featuresOff =
+    plan.key === 'free'
+      ? ((t.raw('plans.tiers.free.featuresOff') as string[] | undefined) ?? [])
+      : [];
+  const hasPrev = plan.key === 'pro' || plan.key === 'max' || plan.key === 'enterprise';
+  // The bundled Motir seat (8.1.22): every PAID plan includes 1 seat (caps lifted);
+  // Free states the absence; Enterprise is custom.
+  const seatText =
+    plan.key === 'free'
+      ? t('plans.seatNone')
+      : !plan.prices
+        ? t('plans.seatCustom')
+        : t('plans.seatIncluded');
+  const seatOff = plan.key === 'free';
+
   return (
     <div
-      className="flex flex-col gap-3 rounded-(--radius-card) border bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card)"
-      style={{ borderColor: accent ? 'var(--el-accent)' : 'var(--el-border-soft)' }}
+      className="flex grow shrink-0 basis-0 snap-start flex-col gap-2 rounded-(--radius-card) border bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card)"
+      style={{
+        minWidth: '10rem',
+        borderColor: accent ? 'var(--el-accent)' : 'var(--el-border-soft)',
+      }}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 font-sans text-base font-semibold text-(--el-text)">
@@ -1052,14 +1077,50 @@ function PlanCard({
           </Pill>
         ) : null}
       </div>
+      {/* per-tier use-case — min-height keeps the price rows aligned across cards */}
+      <p className="min-h-[2.75rem] font-sans text-xs text-(--el-text-secondary)">
+        {t(`${tierBase}.useCase`)}
+      </p>
       {priceBlock}
-      {plan.monthlyCredits != null ? (
-        <p className="flex items-center gap-1.5 font-sans text-sm text-(--el-text-secondary)">
-          <Check className="h-4 w-4 text-(--el-success)" aria-hidden />
-          {t('plans.creditsAllotment', { n: fmt(plan.monthlyCredits) })}
-        </p>
-      ) : null}
-      <div className="mt-auto">{cta}</div>
+      <p className="font-sans text-sm font-semibold text-(--el-text-strong)">
+        {plan.monthlyCredits != null
+          ? t('plans.creditsAllotment', { n: fmt(plan.monthlyCredits) })
+          : t('plans.customPool')}
+      </p>
+      {/* bundled Motir seat (8.1.22) */}
+      <p
+        className={`flex items-center gap-1.5 font-sans text-xs ${
+          seatOff ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'
+        }`}
+      >
+        <Users
+          className={`h-3.5 w-3.5 shrink-0 ${seatOff ? 'text-(--el-text-faint)' : 'text-(--el-accent-on-surface)'}`}
+          aria-hidden
+        />
+        {seatText}
+      </p>
+      {/* cumulative feature list */}
+      <ul className="flex flex-col gap-1.5 font-sans text-xs text-(--el-text-secondary)">
+        {hasPrev ? (
+          <li className="flex items-center gap-1.5 font-medium">
+            <Check className="h-3.5 w-3.5 shrink-0 text-(--el-success)" aria-hidden />
+            {t('plans.everythingIn', { prev: t(`${tierBase}.prev`) })}
+          </li>
+        ) : null}
+        {features.map((f, i) => (
+          <li key={i} className="flex items-start gap-1.5">
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--el-success)" aria-hidden />
+            <span>{f}</span>
+          </li>
+        ))}
+        {featuresOff.map((f, i) => (
+          <li key={`off-${i}`} className="flex items-start gap-1.5 text-(--el-text-faint)">
+            <X className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-auto pt-1">{cta}</div>
     </div>
   );
 }

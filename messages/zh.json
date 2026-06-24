@@ -3762,7 +3762,38 @@
       "ctaContactSales": "联系销售",
       "ctaCurrent": "当前套餐",
       "ctaTrialUsed": "试用已用",
-      "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。"
+      "footer": "当前显示按年计费（Stripe 默认）—— 可在上方切换到按月对比。结账时自动计税。额度是内部用量配额；所示价格为 AI 套餐费用，由 Stripe 向 {org} 组织收取。你的 Motir 席位单独计费 —— 请在 Motir 套餐页面管理。",
+      "seatIncluded": "+ 1 个 Motir 席位 · 工作项不受上限",
+      "seatNone": "无 Motir 席位 · 250 个工作项上限",
+      "seatCustom": "包含 Motir 席位（定制）",
+      "customPool": "定制额度池",
+      "everythingIn": "包含 {prev} 的全部，另加",
+      "tiers": {
+        "free": {
+          "useCase": "试用 Motir AI。",
+          "features": ["每种助理各体验一次"],
+          "featuresOff": ["不按月刷新 · 无加购"]
+        },
+        "standard": {
+          "useCase": "详细规划，外加少量助理额度。",
+          "features": ["详细规划整个项目", "额度按月刷新 · 可加购", "可尝试助理任务"]
+        },
+        "pro": {
+          "useCase": "详细规划，外加真正的助理工作。",
+          "prev": "Standard",
+          "features": ["用助理处理真实任务", "需要时随时加购"]
+        },
+        "max": {
+          "useCase": "详细规划，外加大量助理工作。",
+          "prev": "Pro",
+          "features": ["充足的持续助理工作余量", "满足繁忙团队的吞吐"]
+        },
+        "enterprise": {
+          "useCase": "定制用量，外加组织管控。",
+          "prev": "Max",
+          "features": ["开票计费与 SSO", "专属支持"]
+        }
+      }
     },
     "topup": {
       "title": "加购额度",

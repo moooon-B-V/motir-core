@@ -32,8 +32,8 @@ export interface CatalogPrice {
 /** A Motir AI plan tier (the motir-ai `PlanTier`) as the storefront renders it. */
 export interface AiPlanCatalogEntry {
   /** The `PlanTier.key` (matches the usage read's `tier.key`). */
-  key: 'free' | 'starter' | 'standard' | 'pro' | 'max' | 'enterprise';
-  /** Customer-facing name ("Starter", "Pro", …). */
+  key: 'free' | 'standard' | 'pro' | 'max' | 'enterprise';
+  /** Customer-facing name ("Standard", "Pro", …). */
   name: string;
   /** Monthly credit allotment for the tier (ADR §2). */
   monthlyCredits: number | null;
@@ -77,16 +77,7 @@ export interface BillingCatalog {
 export const BILLING_CATALOG: BillingCatalog = {
   aiPlans: [
     { key: 'free', name: 'Free', monthlyCredits: 300, recommended: false, prices: null },
-    {
-      key: 'starter',
-      name: 'Starter',
-      monthlyCredits: 300,
-      recommended: false,
-      prices: {
-        monthly: { amountUsd: 5, priceLookupKey: 'starter_pool_monthly' },
-        annual: { amountUsd: 40, priceLookupKey: 'starter_pool_annual' },
-      },
-    },
+    // `starter` removed by the 2026-06-23 amendment (8.1.18 / MOTIR-1308).
     {
       key: 'standard',
       name: 'Standard',
