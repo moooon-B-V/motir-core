@@ -1,11 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import {
-  PlanningCanvas,
-  type CanvasEdge,
-  type CanvasNode,
-} from '@/components/planning/PlanningCanvas';
+import { ProjectRoadmapCanvas } from '@/components/planning/ProjectRoadmapCanvas';
+import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import { Spinner } from '@/components/ui/Spinner';
 import { IdeaCard, StationCard } from './StationNode';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
@@ -20,15 +17,18 @@ import {
 } from '@/lib/onboarding/stationLayout';
 
 // The onboarding canvas (Subtask 7.3.11 / MOTIR-840) — the LEFT pane of the hub.
-// It composes the spatial `PlanningCanvas` (7.3.76): the pre-plan stations (idea →
-// the four tiers → design / plan slots) are nodes laid out in a space-filling
-// serpentine and connected by the READ-ONLY dependency chain. The user can pan,
-// zoom, and DRAG nodes; their arrangement persists per project (7.3.77, via
+// It is the pre-plan view of the project roadmap: the stations (idea → the four
+// tiers → design / plan slots) are nodes laid out in a space-filling serpentine
+// and connected by the READ-ONLY dependency chain. The user can pan, zoom, and
+// DRAG nodes; their arrangement persists per project (7.3.77, via
 // `useCanvasLayout`). Clicking a produced tier re-opens its read-only review.
 //
-// This REPLACES 833's minimal vertical placeholder canvas. The post-plan epic /
-// story clusters on the same surface are a separate Epic-7 story (the design is
-// built to accommodate them); here the canvas carries the pre-plan stations.
+// It composes the reusable `ProjectRoadmapCanvas` FOUNDATION (7.20.2 / MOTIR-1194)
+// — the SAME canvas the persistent roadmap and the planning workspace use for the
+// produced epic → story → subtask tree. The 4 tier docs are part of the ONE
+// project roadmap; this consumer feeds it the pre-plan stations (as the project
+// grows past planning, the same canvas grows the work-item tree). Build it ONCE,
+// every planning surface composes it.
 
 export interface OnboardingCanvasProps {
   state: DiscoveryState;
@@ -83,28 +83,14 @@ export function OnboardingCanvas({
   );
   const present = new Set<CanvasNodeKey>(keys);
 
-  const nodes: CanvasNode[] = keys.map((key) => ({ id: key, ...positionFor(key, positions) }));
-  const edges: CanvasEdge[] = STATION_EDGES.filter(
-    ([from, to]) => present.has(from) && present.has(to),
-  ).map(([from, to]) => ({ from, to, variant: edgeVariant(from, to, stationByKind) }));
-  // Bridge the chain when the design station is gated out, so `plan` stays
-  // connected: validation → plan replaces validation → design → plan.
-  if (!showDesign && present.has('validation') && present.has('plan')) {
-    edges.push({
-      from: 'validation',
-      to: 'plan',
-      variant: edgeVariant('validation', 'plan', stationByKind),
-    });
-  }
-
-  function renderNode(node: CanvasNode) {
-    if (node.id === 'idea') return <IdeaCard idea={idea!.trim()} />;
-    const station = stationByKind.get(node.id as StationKind);
+  function contentFor(key: CanvasNodeKey) {
+    if (key === 'idea') return <IdeaCard idea={idea!.trim()} />;
+    const station = stationByKind.get(key as StationKind);
     if (!station) return null;
     return (
       <StationCard
         station={station}
-        doc={state.docs[node.id]}
+        doc={state.docs[key]}
         session={state.session}
         // The design step is Step 5 — enterable only once the station is ACTIVE
         // (the tiers are complete); before then it's an upcoming roadmap node
@@ -112,13 +98,37 @@ export function OnboardingCanvas({
         onOpenDesign={
           station.kind === 'design' && station.state === 'active' ? onOpenDesign : undefined
         }
-        revisiting={revisitingKind === node.id}
-        refreshing={willRefreshSet.has(node.id)}
+        revisiting={revisitingKind === key}
+        refreshing={willRefreshSet.has(key)}
       />
     );
   }
 
-  function onNodeActivate(id: string) {
+  // The stations are one flat roadmap level (parent-less); their CONTENT is the
+  // shipped StationCard / IdeaCard, and they own their serpentine positions (saved
+  // arrangement overrides, via `positionFor`).
+  const nodes: ProjectCanvasNode[] = keys.map((key) => ({
+    id: key,
+    parentId: null,
+    searchText: key,
+    content: contentFor(key),
+    ...positionFor(key, positions),
+  }));
+
+  const deps: ProjectCanvasDep[] = STATION_EDGES.filter(
+    ([from, to]) => present.has(from) && present.has(to),
+  ).map(([from, to]) => ({ from, to, variant: edgeVariant(from, to, stationByKind) }));
+  // Bridge the chain when the design station is gated out, so `plan` stays
+  // connected: validation → plan replaces validation → design → plan.
+  if (!showDesign && present.has('validation') && present.has('plan')) {
+    deps.push({
+      from: 'validation',
+      to: 'plan',
+      variant: edgeVariant('validation', 'plan', stationByKind),
+    });
+  }
+
+  function onActivate(id: string) {
     // The design station opens the web-only design step (MOTIR-1040) — but only
     // once it is the active step (the tiers are complete); an upcoming design
     // station, like an upcoming tier, does not open. A produced tier re-opens its
@@ -132,12 +142,11 @@ export function OnboardingCanvas({
   }
 
   return (
-    <PlanningCanvas
+    <ProjectRoadmapCanvas
       nodes={nodes}
-      edges={edges}
-      renderNode={renderNode}
+      deps={deps}
       onNodeMove={savePosition}
-      onNodeActivate={onNodeActivate}
+      onSelect={onActivate}
       ariaLabel={t('title')}
     />
   );
@@ -149,7 +158,7 @@ function edgeVariant(
   from: CanvasNodeKey,
   to: CanvasNodeKey,
   byKind: Map<StationKind, StationView>,
-): CanvasEdge['variant'] {
+): ProjectCanvasDep['variant'] {
   const reached = (key: CanvasNodeKey) =>
     key === 'idea' || byKind.get(key as StationKind)?.state !== 'upcoming';
   return reached(from) && reached(to) ? 'firm' : 'pending';

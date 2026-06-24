@@ -90,6 +90,46 @@ describe('PlanningCanvas', () => {
     expect(onNodeActivate).toHaveBeenCalledWith('b');
   });
 
+  it('draws a cross-story edge as ONE path plus a flag badge in its own layer', () => {
+    const crossEdges: CanvasEdge[] = [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'c', variant: 'cross' },
+    ];
+    render(<PlanningCanvas nodes={nodes} edges={crossEdges} renderNode={renderNode} />);
+    // the flag badge does NOT inflate the asserted edge-path count
+    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
+    const flags = screen.getAllByTestId('cross-flag');
+    expect(flags).toHaveLength(1);
+    expect(flags[0]!.textContent).toContain('cross-story');
+  });
+
+  it('renders no cross-flag layer content when there are no cross edges', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    expect(screen.queryByTestId('cross-flag')).toBeNull();
+  });
+
+  it('accepts focusNodeId / focusNonce without throwing (search-to-focus)', () => {
+    const { rerender } = render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={edges}
+        renderNode={renderNode}
+        focusNodeId="c"
+        focusNonce={0}
+      />,
+    );
+    rerender(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={edges}
+        renderNode={renderNode}
+        focusNodeId="c"
+        focusNonce={1}
+      />,
+    );
+    expect(screen.getByTestId('canvas-world')).toBeTruthy();
+  });
+
   it('exposes ONLY zoom controls — no link create / edit / delete affordance', () => {
     render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
     const labels = screen

@@ -8,10 +8,12 @@ import {
   type PointerEvent as RPointerEvent,
   type ReactNode,
 } from 'react';
-import { Maximize2, Minus, Plus } from 'lucide-react';
+import { Flag, Maximize2, Minus, Plus } from 'lucide-react';
 import {
   type Rect,
   type View,
+  centerOn,
+  edgeMidpoint,
   edgePath,
   fitView,
   nodesBounds,
@@ -46,8 +48,14 @@ export interface CanvasNode {
 export interface CanvasEdge {
   from: string;
   to: string;
-  /** `firm` = a hard dependency (solid); `pending` = a not-yet-done edge (dashed). */
-  variant?: 'firm' | 'pending';
+  /**
+   * `firm` = a hard dependency (solid); `pending` = a not-yet-done edge (dashed);
+   * `cross` = a dependency crossing a story/parent boundary — the bad-plan SIGNAL
+   * the dependency-arrow audit forbids (warning-toned + a flag badge at the
+   * midpoint, so a reviewer SEES the tangle). A correct plan is a TREE; a `cross`
+   * edge means the plan is wrong (design `design/roadmap/*`, MOTIR-1009/1194).
+   */
+  variant?: 'firm' | 'pending' | 'cross';
 }
 
 export interface PlanningCanvasProps {
@@ -59,6 +67,13 @@ export interface PlanningCanvasProps {
   onNodeMove?: (id: string, x: number, y: number) => void;
   /** A node was clicked/tapped (a press that did NOT become a drag). */
   onNodeActivate?: (id: string) => void;
+  /**
+   * Search-to-focus: the node to PAN to the centre of the viewport. Centring fires
+   * whenever `focusNonce` changes (so re-searching the SAME node re-centres it);
+   * the scale is left untouched. Omit either and no centring happens.
+   */
+  focusNodeId?: string;
+  focusNonce?: number;
   ariaLabel?: string;
   className?: string;
 }
@@ -90,6 +105,8 @@ export function PlanningCanvas({
   renderNode,
   onNodeMove,
   onNodeActivate,
+  focusNodeId,
+  focusNonce,
   ariaLabel,
   className,
 }: PlanningCanvasProps) {
@@ -154,6 +171,20 @@ export function PlanningCanvas({
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
+
+  // ── search-to-focus: pan the requested node to the viewport centre ──
+  // Keyed on `focusNonce` so a repeat search for the same node re-centres it; the
+  // scale is preserved (a pan, not a zoom). Reads the live node/rect each fire.
+  useEffect(() => {
+    if (focusNonce === undefined || !focusNodeId) return;
+    const vp = vpRef.current;
+    const n = nodeById.get(focusNodeId);
+    if (!vp || !n) return;
+    const r = vp.getBoundingClientRect();
+    if (r.width === 0) return;
+    setView((v) => centerOn(rectOf(n), { w: r.width, h: r.height }, v.scale));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNonce, focusNodeId]);
 
   // ── wheel zoom via a NON-passive native listener (so preventDefault holds) ──
   useEffect(() => {
@@ -292,17 +323,20 @@ export function PlanningCanvas({
             const b = nodeById.get(edge.to);
             if (!a || !b) return null;
             const pending = edge.variant === 'pending';
+            const cross = edge.variant === 'cross';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
                 d={edgePath(rectOf(a), rectOf(b))}
                 fill="none"
                 className={
-                  pending
-                    ? 'stroke-(--el-canvas-edge-pending)'
-                    : 'stroke-(--el-canvas-edge-committed)'
+                  cross
+                    ? 'stroke-(--el-warning)'
+                    : pending
+                      ? 'stroke-(--el-canvas-edge-pending)'
+                      : 'stroke-(--el-canvas-edge-committed)'
                 }
-                strokeWidth={2}
+                strokeWidth={cross ? 2.5 : 2}
                 strokeLinecap="round"
                 strokeDasharray={pending ? '2 7' : undefined}
                 vectorEffect="non-scaling-stroke"
@@ -310,6 +344,37 @@ export function PlanningCanvas({
             );
           })}
         </svg>
+
+        {/* cross-story flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
+            the edge <svg>, whose <path> count is asserted): a warning chip + flag
+            glyph + label at each cross edge's midpoint, so the tangle never rests
+            on edge colour alone. Decorative — the dependency facts live in the
+            node list. */}
+        <div
+          className="pointer-events-none absolute top-0 left-0"
+          style={worldTransform}
+          aria-hidden="true"
+          data-testid="canvas-cross-flags"
+        >
+          {edges.map((edge, i) => {
+            if (edge.variant !== 'cross') return null;
+            const a = nodeById.get(edge.from);
+            const b = nodeById.get(edge.to);
+            if (!a || !b) return null;
+            const m = edgeMidpoint(rectOf(a), rectOf(b));
+            return (
+              <span
+                key={`flag~${edge.from}~${edge.to}~${i}`}
+                className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)"
+                style={{ left: m.x, top: m.y }}
+                data-testid="cross-flag"
+              >
+                <Flag className="size-3.5" />
+                cross-story
+              </span>
+            );
+          })}
+        </div>
 
         {/* nodes — caller content; the canvas owns the box + drag */}
         <div className="absolute top-0 left-0" style={worldTransform} data-testid="canvas-world">
