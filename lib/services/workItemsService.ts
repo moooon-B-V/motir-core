@@ -2405,13 +2405,14 @@ export const workItemsService = {
   ): Promise<{
     ready: boolean;
     openBlockerIds: Set<string>;
+    blockedByAncestorId: string | null;
     inheritedSessionBranch: string | null;
     conflictingSessionBranches: string[];
   }> {
     // The node's OWN-blocker verdict + the rich open-blocker / session-branch
     // detail. (`openBlockerIds` stays the node's OWN blockers — the relationships
-    // banner highlights those; a parent-not-ready reason is conveyed by the tree,
-    // not invented as a phantom blocker here. Card 7.0.13: surfacing it is "may".)
+    // banner highlights those; the cascade cause is surfaced separately as
+    // `blockedByAncestorId`, the nearest own-blocked ancestor. Card 7.0.13's "may".)
     const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
     let ownReady = true;
     let openBlockerIds = new Set<string>();
@@ -2439,13 +2440,18 @@ export const workItemsService = {
     );
     const ancestors = ancestorsByItem.get(workItemId) ?? [];
     let ancestorsReady = true;
+    let blockedByAncestorId: string | null = null;
     if (ancestors.length > 0) {
       const ownReadyAnc = await computeOwnBlockerReadiness(ancestors, ctx);
       ancestorsReady = ancestors.every((a) => ownReadyAnc.get(a) !== false);
+      // `ancestors` is nearest-first (parent, grandparent, …), so the FIRST
+      // own-blocked ancestor is the nearest one — the cause the banner names.
+      blockedByAncestorId = ancestors.find((a) => ownReadyAnc.get(a) === false) ?? null;
     }
     return {
       ready: ownReady && ancestorsReady,
       openBlockerIds,
+      blockedByAncestorId,
       inheritedSessionBranch,
       conflictingSessionBranches,
     };
@@ -2635,6 +2641,13 @@ export const workItemsService = {
     const openBlockers = blockedBy
       .filter((l) => readiness.openBlockerIds.has(l.item.id))
       .map((l) => l.item);
+    // The cascade cause (7.0.13): resolve the nearest own-blocked ancestor id
+    // back to its summary from the breadcrumb chain we already loaded (no extra
+    // read). null when the item isn't held by a blocked ancestor.
+    const blockedByAncestor =
+      readiness.blockedByAncestorId === null
+        ? null
+        : (ancestors.find((a) => a.id === readiness.blockedByAncestorId) ?? null);
 
     return {
       item: toWorkItemDto(item),
@@ -2646,7 +2659,7 @@ export const workItemsService = {
       relatesTo: toRelationshipLinks(relatesLinks, relatesRows, 'toId'),
       duplicates: toRelationshipLinks(duplicatesLinks, duplicatesRows, 'toId'),
       clones: toRelationshipLinks(clonesLinks, clonesRows, 'toId'),
-      readiness: { ready: readiness.ready, openBlockers },
+      readiness: { ready: readiness.ready, openBlockers, blockedByAncestor },
       workflow,
       labels: labelRows.map(toLabelDto),
       components: componentRows.map(toComponentDto),

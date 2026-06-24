@@ -243,6 +243,16 @@ export interface IssueDetailDto {
 export interface ReadinessVerdictDto {
   ready: boolean;
   openBlockers: WorkItemSummaryDto[];
+  /**
+   * The nearest ANCESTOR whose OWN blocker is still open — the cascade cause
+   * (Subtask 7.0.13) when an item's own blockers are all clear but a blocked
+   * parent / grandparent holds it out of the ready set. `null` when the item is
+   * ready, or when no ancestor is itself own-blocked. Populated independently of
+   * `openBlockers` (an item can have both); the banner shows own blockers first
+   * and falls back to this so a cascade-blocked item is never a bare "Blocked"
+   * with nothing to point at.
+   */
+  blockedByAncestor: WorkItemSummaryDto | null;
 }
 
 /**

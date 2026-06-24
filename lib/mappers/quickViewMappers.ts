@@ -57,6 +57,12 @@ export function toQuickViewData(
     readiness: {
       ready: detail.readiness.ready,
       blockers: detail.readiness.openBlockers.map((b) => b.identifier),
+      blockedByAncestor: detail.readiness.blockedByAncestor
+        ? {
+            identifier: detail.readiness.blockedByAncestor.identifier,
+            title: detail.readiness.blockedByAncestor.title,
+          }
+        : null,
     },
   };
 }

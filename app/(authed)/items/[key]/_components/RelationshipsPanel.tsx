@@ -174,6 +174,15 @@ export function RelationshipsPanel({
               identifier: b.identifier,
               href: `/items/${b.identifier}`,
             }))}
+            blockedByAncestor={
+              readiness.blockedByAncestor
+                ? {
+                    identifier: readiness.blockedByAncestor.identifier,
+                    title: readiness.blockedByAncestor.title,
+                    href: `/items/${readiness.blockedByAncestor.identifier}`,
+                  }
+                : null
+            }
           />
         ) : null}
 

@@ -180,7 +180,10 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     render(
       <IssueQuickViewPanel
         state="ready"
-        data={{ ...TODO, readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'] } }}
+        data={{
+          ...TODO,
+          readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'], blockedByAncestor: null },
+        }}
       />,
     );
     expect(screen.getByText('Blocked')).toBeTruthy();
@@ -198,6 +201,28 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     expect(b8.getAttribute('rel')).toContain('noopener');
   });
 
+  it('cascade-blocked: names the blocked parent (own blockers clear) so the banner is not a bare "Blocked" (7.0.13)', () => {
+    searchParamsString = 'view=list&peek=PROD-7';
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{
+          ...TODO,
+          readiness: {
+            ready: false,
+            blockers: [],
+            blockedByAncestor: { identifier: 'PROD-8', title: '7.19 Roadmap' },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByText(/Waiting on a parent item —/)).toBeTruthy();
+    const parent = screen.getByRole('link', { name: 'PROD-8' });
+    expect(parent.getAttribute('href')).toBe('/items/PROD-8');
+    expect(parent.getAttribute('target')).toBe('_blank'); // peek → new tab
+  });
+
   it('ready: renders "Ready to start" when the verdict is ready (all blockers resolved, OR none — bug-ready-banner-no-deps)', () => {
     // `{ ready: true, blockers: [] }` is the payload for BOTH "every blocker is
     // terminal" and "the item has no blockers at all" — a no-dependency todo item
@@ -205,7 +230,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
     render(
       <IssueQuickViewPanel
         state="ready"
-        data={{ ...TODO, readiness: { ready: true, blockers: [] } }}
+        data={{ ...TODO, readiness: { ready: true, blockers: [], blockedByAncestor: null } }}
       />,
     );
     expect(screen.getByText('Ready to start')).toBeTruthy();
@@ -226,7 +251,7 @@ describe('IssueQuickViewPanel — readiness banner (Subtask 2.5.21)', () => {
         data={{
           ...DATA,
           statusCategory: 'in_progress',
-          readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'] },
+          readiness: { ready: false, blockers: ['PROD-3', 'PROD-8'], blockedByAncestor: null },
         }}
       />,
     );
