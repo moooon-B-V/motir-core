@@ -3837,7 +3837,8 @@
       "seatsBilled": "计费 {n} 个席位 · 每位成员 1 个",
       "scaledDesc": "按年计费 · 约合 ${mo}/月 · {date} 续订。已解除全部免费上限。席位随成员变动：新增成员会按本期剩余时间产生按比例计费；移除成员会在下一张发票上按比例抵扣（期中不退款）。",
       "manageSeats": "管理席位",
-      "switchMonthly": "切换为按月计费"
+      "switchMonthly": "切换为按月计费",
+      "includedSeatNote": "你的 Motir AI 套餐已包含 1 个 Motir 席位 —— 工作项上限已解除。除已包含的 1 个外，按 {n} 个额外席位计费。"
     },
     "paywall": {
       "fallbackOrg": "当前",

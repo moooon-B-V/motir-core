@@ -83,7 +83,12 @@ export interface BillingStatusDTO {
    *  / checkout CTAs); the two billed lines below are not meaningful for it. */
   isMeta: boolean;
   /** ① Motir (seats): the scaled-tracker subscription, or `null` = free/unscaled. */
-  motir: { scaledTrackerSubscription: ScaledTrackerSubscription | null };
+  motir: {
+    scaledTrackerSubscription: ScaledTrackerSubscription | null;
+    /** True when a PAID Motir AI plan bundles 1 Motir seat → caps lifted, first
+     *  seat included (8.1.22). The SeatsView surfaces the included seat from this. */
+    aiIncludedSeat: boolean;
+  };
   /** ② Motir AI: the credit plan tier + balance. */
   motirAi: MotirAiBillingDTO;
   /** The purchasable prices the storefront renders + checkout routes through. */

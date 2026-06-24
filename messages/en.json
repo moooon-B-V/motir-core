@@ -3841,7 +3841,8 @@
       "seatsBilled": "{n} seats billed · 1 per member",
       "scaledDesc": "Billed annually · ${mo}/mo equiv · renews {date}. All free-tier caps lifted. Seats track membership: adding a member adds a prorated charge for the rest of the term; removing one applies a prorated credit to the next invoice (no mid-term refund).",
       "manageSeats": "Manage seats",
-      "switchMonthly": "Switch to monthly billing"
+      "switchMonthly": "Switch to monthly billing",
+      "includedSeatNote": "Your Motir AI plan includes 1 Motir seat — work-item caps are lifted. You're billed for {n} additional seat(s) beyond the included one."
     },
     "paywall": {
       "fallbackOrg": "current",

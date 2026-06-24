@@ -22,7 +22,7 @@ function activeStandard(): BillingStatusDTO {
     organizationId: 'org1',
     access: { role: 'owner', canManageBilling: true },
     isMeta: false,
-    motir: { scaledTrackerSubscription: null },
+    motir: { scaledTrackerSubscription: null, aiIncludedSeat: false },
     motirAi: {
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
       balance: 1420,
@@ -234,5 +234,24 @@ describe('BillingClient', () => {
     // Per-tier use-case copy + the cumulative "Everything in {prev}" lead render.
     expect(screen.getByText('Detailed planning, plus real agent work.')).toBeTruthy();
     expect(screen.getByText('Everything in Standard, plus')).toBeTruthy();
+  });
+
+  it('SeatsView surfaces the bundled Motir seat when the org holds a paid AI plan (8.1.25)', async () => {
+    const withAiSeat = {
+      ...activeStandard(),
+      motir: { scaledTrackerSubscription: null, aiIncludedSeat: true },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(withAiSeat), { status: 200 })),
+    );
+    renderClient();
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    // Enter the seats screen (Motir line → Upgrade Motir).
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade Motir' }));
+    await waitFor(() => expect(screen.getByText('Scale up Motir')).toBeTruthy());
+    // The included-seat note renders, netting one off the billed count (6 → 5).
+    expect(screen.getByText(/includes 1 Motir seat/i)).toBeTruthy();
+    expect(screen.getByText(/billed for 5 additional/i)).toBeTruthy();
   });
 });
