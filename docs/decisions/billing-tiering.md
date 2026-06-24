@@ -3,7 +3,20 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 — see below.**
+- **Amendment (2026-06-24, 8.1.22 / MOTIR-1316) — every PAID AI plan BUNDLES 1 tracker seat.**
+  A paid Motir AI plan (Standard / Pro / Max) now **includes 1 tracker seat → the
+  org's §4 caps are lifted** (`scaled`). Why: the solo plan-with-AI journey was
+  broken — a solo user buys AI to plan, the planner generates work items, and they
+  hit the **250 free-tracker cap**, blocked from storing the plan they paid the AI
+  to produce. **Seat accounting: the first seat is included** — billable
+  scaled-tracker seats = `max(0, members − 1)`; a solo org pays only the AI fee
+  (caps lifted, $0 seat), a team pays $5/seat beyond the first. The **Free one-time
+  trial is NOT** included (stays bounded at 250). This **partially supersedes** the
+  "FULLY independent" framing in §1 and the "an AI plan never lifts a cap" rule in
+  §4 (both updated below). Implemented by 8.1.23 (MOTIR-1317, motir-ai propagation)
+  and 8.1.24 (MOTIR-1318, motir-core entitlement + seat accounting); storefront copy
+  by 8.1.17 (MOTIR-1304). AI fee unchanged (cap-lift COGS ≈ nil; a seat is cents).
 - **Amendment (2026-06-23, 8.1.18 / MOTIR-1308) — the `starter` AI tier is REMOVED.**
   The AI ladder is now **Free (300, one-time) · Standard · Pro · Max · Enterprise**
   — four named paid plans plus the free trial (was five). Why: Starter (300 cr/mo @
@@ -166,9 +179,14 @@ is **two decoupled dimensions**. Keeping them separate is the core of this model
   you. (This preserves "the PM substrate is real, not a veneer", Principle #8,
   while still giving growth a price.)
 
-**The two billed lines are FULLY independent — neither forces the other (Yue,
-2026-06-21):** Motir bills **two separate products**, each with its **own free→paid
-line**. An org subscribes to either, both, or neither.
+**The two billed lines are largely independent, with ONE bundle — a paid AI plan
+includes the first tracker seat (Yue, 2026-06-21; amended 2026-06-24):** Motir
+bills **two separate products**, each with its **own free→paid line**. An org
+subscribes to either, both, or neither — with one tie: **a PAID AI plan includes 1
+tracker seat, which lifts the §4 caps** (so a solo user planning with AI is never
+walled by the 250-item cap). AI is still buyable without a _paid_ tracker; the
+bundle runs one way (AI → includes a seat), never the other (a paid tracker grants
+no credits).
 
 - **① The Tracker (the PM tool) — free for small use, paid only at SCALE.** The
   tracker is **free for any team within the caps** (≤ 250 work items, ≤ 3 projects,
@@ -184,17 +202,21 @@ line**. An org subscribes to either, both, or neither.
   buy AI.** It is funded by a **flat per-ORG fee, never the seat fee** (the margin
   rule): credits cost real money, so the AI fee — not seats — covers them. AI is
   org-level (one flat `monthlyCreditAllotment` per org, not per seat —
-  `credit-model.md` §4).
+  `credit-model.md` §4). **A paid AI plan INCLUDES 1 tracker seat** (amended
+  2026-06-24): the org's §4 caps are lifted and the first seat is free, so the solo
+  plan-with-AI journey never hits the 250-item wall; members beyond the first bill
+  at $5/seat (§4). The Free one-time trial does NOT include a seat.
 
-**Your bill = ① + ②, and they don't gate each other:**
+**Your bill = ① + ②, with a paid AI plan's included seat folded into the tracker
+line (the org goes `scaled`; the first seat is free, members beyond it bill $5):**
 
-| Org                                           | Tracker        | AI               | **Total / mo**        |
-| --------------------------------------------- | -------------- | ---------------- | --------------------- |
-| Solo, < 250 items, no AI                      | free           | 300 trial (once) | **$0**                |
-| **Solo, < 250 items, wants planning**         | **free**       | Standard $25     | **$25** ← no seat fee |
-| 5-person team, < 250 items, everyday planning | free           | Standard $25     | **$25**               |
-| 8-person team, 2,000 items (scaled) + coding  | $5 × 8 = $40   | Pro $75          | **$115**              |
-| 20-person team, scaled, tracker-only (no AI)  | $5 × 20 = $100 | none             | **$100**              |
+| Org                                  | Tracker                 | AI               | **Total / mo**                    |
+| ------------------------------------ | ----------------------- | ---------------- | --------------------------------- |
+| Solo, < 250 items, no AI             | free                    | 300 trial (once) | **$0**                            |
+| **Solo, wants planning**             | **included w/ AI plan** | Standard $25     | **$25** ← caps lifted, seat incl. |
+| 5-person team, everyday planning     | 4 paid seats (1 incl.)  | Standard $25     | **$45** ($25 + 4 × $5)            |
+| 8-person team, scaled + coding       | 7 paid seats (1 incl.)  | Pro $75          | **$110** ($75 + 7 × $5)           |
+| 20-person team, tracker-only (no AI) | $5 × 20 = $100          | none             | **$100**                          |
 
 So the **seat fee appears ONLY when the org outgrows the free caps**; a small org
 pays only for the AI it opts into. The named plans (**Standard → Pro → Max →
@@ -414,11 +436,15 @@ The shape locked above became, in practice:
 
 ### 4. The entitlement caps + the org-creation gate (Yue, binding)
 
-The caps from §2, stated as enforceable rules (the enforcement home is the new
-8.1.11 — see Consequences). **These caps are the Tracker's free→paid line:**
-exceeding any one requires the org to start the **$5/seat scaled-tracker
-subscription** (or the create is blocked). They are **independent of the AI plan** —
-an AI plan never lifts a cap, and a scaled tracker never grants credits.
+The caps from §2, stated as enforceable rules (the enforcement home is 8.1.11,
+extended by 8.1.24 / MOTIR-1318 — see Consequences). **These caps are the Tracker's
+free→paid line:** exceeding any one requires the org to start the **$5/seat
+scaled-tracker subscription** (or the create is blocked). **A paid AI plan lifts the
+caps via its included seat (amended 2026-06-24, 8.1.22 / MOTIR-1316):** an org with
+an active paid AI plan (Standard / Pro / Max) resolves to `scaled` — all §4 caps
+lifted, the first seat included, members beyond the first billed at $5/seat. The
+scaled tracker still grants no credits (the bundle is one-way: AI → seat, never
+seat → credits), and the **Free trial does not lift any cap**.
 
 > **All scale caps are counted at the `Organization`, not the workspace or
 > project (binding).** The hierarchy is `Organization → Workspace → Project →
