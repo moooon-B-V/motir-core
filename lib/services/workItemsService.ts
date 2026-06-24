@@ -2273,28 +2273,46 @@ export const workItemsService = {
     inheritedSessionBranch: string | null;
     conflictingSessionBranches: string[];
   }> {
+    // The node's OWN-blocker verdict + the rich open-blocker / session-branch
+    // detail. (`openBlockerIds` stays the node's OWN blockers — the relationships
+    // banner highlights those; a parent-not-ready reason is conveyed by the tree,
+    // not invented as a phantom blocker here. Card 7.0.13: surfacing it is "may".)
     const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
-    if (blockers.length === 0) {
-      return {
-        ready: true,
-        openBlockerIds: new Set(),
-        inheritedSessionBranch: null,
-        conflictingSessionBranches: [],
-      };
+    let ownReady = true;
+    let openBlockerIds = new Set<string>();
+    let inheritedSessionBranch: string | null = null;
+    let conflictingSessionBranches: string[] = [];
+    if (blockers.length > 0) {
+      const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+        blockers.map((b) => b.projectId),
+        ctx.workspaceId,
+      );
+      const cls = classifyBlockerReadiness(blockers, terminalByProject);
+      ownReady = cls.ready;
+      openBlockerIds = new Set(
+        blockers.filter((b) => isOpenBlocker(b, terminalByProject)).map((b) => b.id),
+      );
+      inheritedSessionBranch = cls.inheritedSessionBranch;
+      conflictingSessionBranches = cls.conflicting ? cls.sessionBranches : [];
     }
-    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-      blockers.map((b) => b.projectId),
+    // Cascade (Subtask 7.0.13): also gate on the ANCESTOR chain — ready only when
+    // every ancestor is ready too. Checked even when the node has no own blocker,
+    // because an unready ancestor still holds it out of the ready set.
+    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
+      [workItemId],
       ctx.workspaceId,
     );
-    const cls = classifyBlockerReadiness(blockers, terminalByProject);
-    const openBlockerIds = new Set(
-      blockers.filter((b) => isOpenBlocker(b, terminalByProject)).map((b) => b.id),
-    );
+    const ancestors = ancestorsByItem.get(workItemId) ?? [];
+    let ancestorsReady = true;
+    if (ancestors.length > 0) {
+      const ownReadyAnc = await computeOwnBlockerReadiness(ancestors, ctx);
+      ancestorsReady = ancestors.every((a) => ownReadyAnc.get(a) !== false);
+    }
     return {
-      ready: cls.ready,
+      ready: ownReady && ancestorsReady,
       openBlockerIds,
-      inheritedSessionBranch: cls.inheritedSessionBranch,
-      conflictingSessionBranches: cls.conflicting ? cls.sessionBranches : [],
+      inheritedSessionBranch,
+      conflictingSessionBranches,
     };
   },
 
@@ -2313,22 +2331,25 @@ export const workItemsService = {
   ): Promise<Map<string, boolean>> {
     const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
     if (itemIds.length === 0) return ready;
-    const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
-    if (blockers.length === 0) return ready;
-    const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-      blockers.map((b) => b.projectId),
+    // Cascade (Subtask 7.0.13): a node is ready ⟺ its OWN sibling blockers are
+    // done AND every ANCESTOR is ready. Resolve the ancestor chains, compute
+    // OWN-blocker readiness over the union (items + ancestors) in ONE batch
+    // (no N+1), then AND the chain in. The flat per-node blocker rule still
+    // holds at each level; an unready ancestor (its own open blocker, or ITS
+    // ancestor unready) holds the whole subtree out of the ready set — the
+    // mirror of 7.0.10 (a parent-with-children is excluded; its children wait
+    // until it is ready).
+    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
+      itemIds,
       ctx.workspaceId,
     );
-    // Group each item's blockers, then classify per item (an item is ready iff
-    // it has no open blocker AND its integrated deps don't span >1 branch).
-    const byItem = new Map<string, BlockerReadinessState[]>();
-    for (const b of blockers) {
-      const arr = byItem.get(b.fromId);
-      if (arr) arr.push(b);
-      else byItem.set(b.fromId, [b]);
-    }
-    for (const [fromId, itemBlockers] of byItem) {
-      ready.set(fromId, classifyBlockerReadiness(itemBlockers, terminalByProject).ready);
+    const union = new Set<string>(itemIds);
+    for (const chain of ancestorsByItem.values()) for (const a of chain) union.add(a);
+    const ownReady = await computeOwnBlockerReadiness([...union], ctx);
+    for (const id of itemIds) {
+      const selfReady = ownReady.get(id) !== false;
+      const chainReady = (ancestorsByItem.get(id) ?? []).every((a) => ownReady.get(a) !== false);
+      ready.set(id, selfReady && chainReady);
     }
     return ready;
   },
@@ -3055,4 +3076,41 @@ export function classifyBlockerReadiness(
     inheritedSessionBranch,
     conflicting,
   };
+}
+
+/**
+ * OWN-blocker readiness for a set of items (Subtask 7.0.13) — `id → ready` where
+ * ready means "this node's own `is_blocked_by` blockers are all satisfied"
+ * (terminal or integrated-awaiting-review), with NO ancestor cascade. This is
+ * the per-node leg the readiness verdict is built from: `getReadinessForItems`
+ * (batch) and `getReadiness` (single) call it over the item ∪ ancestor set, then
+ * AND each node with its ancestor chain to get the cascaded verdict. Extracted
+ * so the two entry points share ONE blocker classification (no drift). One
+ * blocker query + one terminal-set query regardless of item count (no N+1); an
+ * item with no blockers stays `true`.
+ */
+async function computeOwnBlockerReadiness(
+  itemIds: string[],
+  ctx: ServiceContext,
+): Promise<Map<string, boolean>> {
+  const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
+  if (itemIds.length === 0) return ready;
+  const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
+  if (blockers.length === 0) return ready;
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    blockers.map((b) => b.projectId),
+    ctx.workspaceId,
+  );
+  // Group each item's blockers, then classify per item (an item is ready iff it
+  // has no open blocker AND its integrated deps don't span >1 branch).
+  const byItem = new Map<string, BlockerReadinessState[]>();
+  for (const b of blockers) {
+    const arr = byItem.get(b.fromId);
+    if (arr) arr.push(b);
+    else byItem.set(b.fromId, [b]);
+  }
+  for (const [fromId, itemBlockers] of byItem) {
+    ready.set(fromId, classifyBlockerReadiness(itemBlockers, terminalByProject).ready);
+  }
+  return ready;
 }

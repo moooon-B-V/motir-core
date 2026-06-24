@@ -1236,6 +1236,47 @@ export const workItemRepository = {
   },
 
   /**
+   * Batch ancestor walk (Subtask 7.0.13) — for EACH of `itemIds`, the ids of all
+   * its ancestors (parent → grandparent → … → root). The readiness cascade gates
+   * a node on its whole ancestor chain (a leaf is ready only if every ancestor is
+   * ready too), and the batch readiness path must resolve those chains for many
+   * items WITHOUT an N+1 — so this is the multi-seed analogue of `findAncestors`:
+   * ONE recursive CTE seeded from the full id set, emitting a `(seedId,
+   * ancestorId)` row per ancestor. An item with no parent contributes no row and
+   * maps to `[]`. `workspaceId` is filtered on BOTH the anchor and the recursive
+   * step so a cross-workspace ancestor can never enter a chain (the finding-#26
+   * tenant gate, mirroring `findAncestors`). Depth is tree-capped at 4 (Story
+   * 1.4), so the recursion is short and bounded. Read-only → `db` singleton.
+   */
+  async findAncestorIdsForItems(
+    itemIds: string[],
+    workspaceId: string,
+  ): Promise<Map<string, string[]>> {
+    const byItem = new Map<string, string[]>(itemIds.map((id) => [id, []]));
+    if (itemIds.length === 0) return byItem;
+    const rows = await db.$queryRaw<Array<{ seedId: string; ancestorId: string }>>`
+      WITH RECURSIVE chain AS (
+        SELECT w."id" AS "seedId", w."parentId" AS "ancestorId"
+          FROM "work_item" w
+          WHERE w."id" IN (${Prisma.join(itemIds)})
+            AND w."workspaceId" = ${workspaceId}
+            AND w."parentId" IS NOT NULL
+        UNION ALL
+        SELECT c."seedId", p."parentId" AS "ancestorId"
+          FROM "work_item" p
+          JOIN chain c ON p."id" = c."ancestorId"
+          WHERE p."workspaceId" = ${workspaceId}
+            AND p."parentId" IS NOT NULL
+      )
+      SELECT "seedId", "ancestorId" FROM chain`;
+    for (const r of rows) {
+      const arr = byItem.get(r.seedId);
+      if (arr) arr.push(r.ancestorId);
+    }
+    return byItem;
+  },
+
+  /**
    * The WHOLE non-archived issue forest of a project, in ONE round-trip via a
    * recursive CTE walking DOWN the `parentId` edge from the roots
    * (`parentId IS NULL`). Each row carries its `depth` (root = 1, for the

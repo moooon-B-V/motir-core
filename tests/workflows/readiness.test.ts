@@ -163,3 +163,91 @@ describe('isReady — terminal status is per-project category=done (finding #21)
     }
   });
 });
+
+describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
+  // Build epic → story → subtask, returning the three ids + a free task to use
+  // as a blocker. The subtask has NO own blocker, so its readiness is decided
+  // entirely by the ancestor chain.
+  async function tree() {
+    const fx = await makeWorkItemFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'E' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'S', parentId: epic.id },
+      fx.ctx,
+    );
+    const subtask = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'T', parentId: story.id },
+      fx.ctx,
+    );
+    return { fx, epic, story, subtask };
+  }
+
+  async function block(
+    fromId: string,
+    fx: { projectId: string; ctx: Parameters<typeof workItemsService.isReady>[1] },
+  ) {
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'BLK' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    return blocker;
+  }
+
+  it('a subtask with no own blocker is NOT ready while its STORY is blocked, and becomes ready once the story clears', async () => {
+    const { fx, subtask, story } = await tree();
+    // Baseline: nothing blocked → the subtask is ready.
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
+
+    // Block the STORY (an open sibling-level blocker). The subtask's own blockers
+    // are still empty, but the cascade holds it out.
+    const blocker = await block(story.id, fx);
+    expect(await workItemsService.isReady(story.id, fx.ctx)).toBe(false);
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(false);
+
+    // Clear the story's blocker (cancelled = category=done) → the chain is ready
+    // again, so the subtask re-enters the ready set.
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
+    expect(await workItemsService.isReady(story.id, fx.ctx)).toBe(true);
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
+  });
+
+  it('blocks the subtree when the grandparent EPIC is not ready', async () => {
+    const { fx, epic, story, subtask } = await tree();
+    const blocker = await block(epic.id, fx);
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(false);
+    // The story (the middle node) is also held by its unready parent.
+    expect(await workItemsService.isReady(story.id, fx.ctx)).toBe(false);
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
+  });
+
+  it("the flat rule still holds at the leaf: a subtask's OWN open blocker keeps it not-ready even when the chain is clear", async () => {
+    const { fx, subtask } = await tree();
+    const blocker = await block(subtask.id, fx);
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(false);
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
+  });
+
+  it('the ready SET (listReady) reflects the cascade — the subtask is absent while its story is blocked, present once cleared', async () => {
+    const { fx, subtask, story } = await tree();
+    const inReady = async () =>
+      (await workItemsService.listReady(fx.projectId, {}, fx.ctx)).items.some(
+        (r) => r.id === subtask.id,
+      );
+    expect(await inReady()).toBe(true);
+
+    const blocker = await block(story.id, fx);
+    expect(await inReady()).toBe(false);
+
+    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    expect(await inReady()).toBe(true);
+  });
+});
