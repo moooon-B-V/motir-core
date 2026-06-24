@@ -55,8 +55,15 @@ describe('Sidebar', () => {
       />,
     );
     expect(screen.getByText('Workspace')).toBeTruthy();
-    // One <hr> separates the two sections.
-    expect(container.querySelectorAll('hr')).toHaveLength(1);
+    // One separator between the two sections. It MUST be a div.border-t (role
+    // separator), NOT an <hr>: the Hand-Drawn style roughens dividers via an
+    // `::after` overlay, which Chromium never renders on <hr> — so an <hr>
+    // splitter stays machine-straight under that style (MOTIR-1315). The div
+    // carries the border-t the rough rule targets.
+    expect(container.querySelectorAll('hr')).toHaveLength(0);
+    const separators = container.querySelectorAll('[role="separator"]');
+    expect(separators).toHaveLength(1);
+    expect(separators[0]!.className).toContain('border-t');
   });
 
   it('wraps each collapsed row in a Radix Tooltip trigger (icon-only mode)', async () => {

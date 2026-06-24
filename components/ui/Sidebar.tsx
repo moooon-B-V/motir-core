@@ -288,7 +288,14 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
         {sections.map((section, index) => (
           <div key={section.id} className="flex flex-col gap-3">
-            {index > 0 ? <hr className="border-0 border-t border-(--el-sidebar-border)" /> : null}
+            {/* A DIV separator, not an <hr>: the Hand-Drawn style roughens
+                dividers via an `::after` overlay, and Chromium does not render
+                generated content on <hr> — so an <hr> splitter stayed
+                machine-straight under that style (MOTIR-1315). A div carries the
+                same border-t + role and DOES get the overlay. */}
+            {index > 0 ? (
+              <div role="separator" className="border-t border-(--el-sidebar-border)" />
+            ) : null}
             <SidebarSectionFrame section={section} collapsed={collapsed} />
           </div>
         ))}
