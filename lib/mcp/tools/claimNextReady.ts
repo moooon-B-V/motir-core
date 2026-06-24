@@ -11,14 +11,15 @@ import { projectKeyField } from './readyFilters';
 
 // `claim_next_ready` (MOTIR-1330) — ATOMIC, race-safe dispatch claim. Unlike
 // `next_ready` (which READS the top ready item without changing it), this CLAIMS:
-// it resolves the project's ACTIVE sprint, locks the highest-ranked ready Subtask
-// in it (`FOR UPDATE SKIP LOCKED`), flips it to `in_progress`, and returns the
-// same dispatch payload — all in one transaction. Two concurrent `motir run`
-// sessions therefore never claim the same item: the loser takes the next-best, or
-// gets an empty result and RETRIES. The claim IS the dispatch flip, so the caller
-// must NOT also `transition_status` afterwards. The active sprint is resolved
-// server-side (the single source of truth — there is exactly one active sprint per
-// project), so no sprint id is passed.
+// it locks the highest-ranked ready Subtask (`FOR UPDATE SKIP LOCKED`), flips it
+// to `in_progress`, and returns the same dispatch payload — all in one
+// transaction. Two concurrent `motir run` sessions therefore never claim the same
+// item: the loser takes the next-best, or gets an empty result and RETRIES. The
+// claim IS the dispatch flip, so the caller must NOT also `transition_status`
+// afterwards. SCOPE: the active sprint is resolved server-side (one per project)
+// and the claim is scoped to it when present; when there is NO active sprint —
+// Motir used without sprint planning (plain Kanban) — the claim widens to the
+// whole project, so a missing sprint is never an error. No sprint id is passed.
 
 export const CLAIM_NEXT_READY_TOOL_NAME = 'claim_next_ready';
 
@@ -50,18 +51,17 @@ export async function runClaimNextReady(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   const project = await projectsService.getByKey(args.projectKey, ctx);
+  // Prefer the active sprint when one exists (sprint discipline — dispatch only
+  // committed work); otherwise claim across the WHOLE project. Motir can be used
+  // WITHOUT planning a sprint (plain Kanban), so a missing active sprint is NOT
+  // an error — it just widens the claim to the project's ready set.
   const activeSprint = await sprintsService.getActiveSprint(project.id, ctx);
-  if (!activeSprint) {
-    return toolOk('No active sprint — run `motir plan sprint` first, then claim.', {
-      item: null,
-      reason: 'no_active_sprint',
-    });
-  }
-  const item = await workItemsService.claimNextReady(project.id, activeSprint.id, ctx);
+  const item = await workItemsService.claimNextReady(project.id, activeSprint?.id ?? null, ctx);
   if (!item) {
+    const scope = activeSprint ? 'the active sprint' : 'this project';
     return toolOk(
-      'No ready work item in the active sprint to claim — RETRY (a sibling may have just claimed the ' +
-        'last one), or repair the sprint if its ready set is genuinely empty.',
+      `No ready work item in ${scope} to claim — RETRY (a sibling may have just claimed the last ` +
+        'one), or check there is unblocked work to start.',
       { item: null, reason: 'none_ready' },
     );
   }

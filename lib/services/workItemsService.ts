@@ -2924,8 +2924,10 @@ export const workItemsService = {
   /**
    * `claim_next_ready` (MOTIR-1330) — the ATOMIC, race-safe dispatch claim.
    * Compute the project's ready leaves (the SAME source `listReady` /
-   * `getNextReady` derive), scope them to the ACTIVE `sprintId`, keep the
-   * dispatch rank, then — in ONE transaction — LOCK the best still-claimable
+   * `getNextReady` derive), scope them to the active `sprintId` when one is given
+   * (or take the WHOLE project when `sprintId` is `null` — Motir used without
+   * sprints), keep the dispatch rank, then — in ONE transaction — LOCK the best
+   * still-claimable
    * candidate (`FOR UPDATE SKIP LOCKED`) and flip it `→ in_progress`. Two
    * concurrent callers therefore claim DIFFERENT items (or one gets the item and
    * the other `null`): there is no read-then-flip-later window for them to both
@@ -2938,18 +2940,21 @@ export const workItemsService = {
    */
   async claimNextReady(
     projectId: string,
-    sprintId: string,
+    sprintId: string | null,
     ctx: ServiceContext,
   ): Promise<ReadyItemDispatchDto | null> {
     const project = await projectRepository.findById(projectId);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
-    // The project-wide ready leaves, scoped to the active sprint, in dispatch
-    // rank order (priority encodes the in-sprint leverage `motir plan sprint`
-    // re-ranks to — so this rank IS "most-unblocking first").
+    // The project's ready leaves in dispatch rank order (priority encodes the
+    // in-sprint leverage `motir plan sprint` re-ranks to — so this rank IS
+    // "most-unblocking first"). When an active `sprintId` is given, scope to it
+    // (sprint discipline); when `null` — Motir used WITHOUT sprints (plain
+    // Kanban) — claim across the WHOLE project, since a missing sprint is not an
+    // error.
     const ready = await collectReadyLeaves(projectId, project.workspaceId, ctx, {});
-    const candidates = ready.filter((r) => r.sprintId === sprintId);
+    const candidates = sprintId ? ready.filter((r) => r.sprintId === sprintId) : ready;
     if (candidates.length === 0) return null;
     const orderedIds = candidates.map((r) => r.id);
 

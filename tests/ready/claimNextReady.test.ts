@@ -108,6 +108,17 @@ describe('claimNextReady — atomic dispatch claim', () => {
     expect(await workItemsService.claimNextReady(fx.projectId, sprintId, fx.ctx)).toBeNull();
   });
 
+  it('with NO sprint scope (null), claims across the whole project — no sprint required', async () => {
+    const fx = await makeWorkItemFixture();
+    const top = await makeReady(fx, 'top', 'highest');
+    await makeReady(fx, 'low', 'low');
+
+    const claimed = await workItemsService.claimNextReady(fx.projectId, null, fx.ctx);
+    expect(claimed?.key).toBe(top.identifier);
+    expect(claimed?.status.category).toBe('in_progress');
+    expect(await statusOf(top.id)).toBe('in_progress');
+  });
+
   it('two concurrent claims take TWO DIFFERENT items — never double-claim (warm pool)', async () => {
     const fx = await makeWorkItemFixture();
     const a = await makeReady(fx, 'a', 'highest');
@@ -145,13 +156,16 @@ describe('claimNextReady — atomic dispatch claim', () => {
 });
 
 describe('runClaimNextReady — the MCP tool', () => {
-  it('no active sprint → empty result with reason "no_active_sprint"', async () => {
+  it('no active sprint → claims the top ready item project-wide (Kanban, no sprint required)', async () => {
     const fx = await makeWorkItemFixture();
-    await makeReady(fx, 'x', 'high'); // ready, but in the backlog with no active sprint
+    const item = await makeReady(fx, 'kanban', 'highest'); // ready, in the backlog, no sprint
     const res = await runClaimNextReady({ projectKey: fx.projectIdentifier }, fx.ctx);
-    const sc = res.structuredContent as { item: unknown; reason?: string };
-    expect(sc.item).toBeNull();
-    expect(sc.reason).toBe('no_active_sprint');
+    const sc = res.structuredContent as {
+      item: { key: string; status: { category: string } } | null;
+    };
+    expect(sc.item?.key).toBe(item.identifier);
+    expect(sc.item?.status.category).toBe('in_progress');
+    expect(await statusOf(item.id)).toBe('in_progress');
   });
 
   it('claims and returns the dispatch payload (status now in_progress) through the tool', async () => {
