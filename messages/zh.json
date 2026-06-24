@@ -3779,7 +3779,7 @@
     "seats": {
       "breadcrumb": "组织 · {org} · Motir",
       "title": "扩容 Motir",
-      "subtitle": "每位组织成员 1 个席位 —— 与 Jira、Linear 一致。",
+      "subtitle": "每位组织成员 1 个席位。",
       "back": "返回账单",
       "membersToSeats": "{n} 位成员 → {n} 个席位",
       "annualTotal": "{n} × ${seat}/年 = ${total} / 年",
