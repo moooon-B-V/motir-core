@@ -340,14 +340,15 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 `7.12.1`/`MOTIR-907`.
 
 **Asset:** `planning-workspace.mock.html` (source) + `planning-workspace.png`
-(full-page export). A four-sheet review board:
+(full-page export). A five-sheet review board:
 
-| Sheet | What it shows                                                                                                                  |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                              |
-| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)            |
-| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door |
-| **4** | The universal "Plan with AI" entrance — ONE global hero affordance (header control OR floating button), context → mode adapts  |
+| Sheet | What it shows                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                             |
+| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                           |
+| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                |
+| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating "M" universal AI callout; context → mode adapts |
+| **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)     |
 
 ### ⚠️ SCOPE — this designs the SHELL + ENTRANCE, NOT the canvas pane
 
@@ -427,29 +428,51 @@ the flow):
 Onboarding (7.3) is the one specialization that wraps this shell in its gated
 per-tier pre-plan review loop (see `onboarding.mock.html`).
 
-### ⚠️ The universal entrance — ONE global hero affordance (sheet 4)
+### ⚠️ The universal entrance — global hero affordances, not per-surface (sheet 4)
 
 **Corrected 2026-06-24 (Yue): NOT one door per screen.** The global **header**
-(`TopNav`) and the **⌘K** command menu are present on **every** PM screen, so the
-planner needs **ONE entrance**, not a per-surface button. And because this is the
+(`TopNav`) and the **⌘K** command menu are present on **every** PM screen, so AI
+is reachable everywhere via **global** affordances, not a per-surface button. And
+because this is the
 **product's headline feature / selling point**, the affordance is a **hero
 control** — gradient fill, a soft glow / aura, a `Sparkles` mark, a subtle
 shimmer — **never a plain toolbar button**. (This supersedes the earlier
 per-surface in-situ grid, which multiplied a regular button across seven
 surfaces — wrong on both counts.)
 
-**Two placement OPTIONS** (either one IS the single universal entrance — the user
-picks; ⌘K always opens the same workspace too):
+**We ship BOTH entrances** (refined 2026-06-24, Yue) — they are complementary,
+both always-present, and both restyle with the active design style (sheet 5);
+⌘K opens the workspace too:
 
-- **Option A — Header hero control (RECOMMENDED).** A gradient pill **"✦ Plan
-  with AI"** in `TopNav`'s right cluster, present on every screen, always one tap
-  away, never covering content; the gradient + glow make it read as the primary
-  AI action among the neutral nav icons. Recommended: consistent, discoverable,
-  scales.
-- **Option B — Floating action button.** A glowing orb anchored bottom-right,
-  floating above content on every screen, **expanding to a labelled pill on hover
-  / focus**. Maximum "the AI lives here" presence, at the cost of floating over
-  content. The **same** hero affordance, just docked.
+- **A — the header "Plan with AI" pill.** A gradient hero pill in `TopNav`'s
+  right cluster, present on every screen, never covering content — the direct
+  **planning** entrance; opens the workspace in the current context's mode.
+- **B — the floating "M" button = the universal AI callout.** A glowing orb (the
+  **M** logo) afloat bottom-right on every screen; tapping it opens the AI
+  callout — **the home of ALL AI**, where **Plan with AI is ONE action**
+  alongside **"Ask about this project"** (Q&A over the plan / docs / work items)
+  and **"Help with a task"** (draft / summarise / assist). Planning is the
+  capability this design+story deliver now; project Q&A and task assistance are
+  **future capabilities reached through the same button**. **Built now with a
+  mock `M` logo** — the real brand logo replaces it later (the orb is the logo's
+  home). The callout menu composes `Card` + list rows + an "Ask Motir anything…"
+  input.
+
+**⚠️ The hero control is STYLE-AWARE — special in every design style (sheet 5).**
+It is not a fixed gradient: each `data-style` gives the "Plan with AI" control a
+**distinct, special treatment** — Warm Editorial (gradient + glow + shimmer),
+Soft/Playful (rounded, pillowy stacked shadow), Swiss/Minimal-Flat (flat solid,
+sharp, uppercase), Neo-Brutalism (hard border + offset hard shadow), Glassmorphism
+(frosted translucent over a colourful surface), Cybercore/Y2K (dark surface + neon
+glow + mono). The floating **M** orb adopts each style's material the same way.
+Implemented as a **per-style material surface** (the sanctioned exception, like
+glassmorphism): `[data-style='id'] [data-surface='ai-cta'] { … }` rules whose
+colour is **palette-DERIVED** (`color-mix()` / `var(--el-accent|--el-highlight)`,
+no raw hex) and whose radius/padding/shadow flow through element-semantic **shape**
+tokens — so a `data-palette` swap re-tints every style's treatment and a
+`data-style` swap re-shapes it (the axes stay disjoint). **AA holds in each**
+(label over the accent-dominant region; Cybercore renders its native dark
+register).
 
 **The anatomy of the hero control** (drawn in the sheet-4 close-up):
 
@@ -477,9 +500,11 @@ affordance opens the workspace in the mode for the **current context**:
 | the **roadmap**                                | roadmap read + augment                   | 7.19  |
 
 - **Implementation** = the reusable **`PlanWithAILauncher`** (**`MOTIR-1299`** /
-  `7.20.3`, `blocked_by` this design): it renders the hero control (header or
-  FAB), opens the `PlanningWorkspace`, and passes the originating context so it
-  lands in the matching state (sheet 3).
+  `7.20.3`, `blocked_by` this design): it renders **both** hero controls (the
+  header pill + the floating **M** callout), opens the `PlanningWorkspace`, and
+  passes the originating context so it lands in the matching state (sheet 3). The
+  callout's non-planning actions (project Q&A, task assistance) are future
+  capabilities that mount in the same menu.
 - The **work-item detail door** (`MOTIR-910`) and the **Board ↔ Roadmap toggle**
   (`MOTIR-1011`) are **the same launcher in context**, not separate inventions.
   (The authed roadmap + toggle are owned by 7.19/`MOTIR-1011` and not shipped yet
