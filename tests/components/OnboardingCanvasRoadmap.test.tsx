@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
-import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { OnboardingCanvas } from '@/components/onboarding/OnboardingCanvas';
 import { type DiscoveryState, initialDiscoveryState } from '@/lib/onboarding/discoveryLoop';
@@ -51,7 +50,7 @@ afterEach(() => {
 });
 
 describe('OnboardingCanvas — produced work-item tree', () => {
-  it('hangs the produced epics under the plan station and reveals them on drill', async () => {
+  it('shows the produced epics at the top level beside the stations', async () => {
     renderWithIntl(
       <OnboardingCanvas
         state={hubState()}
@@ -63,14 +62,13 @@ describe('OnboardingCanvas — produced work-item tree', () => {
     );
     // Stations paint after the layout load…
     expect(await screen.findByText('Plan → your epics')).toBeTruthy();
-    // …and once the roadmap read resolves, the canvas becomes searchable (the tell
-    // that work items loaded). The epic is NOT at the top level — it hangs under plan.
-    await screen.findByPlaceholderText('Search the roadmap');
-    expect(document.querySelector('[data-node-id="e1"]')).toBeNull();
-    // Drill the plan station → the produced epic appears.
-    fireEvent.keyDown(document.querySelector('[data-node-id="plan"]')!, { key: 'Enter' });
+    // …and once the roadmap read resolves, the epic is VISIBLE at the top level
+    // (a root beside the stations) — not hidden behind a drill. The canvas is now
+    // searchable too.
     expect(await screen.findByText('Billing epic')).toBeTruthy();
     expect(document.querySelector('[data-node-id="e1"]')).not.toBeNull();
+    expect(document.querySelector('[data-node-id="plan"]')).not.toBeNull();
+    expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
   });
 
   it('without a projectKey, no roadmap is read and only the stations show', async () => {

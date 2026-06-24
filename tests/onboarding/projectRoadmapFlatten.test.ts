@@ -38,10 +38,10 @@ describe('flattenRoadmap', () => {
     },
   ];
 
-  it('flattens the nested forest and hangs roots under the plan node', () => {
-    const flat = flattenRoadmap(forest, 'plan');
+  it('flattens the nested forest, keeping epics as roots (parentId null)', () => {
+    const flat = flattenRoadmap(forest);
     expect(flat.map((i) => [i.id, i.parentId])).toEqual([
-      ['e1', 'plan'], // epic re-parented under the plan station
+      ['e1', null], // epic stays a root → shown at the top level beside the stations
       ['s1', 'e1'], // story keeps its epic parent
       ['t1', 's1'], // subtask keeps its story parent
     ]);
@@ -51,35 +51,32 @@ describe('flattenRoadmap', () => {
   });
 
   it('falls back via isDone for an unrecognized status, and to subtask for an unknown kind', () => {
-    const flat = flattenRoadmap(
-      [
-        {
-          id: 'a',
-          parentId: null,
-          kind: 'weird',
-          identifier: 'X-1',
-          title: 'A',
-          status: 'mystery',
-          isDone: true,
-        },
-        {
-          id: 'b',
-          parentId: null,
-          kind: 'epic',
-          identifier: 'X-2',
-          title: 'B',
-          status: 'mystery',
-          isDone: false,
-        },
-      ],
-      'plan',
-    );
+    const flat = flattenRoadmap([
+      {
+        id: 'a',
+        parentId: null,
+        kind: 'weird',
+        identifier: 'X-1',
+        title: 'A',
+        status: 'mystery',
+        isDone: true,
+      },
+      {
+        id: 'b',
+        parentId: null,
+        kind: 'epic',
+        identifier: 'X-2',
+        title: 'B',
+        status: 'mystery',
+        isDone: false,
+      },
+    ]);
     expect(flat.find((i) => i.id === 'a')!.status).toBe('done'); // isDone → done
     expect(flat.find((i) => i.id === 'a')!.kind).toBe('subtask'); // unknown kind → subtask
     expect(flat.find((i) => i.id === 'b')!.status).toBe('todo'); // not done → todo
   });
 
   it('returns an empty list for an empty forest', () => {
-    expect(flattenRoadmap([], 'plan')).toEqual([]);
+    expect(flattenRoadmap([])).toEqual([]);
   });
 });

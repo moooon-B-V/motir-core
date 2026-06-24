@@ -32,16 +32,27 @@ import {
 // grows past planning, the same canvas grows the work-item tree). Build it ONCE,
 // every planning surface composes it.
 
-// The plan station the produced work-item tree hangs under (drill it → epics).
-const PLAN_NODE = 'plan';
+// Parent-less work items (epics, or any orphan) lay out in a grid BELOW the
+// station serpentine (which occupies up to ~y:800), so they show at the top level
+// without colliding with the stations. They are NOT fanned from the plan node:
+// these items are not necessarily produced by THIS onboarding. The "plan → epic"
+// fan is correct only once a project carries the planned/onboarded (planning-
+// origin) flag, which MOTIR-1013 introduces; until then a parent-less item is
+// simply a top-level roadmap node.
+const ROOT_COLS = 4;
+const ROOT_X0 = 40;
+const ROOT_Y0 = 920;
+const ROOT_STEP_X = 360; // NODE_W (280) + gap
+const ROOT_STEP_Y = 204; // NODE_H (132) + gap
 
 export interface OnboardingCanvasProps {
   state: DiscoveryState;
   /** The seed idea (the idea node; omitted when absent — e.g. a resume). */
   idea: string | null;
-  /** The active project's key — the produced work-item tree is read from
-   *  `/api/projects/[key]/roadmap` and hung under the plan station. Omit (e.g. a
-   *  pre-project state) and the canvas shows only the pre-plan stations. */
+  /** The active project's key — the work-item tree is read from
+   *  `/api/projects/[key]/roadmap` and shown on the canvas (parent-less items at
+   *  the top level, beside the stations). Omit (e.g. a pre-project state) and the
+   *  canvas shows only the pre-plan stations. */
   projectKey?: string;
   /** Re-open a produced tier's read-only review. */
   onOpen: (kind: DirectionDocKind) => void;
@@ -66,9 +77,10 @@ export function OnboardingCanvas({
   const t = useTranslations('onboarding.chat.canvas');
   const { positions, savePosition, loaded } = useCanvasLayout();
   // The produced work-item forest (epics → stories → subtasks) for THIS project —
-  // best-effort; empty until generation (7.4) produces a tree. It hangs under the
-  // plan station, so drilling "Plan → your epics" reveals the whole project.
-  const { items: workItems } = useProjectRoadmap(projectKey, PLAN_NODE);
+  // best-effort; empty until generation (7.4) produces a tree. The EPICS show at
+  // the top level beside the stations (below the plan station, linked to it);
+  // stories / subtasks drill out of their epic / story.
+  const { items: workItems } = useProjectRoadmap(projectKey);
   const willRefreshSet = new Set<string>(willRefresh);
 
   // Hold a loading state until the saved positions resolve, so nodes never paint
@@ -129,16 +141,26 @@ export function OnboardingCanvas({
     ...positionFor(key, positions),
   }));
 
-  // The produced work items become drillable nodes UNDER the plan station (epics →
-  // stories → subtasks) — so the same canvas shows the whole project. Auto-laid out
-  // per level (no explicit position); leaves carry the WorkItemNode content.
+  // The produced work items join the SAME canvas. Parent-less items (epics, or any
+  // orphan) are ROADMAP ROOTS shown at the top level beside the stations, in a grid
+  // below the serpentine so they don't collide. Stories / subtasks keep their parent
+  // and auto-lay-out when their epic / story is drilled.
   const wiChildParents = new Set(workItems.filter((i) => i.parentId).map((i) => i.parentId!));
+  const roots = workItems.filter((i) => i.parentId === null);
+  const rootPos = new Map<string, { x: number; y: number }>();
+  roots.forEach((r, i) => {
+    const row = Math.floor(i / ROOT_COLS);
+    const col = i % ROOT_COLS;
+    rootPos.set(r.id, { x: ROOT_X0 + col * ROOT_STEP_X, y: ROOT_Y0 + row * ROOT_STEP_Y });
+  });
+
   const workItemNodes: ProjectCanvasNode[] = workItems.map((item) => ({
     id: item.id,
     parentId: item.parentId,
     searchText: `${item.identifier} ${item.title}`,
     crumbLabel: item.identifier,
     content: <WorkItemNode item={item} drillable={wiChildParents.has(item.id)} />,
+    ...(rootPos.get(item.id) ?? {}),
   }));
 
   const nodes: ProjectCanvasNode[] = [...stationNodes, ...workItemNodes];
@@ -155,6 +177,9 @@ export function OnboardingCanvas({
       variant: edgeVariant('validation', 'plan', stationByKind),
     });
   }
+  // NOTE: no `plan → epic` fan here — a parent-less work item stands on its own at
+  // the top level. The fan (and the "you are here" planning-origin cluster) is gated
+  // on the planned/onboarded flag and is MOTIR-1013's work.
 
   function onActivate(id: string) {
     // The design station opens the web-only design step (MOTIR-1040) — but only

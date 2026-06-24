@@ -13,10 +13,10 @@ import type { WorkItemStatus } from '@/components/planning/WorkItemNode';
 // after generation, 7.4), and a failed / absent read just leaves the list empty —
 // the canvas then shows only the pre-plan stations and never blocks on this.
 //
-// Top-level epics are RE-PARENTED under the caller's `planNodeId` (the "Plan →
-// your epics" station), so the produced tree hangs off the plan node: the canvas
-// shows the stations at the top level and DRILLING the plan node reveals
-// epic → story → subtask (the whole project on one roadmap).
+// The forest's PARENT structure is preserved verbatim (epics keep `parentId:
+// null`), so the EPICS are roadmap roots that the canvas shows at the top level
+// beside the stations — the produced tree is VISIBLE, not hidden. Stories /
+// subtasks keep their parent, so they drill out of their epic / story.
 
 /** The nested shape returned by `GET /api/projects/[key]/roadmap` (RoadmapNodeDto). */
 interface RoadmapNode {
@@ -49,11 +49,11 @@ function toStatus(raw: string, isDone: boolean): WorkItemStatus {
 const KNOWN_KINDS = new Set<IssueType>(['epic', 'story', 'task', 'bug', 'subtask']);
 
 /**
- * Flatten the nested roadmap forest into the canvas's flat node list, hanging the
- * roadmap ROOTS (epics — `parentId === null`) under `planNodeId` so the produced
- * tree drills out of the plan station. Pure (no I/O) so it is unit-testable.
+ * Flatten the nested roadmap forest into the canvas's flat node list, preserving
+ * each node's parent (epics stay `parentId: null` — they are roadmap roots the
+ * canvas shows at the top level). Pure (no I/O) so it is unit-testable.
  */
-export function flattenRoadmap(nodes: RoadmapNode[], planNodeId: string): WorkItemForestItem[] {
+export function flattenRoadmap(nodes: RoadmapNode[]): WorkItemForestItem[] {
   const out: WorkItemForestItem[] = [];
   const walk = (list: RoadmapNode[]) => {
     for (const n of list) {
@@ -62,7 +62,7 @@ export function flattenRoadmap(nodes: RoadmapNode[], planNodeId: string): WorkIt
         : 'subtask';
       out.push({
         id: n.id,
-        parentId: n.parentId ?? planNodeId,
+        parentId: n.parentId,
         identifier: n.identifier,
         title: n.title,
         kind,
@@ -83,14 +83,11 @@ export interface UseProjectRoadmap {
 
 /**
  * Read the active project's work-item forest for the canvas. `projectKey` is the
- * project's `PROD`/`MOTIR` key; `planNodeId` is the station the produced tree
- * hangs under. With no key, no fetch happens (the read is skipped, `loaded` true,
- * `items` empty — a self-host / pre-project state shows stations only).
+ * project's `PROD`/`MOTIR` key. With no key, no fetch happens (the read is
+ * skipped, `loaded` true, `items` empty — a self-host / pre-project state shows
+ * stations only).
  */
-export function useProjectRoadmap(
-  projectKey: string | undefined,
-  planNodeId: string,
-): UseProjectRoadmap {
+export function useProjectRoadmap(projectKey: string | undefined): UseProjectRoadmap {
   const [items, setItems] = useState<WorkItemForestItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const mounted = useRef(true);
@@ -110,7 +107,7 @@ export function useProjectRoadmap(
           });
           if (res.ok && mounted.current) {
             const body = (await res.json()) as { nodes?: RoadmapNode[] };
-            if (mounted.current) setItems(flattenRoadmap(body.nodes ?? [], planNodeId));
+            if (mounted.current) setItems(flattenRoadmap(body.nodes ?? []));
           }
         }
       } catch {
@@ -123,7 +120,7 @@ export function useProjectRoadmap(
       mounted.current = false;
       controller.abort();
     };
-  }, [projectKey, planNodeId]);
+  }, [projectKey]);
 
   return { items, loaded };
 }
