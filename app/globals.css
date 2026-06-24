@@ -1477,6 +1477,44 @@
   content: none;
 }
 
+/* The APP SHELL FRAME — the sidebar rail's right edge + the top bar's bottom edge
+   (MOTIR-1315). These use DIRECTIONAL borders (border-r / border-b) the full-box
+   `.border` rule doesn't match, and the rail/header sit OUTSIDE the [data-surface]
+   panels the divider rules scope to — so the shell frame stayed machine-straight
+   while every card looked hand-drawn. Draw the rough ink directly on the
+   data-surface host: the rail (data-surface="sidebar") gets a wavy RIGHT edge, the
+   header (data-surface="header") a wavy BOTTOM edge. Palette-DERIVED ink
+   (var(--el-border-strong)), so the colour axis stays disjoint. Add `position`
+   ONLY to a STATIC host (the rail) — never the STICKY header, which is already a
+   containing block (overriding it would break the sticky), mirroring the `.border`
+   rule's guard. */
+[data-style='hand-drawn-indie']
+  :is([data-surface='sidebar'], [data-surface='header']):not(.fixed):not(.absolute):not(.sticky) {
+  position: relative;
+}
+[data-style='hand-drawn-indie'] [data-surface='sidebar']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -1px;
+  width: 0;
+  pointer-events: none;
+  border-right: 2px solid var(--el-border-strong);
+  filter: url(#hd-rough);
+}
+[data-style='hand-drawn-indie'] [data-surface='header']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 0;
+  pointer-events: none;
+  border-bottom: 2px solid var(--el-border-strong);
+  filter: url(#hd-rough);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Neumorphism — the soft-extruded "soft UI" style (7.3.42, DEFERRED follow-up).
    EXPERIMENTAL. The identity is a SINGLE MONOCHROME FIELD out of which every

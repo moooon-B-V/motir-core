@@ -71,7 +71,14 @@ export async function TopNav({
 }: TopNavProps) {
   const t = await getTranslations('shell');
   return (
-    <header className="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b">
+    <header
+      // `data-surface="header"` lets a surface-material style treat the top bar
+      // as shell chrome — the Hand-Drawn style roughens its bottom edge so the
+      // shell frame matches the cards (MOTIR-1315). Inert under styles with no
+      // [data-surface='header'] rule.
+      data-surface="header"
+      className="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+    >
       {/* `aria-label` names this landmark distinctly from the sidebar's
           "Primary" nav — two unnamed <nav> landmarks fail axe's
           landmark-unique rule and leave screen-reader users unable to tell the
