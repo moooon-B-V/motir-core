@@ -4,6 +4,7 @@ import { scopeGatedServer } from './scopeGate';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { LIST_READY_TOOL_NAME, registerListReady } from './tools/listReady';
 import { NEXT_READY_TOOL_NAME, registerNextReady } from './tools/nextReady';
+import { CLAIM_NEXT_READY_TOOL_NAME, registerClaimNextReady } from './tools/claimNextReady';
 import { CREATE_WORK_ITEM_TOOL_NAME, registerCreateWorkItem } from './tools/createWorkItem';
 import { TRANSITION_STATUS_TOOL_NAME, registerTransitionStatus } from './tools/transitionStatus';
 import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
@@ -52,6 +53,7 @@ export const MCP_TOOL_NAMES = [
   GET_WORK_ITEM_TOOL_NAME,
   LIST_READY_TOOL_NAME,
   NEXT_READY_TOOL_NAME,
+  CLAIM_NEXT_READY_TOOL_NAME,
   CREATE_WORK_ITEM_TOOL_NAME,
   TRANSITION_STATUS_TOOL_NAME,
   ADD_COMMENT_TOOL_NAME,
@@ -103,6 +105,9 @@ export function registerMcpTools(
   registerGetWorkItem(target, resolveContext);
   registerListReady(target, resolveContext);
   registerNextReady(target, resolveContext);
+  // Atomic, race-safe dispatch claim (MOTIR-1330) — the write-side counterpart
+  // of next_ready: lock + flip to in_progress so concurrent claims never collide.
+  registerClaimNextReady(target, resolveContext);
   // Write tools (7.8.5).
   registerCreateWorkItem(target, resolveContext);
   registerTransitionStatus(target, resolveContext);

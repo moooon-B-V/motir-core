@@ -2922,6 +2922,71 @@ export const workItemsService = {
   },
 
   /**
+   * `claim_next_ready` (MOTIR-1330) — the ATOMIC, race-safe dispatch claim.
+   * Compute the project's ready leaves (the SAME source `listReady` /
+   * `getNextReady` derive), scope them to the active `sprintId` when one is given
+   * (or take the WHOLE project when `sprintId` is `null` — Motir used without
+   * sprints), keep the dispatch rank, then — in ONE transaction — LOCK the best
+   * still-claimable
+   * candidate (`FOR UPDATE SKIP LOCKED`) and flip it `→ in_progress`. Two
+   * concurrent callers therefore claim DIFFERENT items (or one gets the item and
+   * the other `null`): there is no read-then-flip-later window for them to both
+   * grab the same Subtask, which the old "compute ready set, then
+   * `transition_status`" dispatch had. Returns the dispatch payload for the
+   * claimed item (status now `in_progress`), or `null` when the active-sprint
+   * ready set is empty OR every candidate was already locked — the caller RETRIES
+   * on `null`. The flip records a revision and emits `work-item/transitioned`
+   * AFTER commit, exactly like `updateStatus` (the 5.1.2 rule).
+   */
+  async claimNextReady(
+    projectId: string,
+    sprintId: string | null,
+    ctx: ServiceContext,
+  ): Promise<ReadyItemDispatchDto | null> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    // The project's ready leaves in dispatch rank order (priority encodes the
+    // in-sprint leverage `motir plan sprint` re-ranks to — so this rank IS
+    // "most-unblocking first"). When an active `sprintId` is given, scope to it
+    // (sprint discipline); when `null` — Motir used WITHOUT sprints (plain
+    // Kanban) — claim across the WHOLE project, since a missing sprint is not an
+    // error.
+    const ready = await collectReadyLeaves(projectId, project.workspaceId, ctx, {});
+    const candidates = sprintId ? ready.filter((r) => r.sprintId === sprintId) : ready;
+    if (candidates.length === 0) return null;
+    const orderedIds = candidates.map((r) => r.id);
+
+    const claimed = await db.$transaction(async (tx) => {
+      const locked = await workItemRepository.claimNextReadyCandidate(orderedIds, tx);
+      if (!locked) return null;
+      // `in_progress` is the dispatch state (lib/workflows/defaultWorkflow.ts);
+      // `applyStatusTransition` validates the todo|blocked → in_progress edge,
+      // records the revision, and re-locks the row under the same tx.
+      return workItemsService.applyStatusTransition(locked.id, 'in_progress', ctx, tx);
+    });
+    if (!claimed) return null;
+
+    if (claimed.transition) {
+      await sendEvent('work-item/transitioned', {
+        workspaceId: ctx.workspaceId,
+        workItemId: claimed.dto.id,
+        actorId: ctx.userId,
+        fromStatusKey: claimed.transition.fromStatusKey,
+        toStatusKey: claimed.transition.toStatusKey,
+        revisionId: claimed.transition.revisionId,
+      });
+    }
+
+    // Build the dispatch payload from the claimed candidate row, reflecting the
+    // post-claim status (now in the `in_progress` category).
+    const chosen = candidates.find((r) => r.id === claimed.dto.id)!;
+    const dispatch = await buildReadyDispatchDto(chosen, ctx);
+    return { ...dispatch, status: { key: claimed.dto.status, category: 'in_progress' } };
+  },
+
+  /**
    * The READY COUNT (Subtask 7.0.6) — how many work items are ready to start in
    * the project, under the SAME top-down predicate `listReady` uses, so the count
    * can never disagree with the list (the bug the 7.0.13 rework fixed). Resolved
