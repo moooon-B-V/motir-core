@@ -9,22 +9,29 @@ import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState
 // file is data access only — each method is one Prisma call, writes require
 // `tx`. Mirrors `workspaceRepository`.
 
-/** The two signals `pmTierForOrg` (8.1.11) resolves an org's §4 tier from: the
- *  `isMeta` exemption flag and the scaled-tracker subscription. */
+/** The signals `pmTierForOrg` (8.1.11) resolves an org's §4 tier from: the
+ *  `isMeta` exemption flag, the scaled-tracker (purchased-seat) subscription, and
+ *  the `aiIncludedSeat` flag (a PAID AI plan bundles a seat → lifts caps, 8.1.24). */
 export interface OrgCapContext {
   isMeta: boolean;
   scaledTrackerSubscription: ScaledTrackerSubscription | null;
+  aiIncludedSeat: boolean;
 }
 
 /** Normalise a selected org row (or a missing/hidden one) into an `OrgCapContext`.
- *  Absent → the safe default (`isMeta: false`, no subscription → bounded `free`). */
+ *  Absent → the safe default (`isMeta: false`, no subscription, no AI seat → bounded `free`). */
 function toCapContext(
-  org: { isMeta: boolean; scaledTrackerSubscription: Prisma.JsonValue } | null,
+  org: {
+    isMeta: boolean;
+    scaledTrackerSubscription: Prisma.JsonValue;
+    aiIncludedSeat: boolean;
+  } | null,
 ): OrgCapContext {
   return {
     isMeta: org?.isMeta ?? false,
     scaledTrackerSubscription:
       (org?.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null,
+    aiIncludedSeat: org?.aiIncludedSeat ?? false,
   };
 }
 
@@ -92,7 +99,7 @@ export const organizationRepository = {
   async findCapContextInTx(id: string, tx: Prisma.TransactionClient): Promise<OrgCapContext> {
     const org = await tx.organization.findUnique({
       where: { id },
-      select: { isMeta: true, scaledTrackerSubscription: true },
+      select: { isMeta: true, scaledTrackerSubscription: true, aiIncludedSeat: true },
     });
     return toCapContext(org);
   },
@@ -106,7 +113,7 @@ export const organizationRepository = {
   async findCapContext(id: string): Promise<OrgCapContext> {
     const org = await db.organization.findUnique({
       where: { id },
-      select: { isMeta: true, scaledTrackerSubscription: true },
+      select: { isMeta: true, scaledTrackerSubscription: true, aiIncludedSeat: true },
     });
     return toCapContext(org);
   },
@@ -133,5 +140,19 @@ export const organizationRepository = {
           state === null ? Prisma.DbNull : (state as unknown as Prisma.InputJsonValue),
       },
     });
+  },
+
+  /**
+   * Set the org's `aiIncludedSeat` flag (8.1.24) — true while a PAID Motir AI
+   * plan is active (it bundles 1 Motir seat → lifts the §4 caps), false clears
+   * it. Same RLS/tx contract as {@link updateScaledTrackerState}; `P2025` when
+   * the org is absent/hidden → the service maps it to `OrganizationNotFoundError`.
+   */
+  async updateAiIncludedSeat(
+    id: string,
+    included: boolean,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization> {
+    return tx.organization.update({ where: { id }, data: { aiIncludedSeat: included } });
   },
 };

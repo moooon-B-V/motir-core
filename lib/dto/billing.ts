@@ -13,6 +13,12 @@ export interface ScaledTrackerStateDTO {
   scaledTrackerSubscription: ScaledTrackerSubscription | null;
 }
 
+/** Confirmation of the AI-included-seat propagation (8.1.24 receiver). */
+export interface AiIncludedSeatDTO {
+  organizationId: string;
+  aiIncludedSeat: boolean;
+}
+
 // ── The org-facing billing status (Story 8.1.6 → renders in 8.1.7) ──────────
 
 /** What the actor may DO with billing (ADR §7: view = owner/admin, mutate = owner). */

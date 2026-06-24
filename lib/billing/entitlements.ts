@@ -6,16 +6,18 @@
 // gating + counting lives in `entitlementsService`, the cloud gate in
 // `lib/billing/availability.ts` (`isCloudBilling`).
 //
-// ── Which signal drives these caps (read before touching) ──────────────────
-// The PM-core scale caps key off the org's SCALED-TRACKER subscription
-// (`Organization.scaledTrackerSubscription`, written by 8.1.4c — the schema
-// comment names THIS subtask as its consumer), NOT the AI `PlanTier`. §4: the
-// caps "are independent of the AI plan — an AI plan never lifts a cap." An ACTIVE
-// scaled-tracker subscription lifts every cap (`scaled`); its absence / a
-// past_due / a canceled state is the bounded `free` tier. (`enterprise` is a
-// staff-set custom tier with no scaled-tracker representation yet — its caps are
-// modelled here so the table is total, but `pmTierFromScaledTracker` only ever
-// resolves `free`/`scaled` in v1.)
+// ── Which signals drive these caps (read before touching) ──────────────────
+// The PM-core scale caps lift to `scaled` on EITHER of two signals (ADR §4,
+// amended 2026-06-24 / 8.1.22): (1) an ACTIVE SCALED-TRACKER subscription
+// (`Organization.scaledTrackerSubscription`, the PURCHASED per-seat plan, written
+// by 8.1.4c), OR (2) the `Organization.aiIncludedSeat` flag — a PAID Motir AI
+// plan BUNDLES 1 Motir seat, and that included seat lifts the caps (written by
+// the 8.1.24 receiver from motir-ai's 8.1.23 webhook). The earlier rule "an AI
+// plan never lifts a cap" is SUPERSEDED: a paid AI plan now lifts caps via its
+// included seat (the two signals stay distinct so 8.1.25 can net the included
+// seat out of billable seats). Absence of both / past_due / canceled is the
+// bounded `free` tier. (`enterprise` is a staff-set custom tier not derivable
+// from these columns in v1, but modelled here so the cap table is total.)
 
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
@@ -124,7 +126,12 @@ export function pmTierFromScaledTracker(sub: ScaledTrackerSubscription | null): 
 export function pmTierForOrg(input: {
   isMeta: boolean;
   scaledTrackerSubscription: ScaledTrackerSubscription | null;
+  aiIncludedSeat: boolean;
 }): PmTier {
   if (input.isMeta) return 'meta';
+  // A PAID Motir AI plan bundles 1 Motir seat → caps lifted (ADR §4, amended
+  // 2026-06-24 / 8.1.22), the same `scaled` outcome as a purchased scaled-tracker
+  // subscription. Either signal lifts; both absent → bounded `free`.
+  if (input.aiIncludedSeat) return 'scaled';
   return pmTierFromScaledTracker(input.scaledTrackerSubscription);
 }
