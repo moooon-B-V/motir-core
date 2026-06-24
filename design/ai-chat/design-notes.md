@@ -392,8 +392,19 @@ The shell is **already shipped** and reused, not reinvented:
 
 ### Chat-to-plan, on-canvas incremental placement & confirm-to-persist (sheet 2)
 
+> **⚠️ No "plan" button INSIDE the workspace (Yue, 2026-06-24).** Inside, the
+> user **just chats** — there is **no "Plan with AI" action/button** on the canvas
+> or anywhere in the shell. The **conversation itself turns into a plan**: as you
+> talk, proposed cards appear on the canvas. "Plan with AI" names **only the
+> ENTRANCE** (the affordance that opens this from the app); once you're in, the
+> canvas is just the project roadmap and the **chat is the sole input**. (The
+> canvas chrome shows the project / roadmap context + Close + search — never a
+> "plan" button; the composer reads "Message Motir AI…", not "describe what to
+> plan".)
+
 - **The chat drives; the conductor proposes work.** Free-form chat in the rail
-  → the conductor proposes work items.
+  → the conductor proposes work items. The user never presses "plan" — talking
+  is planning.
 - **On-canvas incremental placement.** Proposed work items appear on the
   standalone canvas **one by one**, each drawn with its **relationship edges** —
   parent→child, the within-story `depends_on` arrow, and the cross-story
