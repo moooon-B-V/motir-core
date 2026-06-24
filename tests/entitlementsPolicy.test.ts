@@ -18,17 +18,39 @@ const ACTIVE: ScaledTrackerSubscription = {
 
 describe('pmTierForOrg', () => {
   it('resolves the META org to the `meta` tier regardless of subscription', () => {
-    expect(pmTierForOrg({ isMeta: true, scaledTrackerSubscription: null })).toBe('meta');
-    expect(pmTierForOrg({ isMeta: true, scaledTrackerSubscription: ACTIVE })).toBe('meta');
+    expect(
+      pmTierForOrg({ isMeta: true, scaledTrackerSubscription: null, aiIncludedSeat: false }),
+    ).toBe('meta');
+    expect(
+      pmTierForOrg({ isMeta: true, scaledTrackerSubscription: ACTIVE, aiIncludedSeat: false }),
+    ).toBe('meta');
+    // META wins even over an AI-included seat.
+    expect(
+      pmTierForOrg({ isMeta: true, scaledTrackerSubscription: null, aiIncludedSeat: true }),
+    ).toBe('meta');
   });
 
   it('defers to the scaled-tracker state for a non-meta org', () => {
-    expect(pmTierForOrg({ isMeta: false, scaledTrackerSubscription: null })).toBe('free');
-    expect(pmTierForOrg({ isMeta: false, scaledTrackerSubscription: ACTIVE })).toBe('scaled');
-    // Mirrors pmTierFromScaledTracker exactly when not meta.
-    expect(pmTierForOrg({ isMeta: false, scaledTrackerSubscription: ACTIVE })).toBe(
-      pmTierFromScaledTracker(ACTIVE),
-    );
+    expect(
+      pmTierForOrg({ isMeta: false, scaledTrackerSubscription: null, aiIncludedSeat: false }),
+    ).toBe('free');
+    expect(
+      pmTierForOrg({ isMeta: false, scaledTrackerSubscription: ACTIVE, aiIncludedSeat: false }),
+    ).toBe('scaled');
+    // Mirrors pmTierFromScaledTracker exactly when not meta and no AI seat.
+    expect(
+      pmTierForOrg({ isMeta: false, scaledTrackerSubscription: ACTIVE, aiIncludedSeat: false }),
+    ).toBe(pmTierFromScaledTracker(ACTIVE));
+  });
+
+  it('a PAID AI plan (aiIncludedSeat) lifts caps to `scaled`, even with no scaled-tracker sub (8.1.24)', () => {
+    expect(
+      pmTierForOrg({ isMeta: false, scaledTrackerSubscription: null, aiIncludedSeat: true }),
+    ).toBe('scaled');
+    // Clearing it (downgrade to free) re-applies the bounded tier.
+    expect(
+      pmTierForOrg({ isMeta: false, scaledTrackerSubscription: null, aiIncludedSeat: false }),
+    ).toBe('free');
   });
 });
 

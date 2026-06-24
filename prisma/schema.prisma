@@ -335,6 +335,15 @@ model Organization {
   /// this is plain propagated state.
   scaledTrackerSubscription Json?
 
+  /// Whether the org holds a PAID Motir AI plan, which BUNDLES 1 Motir seat and
+  /// so lifts the §4 caps (ADR §4, amended 2026-06-24 / 8.1.22). A LOCAL mirror
+  /// of motir-ai's PlanTier state, propagated by motir-ai's webhook (8.1.23) via
+  /// POST /api/internal/billing/ai-included-seat, so the hot-path cap gate
+  /// (8.1.11) reads it without a per-create cross-service call. DISTINCT from
+  /// scaledTrackerSubscription (a team's PURCHASED seats) so the two never
+  /// clobber, and 8.1.25's seat accounting can net the included seat out.
+  aiIncludedSeat Boolean @default(false)
+
   /// The internal dogfood org (moooon B.V.) — the META org. Resolves to the
   /// `meta` entitlement tier (every §4 cap lifted) and disables the AI paywall.
   /// DISTINCT from the future commercial `enterprise` tier: `meta` is never

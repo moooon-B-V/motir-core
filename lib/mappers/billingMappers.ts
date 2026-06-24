@@ -1,5 +1,5 @@
 import type { Organization } from '@prisma/client';
-import type { ScaledTrackerStateDTO } from '@/lib/dto/billing';
+import type { ScaledTrackerStateDTO, AiIncludedSeatDTO } from '@/lib/dto/billing';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
 // Prisma → DTO converters for the billing-propagation domain (Story 8.1). The
@@ -15,4 +15,8 @@ export function toScaledTrackerStateDTO(org: Organization): ScaledTrackerStateDT
     scaledTrackerSubscription:
       (org.scaledTrackerSubscription as ScaledTrackerSubscription | null) ?? null,
   };
+}
+
+export function toAiIncludedSeatDTO(org: Organization): AiIncludedSeatDTO {
+  return { organizationId: org.id, aiIncludedSeat: org.aiIncludedSeat };
 }

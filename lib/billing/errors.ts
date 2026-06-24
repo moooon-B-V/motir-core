@@ -18,6 +18,18 @@ export class ScaledTrackerStateValidationError extends Error {
   }
 }
 
+/**
+ * The inbound AI-included-seat body failed validation — a missing/empty
+ * organizationId or a non-boolean `included` (8.1.24 receiver). Maps to 400.
+ */
+export class AiIncludedSeatValidationError extends Error {
+  readonly code = 'AI_INCLUDED_SEAT_INVALID';
+  constructor(detail: string) {
+    super(detail);
+    this.name = 'AiIncludedSeatValidationError';
+  }
+}
+
 // ── The billing boundary surface (Story 8.1.6) errors ──────────────────────
 
 /**

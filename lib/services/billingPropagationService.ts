@@ -2,9 +2,10 @@ import { Prisma } from '@prisma/client';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
-import { toScaledTrackerStateDTO } from '@/lib/mappers/billingMappers';
+import { toScaledTrackerStateDTO, toAiIncludedSeatDTO } from '@/lib/mappers/billingMappers';
 import type { SetScaledTrackerStateInput } from '@/lib/billing/scaledTrackerState';
-import type { ScaledTrackerStateDTO } from '@/lib/dto/billing';
+import type { SetAiIncludedSeatInput } from '@/lib/billing/aiIncludedSeat';
+import type { ScaledTrackerStateDTO, AiIncludedSeatDTO } from '@/lib/dto/billing';
 
 // Billing-propagation service (Story 8.1.4c) — the motir-core consumer side of
 // scaled-tracker subscription propagation. motir-ai's Stripe webhook (8.1.4b)
@@ -37,6 +38,27 @@ export const billingPropagationService = {
       // P2025 = "record to update not found": the org id is absent, or RLS hid
       // it. Either way the caller gets a 404 (the no-leak rule — never reveal
       // existence across the tenant boundary).
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        throw new OrganizationNotFoundError(input.organizationId);
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Set the org's AI-included-seat flag (8.1.24) — true while a PAID Motir AI
+   * plan is active (it bundles 1 Motir seat → lifts the §4 caps), false clears
+   * it. Same write contract as {@link setScaledTrackerState}: one bound-context
+   * transaction, idempotent, `OrganizationNotFoundError` (→ 404) on a missing/
+   * RLS-hidden org.
+   */
+  async setAiIncludedSeat(input: SetAiIncludedSeatInput): Promise<AiIncludedSeatDTO> {
+    try {
+      const org = await withOrgServiceWriteContext(input.organizationId, (tx) =>
+        organizationRepository.updateAiIncludedSeat(input.organizationId, input.included, tx),
+      );
+      return toAiIncludedSeatDTO(org);
+    } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
         throw new OrganizationNotFoundError(input.organizationId);
       }
