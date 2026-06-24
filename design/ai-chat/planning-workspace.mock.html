@@ -1,0 +1,2594 @@
+<!doctype html>
+<!--
+  THE REUSABLE AI PLANNING WORKSPACE — shell + universal entrance (MOTIR-1193 / 7.20.1).
+  A design artifact (not the shipped component) pinning the ONE planning interface
+  every AI-planning MODE composes: a full-screen canvas (left) + chat (right) shell,
+  the on-canvas one-by-one proposed-card placement, the confirm-to-persist gate, the
+  four MODES as states of the one surface, and the universal "Plan with AI" entrance
+  as ONE global hero affordance (header control or floating button) — the header /
+  command menu is on every screen, so one entrance is summonable from anywhere.
+
+  The canvas pane is NOT redrawn here — it is the standalone WorkItemCanvas
+  (MOTIR-1194; design @ design/roadmap/, MOTIR-1009). This asset composes it and
+  designs only the workspace AROUND it + the entrance. The shell is the shipped
+  components/planning/PlanningWorkspace.tsx; the chat rail mirrors the shipped
+  components/onboarding/DiscoveryChatRail.tsx; the global launcher composes the
+  shipped components/ui/CommandPalette.tsx.
+
+  Colours are the real Motir light palette (globals.css --el-* values, inlined).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reusable AI planning workspace — shell + universal entrance</title>
+    <style>
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #54514b;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --accent: #5645d4;
+        --accent-soft: #ece9fb;
+        --accent-text: #ffffff;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --info: #0075de;
+        --danger: #e03131;
+        --sky: #dcecfa;
+        --lavender: #e6e0f5;
+        --mint: #d9f3e1;
+        --peach: #ffe8d4;
+        --rose: #fce4ea;
+        --yellow: #fbf2cc;
+        --pink: #ff64c8;
+        /* work-item type hues (--el-type-*) */
+        --type-epic: #ff64c8;
+        --type-story: #1aae39;
+        --type-task: #0075de;
+        --type-bug: #e03131;
+        --type-subtask: #2a9d99;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f1efec;
+        color: var(--text);
+        padding: 30px 22px 60px;
+      }
+      .page-head {
+        max-width: 1150px;
+        margin: 0 auto 22px;
+      }
+      .page-head h1 {
+        font-size: 21px;
+        margin: 0 0 7px;
+        color: var(--strong);
+        letter-spacing: -0.01em;
+      }
+      .page-head p {
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--muted);
+        max-width: 920px;
+        margin: 0;
+      }
+      .page-head .ref {
+        color: var(--accent);
+        font:
+          600 12px ui-monospace,
+          monospace;
+      }
+
+      /* ── review-board sheet (the roadmap/ house style) ── */
+      .sheet {
+        max-width: 1150px;
+        margin: 0 auto 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        font:
+          700 11px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .sheetbody {
+        padding: 20px 18px 22px;
+      }
+      .note {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--secondary);
+        margin: 14px 18px 0;
+        padding: 10px 12px;
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 10px;
+      }
+      .note b {
+        color: var(--strong);
+      }
+      .note code,
+      .sheethead code {
+        font:
+          600 11.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+
+      /* ── a framed "screen" (the app at full bleed) ── */
+      .screen {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px #0000000f;
+        background: var(--surface);
+      }
+
+      /* the two-pane PlanningWorkspace frame */
+      .frame {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        height: 520px;
+      }
+      .frame.tall {
+        height: 560px;
+      }
+
+      /* ── canvas pane (composed standalone WorkItemCanvas) ── */
+      .canvas {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
+          var(--hub);
+      }
+      .world {
+        position: absolute;
+        inset: 0;
+      }
+      .edges {
+        position: absolute;
+        inset: 0;
+        overflow: visible;
+        pointer-events: none;
+      }
+      .ov {
+        position: absolute;
+        z-index: 5;
+      }
+      .ov-top {
+        top: 12px;
+        left: 14px;
+        right: 14px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .crumb .muted {
+        color: var(--faint);
+        font-weight: 500;
+      }
+      .crumb .chev {
+        color: var(--faint);
+        font-size: 11px;
+        margin-left: 1px;
+      }
+      .crumb .sep {
+        color: var(--faint);
+        font-weight: 500;
+        margin: 0 1px;
+      }
+      .searchbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: 12px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .searchbox kbd {
+        font:
+          600 10px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--faint);
+      }
+      .zoomctl {
+        bottom: 12px;
+        left: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 3px;
+        box-shadow: 0 1px 3px #0000000f;
+      }
+      .zoomctl button {
+        width: 26px;
+        height: 26px;
+        border: 0;
+        background: transparent;
+        border-radius: 6px;
+        color: var(--secondary);
+        font-size: 14px;
+        cursor: default;
+        display: grid;
+        place-items: center;
+      }
+      .zoomctl .pct {
+        font-size: 11px;
+        color: var(--muted);
+        padding: 0 6px;
+        min-width: 40px;
+        text-align: center;
+      }
+      .legend {
+        position: absolute;
+        left: 14px;
+        bottom: 54px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 8px 11px;
+        font-size: 10.5px;
+        color: var(--muted);
+        box-shadow: 0 1px 2px #0000000d;
+        max-width: 220px;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend i {
+        width: 16px;
+        height: 0;
+        border-top: 2px solid var(--border);
+        display: inline-block;
+        flex: none;
+      }
+      .legend i.firm {
+        border-top: 2px solid #b8b3aa;
+      }
+      .legend i.pending {
+        border-top: 2px dashed var(--accent);
+      }
+      .legend i.cross {
+        border-top: 2px solid var(--warning);
+      }
+
+      /* ── canvas node (StationCard language) ── */
+      .node {
+        position: absolute;
+        width: 210px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        padding: 11px 12px;
+        box-shadow: 0 2px 6px #0000000f;
+        z-index: 2;
+      }
+      .node.sm {
+        width: 178px;
+        padding: 9px 11px;
+        border-radius: 13px;
+      }
+      .node.upcoming {
+        opacity: 0.66;
+        border-style: dashed;
+        box-shadow: none;
+      }
+      .node.active {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px #5645d426,
+          0 4px 12px #5645d41f;
+      }
+      .node.proposed {
+        border: 1.5px dashed var(--accent);
+        background: linear-gradient(180deg, #fbfaff, #f6f3ff);
+        box-shadow:
+          0 2px 10px #5645d41f,
+          0 0 16px -2px #ff64c855;
+      }
+      .nhead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .tile {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 14px;
+      }
+      .ntitle {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.18;
+      }
+      .nsub {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .pill {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill.reviewed {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.here {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.deciding {
+        background: var(--peach);
+        color: #8a3d00;
+      }
+      .pill.proposed {
+        background: var(--accent-soft);
+        color: #3a2d8a;
+      }
+      .pill.done {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .capt {
+        margin-top: 9px;
+        padding-top: 8px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .capt div {
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+        font-size: 11px;
+        color: var(--secondary);
+      }
+
+      /* ── chat rail (mirrors DiscoveryChatRail.tsx) ── */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .railhead .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #5645d4, #ff64c8);
+        box-shadow: 0 0 7px #ff64c885;
+      }
+      .railhead .lbl {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--secondary);
+      }
+      .railhead .lbl::before {
+        content: '✦ ';
+        color: var(--accent);
+      }
+      .railhead .mode {
+        margin-left: auto;
+        font:
+          600 10px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+      .log {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        padding: 14px 14px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.user {
+        flex-direction: row-reverse;
+      }
+      .avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+      }
+      .avatar.ai {
+        background: var(--accent);
+        color: #fff;
+      }
+      .avatar.user {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .bubble {
+        border-radius: 13px;
+        padding: 8px 11px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        max-width: 232px;
+      }
+      .bubble.ai {
+        background: var(--soft);
+        color: var(--text);
+      }
+      .bubble.user {
+        background: var(--accent);
+        color: #fff;
+      }
+      .drafting {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--soft);
+        border-radius: 13px;
+        padding: 8px 11px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .spin {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        border: 2px solid #d8d4cd;
+        border-top-color: var(--accent);
+      }
+      .composer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--border);
+        padding: 11px 12px;
+      }
+      .composer .inp {
+        flex: 1;
+        min-width: 0;
+        height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 0 11px;
+        font-size: 12px;
+        color: var(--faint);
+        display: flex;
+        align-items: center;
+      }
+      .composer .send {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 14px;
+      }
+
+      /* ── the confirm-to-persist gate bar ── */
+      .persistbar {
+        position: absolute;
+        left: 50%;
+        bottom: 14px;
+        transform: translateX(-50%);
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--surface);
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        padding: 9px 11px 9px 14px;
+        box-shadow: 0 6px 22px #5645d422;
+        white-space: nowrap;
+      }
+      .persistbar .txt {
+        font-size: 12px;
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .persistbar .txt small {
+        display: block;
+        font-weight: 500;
+        color: var(--muted);
+        font-size: 10.5px;
+      }
+      .btn {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--surface);
+        color: var(--secondary);
+        cursor: default;
+        white-space: nowrap;
+      }
+      .btn.primary {
+        background: linear-gradient(135deg, #6a4ef2, #5645d4 50%, #9450ef);
+        border-color: transparent;
+        color: #fff;
+        box-shadow:
+          inset 0 1px 0 #ffffff4d,
+          0 4px 12px -4px #5645d4cc,
+          0 0 16px -3px #ff64c870;
+      }
+      .btn.ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn.sm {
+        padding: 4px 9px;
+        font-size: 11px;
+      }
+
+      /* ── modes grid (sheet 3) ── */
+      .modes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .modecard {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .modecard .mh {
+        padding: 11px 13px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .modecard .mh h3 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--strong);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .modecard .mh .door {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .modecard .mh .door b {
+        color: var(--accent);
+      }
+      .miniframe {
+        display: grid;
+        grid-template-columns: 1fr 132px;
+        height: 188px;
+      }
+      .miniframe .canvas {
+        font-size: 0;
+      }
+      .miniframe .minirail {
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .miniframe .minirail .mlbl {
+        font:
+          600 9px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--faint);
+      }
+      .minibub {
+        font-size: 10px;
+        line-height: 1.4;
+        border-radius: 9px;
+        padding: 6px 8px;
+      }
+      .minibub.ai {
+        background: var(--soft);
+        color: var(--secondary);
+      }
+      .minibub.user {
+        background: var(--accent);
+        color: #fff;
+        align-self: flex-end;
+        max-width: 92%;
+      }
+      .mininode {
+        position: absolute;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        font-size: 9px;
+        font-weight: 600;
+        color: var(--strong);
+        padding: 5px 7px;
+        box-shadow: 0 1px 4px #0000000d;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        z-index: 2;
+      }
+      .mininode .dt {
+        width: 8px;
+        height: 8px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .mininode.prop {
+        border: 1.5px dashed var(--accent);
+        background: #faf9ff;
+      }
+      .mininode.done {
+        opacity: 0.85;
+      }
+      .mininode.lock {
+        background: var(--soft);
+        color: var(--muted);
+      }
+
+      /* ════ the universal entrance (sheet 4) — ONE global HERO affordance ════ */
+      .lead {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--secondary);
+        margin: 0 0 18px;
+        max-width: 1000px;
+      }
+      .lead b {
+        color: var(--strong);
+      }
+      .lead code {
+        font:
+          600 11.5px ui-monospace,
+          monospace;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+      .desc {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin: 0;
+        line-height: 1.5;
+      }
+      .desc b {
+        color: var(--secondary);
+      }
+      .desc code {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        color: var(--accent);
+      }
+      .entrance {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .optcard {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--surface);
+        display: flex;
+        flex-direction: column;
+      }
+      .optcard .opt-h {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .optcard .opt-h h3 {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--strong);
+      }
+      .reco-badge {
+        margin-left: auto;
+        font:
+          700 9.5px ui-monospace,
+          monospace;
+        letter-spacing: 0.04em;
+        color: #fff;
+        background: linear-gradient(135deg, #5645d4, #9450ef);
+        padding: 3px 9px;
+        border-radius: 999px;
+        box-shadow: 0 0 12px -2px #ff64c870;
+      }
+      .optcard .opt-b {
+        padding: 13px 14px 15px;
+        border-top: 1px solid var(--hair);
+      }
+      /* a stage that lets the glow read */
+      .stage {
+        position: relative;
+        flex: 1;
+        padding: 30px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(
+          120% 150% at 82% -20%,
+          #efeafd 0%,
+          #f7f6fb 46%,
+          var(--surface) 80%
+        );
+      }
+      /* the real global top nav (Option A host) */
+      .topnav {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        padding: 9px 13px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 3px 12px -3px #0000001a;
+      }
+      .topnav .brand {
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: var(--strong);
+      }
+      .topnav .brand b {
+        color: var(--accent);
+        font-weight: 800;
+      }
+      .topnav .spacer {
+        margin-left: auto;
+      }
+      .icbtn {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        background: var(--soft);
+        border: 1px solid var(--border);
+        font-size: 12px;
+      }
+      .avatarchip {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--mutedfill);
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      /* ⭐ THE HERO control — gradient + glow + shimmer + sparkle (NOT a plain button) */
+      .hero-cta {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 16px 8px 13px;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 650;
+        white-space: nowrap;
+        background: linear-gradient(135deg, #6a4ef2 0%, #5645d4 46%, #9450ef 100%);
+        box-shadow:
+          inset 0 1px 0 #ffffff5e,
+          inset 0 0 0 1px #ffffff2e,
+          0 6px 18px -5px #5645d4cc,
+          0 0 22px -3px #ff64c885;
+        overflow: hidden;
+      }
+      .hero-cta .spark {
+        font-size: 14px;
+        line-height: 1;
+        filter: drop-shadow(0 0 5px #ffffffd6);
+      }
+      .hero-cta::after {
+        content: '';
+        position: absolute;
+        top: -12%;
+        left: -45%;
+        width: 38%;
+        height: 130%;
+        background: linear-gradient(100deg, transparent, #ffffff9c, transparent);
+        transform: skewX(-18deg);
+      }
+      .hero-cta.big {
+        font-size: 16px;
+        padding: 12px 24px 12px 19px;
+        gap: 9px;
+      }
+      .hero-cta.big .spark {
+        font-size: 19px;
+      }
+      /* a premium conic ring for the anatomy close-up */
+      .ringwrap {
+        position: relative;
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2.5px;
+        background: conic-gradient(from 200deg, #5645d4, #ff64c8, #6a4ef2, #9450ef, #5645d4);
+        box-shadow:
+          0 0 30px -3px #ff64c885,
+          0 10px 30px -8px #5645d4cc;
+      }
+
+      /* ⭐ THE FAB — floating orb that expands to a pill (Option B) */
+      .fabstage {
+        position: relative;
+        width: 100%;
+        height: 196px;
+        border-radius: 11px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background:
+          radial-gradient(circle at 1px 1px, #e6e3de 1px, transparent 0) 0 0 / 22px 22px,
+          var(--soft);
+      }
+      .fabstage .faux {
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .fabstage .faux i {
+        display: block;
+        height: 10px;
+        border-radius: 5px;
+        background: #ebe8e3;
+      }
+      .fab {
+        position: absolute;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 21px;
+        background: radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd);
+        box-shadow:
+          inset 0 1px 0 #ffffff6e,
+          0 10px 24px -5px #5645d4cc,
+          0 0 34px -3px #ff64c895;
+      }
+      .fab .spark {
+        filter: drop-shadow(0 0 6px #ffffffd6);
+      }
+      .fab::before {
+        content: '';
+        position: absolute;
+        inset: -12px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #ff64c855, transparent 66%);
+        z-index: -1;
+      }
+      .fab.collapsed {
+        right: 18px;
+        bottom: 18px;
+      }
+      .fab.expanded {
+        right: 18px;
+        bottom: 84px;
+        width: auto;
+        height: 46px;
+        border-radius: 999px;
+        grid-auto-flow: column;
+        gap: 8px;
+        padding: 0 18px 0 15px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .fab.expanded .lbl {
+        white-space: nowrap;
+      }
+      .fab-hint {
+        position: absolute;
+        right: 84px;
+        bottom: 28px;
+        font-size: 10.5px;
+        color: var(--faint);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 7px;
+      }
+
+      /* anatomy close-up */
+      .anatomy {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 20px;
+        align-items: center;
+        margin-top: 18px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .anatomy .ashow {
+        position: relative;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 34px 18px;
+        background:
+          radial-gradient(80% 90% at 30% 20%, #ece6fb 0%, transparent 60%),
+          radial-gradient(70% 80% at 80% 90%, #fbe2f0 0%, transparent 62%), #fafafa;
+        border-right: 1px solid var(--hair);
+      }
+      .anatomy ul {
+        margin: 0;
+        padding: 16px 18px 16px 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .anatomy li {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--secondary);
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+      }
+      .anatomy li b {
+        color: var(--strong);
+      }
+      .anatomy li .dotk {
+        margin-top: 5px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: none;
+        background: linear-gradient(135deg, #5645d4, #ff64c8);
+      }
+
+      /* context-aware strip — ONE entrance, mode adapts */
+      .modemap {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 11px;
+        margin-top: 18px;
+      }
+      .modemap .mm {
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 11px 12px;
+        background: var(--surface);
+      }
+      .modemap .mm .where {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .modemap .mm .arrow {
+        margin: 3px 0;
+        font-size: 13px;
+        color: var(--accent);
+      }
+      .modemap .mm .what {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .modemap .mm .ref {
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        color: var(--faint);
+      }
+
+      /* ── the floating "M" universal AI callout (Option B) ── */
+      .mlogo {
+        width: 26px;
+        height: 26px;
+        display: block;
+      }
+      .mlogo path {
+        stroke: #fff;
+        stroke-width: 2.6;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .orb {
+        position: relative;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at 33% 27%, #9c81ff, #5645d4 58%, #4733bd);
+        box-shadow:
+          inset 0 1px 0 #ffffff6e,
+          0 10px 24px -5px #5645d4cc,
+          0 0 34px -3px #ff64c895;
+      }
+      .orb::before {
+        content: '';
+        position: absolute;
+        inset: -12px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #ff64c855, transparent 66%);
+        z-index: -1;
+      }
+      /* the callout menu the orb opens (planning is ONE of its actions) */
+      .ai-menu {
+        width: 250px;
+        border-radius: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: 0 16px 40px -8px #00000026;
+        overflow: hidden;
+      }
+      .ai-menu .am-h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 13px;
+        background: linear-gradient(135deg, #efeafd, #fbe9f4);
+        border-bottom: 1px solid var(--hair);
+      }
+      .ai-menu .am-h .mini-orb {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #6a4ef2, #9450ef);
+      }
+      .ai-menu .am-h .mini-orb svg {
+        width: 14px;
+        height: 14px;
+      }
+      .ai-menu .am-h b {
+        font-size: 12.5px;
+        color: var(--strong);
+      }
+      .ai-menu .am-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 9px 13px;
+      }
+      .ai-menu .am-row + .am-row {
+        border-top: 1px solid var(--hair);
+      }
+      .ai-menu .am-row .ic {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        flex: none;
+        font-size: 13px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .ai-menu .am-row.primary .ic {
+        background: linear-gradient(135deg, #6a4ef2, #9450ef);
+        color: #fff;
+      }
+      .ai-menu .am-row .tt {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .ai-menu .am-row .ds {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .ai-menu .am-ask {
+        margin: 4px 11px 11px;
+        height: 32px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--soft);
+        display: flex;
+        align-items: center;
+        padding: 0 11px;
+        font-size: 11px;
+        color: var(--faint);
+      }
+
+      /* ── style-aware showcase (sheet 5): one button, six design styles ── */
+      .stylegrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .styletile {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .styletile .st-h {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+        font:
+          600 10px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+      .styletile .st-h .def {
+        margin-left: auto;
+        color: var(--accent);
+        background: var(--accent-soft);
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-size: 8.5px;
+      }
+      .st-stage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 104px;
+        padding: 26px 16px;
+      }
+      /* shared button layout; each style overrides the visual */
+      .hc {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 9px 17px 9px 14px;
+        font-size: 12.5px;
+        font-weight: 650;
+        white-space: nowrap;
+        cursor: default;
+      }
+      .hc .spark {
+        font-size: 14px;
+        line-height: 1;
+      }
+      /* 1 · Warm Editorial (default) — gradient + glow + shimmer */
+      .st-editorial .st-stage {
+        background: radial-gradient(120% 150% at 80% -20%, #efeafd, #faf9fb 60%, #fff);
+      }
+      .hc-editorial {
+        border-radius: 999px;
+        color: #fff;
+        background: linear-gradient(135deg, #6a4ef2, #5645d4 46%, #9450ef);
+        box-shadow:
+          inset 0 1px 0 #ffffff5e,
+          0 6px 18px -5px #5645d4cc,
+          0 0 22px -3px #ff64c885;
+        overflow: hidden;
+      }
+      .hc-editorial .spark {
+        filter: drop-shadow(0 0 5px #ffffffd6);
+      }
+      .hc-editorial::after {
+        content: '';
+        position: absolute;
+        top: -12%;
+        left: -45%;
+        width: 38%;
+        height: 130%;
+        background: linear-gradient(100deg, transparent, #ffffff9c, transparent);
+        transform: skewX(-18deg);
+      }
+      /* 2 · Soft / Playful — rounded, pillowy stacked shadow */
+      .st-soft .st-stage {
+        background: linear-gradient(160deg, #f3effe, #fdeef7);
+      }
+      .hc-soft {
+        border-radius: 17px;
+        color: #fff;
+        font-weight: 800;
+        background: linear-gradient(135deg, #6d54e6, #a05cf0);
+        box-shadow:
+          0 7px 0 -1px #d8c7ff,
+          0 14px 22px -6px #b794f6cc;
+      }
+      .hc-soft .spark {
+        filter: drop-shadow(0 0 4px #fff);
+      }
+      /* 3 · Swiss / Minimal-Flat — flat solid, sharp, uppercase */
+      .st-swiss .st-stage {
+        background: #ffffff;
+      }
+      .hc-swiss {
+        border-radius: 3px;
+        color: #fff;
+        background: #5645d4;
+        box-shadow: none;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+      /* 4 · Neo-Brutalism — hard border + offset hard shadow */
+      .st-brutal .st-stage {
+        background: #fdf7e3;
+      }
+      .hc-brutal {
+        border-radius: 5px;
+        color: #1a1a1a;
+        background: #b9a6ff;
+        border: 2px solid #000;
+        box-shadow: 5px 5px 0 #000;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 11.5px;
+      }
+      /* 5 · Glassmorphism — frosted translucent over a colourful surface */
+      .st-glass .st-stage {
+        background: linear-gradient(135deg, #6a4ef2, #c084fc 52%, #f0abfc);
+      }
+      .hc-glass {
+        border-radius: 999px;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.6),
+          0 8px 22px rgba(40, 20, 90, 0.3);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+      }
+      /* 6 · Cybercore / Y2K — dark surface + neon glow + mono */
+      .st-cyber .st-h {
+        background: #14111f;
+        color: #c4a6ff;
+        border-bottom-color: #2a2540;
+      }
+      .st-cyber .st-h .def {
+        background: #2a2150;
+        color: #e7b3ff;
+      }
+      .st-cyber .st-stage {
+        background:
+          linear-gradient(#181430 1px, transparent 1px) 0 0 / 18px 18px,
+          linear-gradient(90deg, #181430 1px, transparent 1px) 0 0 / 18px 18px,
+          #0b0a16;
+      }
+      .hc-cyber {
+        border-radius: 4px;
+        color: #fff;
+        font-family: ui-monospace, monospace;
+        font-size: 11.5px;
+        letter-spacing: 0.04em;
+        background: linear-gradient(135deg, #7c3aed, #db2777);
+        border: 1px solid #f0abfc;
+        box-shadow:
+          0 0 10px #d946ef,
+          0 0 26px -4px #7c3aed;
+        text-shadow: 0 0 6px #ffffffb0;
+      }
+
+      /* ── workspace exit chrome (the close affordance on the shell) ── */
+      .wclose {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: 0 1px 2px #0000000d;
+      }
+      .wclose .x {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1;
+      }
+      .wclose kbd {
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--faint);
+      }
+
+      /* ── sheet 6: opening on top of the app + exiting ── */
+      .exitrow {
+        display: grid;
+        grid-template-columns: 1.45fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .ontop {
+        position: relative;
+        height: 318px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--hub);
+      }
+      /* the PM app, sitting BEHIND the workspace */
+      .appback {
+        position: absolute;
+        inset: 0;
+        padding: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 9px;
+        filter: saturate(0.9);
+      }
+      .appback .col {
+        background: var(--soft);
+        border: 1px solid var(--hair);
+        border-radius: 9px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .appback .col b {
+        font-size: 9px;
+        color: var(--faint);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .appback .card {
+        height: 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: #1b1733cc;
+        backdrop-filter: blur(1.5px);
+      }
+      /* the workspace overlay ON TOP (inset so the app shows it's beneath) */
+      .wsoverlay {
+        position: absolute;
+        inset: 16px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: 0 30px 70px -18px #00000073;
+        display: grid;
+        grid-template-columns: 1fr 150px;
+      }
+      .wsoverlay .wcanvas {
+        position: relative;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 20px 20px,
+          var(--hub);
+      }
+      .wsoverlay .wtop {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wsoverlay .wrail {
+        border-left: 1px solid var(--border);
+        background: var(--surface);
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .wsoverlay .wrail .rl {
+        font:
+          600 8px ui-monospace,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--faint);
+      }
+      .exitcol {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .panel .ph {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--strong);
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .panel .pb {
+        padding: 13px;
+      }
+      .exitopt {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        color: var(--secondary);
+        padding: 6px 0;
+      }
+      .exitopt + .exitopt {
+        border-top: 1px solid var(--hair);
+      }
+      .exitopt .k {
+        flex: none;
+      }
+      /* the unsaved-proposals guard dialog */
+      .guard {
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 12px 30px -10px #5645d440;
+        overflow: hidden;
+      }
+      .guard .gt {
+        padding: 12px 13px 4px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .guard .gd {
+        padding: 0 13px 11px;
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .guard .ga {
+        display: flex;
+        gap: 7px;
+        padding: 11px 13px;
+        border-top: 1px solid var(--hair);
+        background: var(--soft);
+        flex-wrap: wrap;
+      }
+
+      svg.edge {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+        z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-head">
+      <h1>The reusable AI planning workspace — shell + universal entrance</h1>
+      <p>
+        <span class="ref">MOTIR-1193 · 7.20.1</span> — the ONE shared planning interface. Every
+        AI-planning surface (generation review <b>7.4</b>, re-planning <b>7.11</b>, contextual
+        planning <b>7.12</b>, the persistent roadmap <b>7.19</b>, and onboarding <b>7.3</b>)
+        composes the <b>same</b> full-screen <b>canvas (left) + chat (right)</b> shell — they are
+        <b>MODES</b> (states) of this one surface, not separate UIs. This asset designs the
+        <b>workspace shell + its behaviours + the universal entrance</b> — two always-present hero
+        affordances (a header <b>“Plan with AI”</b> pill + a floating <b>M</b> AI callout) that
+        <b>restyle with the active design style</b> (sheet 5). The canvas pane is the standalone
+        <span class="ref">WorkItemCanvas</span> (MOTIR-1194; design @
+        <span class="ref">design/roadmap/</span>) — <b>composed here, never redrawn</b>.
+      </p>
+    </div>
+
+    <!-- ════════════════ SHEET 1 — the reusable shell ════════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>The shell — full-screen two-pane workspace (canvas left · chat right)</h2>
+        <span class="cap"><code>PlanningWorkspace</code> · no app nav</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="frame" id="frame1">
+            <div class="canvas" id="canvas1">
+              <svg class="edge" id="edge1"></svg>
+              <div class="ov ov-top">
+                <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                <span class="crumb">PayFlow <span class="chev">⌄</span></span>
+                <span class="searchbox" style="margin-left: auto"
+                  >⌕ Find a work item <kbd>/</kbd></span
+                >
+              </div>
+              <div class="ov zoomctl">
+                <button>−</button><span class="pct">80%</span><button>+</button><button>⤢</button>
+              </div>
+              <div class="legend">
+                <span><i class="firm"></i> depends-on (within story)</span>
+                <span><i class="cross"></i> cross-story blocked_by</span>
+                <span><i class="pending"></i> proposed (pending)</span>
+              </div>
+            </div>
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">re-plan</span>
+              </div>
+              <div class="log">
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Here’s PayFlow’s current plan on the canvas. Tell me what to add, expand or
+                    re-sequence — I’ll place it as you go.
+                  </div>
+                </div>
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">
+                    Add recurring invoices, blocked by the invoice model.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Adding a “Recurring invoices” story under Billing, linked after “Invoice model”.
+                    Placing it now…
+                  </div>
+                </div>
+              </div>
+              <div class="composer">
+                <span class="inp">Message Motir AI…</span>
+                <span class="send">➤</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Shipped shell, reused.</b> The frame is
+        <code>components/planning/PlanningWorkspace.tsx</code> —
+        <code>grid h-dvh grid-cols-[1fr_22rem]</code>, canvas left + chat right,
+        <b>no app shell / nav</b> (a focused full-screen surface) — but it carries its
+        <b>own exit chrome</b>: a <b>Close</b> (✕ / <kbd>Esc</kbd>) top-left, because it opens as an
+        overlay <b>on top</b> of the app (sheet 6). The chat rail mirrors the shipped
+        <code>DiscoveryChatRail.tsx</code> (the <code>Motir AI</code> rail label + success dot, the
+        bubble + avatar language, the composer). The <b>only</b> thing each mode changes is the
+        canvas content + the chat driver — the structure is identical everywhere.
+        <b>No “Plan with AI” button INSIDE</b> — you just chat, and the conversation turns into a
+        plan (proposed cards appear on the canvas, sheet 2). “Plan with AI” names only the
+        <b>entrance</b>
+        (how you open this from the app); inside, the canvas is the project roadmap and the chat is
+        the sole input. The top-left chip is the canvas’s <b>drill-down breadcrumb</b> — the project
+        root <code>PayFlow</code>, growing as you drill into a node (<code
+          >PayFlow › Epic 1 › Story 1</code
+        >), reusing the canvas drill-down (MOTIR-1009). It is an <b>in-app overlay</b>, so there is
+        no browser / window chrome.
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 2 — chat-to-plan + on-canvas placement + confirm ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>
+          Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until you
+          confirm
+        </h2>
+        <span class="cap">confirm-to-persist</span>
+      </div>
+      <div class="sheetbody">
+        <div class="screen">
+          <div class="frame tall" id="frame2">
+            <div class="canvas" id="canvas2">
+              <svg class="edge" id="edge2"></svg>
+              <div class="ov ov-top">
+                <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                <span class="crumb">Proposing <span class="muted">· 5 new</span></span>
+              </div>
+              <div class="ov zoomctl">
+                <button>−</button><span class="pct">90%</span><button>+</button><button>⤢</button>
+              </div>
+              <div class="persistbar">
+                <span class="txt"
+                  >5 proposed work items<small
+                    >Nothing saved yet — review on the canvas</small
+                  ></span
+                >
+                <span class="btn ghost sm">Discard</span>
+                <span class="btn primary">Confirm &amp; add to project</span>
+              </div>
+            </div>
+            <aside class="rail">
+              <div class="railhead">
+                <span class="dot"></span><span class="lbl">Motir AI</span>
+                <span class="mode">generation</span>
+              </div>
+              <div class="log">
+                <div class="turn user">
+                  <span class="avatar user">·</span>
+                  <div class="bubble user">Plan the billing area for PayFlow.</div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    I’ll draft a Billing epic. Watch the canvas — each card appears as I propose it,
+                    with its dependency edges.
+                  </div>
+                </div>
+                <div class="turn">
+                  <span class="avatar ai">M</span>
+                  <div class="bubble ai">
+                    Placed: <b>Invoice model</b> → <b>Create invoice</b> → <b>Send invoice</b>, plus
+                    <b>Recurring invoices</b> (after the model) and <b>Payment reminders</b>.
+                  </div>
+                </div>
+                <div class="drafting"><span class="spin"></span> Drafting the next story…</div>
+              </div>
+              <div class="composer">
+                <span class="inp">Reply, or refine a card…</span>
+                <span class="send">➤</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>On-canvas incremental placement.</b> Proposed work items appear on the standalone canvas
+        <b>one by one</b> as the conductor proposes them, each drawn with its
+        <b>relationship edges</b> — parent→child, the within-story <code>depends_on</code> arrow,
+        and the cross-story <code>blocked_by</code> warning edge — using the canvas’s own node +
+        edge language (the <code>StationCard</code> + <code>PlanningCanvas</code> conventions from
+        <code>design/roadmap/</code>). <b>Confirm-to-persist:</b> the proposed set is a
+        <b>STATE of the canvas</b> — pending nodes (dashed accent border + a
+        <code>proposed</code> pill) and pending edges (dashed).
+        <b>Nothing is written to the DB until the user presses Confirm</b>; Discard drops the whole
+        proposal. This is the diff/review surface — no separate review screen.
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 3 — the four MODES = states of ONE surface ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">3</span>
+        <h2>The planning MODES — states of the one surface, each opened by an entrance door</h2>
+        <span class="cap">not separate screens</span>
+      </div>
+      <div class="sheetbody">
+        <div class="modes">
+          <!-- generation 7.4 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >✦</span
+                >
+                Generation review — 7.4
+              </h3>
+              <div class="door">
+                Door: a project surface with <b>no plan yet</b> → generate the first fresh tree →
+                review → confirm.
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_gen"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · generation</span>
+                <div class="minibub user">Build PayFlow.</div>
+                <div class="minibub ai">
+                  Drafting epics → stories → subtasks. Confirm to persist.
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- re-plan 7.11 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >↻</span
+                >
+                Augment / re-plan — 7.11
+              </h3>
+              <div class="door">
+                Door: a project surface <b>with a plan</b> → expand / re-sequence; done work is
+                completion-aware (locked).
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_replan"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · re-plan</span>
+                <div class="minibub user">Add a reminders story.</div>
+                <div class="minibub ai">
+                  Existing tree stays; new card proposed after “Invoices”.
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- contextual 7.12 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >◎</span
+                >
+                Contextual planning — 7.12
+              </h3>
+              <div class="door">
+                Door: <b>from a specific work item</b> (detail page / row action) → planning scoped
+                to that item’s subtree.
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_ctx"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · contextual</span>
+                <div class="minibub ai">
+                  Scoped to <b>Create invoice</b>. Breaking it into subtasks…
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- roadmap-read 7.19 -->
+          <div class="modecard">
+            <div class="mh">
+              <h3>
+                <span
+                  class="tile"
+                  style="
+                    background: var(--accent-soft);
+                    color: var(--accent);
+                    width: 22px;
+                    height: 22px;
+                    font-size: 12px;
+                  "
+                  >⌖</span
+                >
+                Roadmap read + augment — 7.19
+              </h3>
+              <div class="door">
+                Door: the <b>Board ↔ Roadmap</b> toggle → the persistent roadmap; read the whole
+                tree, augment in place.
+              </div>
+            </div>
+            <div class="miniframe">
+              <div class="canvas" id="m_road"></div>
+              <div class="minirail">
+                <span class="mlbl">Motir AI · roadmap</span>
+                <div class="minibub ai">The live roadmap. Ask me to plan the next phase.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>One surface, four states.</b> Generation (7.4), augment/re-plan (7.11), contextual (7.12)
+        and roadmap-read (7.19) differ <b>only</b> in (a) what the canvas is seeded with — empty vs
+        an existing tree vs one item’s subtree — and (b) the chat driver’s framing. The shell, the
+        on-canvas placement, and the confirm-to-persist gate are identical. Onboarding (7.3) is the
+        one specialization that wraps this shell in its gated per-tier pre-plan review loop (see
+        <code>onboarding.mock.html</code>). Each state is reached through the entrance door called
+        out above — drawn in sheet 4.
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 4 — the universal entrance (ONE global hero affordance) ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">4</span>
+        <h2>The universal entrance — ONE global affordance, summonable from anywhere</h2>
+        <span class="cap">two options · the product’s hero control</span>
+      </div>
+      <div class="sheetbody">
+        <p class="lead">
+          The global <b>header</b> (<code>TopNav</code>) + <b>⌘K</b> are on <b>every</b> PM screen,
+          so AI is reachable everywhere without a per-surface button. <b>We ship BOTH</b> entrances,
+          and each is a <b>hero surface</b> — never a plain button — that
+          <b>restyles with the active design style</b> (sheet 5):
+        </p>
+        <ul class="lead" style="margin-top: -8px; padding-left: 18px">
+          <li>
+            <b>A — the header “Plan with AI” pill</b>: the direct <b>planning</b> entrance; opens
+            the workspace in the current context’s mode.
+          </li>
+          <li>
+            <b>B — the floating “M” button</b>: the <b>universal AI callout</b> — planning is just
+            one of its actions; it also <b>answers questions about the project</b> and
+            <b>assists with tasks</b>. (Built now with a mock <b>M</b> logo — the real brand logo
+            lands later.)
+          </li>
+        </ul>
+
+        <div class="entrance">
+          <!-- A — header Plan with AI pill -->
+          <div class="optcard">
+            <div class="opt-h">
+              <h3>A — Header: “Plan with AI”</h3>
+              <span class="reco-badge">Planning entrance</span>
+            </div>
+            <div class="stage">
+              <div class="topnav">
+                <span class="brand">moooon · <b>PayFlow</b></span>
+                <span class="spacer"></span>
+                <span class="icbtn">＋</span>
+                <span class="icbtn">⌘K</span>
+                <span class="hero-cta"><span class="spark">✦</span> Plan with AI</span>
+                <span class="icbtn">☾</span>
+                <span class="icbtn">🔔</span>
+                <span class="avatarchip">Y</span>
+              </div>
+            </div>
+            <div class="opt-b">
+              <p class="desc">
+                In the right cluster of <code>TopNav</code> — present on every screen, never covers
+                content. A hero gradient pill that opens the planning workspace in the
+                <b>context’s mode</b>; restyles per design style (sheet 5).
+              </p>
+            </div>
+          </div>
+
+          <!-- B — floating M universal AI callout -->
+          <div class="optcard">
+            <div class="opt-h">
+              <h3>B — Floating “M”: the universal AI callout</h3>
+              <span class="reco-badge" style="background: linear-gradient(135deg, #5645d4, #ff64c8)"
+                >All of AI</span
+              >
+            </div>
+            <div
+              class="stage"
+              style="flex-direction: column; align-items: stretch; gap: 14px; padding: 16px"
+            >
+              <div class="fabstage" style="height: 132px">
+                <div class="faux">
+                  <i style="width: 46%"></i>
+                  <i style="width: 88%"></i>
+                  <i style="width: 70%"></i>
+                  <i style="width: 58%"></i>
+                </div>
+                <span class="fab-hint" style="right: 86px; bottom: 30px">always afloat →</span>
+                <span class="orb" style="position: absolute; right: 18px; bottom: 18px">
+                  <svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 18V7l7 6 7-6v11" />
+                  </svg>
+                </span>
+              </div>
+              <!-- the callout it opens — planning is ONE action -->
+              <div class="ai-menu" style="align-self: center">
+                <div class="am-h">
+                  <span class="mini-orb"
+                    ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5 18V7l7 6 7-6v11" /></svg
+                  ></span>
+                  <b>Motir AI</b>
+                </div>
+                <div class="am-row primary">
+                  <span class="ic">✦</span>
+                  <div>
+                    <div class="tt">Plan with AI</div>
+                    <div class="ds">Generate, expand or re-plan the project</div>
+                  </div>
+                </div>
+                <div class="am-row">
+                  <span class="ic">?</span>
+                  <div>
+                    <div class="tt">Ask about this project</div>
+                    <div class="ds">Answers from your plan, docs &amp; work items</div>
+                  </div>
+                </div>
+                <div class="am-row">
+                  <span class="ic">⚒</span>
+                  <div>
+                    <div class="tt">Help with a task</div>
+                    <div class="ds">Draft, summarise, or assist on a work item</div>
+                  </div>
+                </div>
+                <div class="am-ask">Ask Motir anything…</div>
+              </div>
+            </div>
+            <div class="opt-b">
+              <p class="desc">
+                A glowing orb (the <b>M</b> logo) afloat bottom-right on every screen; tapping it
+                opens the <b>universal AI callout</b> — the home of <b>all</b> AI, with
+                <b>Plan with AI</b> as one action alongside project Q&amp;A and task help. Mock
+                <b>M</b> now, real logo later. The orb adopts each design style’s material too
+                (sheet 5).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- anatomy close-up -->
+        <div class="anatomy">
+          <div class="ashow">
+            <span class="ringwrap"
+              ><span class="hero-cta big"><span class="spark">✦</span> Plan with AI</span></span
+            >
+          </div>
+          <ul>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Gradient fill</b>, accent → violet (<code>--el-accent</code> →
+                <code>--el-highlight</code>-derived) — AA-safe white text over the accent-dominant
+                region; the pink lives only in the glow.</span
+              >
+            </li>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Aura / outer glow</b> — a soft pink + violet halo so it lifts off the chrome and
+                reads as “special”.</span
+              >
+            </li>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Sparkle mark</b> (lucide <code>Sparkles</code>) + a <b>shimmer sweep</b> — the
+                living, AI feel (a slow loop in the build).</span
+              >
+            </li>
+            <li>
+              <span class="dotk"></span
+              ><span
+                ><b>Conic ring</b> (close-up) for an optional premium rim; <b>⌘K</b> opens the same
+                workspace from the keyboard.</span
+              >
+            </li>
+          </ul>
+        </div>
+
+        <!-- ONE entrance, mode adapts to context -->
+        <div class="modemap">
+          <div class="mm">
+            <div class="where">On a work item</div>
+            <div class="arrow">↓</div>
+            <div class="what">Contextual planning</div>
+            <div class="ref">7.12</div>
+          </div>
+          <div class="mm">
+            <div class="where">On a project surface</div>
+            <div class="arrow">↓</div>
+            <div class="what">Augment / re-plan</div>
+            <div class="ref">7.11</div>
+          </div>
+          <div class="mm">
+            <div class="where">Empty project (no plan)</div>
+            <div class="arrow">↓</div>
+            <div class="what">Generation</div>
+            <div class="ref">7.4</div>
+          </div>
+          <div class="mm">
+            <div class="where">On the roadmap</div>
+            <div class="arrow">↓</div>
+            <div class="what">Roadmap read + augment</div>
+            <div class="ref">7.19</div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Two entrances, one launcher — the door ADAPTS to context, not per-surface copies.</b> The
+        header pill and the floating <b>M</b> callout both reach the planning workspace, opened in
+        the mode for the <b>current context</b> (the strip above) — viewing an item → contextual; a
+        project surface → re-plan, or generation if no plan exists; the roadmap → roadmap read +
+        augment. Built once as the reusable <code>PlanWithAILauncher</code> (<b>MOTIR-1299</b>,
+        <code>blocked_by</code> this design): it renders the hero control (header pill + floating
+        M), opens the <code>PlanningWorkspace</code>, and passes the originating context so it lands
+        in the matching state from sheet 3. The detail-panel door (MOTIR-910) + the roadmap toggle
+        (MOTIR-1011) are the same launcher in context. The floating <b>M</b> is the broader
+        <b>universal AI callout</b> — planning is one of its actions; project Q&amp;A + task
+        assistance are future capabilities reached through the same button.
+        <code>--el-*</code> palette-derived colour + semantic shape tokens; AA holds;
+        keyboard-reachable (⌘K + focusable).
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 5 — the hero control is STYLE-AWARE ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">5</span>
+        <h2>Style-aware — the “Plan with AI” control looks special in every design style</h2>
+        <span class="cap">restyles with <code>data-style</code></span>
+      </div>
+      <div class="sheetbody">
+        <p class="lead" style="margin-bottom: 16px">
+          Motir dogfoods its own swappable <b>style axis</b> (<code>data-style</code>). The hero
+          control is a <b>style-aware surface</b>: it doesn’t just inherit a token — each style
+          gives it a <b>distinct, special treatment</b> (gradient + glow, frosted glass, hard-shadow
+          brutalist, neon, flat-Swiss, soft-playful), with colour <b>palette-derived</b> so a
+          <code>data-palette</code> swap re-tints it and a <code>data-style</code> swap re-shapes
+          it. The same logic themes the floating <b>M</b> orb.
+        </p>
+        <div class="stylegrid">
+          <div class="styletile st-editorial">
+            <div class="st-h">Warm Editorial <span class="def">default</span></div>
+            <div class="st-stage">
+              <span class="hc hc-editorial"><span class="spark">✦</span> Plan with AI</span>
+            </div>
+          </div>
+          <div class="styletile st-soft">
+            <div class="st-h">Soft / Playful</div>
+            <div class="st-stage">
+              <span class="hc hc-soft"><span class="spark">✦</span> Plan with AI</span>
+            </div>
+          </div>
+          <div class="styletile st-swiss">
+            <div class="st-h">Swiss / Minimal-Flat</div>
+            <div class="st-stage">
+              <span class="hc hc-swiss"><span class="spark">✦</span> Plan with AI</span>
+            </div>
+          </div>
+          <div class="styletile st-brutal">
+            <div class="st-h">Neo-Brutalism</div>
+            <div class="st-stage">
+              <span class="hc hc-brutal"><span class="spark">✦</span> Plan with AI</span>
+            </div>
+          </div>
+          <div class="styletile st-glass">
+            <div class="st-h">Glassmorphism</div>
+            <div class="st-stage">
+              <span class="hc hc-glass"><span class="spark">✦</span> Plan with AI</span>
+            </div>
+          </div>
+          <div class="styletile st-cyber">
+            <div class="st-h">Cybercore / Y2K</div>
+            <div class="st-stage">
+              <span class="hc hc-cyber"><span class="spark">✦</span> Plan with AI</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>How it stays token-disciplined.</b> Like the sanctioned surface-material styles
+        (glassmorphism &amp; co.), the hero control gets a per-style <b>material</b> treatment —
+        <code>[data-style='id'] [data-surface='ai-cta'] {…}</code> — whose colour is
+        <b>palette-derived</b> (<code>color-mix()</code> /
+        <code>var(--el-accent | --el-highlight)</code>, no raw hex), and whose radius / padding /
+        shadow flow through the element-semantic <b>shape</b> tokens. So the two axes stay disjoint:
+        a palette swap re-tints every style’s treatment; a style swap re-shapes it.
+        <b>AA holds in each</b> — label text sits over the accent-dominant region (and Cybercore
+        renders its native dark register).
+      </div>
+    </section>
+
+    <!-- ════════════════ SHEET 6 — opening on top of the app + exiting ═══════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">6</span>
+        <h2>Opening &amp; exiting — a full-screen overlay ON TOP of the app, with a clear close</h2>
+        <span class="cap">layer, not a route change</span>
+      </div>
+      <div class="sheetbody">
+        <p class="lead" style="margin-bottom: 16px">
+          The workspace covers the screen (the canvas + chat need the room) but it is a
+          <b>full-screen overlay LAYERED ON TOP of the PM app</b> — not a navigation away. The app
+          stays mounted, dimmed, behind it;
+          <b>closing returns you to the exact screen you launched from</b> (same scroll, same
+          filters), with no reload. So it is &ldquo;full-screen&rdquo; for working
+          <b>and</b> &ldquo;on top&rdquo; for context.
+        </p>
+        <div class="exitrow">
+          <!-- it opens on top of the app -->
+          <div>
+            <div class="ontop">
+              <div class="appback">
+                <div class="col">
+                  <b>To do</b>
+                  <span class="card"></span><span class="card"></span>
+                </div>
+                <div class="col">
+                  <b>In progress</b>
+                  <span class="card"></span>
+                </div>
+                <div class="col">
+                  <b>In review</b>
+                  <span class="card"></span><span class="card"></span>
+                </div>
+                <div class="col">
+                  <b>Done</b>
+                  <span class="card"></span>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="wsoverlay">
+                <div class="wcanvas">
+                  <div class="wtop">
+                    <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                    <span class="crumb" style="font-size: 11px; padding: 4px 8px"
+                      >PayFlow <span class="muted">· roadmap</span></span
+                    >
+                  </div>
+                </div>
+                <div class="wrail">
+                  <span class="rl">✦ Motir AI</span>
+                  <div class="minibub ai" style="font-size: 9px">How can I help plan?</div>
+                </div>
+              </div>
+            </div>
+            <p class="desc" style="margin-top: 10px">
+              Launched from the header pill or the floating <b>M</b>, the workspace
+              <b>animates in over the app</b> (the board here, dimmed + inert behind). The slight
+              inset + drop shadow show it&rsquo;s a <b>layer on top</b>, not a new page — so
+              dismissing it is instant and lossless.
+            </p>
+          </div>
+
+          <!-- how to exit + the guard -->
+          <div class="exitcol">
+            <div class="panel">
+              <div class="ph">How to exit</div>
+              <div class="pb">
+                <div class="exitopt">
+                  <span class="wclose k"><span class="x">✕</span> Close</span>
+                  <span>the close control, top-left of the workspace</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k"><kbd class="">Esc</kbd></span>
+                  <span>keyboard — closes from anywhere in the workspace</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k" style="font-size: 12px; color: var(--accent); font-weight: 600"
+                    >↩ Back to board</span
+                  >
+                  <span>the close is labelled with where you came from</span>
+                </div>
+              </div>
+            </div>
+            <div class="guard">
+              <div class="gt">Closing with proposed work items?</div>
+              <div class="gd">
+                Nothing is saved until <b>Confirm</b> (confirm-to-persist), so closing with pending
+                cards asks first — never a silent loss.
+              </div>
+              <div class="ga">
+                <span class="btn ghost sm">Discard 5 proposed</span>
+                <span class="btn sm">Keep planning</span>
+                <span class="btn primary sm">Confirm &amp; add</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        <b>Why an overlay, not a route.</b> The summoned planner is a
+        <b>session on top of your work</b>, not a place you navigate to — so it mounts as a
+        full-screen layer above the current route (the app inert behind), and closing restores that
+        route instantly with no reload or lost state. The close lives in the workspace&rsquo;s own
+        top-left chrome (✕ + <kbd>Esc</kbd>, labelled with the origin); a dismissal with unconfirmed
+        proposals hits the confirm-to-persist guard (Discard / Keep planning / Confirm &amp; add).
+        Onboarding is the one case that is a genuine full-page route (a dedicated first-run
+        journey), not this dismissable overlay.
+      </div>
+    </section>
+
+    <script>
+      // ── shared node + edge rendering for the embedded canvas panes ──
+      // (The real surface uses the shipped PlanningCanvas; here we statically
+      //  place nodes + draw edges so the composed canvas reads faithfully — it
+      //  is the design/roadmap/ canvas language, not a re-drawn canvas.)
+      const TYPE = {
+        epic: '#ff64c8',
+        story: '#1aae39',
+        task: '#0075de',
+        subtask: '#2a9d99',
+        bug: '#e03131',
+      };
+      function tint(hex) {
+        return hex + '22';
+      }
+
+      // Place a full StationCard-language node; returns the element for edge routing.
+      function addNode(host, n) {
+        const el = document.createElement('div');
+        el.className = 'node' + (n.cls ? ' ' + n.cls : '') + (n.sm ? ' sm' : '');
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        const hue = TYPE[n.type] || '#5645d4';
+        const pill = n.pill ? `<span class="pill ${n.pill[0]}">${n.pill[1]}</span>` : '';
+        const capt = n.capt
+          ? '<div class="capt">' + n.capt.map((c) => `<div>${c}</div>`).join('') + '</div>'
+          : '';
+        el.innerHTML =
+          `<div class="nhead"><span class="tile" style="background:${tint(hue)};color:${hue}">${n.glyph || '▦'}</span>` +
+          `<div><div class="ntitle">${n.t}</div>${n.sub ? `<div class="nsub">${n.sub}</div>` : ''}</div>${pill}</div>${capt}`;
+        host.appendChild(el);
+        return el;
+      }
+
+      // Place a compact mini-node (the mode + entrance mini-canvases).
+      function addMini(host, n) {
+        const el = document.createElement('div');
+        el.className = 'mininode' + (n.cls ? ' ' + n.cls : '');
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        const hue = TYPE[n.type] || '#5645d4';
+        el.innerHTML = `<span class="dt" style="background:${hue}"></span>${n.t}`;
+        host.appendChild(el);
+        return el;
+      }
+
+      // Curved edge between two elements; anchors chosen by dominant axis so a
+      // child below its parent routes top↔bottom, a child to the right left↔right.
+      function drawEdge(svg, a, b, variant) {
+        const sr = svg.getBoundingClientRect();
+        const ar = a.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        const acx = ar.left + ar.width / 2 - sr.left,
+          acy = ar.top + ar.height / 2 - sr.top;
+        const bcx = br.left + br.width / 2 - sr.left,
+          bcy = br.top + br.height / 2 - sr.top;
+        let x1, y1, x2, y2, c1x, c1y, c2x, c2y;
+        if (Math.abs(bcx - acx) >= Math.abs(bcy - acy)) {
+          // horizontal-dominant: exit the side facing B
+          const toRight = bcx >= acx;
+          x1 = (toRight ? ar.right : ar.left) - sr.left;
+          y1 = acy;
+          x2 = (toRight ? br.left : br.right) - sr.left;
+          y2 = bcy;
+          const mx = (x1 + x2) / 2;
+          c1x = mx;
+          c1y = y1;
+          c2x = mx;
+          c2y = y2;
+        } else {
+          // vertical-dominant: exit top/bottom
+          const toDown = bcy >= acy;
+          x1 = acx;
+          y1 = (toDown ? ar.bottom : ar.top) - sr.top;
+          x2 = bcx;
+          y2 = (toDown ? br.top : br.bottom) - sr.top;
+          const my = (y1 + y2) / 2;
+          c1x = x1;
+          c1y = my;
+          c2x = x2;
+          c2y = my;
+        }
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', `M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}`);
+        p.setAttribute('fill', 'none');
+        const stroke =
+          variant === 'cross' ? '#dd5b00' : variant === 'pending' ? '#5645d4' : '#b8b3aa';
+        p.setAttribute('stroke', stroke);
+        p.setAttribute('stroke-width', variant === 'cross' ? '2' : '1.7');
+        if (variant === 'pending') p.setAttribute('stroke-dasharray', '5 4');
+        svg.appendChild(p);
+      }
+
+      function render() {
+        // ── Sheet 1: an existing plan + one proposed card ──
+        (function () {
+          const c = document.getElementById('canvas1');
+          const svg = document.getElementById('edge1');
+          const plan = addNode(c, {
+            x: 26,
+            y: 232,
+            type: 'epic',
+            glyph: '◆',
+            t: 'Plan · PayFlow',
+            sub: 'your project',
+            pill: ['done', '✓ live'],
+          });
+          const billing = addNode(c, {
+            x: 268,
+            y: 232,
+            type: 'story',
+            glyph: '▤',
+            t: 'Billing',
+            sub: 'epic · 6 items',
+            pill: ['here', 'you are here'],
+          });
+          const model = addNode(c, {
+            x: 512,
+            y: 110,
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Invoice model',
+            sub: 'subtask · done',
+            pill: ['done', '✓'],
+          });
+          const create = addNode(c, {
+            x: 512,
+            y: 318,
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Create invoice',
+            sub: 'subtask',
+          });
+          const rec = addNode(c, {
+            x: 540,
+            y: 446,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '＋',
+            t: 'Recurring invoices',
+            pill: ['proposed', 'proposed'],
+          });
+          requestAnimationFrame(() => {
+            drawEdge(svg, plan, billing, 'firm');
+            drawEdge(svg, billing, model, 'firm');
+            drawEdge(svg, billing, create, 'firm');
+            drawEdge(svg, model, rec, 'pending');
+          });
+        })();
+
+        // ── Sheet 2: a fresh tree proposed one-by-one (all pending) ──
+        (function () {
+          const c = document.getElementById('canvas2');
+          const svg = document.getElementById('edge2');
+          const epic = addNode(c, {
+            x: 28,
+            y: 150,
+            cls: 'proposed',
+            type: 'epic',
+            glyph: '◆',
+            t: 'Billing',
+            sub: 'epic',
+            pill: ['proposed', 'new'],
+          });
+          const model = addNode(c, {
+            x: 286,
+            y: 60,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Invoice model',
+          });
+          const create = addNode(c, {
+            x: 286,
+            y: 168,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Create invoice',
+          });
+          const send = addNode(c, {
+            x: 522,
+            y: 168,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Send invoice',
+          });
+          const rec = addNode(c, {
+            x: 286,
+            y: 300,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Recurring invoices',
+          });
+          const remind = addNode(c, {
+            x: 522,
+            y: 300,
+            sm: true,
+            cls: 'proposed',
+            type: 'subtask',
+            glyph: '▦',
+            t: 'Payment reminders',
+          });
+          requestAnimationFrame(() => {
+            drawEdge(svg, epic, model, 'pending');
+            drawEdge(svg, epic, create, 'pending');
+            drawEdge(svg, create, send, 'pending');
+            drawEdge(svg, model, rec, 'pending');
+            drawEdge(svg, create, remind, 'pending');
+          });
+        })();
+
+        // ── Sheet 3 mode mini-canvases ──
+        function mini(id, build) {
+          const c = document.getElementById(id);
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('class', 'edge');
+          c.appendChild(svg);
+          const edges = build(c);
+          requestAnimationFrame(() => edges.forEach((e) => drawEdge(svg, e[0], e[1], e[2])));
+        }
+        mini('m_gen', (c) => {
+          const e = addMini(c, { x: 14, y: 78, cls: 'prop', type: 'epic', t: 'Billing' });
+          const a = addMini(c, { x: 150, y: 28, cls: 'prop', type: 'subtask', t: 'Invoice model' });
+          const b = addMini(c, {
+            x: 150,
+            y: 120,
+            cls: 'prop',
+            type: 'subtask',
+            t: 'Create invoice',
+          });
+          const d = addMini(c, { x: 300, y: 120, cls: 'prop', type: 'subtask', t: 'Send' });
+          return [
+            [e, a, 'pending'],
+            [e, b, 'pending'],
+            [b, d, 'pending'],
+          ];
+        });
+        mini('m_replan', (c) => {
+          const a = addMini(c, { x: 14, y: 78, cls: 'done', type: 'story', t: 'Invoices ✓' });
+          const b = addMini(c, { x: 165, y: 30, type: 'story', t: 'Payments' });
+          const d = addMini(c, { x: 165, y: 122, cls: 'prop', type: 'story', t: 'Reminders' });
+          return [
+            [a, b, 'firm'],
+            [a, d, 'pending'],
+          ];
+        });
+        mini('m_ctx', (c) => {
+          const f = addMini(c, { x: 12, y: 78, type: 'subtask', t: 'Create invoice' });
+          f.style.outline = '2px solid #5645d4';
+          f.style.outlineOffset = '1px';
+          const a = addMini(c, { x: 175, y: 24, cls: 'prop', type: 'subtask', t: 'Build form' });
+          const b = addMini(c, { x: 175, y: 80, cls: 'prop', type: 'subtask', t: 'Validate' });
+          const d = addMini(c, { x: 175, y: 136, cls: 'prop', type: 'subtask', t: 'Persist' });
+          return [
+            [f, a, 'pending'],
+            [f, b, 'pending'],
+            [f, d, 'pending'],
+          ];
+        });
+        mini('m_road', (c) => {
+          const p = addMini(c, { x: 10, y: 78, cls: 'lock', type: 'epic', t: 'Plan' });
+          const a = addMini(c, { x: 110, y: 78, cls: 'done', type: 'epic', t: 'Epic 1 ✓' });
+          const b = addMini(c, { x: 215, y: 30, type: 'epic', t: 'Epic 2' });
+          const d = addMini(c, { x: 215, y: 122, cls: 'lock', type: 'epic', t: 'Epic 3' });
+          return [
+            [p, a, 'firm'],
+            [a, b, 'firm'],
+            [a, d, 'firm'],
+          ];
+        });
+      }
+      window.addEventListener('load', render);
+    </script>
+  </body>
+</html>
