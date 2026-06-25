@@ -190,4 +190,58 @@ describe('ProjectRoadmapCanvas', () => {
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve({ nodes: [], deps: [] })} />);
     expect(await screen.findByText('Nothing on the roadmap yet')).toBeTruthy();
   });
+
+  // The quick-view "View" affordance (Subtask 7.20.11 / MOTIR-1352) — surfaced on
+  // the SELECTED card for a `viewable` node when an `onView` handler is wired.
+  // Distinct from select (highlight) and from "Open" (drill).
+  it('surfaces a View button on a selected viewable node and calls onView with its id', async () => {
+    const onView = vi.fn();
+    const level: RoadmapLevel = {
+      nodes: [{ ...node('V', 'View me'), viewable: true }],
+      deps: [],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} onView={onView} />);
+    await screen.findByText('View me');
+    // Not shown until the card is selected.
+    expect(screen.queryByTestId('view-button')).toBeNull();
+    fireEvent.keyDown(el('V')!, { key: 'Enter' });
+    const view = await screen.findByTestId('view-button');
+    expect(view.getAttribute('aria-label')).toBe('View V'); // labelled by identifier
+    fireEvent.click(view);
+    expect(onView).toHaveBeenCalledWith('V');
+  });
+
+  it('surfaces BOTH View and Open on a selected drillable viewable node (View distinct from drill)', async () => {
+    const onView = vi.fn();
+    const level: RoadmapLevel = {
+      nodes: [{ ...node('D', 'Drill me', true), viewable: true }],
+      deps: [],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} onView={onView} />);
+    await screen.findByText('Drill me');
+    fireEvent.keyDown(el('D')!, { key: 'Enter' });
+    expect(await screen.findByTestId('view-button')).toBeTruthy();
+    expect(screen.getByTestId('drill-button')).toBeTruthy();
+  });
+
+  it('shows NO View button on a non-viewable node (e.g. an off-level ghost anchor)', async () => {
+    const onView = vi.fn();
+    // `node()` omits `viewable` → not viewable.
+    const level: RoadmapLevel = { nodes: [node('G', 'ghost')], deps: [] };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} onView={onView} />);
+    await screen.findByText('ghost');
+    fireEvent.keyDown(el('G')!, { key: 'Enter' });
+    expect(screen.queryByTestId('view-button')).toBeNull();
+  });
+
+  it('shows NO View button when onView is not wired, even for a viewable node', async () => {
+    const level: RoadmapLevel = {
+      nodes: [{ ...node('V', 'View me'), viewable: true }],
+      deps: [],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} />);
+    await screen.findByText('View me');
+    fireEvent.keyDown(el('V')!, { key: 'Enter' });
+    expect(screen.queryByTestId('view-button')).toBeNull();
+  });
 });

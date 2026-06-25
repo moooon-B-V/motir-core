@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
+import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 
@@ -15,6 +16,11 @@ import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmap
 // `WorkItemNode`: the roots, then a node's children on drill, with the level's
 // `blocked_by` edges drawn. The onboarding canvas is the OTHER consumer of the same
 // foundation (stations + roots at the top level).
+//
+// It also OWNS the work-item quick-view peek (Subtask 7.20.11 / MOTIR-1352): the
+// canvas surfaces a "View" button on the selected card, and this consumer opens the
+// shipped peek (`WorkItemQuickView`) for that node — driven by LOCAL state, so the
+// reusable canvas stays route-agnostic (no `?peek=` URL coupling).
 
 const ROOT_KEY = '__root__';
 
@@ -40,6 +46,11 @@ export function WorkItemRoadmap({
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
   // project+parent (a ref — mutable — so a new key just misses; no reset needed).
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
+  // node id → its identifier (`MOTIR-12`), accumulated as levels load — the canvas
+  // hands the View handler a node id; the peek read keys off the identifier.
+  const identifierByIdRef = useRef(new Map<string, string>());
+  // The work-item currently peeked (its identifier), or null when the peek is closed.
+  const [peekKey, setPeekKey] = useState<string | null>(null);
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
@@ -49,21 +60,34 @@ export function WorkItemRoadmap({
         wi = await fetchRoadmapLevel(projectKey, parentId);
         cacheRef.current.set(key, wi);
       }
+      for (const item of wi.items) identifierByIdRef.current.set(item.id, item.identifier);
       return buildWorkItemLevel(wi);
     },
     [projectKey],
   );
 
+  // Open the quick-view peek for a node's work item (the canvas "View" button).
+  // A node with no mapped identifier (only the real items are `viewable`, so this
+  // is defensive) opens nothing.
+  const handleView = useCallback((id: string) => {
+    const identifier = identifierByIdRef.current.get(id);
+    if (identifier) setPeekKey(identifier);
+  }, []);
+
   return (
-    <ProjectRoadmapCanvas
-      loadLevel={loadLevel}
-      positions={positions}
-      onNodeMove={onNodeMove}
-      onResetPositions={onResetPositions}
-      onSelect={onSelect}
-      searchable
-      rootLabel="Roadmap"
-      ariaLabel={ariaLabel}
-    />
+    <>
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        positions={positions}
+        onNodeMove={onNodeMove}
+        onResetPositions={onResetPositions}
+        onSelect={onSelect}
+        onView={handleView}
+        searchable
+        rootLabel="Roadmap"
+        ariaLabel={ariaLabel}
+      />
+      <WorkItemQuickView peekKey={peekKey} onClose={() => setPeekKey(null)} />
+    </>
   );
 }

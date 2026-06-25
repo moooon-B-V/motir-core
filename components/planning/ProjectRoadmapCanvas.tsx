@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, RotateCcw, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, RotateCcw, Search } from 'lucide-react';
 import {
   PlanningCanvas,
   type CanvasEdge,
@@ -55,6 +55,12 @@ export interface ProjectRoadmapCanvasProps {
   onResetPositions?: (nodeIds: string[]) => void;
   /** A LEAF node (not drillable) was activated. */
   onSelect?: (id: string) => void;
+  /** Open the quick-view DETAIL surface for a node (MOTIR-1352). When wired, the
+   *  canvas renders a **View** button on the SELECTED card (beside the "Open" drill
+   *  pill) for every node flagged `viewable` — the work-item consumer opens the
+   *  quick-view peek, the onboarding consumer opens the tier doc. View (open detail)
+   *  is DISTINCT from select (highlight) and from "Open" (drill into children). */
+  onView?: (id: string) => void;
   /** Show the search-to-locate overlay (`/` shortcut) — locates within the level. */
   searchable?: boolean;
   /** The breadcrumb root label. */
@@ -74,6 +80,7 @@ export function ProjectRoadmapCanvas({
   onNodeMove,
   onResetPositions,
   onSelect,
+  onView,
   searchable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
@@ -314,24 +321,46 @@ export function ProjectRoadmapCanvas({
           .join(' ')}
       >
         {node.content}
-        {/* The explicit DRILL affordance — surfaced on the selected card so "open
-            its children" is obvious without hijacking a plain click (which now just
-            selects). Stops the press from starting a canvas drag/select. */}
-        {selected && node.drillable && (
-          <button
-            type="button"
-            data-testid="drill-button"
-            aria-label="Open this item's children"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDrill(cn.id);
-            }}
-            className="absolute -bottom-3.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-accent-text) shadow-(--shadow-card) hover:bg-(--el-accent-pressed) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-          >
-            Open
-            <ChevronRight className="size-3.5" aria-hidden="true" />
-          </button>
+        {/* The selected card's ACTION SLOT — surfaced on the bottom edge so the
+            detail / drill actions are obvious without hijacking a plain click
+            (which now just selects). VIEW (open the quick-view detail, MOTIR-1352)
+            and OPEN (drill into children) are DISTINCT and sit side by side; a leaf
+            shows View alone. Each stops the press from starting a canvas drag. */}
+        {selected && ((onView && node.viewable) || node.drillable) && (
+          <div className="absolute -bottom-3.5 left-1/2 flex -translate-x-1/2 items-center gap-2">
+            {onView && node.viewable && (
+              <button
+                type="button"
+                data-testid="view-button"
+                aria-label={`View ${node.crumbLabel ?? node.searchText}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onView(cn.id);
+                }}
+                className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              >
+                <Eye className="size-3.5" aria-hidden="true" />
+                View
+              </button>
+            )}
+            {node.drillable && (
+              <button
+                type="button"
+                data-testid="drill-button"
+                aria-label="Open this item's children"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDrill(cn.id);
+                }}
+                className="inline-flex items-center gap-1 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-accent-text) shadow-(--shadow-card) hover:bg-(--el-accent-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              >
+                Open
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
         )}
       </div>
     );
