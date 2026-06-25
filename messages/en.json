@@ -4086,5 +4086,17 @@
       "designDefault": "Default look",
       "revisableNote": "Nothing's locked. Go back any time to revise a step or the design — your plan will follow."
     }
+  },
+  "roadmap": {
+    "heading": "Roadmap",
+    "subtitle": "{project}'s roadmap",
+    "noProjectTitle": "No project selected",
+    "noProjectDescription": "Pick or create a project from the switcher to see its roadmap.",
+    "emptyTitle": "Nothing on the roadmap yet",
+    "emptyDescription": "Work items will appear here as the plan takes shape. Plan with Motir AI to generate one, or add an epic by hand.",
+    "canvasAria": "{project} roadmap",
+    "toggleAria": "Switch between board and roadmap",
+    "toggleBoard": "Board",
+    "toggleRoadmap": "Roadmap"
   }
 }
