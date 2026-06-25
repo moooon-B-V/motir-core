@@ -26,7 +26,6 @@ import { AdvancedFilterProvider } from '../items/_components/AdvancedFilterConte
 import { SavedFilterSessionProvider } from '../items/_components/SavedFilterContext';
 import { NewIssueButton } from '../items/_components/NewIssueButton';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
-import { BoardRoadmapToggle } from '../_components/BoardRoadmapToggle';
 import { BoardContainer } from './_components/BoardContainer';
 import { BoardSwitcher } from './_components/BoardSwitcher';
 import { BoardFilterControls } from './_components/BoardFilterControls';
@@ -196,10 +195,6 @@ export default async function BoardsPage({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {/* The Board ↔ Roadmap view toggle (Subtask 7.20.5 / MOTIR-1011) —
-                    the access path to the roadmap view (design/roadmap sheet 1).
-                    Leftmost, as the primary view switch; no new primary-nav entry. */}
-                <BoardRoadmapToggle current="board" />
                 {/* The board switcher (Subtask 3.7.4) — left of the filter
                     affordances + [+ New issue]. Owns its own board-list fetch +
                     the `?board=` selection, so it stays present across the

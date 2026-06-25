@@ -10,20 +10,21 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
-import { BoardRoadmapToggle } from '../_components/BoardRoadmapToggle';
 
 // The project Roadmap VIEW (Story 7.20 · Subtask 7.20.5 / MOTIR-1011) — the route
-// + Board↔Roadmap toggle + read-mode wiring that mounts the reusable roadmap canvas
-// (`WorkItemRoadmap` → `ProjectRoadmapCanvas`, MOTIR-1194) against the live project
-// tree. This page owns the ROUTE, the ACCESS PATH (the `BoardRoadmapToggle`, no new
-// primary-nav entry), and the read-mode wiring + states — NOT the canvas rendering
-// (1194 owns the road/node rendering, zoom, drill-down, virtualization).
+// + read-mode wiring that mounts the reusable roadmap canvas (`WorkItemRoadmap` →
+// `ProjectRoadmapCanvas`, MOTIR-1194) against the live project tree. This page owns
+// the ROUTE and the read-mode wiring + states — NOT the canvas rendering (1194 owns
+// the road/node rendering, zoom, drill-down, virtualization). The ACCESS PATH is the
+// "Roadmap" primary left-nav entry in `SidebarNav` (the ai-planning design §5 — a
+// planning surface is reached from a left-nav entry drawn beside the other project
+// nav surfaces, NOT a Board↔Roadmap toggle).
 //
 // Server Component (mirrors `/boards`): it resolves the active project, gates on
 // `canBrowse` (6.4.6), reads ONLY the ROOT level of the per-level roadmap read
-// (7.20.4 / MOTIR-1010) to decide empty-vs-populated, then renders the header +
-// toggle and hands off to the client `WorkItemRoadmap`, which fetches each level on
-// drill. An empty project gets the design's empty state with the SHIPPED
+// (7.20.4 / MOTIR-1010) to decide empty-vs-populated, then renders the header and
+// hands off to the client `WorkItemRoadmap`, which fetches each level on drill. An
+// empty project gets the design's empty state with the SHIPPED
 // `PlanWithAILauncher` (MOTIR-1299) — never a hand-rolled AI affordance
 // (MOTIR-1300 item 2) — gated on AI being configured, exactly like the shell's
 // header pill. Unauthenticated → /sign-in; no active project → a hint; no browse
@@ -81,16 +82,11 @@ export default async function RoadmapPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-          <p className="text-sm text-(--el-text-muted)">
-            {t('subtitle', { project: ctx.project.name })}
-          </p>
-        </div>
-        {/* The access path (design/roadmap sheet 1) — switches to the board and
-            back. No new primary-nav entry. */}
-        <BoardRoadmapToggle current="roadmap" />
+      <header className="flex flex-col gap-1">
+        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+        <p className="text-sm text-(--el-text-muted)">
+          {t('subtitle', { project: ctx.project.name })}
+        </p>
       </header>
 
       {isEmpty ? (

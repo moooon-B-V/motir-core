@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LayoutList,
   ListChecks,
+  Map,
   Settings,
 } from 'lucide-react';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
@@ -214,6 +215,17 @@ export function SidebarNav({
           label: t('nav.boards'),
           href: '/boards',
           active: isActive(pathname, '/boards'),
+        },
+        {
+          // The persistent project Roadmap view (Subtask 7.20.5 / MOTIR-1011) —
+          // its own primary nav entry (the access path, per the ai-planning
+          // design §5 "drawn beside the other project nav surfaces"; NOT a
+          // Board↔Roadmap toggle). The folded-map glyph matches the roadmap
+          // design's view icon. Sits after Boards, as a sibling work view.
+          icon: <Map />,
+          label: t('nav.roadmap'),
+          href: '/roadmap',
+          active: isActive(pathname, '/roadmap'),
         },
         {
           // The backlog / sprint-planning surface (Subtask 4.2.3) — between

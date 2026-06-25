@@ -343,7 +343,8 @@
       "jobRuns": "任务运行",
       "docs": "文档",
       "backlog": "待办列表",
-      "triage": "分流"
+      "triage": "分流",
+      "roadmap": "路线图"
     },
     "topNav": {
       "global": "全局"
@@ -4090,9 +4091,6 @@
     "noProjectDescription": "从切换器中选择或创建一个项目，以查看其路线图。",
     "emptyTitle": "路线图还是空的",
     "emptyDescription": "随着计划成形，工作项会显示在这里。使用 Motir AI 进行规划以生成路线图，或手动添加一个史诗。",
-    "canvasAria": "{project} 路线图",
-    "toggleAria": "在面板和路线图之间切换",
-    "toggleBoard": "面板",
-    "toggleRoadmap": "路线图"
+    "canvasAria": "{project} 路线图"
   }
 }
