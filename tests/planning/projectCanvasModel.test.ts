@@ -120,7 +120,7 @@ describe('deterministicLayout', () => {
     const e = [{ from: 'a', to: 'b' }];
     expect(deterministicLayout(ids, e)).toEqual(deterministicLayout(ids, e));
   });
-  it('lays a chain left→right by dependency order', () => {
+  it('lays a dependency chain left→right, one layer per step', () => {
     const pos = deterministicLayout(
       ['b', 'a', 'c'],
       [
@@ -132,7 +132,26 @@ describe('deterministicLayout', () => {
     expect(pos['b']!.x).toBeLessThan(pos['c']!.x);
     expect(pos['a']!.y).toBe(pos['b']!.y);
   });
-  it('serpentines onto a new row past the column count and keeps nodes apart', () => {
+  it('stacks siblings that share a blocker into one layer (same column, rows apart)', () => {
+    const pos = deterministicLayout(
+      ['r', 'x', 'y'],
+      [
+        { from: 'r', to: 'x' },
+        { from: 'r', to: 'y' },
+      ],
+    );
+    expect(pos['r']!.x).toBeLessThan(pos['x']!.x); // the blocker sits a layer left
+    expect(pos['x']!.x).toBe(pos['y']!.x); // siblings share the layer column
+    expect(pos['x']!.y).not.toBe(pos['y']!.y); // …stacked into distinct rows
+  });
+  it('drops LOOSE nodes (in no edge) into a band BELOW the flow — off every line', () => {
+    const pos = deterministicLayout(['a', 'b', 'loose'], [{ from: 'a', to: 'b' }]);
+    // the standalone card clears both connected cards, so no dependency line can
+    // ever cross it (the "loose bug on the line" bug).
+    expect(pos['loose']!.y).toBeGreaterThan(pos['a']!.y);
+    expect(pos['loose']!.y).toBeGreaterThan(pos['b']!.y);
+  });
+  it('lays an all-loose level as a plain grid that keeps nodes apart', () => {
     const pos = deterministicLayout(['n0', 'n1', 'n2', 'n3'], []);
     expect(pos['n3']!.y).toBeGreaterThan(pos['n0']!.y);
     expect(Math.abs(pos['n0']!.x - pos['n1']!.x)).toBeGreaterThanOrEqual(NODE_W);

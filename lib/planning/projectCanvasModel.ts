@@ -87,6 +87,8 @@ const GAP_X = 80;
 const GAP_Y = 72;
 const COLS = 3;
 const ORIGIN = 40;
+// Clear vertical separation between the dependency FLOW and the loose-item band.
+const BAND_GAP = 96;
 
 function indexNodes(nodes: ProjectCanvasNode[]): Map<string, ProjectCanvasNode> {
   return new Map(nodes.map((n) => [n.id, n]));
@@ -172,24 +174,66 @@ export function computeLevel(
 }
 
 /**
- * A DETERMINISTIC auto-layout for a level's nodes: order them by the dependency
- * chain (stable Kahn topological sort; ties + any cycle fall back to input order),
- * then place left→right in a SERPENTINE grid (rows of `COLS`, alternate rows
- * reversed) so a chain reads as a flowing road and a large level still fits the
- * width. Same input → same positions (no `Math.random`, no `Date.now`); a node's
- * explicit position (fixed stations / a saved drag) overrides this per node.
+ * A DETERMINISTIC auto-layout for a level's nodes — a LAYERED left→right
+ * dependency flow:
+ *  - **Connected** nodes (an end of ≥1 edge) are placed in LAYERS by longest-path
+ *    depth (a blocker sits one column left of everything it blocks), stacking nodes
+ *    that share a layer into rows. So every dependency edge travels left→right and
+ *    no edge has to thread between siblings — the chain reads as a flowing road.
+ *  - **Loose** nodes (in no edge — e.g. a standalone bug) drop into their OWN grid
+ *    band BELOW the flow, so a dependency line never crosses an unrelated card.
+ * Same input → same positions (no `Math.random`, no `Date.now`); a node's explicit
+ * position (fixed stations / a saved drag) overrides this per node.
  */
 export function deterministicLayout(
   nodeIds: string[],
   edges: ReadonlyArray<{ from: string; to: string }>,
 ): Record<string, { x: number; y: number }> {
-  const order = topologicalOrder(nodeIds, edges);
+  const idSet = new Set(nodeIds);
+  const real = edges.filter((e) => idSet.has(e.from) && idSet.has(e.to) && e.from !== e.to);
+  const touched = new Set<string>();
+  for (const e of real) {
+    touched.add(e.from);
+    touched.add(e.to);
+  }
+  const connected = nodeIds.filter((id) => touched.has(id));
+  const loose = nodeIds.filter((id) => !touched.has(id));
+
+  // longest-path layering over the connected subgraph (topo order → each node sits
+  // one layer past its deepest predecessor; cycles fall back to layer 0 via topo).
+  const preds = new Map<string, string[]>(connected.map((id) => [id, []]));
+  for (const e of real) preds.get(e.to)?.push(e.from);
+  const order = topologicalOrder(connected, real);
+  const layer = new Map<string, number>();
+  for (const id of order) {
+    let L = 0;
+    for (const p of preds.get(id) ?? []) L = Math.max(L, (layer.get(p) ?? 0) + 1);
+    layer.set(id, L);
+  }
+  const byLayer = new Map<number, string[]>();
+  for (const id of order) {
+    const L = layer.get(id) ?? 0;
+    const col = byLayer.get(L);
+    if (col) col.push(id);
+    else byLayer.set(L, [id]);
+  }
+
   const pos: Record<string, { x: number; y: number }> = {};
-  order.forEach((id, i) => {
+  let maxRows = 0;
+  for (const [L, ids] of byLayer) {
+    maxRows = Math.max(maxRows, ids.length);
+    ids.forEach((id, r) => {
+      pos[id] = { x: ORIGIN + L * (NODE_W + GAP_X), y: ORIGIN + r * (NODE_H + GAP_Y) };
+    });
+  }
+
+  // the loose band: a simple grid (rows of COLS) below the flow.
+  const flowBottom = ORIGIN + Math.max(0, maxRows - 1) * (NODE_H + GAP_Y) + NODE_H;
+  const bandY = connected.length > 0 ? flowBottom + BAND_GAP : ORIGIN;
+  loose.forEach((id, i) => {
     const row = Math.floor(i / COLS);
-    const within = i % COLS;
-    const col = row % 2 === 1 ? COLS - 1 - within : within;
-    pos[id] = { x: ORIGIN + col * (NODE_W + GAP_X), y: ORIGIN + row * (NODE_H + GAP_Y) };
+    const col = i % COLS;
+    pos[id] = { x: ORIGIN + col * (NODE_W + GAP_X), y: bandY + row * (NODE_H + GAP_Y) };
   });
   return pos;
 }

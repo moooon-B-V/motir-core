@@ -123,12 +123,14 @@ export function OnboardingCanvas({
       }
 
       // The ROOT level: the stations + (when the project has a tree) a compact
-      // "Your plan" PREVIEW node hung off the plan station — NOT the epics fanned
-      // out. Clicking it drills into the full per-level tree (1333 design).
+      // "Your plan" PREVIEW node — NOT the epics fanned out. It sits below the plan
+      // station but is NOT wired to it: the work items are the user's own tree, not
+      // something the planner station produced, so no edge points at it (the
+      // plan→epic fan is the deferred onboarded-flag work, MOTIR-1013). Clicking it
+      // drills into the full per-level tree (1333 design).
       const stationNodes = buildStationNodes(r);
       const stationDeps = buildStationDeps(r);
       const extra: ProjectCanvasNode[] = [];
-      const extraDeps: ProjectCanvasDep[] = [];
       if (wi.items.length > 0) {
         extra.push({
           id: PLAN_NODE_ID,
@@ -140,9 +142,8 @@ export function OnboardingCanvas({
           x: ROOT_X0,
           y: ROOT_Y0,
         });
-        extraDeps.push({ from: 'plan', to: PLAN_NODE_ID, variant: 'firm', kind: 'flow' });
       }
-      return { nodes: [...stationNodes, ...extra], deps: [...stationDeps, ...extraDeps] };
+      return { nodes: [...stationNodes, ...extra], deps: stationDeps };
     },
     [projectKey, state, idea, positions, revisitingKind, willRefresh, onOpenDesign],
   );

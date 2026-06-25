@@ -97,11 +97,14 @@ export function centerOn(rect: Rect, viewport: { w: number; h: number }, scale: 
   return { scale, tx: viewport.w / 2 - cx * scale, ty: viewport.h / 2 - cy * scale };
 }
 
-/** The world-space midpoint between two node rects (anchors a between-edge badge). */
+/** The world-space midpoint ON the connector curve (anchors a between-edge badge,
+ *  so a cross-story flag rests on the line a reader sees, not on the chord). */
 export function edgeMidpoint(a: Rect, b: Rect): { x: number; y: number } {
+  const c = edgeCurve(a, b);
+  // the cubic evaluated at t=0.5
   return {
-    x: (a.x + a.w / 2 + (b.x + b.w / 2)) / 2,
-    y: (a.y + a.h / 2 + (b.y + b.h / 2)) / 2,
+    x: 0.125 * c.ax + 0.375 * c.c1x + 0.375 * c.c2x + 0.125 * c.bx,
+    y: 0.125 * c.ay + 0.375 * c.c1y + 0.375 * c.c2y + 0.125 * c.by,
   };
 }
 
@@ -119,44 +122,84 @@ export function screenToWorld(view: View, sx: number, sy: number): { x: number; 
   return { x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale };
 }
 
+/** Where the ray from rect centre toward `(tx, ty)` crosses the rect border — the
+ *  edge ANCHOR. Anchoring on the true line of sight (not a fixed mid-side point)
+ *  makes the connector point AT the other node and lets several edges off one node
+ *  fan out from distinct border points instead of stacking on one side. */
+function borderPoint(r: Rect, tx: number, ty: number): { x: number; y: number } {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const sx = dx !== 0 ? r.w / 2 / Math.abs(dx) : Infinity;
+  const sy = dy !== 0 ? r.h / 2 / Math.abs(dy) : Infinity;
+  const t = Math.min(sx, sy);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+interface EdgeCurve {
+  ax: number;
+  ay: number;
+  c1x: number;
+  c1y: number;
+  c2x: number;
+  c2y: number;
+  bx: number;
+  by: number;
+}
+
+// Control-point reach along the line, and a perpendicular BOW that grows with
+// length (capped) so a long skip edge ARCS over the node it would otherwise pass
+// behind, while a short neighbour edge stays nearly straight.
+const CTRL_FRAC = 0.42;
+const CTRL_MAX = 130;
+const BOW_FRAC = 0.22;
+const BOW_MAX = 110;
+
 /**
- * The READ-ONLY connector path between two node rects (world coords): leave A on
- * the side facing B and enter B on the side facing A, as a cubic bezier. The
- * dominant axis (horizontal vs vertical) picks the anchor sides, so a side-by-side
- * pair connects right→left and a stacked pair connects bottom→top — keeping the
- * dependency graph legible whatever arrangement the user drags the nodes into.
+ * The cubic connector between two node rects (world coords): anchored at each
+ * border on the line of sight to the other node, with control points reaching
+ * ALONG that line (so the END tangent follows the line and the arrowhead points
+ * the way the edge actually travels) plus a gentle perpendicular bow (so a long
+ * skip edge arcs clear of an intermediate node and parallel edges separate).
+ */
+function edgeCurve(a: Rect, b: Rect): EdgeCurve {
+  const acx = a.x + a.w / 2;
+  const acy = a.y + a.h / 2;
+  const bcx = b.x + b.w / 2;
+  const bcy = b.y + b.h / 2;
+  const A = borderPoint(a, bcx, bcy);
+  const B = borderPoint(b, acx, acy);
+  const dx = B.x - A.x;
+  const dy = B.y - A.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const k = Math.min(len * CTRL_FRAC, CTRL_MAX);
+  const bow = Math.min(len * BOW_FRAC, BOW_MAX);
+  const px = uy; // left normal of the travel direction
+  const py = -ux;
+  return {
+    ax: A.x,
+    ay: A.y,
+    c1x: A.x + ux * k + px * bow,
+    c1y: A.y + uy * k + py * bow,
+    c2x: B.x - ux * k + px * bow,
+    c2y: B.y - uy * k + py * bow,
+    bx: B.x,
+    by: B.y,
+  };
+}
+
+const round = (v: number): number => Math.round(v * 100) / 100;
+
+/**
+ * The READ-ONLY connector PATH (an SVG `d` string) between two node rects — a
+ * direction-following cubic (see `edgeCurve`). Same input → same path; works for
+ * any arrangement the user drags the nodes into.
  */
 export function edgePath(a: Rect, b: Rect): string {
-  const acx = a.x + a.w / 2,
-    acy = a.y + a.h / 2,
-    bcx = b.x + b.w / 2,
-    bcy = b.y + b.h / 2;
-  const dx = bcx - acx,
-    dy = bcy - acy;
-  let ax: number, ay: number, bx: number, by: number;
-  let c1x: number, c1y: number, c2x: number, c2y: number;
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    // horizontal-dominant
-    ax = dx > 0 ? a.x + a.w : a.x;
-    bx = dx > 0 ? b.x : b.x + b.w;
-    ay = acy;
-    by = bcy;
-    const mx = (ax + bx) / 2;
-    c1x = mx;
-    c1y = ay;
-    c2x = mx;
-    c2y = by;
-  } else {
-    // vertical-dominant
-    ay = dy > 0 ? a.y + a.h : a.y;
-    by = dy > 0 ? b.y : b.y + b.h;
-    ax = acx;
-    bx = bcx;
-    const my = (ay + by) / 2;
-    c1x = ax;
-    c1y = my;
-    c2x = bx;
-    c2y = my;
-  }
-  return `M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}`;
+  const c = edgeCurve(a, b);
+  return `M${round(c.ax)},${round(c.ay)} C${round(c.c1x)},${round(c.c1y)} ${round(c.c2x)},${round(c.c2y)} ${round(c.bx)},${round(c.by)}`;
 }

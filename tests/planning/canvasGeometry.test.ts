@@ -27,10 +27,14 @@ describe('centerOn', () => {
 });
 
 describe('edgeMidpoint', () => {
-  it('is the midpoint between two node centres', () => {
+  it('is a point ON the connector curve (bowed off the centre chord)', () => {
     const a = { x: 0, y: 0, w: 100, h: 100 };
     const b = { x: 200, y: 400, w: 100, h: 100 };
-    expect(edgeMidpoint(a, b)).toEqual({ x: 150, y: 250 });
+    // the curve midpoint, not the chord midpoint (150,250) — so a flag rides the
+    // line the reader sees.
+    const m = edgeMidpoint(a, b);
+    expect(m.x).toBeCloseTo(199.5, 1);
+    expect(m.y).toBeCloseTo(225.25, 1);
   });
 });
 
@@ -102,19 +106,29 @@ describe('screenDeltaToWorld / screenToWorld', () => {
 });
 
 describe('edgePath', () => {
-  it('anchors right→left for side-by-side nodes', () => {
+  it('anchors on each border along the LINE OF SIGHT (side-by-side, offset)', () => {
     const p = edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 300, y: 10, w: 100, h: 50 });
-    expect(p.startsWith('M100,25')).toBe(true); // A right-centre
-    expect(p.endsWith('300,35')).toBe(true); // B left-centre
+    expect(p.startsWith('M100,26.67')).toBe(true); // A right border, aimed at B
+    expect(p.endsWith('300,33.33')).toBe(true); // B left border, aimed at A
   });
-  it('anchors bottom→top for stacked nodes', () => {
+  it('anchors on the facing border for stacked nodes', () => {
     const p = edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 10, y: 200, w: 100, h: 50 });
-    expect(p.startsWith('M50,50')).toBe(true); // A bottom-centre
-    expect(p.endsWith('60,200')).toBe(true); // B top-centre
+    expect(p.startsWith('M51.25,50')).toBe(true); // A bottom border, aimed at B
+    expect(p.endsWith('58.75,200')).toBe(true); // B top border, aimed at A
   });
   it('anchors left→right when B is to the left', () => {
     const p = edgePath({ x: 300, y: 0, w: 100, h: 50 }, { x: 0, y: 0, w: 100, h: 50 });
     expect(p.startsWith('M300,25')).toBe(true); // A left side
     expect(p.endsWith('100,25')).toBe(true); // B right side
+  });
+  it('the END tangent follows the line — a diagonal edge gets a diagonal arrow', () => {
+    // B is down-right of A: the last control point → endpoint vector (which the
+    // arrowhead `orient="auto"` follows) must have BOTH components, not be axis-
+    // locked to horizontal/vertical (the old perpendicular-entry bug).
+    const p = edgePath({ x: 0, y: 0, w: 100, h: 100 }, { x: 300, y: 300, w: 100, h: 100 });
+    const nums = p.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+    const [c2x, c2y, bx, by] = [nums[4]!, nums[5]!, nums[6]!, nums[7]!];
+    expect(Math.abs(bx - c2x)).toBeGreaterThan(1);
+    expect(Math.abs(by - c2y)).toBeGreaterThan(1);
   });
 });
