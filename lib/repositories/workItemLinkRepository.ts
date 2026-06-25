@@ -94,6 +94,12 @@ export const workItemLinkRepository = {
    * review blocker (non-terminal but with a recorded branch) satisfies its
    * dependents, so readiness needs the field, not just the status. Read-only →
    * `db` singleton.
+   *
+   * ARCHIVED blockers are EXCLUDED (`toItem.archivedAt IS NULL`; MOTIR-1328): an
+   * archived item is a soft-removed / superseded node, so a stale `is_blocked_by`
+   * edge to one must NOT hold its dependents out of the ready set. Filtering on
+   * the blocker (`toItem`) here makes every readiness consumer agree
+   * (`getReadiness` / `list_ready` / `next_ready` / the board ready column).
    */
   async findBlockerStates(
     workItemId: string,
@@ -101,7 +107,7 @@ export const workItemLinkRepository = {
     Array<{ id: string; status: string; projectId: string; sessionBranch: string | null }>
   > {
     const rows = await db.workItemLink.findMany({
-      where: { fromId: workItemId, kind: 'is_blocked_by' },
+      where: { fromId: workItemId, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: {
         toItem: { select: { id: true, status: true, projectId: true, sessionBranch: true } },
       },
@@ -123,6 +129,11 @@ export const workItemLinkRepository = {
    * (Subtask 7.8.11 — an integrated blocker with a recorded branch satisfies its
    * dependents and contributes its lineage to the conflicting-branch check). ONE
    * query. Empty `fromIds` short-circuits to `[]`. Read-only → `db` singleton.
+   *
+   * ARCHIVED blockers are EXCLUDED (`toItem.archivedAt IS NULL`; MOTIR-1328) — the
+   * same rule as {@link findBlockerStates}, so the batch readiness path
+   * (`getReadinessForItems` / `collectReadyLeaves`) agrees with the single one: a
+   * stale edge to a soft-removed item never phantom-gates its dependents.
    */
   async findBlockerStatesForItems(
     fromIds: string[],
@@ -131,7 +142,7 @@ export const workItemLinkRepository = {
   > {
     if (fromIds.length === 0) return [];
     const rows = await db.workItemLink.findMany({
-      where: { fromId: { in: fromIds }, kind: 'is_blocked_by' },
+      where: { fromId: { in: fromIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: {
         fromId: true,
         toItem: { select: { status: true, projectId: true, sessionBranch: true } },
