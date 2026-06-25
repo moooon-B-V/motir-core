@@ -89,6 +89,7 @@
   --color-foreground: #1a1a1a; /* ink (primary text) */
   --color-surface: #f6f5f4; /* subtle section backgrounds */
   --color-surface-soft: #fafaf9; /* quieter section divisions */
+  --color-canvas: #ecebe7; /* recessed board behind raised cards (planning canvas) */
 
   /* Text scale (Notion's warm-charcoal hierarchy) */
   --color-ink: #1a1a1a;
@@ -247,6 +248,7 @@
   --color-foreground: #f3f4f6;
   --color-surface: #1a1a1a;
   --color-surface-soft: #161616;
+  --color-canvas: #0e0e0e; /* recessed board behind raised cards (planning canvas) */
 
   --color-ink: #f3f4f6;
   --color-charcoal: #e5e5e5;
@@ -2246,6 +2248,7 @@
   /* ── Surfaces ──────────────────────────────────────────────────── */
   --el-surface: var(--color-surface);
   --el-surface-soft: var(--color-surface-soft);
+  --el-canvas: var(--color-canvas); /* recessed board behind raised cards (planning canvas) */
   --el-surface-text: var(--color-foreground);
   --el-muted: var(--color-muted); /* faint fill — chips, code, inverted text */
 

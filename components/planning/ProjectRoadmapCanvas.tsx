@@ -497,12 +497,12 @@ export function ProjectRoadmapCanvas({
       {level === null ? (
         <div
           aria-busy="true"
-          className="flex h-full w-full items-center justify-center bg-(--el-surface-soft)"
+          className="flex h-full w-full items-center justify-center bg-(--el-canvas)"
         >
           <Spinner aria-label="Loading the roadmap" />
         </div>
       ) : nodes.length === 0 ? (
-        <div className="flex h-full w-full items-center justify-center bg-(--el-surface-soft) p-6">
+        <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
           <div className="max-w-[24rem] text-center">
             <p className="text-sm font-semibold text-(--el-text)">
               {drilled ? 'No items at this level' : 'Nothing on the roadmap yet'}

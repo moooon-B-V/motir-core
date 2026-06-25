@@ -339,7 +339,7 @@ export function PlanningCanvas({
         onPointerUp={endGesture}
         onPointerCancel={endGesture}
         onKeyDown={onKeyDown}
-        className="absolute inset-0 cursor-grab touch-none bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) active:cursor-grabbing"
+        className="absolute inset-0 cursor-grab touch-none bg-(--el-canvas) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) active:cursor-grabbing"
         style={{ touchAction: 'none' }}
         data-testid="planning-canvas"
       >
