@@ -53,10 +53,15 @@ const EXECUTOR_GLYPH: Record<ExecutorDto, typeof Bot> = { coding_agent: Bot, hum
 // payload type from the panel; the canonical definition lives in the DTO.
 export type { QuickViewData };
 
-type IssueQuickViewPanelProps =
+// `onClose` (MOTIR-1352) is the OPTIONAL non-URL close — supplied by the
+// roadmap-canvas quick-view, which drives the peek from local state. Omitted on
+// /items · /ready · /boards, where the close clears `?peek` via the shipped
+// URL-driven default (see QuickViewCloseButton).
+type IssueQuickViewPanelProps = { onClose?: () => void } & (
   | { state: 'loading'; peekKey: string }
   | { state: 'notfound'; peekKey: string }
-  | { state: 'ready'; data: QuickViewData };
+  | { state: 'ready'; data: QuickViewData }
+);
 
 /** "Open full page →" — a Next Link styled as the primary Button (size sm). */
 function OpenFullPageLink({ identifier }: { identifier: string }) {
@@ -168,7 +173,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
       <>
         <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
           <span className="flex-1" />
-          <QuickViewCloseButton variant="icon" />
+          <QuickViewCloseButton variant="icon" onClose={props.onClose} />
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
           <span className="mb-1.5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-muted)">
@@ -181,7 +186,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {t('quickViewUnavailableDescription', { key: props.peekKey })}
           </p>
           <div className="mt-3">
-            <QuickViewCloseButton variant="button" />
+            <QuickViewCloseButton variant="button" onClose={props.onClose} />
           </div>
         </div>
       </>
@@ -198,7 +203,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <Sk className="h-5 w-20 rounded-(--radius-badge)" />
           <span className="flex-1" />
           <OpenFullPageLink identifier={props.peekKey} />
-          <QuickViewCloseButton variant="icon" />
+          <QuickViewCloseButton variant="icon" onClose={props.onClose} />
         </header>
         <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-w-0 overflow-y-auto px-7 pt-6 pb-7" role="status" aria-live="polite">
@@ -256,7 +261,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         <StatusValue category={data.statusCategory} label={data.statusLabel} />
         <span className="flex-1" />
         <OpenFullPageLink identifier={data.identifier} />
-        <QuickViewCloseButton variant="icon" />
+        <QuickViewCloseButton variant="icon" onClose={props.onClose} />
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px]">

@@ -5,6 +5,7 @@ import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
+import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 
@@ -15,6 +16,11 @@ import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmap
 // `WorkItemNode`: the roots, then a node's children on drill, with the level's
 // `blocked_by` edges drawn. The onboarding canvas is the OTHER consumer of the same
 // foundation (stations + roots at the top level).
+//
+// It also OWNS the work-item quick-view peek (Subtask 7.20.11 / MOTIR-1352): the
+// canvas surfaces a "View" button on the selected card, and this consumer opens the
+// shipped peek (`WorkItemQuickView`) for that node — driven by LOCAL state, so the
+// reusable canvas stays route-agnostic (no `?peek=` URL coupling).
 
 const ROOT_KEY = '__root__';
 
@@ -40,6 +46,9 @@ export function WorkItemRoadmap({
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
   // project+parent (a ref — mutable — so a new key just misses; no reset needed).
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
+  // The shared work-item quick-view peek (MOTIR-1352) — the same one the onboarding
+  // canvas uses; opened by the canvas "View" button.
+  const { registerItems, onView, quickView } = useWorkItemQuickView();
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
@@ -49,21 +58,26 @@ export function WorkItemRoadmap({
         wi = await fetchRoadmapLevel(projectKey, parentId);
         cacheRef.current.set(key, wi);
       }
+      registerItems(wi);
       return buildWorkItemLevel(wi);
     },
-    [projectKey],
+    [projectKey, registerItems],
   );
 
   return (
-    <ProjectRoadmapCanvas
-      loadLevel={loadLevel}
-      positions={positions}
-      onNodeMove={onNodeMove}
-      onResetPositions={onResetPositions}
-      onSelect={onSelect}
-      searchable
-      rootLabel="Roadmap"
-      ariaLabel={ariaLabel}
-    />
+    <>
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        positions={positions}
+        onNodeMove={onNodeMove}
+        onResetPositions={onResetPositions}
+        onSelect={onSelect}
+        onView={onView}
+        searchable
+        rootLabel="Roadmap"
+        ariaLabel={ariaLabel}
+      />
+      {quickView}
+    </>
   );
 }

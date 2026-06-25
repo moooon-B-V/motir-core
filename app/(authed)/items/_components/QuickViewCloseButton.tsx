@@ -11,10 +11,32 @@ import { usePeekClose } from './IssueQuickView';
 //   - `button` — the ghost "Close" button in the not-found empty state.
 // Kept tiny + client-only so the streamed (Server Component) modal body can drop
 // them in without importing router hooks itself.
+//
+// `onClose` (MOTIR-1352) lets a NON-URL host (the roadmap-canvas quick-view, which
+// drives the peek from LOCAL state, not `?peek`) supply its own close. When given,
+// the URL `usePeekClose` hook is never reached (a distinct component branch), so the
+// panel renders with no Next-router context. The /items · /ready · /boards surfaces
+// pass nothing → the shipped URL-clearing behaviour is unchanged.
 
-export function QuickViewCloseButton({ variant = 'icon' }: { variant?: 'icon' | 'button' }) {
-  const tc = useTranslations('common');
+export function QuickViewCloseButton({
+  variant = 'icon',
+  onClose,
+}: {
+  variant?: 'icon' | 'button';
+  onClose?: () => void;
+}) {
+  if (onClose) return <CloseButton variant={variant} close={onClose} />;
+  return <UrlCloseButton variant={variant} />;
+}
+
+/** The shipped URL-driven close — clears `?peek` via the shared shallow router. */
+function UrlCloseButton({ variant }: { variant: 'icon' | 'button' }) {
   const close = usePeekClose();
+  return <CloseButton variant={variant} close={close} />;
+}
+
+function CloseButton({ variant, close }: { variant: 'icon' | 'button'; close: () => void }) {
+  const tc = useTranslations('common');
 
   if (variant === 'button') {
     return (
