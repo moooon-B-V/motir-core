@@ -101,7 +101,7 @@ export function OnboardingCanvas({
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
-      const r: LoadInputs = { state, idea, positions, revisitingKind, willRefresh, onOpenDesign };
+      const r: LoadInputs = { state, idea, revisitingKind, willRefresh, onOpenDesign };
 
       // The work-item READ for this level: the roots (the produced epics) back the
       // top-level PREVIEW and the synthetic plan level; else a parent's children.
@@ -145,7 +145,7 @@ export function OnboardingCanvas({
       }
       return { nodes: [...stationNodes, ...extra], deps: stationDeps };
     },
-    [projectKey, state, idea, positions, revisitingKind, willRefresh, onOpenDesign],
+    [projectKey, state, idea, revisitingKind, willRefresh, onOpenDesign],
   );
 
   const onActivate = useCallback(
@@ -193,7 +193,6 @@ export function OnboardingCanvas({
 type LoadInputs = {
   state: DiscoveryState;
   idea: string | null;
-  positions: Record<string, { x: number; y: number }>;
   revisitingKind: DirectionDocKind | null;
   willRefresh: DirectionDocKind[];
   onOpenDesign: () => void;
@@ -237,7 +236,9 @@ function buildStationNodes(r: LoadInputs): ProjectCanvasNode[] {
       searchText: key,
       drillable: false,
       content,
-      ...positionFor(key, r.positions),
+      // The station's DEFAULT spot — a saved drag is applied by the canvas via its
+      // `positions` prop, so the "Reset layout" button can revert a station to here.
+      ...positionFor(key, {}),
     };
   });
 }

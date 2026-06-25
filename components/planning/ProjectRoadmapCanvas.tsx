@@ -165,25 +165,32 @@ export function ProjectRoadmapCanvas({
     [localPositions, positions, layout],
   );
 
-  // The AUTO-LAID nodes (work items) — the ones whose position the user can reset
-  // back to the dependency layout. Fixed-position nodes (stations / the plan
-  // preview carry an explicit x/y) are excluded: their arrangement is their own.
+  // The AUTO-LAID nodes (work items) — the ones the AUTO-RESET tracks (fixed-position
+  // nodes — stations / the plan preview carry an explicit x/y — are excluded: a
+  // re-plan never invalidates their arrangement).
   const autoLaidIds = useMemo(
     () => nodes.filter((n) => n.x === undefined || n.y === undefined).map((n) => n.id),
     [nodes],
   );
-  const hasArrangement = autoLaidIds.some((id) => localPositions[id] ?? positions?.[id]);
+  // The ARRANGED nodes — anything the user has hand-moved on THIS level (a saved or
+  // local override), whether a work item or a station. The "Reset layout" button
+  // acts on these, so it works on the root "Your project" canvas (stations) too.
+  const arrangedIds = useMemo(
+    () => nodes.map((n) => n.id).filter((id) => localPositions[id] ?? positions?.[id]),
+    [nodes, localPositions, positions],
+  );
+  const hasArrangement = arrangedIds.length > 0;
 
-  // Reset this level's auto-laid nodes to the dependency layout (local + persisted).
+  // Reset this level's hand-moved nodes to their default layout (local + persisted).
   const resetLayout = useCallback(() => {
-    if (autoLaidIds.length === 0) return;
+    if (arrangedIds.length === 0) return;
     setLocalPositions((prev) => {
       const next = { ...prev };
-      for (const id of autoLaidIds) delete next[id];
+      for (const id of arrangedIds) delete next[id];
       return next;
     });
-    onResetPositions?.(autoLaidIds);
-  }, [autoLaidIds, onResetPositions]);
+    onResetPositions?.(arrangedIds);
+  }, [arrangedIds, onResetPositions]);
 
   // AUTO-RESET on a layer change: if a level's auto-laid node SET differs from the
   // last time we rendered that level (a re-plan added/removed/reordered items), its

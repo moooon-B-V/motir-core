@@ -80,10 +80,14 @@ describe('ProjectRoadmapCanvas', () => {
     expect(el('C')!.firstElementChild!.className).toContain('opacity-35'); // unrelated dims
   });
 
-  it('offers Reset layout only when an auto-laid node is arranged, and resets on click', async () => {
+  it('offers Reset layout when ANY node is hand-moved (incl. a fixed-position station), resets only those', async () => {
     const onResetPositions = vi.fn();
-    const level: RoadmapLevel = { nodes: [node('A', 'a'), node('B', 'b')], deps: [] };
-    // no saved position → no reset affordance
+    // A is auto-laid; S is a FIXED-position node (explicit x/y, like a root station).
+    const level: RoadmapLevel = {
+      nodes: [node('A', 'a'), { ...node('S', 's'), x: 5, y: 5 }],
+      deps: [],
+    };
+    // nothing arranged → no reset affordance
     const { rerender } = render(
       <ProjectRoadmapCanvas
         loadLevel={() => Promise.resolve(level)}
@@ -92,16 +96,17 @@ describe('ProjectRoadmapCanvas', () => {
     );
     await screen.findByText('a');
     expect(screen.queryByRole('button', { name: 'Reset layout' })).toBeNull();
-    // a saved position for an auto-laid node → the button appears
+    // a saved position for the STATION (fixed-position) node → the button still
+    // appears (so the root "Your project" canvas gets it), and resets only S.
     rerender(
       <ProjectRoadmapCanvas
         loadLevel={() => Promise.resolve(level)}
-        positions={{ A: { x: 9, y: 9 } }}
+        positions={{ S: { x: 90, y: 90 } }}
         onResetPositions={onResetPositions}
       />,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Reset layout' }));
-    expect(onResetPositions).toHaveBeenCalledWith(expect.arrayContaining(['A', 'B']));
+    expect(onResetPositions).toHaveBeenCalledWith(['S']); // only the arranged node
   });
 
   it('auto-resets a level when its auto-laid node set changes (a re-plan)', async () => {

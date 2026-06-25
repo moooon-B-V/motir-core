@@ -109,14 +109,35 @@ export function WorkItemNode({
           : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)'
       }`}
     >
-      {/* The header takes the SLACK and clips the title if it must, so the status
-          row below it (reserved, never shrinks) is always visible. */}
-      <div className="flex min-h-0 flex-1 items-start gap-2.5 overflow-hidden">
+      {/* TOP ROW — a compact STATUS chip (top-left), and the cross-link tag (or the
+          has-children hint) pushed to the right. Keeping status here frees the body
+          below for the title. */}
+      <div className="flex shrink-0 items-center gap-2">
+        <WorkItemStatusPill status={item.status} />
+        {crossBlocked ? (
+          <span
+            data-testid="cross-blocked-flag"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
+          >
+            <Flag className="size-3" aria-hidden="true" />
+            cross-story
+          </span>
+        ) : drillable ? (
+          <ChevronRight
+            className="ml-auto size-4 shrink-0 text-(--el-text-muted)"
+            aria-hidden="true"
+            data-testid="drill-affordance"
+          />
+        ) : null}
+      </div>
+
+      {/* BODY — the kind tile + identifier + title; the title gets the room. */}
+      <div className="mt-2.5 flex min-h-0 flex-1 items-start gap-2.5 overflow-hidden">
         <span
-          className={`flex size-8 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[item.kind]}`}
+          className={`flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[item.kind]}`}
           aria-hidden="true"
         >
-          <IssueTypeIcon type={item.kind} className="size-4.5" />
+          <IssueTypeIcon type={item.kind} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
           <span className="block font-mono text-xs text-(--el-text-faint)">{item.identifier}</span>
@@ -124,30 +145,13 @@ export function WorkItemNode({
             {item.title}
           </span>
         </div>
-        {crossBlocked && (
-          <span
-            data-testid="cross-blocked-flag"
-            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
-          >
-            <Flag className="size-3" aria-hidden="true" />
-            cross-story
-          </span>
-        )}
-        {!crossBlocked && drillable && (
-          <ChevronRight
-            className="size-4 shrink-0 text-(--el-text-muted)"
-            aria-hidden="true"
-            data-testid="drill-affordance"
-          />
-        )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-2 pt-2.5">
-        <WorkItemStatusPill status={item.status} />
-        {item.assigneeName ? (
-          <span className="truncate text-xs text-(--el-text-muted)">{item.assigneeName}</span>
-        ) : null}
-      </div>
+      {item.assigneeName ? (
+        <span className="shrink-0 truncate pt-1.5 text-right text-xs text-(--el-text-muted)">
+          {item.assigneeName}
+        </span>
+      ) : null}
     </div>
   );
 }
