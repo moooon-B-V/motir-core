@@ -380,3 +380,87 @@ describe('getIssueDetail readiness.blockedByAncestor — the cascade cause (Subt
     expect(detail.readiness.blockedByAncestor).toBeNull();
   });
 });
+
+describe('an ARCHIVED blocker no longer gates its dependents (MOTIR-1328)', () => {
+  // A `blocked_by` edge to a soft-removed (archived) item must NOT hold the
+  // dependent out of the ready set: an archived node is superseded, so a stale
+  // edge left over from a re-plan that archived the blocker is dead, not open.
+  // The fix excludes archived blockers in the Repository-layer blocker reads
+  // (`findBlockerStates` / `findBlockerStatesForItems`), so EVERY readiness
+  // consumer agrees — `getReadiness` (single), `getReadinessForItems` (board
+  // batch), and `listReady` / `getNextReady`.
+
+  // Create A `blocked_by` B, where B is an open (todo) blocker that DOES gate A.
+  async function blockedPair(fx: Awaited<ReturnType<typeof makeWorkItemFixture>>) {
+    const a = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'A' },
+      fx.ctx,
+    );
+    const b = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'B' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: a.id, toId: b.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    return { a, b };
+  }
+
+  it('AC: A `blocked_by` an archived B is ready, with B absent from openBlockers', async () => {
+    const fx = await makeWorkItemFixture();
+    const { a, b } = await blockedPair(fx);
+
+    // Baseline: an open todo blocker holds A out of the ready set and is named.
+    let detail = await workItemsService.getIssueDetail(fx.projectId, a.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(false);
+    expect(detail.readiness.openBlockers.map((x) => x.id)).toEqual([b.id]);
+
+    // Archive B (the real soft-remove path) → the stale edge is dead.
+    await workItemsService.archiveWorkItem(b.id, fx.ctx);
+
+    detail = await workItemsService.getIssueDetail(fx.projectId, a.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(true);
+    expect(detail.readiness.openBlockers).toEqual([]); // B excluded, not listed
+    // The single boolean projection agrees with the rich verdict.
+    expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(true);
+  });
+
+  it('a NON-archived blocker still gates exactly as before (no regression)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { a, b } = await blockedPair(fx);
+    // B is open + active → A stays blocked and B is still named.
+    const detail = await workItemsService.getIssueDetail(fx.projectId, a.identifier, fx.ctx);
+    expect(detail.readiness.ready).toBe(false);
+    expect(detail.readiness.openBlockers.map((x) => x.id)).toEqual([b.id]);
+    expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false);
+  });
+
+  it('the BATCH board readiness (getReadinessForItems) also frees A once B is archived', async () => {
+    const fx = await makeWorkItemFixture();
+    const { a, b } = await blockedPair(fx);
+    let map = await workItemsService.getReadinessForItems([a.id], fx.ctx);
+    expect(map.get(a.id)).toBe(false); // active blocker → board shows not-ready
+
+    await workItemsService.archiveWorkItem(b.id, fx.ctx);
+    map = await workItemsService.getReadinessForItems([a.id], fx.ctx);
+    expect(map.get(a.id)).toBe(true); // archived blocker no longer gates
+  });
+
+  it('the ready SET (listReady / getNextReady) surfaces A once its only blocker is archived', async () => {
+    const fx = await makeWorkItemFixture();
+    const { a, b } = await blockedPair(fx);
+    const inReady = async () =>
+      (await workItemsService.listReady(fx.projectId, {}, fx.ctx)).items.some((r) => r.id === a.id);
+
+    // While B is active, A is absent from the ready set; B itself (a todo leaf
+    // with no blockers) IS ready, so the set is non-empty without A.
+    expect(await inReady()).toBe(false);
+
+    await workItemsService.archiveWorkItem(b.id, fx.ctx);
+    expect(await inReady()).toBe(true);
+    // getNextReady (the dispatch read) derives from the same set, so it returns A.
+    const next = await workItemsService.getNextReady(fx.projectId, {}, fx.ctx);
+    expect(next?.id).toBe(a.id);
+  });
+});
