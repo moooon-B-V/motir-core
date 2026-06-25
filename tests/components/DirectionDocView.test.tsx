@@ -130,7 +130,7 @@ describe('DirectionDocView', () => {
     const links = within(nav).getAllByRole('button');
     // self (vision) filtered out; ordered discovery → validation
     expect(links.map((b) => b.textContent)).toEqual([
-      expect.stringContaining('Understanding your idea'),
+      expect.stringContaining('Understanding your project'),
       expect.stringContaining('Will people want it?'),
     ]);
     fireEvent.click(links[0]!);
@@ -141,7 +141,7 @@ describe('DirectionDocView', () => {
     render(<DirectionDocView doc={visionDoc} availableDocs={['discovery']} />);
     const nav = screen.getByRole('navigation', { name: 'Other parts of your direction' });
     expect(within(nav).queryByRole('button')).toBeNull();
-    expect(within(nav).getByText('Understanding your idea')).toBeTruthy();
+    expect(within(nav).getByText('Understanding your project')).toBeTruthy();
   });
 
   it('applies the tier colour accent', () => {

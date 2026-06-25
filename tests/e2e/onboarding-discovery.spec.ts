@@ -33,7 +33,7 @@ test.describe.configure({ timeout: 120_000 });
 // The plain-language tier titles the reader renders (DirectionDocView's h1, from
 // TIER_META) — what a founder sees, not the jargon tier names.
 const TIER_TITLE = {
-  discovery: 'Understanding your idea',
+  discovery: 'Understanding your project',
   vision: "What we'll build",
   feasibility: 'Is it worth building?',
   validation: 'Will people want it?',
