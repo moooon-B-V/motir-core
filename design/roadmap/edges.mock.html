@@ -1,0 +1,628 @@
+<!doctype html>
+<!--
+  ROADMAP CANVAS — dependency-edge legibility (Subtask 7.20.8 / MOTIR-1331).
+  Extends the roadmap canvas (design/roadmap/roadmap.* , MOTIR-1009/1194) edge
+  language with the three things that were illegible / unhandled:
+    1. DIRECTION arrows  — read which item is blocked by which.
+    2. An on-canvas LEGEND — what solid vs dashed vs the red style mean.
+    3. The CROSS-LEVEL bad-plan SIGNAL — a blocker that lives on ANOTHER level
+       (a different story/epic) has no node on this screen; show it as a RED
+       edge to a ghost ANCHOR chip naming the off-level blocker + a flag.
+  Built on the shipped PlanningCanvas cubic-bezier edges (non-scaling stroke) +
+  the WorkItemNode card. Motir light palette (app/globals.css --el-* values,
+  inlined for the static mock). Tokens only; not colour-alone (icon + label).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap canvas — dependency edges (MOTIR-1331)</title>
+    <style>
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --borderstrong: #d3cfc8;
+        --hair: #ede9e4;
+        --accent: #5645d4;
+        --accent-text: #ffffff;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --warning-surface: #ffe8d4;
+        --warning-text: #8a3d00;
+        --danger: #e03131;
+        --danger-surface: #fde0ec;
+        --info: #0075de;
+        --sky: #dcecfa;
+        --lavender: #e6e0f5;
+        --mint: #d9f3e1;
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --t-epic: #ff64c8;
+        --t-story: #1aae39;
+        --t-task: #0075de;
+        --t-subtask: #2a9d99;
+        --t-bug: #e03131;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--text);
+        padding: 28px 22px 60px;
+      }
+      .pagehead {
+        max-width: 1180px;
+        margin: 0 auto 22px;
+      }
+      .pagehead h1 {
+        font-size: 21px;
+        margin: 0 0 4px;
+        color: var(--strong);
+      }
+      .pagehead p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--muted);
+        max-width: 920px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      .viewport {
+        position: relative;
+        background:
+          radial-gradient(circle, #00000010 1px, transparent 1.4px) 0 0 / 22px 22px,
+          var(--hub);
+        overflow: hidden;
+      }
+      .world,
+      .edges {
+        position: absolute;
+        inset: 0;
+      }
+      .edges {
+        pointer-events: none;
+        overflow: visible;
+      }
+      /* ── work-item node card (the shipped WorkItemNode language) ── */
+      .node {
+        position: absolute;
+        width: 244px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px #0000000a;
+        padding: 11px 12px;
+      }
+      .node .top {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .node .tile {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .node .tile svg {
+        width: 17px;
+        height: 17px;
+      }
+      .node .id {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: var(--faint);
+      }
+      .node .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--strong);
+        line-height: 1.25;
+        margin-top: 1px;
+      }
+      .node .foot {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--strong);
+      }
+      .pill svg {
+        width: 13px;
+        height: 13px;
+      }
+      .pill.done {
+        background: var(--mint);
+      }
+      .pill.prog {
+        background: var(--sky);
+      }
+      .pill.todo {
+        background: var(--mutedfill);
+        color: var(--muted);
+      }
+      .node.flagged {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 1px var(--danger) inset;
+      }
+      .crossbadge {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--danger-surface);
+        color: #9b1c4b;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .crossbadge svg {
+        width: 12px;
+        height: 12px;
+      }
+      /* ── ghost anchor for an off-level blocker ── */
+      .ghost {
+        position: absolute;
+        width: 180px;
+        border: 1.5px dashed var(--danger);
+        background: repeating-linear-gradient(
+          135deg,
+          #fff,
+          #fff 7px,
+          var(--danger-surface) 7px,
+          var(--danger-surface) 9px
+        );
+        border-radius: 12px;
+        padding: 9px 11px;
+        opacity: 0.96;
+      }
+      .ghost .gid {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        color: #9b1c4b;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .ghost .gid svg {
+        width: 13px;
+        height: 13px;
+      }
+      .ghost .gsub {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      .ghost .gwhere {
+        color: var(--danger);
+        font-weight: 600;
+      }
+      /* ── edge end-label (the convention call-out) ── */
+      .elabel {
+        position: absolute;
+        font-size: 11px;
+        color: var(--muted);
+        background: #ffffffcc;
+        border-radius: 6px;
+        padding: 1px 6px;
+      }
+      .elabel b {
+        color: var(--strong);
+      }
+      /* ── on-canvas LEGEND (edge key) ── */
+      .legend {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        background: #ffffffee;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        box-shadow: 0 2px 8px #00000012;
+        padding: 9px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .legend .lh {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .legend .lrow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        color: var(--strong);
+      }
+      .legend .swatch {
+        flex: none;
+        width: 40px;
+        height: 14px;
+      }
+      .legend em {
+        color: var(--muted);
+        font-style: normal;
+      }
+      .zoom {
+        position: absolute;
+        bottom: 14px;
+        right: 14px;
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px #0000000d;
+      }
+      .zoom button {
+        border: 0;
+        background: transparent;
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        color: var(--muted);
+        cursor: default;
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--hair);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pagehead">
+      <h1>Roadmap canvas — dependency edges: direction, legend &amp; the cross-story tangle</h1>
+      <p>
+        MOTIR-1331 · extends the per-level roadmap canvas (MOTIR-1194). Three fixes:
+        <b>directional arrows</b> so you can read which item blocks which; an on-canvas
+        <b>legend</b> for the edge styles; and the <b>cross-level red signal</b> for a blocker that
+        lives on another level — drawn to a ghost anchor that names it, reading as a bad-plan tangle
+        (a correct plan is a tree).
+      </p>
+    </div>
+
+    <!-- SHEET 1 — in-level edges: direction + firm/pending + the legend -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>Within a level — directional arrows + firm / pending, read against the legend</h2>
+        <span class="cap">arrow points blocker → blocked (“must be done first”)</span>
+      </div>
+      <div class="viewport" style="height: 430px">
+        <svg class="edges" viewBox="0 0 1140 430" preserveAspectRatio="none">
+          <defs>
+            <marker
+              id="aFirm"
+              viewBox="0 0 10 10"
+              refX="8.5"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M0 0L10 5L0 10z" fill="#d3cfc8" />
+            </marker>
+            <marker
+              id="aPend"
+              viewBox="0 0 10 10"
+              refX="8.5"
+              refY="5"
+              markerWidth="7"
+              markerHeight="7"
+              orient="auto-start-reverse"
+            >
+              <path d="M0 0L10 5L0 10z" fill="#a4a097" />
+            </marker>
+          </defs>
+          <!-- PROD-3 (done) → PROD-4 : FIRM (solid) -->
+          <path
+            d="M300,150 C360,150 360,150 420,150"
+            fill="none"
+            stroke="#d3cfc8"
+            stroke-width="2.2"
+            marker-end="url(#aFirm)"
+          />
+          <!-- PROD-4 → PROD-6 (todo) : PENDING (dashed) -->
+          <path
+            d="M664,168 C724,210 724,250 724,286"
+            fill="none"
+            stroke="#a4a097"
+            stroke-width="2.2"
+            stroke-dasharray="2 7"
+            stroke-linecap="round"
+            marker-end="url(#aPend)"
+          />
+          <!-- PROD-3 (done) → PROD-6 : FIRM -->
+          <path
+            d="M188,182 C188,250 360,250 480,300"
+            fill="none"
+            stroke="#d3cfc8"
+            stroke-width="2.2"
+            marker-end="url(#aFirm)"
+          />
+        </svg>
+
+        <div class="world">
+          <!-- PROD-3 done -->
+          <div class="node" style="left: 56px; top: 122px">
+            <div class="top">
+              <span class="tile" style="background: var(--lavender)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <div>
+                <div class="id">PROD-3</div>
+                <div class="ttl">Scaffold the auth service</div>
+              </div>
+            </div>
+            <div class="foot">
+              <span class="pill done"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                  <path d="m20 6-11 11-5-5" /></svg
+                >Done</span
+              >
+            </div>
+          </div>
+
+          <!-- PROD-4 in progress -->
+          <div class="node" style="left: 420px; top: 122px">
+            <div class="top">
+              <span class="tile" style="background: var(--lavender)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <div>
+                <div class="id">PROD-4</div>
+                <div class="ttl">Wire sign-in + sessions</div>
+              </div>
+            </div>
+            <div class="foot">
+              <span class="pill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" /></svg
+                >In progress</span
+              >
+            </div>
+          </div>
+
+          <!-- PROD-6 todo (the blocked one) -->
+          <div class="node" style="left: 480px; top: 286px">
+            <div class="top">
+              <span class="tile" style="background: var(--lavender)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <div>
+                <div class="id">PROD-6</div>
+                <div class="ttl">Protect the dashboard routes</div>
+              </div>
+            </div>
+            <div class="foot">
+              <span class="pill todo"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-dasharray="3 3"
+                >
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do</span
+              >
+            </div>
+          </div>
+
+          <div class="elabel" style="left: 312px; top: 124px">
+            <b>blocks</b> — PROD-3 done, so PROD-4 can start
+          </div>
+          <div class="elabel" style="left: 558px; top: 232px">pending — PROD-4 not done yet</div>
+        </div>
+
+        <!-- the on-canvas EDGE legend -->
+        <div class="legend">
+          <span class="lh">Dependencies</span>
+          <span class="lrow">
+            <svg class="swatch" viewBox="0 0 40 14">
+              <path d="M2 7H32" stroke="#d3cfc8" stroke-width="2.2" />
+              <path d="M30 3 36 7 30 11z" fill="#d3cfc8" />
+            </svg>
+            blocks <em>· blocker done (ready)</em>
+          </span>
+          <span class="lrow">
+            <svg class="swatch" viewBox="0 0 40 14">
+              <path
+                d="M2 7H32"
+                stroke="#a4a097"
+                stroke-width="2.2"
+                stroke-dasharray="2 6"
+                stroke-linecap="round"
+              />
+              <path d="M30 3 36 7 30 11z" fill="#a4a097" />
+            </svg>
+            pending <em>· blocker not done</em>
+          </span>
+          <span class="lrow">
+            <svg class="swatch" viewBox="0 0 40 14">
+              <path d="M2 7H32" stroke="#e03131" stroke-width="2.4" />
+              <path d="M30 3 36 7 30 11z" fill="#e03131" />
+            </svg>
+            cross-story <em>· blocker in another story (bad plan)</em>
+          </span>
+        </div>
+
+        <div class="zoom"><button>−</button><button>+</button><button>⤢</button></div>
+      </div>
+    </section>
+
+    <!-- SHEET 2 — the cross-level tangle: a blocker on ANOTHER level -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>Across levels — a blocker that lives in another story (the bad-plan tangle)</h2>
+        <span class="cap">off-level blocker → a red edge to a ghost anchor that names it</span>
+      </div>
+      <div class="viewport" style="height: 360px">
+        <svg class="edges" viewBox="0 0 1140 360" preserveAspectRatio="none">
+          <defs>
+            <marker
+              id="aCross"
+              viewBox="0 0 10 10"
+              refX="8.5"
+              refY="5"
+              markerWidth="7.5"
+              markerHeight="7.5"
+              orient="auto-start-reverse"
+            >
+              <path d="M0 0L10 5L0 10z" fill="#e03131" />
+            </marker>
+          </defs>
+          <!-- ghost anchor (off-level blocker) → PROD-12 : RED cross edge -->
+          <path
+            d="M300,150 C400,150 470,180 556,182"
+            fill="none"
+            stroke="#e03131"
+            stroke-width="2.4"
+            marker-end="url(#aCross)"
+          />
+        </svg>
+
+        <div class="world">
+          <!-- the off-level blocker, drawn as a GHOST anchor (no node on this level) -->
+          <div class="ghost" style="left: 96px; top: 118px">
+            <div class="gid">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 17 17 7M9 7h8v8" />
+              </svg>
+              PROD-42
+            </div>
+            <div class="gsub">Migrate legacy tokens</div>
+            <div class="gsub">in <span class="gwhere">Story · Auth hardening ↗</span></div>
+          </div>
+
+          <!-- PROD-12 — blocked across stories -->
+          <div class="node flagged" style="left: 556px; top: 142px">
+            <div class="top">
+              <span class="tile" style="background: var(--lavender)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </span>
+              <div>
+                <div class="id">PROD-12</div>
+                <div class="ttl">Rotate the signing keys</div>
+              </div>
+              <span class="crossbadge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M4 22V4M4 4h13l-2 4 2 4H4" fill="currentColor" stroke="none" />
+                </svg>
+                cross-story
+              </span>
+            </div>
+            <div class="foot">
+              <span class="pill todo"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-dasharray="3 3"
+                >
+                  <circle cx="12" cy="12" r="9" /></svg
+                >To do</span
+              >
+            </div>
+          </div>
+
+          <div class="elabel" style="left: 360px; top: 128px">
+            <b>blocked_by</b> across a story boundary — the tangle the plan should not have
+          </div>
+          <div class="elabel" style="left: 556px; top: 232px; max-width: 250px">
+            tooltip on the flag: “Blocked by PROD-42 in <b>Auth hardening</b> — click to open that
+            level”
+          </div>
+        </div>
+
+        <div class="zoom"><button>−</button><button>+</button><button>⤢</button></div>
+      </div>
+    </section>
+  </body>
+</html>

@@ -23,6 +23,8 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `design-notes.md`   | this spec (primitives, copy, token roles, per-behaviour provenance)              |
 | `roadmap.mock.html` | the source of truth — a multi-panel mock built from the real tokens              |
 | `roadmap.png`       | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
+| `edges.mock.html`   | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story   |
+| `edges.png`         | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
 
 The mock is a **multi-panel review board** — six sheets (5 spec + the multi-level
 drill-down sheet, below), every panel inspected (the multi-panel rule,
@@ -61,6 +63,78 @@ It **adds one variant**: a **cross-story `blocked_by`** edge, drawn **warning-
 toned** (`--el-warning`) **+ a flag badge** at its midpoint, so the dependency
 tangle the arrow-audit forbids is visible (carried from `MOTIR-1009`). This is a
 clean superset; `7.3.77`'s build adds a `variant: 'cross'` to `CanvasEdge`.
+
+---
+
+## ⭐ Dependency-edge LEGIBILITY (Subtask 7.20.8 / MOTIR-1331 — `edges.mock.html`)
+
+The shipped per-level canvas (`MOTIR-1194`) drew the firm / pending / cross edges
+but three things were illegible or unhandled. This section specifies them; the
+build adds them to `PlanningCanvas`'s edge `<svg>` (still read-only, non-scaling
+stroke). Drawn on **`edges.mock.html` sheets 1 (in-level) + 2 (cross-level)**.
+
+### 1. DIRECTION — an arrowhead, one stated convention
+
+Edges were undirected lines — you could not tell which item blocked which. Every
+edge now carries an **arrowhead at its `to` end**, and the convention is fixed and
+stated **everywhere**:
+
+> **The arrow points from the BLOCKER to the item it blocks** — `A → B` reads
+> "A blocks B / B can't start until A is done" (the unblocking flow). This matches
+> the engine's `CanvasEdge.from = blocker`, `to = blocked`.
+
+The arrowhead is an SVG `<marker>` (a filled triangle, `markerWidth ≈ 7`,
+`orient="auto"`) **coloured to match its edge** — one marker per variant (firm =
+`--el-border-strong`, pending = `--el-border`, cross = `--el-danger`) so the head
+reads at a glance. It rides the shipped cubic-bezier connector; `vector-effect:
+non-scaling-stroke` keeps it crisp at any zoom.
+
+### 2. A LEGEND on the canvas (what the styles MEAN)
+
+The canvas never told the reader what solid vs dashed meant. Add a small,
+unobtrusive **edge legend** — a fixed overlay anchored **bottom-left** (the zoom
+control already owns bottom-left in the engine; the legend sits beside it, or
+bottom-left with zoom moved to bottom-right on this surface), `--el-surface` card,
+`--radius-card`, `--shadow-card`. It lists each edge style with a **directional
+swatch** + a plain-language meaning:
+
+- **solid arrow → "blocks"** — _blocker is done (the dependency is settled / ready)_
+- **dashed arrow ⟶ "pending"** — _blocker is not done yet_
+- **red arrow → "cross-story"** — _blocker is in another story (a bad plan)_
+
+(Header "Dependencies", `--el-text-faint` uppercase caption; rows
+`--el-text-strong`, the meanings `--el-text-muted`.) It is the SAME three styles
+the edges use, so the canvas is self-documenting.
+
+### 3. CROSS-LEVEL / cross-story SIGNAL — the off-level blocker (the heart, sheet 2)
+
+A badly-planned project can set a work item `blocked_by` an item on **another
+level** (a different story / epic). The per-level read (`MOTIR-1010`) already
+RETURNS that edge (its blocker id is off-level), but the canvas has no on-screen
+node for the blocker — so it was dropped. It must instead read as the **bad-plan
+TANGLE** the dependency-arrow audit forbids (a correct plan is a tree). Design:
+
+- **A RED edge** (`--el-danger`, slightly heavier, solid) with the red arrowhead —
+  visually distinct from the neutral in-level firm/pending.
+- **A GHOST ANCHOR** for the off-level blocker (it has no node here): a small
+  **dashed-red, hatched chip** that NAMES the blocker — its identifier (`PROD-42`,
+  with an **↗ "leaves this level"** glyph), its title, and **where it lives**
+  ("in Story · Auth hardening ↗", `--el-danger` text). The red edge runs from this
+  anchor INTO the blocked node, so the tangle is legible without leaving the level.
+- **A node BADGE** on the blocked item — a `cross-story` flag pill
+  (`--el-danger-surface` tint + strong text + a flag glyph) + a red node ring — so
+  even off-screen of the edge, the node reads as entangled (not colour-alone:
+  icon + label + tint, AA).
+- **States:** one vs several off-level blockers (the anchor stacks "+N more");
+  **hover/tooltip** on the flag names the blocker + its level; **click** → drill to
+  the blocker's level (the canvas already navigates per level). The normal
+  (in-level, tree-shaped) case is unaffected — no anchor, no red.
+
+**Build note.** The consumer's `loadLevel` already gets each level's edges; for an
+edge whose blocker is NOT in the level's node set, emit a `cross` dep + a ghost
+anchor node (id = the blocker, rendered as the anchor chip) so `PlanningCanvas`
+draws the red edge to a real anchored target, and flag the blocked node. The
+within-level firm/pending arrows are unchanged.
 
 ---
 
