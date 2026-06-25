@@ -223,8 +223,8 @@ export function ProjectRoadmapCanvas({
   const canvasNodes: CanvasNode[] = nodes.map((n) => ({
     id: n.id,
     ...positionOf(n),
-    width: NODE_W,
-    height: NODE_H,
+    width: n.width ?? NODE_W,
+    height: n.height ?? NODE_H,
   }));
   const canvasEdges: CanvasEdge[] = deps.map((d) => ({
     from: d.from,

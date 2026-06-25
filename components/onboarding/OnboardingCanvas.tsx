@@ -143,6 +143,10 @@ export function OnboardingCanvas({
           content: <PlanPreview epics={wi.items} />,
           x: ROOT_X0,
           y: ROOT_Y0,
+          // The preview is far WIDER (44rem) + taller than a station card; hint its
+          // real size so the once-only fit-to-view frames it instead of clipping it.
+          width: 704,
+          height: 240,
         });
       }
       return { nodes: [...stationNodes, ...extra], deps: stationDeps };

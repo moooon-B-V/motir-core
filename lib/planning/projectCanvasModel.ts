@@ -37,6 +37,12 @@ export interface ProjectCanvasNode {
    *  auto-layout places the node. */
   x?: number;
   y?: number;
+  /** Size HINT (world px) for nodes that are NOT the standard card size — used by
+   *  the once-only fit-to-view before the DOM is measured, so an oversized node (the
+   *  wide "Your plan" preview) is fully framed rather than clipped. Defaults to the
+   *  standard NODE_W/NODE_H. */
+  width?: number;
+  height?: number;
 }
 
 /** A dependency edge. Direction is the consumer's (onboarding: journey order;

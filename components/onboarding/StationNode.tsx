@@ -117,9 +117,9 @@ export function StationCard({
   return (
     <div
       className={[
-        // p-4, not the roomy --spacing-card-padding: a canvas node reads tighter
+        // p-3, not the roomy --spacing-card-padding: a canvas node reads tighter
         // (matching the work-item card's density) so the top isn't over-padded.
-        'w-[300px] rounded-(--radius-card) border p-4',
+        'w-[300px] rounded-(--radius-card) border p-3',
         revisiting
           ? 'border-(--el-border-strong) bg-(--el-tint-peach) shadow-(--shadow-card)'
           : ringed
