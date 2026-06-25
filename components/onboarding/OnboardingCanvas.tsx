@@ -7,6 +7,7 @@ import {
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
+import { PlanPreview } from '@/components/planning/PlanPreview';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import { Spinner } from '@/components/ui/Spinner';
@@ -36,13 +37,13 @@ import {
 // per project so the stations refreshing (each chat turn) never re-hits the API.
 
 const ROOT_KEY = '__root__';
-// Parent-less work items (epics) lay out in a grid BELOW the station serpentine
-// (which occupies up to ~y:800), so they show at the top level without colliding.
-const ROOT_COLS = 4;
+// The synthetic top-level node that stands in for the whole produced plan — a
+// compact "Your plan" PREVIEW (MOTIR-1333) instead of every epic fanned out. It
+// hangs off the `plan` station and drills into the real epic roots on activate.
+const PLAN_NODE_ID = '__plan__';
+// The preview sits BELOW the station serpentine (which occupies up to ~y:800).
 const ROOT_X0 = 40;
 const ROOT_Y0 = 920;
-const ROOT_STEP_X = 360;
-const ROOT_STEP_Y = 204;
 
 export interface OnboardingCanvasProps {
   state: DiscoveryState;
@@ -102,43 +103,46 @@ export function OnboardingCanvas({
     async (parentId: string | null): Promise<RoadmapLevel> => {
       const r: LoadInputs = { state, idea, positions, revisitingKind, willRefresh, onOpenDesign };
 
-      // Work items for this level (cached per project).
+      // The work-item READ for this level: the roots (the produced epics) back the
+      // top-level PREVIEW and the synthetic plan level; else a parent's children.
+      const readParent = parentId === null || parentId === PLAN_NODE_ID ? null : parentId;
       let wi: RoadmapLevelData = { items: [], edges: [], offLevelBlockers: [] };
       if (projectKey) {
-        const key = `${projectKey}:${parentId ?? ROOT_KEY}`;
+        const key = `${projectKey}:${readParent ?? ROOT_KEY}`;
         const cached = cacheRef.current.get(key);
         if (cached) wi = cached;
         else {
-          wi = await fetchRoadmapLevel(projectKey, parentId);
+          wi = await fetchRoadmapLevel(projectKey, readParent);
           cacheRef.current.set(key, wi);
         }
       }
-      // The work-item nodes + deps (within-level arrows + the cross-story signal).
-      const { nodes: wiNodes, deps: wiDeps } = buildWorkItemLevel(wi);
 
       if (parentId !== null) {
-        // A deeper work-item level — auto-laid-out by the foundation.
-        return { nodes: wiNodes, deps: wiDeps };
+        // The plan level (the epics) or a deeper work-item level — auto-laid out.
+        return buildWorkItemLevel(wi);
       }
 
-      // The ROOT level: the stations (from the live state) + the produced epics in
-      // a grid below them. Grid-position the parent-less work items (the epics);
-      // any cross-story anchor keeps the foundation's auto-layout.
+      // The ROOT level: the stations + (when the project has a tree) a compact
+      // "Your plan" PREVIEW node hung off the plan station — NOT the epics fanned
+      // out. Clicking it drills into the full per-level tree (1333 design).
       const stationNodes = buildStationNodes(r);
       const stationDeps = buildStationDeps(r);
-      const rootPos = new Map<string, { x: number; y: number }>();
-      wi.items
-        .filter((i) => i.parentId === null)
-        .forEach((item, i) => {
-          const row = Math.floor(i / ROOT_COLS);
-          const col = i % ROOT_COLS;
-          rootPos.set(item.id, { x: ROOT_X0 + col * ROOT_STEP_X, y: ROOT_Y0 + row * ROOT_STEP_Y });
+      const extra: ProjectCanvasNode[] = [];
+      const extraDeps: ProjectCanvasDep[] = [];
+      if (wi.items.length > 0) {
+        extra.push({
+          id: PLAN_NODE_ID,
+          parentId: null,
+          drillable: true,
+          searchText: 'your plan',
+          crumbLabel: 'Your plan',
+          content: <PlanPreview epics={wi.items} />,
+          x: ROOT_X0,
+          y: ROOT_Y0,
         });
-      const positioned = wiNodes.map((n) => {
-        const p = rootPos.get(n.id);
-        return p ? { ...n, ...p } : n;
-      });
-      return { nodes: [...stationNodes, ...positioned], deps: [...stationDeps, ...wiDeps] };
+        extraDeps.push({ from: 'plan', to: PLAN_NODE_ID, variant: 'firm' });
+      }
+      return { nodes: [...stationNodes, ...extra], deps: [...stationDeps, ...extraDeps] };
     },
     [projectKey, state, idea, positions, revisitingKind, willRefresh, onOpenDesign],
   );
