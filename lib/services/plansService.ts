@@ -264,7 +264,9 @@ async function applyModify(
 
   const patch = (item.patch ?? {}) as unknown as PlanItemPatch;
   const update: Prisma.WorkItemUncheckedUpdateInput = {};
-  const diff: Record<string, { from: unknown; to: unknown }> = {};
+  // Holds per-field { from, to } cells AND the `links` edge-change cell
+  // ({ added, removed }) — the work-item revision diff is a heterogeneous map.
+  const diff: Record<string, unknown> = {};
 
   if (patch.title !== undefined && patch.title !== current.title) {
     update.title = patch.title;
@@ -287,7 +289,11 @@ async function applyModify(
   }
 
   // Edge changes: add/remove `is_blocked_by` links (the target is the `from`).
-  const added: string[] = [];
+  // Recorded under the EXISTING `links` revision-diff key + shape that
+  // workItemsService uses ({ added/removed: [{ toId, kind }] }) — so the activity
+  // feed renders them through the already-registered `links` disposition
+  // (lib/activity/renderers.ts) rather than a new, undispositioned key.
+  const linkAdded: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);
     await workItemLinkRepository.create(
@@ -300,9 +306,9 @@ async function applyModify(
       },
       tx,
     );
-    added.push(toId);
+    linkAdded.push({ toId, kind: 'is_blocked_by' });
   }
-  const removed: string[] = [];
+  const linkRemoved: Array<{ toId: string; kind: string }> = [];
   for (const ref of patch.blockedByRemove ?? []) {
     const toId = resolveRef(ref);
     const link = await workItemLinkRepository.findReciprocal(
@@ -313,11 +319,14 @@ async function applyModify(
     );
     if (link) {
       await workItemLinkRepository.delete(link.id, tx);
-      removed.push(toId);
+      linkRemoved.push({ toId, kind: 'is_blocked_by' });
     }
   }
-  if (added.length > 0 || removed.length > 0) {
-    diff.blockedBy = { from: removed, to: added };
+  if (linkAdded.length > 0 || linkRemoved.length > 0) {
+    diff.links = {
+      ...(linkAdded.length > 0 ? { added: linkAdded } : {}),
+      ...(linkRemoved.length > 0 ? { removed: linkRemoved } : {}),
+    };
   }
 
   // ONE revision for the whole modify (same id — lands as a single entry in the

@@ -186,8 +186,13 @@ describe('plansService.approvePlan — materialize per op', () => {
     const targetId = await seedItem(fx, 'Old title');
     const doomedId = await seedItem(fx, 'To remove');
 
+    const blockerId = await seedItem(fx, 'Blocker for modify');
     const planId = await plannedPlan(fx, [
-      { op: 'modify', workItemId: targetId, patch: { title: 'New title', priority: 'high' } },
+      {
+        op: 'modify',
+        workItemId: targetId,
+        patch: { title: 'New title', priority: 'high', blockedByAdd: [blockerId] },
+      },
       { op: 'remove', workItemId: doomedId },
     ]);
 
@@ -205,12 +210,22 @@ describe('plansService.approvePlan — materialize per op', () => {
     expect(modified.title).toBe('New title');
     expect(modified.priority).toBe('high');
 
+    // The edge change applied: an is_blocked_by link to the blocker now exists.
+    const link = await db.workItemLink.findFirst({
+      where: { fromId: targetId, toId: blockerId, kind: 'is_blocked_by' },
+    });
+    expect(link).not.toBeNull();
+
     // Exactly ONE `updated` revision for the whole modify (the seed `created`
-    // one aside) — the modify lands as a single entry, same id.
+    // one aside) — the modify lands as a single entry, same id — and the edge
+    // change rides it under the existing `links` diff key.
     const modRevisions = await db.workItemRevision.findMany({
       where: { workItemId: targetId, changeKind: 'updated' },
     });
     expect(modRevisions).toHaveLength(1);
+    expect(modRevisions[0]!.diff).toMatchObject({
+      links: { added: [{ toId: blockerId, kind: 'is_blocked_by' }] },
+    });
 
     const removed = await db.workItem.findUniqueOrThrow({ where: { id: doomedId } });
     expect(removed.archivedAt).not.toBeNull();
