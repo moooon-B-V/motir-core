@@ -627,23 +627,29 @@
         background: var(--sky);
         color: #0a4fa0;
       }
+      /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
+         Deliberately NOT red/dashed/hatched — that language is reserved for the
+         cross-story dependency signal (.ghost / .node.flagged below), which is
+         shipped canvas language we compose. Archive is reversible, not an error,
+         so it reads as greyscale + strike-through, like the cancelled status hue. */
       .node.remove {
-        border: 1.5px dashed var(--danger);
-        background: repeating-linear-gradient(
-          135deg,
-          #fff,
-          #fff 8px,
-          var(--danger-surface) 8px,
-          var(--danger-surface) 10px
-        );
+        border: 1px solid var(--border-strong);
+        background: var(--mutedfill);
+        opacity: 0.66;
+        filter: grayscale(0.5);
       }
       .node.remove .ttl {
         text-decoration: line-through;
-        color: var(--secondary);
+        text-decoration-color: var(--faint);
+        color: var(--muted);
+      }
+      .node.remove .id {
+        color: var(--faint);
       }
       .opbadge.remove {
-        background: var(--danger-surface);
-        color: #9b1c4b;
+        background: var(--mutedfill);
+        color: var(--secondary);
+        border: 1px solid var(--border-strong);
       }
 
       .diff {
@@ -1608,13 +1614,33 @@
                         fill="none"
                         stroke="currentColor"
                         stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
                       >
-                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg
+                        <rect x="3" y="4" width="18" height="4" rx="1" />
+                        <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg
                       >remove</span
                     >
                   </div>
                   <div class="foot">
-                    <span class="pill" style="background: var(--danger-surface); color: #9b1c4b"
+                    <span
+                      class="pill"
+                      style="
+                        background: var(--mutedfill);
+                        color: var(--secondary);
+                        border: 1px solid var(--border-strong);
+                      "
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        style="width: 12px; height: 12px"
+                      >
+                        <rect x="3" y="4" width="18" height="4" rx="1" />
+                        <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg
                       >will be archived</span
                     >
                   </div>

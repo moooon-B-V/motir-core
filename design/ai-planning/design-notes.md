@@ -65,11 +65,21 @@ list/`useRowWindow` primitives — not a hand-rolled list. (Built by MOTIR-1338.
 The composed canvas+chat shell, with the Plans chrome layered on:
 
 - **Plan status** + a **history timeline** (created / planned at X; approved or declined at Y by Z).
-- **Per-item `op` treatment**, drawn ON the real `WorkItemNode`:
-  - **`add`** → the node in a **"proposed" tint** (a new node not yet in the tree).
-  - **`modify`** → the **EXISTING** node + a **"proposed change" badge** + an inline **old→new
-    diff** (old read live from the target, new from `patch`) — SAME id, not a ghost copy.
-  - **`remove`** → the node marked **"will be archived"**.
+- **Per-item `op` treatment**, drawn ON the real `WorkItemNode`. The three ops use **three
+  distinct, non-colliding visual languages**, and none of them reuses the red dashed/hatched
+  language the shipped canvas already owns for **cross-story dependencies** (the `GhostAnchor` /
+  cross-blocked node — danger dashed border + `danger-surface` hatch). Red-hatch stays reserved
+  for that dependency signal; the op treatments are a separate axis:
+  - **`add`** → **dashed ACCENT (purple) border + accent-soft tint + a "+ add" badge** — a new
+    node not yet in the tree (proposed).
+  - **`modify`** → the **EXISTING** node, **solid INFO (blue) ring + a "proposed change" badge** +
+    an inline **old→new diff** (old read live from the target, new from `patch`) — SAME id, not a
+    ghost copy.
+  - **`remove`** → a **dimmed, de-saturated, NEUTRAL "will be archived"** treatment (solid muted
+    border + grey fill + strike-through title + an archive chip) — deliberately **not**
+    red/dashed/hatched, since archive is reversible (the `cancelled`-status hue), not the
+    error/attention signal cross-story deps carry. This is the fix for the original collision:
+    `remove` previously read identically to a cross-level dependency.
 - **Per-item stale badges + reasons** (from MOTIR-1340): `parent_removed` / `siblings_added` /
   `blocker_removed` / `base_revision_drift`, plus a plan-level **"N may be out of date"** summary.
 - The decision gate: an **Approve** primary — **"Add N items to your backlog"** (→ MATERIALIZE),
