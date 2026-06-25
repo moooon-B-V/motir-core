@@ -333,11 +333,6 @@ export function ProjectRoadmapCanvas({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
-            addonEnd={
-              <kbd className="rounded-(--radius-kbd) bg-(--el-muted) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-xs text-(--el-text-muted)">
-                /
-              </kbd>
-            }
           />
         </form>
       )}
