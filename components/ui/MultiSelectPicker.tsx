@@ -1,8 +1,36 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Plus, TriangleAlert, X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+
+// Run the position measurement before paint on the client; fall back to
+// useEffect during SSR (the listbox only ever opens client-side).
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+// `false` during SSR / first hydration render, `true` on the client thereafter —
+// gates the createPortal call so document.body is guaranteed present (mirrors
+// Combobox's useMounted). Hydration-safe and avoids setState-in-effect.
+const subscribeNoop = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+}
 
 // MultiSelectPicker (Story 5.4 · Subtask 5.4.8) — the generic chip-input
 // primitive, per design/work-items/labels-components-watch.mock.html panel 1:
@@ -173,9 +201,26 @@ export function MultiSelectPicker({
   const baseId = useId();
   const listId = `${baseId}-listbox`;
   const rootRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  // The listbox is PORTALED to <body> with viewport-anchored `position: fixed`
+  // (MOTIR-1346) so it escapes the Advanced-filter popover's `overflow-hidden`
+  // and its `overflow-y-auto` scroll body — an in-popover absolute panel is
+  // trapped by those and gets cut off near the edge. Same mechanism as the
+  // Combobox menu (the bug-inline-edit-clipped-when-table-short fix). Only render
+  // the portal once mounted, since createPortal needs document.body.
+  const mounted = useMounted();
+  // Portal everywhere EXCEPT inside a focus-trapping modal (the Modal primitive,
+  // `data-surface="modal"`), where a body-portaled option click fights the trap /
+  // dismisses the modal — there we render the listbox INLINE. Same rule + marker
+  // as the Combobox menu. Detected in a layout effect (not during render) so it's
+  // set before paint with no ref-read-in-render.
+  const [inModal, setInModal] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
+  const [listMaxHeight, setListMaxHeight] = useState(256);
 
   const atCap = cap != null && values.length >= cap;
   const inputDisabled = disabled || atCap;
@@ -195,15 +240,67 @@ export function MultiSelectPicker({
   const clampedActive = rowCount === 0 ? 0 : Math.min(activeIndex, rowCount - 1);
   const activeId = open && rowCount > 0 ? `${baseId}-opt-${clampedActive}` : undefined;
 
-  // Close on outside pointerdown (the picker stays open across toggles).
+  // Close on outside pointerdown (the picker stays open across toggles). The
+  // listbox is portaled out of rootRef, so a click on it must count as "inside"
+  // (else the option click closes the menu before it registers).
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [open]);
+
+  // Anchor the portaled listbox to the box in VIEWPORT coordinates (position:
+  // fixed), flipping above when there's more room there and capping the height to
+  // the available space so it never runs off-screen. Recomputed on open / scroll
+  // / resize. (Mirrors Combobox.updatePosition — the proven, E2E-stable mechanism:
+  // because the menu lives at <body> and is fully visible, a click never has to
+  // scroll a clipped container to reach an option, so it stays put.)
+  const updatePosition = useCallback(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const gap = 4; // matches the old mt-1
+    const viewportH = window.innerHeight;
+    const spaceBelow = viewportH - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const placeBelow = spaceBelow >= spaceAbove;
+    const avail = Math.max(120, placeBelow ? spaceBelow : spaceAbove);
+    setListMaxHeight(Math.max(80, Math.min(256, avail - 8)));
+    const style: CSSProperties = {
+      position: 'fixed',
+      left: Math.round(rect.left),
+      minWidth: Math.round(rect.width),
+    };
+    if (placeBelow) style.top = Math.round(rect.bottom + gap);
+    else style.bottom = Math.round(viewportH - rect.top + gap);
+    setMenuStyle(style);
+  }, []);
+
+  // Detect (before paint) whether we sit inside a focus-trapping modal, to pick
+  // the inline vs portal branch. Read in an effect, not during render.
+  useIsomorphicLayoutEffect(() => {
+    if (!open) return;
+    setInModal(!!boxRef.current?.closest('[data-surface="modal"],[aria-modal="true"]'));
+  }, [open]);
+
+  // Position before paint, and keep it glued to the box while open (capture-phase
+  // scroll so a scrolling dialog body re-anchors it).
+  useIsomorphicLayoutEffect(() => {
+    if (!(open && mounted) || inModal) return; // inline (modal) branch positions via CSS
+    updatePosition();
+    const onReflow = () => updatePosition();
+    window.addEventListener('scroll', onReflow, true);
+    window.addEventListener('resize', onReflow);
+    return () => {
+      window.removeEventListener('scroll', onReflow, true);
+      window.removeEventListener('resize', onReflow);
+    };
+  }, [open, mounted, inModal, updatePosition, rowCount]);
 
   // The caller owns the query across a create: a rejected name stays in the
   // input for correction (mock panel 2); the card clears it on success.
@@ -249,6 +346,10 @@ export function MultiSelectPicker({
     }
   }
 
+  // Inside a focus-trapping modal: render the listbox INLINE (in rootRef's
+  // subtree). Otherwise: portal it to <body> so it escapes clipping ancestors.
+  const wrapMenu = (el: ReactNode) => (inModal ? el : createPortal(el, document.body));
+
   return (
     // `data-inner-dismiss` (set while the listbox is open) lets an enclosing
     // Radix layer's `onEscapeKeyDown` defer to us: Radix listens for Escape
@@ -260,6 +361,7 @@ export function MultiSelectPicker({
           click anywhere focuses the input; at the cap the box goes quiet but
           chips stay removable. */}
       <div
+        ref={boxRef}
         onClick={() => inputRef.current?.focus()}
         className={cn(
           'flex min-h-(--height-input) cursor-text flex-wrap items-center gap-1.5 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y)',
@@ -299,91 +401,108 @@ export function MultiSelectPicker({
         />
       </div>
 
-      {open ? (
-        <div
-          id={listId}
-          role="listbox"
-          aria-multiselectable="true"
-          aria-label={label}
-          data-menu-surface=""
-          className="absolute top-full left-0 z-10 mt-1 w-max max-w-72 min-w-60 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1 shadow-(--shadow-elevated)"
-        >
-          {options.map((opt, i) => {
-            const selected = values.some((v) => v.id === opt.id);
-            const Glyph = opt.glyph;
-            return (
-              <button
-                key={opt.id}
-                id={`${baseId}-opt-${i}`}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                disabled={disabled}
-                // Keep focus in the input across a toggle (the menu stays open).
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => commitRow(i)}
-                onMouseEnter={() => setActiveIndex(i)}
-                className={cn(
-                  'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-option-active-bg) focus-visible:outline-none',
-                  i === clampedActive && 'bg-(--el-option-active-bg)',
-                )}
-              >
-                <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-icon-muted)">
-                  {opt.tint ? (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'h-2.5 w-2.5 rounded-full border border-(--el-border)',
-                        TINT_CHIP[opt.tint],
-                      )}
-                    />
-                  ) : Glyph ? (
-                    <Glyph className="h-3.5 w-3.5" aria-hidden />
-                  ) : null}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-                <Check
-                  aria-hidden
-                  className={cn(
-                    'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
-                    selected ? 'opacity-100' : 'opacity-0',
-                  )}
-                />
-              </button>
-            );
-          })}
-
-          {showCreate ? (
-            <button
-              id={`${baseId}-opt-${options.length}`}
-              type="button"
-              role="option"
-              aria-selected={false}
-              disabled={disabled}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => commitRow(options.length)}
-              onMouseEnter={() => setActiveIndex(options.length)}
+      {open && mounted
+        ? wrapMenu(
+            <div
+              ref={menuRef}
+              id={listId}
+              role="listbox"
+              aria-multiselectable="true"
+              aria-label={label}
+              data-menu-surface=""
+              // Portal branch: viewport-anchored `position: fixed` (hidden until
+              // positioned to avoid a first-paint flash at 0,0). Inline (modal)
+              // branch: absolute, glued below the box, capped at max-h-64.
+              style={
+                inModal
+                  ? { maxHeight: listMaxHeight }
+                  : {
+                      ...(menuStyle ?? { position: 'fixed', visibility: 'hidden' }),
+                      maxHeight: listMaxHeight,
+                    }
+              }
               className={cn(
-                'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-option-active-bg) focus-visible:outline-none',
-                clampedActive === options.length && 'bg-(--el-option-active-bg)',
+                'w-max max-w-72 min-w-60 overflow-y-auto rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-1 shadow-(--shadow-elevated)',
+                inModal ? 'absolute top-full left-0 z-10 mt-1 max-h-64' : 'z-50',
               )}
             >
-              <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-accent-on-surface)">
-                <Plus className="h-3.5 w-3.5" aria-hidden />
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {createLabel ? createLabel(trimmed) : trimmed}
-              </span>
-            </button>
-          ) : null}
+              {options.map((opt, i) => {
+                const selected = values.some((v) => v.id === opt.id);
+                const Glyph = opt.glyph;
+                return (
+                  <button
+                    key={opt.id}
+                    id={`${baseId}-opt-${i}`}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    disabled={disabled}
+                    // Keep focus in the input across a toggle (the menu stays open).
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => commitRow(i)}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-option-active-bg) focus-visible:outline-none',
+                      i === clampedActive && 'bg-(--el-option-active-bg)',
+                    )}
+                  >
+                    <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-icon-muted)">
+                      {opt.tint ? (
+                        <span
+                          aria-hidden
+                          className={cn(
+                            'h-2.5 w-2.5 rounded-full border border-(--el-border)',
+                            TINT_CHIP[opt.tint],
+                          )}
+                        />
+                      ) : Glyph ? (
+                        <Glyph className="h-3.5 w-3.5" aria-hidden />
+                      ) : null}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                    <Check
+                      aria-hidden
+                      className={cn(
+                        'h-4 w-4 shrink-0 text-(--el-accent-on-surface)',
+                        selected ? 'opacity-100' : 'opacity-0',
+                      )}
+                    />
+                  </button>
+                );
+              })}
 
-          {options.length === 0 && !showCreate ? (
-            <div className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-muted)">
-              {emptyText}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+              {showCreate ? (
+                <button
+                  id={`${baseId}-opt-${options.length}`}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  disabled={disabled}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => commitRow(options.length)}
+                  onMouseEnter={() => setActiveIndex(options.length)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left text-sm text-(--el-text) hover:bg-(--el-option-active-bg) focus-visible:outline-none',
+                    clampedActive === options.length && 'bg-(--el-option-active-bg)',
+                  )}
+                >
+                  <span className="flex w-[22px] shrink-0 items-center justify-center text-(--el-accent-on-surface)">
+                    <Plus className="h-3.5 w-3.5" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {createLabel ? createLabel(trimmed) : trimmed}
+                  </span>
+                </button>
+              ) : null}
+
+              {options.length === 0 && !showCreate ? (
+                <div className="px-(--spacing-control-x) py-(--spacing-control-y) text-sm text-(--el-text-muted)">
+                  {emptyText}
+                </div>
+              ) : null}
+            </div>,
+          )
+        : null}
 
       {error ? (
         <p
