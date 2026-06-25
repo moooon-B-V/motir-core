@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
@@ -8,6 +8,7 @@ import {
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
+import { TierDocModal } from '@/components/planning/TierDocModal';
 import { PlanPreview } from '@/components/planning/PlanPreview';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
@@ -16,7 +17,11 @@ import { IdeaCard, StationCard } from './StationNode';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
 import { type DiscoveryState, shouldShowDesignStep } from '@/lib/onboarding/discoveryLoop';
 import { type StationKind, type StationView, buildStations } from '@/lib/onboarding/canvasModel';
-import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import {
+  isDirectionDocKind,
+  TIER_META,
+  type DirectionDocKind,
+} from '@/lib/onboarding/directionDoc';
 import {
   CANVAS_NODE_KEYS,
   STATION_EDGES,
@@ -36,6 +41,11 @@ import {
 // root level returns the stations (from the live discovery state) + the produced
 // epics; a deeper level returns one parent's children. Work-item levels are cached
 // per project so the stations refreshing (each chat turn) never re-hits the API.
+//
+// The canvas "View" affordance opens a DETAIL surface per node kind (MOTIR-1351):
+// a PRODUCED tier station opens its doc in the tier-doc viewer (TierDocModal,
+// MOTIR-1355); a drilled work-item node opens the shared quick-view peek
+// (MOTIR-1352). Selecting a station only HIGHLIGHTS it — View opens the doc.
 
 const ROOT_KEY = '__root__';
 // The synthetic top-level node that stands in for the whole produced plan — a
@@ -52,8 +62,6 @@ export interface OnboardingCanvasProps {
   state: DiscoveryState;
   /** The seed idea (the idea node; omitted when absent — e.g. a resume). */
   idea: string | null;
-  /** Re-open a produced tier's read-only review. */
-  onOpen: (kind: DirectionDocKind) => void;
   /** Open the web-only design step (MOTIR-1040) — the `design` station's action. */
   onOpenDesign: () => void;
   /** The active project's key — the work-item tree is read per level from
@@ -69,7 +77,6 @@ export interface OnboardingCanvasProps {
 export function OnboardingCanvas({
   state,
   idea,
-  onOpen,
   onOpenDesign,
   projectKey,
   revisitingKind = null,
@@ -85,7 +92,20 @@ export function OnboardingCanvas({
   // The shared work-item quick-view peek (MOTIR-1352) — the same one the roadmap
   // uses. On the onboarding canvas it lights up once the user drills into the
   // produced tree (the stations / "Your plan" preview aren't `viewable`).
-  const { registerItems, onView, quickView } = useWorkItemQuickView();
+  const { registerItems, onView: onViewWorkItem, quickView } = useWorkItemQuickView();
+  // The tier whose doc is open in the on-canvas viewer (MOTIR-1355), or null.
+  const [viewTier, setViewTier] = useState<DirectionDocKind | null>(null);
+
+  // The canvas's single View handler, routed by node kind: a tier station opens
+  // the tier-doc viewer; any other `viewable` node (a drilled work item) opens the
+  // shared quick-view peek. (Work-item ids are never a tier kind, so this is safe.)
+  const onView = useCallback(
+    (id: string) => {
+      if (isDirectionDocKind(id)) setViewTier(id);
+      else onViewWorkItem(id);
+    },
+    [onViewWorkItem],
+  );
 
   // A signature of the station-relevant state; bumping it refetches the current
   // level so the stations refresh as tiers complete / the cascade moves.
@@ -164,17 +184,16 @@ export function OnboardingCanvas({
 
   const onActivate = useCallback(
     (id: string) => {
-      const station = buildStations(state).find((s) => s.kind === id);
       // The design station opens the web-only design step — only once active (tiers
-      // complete). A produced tier re-opens its read-only review. A work-item leaf
-      // (a subtask) has no onboarding action yet.
+      // complete). A tier station's bare select only HIGHLIGHTS now (per the
+      // 7.20.10 design — select highlights, the View button opens the doc viewer,
+      // MOTIR-1355); a work-item leaf has no onboarding action yet.
       if (id === 'design') {
+        const station = buildStations(state).find((s) => s.kind === id);
         if (station?.state === 'active') onOpenDesign();
-        return;
       }
-      if (station?.openable) onOpen(id as DirectionDocKind);
     },
-    [state, onOpen, onOpenDesign],
+    [state, onOpenDesign],
   );
 
   // Hold a loading state until the saved positions resolve (MOTIR-1253).
@@ -204,6 +223,7 @@ export function OnboardingCanvas({
         ariaLabel={t('title')}
       />
       {quickView}
+      <TierDocModal tier={viewTier} onClose={() => setViewTier(null)} />
     </>
   );
 }
@@ -229,30 +249,34 @@ function buildStationNodes(r: LoadInputs): ProjectCanvasNode[] {
 
   return keys.map((key) => {
     let content: ProjectCanvasNode['content'] = null;
+    const station = key === 'idea' ? undefined : stationByKind.get(key as StationKind);
     if (key === 'idea') {
       content = <IdeaCard idea={r.idea!.trim()} />;
-    } else {
-      const station = stationByKind.get(key as StationKind);
-      if (station) {
-        content = (
-          <StationCard
-            station={station}
-            doc={r.state.docs[key]}
-            session={r.state.session}
-            onOpenDesign={
-              station.kind === 'design' && station.state === 'active' ? r.onOpenDesign : undefined
-            }
-            revisiting={r.revisitingKind === key}
-            refreshing={willRefreshSet.has(key)}
-          />
-        );
-      }
+    } else if (station) {
+      content = (
+        <StationCard
+          station={station}
+          doc={r.state.docs[key]}
+          session={r.state.session}
+          onOpenDesign={
+            station.kind === 'design' && station.state === 'active' ? r.onOpenDesign : undefined
+          }
+          revisiting={r.revisitingKind === key}
+          refreshing={willRefreshSet.has(key)}
+        />
+      );
     }
+    // A PRODUCED direction-tier station gets a "View" affordance on the selected
+    // card → opens its doc in the on-canvas tier-doc viewer (MOTIR-1355). Only the
+    // four tier kinds are viewable; idea / design / plan stations are not.
+    const viewable = isDirectionDocKind(key) && !!station?.openable;
     return {
       id: key,
       parentId: null,
       searchText: key,
+      crumbLabel: isDirectionDocKind(key) ? TIER_META[key].label : undefined,
       drillable: false,
+      viewable,
       content,
       // The station's DEFAULT spot — a saved drag is applied by the canvas via its
       // `positions` prop, so the "Reset layout" button can revert a station to here.

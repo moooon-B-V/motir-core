@@ -70,12 +70,7 @@ describe('OnboardingCanvas', () => {
   // so node assertions await the post-load render (`findBy*`).
   it('renders the stations + the idea node on the spatial canvas', async () => {
     renderWithIntl(
-      <OnboardingCanvas
-        state={hubState()}
-        idea="An invoicing tool"
-        onOpen={vi.fn()}
-        onOpenDesign={vi.fn()}
-      />,
+      <OnboardingCanvas state={hubState()} idea="An invoicing tool" onOpenDesign={vi.fn()} />,
     );
     expect(await screen.findByText('Understanding your project')).toBeTruthy();
     expect(screen.getByText("What we'll build")).toBeTruthy();
@@ -92,43 +87,41 @@ describe('OnboardingCanvas', () => {
       'fetch',
       vi.fn(() => new Promise(() => {})),
     );
-    renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
-    );
+    renderWithIntl(<OnboardingCanvas state={hubState()} idea="x" onOpenDesign={vi.fn()} />);
     expect(screen.getByRole('status', { name: 'Loading your roadmap…' })).toBeTruthy();
     // nodes are NOT painted yet (so they can't flash at the auto-layout first)
     expect(screen.queryByText('Understanding your project')).toBeNull();
   });
 
   it('draws the read-only dependency chain as edges', async () => {
-    renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
-    );
+    renderWithIntl(<OnboardingCanvas state={hubState()} idea="x" onOpenDesign={vi.fn()} />);
     // idea→discovery→vision→feasibility→validation→design→plan = 6 edges
     const edges = await screen.findByTestId('canvas-edges');
     expect(edges.querySelectorAll('path')).toHaveLength(6);
   });
 
   it('omits the idea node + its edge when there is no idea (resume)', async () => {
-    renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea={null} onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
-    );
+    renderWithIntl(<OnboardingCanvas state={hubState()} idea={null} onOpenDesign={vi.fn()} />);
     const edges = await screen.findByTestId('canvas-edges');
     expect(screen.queryByText('Your idea')).toBeNull();
     expect(edges.querySelectorAll('path')).toHaveLength(5);
   });
 
-  it('activating a produced tier opens its review; an upcoming station does not', async () => {
-    const onOpen = vi.fn();
-    renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea={null} onOpen={onOpen} onOpenDesign={vi.fn()} />,
-    );
+  // Per the 7.20.10 design (MOTIR-1355): selecting a station only HIGHLIGHTS it;
+  // a PRODUCED tier surfaces a "View" button (opens its doc in the tier-doc viewer),
+  // while a non-tier station (design) carries no View button.
+  it('surfaces a View button on a selected produced tier; not on a non-tier station', async () => {
+    renderWithIntl(<OnboardingCanvas state={hubState()} idea={null} onOpenDesign={vi.fn()} />);
     await screen.findByTestId('canvas-edges');
+
     fireEvent.keyDown(document.querySelector('[data-node-id="discovery"]')!, { key: 'Enter' });
-    expect(onOpen).toHaveBeenCalledWith('discovery');
-    onOpen.mockClear();
+    expect(
+      await screen.findByRole('button', { name: /view understanding your project/i }),
+    ).toBeTruthy();
+
+    // Selecting the design station (not a direction tier) carries no View button.
     fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
-    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^view /i })).toBeNull();
   });
 
   it('shows the cascade-back canvas states — Revisiting + Will refresh (1179)', async () => {
@@ -136,7 +129,6 @@ describe('OnboardingCanvas', () => {
       <OnboardingCanvas
         state={hubState()}
         idea={null}
-        onOpen={vi.fn()}
         onOpenDesign={vi.fn()}
         revisitingKind="discovery"
         willRefresh={['vision']}
@@ -155,7 +147,6 @@ describe('OnboardingCanvas', () => {
           session: { ...hubState().session, platform: 'mobile' },
         })}
         idea="x"
-        onOpen={vi.fn()}
         onOpenDesign={vi.fn()}
       />,
     );
@@ -171,9 +162,7 @@ describe('OnboardingCanvas', () => {
   // not ENTERABLE (no CTA, click is inert) until the tiers are complete.
   it('shows the design station upcoming but inert before the tiers complete (web)', async () => {
     const onOpenDesign = vi.fn();
-    renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={onOpenDesign} />,
-    );
+    renderWithIntl(<OnboardingCanvas state={hubState()} idea="x" onOpenDesign={onOpenDesign} />);
     await screen.findByTestId('canvas-edges');
     expect(screen.getByText('Design the look')).toBeTruthy(); // roadmap node visible
     expect(document.querySelector('[data-node-id="design"]')).not.toBeNull();
@@ -209,13 +198,7 @@ describe('OnboardingCanvas', () => {
       }),
     );
     renderWithIntl(
-      <OnboardingCanvas
-        state={hubState()}
-        idea="x"
-        onOpen={vi.fn()}
-        onOpenDesign={vi.fn()}
-        projectKey="MOTIR"
-      />,
+      <OnboardingCanvas state={hubState()} idea="x" onOpenDesign={vi.fn()} projectKey="MOTIR" />,
     );
     // The "Your plan" preview node appears at the root once the tree loads; select
     // it and drill into the produced epics.
@@ -249,7 +232,6 @@ describe('OnboardingCanvas', () => {
       <OnboardingCanvas
         state={hubState({ session: { ...hubState().session, status: 'tiers_complete' } })}
         idea="x"
-        onOpen={vi.fn()}
         onOpenDesign={onOpenDesign}
       />,
     );
