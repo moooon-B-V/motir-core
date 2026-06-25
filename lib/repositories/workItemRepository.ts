@@ -1358,6 +1358,49 @@ export const workItemRepository = {
   },
 
   /**
+   * The roadmap PROGRESS roll-up (Subtask 7.20.6 / MOTIR-1013) for a set of
+   * container roots, in ONE recursive-CTE round-trip. For each root in
+   * `rootIds`, counts its LIVE (non-archived) DESCENDANTS (the root EXCLUDED,
+   * `depth > 1`), attributing every descendant to its originating root carried
+   * down the recursion:
+   *  - `total` — descendants whose status is NOT the sealed `excludedStatusKey`
+   *    (`cancelled`), so a container whose only remnants are cancelled isn't held
+   *    permanently incomplete;
+   *  - `done`  — descendants whose status is one of `doneStatusKeys` (the
+   *    `done`-category keys except cancelled, which the service computes).
+   * A root with no live descendants simply does not appear in the result (the
+   * GROUP BY emits matched rows only) → the service treats it as `0 / 0`. Counts
+   * are cast to `int` so `$queryRaw` returns JS numbers, not Postgres `bigint`.
+   * Empty `rootIds` short-circuits to `[]` (never a degenerate `= ANY('{}')`).
+   */
+  async countRoadmapProgress(
+    rootIds: string[],
+    doneStatusKeys: string[],
+    excludedStatusKey: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<{ rootId: string; total: number; done: number }>> {
+    if (rootIds.length === 0) return [];
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ rootId: string; total: number; done: number }>>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."parentId", w."status", w."archivedAt", w."id" AS root_id, 1 AS depth
+          FROM "work_item" w
+          WHERE w."id" = ANY(${rootIds})
+        UNION ALL
+        SELECT w."id", w."parentId", w."status", w."archivedAt", s.root_id, s.depth + 1
+          FROM "work_item" w
+          JOIN subtree s ON w."parentId" = s."id"
+      )
+      SELECT root_id AS "rootId",
+             COUNT(*) FILTER (WHERE "status" <> ${excludedStatusKey})::int AS "total",
+             COUNT(*) FILTER (WHERE "status" = ANY(${doneStatusKeys}))::int  AS "done"
+        FROM subtree
+        WHERE depth > 1
+          AND "archivedAt" IS NULL
+        GROUP BY root_id`;
+  },
+
+  /**
    * The ANCESTOR chain of a work item — its parent, grandparent, … up to the
    * root — in ONE round-trip via a recursive CTE walking UP the `parentId`
    * edge (the inverse of `findSubtree`). Excludes the item itself; returns the

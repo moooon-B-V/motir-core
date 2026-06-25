@@ -8,6 +8,13 @@ import type { WorkItemStatus } from '@/components/planning/WorkItemNode';
 // EFFORT, mirroring `useCanvasLayout`: a failed / absent read resolves to an empty
 // level so the canvas degrades to just its stations and never blocks.
 
+/** A container node's subtree done/total roll-up (Subtask 7.20.6 / MOTIR-1013) —
+ *  the data behind the per-epic/story progress meter. `null` on a leaf. */
+export interface RoadmapProgress {
+  done: number;
+  total: number;
+}
+
 export interface RoadmapLevelItem {
   id: string;
   parentId: string | null;
@@ -17,6 +24,10 @@ export interface RoadmapLevelItem {
   status: WorkItemStatus;
   /** Has children → the canvas can DRILL into it. */
   hasChildren: boolean;
+  /** Subtree progress roll-up — present on container nodes, `null` on leaves
+   *  (Subtask 7.20.6 / MOTIR-1013). Optional client-side: an older / onboarding
+   *  read that omits it degrades to "no meter". */
+  progress?: RoadmapProgress | null;
 }
 
 export interface RoadmapEdge {
@@ -48,6 +59,7 @@ interface RoadmapNode {
   status: string;
   isDone: boolean;
   hasChildren: boolean;
+  progress?: { done: number; total: number } | null;
 }
 
 const KNOWN_STATUSES: WorkItemStatus[] = [
@@ -77,6 +89,7 @@ function toItem(n: RoadmapNode): RoadmapLevelItem {
     kind: KNOWN_KINDS.has(n.kind as IssueType) ? (n.kind as IssueType) : 'subtask',
     status: toStatus(n.status, n.isDone),
     hasChildren: n.hasChildren,
+    progress: n.progress ?? null,
   };
 }
 

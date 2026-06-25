@@ -9,6 +9,7 @@ import type {
 import type {
   ArchivedWorkItemDto,
   RoadmapNodeDto,
+  RoadmapProgressDto,
   WorkItemDto,
   WorkItemListItemDto,
   WorkItemSummaryDto,
@@ -151,12 +152,17 @@ export function toWorkItemTreeNodeDto(
 /**
  * Roadmap LEVEL-node DTO (Subtask 7.20.4 re-plan, MOTIR-1010). Maps one
  * `findProjectTreeLevel` row — already carrying the lazy `hasChildren` drill flag —
- * into a flat {@link RoadmapNodeDto}. `isDone` (the node's own done-ness) is the
- * service's call (it holds the project's done-status keys); per-container progress
- * meters are MOTIR-1013's work and deliberately NOT computed here (a level read
- * never loads the subtree).
+ * into a flat {@link RoadmapNodeDto}. `isDone` (the node's own done-ness) and
+ * `progress` (the subtree done/total roll-up, Subtask 7.20.6 / MOTIR-1013) are the
+ * service's call — it holds the project's done-status keys and runs the one extra
+ * recursive count over the level's CONTAINERS. `progress` is `null` on a leaf
+ * (`!hasChildren`); the service passes it through here.
  */
-export function toRoadmapNodeDto(row: WorkItemTreeRow, isDone: boolean): RoadmapNodeDto {
+export function toRoadmapNodeDto(
+  row: WorkItemTreeRow,
+  isDone: boolean,
+  progress: RoadmapProgressDto | null,
+): RoadmapNodeDto {
   return {
     id: row.id,
     parentId: row.parentId,
@@ -168,6 +174,7 @@ export function toRoadmapNodeDto(row: WorkItemTreeRow, isDone: boolean): Roadmap
     status: row.status,
     isDone,
     hasChildren: row.hasChildren,
+    progress,
   };
 }
 

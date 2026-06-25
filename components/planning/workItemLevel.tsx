@@ -1,3 +1,8 @@
+import {
+  PlanningOriginCluster,
+  ORIGIN_H,
+  ORIGIN_W,
+} from '@/components/planning/PlanningOriginCluster';
 import { GhostAnchor, WorkItemNode } from '@/components/planning/WorkItemNode';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
@@ -10,8 +15,29 @@ import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 //  - a blocker on ANOTHER level → the CROSS-STORY signal: a `cross` (red) edge to
 //    a GHOST ANCHOR node that names the off-level blocker, and the blocked node is
 //    flagged (red ring + "cross-story" pill).
+//
+// Subtask 7.20.6 / MOTIR-1013 adds (via `opts`, used by the persistent roadmap —
+// NOT onboarding):
+//  - `markActive` — the in-progress FRONTIER node (the active epic at the road's
+//    start) is marked "you are here";
+//  - `includeOrigin` — at the ROOT level, the collapsed planning-origin cluster is
+//    pinned LEFT of the epics so the road reads from its completed-planning start.
+//  - each container item carries its subtree `progress` meter.
 
-export function buildWorkItemLevel(wi: RoadmapLevelData): {
+// The id of the synthetic planning-origin node (no real work item backs it).
+const ORIGIN_ID = '__planning_origin__';
+
+export interface BuildWorkItemLevelOptions {
+  /** Mark the in-progress frontier node "you are here" (the roadmap consumer). */
+  markActive?: boolean;
+  /** Pin the planning-origin cluster at the road's start (the ROOT level only). */
+  includeOrigin?: boolean;
+}
+
+export function buildWorkItemLevel(
+  wi: RoadmapLevelData,
+  opts: BuildWorkItemLevelOptions = {},
+): {
   nodes: ProjectCanvasNode[];
   deps: ProjectCanvasDep[];
 } {
@@ -57,6 +83,13 @@ export function buildWorkItemLevel(wi: RoadmapLevelData): {
     }
   }
 
+  // The current-position ("you are here") node = the FIRST in-progress item on
+  // this level, in the level's key-asc order (at the root that's the active epic).
+  // None in progress → no marker.
+  const activeId = opts.markActive
+    ? (wi.items.find((i) => i.status === 'in_progress')?.id ?? null)
+    : null;
+
   const itemNodes: ProjectCanvasNode[] = wi.items.map((item) => ({
     id: item.id,
     parentId: item.parentId,
@@ -78,9 +111,37 @@ export function buildWorkItemLevel(wi: RoadmapLevelData): {
         }}
         drillable={item.hasChildren}
         crossBlocked={crossBlocked.has(item.id)}
+        progress={item.progress ?? null}
+        here={item.id === activeId}
       />
     ),
   }));
 
-  return { nodes: [...itemNodes, ...anchorNodes], deps };
+  // The planning-origin cluster (Subtask 7.20.6 / MOTIR-1013) — a FIXED-position
+  // node pinned to the LEFT of the auto-laid epics so the road reads from its
+  // completed-planning start. It carries an explicit position (so it's excluded
+  // from the auto-layout) and NO dependency edge (the work items are the user's
+  // own tree, not output the planning stations produced — the same reasoning the
+  // onboarding init screen uses for its plan preview), so it never distorts the
+  // epics' layout. Only at the ROOT level, and only when there ARE epics to anchor.
+  const originNodes: ProjectCanvasNode[] =
+    opts.includeOrigin && wi.items.length > 0
+      ? [
+          {
+            id: ORIGIN_ID,
+            parentId: null,
+            drillable: false,
+            searchText: 'Planning origin idea discover shape validate plan',
+            content: <PlanningOriginCluster />,
+            // Left of the auto-layout origin (x=40, y=40 in `deterministicLayout`),
+            // vertically aligned with the first epic row.
+            x: -(ORIGIN_W + 80),
+            y: 40,
+            width: ORIGIN_W,
+            height: ORIGIN_H,
+          },
+        ]
+      : [];
+
+  return { nodes: [...originNodes, ...itemNodes, ...anchorNodes], deps };
 }
