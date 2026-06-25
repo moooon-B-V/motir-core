@@ -54,13 +54,7 @@ afterEach(() => {
 describe('OnboardingCanvas — produced work-item tree (per level)', () => {
   it('shows a "Your plan" preview at the top level and drills into the epic roots', async () => {
     renderWithIntl(
-      <OnboardingCanvas
-        state={hubState()}
-        idea="x"
-        projectKey="MOTIR"
-        onOpen={vi.fn()}
-        onOpenDesign={vi.fn()}
-      />,
+      <OnboardingCanvas state={hubState()} idea="x" projectKey="MOTIR" onOpenDesign={vi.fn()} />,
     );
     // The root level resolves: stations + the compact "Your plan" preview node —
     // the epic itself is NOT a top-level node, only previewed inside the card.
@@ -82,9 +76,7 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
   });
 
   it('without a projectKey, no roadmap is read and only the stations show', async () => {
-    renderWithIntl(
-      <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
-    );
+    renderWithIntl(<OnboardingCanvas state={hubState()} idea="x" onOpenDesign={vi.fn()} />);
     expect(await screen.findByText('Plan → your project')).toBeTruthy();
     expect(screen.queryByPlaceholderText('Search the roadmap')).toBeNull();
     const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) =>

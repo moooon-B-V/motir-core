@@ -173,7 +173,6 @@ export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboar
             state={state}
             idea={idea}
             projectKey={projectKey}
-            onOpen={openTier}
             onOpenDesign={openDesign}
             revisitingKind={state.cascade?.directTier ?? null}
             willRefresh={willRefreshKinds(state)}

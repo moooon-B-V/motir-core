@@ -24,6 +24,11 @@ export const DIRECTION_DOC_ORDER: readonly DirectionDocKind[] = [
   'validation',
 ];
 
+/** Narrow an arbitrary string (e.g. a `[tier]` route param) to a known tier kind. */
+export function isDirectionDocKind(value: string): value is DirectionDocKind {
+  return (DIRECTION_DOC_ORDER as readonly string[]).includes(value);
+}
+
 /** A produced tier doc — its kind + the persisted Markdown body. */
 export interface DirectionDocView {
   kind: DirectionDocKind;

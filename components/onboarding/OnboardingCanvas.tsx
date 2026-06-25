@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
@@ -15,7 +15,12 @@ import { IdeaCard, StationCard } from './StationNode';
 import { useCanvasLayout } from '@/lib/hooks/useCanvasLayout';
 import { type DiscoveryState, shouldShowDesignStep } from '@/lib/onboarding/discoveryLoop';
 import { type StationKind, type StationView, buildStations } from '@/lib/onboarding/canvasModel';
-import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import {
+  isDirectionDocKind,
+  TIER_META,
+  type DirectionDocKind,
+} from '@/lib/onboarding/directionDoc';
+import { TierDocModal } from '@/components/planning/TierDocModal';
 import {
   CANVAS_NODE_KEYS,
   STATION_EDGES,
@@ -51,8 +56,6 @@ export interface OnboardingCanvasProps {
   state: DiscoveryState;
   /** The seed idea (the idea node; omitted when absent — e.g. a resume). */
   idea: string | null;
-  /** Re-open a produced tier's read-only review. */
-  onOpen: (kind: DirectionDocKind) => void;
   /** Open the web-only design step (MOTIR-1040) — the `design` station's action. */
   onOpenDesign: () => void;
   /** The active project's key — the work-item tree is read per level from
@@ -68,7 +71,6 @@ export interface OnboardingCanvasProps {
 export function OnboardingCanvas({
   state,
   idea,
-  onOpen,
   onOpenDesign,
   projectKey,
   revisitingKind = null,
@@ -76,6 +78,8 @@ export function OnboardingCanvas({
 }: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
   const { positions, savePosition, resetPositions, loaded } = useCanvasLayout();
+  // The tier whose doc is open in the on-canvas viewer (MOTIR-1355), or null.
+  const [viewTier, setViewTier] = useState<DirectionDocKind | null>(null);
 
   // Work-item levels cached (a mutable ref, keyed by project+parent — a new key
   // just misses); the stations are rebuilt from state on every call, so they
@@ -156,18 +160,22 @@ export function OnboardingCanvas({
 
   const onActivate = useCallback(
     (id: string) => {
-      const station = buildStations(state).find((s) => s.kind === id);
       // The design station opens the web-only design step — only once active (tiers
-      // complete). A produced tier re-opens its read-only review. A work-item leaf
-      // (a subtask) has no onboarding action yet.
+      // complete). A tier station's bare select only HIGHLIGHTS now (per the
+      // 7.20.10 design — select highlights, the View button opens the doc viewer,
+      // MOTIR-1355); a work-item leaf has no onboarding action yet.
       if (id === 'design') {
+        const station = buildStations(state).find((s) => s.kind === id);
         if (station?.state === 'active') onOpenDesign();
-        return;
       }
-      if (station?.openable) onOpen(id as DirectionDocKind);
     },
-    [state, onOpen, onOpenDesign],
+    [state, onOpenDesign],
   );
+
+  // A produced tier station's View button opens its doc in the on-canvas viewer.
+  const onViewNode = useCallback((id: string) => {
+    if (isDirectionDocKind(id)) setViewTier(id);
+  }, []);
 
   // Hold a loading state until the saved positions resolve (MOTIR-1253).
   if (!loaded) {
@@ -182,17 +190,21 @@ export function OnboardingCanvas({
   }
 
   return (
-    <ProjectRoadmapCanvas
-      loadLevel={loadLevel}
-      reloadKey={reloadKey}
-      positions={positions}
-      onNodeMove={savePosition}
-      onResetPositions={resetPositions}
-      onSelect={onActivate}
-      searchable={!!projectKey}
-      rootLabel={t('title')}
-      ariaLabel={t('title')}
-    />
+    <>
+      <ProjectRoadmapCanvas
+        loadLevel={loadLevel}
+        reloadKey={reloadKey}
+        positions={positions}
+        onNodeMove={savePosition}
+        onResetPositions={resetPositions}
+        onSelect={onActivate}
+        onViewNode={onViewNode}
+        searchable={!!projectKey}
+        rootLabel={t('title')}
+        ariaLabel={t('title')}
+      />
+      <TierDocModal tier={viewTier} onClose={() => setViewTier(null)} />
+    </>
   );
 }
 
@@ -217,30 +229,34 @@ function buildStationNodes(r: LoadInputs): ProjectCanvasNode[] {
 
   return keys.map((key) => {
     let content: ProjectCanvasNode['content'] = null;
+    const station = key === 'idea' ? undefined : stationByKind.get(key as StationKind);
     if (key === 'idea') {
       content = <IdeaCard idea={r.idea!.trim()} />;
-    } else {
-      const station = stationByKind.get(key as StationKind);
-      if (station) {
-        content = (
-          <StationCard
-            station={station}
-            doc={r.state.docs[key]}
-            session={r.state.session}
-            onOpenDesign={
-              station.kind === 'design' && station.state === 'active' ? r.onOpenDesign : undefined
-            }
-            revisiting={r.revisitingKind === key}
-            refreshing={willRefreshSet.has(key)}
-          />
-        );
-      }
+    } else if (station) {
+      content = (
+        <StationCard
+          station={station}
+          doc={r.state.docs[key]}
+          session={r.state.session}
+          onOpenDesign={
+            station.kind === 'design' && station.state === 'active' ? r.onOpenDesign : undefined
+          }
+          revisiting={r.revisitingKind === key}
+          refreshing={willRefreshSet.has(key)}
+        />
+      );
     }
+    // A PRODUCED direction-tier station gets a "View" affordance on the selected
+    // card → opens its doc in the on-canvas viewer (MOTIR-1355). Only the four tier
+    // kinds are viewable; idea / design / plan stations are not.
+    const viewable = isDirectionDocKind(key) && !!station?.openable;
     return {
       id: key,
       parentId: null,
       searchText: key,
+      crumbLabel: isDirectionDocKind(key) ? TIER_META[key].label : undefined,
       drillable: false,
+      viewable,
       content,
       // The station's DEFAULT spot — a saved drag is applied by the canvas via its
       // `positions` prop, so the "Reset layout" button can revert a station to here.
