@@ -3958,3 +3958,27 @@ body {
     animation: plan-with-ai-shimmer 4.5s ease-in-out 1.2s infinite;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   "Plan with AI" floating orb — the FAB's gently-pulsing aura (MOTIR-1299)
+   ═══════════════════════════════════════════════════════════════════════
+   A soft expanding halo so the orb reads as "glowing" (the halo colour is
+   palette-derived — --el-highlight — set on the element). GATED behind
+   prefers-reduced-motion, matching the shimmer + aurora pattern above, so a
+   motion-sensitive user gets the static orb (no pulse). */
+@keyframes plan-with-ai-fab-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-highlight) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--el-highlight) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-highlight) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-with-ai-fab-pulse {
+    animation: plan-with-ai-fab-pulse 3.2s ease-out infinite;
+  }
+}

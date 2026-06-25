@@ -23,6 +23,7 @@ import { CreateIssueProvider } from './_components/CreateIssueProvider';
 import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
 import { ReportProvider } from './_components/ReportProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
+import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
 // top-nav + centered <main> into the full AppLayout shell: a full-width top
@@ -247,6 +248,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 settingsAccess={settingsAccess}
                 aiPlanningConfigured={aiPlanningConfigured}
               />
+
+              {/* The floating "M" entrance (MOTIR-1299) — the second of the two
+                  planning-workspace doors the design ships (alongside the
+                  header pill). A fixed bottom-right orb, mounted once at the
+                  layout root, under the same gate as the pill. */}
+              {showPlanWithAi ? <PlanWithAIFab /> : null}
             </ReportProvider>
           </ProjectAccessProvider>
         </CreateIssueProvider>
