@@ -117,3 +117,61 @@ export interface ListPlansOptions {
   cursor?: string | null;
   limit?: number;
 }
+
+// --- Plan staleness (Story 7.21 · MOTIR-1340) -------------------------------
+// Computed at REVIEW time from the CURRENT work-item tree + the plan's
+// `plannedAt`. The committed tree can change between when a plan is generated
+// and when the user reviews it, so a proposed item can DRIFT: its parent was
+// archived, new siblings appeared under its parent (its build-sequence context
+// is outdated), a blocker it references was removed, or — for modify/remove —
+// the target changed since the patch's `baseRevision`. A PURE READ that WARNS;
+// it NEVER blocks approve. The 7.4.5 plan-detail (MOTIR-847) + 7.21.1 plans-list
+// (MOTIR-1338) UIs bind to these.
+
+/** The reason a proposed PlanItem is flagged stale. A REASON LIST (not a
+ *  boolean) so a single item can carry several, and the set is EXTENSIBLE as
+ *  the rule set grows — `add` items get the structural reasons; `modify`/`remove`
+ *  items get `base_revision_drift`. */
+export type StaleReasonCode =
+  | 'parent_removed'
+  | 'siblings_added'
+  | 'blocker_removed'
+  | 'base_revision_drift';
+
+/** One staleness reason, carrying the specifics the review UI shows. */
+export type StaleReason =
+  /** `add`: the proposal's (real) parent is archived/deleted — it would be
+   *  orphaned on approve. */
+  | { code: 'parent_removed'; parentId: string }
+  /** `add`: the parent gained these children AFTER `plannedAt` that the
+   *  proposal has no dependency relation with — its build-sequence context is
+   *  outdated. */
+  | { code: 'siblings_added'; siblingIds: string[] }
+  /** `add`: these (real) `blocked_by` targets of the proposal are now
+   *  archived/deleted — a dangling dependency. */
+  | { code: 'blocker_removed'; blockerIds: string[] }
+  /** `modify`/`remove`: the target changed since the patch's `baseRevision`
+   *  (`edited`), was `archived`, or is `missing` (hard-deleted) — applying the
+   *  patch may conflict with a newer edit. */
+  | { code: 'base_revision_drift'; change: 'edited' | 'archived' | 'missing' };
+
+/** One proposed PlanItem's staleness verdict. `stale === reasons.length > 0`. */
+export interface PlanItemStalenessDto {
+  /** The PlanItem this verdict concerns — the stable key (an un-materialized
+   *  `add` has no `workItemId`). */
+  planItemId: string;
+  /** The target/parent work item the verdict concerns; `null` for an `add`
+   *  (it has no real target until materialize). */
+  workItemId: string | null;
+  stale: boolean;
+  reasons: StaleReason[];
+}
+
+/** A plan's staleness verdict — per-item reasons + a roll-up `stale` flag. A
+ *  plan whose tree is unchanged since `plannedAt` returns all-clear
+ *  (`stale: false`, every item with no reasons). */
+export interface PlanStalenessDto {
+  planId: string;
+  stale: boolean;
+  items: PlanItemStalenessDto[];
+}

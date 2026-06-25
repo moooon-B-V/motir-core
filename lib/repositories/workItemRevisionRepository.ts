@@ -65,6 +65,30 @@ export const workItemRevisionRepository = {
   },
 
   /**
+   * The id of the LATEST revision per work item across a set of ids, in ONE
+   * query via `DISTINCT ON ("workItemId")` ordered newest-first (the same total
+   * order {@link listByWorkItem} uses — `changedAt DESC, id DESC` — so a tie in
+   * the millisecond stamp resolves deterministically). This is the optimistic-
+   * concurrency anchor behind plan-staleness `base_revision_drift` (7.21.3 /
+   * MOTIR-1340): a `modify`/`remove` PlanItem stores the target's latest revision
+   * id at proposal time as `baseRevision`; if the target's CURRENT latest id
+   * differs, the target was edited since the plan was generated. Served by the
+   * `[workItemId, changedAt]` index; batched (no N+1) across all of a plan's
+   * targets. A work item with no revisions simply has no entry in the map.
+   * Read-only path → `db` singleton; empty input short-circuits to an empty map.
+   */
+  async findLatestIdsByWorkItemIds(workItemIds: string[]): Promise<Map<string, string>> {
+    if (workItemIds.length === 0) return new Map();
+    const rows = await db.$queryRaw<Array<{ workItemId: string; id: string }>>`
+      SELECT DISTINCT ON ("workItemId") "workItemId", "id"
+      FROM "work_item_revision"
+      WHERE "workItemId" IN (${Prisma.join(workItemIds)})
+      ORDER BY "workItemId", "changedAt" DESC, "id" DESC
+    `;
+    return new Map(rows.map((r) => [r.workItemId, r.id]));
+  },
+
+  /**
    * The ACTOR of the latest `'archived'` revision of one work item (Story 2.9 ·
    * Subtask 2.9.6) — the detail page's archived banner reads WHO archived it
    * from here (the WHEN comes from `work_item.archivedAt`). A re-archived item
