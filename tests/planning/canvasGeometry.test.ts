@@ -122,34 +122,37 @@ describe('routeEdges', () => {
     expect(r[1]).toBeNull();
   });
 
-  it('leaves the source RIGHT and enters the target LEFT, pointing RIGHT (flow)', () => {
-    // A (col 0) → B (col 1): a neighbour edge.
+  it('connects the FACING sides — right→left for a forward edge, arrow pointing right', () => {
     const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 200, w: 100, h: 50 } };
-    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
-    expect(pts[0]!.x).toBeCloseTo(100, 1); // leaves a.x + a.w (right edge)
-    expect(pts[0]!.y).toBeCloseTo(25, 1); // single out-edge → centre height
-    const end = pts[pts.length - 1]!;
-    const prev = pts[pts.length - 2]!;
-    expect(end.x).toBeCloseTo(300, 1); // lands on the target's LEFT edge (b.x)
-    expect(Math.abs(end.y - prev.y)).toBeLessThan(0.5); // final segment horizontal → arrow points right
-    expect(end.y).toBeGreaterThan(200); // …within the target's height
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d); // [A,c1,c2,B]
+    expect(pts[0]!.x).toBeCloseTo(100, 1); // leaves A's RIGHT side (a.x + a.w)
+    const end = pts[3]!;
+    expect(end.x).toBeCloseTo(300, 1); // arrives at B's LEFT side (b.x)
+    expect(end.y).toBeGreaterThan(200); // …within B's height
     expect(end.y).toBeLessThan(250);
+    expect(end.x - pts[2]!.x).toBeGreaterThan(1); // end tangent points RIGHT into the left side
   });
 
-  it('routes a neighbour edge as an in-row S-elbow (no detour above the cards)', () => {
-    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 0, w: 100, h: 50 } };
+  it('connects the FACING sides for a BACK edge — left→right (no crossing the block)', () => {
+    // B sits to the LEFT of A: the edge must leave A's left and enter B's right.
+    const m: RMap = { A: { x: 300, y: 0, w: 100, h: 50 }, B: { x: 0, y: 0, w: 100, h: 50 } };
     const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
-    const minY = Math.min(...pts.map((p) => p.y));
-    expect(minY).toBeGreaterThanOrEqual(0); // never rises above the node row
+    expect(pts[0]!.x).toBeCloseTo(300, 1); // leaves A's LEFT side (a.x)
+    expect(pts[3]!.x).toBeCloseTo(100, 1); // arrives at B's RIGHT side (b.x + b.w)
   });
 
-  it('fans two edges into one target to DISTINCT entry heights AND vertical lanes', () => {
-    // A and B both drop a long way into T, so their gutter verticals OVERLAP in y
-    // and must be given separate lanes.
+  it('connects TOP/BOTTOM for a stacked pair (target directly below)', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 0, y: 300, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(pts[0]!.y).toBeCloseTo(50, 1); // leaves A's BOTTOM (a.y + a.h)
+    expect(pts[3]!.y).toBeCloseTo(300, 1); // arrives at B's TOP (b.y)
+  });
+
+  it('fans two edges into one target to DISTINCT entry points (no shared arrowhead)', () => {
     const m: RMap = {
       A: { x: 0, y: 0, w: 100, h: 50 },
-      B: { x: 0, y: 80, w: 100, h: 50 },
-      T: { x: 300, y: 260, w: 100, h: 80 },
+      B: { x: 0, y: 200, w: 100, h: 50 },
+      T: { x: 300, y: 80, w: 100, h: 80 },
     };
     const [r1, r2] = routeEdges(
       [
@@ -158,13 +161,10 @@ describe('routeEdges', () => {
       ],
       lookup(m),
     );
-    const e1 = points(r1!.d);
-    const e2 = points(r2!.d);
-    expect(e1[e1.length - 1]!.y).not.toBe(e2[e2.length - 1]!.y); // distinct entry heights
-    expect(r1!.mid.x).not.toBe(r2!.mid.x); // distinct gutter lanes → no vertical overlap
+    expect(points(r1!.d)[3]!.y).not.toBe(points(r2!.d)[3]!.y); // distinct entry heights on T's left
   });
 
-  it('gives two edges off one source DISTINCT exit heights', () => {
+  it('fans two edges off one source to DISTINCT exit points', () => {
     const m: RMap = {
       S: { x: 0, y: 0, w: 100, h: 100 },
       X: { x: 300, y: 0, w: 100, h: 50 },
@@ -180,44 +180,16 @@ describe('routeEdges', () => {
     expect(points(rx!.d)[0]!.y).not.toBe(points(ry!.d)[0]!.y);
   });
 
-  it('detours a SKIP edge over a band above the cards', () => {
-    // three columns; A→C skips column B.
-    const m: RMap = {
-      A: { x: 0, y: 0, w: 100, h: 50 },
-      B: { x: 300, y: 0, w: 100, h: 50 },
-      C: { x: 600, y: 0, w: 100, h: 50 },
-    };
-    const r = routeEdges(
-      [
-        { from: 'A', to: 'B' },
-        { from: 'B', to: 'C' },
-        { from: 'A', to: 'C' },
-      ],
-      lookup(m),
-    );
-    const skip = points(r[2]!.d); // A→C
-    expect(Math.min(...skip.map((p) => p.y))).toBeLessThan(0); // rose above the row
+  it('ARCS a long horizontal edge so it clears a card between the columns', () => {
+    // A and B are far apart on the same row → the curve must bow above the row.
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 900, y: 0, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(Math.min(...pts.map((p) => p.y))).toBeLessThan(0); // a control point rose above the row
   });
 
-  it('keeps two OVERLAPPING band runs on separate rows (no line on top of another)', () => {
-    const m: RMap = {
-      A: { x: 0, y: 0, w: 100, h: 50 },
-      M: { x: 300, y: 0, w: 100, h: 50 },
-      T: { x: 600, y: 0, w: 100, h: 50 },
-      U: { x: 900, y: 0, w: 100, h: 50 },
-    };
-    // A→T and A→U both skip columns and run rightward across the same band x-range —
-    // the router must put them on different band rows.
-    const r = routeEdges(
-      [
-        { from: 'A', to: 'M' },
-        { from: 'M', to: 'T' },
-        { from: 'T', to: 'U' },
-        { from: 'A', to: 'T' },
-        { from: 'A', to: 'U' },
-      ],
-      lookup(m),
-    );
-    expect(r[3]!.mid.y).not.toBe(r[4]!.mid.y);
+  it('does NOT arc a short neighbour edge (stays flat between adjacent cards)', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 200, y: 0, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThanOrEqual(0); // no bow
   });
 });
