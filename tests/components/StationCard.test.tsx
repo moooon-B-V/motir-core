@@ -73,7 +73,7 @@ describe('StationCard "can skip" tag (MOTIR-1363)', () => {
         doc={undefined}
         session={{
           ...session,
-          designChoice: { styleId: 'minimal', paletteId: 'cobalt', typeId: 'grotesk' },
+          designChoice: { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' },
         }}
       />,
     );
