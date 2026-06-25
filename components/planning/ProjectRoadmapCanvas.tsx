@@ -294,9 +294,11 @@ export function ProjectRoadmapCanvas({
         </form>
       )}
 
-      {/* edge LEGEND — shown when the level has dependency edges, so the canvas is
-          self-documenting (MOTIR-1331). Sits above the engine's bottom-left zoom. */}
-      {deps.length > 0 && (
+      {/* edge LEGEND — shown when the level has real blocked-by DEPENDENCY edges,
+          so the canvas is self-documenting (MOTIR-1331). Sequence/`flow` edges (the
+          onboarding station serpentine) are excluded — they are drawn, but they are
+          not dependencies. Sits above the engine's bottom-left zoom. */}
+      {deps.some((d) => d.kind !== 'flow') && (
         <div
           data-testid="edge-legend"
           className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"

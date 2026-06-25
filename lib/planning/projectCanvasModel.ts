@@ -48,6 +48,11 @@ export interface ProjectCanvasDep {
   /** `firm` = a settled dependency (solid); `pending` = not-yet-done (dashed);
    *  `cross` = a story/parent-boundary crossing (the bad-plan flag). */
   variant?: 'firm' | 'pending' | 'cross';
+  /** `dependency` (default) = a real blocked-by edge → counts toward the
+   *  dependency LEGEND. `flow` = a sequence/journey edge (the onboarding station
+   *  serpentine) that is drawn but is NOT a blocked-by relationship, so it must
+   *  NOT surface the "Dependencies" legend. */
+  kind?: 'dependency' | 'flow';
 }
 
 export type CanvasEdgeVariant = 'firm' | 'pending' | 'cross';

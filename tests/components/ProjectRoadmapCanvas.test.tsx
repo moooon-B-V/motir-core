@@ -111,6 +111,18 @@ describe('ProjectRoadmapCanvas', () => {
     expect(screen.queryByTestId('edge-legend')).toBeNull();
   });
 
+  it('hides the legend when the only edges are `flow` (sequence, not dependency)', async () => {
+    // The onboarding station serpentine is drawn but is NOT a blocked-by chain, so
+    // it must not surface the "Dependencies" legend.
+    const flowOnly: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b')],
+      deps: [{ from: 'A', to: 'B', variant: 'firm', kind: 'flow' }],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(flowOnly)} />);
+    await screen.findByText('a');
+    expect(screen.queryByTestId('edge-legend')).toBeNull();
+  });
+
   it('shows the empty state when a level has no nodes', async () => {
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve({ nodes: [], deps: [] })} />);
     expect(await screen.findByText('Nothing on the roadmap yet')).toBeTruthy();

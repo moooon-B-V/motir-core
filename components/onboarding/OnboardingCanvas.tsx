@@ -140,7 +140,7 @@ export function OnboardingCanvas({
           x: ROOT_X0,
           y: ROOT_Y0,
         });
-        extraDeps.push({ from: 'plan', to: PLAN_NODE_ID, variant: 'firm' });
+        extraDeps.push({ from: 'plan', to: PLAN_NODE_ID, variant: 'firm', kind: 'flow' });
       }
       return { nodes: [...stationNodes, ...extra], deps: [...stationDeps, ...extraDeps] };
     },
@@ -254,11 +254,18 @@ function buildStationDeps(r: LoadInputs): ProjectCanvasDep[] {
   const variantOf = (from: CanvasNodeKey, to: CanvasNodeKey): ProjectCanvasDep['variant'] =>
     reached(from) && reached(to) ? 'firm' : 'pending';
 
+  // `flow` edges: the station serpentine is a journey sequence, NOT a blocked-by
+  // dependency, so it must not raise the dependency legend.
   const deps: ProjectCanvasDep[] = STATION_EDGES.filter(
     ([from, to]) => present.has(from) && present.has(to),
-  ).map(([from, to]) => ({ from, to, variant: variantOf(from, to) }));
+  ).map(([from, to]) => ({ from, to, variant: variantOf(from, to), kind: 'flow' }));
   if (!showDesign && present.has('validation') && present.has('plan')) {
-    deps.push({ from: 'validation', to: 'plan', variant: variantOf('validation', 'plan') });
+    deps.push({
+      from: 'validation',
+      to: 'plan',
+      variant: variantOf('validation', 'plan'),
+      kind: 'flow',
+    });
   }
   return deps;
 }

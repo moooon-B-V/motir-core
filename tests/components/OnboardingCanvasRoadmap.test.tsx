@@ -71,6 +71,8 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     expect(document.querySelector('[data-node-id="plan"]')).not.toBeNull();
     expect(document.querySelector('[data-node-id="e1"]')).toBeNull(); // not yet drilled
     expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
+    // The station serpentine is `flow`, not blocked-by deps → no dependency legend.
+    expect(screen.queryByTestId('edge-legend')).toBeNull();
 
     // Drilling the preview reveals the real epic root node.
     fireEvent.keyDown(document.querySelector('[data-node-id="__plan__"]')!, { key: 'Enter' });

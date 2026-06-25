@@ -178,11 +178,14 @@ export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboar
             revisitingKind={state.cascade?.directTier ?? null}
             willRefresh={willRefreshKinds(state)}
           />
+          {/* Stacked BELOW the canvas's own top-right search overlay (the reusable
+              foundation owns `top-3 right-3`); sharing the corner made the search
+              input intercept this button's clicks (E2E regression). */}
           {showDesign && complete && (
             <Button
               variant="secondary"
               size="sm"
-              className="absolute top-4 right-4 bg-(--el-page-bg)"
+              className="absolute top-20 right-4 bg-(--el-page-bg)"
               leftIcon={<Palette className="size-4" />}
               onClick={openDesign}
             >
