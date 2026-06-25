@@ -5,9 +5,8 @@ import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
-import { WorkItemNode } from '@/components/planning/WorkItemNode';
+import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
-import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 
 // The WORK-ITEM consumer of the reusable `ProjectRoadmapCanvas` (Subtask 7.20.2 /
 // MOTIR-1194) — the adapter the persistent roadmap (MOTIR-1011) + the planning
@@ -48,32 +47,7 @@ export function WorkItemRoadmap({
         wi = await fetchRoadmapLevel(projectKey, parentId);
         cacheRef.current.set(key, wi);
       }
-      const statusById = new Map(wi.items.map((i) => [i.id, i.status]));
-      const deps: ProjectCanvasDep[] = wi.edges.map((e) => ({
-        from: e.blockerId,
-        to: e.blockedId,
-        variant: statusById.get(e.blockerId) === 'done' ? 'firm' : 'pending',
-      }));
-      const nodes: ProjectCanvasNode[] = wi.items.map((item) => ({
-        id: item.id,
-        parentId: item.parentId,
-        searchText: `${item.identifier} ${item.title}`,
-        crumbLabel: item.identifier,
-        drillable: item.hasChildren,
-        content: (
-          <WorkItemNode
-            item={{
-              id: item.id,
-              identifier: item.identifier,
-              title: item.title,
-              kind: item.kind,
-              status: item.status,
-            }}
-            drillable={item.hasChildren}
-          />
-        ),
-      }));
-      return { nodes, deps };
+      return buildWorkItemLevel(wi);
     },
     [projectKey],
   );

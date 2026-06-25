@@ -1940,7 +1940,15 @@ export const workItemsService = {
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
     const edges = await workItemLinkRepository.findBlockedByEdges(rows.map((r) => r.id));
 
-    return { nodes, edges };
+    // A blocker NOT on this level is a cross-story tangle — fetch a NAMING stub so
+    // the canvas can anchor the red signal to a chip (MOTIR-1331).
+    const levelIds = new Set(rows.map((r) => r.id));
+    const offLevelIds = [
+      ...new Set(edges.map((e) => e.blockerId).filter((id) => !levelIds.has(id))),
+    ];
+    const offLevelBlockers = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+
+    return { nodes, edges, offLevelBlockers };
   },
 
   /**

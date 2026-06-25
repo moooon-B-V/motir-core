@@ -1,12 +1,14 @@
 'use client';
 
 import {
+  ArrowUpRight,
   Ban,
   Check,
   ChevronRight,
   CircleDashed,
   CircleDot,
   Eye,
+  Flag,
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -87,15 +89,22 @@ export function WorkItemStatusPill({ status }: { status: WorkItemStatus }) {
 export function WorkItemNode({
   item,
   drillable = false,
+  crossBlocked = false,
 }: {
   item: WorkItemNodeData;
   /** Has children — clicking DRILLS in; show the affordance. */
   drillable?: boolean;
+  /** Blocked by an item on ANOTHER level — flag the bad-plan tangle (MOTIR-1331). */
+  crossBlocked?: boolean;
 }) {
   return (
     <div
       style={{ width: NODE_W }}
-      className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-subtle)"
+      className={`rounded-(--radius-card) border p-(--spacing-card-padding) ${
+        crossBlocked
+          ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-subtle)'
+          : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)'
+      }`}
     >
       <div className="flex items-start gap-2.5">
         <span
@@ -110,7 +119,16 @@ export function WorkItemNode({
             {item.title}
           </span>
         </div>
-        {drillable && (
+        {crossBlocked && (
+          <span
+            data-testid="cross-blocked-flag"
+            className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
+          >
+            <Flag className="size-3" aria-hidden="true" />
+            cross-story
+          </span>
+        )}
+        {!crossBlocked && drillable && (
           <ChevronRight
             className="size-4 shrink-0 text-(--el-text-muted)"
             aria-hidden="true"
@@ -125,6 +143,43 @@ export function WorkItemNode({
           <span className="truncate text-xs text-(--el-text-muted)">{item.assigneeName}</span>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The GHOST ANCHOR for an off-level blocker (MOTIR-1331) — a dashed-red, hatched
+ * chip that names the blocker the canvas can't show a node for ("PROD-42 ↗ in
+ * Story X"), so the red cross-story edge has a target.
+ */
+export function GhostAnchor({
+  identifier,
+  title,
+  parentTitle,
+}: {
+  identifier: string;
+  title: string;
+  parentTitle: string | null;
+}) {
+  return (
+    <div
+      style={{
+        width: 200,
+        backgroundImage:
+          'repeating-linear-gradient(135deg, var(--el-surface), var(--el-surface) 7px, var(--el-danger-surface) 7px, var(--el-danger-surface) 9px)',
+      }}
+      className="rounded-(--radius-card) border border-dashed border-(--el-danger) p-(--spacing-card-padding)"
+    >
+      <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-(--el-danger-text)">
+        <ArrowUpRight className="size-3.5" aria-hidden="true" />
+        {identifier}
+      </span>
+      <span className="mt-1 line-clamp-1 block text-xs text-(--el-text-secondary)">{title}</span>
+      {parentTitle ? (
+        <span className="mt-0.5 block text-xs text-(--el-danger)">in {parentTitle} ↗</span>
+      ) : (
+        <span className="mt-0.5 block text-xs text-(--el-danger)">elsewhere in the plan ↗</span>
+      )}
     </div>
   );
 }

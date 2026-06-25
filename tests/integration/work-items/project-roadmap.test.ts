@@ -133,11 +133,12 @@ describe('workItemsService.getProjectRoadmap — per-level read', () => {
     expect(nodes.map((n) => n.identifier)).toEqual(['PROD-2']); // Story B archived out
   });
 
-  it('empty level → { nodes: [], edges: [] }', async () => {
+  it('empty level → { nodes: [], edges: [], offLevelBlockers: [] }', async () => {
     const fx = await makeFixture();
     expect(await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx)).toEqual({
       nodes: [],
       edges: [],
+      offLevelBlockers: [],
     });
   });
 
@@ -156,19 +157,23 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
     const f = await buildForest(fx);
     await link(fx, f.A2.id, f.A1.id); // A2 blocked_by A1, both under Story A
 
-    const { edges } = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
-    expect(edges).toEqual([{ blockedId: f.A2.id, blockerId: f.A1.id }]);
+    const lvl = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
+    expect(lvl.edges).toEqual([{ blockedId: f.A2.id, blockerId: f.A1.id }]);
+    expect(lvl.offLevelBlockers).toEqual([]); // both ends on this level — no anchor
   });
 
-  it('returns an edge to an OFF-level blocker (the canvas flags it cross-story)', async () => {
+  it('returns an OFF-level blocker edge + a naming STUB for the cross-story anchor', async () => {
     const fx = await makeFixture();
     const f = await buildForest(fx);
     await link(fx, f.A2.id, f.B1.id); // A2 (Story A) blocked_by B1 (Story B) — cross-story
 
     // The edge is returned FROM this level (blocked end A2 ∈ level); its blocker is
-    // off-level, so the canvas renders it as a cross-story flag rather than an arrow.
-    const { edges } = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
-    expect(edges).toEqual([{ blockedId: f.A2.id, blockerId: f.B1.id }]);
+    // off-level → the canvas anchors a red signal to a chip naming it.
+    const lvl = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
+    expect(lvl.edges).toEqual([{ blockedId: f.A2.id, blockerId: f.B1.id }]);
+    expect(lvl.offLevelBlockers).toEqual([
+      { id: f.B1.id, identifier: 'PROD-6', title: 'Subtask B1', parentTitle: 'Story B' },
+    ]);
   });
 
   it('a level with no blocked_by links → no edges', async () => {

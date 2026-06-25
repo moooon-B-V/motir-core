@@ -81,4 +81,42 @@ describe('WorkItemRoadmap', () => {
     await screen.findByText('Epic one');
     expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
   });
+
+  it('renders the cross-story signal: a ghost anchor + a flagged node for an off-level blocker', async () => {
+    // A level where T1 is blocked_by X, and X is NOT in the level → off-level.
+    const crossLevel = {
+      nodes: [
+        {
+          id: 'T1',
+          parentId: null,
+          kind: 'subtask',
+          identifier: 'MOTIR-5',
+          title: 'Wire it',
+          status: 'todo',
+          isDone: false,
+          hasChildren: false,
+        },
+      ],
+      edges: [{ blockedId: 'T1', blockerId: 'X9' }],
+      offLevelBlockers: [
+        {
+          id: 'X9',
+          identifier: 'MOTIR-42',
+          title: 'Migrate tokens',
+          parentTitle: 'Auth hardening',
+        },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => crossLevel })),
+    );
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    // the blocked node carries the cross-story flag…
+    expect(await screen.findByTestId('cross-blocked-flag')).toBeTruthy();
+    // …and the off-level blocker is anchored by a named ghost node.
+    expect(screen.getByText('MOTIR-42')).toBeTruthy();
+    expect(screen.getByText('in Auth hardening ↗')).toBeTruthy();
+    expect(document.querySelector('[data-node-id="X9"]')).not.toBeNull();
+  });
 });

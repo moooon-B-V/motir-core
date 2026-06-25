@@ -6,7 +6,7 @@ import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
-import { WorkItemNode } from '@/components/planning/WorkItemNode';
+import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import { Spinner } from '@/components/ui/Spinner';
@@ -103,7 +103,7 @@ export function OnboardingCanvas({
       const r: LoadInputs = { state, idea, positions, revisitingKind, willRefresh, onOpenDesign };
 
       // Work items for this level (cached per project).
-      let wi: RoadmapLevelData = { items: [], edges: [] };
+      let wi: RoadmapLevelData = { items: [], edges: [], offLevelBlockers: [] };
       if (projectKey) {
         const key = `${projectKey}:${parentId ?? ROOT_KEY}`;
         const cached = cacheRef.current.get(key);
@@ -113,51 +113,32 @@ export function OnboardingCanvas({
           cacheRef.current.set(key, wi);
         }
       }
-      const statusById = new Map(wi.items.map((i) => [i.id, i.status]));
-      const wiDeps: ProjectCanvasDep[] = wi.edges.map((e) => ({
-        from: e.blockerId,
-        to: e.blockedId,
-        variant: statusById.get(e.blockerId) === 'done' ? 'firm' : 'pending',
-      }));
-      const wiNode = (item: (typeof wi.items)[number]): ProjectCanvasNode => ({
-        id: item.id,
-        parentId: item.parentId,
-        searchText: `${item.identifier} ${item.title}`,
-        crumbLabel: item.identifier,
-        drillable: item.hasChildren,
-        content: (
-          <WorkItemNode
-            item={{
-              id: item.id,
-              identifier: item.identifier,
-              title: item.title,
-              kind: item.kind,
-              status: item.status,
-            }}
-            drillable={item.hasChildren}
-          />
-        ),
-      });
+      // The work-item nodes + deps (within-level arrows + the cross-story signal).
+      const { nodes: wiNodes, deps: wiDeps } = buildWorkItemLevel(wi);
 
       if (parentId !== null) {
         // A deeper work-item level — auto-laid-out by the foundation.
-        return { nodes: wi.items.map(wiNode), deps: wiDeps };
+        return { nodes: wiNodes, deps: wiDeps };
       }
 
       // The ROOT level: the stations (from the live state) + the produced epics in
-      // a grid below them.
+      // a grid below them. Grid-position the parent-less work items (the epics);
+      // any cross-story anchor keeps the foundation's auto-layout.
       const stationNodes = buildStationNodes(r);
       const stationDeps = buildStationDeps(r);
-      const rootNodes = wi.items.map((item, i) => {
-        const row = Math.floor(i / ROOT_COLS);
-        const col = i % ROOT_COLS;
-        return {
-          ...wiNode(item),
-          x: ROOT_X0 + col * ROOT_STEP_X,
-          y: ROOT_Y0 + row * ROOT_STEP_Y,
-        };
+      const rootPos = new Map<string, { x: number; y: number }>();
+      wi.items
+        .filter((i) => i.parentId === null)
+        .forEach((item, i) => {
+          const row = Math.floor(i / ROOT_COLS);
+          const col = i % ROOT_COLS;
+          rootPos.set(item.id, { x: ROOT_X0 + col * ROOT_STEP_X, y: ROOT_Y0 + row * ROOT_STEP_Y });
+        });
+      const positioned = wiNodes.map((n) => {
+        const p = rootPos.get(n.id);
+        return p ? { ...n, ...p } : n;
       });
-      return { nodes: [...stationNodes, ...rootNodes], deps: [...stationDeps, ...wiDeps] };
+      return { nodes: [...stationNodes, ...positioned], deps: [...stationDeps, ...wiDeps] };
     },
     [projectKey, state, idea, positions, revisitingKind, willRefresh, onOpenDesign],
   );

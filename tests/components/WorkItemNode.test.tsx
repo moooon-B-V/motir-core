@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { WorkItemNode, type WorkItemNodeData } from '@/components/planning/WorkItemNode';
+import {
+  GhostAnchor,
+  WorkItemNode,
+  type WorkItemNodeData,
+} from '@/components/planning/WorkItemNode';
 
 afterEach(() => cleanup());
 
@@ -28,5 +32,22 @@ describe('WorkItemNode', () => {
     expect(screen.queryByTestId('drill-affordance')).toBeTruthy();
     rerender(<WorkItemNode item={item} drillable={false} />);
     expect(screen.queryByTestId('drill-affordance')).toBeNull();
+  });
+
+  it('flags a cross-story (off-level blocked) node', () => {
+    render(<WorkItemNode item={item} crossBlocked />);
+    const flag = screen.getByTestId('cross-blocked-flag');
+    expect(flag.textContent).toContain('cross-story');
+  });
+});
+
+describe('GhostAnchor', () => {
+  it('names the off-level blocker and where it lives', () => {
+    render(
+      <GhostAnchor identifier="PROD-42" title="Migrate tokens" parentTitle="Auth hardening" />,
+    );
+    expect(screen.getByText('PROD-42')).toBeTruthy();
+    expect(screen.getByText('Migrate tokens')).toBeTruthy();
+    expect(screen.getByText('in Auth hardening ↗')).toBeTruthy();
   });
 });

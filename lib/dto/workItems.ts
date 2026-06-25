@@ -431,6 +431,19 @@ export interface RoadmapEdgeDto {
 }
 
 /**
+ * A stub for an OFF-LEVEL blocker (Subtask 7.20.2 / MOTIR-1331). When an edge's
+ * blocker is not in the current level, the canvas anchors a red "cross-story" edge
+ * to a chip NAMING it — its `identifier` + `title` + the container it lives in
+ * (`parentTitle`). Only blockers NOT on this level appear here.
+ */
+export interface RoadmapBlockerStubDto {
+  id: string;
+  identifier: string;
+  title: string;
+  parentTitle: string | null;
+}
+
+/**
  * ONE LEVEL of the project roadmap (Subtask 7.20.4 re-plan, MOTIR-1010): the
  * roots (`parentId = null`) OR one parent's direct children, each with a lazy
  * `hasChildren` drill flag, PLUS the `is_blocked_by` {@link RoadmapEdgeDto}s FROM
@@ -443,6 +456,10 @@ export interface RoadmapEdgeDto {
 export interface ProjectRoadmapDto {
   nodes: RoadmapNodeDto[];
   edges: RoadmapEdgeDto[];
+  /** Stubs for the edges' blockers that are NOT on this level (the cross-story
+   *  anchors the canvas draws the red signal to). Empty when the level is a clean
+   *  tree (every blocker is an on-level sibling). */
+  offLevelBlockers: RoadmapBlockerStubDto[];
 }
 
 /**

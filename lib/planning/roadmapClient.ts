@@ -24,9 +24,18 @@ export interface RoadmapEdge {
   blockerId: string;
 }
 
+/** A naming stub for a blocker that lives on ANOTHER level (the cross-story anchor). */
+export interface RoadmapBlockerStub {
+  id: string;
+  identifier: string;
+  title: string;
+  parentTitle: string | null;
+}
+
 export interface RoadmapLevelData {
   items: RoadmapLevelItem[];
   edges: RoadmapEdge[];
+  offLevelBlockers: RoadmapBlockerStub[];
 }
 
 /** The per-level node shape `GET …/roadmap?parentId=` returns (RoadmapNodeDto). */
@@ -87,10 +96,18 @@ export async function fetchRoadmapLevel(
       headers: { Accept: 'application/json' },
       signal,
     });
-    if (!res.ok) return { items: [], edges: [] };
-    const body = (await res.json()) as { nodes?: RoadmapNode[]; edges?: RoadmapEdge[] };
-    return { items: (body.nodes ?? []).map(toItem), edges: body.edges ?? [] };
+    if (!res.ok) return { items: [], edges: [], offLevelBlockers: [] };
+    const body = (await res.json()) as {
+      nodes?: RoadmapNode[];
+      edges?: RoadmapEdge[];
+      offLevelBlockers?: RoadmapBlockerStub[];
+    };
+    return {
+      items: (body.nodes ?? []).map(toItem),
+      edges: body.edges ?? [],
+      offLevelBlockers: body.offLevelBlockers ?? [],
+    };
   } catch {
-    return { items: [], edges: [] };
+    return { items: [], edges: [], offLevelBlockers: [] };
   }
 }
