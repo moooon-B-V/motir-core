@@ -55,6 +55,16 @@ export default defineConfig({
       concurrent: false,
     },
     testTimeout: 15_000,
+    // MOTIR-1265 — give lifecycle hooks their own, larger budget. Vitest
+    // defaults `hookTimeout` to 10s, which was BELOW the 15s `testTimeout` and
+    // applied to the `beforeEach` `truncateAll()` every DB-backed suite runs.
+    // The multi-table `TRUNCATE … CASCADE` is legitimately variable under the
+    // concurrent-worker CI load (see tests/setup/globalDb.ts, where
+    // `synchronous_commit = off` now removes the fsync stall that was the root
+    // cause); this headroom keeps a rare IO spike from red-lighting the whole
+    // job (which, via merge-with-main CI, taxes every open PR). Belt-and-braces
+    // with the globalDb fix — not a substitute for it.
+    hookTimeout: 30_000,
     // Coverage (Subtask 1.4.7, extended by 2.6.4). The Epic-2 load-bearing
     // modules must stay at ≥90% branches/functions/lines. 1.4.7 gated the
     // work-item data model — the service + its three repositories. 2.6.4 adds
