@@ -27,6 +27,15 @@ describe('WorkItemNode', () => {
     expect(screen.getByText('Yue')).toBeTruthy();
   });
 
+  it('has a fixed height so a long title cannot overlap the row below it', () => {
+    const { container } = render(
+      <WorkItemNode
+        item={{ ...item, title: 'A very long title that would wrap to many lines '.repeat(4) }}
+      />,
+    );
+    expect((container.firstChild as HTMLElement).style.height).toBe('132px');
+  });
+
   it('shows the drill affordance only when drillable', () => {
     const { rerender } = render(<WorkItemNode item={item} drillable />);
     expect(screen.queryByTestId('drill-affordance')).toBeTruthy();

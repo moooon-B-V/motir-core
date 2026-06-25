@@ -46,7 +46,10 @@ describe('ProjectRoadmapCanvas', () => {
   it('drills into a node (fetching its level), shows the breadcrumb, and Back returns', async () => {
     render(<ProjectRoadmapCanvas loadLevel={loadLevel} rootLabel="Roadmap" />);
     await screen.findByText('Epic one');
+    // A click SELECTS (no drill); the explicit "Open" affordance drills.
     fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    expect(el('S1')).toBeNull(); // still on the root level
+    fireEvent.click(await screen.findByTestId('drill-button'));
     expect(await screen.findByText('Story one')).toBeTruthy();
     expect(el('S2')).toBeTruthy();
     const crumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
@@ -62,6 +65,19 @@ describe('ProjectRoadmapCanvas', () => {
     await screen.findByText('Epic two');
     fireEvent.keyDown(el('E2')!, { key: 'Enter' }); // E2 is not drillable
     expect(onSelect).toHaveBeenCalledWith('E2');
+  });
+
+  it('selecting a node highlights it + its connections and dims the rest', async () => {
+    const level: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b'), node('C', 'c')],
+      deps: [{ from: 'A', to: 'B', variant: 'firm' }], // A↔B connected; C unrelated
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} />);
+    await screen.findByText('a');
+    fireEvent.keyDown(el('A')!, { key: 'Enter' });
+    expect(el('A')!.querySelector('[data-selected]')).toBeTruthy(); // A is the selection
+    expect(el('B')!.firstElementChild!.className).not.toContain('opacity-35'); // dependency stays lit
+    expect(el('C')!.firstElementChild!.className).toContain('opacity-35'); // unrelated dims
   });
 
   it('search-to-focus highlights a match in the current level', async () => {

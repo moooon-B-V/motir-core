@@ -74,6 +74,11 @@ export interface PlanningCanvasProps {
    */
   focusNodeId?: string;
   focusNonce?: number;
+  /** The selected node — its edges (and their other ends) stay lit while every
+   *  other connector dims, so the selection's dependencies/blockers stand out. */
+  selectedId?: string | null;
+  /** A press on empty canvas that did not pan — used to clear the selection. */
+  onBackgroundClick?: () => void;
   ariaLabel?: string;
   className?: string;
 }
@@ -87,7 +92,7 @@ const WHEEL_STEP = 1.04;
 const PAN_KEY_STEP = 64;
 
 type Gesture =
-  | { kind: 'pan'; sx: number; sy: number; tx: number; ty: number }
+  | { kind: 'pan'; sx: number; sy: number; tx: number; ty: number; moved: boolean }
   | {
       kind: 'node';
       id: string;
@@ -107,6 +112,8 @@ export function PlanningCanvas({
   onNodeActivate,
   focusNodeId,
   focusNonce,
+  selectedId,
+  onBackgroundClick,
   ariaLabel,
   className,
 }: PlanningCanvasProps) {
@@ -231,13 +238,26 @@ export function PlanningCanvas({
         moved: false,
       };
     } else {
-      gesture.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty };
+      gesture.current = {
+        kind: 'pan',
+        sx: e.clientX,
+        sy: e.clientY,
+        tx: view.tx,
+        ty: view.ty,
+        moved: false,
+      };
     }
   }
   function onPointerMove(e: RPointerEvent<HTMLDivElement>) {
     const g = gesture.current;
     if (!g) return;
     if (g.kind === 'pan') {
+      if (
+        Math.abs(e.clientX - g.sx) > ACTIVATE_SLOP ||
+        Math.abs(e.clientY - g.sy) > ACTIVATE_SLOP
+      ) {
+        g.moved = true;
+      }
       setView((v) => ({ ...v, tx: g.tx + (e.clientX - g.sx), ty: g.ty + (e.clientY - g.sy) }));
     } else {
       if (
@@ -266,6 +286,9 @@ export function PlanningCanvas({
       });
       // A press that never moved is a click → activate the node.
       if (!g.moved) onNodeActivate?.(g.id);
+    } else if (g?.kind === 'pan' && !g.moved) {
+      // A press on empty canvas that did not pan → clear the selection.
+      onBackgroundClick?.();
     }
   }
 
@@ -365,6 +388,8 @@ export function PlanningCanvas({
             const pending = edge.variant === 'pending';
             const cross = edge.variant === 'cross';
             const marker = cross ? 'warning' : pending ? 'pending' : 'committed';
+            // When a node is selected, only its own edges stay lit.
+            const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
@@ -377,11 +402,12 @@ export function PlanningCanvas({
                       ? 'stroke-(--el-canvas-edge-pending)'
                       : 'stroke-(--el-canvas-edge-committed)'
                 }
-                strokeWidth={cross ? 2.5 : 2}
+                strokeWidth={lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2}
                 strokeLinecap="round"
                 strokeDasharray={pending ? '2 7' : undefined}
                 markerEnd={`url(#${mId}-${marker})`}
                 vectorEffect="non-scaling-stroke"
+                style={{ opacity: lit ? 1 : 0.12 }}
               />
             );
           })}

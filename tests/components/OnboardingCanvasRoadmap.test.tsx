@@ -74,8 +74,9 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     // The station serpentine is `flow`, not blocked-by deps → no dependency legend.
     expect(screen.queryByTestId('edge-legend')).toBeNull();
 
-    // Drilling the preview reveals the real epic root node.
+    // Selecting the preview, then its Open affordance, drills to the real epic root.
     fireEvent.keyDown(document.querySelector('[data-node-id="__plan__"]')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
     expect(await screen.findByText('Billing epic')).toBeTruthy();
     expect(document.querySelector('[data-node-id="e1"]')).not.toBeNull();
   });

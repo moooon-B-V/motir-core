@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import type { IssueType } from '@/lib/issues/parentRules';
-import { NODE_W } from '@/lib/planning/projectCanvasModel';
+import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
 // MOTIR-1194) — the card the reusable `ProjectRoadmapCanvas` renders for an epic /
@@ -99,8 +99,11 @@ export function WorkItemNode({
 }) {
   return (
     <div
-      style={{ width: NODE_W }}
-      className={`rounded-(--radius-card) border p-(--spacing-card-padding) ${
+      // Fixed height (= the layout's NODE_H) so a long, two-line title can never
+      // grow the card into the row below it — the deterministic layout spaces rows
+      // by NODE_H, so the card must honour it exactly (MOTIR-1194 review).
+      style={{ width: NODE_W, height: NODE_H }}
+      className={`flex flex-col overflow-hidden rounded-(--radius-card) border p-(--spacing-card-padding) ${
         crossBlocked
           ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-subtle)'
           : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)'
@@ -137,7 +140,7 @@ export function WorkItemNode({
         )}
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between gap-2">
+      <div className="mt-auto flex items-center justify-between gap-2 pt-2.5">
         <WorkItemStatusPill status={item.status} />
         {item.assigneeName ? (
           <span className="truncate text-xs text-(--el-text-muted)">{item.assigneeName}</span>

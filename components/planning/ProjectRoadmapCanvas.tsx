@@ -77,6 +77,7 @@ export function ProjectRoadmapCanvas({
   const [level, setLevel] = useState<RoadmapLevel | null>(null);
   const [query, setQuery] = useState('');
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
   const [localPositions, setLocalPositions] = useState<Record<string, { x: number; y: number }>>(
     {},
@@ -128,6 +129,17 @@ export function ProjectRoadmapCanvas({
   const deps = useMemo(() => level?.deps ?? [], [level]);
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const matchIds = useMemo(() => new Set(searchMatches(nodes, query)), [nodes, query]);
+  // The selected node + everything it is connected to (its dependencies/blockers) —
+  // these stay lit while the rest of the level dims, so the selection reads clearly.
+  const connectedIds = useMemo(() => {
+    if (selectedId === null) return null;
+    const s = new Set<string>([selectedId]);
+    for (const d of deps) {
+      if (d.from === selectedId) s.add(d.to);
+      if (d.to === selectedId) s.add(d.from);
+    }
+    return s;
+  }, [selectedId, deps]);
   const layout = useMemo(
     () =>
       deterministicLayout(
@@ -167,25 +179,35 @@ export function ProjectRoadmapCanvas({
     [onNodeMove],
   );
 
+  // Clicking a card SELECTS it (focus + highlight its connections) — it does NOT
+  // drill. Drilling is the explicit "Open" affordance on the selected card. The
+  // consumer's onSelect still fires (e.g. an onboarding station opens its doc).
   const handleActivate = useCallback(
     (id: string) => {
-      const n = byId.get(id);
-      if (n?.drillable) {
-        // Drill: fetch the node's children (the load effect fires on focusId change).
-        setCrumbs((c) => [...c, { id, label: n.crumbLabel ?? n.searchText }]);
-        setLocalPositions({});
-        setFocusId(id);
-        setHighlightId(null);
-      } else {
-        onSelect?.(id);
-      }
+      setSelectedId(id);
+      onSelect?.(id);
     },
-    [byId, onSelect],
+    [onSelect],
+  );
+
+  const handleDrill = useCallback(
+    (id: string) => {
+      const n = byId.get(id);
+      if (!n?.drillable) return;
+      // Drill: fetch the node's children (the load effect fires on focusId change).
+      setCrumbs((c) => [...c, { id, label: n.crumbLabel ?? n.searchText }]);
+      setLocalPositions({});
+      setSelectedId(null);
+      setFocusId(id);
+      setHighlightId(null);
+    },
+    [byId],
   );
 
   const navigate = useCallback((crumbId: string | null) => {
     setLocalPositions({});
     setHighlightId(null);
+    setSelectedId(null);
     if (crumbId === null) {
       setCrumbs([]);
       setFocusId(null);
@@ -214,16 +236,42 @@ export function ProjectRoadmapCanvas({
     const node = byId.get(cn.id);
     if (!node) return null;
     const matched = highlightId === cn.id || matchIds.has(cn.id);
+    const selected = cn.id === selectedId;
+    const dimmed = connectedIds !== null && !connectedIds.has(cn.id);
     return (
       <div
         data-highlighted={matched || undefined}
-        className={
-          matched
-            ? 'rounded-(--radius-card) ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)'
-            : undefined
-        }
+        data-selected={selected || undefined}
+        className={[
+          'relative rounded-(--radius-card) transition-opacity',
+          selected || matched
+            ? 'ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)'
+            : '',
+          dimmed ? 'opacity-35' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         {node.content}
+        {/* The explicit DRILL affordance — surfaced on the selected card so "open
+            its children" is obvious without hijacking a plain click (which now just
+            selects). Stops the press from starting a canvas drag/select. */}
+        {selected && node.drillable && (
+          <button
+            type="button"
+            data-testid="drill-button"
+            aria-label="Open this item's children"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDrill(cn.id);
+            }}
+            className="absolute -bottom-3.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-accent-text) shadow-(--shadow-card) hover:bg-(--el-accent-pressed) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          >
+            Open
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
       </div>
     );
   }
@@ -376,6 +424,8 @@ export function ProjectRoadmapCanvas({
           renderNode={renderNode}
           onNodeMove={onNodeMove ? handleMove : undefined}
           onNodeActivate={handleActivate}
+          selectedId={selectedId}
+          onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}
           ariaLabel={ariaLabel}

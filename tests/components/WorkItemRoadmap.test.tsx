@@ -58,22 +58,26 @@ function el(id: string) {
 }
 
 describe('WorkItemRoadmap', () => {
-  it('renders the root level and drills into a node, fetching its children', async () => {
+  it('selects a node, then drills via its Open affordance, fetching its children', async () => {
     render(<WorkItemRoadmap projectKey="MOTIR" />);
     expect(await screen.findByText('Epic one')).toBeTruthy();
-    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' }); // select (no drill yet)
+    expect(el('S1')).toBeNull();
+    fireEvent.click(await screen.findByTestId('drill-button')); // Open → drill
     expect(await screen.findByText('Story one')).toBeTruthy();
     expect(screen.getByText('Done')).toBeTruthy(); // S1 status pill
   });
 
-  it('selects a leaf instead of drilling', async () => {
+  it('selecting a leaf calls onSelect and offers no drill affordance', async () => {
     const onSelect = vi.fn();
     render(<WorkItemRoadmap projectKey="MOTIR" onSelect={onSelect} />);
     await screen.findByText('Epic one');
     fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button')); // drill into E1
     await screen.findByText('Story one');
-    fireEvent.keyDown(el('S1')!, { key: 'Enter' }); // S1 is a leaf
+    fireEvent.keyDown(el('S1')!, { key: 'Enter' }); // S1 is a leaf → just selects
     expect(onSelect).toHaveBeenCalledWith('S1');
+    expect(screen.queryByTestId('drill-button')).toBeNull(); // a leaf can't drill
   });
 
   it('offers the search overlay', async () => {
