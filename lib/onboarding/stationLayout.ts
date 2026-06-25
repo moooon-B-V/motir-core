@@ -31,7 +31,15 @@ export const CANVAS_NODE_KEYS: readonly CanvasNodeKey[] = ['idea', ...STATION_OR
 // 40px gap; the row Ys clear the idea card / a tier row by its height + a band gap.
 const ROW_IDEA_Y = 40;
 const ROW_TIER_Y = 220;
-const ROW_DESIGN_Y = 440;
+// A PRODUCED tier card grows with its captured-findings rows — well past the
+// ~220px a bare card is — so the design/plan row must clear the TALLEST such card
+// or it overlaps the row above (MOTIR-1364: a tall tier card collided with the
+// design / "Your plan" row). Budget a generous max tier-card height + a band gap
+// instead of the old fixed 440 (which a tall card overran). Exported so
+// `OnboardingCanvas` pins the "Your plan" preview to the SAME row.
+const MAX_TIER_CARD_H = 360;
+const ROW_BAND = 40;
+export const ROW_DESIGN_Y = ROW_TIER_Y + MAX_TIER_CARD_H + ROW_BAND;
 const ORIGIN_X = 40;
 const STEP_X = 340; // station card (300) + 40px gap
 export const STATION_AUTO_LAYOUT: Record<CanvasNodeKey, { x: number; y: number }> = {

@@ -50,9 +50,17 @@ export interface TierDocModalProps {
   tier: DirectionDocKind | null;
   /** Close the modal (the consumer clears its open-tier state). */
   onClose: () => void;
+  /**
+   * Where the modal is mounted, which decides what "Open full page" does (MOTIR-1366):
+   * - `roadmap` (default) — the user is already inside the app shell, so the full
+   *   page opens in the SAME tab, in-shell (`/direction/[tier]`).
+   * - `onboarding` — the user hasn't seen the app yet, so the full page opens in a
+   *   NEW TAB, full-screen, WITHOUT the app shell (`/onboarding/direction/[tier]`).
+   */
+  origin?: 'onboarding' | 'roadmap';
 }
 
-export function TierDocModal({ tier, onClose }: TierDocModalProps) {
+export function TierDocModal({ tier, onClose, origin = 'roadmap' }: TierDocModalProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   // Discard an out-of-order resolve (the tier changed mid-fetch) by sequence.
   const reqSeq = useRef(0);
@@ -114,16 +122,32 @@ export function TierDocModal({ tier, onClose }: TierDocModalProps) {
           Direction{tier ? ` · ${tier.charAt(0).toUpperCase()}${tier.slice(1)}` : ''}
         </span>
         <span className="flex-1" />
-        {tier && (
-          <Link
-            href={`/direction/${tier}`}
-            onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-          >
-            <ArrowUpRight className="size-4" aria-hidden="true" />
-            Open full page
-          </Link>
-        )}
+        {tier &&
+          (origin === 'onboarding' ? (
+            // Onboarding: open the SHELL-LESS full page in a NEW TAB so the user
+            // stays in the immersive onboarding flow (never dropped into the app
+            // shell they haven't seen). A plain anchor, not next/link — it's a
+            // cross-context, new-tab navigation.
+            <a
+              href={`/onboarding/direction/${tier}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onClose}
+              className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            >
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+              Open full page
+            </a>
+          ) : (
+            <Link
+              href={`/direction/${tier}`}
+              onClick={onClose}
+              className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            >
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+              Open full page
+            </Link>
+          ))}
         <button
           type="button"
           aria-label="Close"

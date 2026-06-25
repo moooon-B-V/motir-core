@@ -110,9 +110,15 @@ export function StationCard({
   const subtitle = isDesign ? null : t(`stations.${station.kind}.subtitle`);
   const showCaptured = tierKind !== null && (station.state === 'done' || active);
   // An optional step shows a "can skip" tag while it is still ahead OR the current
-  // step (you can skip it right up to acting on it) — not once it's done/skipped.
+  // step (you can skip it right up to acting on it) — but NOT once its doc is
+  // produced (a linked tier is no longer skippable) and, for the design step, NOT
+  // once a design has been chosen (MOTIR-1363).
+  const designChosen = isDesign && session.designChoice !== null;
   const showCanSkip =
-    station.optional && (station.state === 'upcoming' || station.state === 'active');
+    station.optional &&
+    (station.state === 'upcoming' || station.state === 'active') &&
+    !doc &&
+    !designChosen;
 
   return (
     <div

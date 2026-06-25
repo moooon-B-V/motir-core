@@ -163,40 +163,41 @@ export function TierReviewGate({
               </div>
             </section>
           )}
+        </div>
+      </div>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-(--el-border-soft) pt-5">
-            <Button
-              variant="secondary"
-              leftIcon={<ArrowLeft className="size-4" />}
-              onClick={onBack}
-            >
-              {t('back')}
-            </Button>
-            <span className="flex items-center gap-1.5 text-xs text-(--el-text-muted)">
-              {blockedByDecision ? (
-                <>
-                  <Lock className="size-4 text-(--el-text-faint)" aria-hidden="true" />
-                  {t('validate.blockedNote')}
-                </>
-              ) : (
-                <>
-                  <Unlock className="size-4 text-(--el-text-faint)" aria-hidden="true" />
-                  {t('gateNote')}
-                </>
-              )}
-            </span>
-            <span className="grow" />
-            <Button
-              variant="primary"
-              size="lg"
-              rightIcon={<ArrowRight className="size-4" />}
-              onClick={onContinue}
-              loading={busy}
-              disabled={busy || blockedByDecision}
-            >
-              {t('continueLabel')}
-            </Button>
-          </div>
+      {/* Bottom-LOCKED action bar (MOTIR-1365): Back + Continue stay in ONE row,
+          pinned below the scrolling doc on EVERY tier step — so a long doc (e.g.
+          the validation "Will people want it?" tier) never hides them. */}
+      <div className="shrink-0 border-t border-(--el-border) bg-(--el-surface) px-4 py-3">
+        <div className="mx-auto flex max-w-[48rem] items-center gap-3">
+          <Button variant="secondary" leftIcon={<ArrowLeft className="size-4" />} onClick={onBack}>
+            {t('back')}
+          </Button>
+          <span className="hidden items-center gap-1.5 text-xs text-(--el-text-muted) sm:flex">
+            {blockedByDecision ? (
+              <>
+                <Lock className="size-4 text-(--el-text-faint)" aria-hidden="true" />
+                {t('validate.blockedNote')}
+              </>
+            ) : (
+              <>
+                <Unlock className="size-4 text-(--el-text-faint)" aria-hidden="true" />
+                {t('gateNote')}
+              </>
+            )}
+          </span>
+          <span className="grow" />
+          <Button
+            variant="primary"
+            size="lg"
+            rightIcon={<ArrowRight className="size-4" />}
+            onClick={onContinue}
+            loading={busy}
+            disabled={busy || blockedByDecision}
+          >
+            {t('continueLabel')}
+          </Button>
         </div>
       </div>
     </section>
