@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent as RKeyboardEvent,
@@ -118,6 +119,8 @@ export function PlanningCanvas({
   const nodeEls = useRef<Map<string, HTMLElement>>(new Map());
   const gesture = useRef<Gesture | null>(null);
   const didFit = useRef(false);
+  // Unique marker ids (a doc-global `<marker>` id collides across canvas instances).
+  const mId = useId().replace(/:/g, '');
 
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const rectOf = (n: CanvasNode): Rect => {
@@ -311,6 +314,38 @@ export function PlanningCanvas({
         style={{ touchAction: 'none' }}
         data-testid="planning-canvas"
       >
+        {/* Arrowhead markers — in their OWN <svg> (marker refs are doc-global), so
+            the canvas-edges <path> count stays = the edge count. One per variant,
+            coloured to match its edge → a reader can tell DIRECTION (the arrow
+            points blocker → blocked). MOTIR-1331. */}
+        <svg className="absolute h-0 w-0" aria-hidden="true">
+          <defs>
+            {(['committed', 'pending', 'warning'] as const).map((kind) => (
+              <marker
+                key={kind}
+                id={`${mId}-${kind}`}
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M0 0L10 5L0 10z"
+                  className={
+                    kind === 'warning'
+                      ? 'fill-(--el-warning)'
+                      : kind === 'pending'
+                        ? 'fill-(--el-canvas-edge-pending)'
+                        : 'fill-(--el-canvas-edge-committed)'
+                  }
+                />
+              </marker>
+            ))}
+          </defs>
+        </svg>
+
         {/* edges — read-only dependency connectors (non-scaling stroke) */}
         <svg
           className="pointer-events-none absolute top-0 left-0 h-full w-full"
@@ -324,6 +359,7 @@ export function PlanningCanvas({
             if (!a || !b) return null;
             const pending = edge.variant === 'pending';
             const cross = edge.variant === 'cross';
+            const marker = cross ? 'warning' : pending ? 'pending' : 'committed';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
@@ -339,6 +375,7 @@ export function PlanningCanvas({
                 strokeWidth={cross ? 2.5 : 2}
                 strokeLinecap="round"
                 strokeDasharray={pending ? '2 7' : undefined}
+                markerEnd={`url(#${mId}-${marker})`}
                 vectorEffect="non-scaling-stroke"
               />
             );

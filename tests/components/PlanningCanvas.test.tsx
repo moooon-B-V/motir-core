@@ -103,6 +103,17 @@ describe('PlanningCanvas', () => {
     expect(flags[0]!.textContent).toContain('cross-story');
   });
 
+  it('gives every edge a directional arrowhead (marker-end), markers in their own defs', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    // the markers live OUTSIDE canvas-edges, so its path count is unchanged…
+    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
+    // …and every edge path points at an arrowhead marker.
+    const edgePaths = screen.getByTestId('canvas-edges').querySelectorAll('path');
+    edgePaths.forEach((p) => expect(p.getAttribute('marker-end')).toMatch(/^url\(#/));
+    // three markers defined (firm / pending / cross)
+    expect(document.querySelectorAll('marker')).toHaveLength(3);
+  });
+
   it('renders no cross-flag layer content when there are no cross edges', () => {
     render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
     expect(screen.queryByTestId('cross-flag')).toBeNull();

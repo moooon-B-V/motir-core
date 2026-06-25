@@ -294,6 +294,57 @@ export function ProjectRoadmapCanvas({
         </form>
       )}
 
+      {/* edge LEGEND — shown when the level has dependency edges, so the canvas is
+          self-documenting (MOTIR-1331). Sits above the engine's bottom-left zoom. */}
+      {deps.length > 0 && (
+        <div
+          data-testid="edge-legend"
+          className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
+        >
+          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-faint) uppercase">
+            Dependencies
+          </span>
+          {(
+            [
+              ['committed', 'blocks', 'blocker done'],
+              ['pending', 'pending', 'not done yet'],
+              ['warning', 'cross-story', 'in another story'],
+            ] as const
+          ).map(([kind, label, meaning]) => (
+            <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
+              <svg viewBox="0 0 40 12" className="h-3 w-10 shrink-0" aria-hidden="true">
+                <path
+                  d="M2 6H31"
+                  fill="none"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                  strokeDasharray={kind === 'pending' ? '2 5' : undefined}
+                  className={
+                    kind === 'warning'
+                      ? 'stroke-(--el-warning)'
+                      : kind === 'pending'
+                        ? 'stroke-(--el-canvas-edge-pending)'
+                        : 'stroke-(--el-canvas-edge-committed)'
+                  }
+                />
+                <path
+                  d="M30 2 36 6 30 10z"
+                  className={
+                    kind === 'warning'
+                      ? 'fill-(--el-warning)'
+                      : kind === 'pending'
+                        ? 'fill-(--el-canvas-edge-pending)'
+                        : 'fill-(--el-canvas-edge-committed)'
+                  }
+                />
+              </svg>
+              {label}
+              <span className="text-(--el-text-muted)">· {meaning}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
       {level === null ? (
         <div
           aria-busy="true"

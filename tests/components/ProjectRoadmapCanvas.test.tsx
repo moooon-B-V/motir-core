@@ -87,6 +87,30 @@ describe('ProjectRoadmapCanvas', () => {
     expect(screen.getAllByTestId('cross-flag')).toHaveLength(1);
   });
 
+  it('shows the edge legend when the level has dependency edges', async () => {
+    const withDeps: RoadmapLevel = {
+      nodes: [node('A', 'a'), node('B', 'b')],
+      deps: [{ from: 'A', to: 'B', variant: 'firm' }],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(withDeps)} />);
+    await screen.findByText('a');
+    const legend = screen.getByTestId('edge-legend');
+    expect(within(legend).getByText('Dependencies')).toBeTruthy();
+    expect(within(legend).getByText('blocks')).toBeTruthy();
+    expect(within(legend).getByText('pending')).toBeTruthy();
+    expect(within(legend).getByText('cross-story')).toBeTruthy();
+  });
+
+  it('hides the legend when there are no edges', async () => {
+    render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve({ nodes: [node('A', 'a')], deps: [] })}
+      />,
+    );
+    await screen.findByText('a');
+    expect(screen.queryByTestId('edge-legend')).toBeNull();
+  });
+
   it('shows the empty state when a level has no nodes', async () => {
     render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve({ nodes: [], deps: [] })} />);
     expect(await screen.findByText('Nothing on the roadmap yet')).toBeTruthy();
