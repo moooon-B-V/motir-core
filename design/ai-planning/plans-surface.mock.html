@@ -1,0 +1,2118 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Plans surface — MOTIR-843 / 7.4.1</title>
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
+         light theme / warm-editorial / motir palette). This standalone mock uses
+         the same VALUES so it renders without the Tailwind build, exactly as the
+         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
+         Nothing here re-defines shape/colour semantics — it re-states them so a
+         plain browser paints the real palette.
+      ---------------------------------------------------------------------- */
+      :root {
+        /* text */
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        /* surfaces */
+        --page: #f4f3f1;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        /* borders */
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --border-strong: #d3cfc8;
+        /* accent */
+        --accent: #5645d4;
+        --accent-pressed: #4534b3;
+        --accent-soft: #f4f2fd;
+        --highlight: #ff64c8;
+        /* status / intent */
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --info: #0075de;
+        /* tints */
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --danger-surface: #fde0ec;
+        --warning-surface: #ffe8d4;
+        /* work-item type hues */
+        --t-epic: #ff64c8;
+        --t-epic-soft: #ffe3f5;
+        --t-story: #1aae39;
+        --t-story-soft: #d9f3e1;
+        --t-task: #0075de;
+        --t-task-soft: #dcecfa;
+        --t-bug: #e03131;
+        --t-subtask: #2a9d99;
+        --t-subtask-soft: #d6f0ee;
+        /* shape */
+        --r-card: 12px;
+        --r-btn: 10px;
+        --r-control: 8px;
+        --r-pill: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 4px 14px #00000014;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .sheet {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 36px 28px 64px;
+      }
+      .doc-head h1 {
+        font-size: 26px;
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.5;
+        max-width: 70ch;
+      }
+      .doc-head .refs {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid #e3def8;
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--secondary);
+        background: var(--hub);
+        border-color: var(--border);
+      }
+
+      .panel {
+        margin-top: 34px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 11px;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--mono);
+        color: #fff;
+        background: var(--accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap span.note {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .frame {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: var(--sh-card);
+        overflow: hidden;
+      }
+
+      /* ---- app shell: left nav + main ---- */
+      .app {
+        display: grid;
+        grid-template-columns: 212px 1fr;
+        height: 560px;
+      }
+      .nav {
+        background: var(--hub);
+        border-right: 1px solid var(--border);
+        padding: 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nav .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 4px 8px 12px;
+      }
+      .nav .brand .logo {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        font-size: 14px;
+      }
+      .nav .brand .who {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--strong);
+        line-height: 1.1;
+      }
+      .nav .brand .who small {
+        display: block;
+        font-weight: 500;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .nav .sec {
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--faint);
+        padding: 12px 8px 5px;
+      }
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 9px;
+        border-radius: var(--r-control);
+        font-size: 13px;
+        color: var(--secondary);
+        text-decoration: none;
+      }
+      .nav a svg {
+        width: 16px;
+        height: 16px;
+        color: var(--faint);
+        flex: none;
+      }
+      .nav a.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .nav a.on svg {
+        color: var(--accent);
+      }
+      .nav a .count {
+        margin-left: auto;
+        font: 600 11px var(--mono);
+        color: var(--muted);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        height: 50px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 18px;
+        flex: none;
+      }
+      .topbar h3 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .topbar .sub {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .topbar .grow {
+        margin-left: auto;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 0;
+        border-radius: var(--r-btn);
+        padding: 8px 13px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn.secondary {
+        background: transparent;
+        color: var(--strong);
+        border: 1px solid var(--border-strong);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--secondary);
+      }
+      .btn.sm {
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      /* ---- plans list ---- */
+      .list {
+        padding: 14px 18px;
+        overflow: auto;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 22px 1fr auto;
+        gap: 13px;
+        align-items: center;
+        padding: 13px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        margin-bottom: 9px;
+        box-shadow: var(--sh-subtle);
+      }
+      .row:hover {
+        border-color: var(--border-strong);
+      }
+      .row .ic {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+      }
+      .row .ic svg {
+        width: 13px;
+        height: 13px;
+      }
+      .row .idea {
+        min-width: 0;
+      }
+      .row .idea .t {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--strong);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .row .idea .m {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 2px;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .row .idea .m b {
+        color: var(--secondary);
+        font-weight: 600;
+      }
+      .row .meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 9px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.generating {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .pill.planned {
+        background: var(--lavender);
+        color: #3a2d8a;
+      }
+      .pill.approved {
+        background: var(--mint);
+        color: #0f5e29;
+      }
+      .pill.declined {
+        background: var(--mutedfill);
+        color: var(--muted);
+      }
+      .pill.stale {
+        background: var(--warning-surface);
+        color: #8a3d00;
+      }
+      .pill.count {
+        background: var(--hub);
+        color: var(--secondary);
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      .spin {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #b9d4f2;
+        border-top-color: var(--info);
+        display: inline-block;
+        animation: sp 0.9s linear infinite;
+      }
+      @keyframes sp {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ---- canvas + review shell (plan detail) ---- */
+      .detail {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        height: 560px;
+      }
+      .viewport {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
+          var(--hub);
+      }
+      .ovl {
+        position: absolute;
+        z-index: 5;
+      }
+      .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: var(--sh-subtle);
+      }
+      .crumb svg {
+        width: 13px;
+        height: 13px;
+        color: var(--faint);
+      }
+      .crumb .dot {
+        width: 15px;
+        height: 15px;
+        border-radius: 5px;
+        background: var(--accent);
+      }
+      .search {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        font-size: 12.5px;
+        color: var(--muted);
+        box-shadow: var(--sh-subtle);
+        min-width: 190px;
+      }
+      .search svg {
+        width: 14px;
+        height: 14px;
+        color: var(--faint);
+      }
+      .search kbd {
+        margin-left: auto;
+        font: 600 10px var(--mono);
+        color: var(--faint);
+        background: var(--mutedfill);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      .zoom {
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-control);
+        overflow: hidden;
+        box-shadow: var(--sh-subtle);
+      }
+      .zoom button {
+        width: 34px;
+        height: 32px;
+        border: 0;
+        background: transparent;
+        font-size: 16px;
+        color: var(--strong);
+        cursor: pointer;
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--hair);
+      }
+      .zlvl {
+        font: 600 11px var(--mono);
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 9px;
+        box-shadow: var(--sh-subtle);
+      }
+
+      .legend {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: #ffffffee;
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        padding: 9px 12px;
+        box-shadow: var(--sh-card);
+      }
+      .legend .lh {
+        font: 700 10px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .legend .lrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11.5px;
+        color: var(--strong);
+      }
+      .legend .lrow em {
+        color: var(--muted);
+        font-style: normal;
+      }
+      .legend svg {
+        width: 38px;
+        height: 12px;
+        flex: none;
+      }
+
+      .world {
+        position: absolute;
+        inset: 0;
+      }
+      .edges {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: visible;
+      }
+      .node {
+        position: absolute;
+        width: 236px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        box-shadow: var(--sh-subtle);
+        padding: 11px 12px;
+      }
+      .node .top {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .node .tile {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--r-control);
+        display: grid;
+        place-items: center;
+      }
+      .node .tile svg {
+        width: 17px;
+        height: 17px;
+      }
+      .node .id {
+        font: 600 11px var(--mono);
+        color: var(--faint);
+      }
+      .node .ttl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--strong);
+        line-height: 1.25;
+        margin-top: 1px;
+      }
+      .node .foot {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .node .who {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .opbadge {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--r-pill);
+        padding: 2px 8px;
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+      .opbadge svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      /* op treatments */
+      .node.add {
+        border: 1.5px dashed var(--accent);
+        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+        box-shadow: 0 0 0 3px #5645d41a;
+      }
+      .opbadge.add {
+        background: var(--accent);
+        color: #fff;
+      }
+      .node.modify {
+        border-color: var(--info);
+        box-shadow:
+          0 0 0 1px var(--info) inset,
+          var(--sh-subtle);
+      }
+      .opbadge.modify {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
+         Deliberately NOT red/dashed/hatched — that language is reserved for the
+         cross-story dependency signal (.ghost / .node.flagged below), which is
+         shipped canvas language we compose. Archive is reversible, not an error,
+         so it reads as greyscale + strike-through, like the cancelled status hue. */
+      .node.remove {
+        border: 1px solid var(--border-strong);
+        background: var(--mutedfill);
+        opacity: 0.66;
+        filter: grayscale(0.5);
+      }
+      .node.remove .ttl {
+        text-decoration: line-through;
+        text-decoration-color: var(--faint);
+        color: var(--muted);
+      }
+      .node.remove .id {
+        color: var(--faint);
+      }
+      .opbadge.remove {
+        background: var(--mutedfill);
+        color: var(--secondary);
+        border: 1px solid var(--border-strong);
+      }
+
+      .diff {
+        margin-top: 9px;
+        padding-top: 9px;
+        border-top: 1px solid var(--hair);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .diff .dl {
+        font: 600 10px var(--mono);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .diff .old {
+        font-size: 11.5px;
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+      .diff .new {
+        font-size: 11.5px;
+        color: var(--strong);
+        font-weight: 600;
+      }
+      .diff .new b {
+        color: var(--info);
+      }
+
+      .stale {
+        margin-top: 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #8a3d00;
+        background: var(--warning-surface);
+        border-radius: var(--r-pill);
+        padding: 2px 8px;
+      }
+      .stale svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      .ghost {
+        position: absolute;
+        width: 184px;
+        border: 1.5px dashed var(--danger);
+        background: repeating-linear-gradient(
+          135deg,
+          #fff,
+          #fff 7px,
+          var(--danger-surface) 7px,
+          var(--danger-surface) 9px
+        );
+        border-radius: var(--r-card);
+        padding: 9px 11px;
+      }
+      .ghost .gid {
+        font: 600 11px var(--mono);
+        color: #9b1c4b;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .ghost .gid svg {
+        width: 13px;
+        height: 13px;
+      }
+      .ghost .gsub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+      .ghost .gwhere {
+        color: var(--danger);
+        font-weight: 600;
+      }
+
+      .stale-summary {
+        position: absolute;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--warning-surface);
+        border: 1px solid #f3c9a0;
+        color: #8a3d00;
+        border-radius: var(--r-pill);
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: var(--sh-card);
+      }
+      .stale-summary svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ---- review rail ---- */
+      .rail {
+        background: var(--surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .railhead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--hair);
+      }
+      .railhead .g {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success);
+      }
+      .railhead .lab {
+        font: 600 11px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #54514b;
+      }
+      .railbody {
+        flex: 1;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        overflow: auto;
+      }
+      .summary .idea {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--strong);
+        line-height: 1.3;
+      }
+      .summary .by {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .opcounts {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .opc {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 600;
+        border-radius: var(--r-control);
+        padding: 4px 8px;
+      }
+      .opc.add {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .opc.mod {
+        background: var(--sky);
+        color: #0a4fa0;
+      }
+      .opc.rem {
+        background: var(--danger-surface);
+        color: #9b1c4b;
+      }
+
+      .block-h {
+        font: 600 10.5px var(--mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--faint);
+        margin-bottom: 8px;
+      }
+      .timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .tl {
+        display: grid;
+        grid-template-columns: 16px 1fr;
+        gap: 9px;
+      }
+      .tl .mk {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .tl .mk i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        margin-top: 3px;
+      }
+      .tl .mk .line {
+        flex: 1;
+        width: 2px;
+        background: var(--hair);
+        margin: 2px 0;
+      }
+      .tl .body {
+        padding-bottom: 13px;
+      }
+      .tl .body .ev {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+      }
+      .tl .body .at {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .tl.done .mk i {
+        background: var(--success);
+      }
+      .tl.now .mk i {
+        background: var(--accent);
+        box-shadow: 0 0 0 3px #5645d426;
+      }
+      .tl.pending .mk i {
+        background: var(--surface);
+        border: 2px solid var(--border-strong);
+      }
+      .tl.pending .body .ev {
+        color: var(--muted);
+      }
+
+      .callout {
+        border: 1px solid #f3c9a0;
+        background: var(--warning-surface);
+        border-radius: var(--r-card);
+        padding: 11px 12px;
+      }
+      .callout .ch {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #8a3d00;
+      }
+      .callout .ch svg {
+        width: 14px;
+        height: 14px;
+      }
+      .callout ul {
+        margin: 8px 0 0;
+        padding-left: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .callout li {
+        font-size: 11.5px;
+        color: #7a4a10;
+      }
+      .callout li code {
+        font: 600 11px var(--mono);
+        color: #8a3d00;
+        background: #ffffff80;
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+
+      .decide {
+        padding: 13px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .decide .btn {
+        justify-content: center;
+        padding: 11px;
+      }
+      .decide .hint {
+        font-size: 11px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      /* ---- chat-review messages ---- */
+      .msg {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .msg .av {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        font: 700 12px sans-serif;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .msg .bubble {
+        background: var(--hub);
+        border-radius: 13px;
+        padding: 9px 12px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--text);
+      }
+
+      /* ---- terminal states ---- */
+      .states {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+      .estate {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        min-height: 230px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        text-align: center;
+        padding: 26px 22px;
+        box-shadow: var(--sh-subtle);
+      }
+      .estate .glyph {
+        width: 46px;
+        height: 46px;
+        border-radius: 13px;
+        display: grid;
+        place-items: center;
+        background: var(--hub);
+        border: 1px solid var(--border);
+      }
+      .estate .glyph svg {
+        width: 22px;
+        height: 22px;
+        color: var(--muted);
+      }
+      .estate.fail .glyph {
+        background: #fdeae3;
+        border-color: #f3b4a0;
+      }
+      .estate.fail .glyph svg {
+        color: var(--warning);
+      }
+      .estate.credits .glyph {
+        background: var(--accent-soft);
+        border-color: #e3def8;
+      }
+      .estate.credits .glyph svg {
+        color: var(--accent);
+      }
+      .estate h4 {
+        margin: 0;
+        font-size: 14px;
+        color: var(--strong);
+      }
+      .estate p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--muted);
+        max-width: 260px;
+      }
+      .estate .acts {
+        margin-top: 4px;
+        display: flex;
+        gap: 8px;
+      }
+
+      .liveband {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 6;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        background-size: 40% 100%;
+        background-repeat: no-repeat;
+        animation: scan 1.4s ease-in-out infinite;
+      }
+      @keyframes scan {
+        0% {
+          background-position: -40% 0;
+        }
+        100% {
+          background-position: 140% 0;
+        }
+      }
+      .genchip {
+        position: absolute;
+        z-index: 6;
+        left: 50%;
+        transform: translateX(-50%);
+        top: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-pill);
+        padding: 7px 14px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+        box-shadow: var(--sh-card);
+      }
+      .node.streaming {
+        opacity: 0;
+        animation: pop 0.4s ease forwards;
+      }
+      .node.s1 {
+        animation-delay: 0.1s;
+      }
+      .node.s2 {
+        animation-delay: 0.35s;
+      }
+      .node.s3 {
+        animation-delay: 0.6s;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .skeleton {
+        position: absolute;
+        width: 236px;
+        height: 86px;
+        border-radius: var(--r-card);
+        border: 1.5px dashed var(--border-strong);
+        background: var(--soft);
+        display: grid;
+        place-items: center;
+        color: var(--faint);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>The Plans surface — <span style="color: var(--accent)">MOTIR-843 · 7.4.1</span></h1>
+        <p>
+          COMPOSES four shipped surfaces and adds only the Plans-substrate chrome (list + nav,
+          status &amp; history, op treatments, staleness, and the Approve→materialize / Decline
+          gate). It is not a bespoke tree editor and does not re-draw the canvas, its edges, zoom,
+          search, or drill-down. See <code>design-notes.md</code>. A <code>Plan</code> bundles
+          proposed <code>PlanItem</code>
+          ops; nothing is real until Approve materializes them.
+        </p>
+        <div class="refs">
+          <span class="ref">composes · MOTIR-1193 shell</span>
+          <span class="ref">composes · MOTIR-1009 canvas</span>
+          <span class="ref">composes · MOTIR-1194 WorkItemCanvas</span>
+          <span class="ref">composes · MOTIR-1010 per-level read</span>
+          <span class="ref muted">renders · 7.21 Plan / PlanItem</span>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL A — Plans list + left-nav entry (the access path)        -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">A</span>
+          <h2>Plans list &amp; the “Plans” nav entry</h2>
+          <span class="note">the index — a list, not a canvas; the access path to every plan</span>
+        </div>
+        <div class="frame">
+          <div class="app">
+            <!-- left nav: the access path -->
+            <nav class="nav">
+              <div class="brand">
+                <span class="logo">P</span>
+                <span class="who">PayFlow<small>moooon · your project</small></span>
+              </div>
+              <a
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12h18M3 6h18M3 18h18" /></svg
+                >Inbox</a
+              >
+              <a
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" /></svg
+                >Board</a
+              >
+              <a
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 6h16M4 12h10M4 18h7" /></svg
+                >Backlog</a
+              >
+              <a
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" />
+                  <path d="M9 3v15M15 6v15" /></svg
+                >Roadmap</a
+              >
+              <div class="sec">Motir AI</div>
+              <a class="on"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 4h18v4H3zM3 13h12v4H3z" />
+                  <path d="M19 13l2 2-2 2" /></svg
+                >Plans<span class="count">4</span></a
+              >
+              <a
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 3v3M12 18v3M5 12H2M22 12h-3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"
+                  />
+                  <circle cx="12" cy="12" r="3" /></svg
+                >Discovery</a
+              >
+            </nav>
+
+            <div class="main">
+              <div class="topbar">
+                <h3>Plans</h3>
+                <span class="sub">· every plan Motir AI proposed for PayFlow</span>
+                <span class="grow"></span>
+                <button class="btn primary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 5v14M5 12h14" /></svg
+                  >Generate a plan
+                </button>
+              </div>
+              <div class="list">
+                <!-- generating -->
+                <div class="row">
+                  <span class="ic" style="background: var(--sky)"><span class="spin"></span></span>
+                  <div class="idea">
+                    <div class="t">Add recurring invoices &amp; payment reminders</div>
+                    <div class="m">
+                      <span>generating…</span><span><b>building</b> the tree</span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill generating"><span class="spin"></span> Generating</span>
+                  </div>
+                </div>
+                <!-- planned, awaiting review, stale -->
+                <div
+                  class="row"
+                  style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
+                >
+                  <span class="ic" style="background: var(--lavender)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#3a2d8a"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M9 11l3 3 8-8" />
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Stripe Connect payouts for marketplace sellers</div>
+                    <div class="m">
+                      <span><b>14</b> items</span><span>+9 add · 4 modify · 1 remove</span
+                      ><span>planned <b>2h ago</b></span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill stale"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                        /></svg
+                      >3 may be out of date</span
+                    >
+                    <span class="pill planned"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 6v6l4 2" />
+                        <circle cx="12" cy="12" r="9" /></svg
+                      >Planned</span
+                    >
+                  </div>
+                </div>
+                <!-- approved -->
+                <div class="row">
+                  <span class="ic" style="background: var(--mint)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#0f5e29"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m20 6-11 11-5-5" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Email digest &amp; weekly summaries</div>
+                    <div class="m">
+                      <span><b>8</b> items</span><span>all added to backlog</span
+                      ><span>approved <b>yesterday</b> by Mara</span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill approved"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m20 6-11 11-5-5" /></svg
+                      >Approved</span
+                    >
+                  </div>
+                </div>
+                <!-- declined -->
+                <div class="row" style="opacity: 0.78">
+                  <span class="ic" style="background: var(--mutedfill)"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#787671"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M18 6 6 18M6 6l12 12" /></svg
+                  ></span>
+                  <div class="idea">
+                    <div class="t">Crypto wallet checkout</div>
+                    <div class="m">
+                      <span><b>11</b> items</span><span>dropped — nothing changed</span
+                      ><span>declined <b>3 days ago</b> by Mara</span>
+                    </div>
+                  </div>
+                  <div class="meta">
+                    <span class="pill declined"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" /></svg
+                      >Declined</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL B — Plan detail = generation-review MODE of 1193 shell   -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">B</span>
+          <h2>Plan detail — the generation-review mode of the canvas+chat shell</h2>
+          <span class="note"
+            >composed canvas (left, per-level) · review rail (right) · op treatments on the real
+            nodes</span
+          >
+        </div>
+        <div class="frame">
+          <div class="detail">
+            <!-- LEFT: the composed canvas (1009/1194/1010) with op treatments layered on -->
+            <div class="viewport">
+              <div class="ovl" style="top: 14px; left: 16px">
+                <span class="crumb"
+                  ><span class="dot"></span>Plans · Stripe Connect payouts
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                  Epics</span
+                >
+              </div>
+              <div class="ovl" style="top: 14px; right: 16px">
+                <span class="search"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m21 21-4.3-4.3" /></svg
+                  >Find a proposed item…<kbd>/</kbd></span
+                >
+              </div>
+              <div class="stale-summary" style="top: 56px; left: 16px">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                  /></svg
+                >3 of 14 proposed items may be out of date
+              </div>
+
+              <!-- edges (composed from 1009/1194 edge router): firm / pending / cross -->
+              <svg class="edges" viewBox="0 0 760 470" preserveAspectRatio="none">
+                <defs>
+                  <marker
+                    id="aFirm"
+                    viewBox="0 0 10 10"
+                    refX="8.5"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0L10 5L0 10z" fill="#d3cfc8" />
+                  </marker>
+                  <marker
+                    id="aPend"
+                    viewBox="0 0 10 10"
+                    refX="8.5"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0L10 5L0 10z" fill="#a4a097" />
+                  </marker>
+                  <marker
+                    id="aAdd"
+                    viewBox="0 0 10 10"
+                    refX="8.5"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0 0L10 5L0 10z" fill="#5645d4" />
+                  </marker>
+                </defs>
+                <path
+                  d="M150,120 C220,120 220,250 286,250"
+                  fill="none"
+                  stroke="#d3cfc8"
+                  stroke-width="2.2"
+                  marker-end="url(#aFirm)"
+                />
+                <path
+                  d="M150,120 C230,120 230,392 286,392"
+                  fill="none"
+                  stroke="#5645d4"
+                  stroke-width="2.2"
+                  stroke-dasharray="5 5"
+                  marker-end="url(#aAdd)"
+                />
+                <path
+                  d="M522,250 C580,250 580,392 522,392"
+                  fill="none"
+                  stroke="#a4a097"
+                  stroke-width="2.2"
+                  stroke-dasharray="2 7"
+                  stroke-linecap="round"
+                  marker-end="url(#aPend)"
+                />
+              </svg>
+
+              <div class="world">
+                <!-- existing committed epic (context — the modify/remove overlay the committed tree) -->
+                <div class="node" style="left: 24px; top: 86px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-epic-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                        <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">PAY-200</div>
+                      <div class="ttl">Payments core</div>
+                    </div>
+                  </div>
+                  <div class="foot">
+                    <span class="pill" style="background: var(--mint); color: #0f5e29"
+                      >in progress</span
+                    ><span class="who">existing</span>
+                  </div>
+                </div>
+
+                <!-- ADD: a brand-new proposed epic (proposed tint, dashed accent, +badge) -->
+                <div class="node add" style="left: 286px; top: 196px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-epic-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                        <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Marketplace payouts</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                  <div class="foot">
+                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                      >proposed · 9 items</span
+                    >
+                  </div>
+                </div>
+
+                <!-- MODIFY: existing node + "proposed change" badge + old→new diff -->
+                <div class="node modify" style="left: 286px; top: 350px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-story-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-story)"
+                        stroke-width="2"
+                      >
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path
+                          d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"
+                        /></svg
+                    ></span>
+                    <div>
+                      <div class="id">PAY-214</div>
+                      <div class="ttl">Seller onboarding</div>
+                    </div>
+                    <span class="opbadge modify"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                      >
+                        <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+                      >change</span
+                    >
+                  </div>
+                  <div class="diff">
+                    <span class="dl">priority</span>
+                    <span class="old">Medium</span>
+                    <span class="new">→ <b>High</b></span>
+                  </div>
+                  <div class="stale">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M12 8v5M12 16h.01" />
+                      <circle cx="12" cy="12" r="9" /></svg
+                    >base changed since planned · base_revision_drift
+                  </div>
+                </div>
+
+                <!-- REMOVE: existing node marked "will be archived" -->
+                <div class="node remove" style="left: 560px; top: 196px; width: 200px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--mutedfill)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="#787671" stroke-width="2">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path
+                          d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"
+                        /></svg
+                    ></span>
+                    <div>
+                      <div class="id">PAY-219</div>
+                      <div class="ttl">Manual payout export</div>
+                    </div>
+                    <span class="opbadge remove"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect x="3" y="4" width="18" height="4" rx="1" />
+                        <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg
+                      >remove</span
+                    >
+                  </div>
+                  <div class="foot">
+                    <span
+                      class="pill"
+                      style="
+                        background: var(--mutedfill);
+                        color: var(--secondary);
+                        border: 1px solid var(--border-strong);
+                      "
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        style="width: 12px; height: 12px"
+                      >
+                        <rect x="3" y="4" width="18" height="4" rx="1" />
+                        <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg
+                      >will be archived</span
+                    >
+                  </div>
+                </div>
+
+                <!-- ADD node carrying a structural stale reason -->
+                <div class="node add" style="left: 560px; top: 350px; width: 200px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-subtask-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-subtask)"
+                        stroke-width="2"
+                      >
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">KYC webhook handler</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                  <div class="stale">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                      /></svg
+                    >2 siblings added since planned · siblings_added
+                  </div>
+                </div>
+              </div>
+
+              <!-- canvas chrome: zoom (composed) + legend (composed, + the proposed key) -->
+              <div
+                class="ovl"
+                style="left: 16px; bottom: 16px; display: flex; gap: 8px; align-items: center"
+              >
+                <span class="zoom"><button>−</button><button>+</button><button>⤢</button></span>
+                <span class="zlvl">Fit · 82%</span>
+              </div>
+              <div class="ovl" style="right: 16px; bottom: 16px">
+                <div class="legend">
+                  <span class="lh">Dependencies &amp; ops</span>
+                  <span class="lrow"
+                    ><svg viewBox="0 0 40 12">
+                      <path d="M2 6H31" stroke="#d3cfc8" stroke-width="2.2" />
+                      <path d="M30 2 36 6 30 10z" fill="#d3cfc8" /></svg
+                    >blocks <em>· blocker done</em></span
+                  >
+                  <span class="lrow"
+                    ><svg viewBox="0 0 40 12">
+                      <path
+                        d="M2 6H31"
+                        stroke="#a4a097"
+                        stroke-width="2.2"
+                        stroke-dasharray="2 6"
+                        stroke-linecap="round"
+                      />
+                      <path d="M30 2 36 6 30 10z" fill="#a4a097" /></svg
+                    >pending <em>· not done yet</em></span
+                  >
+                  <span class="lrow"
+                    ><svg viewBox="0 0 40 12">
+                      <path
+                        d="M2 6H31"
+                        stroke="#5645d4"
+                        stroke-width="2.2"
+                        stroke-dasharray="5 5"
+                      />
+                      <path d="M30 2 36 6 30 10z" fill="#5645d4" /></svg
+                    >proposed <em>· new in this plan</em></span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT: review rail (the chat-mode rail, repurposed for plan review) -->
+            <aside class="rail">
+              <div class="railhead">
+                <span class="g"></span><span class="lab">Plan review</span>
+              </div>
+              <div class="railbody">
+                <div class="summary">
+                  <div class="idea">Stripe Connect payouts for marketplace sellers</div>
+                  <div class="by">from your idea · generated by Motir AI</div>
+                  <div class="opcounts" style="margin-top: 9px">
+                    <span class="opc add">+9 add</span>
+                    <span class="opc mod">4 modify</span>
+                    <span class="opc rem">1 remove</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="block-h">History</div>
+                  <div class="timeline">
+                    <div class="tl done">
+                      <div class="mk"><i></i><span class="line"></span></div>
+                      <div class="body">
+                        <div class="ev">Generation started</div>
+                        <div class="at">today · 14:02</div>
+                      </div>
+                    </div>
+                    <div class="tl done">
+                      <div class="mk"><i></i><span class="line"></span></div>
+                      <div class="body">
+                        <div class="ev">Planned — 14 items proposed</div>
+                        <div class="at">today · 14:03</div>
+                      </div>
+                    </div>
+                    <div class="tl now">
+                      <div class="mk"><i></i><span class="line"></span></div>
+                      <div class="body">
+                        <div class="ev">Awaiting your review</div>
+                        <div class="at">now</div>
+                      </div>
+                    </div>
+                    <div class="tl pending">
+                      <div class="mk"><i></i></div>
+                      <div class="body">
+                        <div class="ev">Approved or declined</div>
+                        <div class="at">—</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="callout">
+                  <div class="ch">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                      /></svg
+                    >3 items may be out of date
+                  </div>
+                  <ul>
+                    <li><b>KYC webhook handler</b> — <code>siblings_added</code></li>
+                    <li><b>Seller onboarding</b> — <code>base_revision_drift</code></li>
+                    <li><b>Payout ledger</b> — <code>blocker_removed</code></li>
+                  </ul>
+                </div>
+
+                <div class="msg">
+                  <span class="av">M</span>
+                  <div class="bubble">
+                    I proposed 9 new items and adjusted 4 to fit your existing Payments core. Review
+                    them on the canvas — approve to add them to your backlog, or ask me to adjust.
+                  </div>
+                </div>
+              </div>
+
+              <div class="decide">
+                <button class="btn primary">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                    <path d="m20 6-11 11-5-5" /></svg
+                  >Approve — add 14 items to your backlog
+                </button>
+                <button class="btn secondary" style="justify-content: center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <path d="M18 6 6 18M6 6l12 12" /></svg
+                  >Decline
+                </button>
+                <span class="hint"
+                  >Approve materializes the proposals · 3 stale items will be confirmed first</span
+                >
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL C — live generation (per-level streaming)                -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">C</span>
+          <h2>Live generation — proposed nodes stream in per level</h2>
+          <span class="note"
+            >the <code>generating</code> state · drill-down respected, not a whole-tree reveal ·
+            aria-live</span
+          >
+        </div>
+        <div class="frame">
+          <div class="detail">
+            <div
+              class="viewport"
+              role="region"
+              aria-live="polite"
+              aria-label="Generating your plan"
+            >
+              <div class="liveband"></div>
+              <div class="genchip">
+                <span
+                  class="spin"
+                  style="
+                    width: 14px;
+                    height: 14px;
+                    border-color: #cdbcf5;
+                    border-top-color: var(--accent);
+                  "
+                ></span
+                >Generating your plan… 6 of ~14 items
+              </div>
+              <div class="world">
+                <div class="node add streaming s1" style="left: 60px; top: 150px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-epic-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                        <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Marketplace payouts</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                  <div class="foot">
+                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                      >proposed</span
+                    >
+                  </div>
+                </div>
+                <div class="node add streaming s2" style="left: 350px; top: 110px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-story-soft)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-story)"
+                        stroke-width="2"
+                      >
+                        <path
+                          d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"
+                        /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Connect account model</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                  <div class="foot">
+                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                      >proposed</span
+                    >
+                  </div>
+                </div>
+                <div class="node add streaming s3" style="left: 350px; top: 250px">
+                  <div class="top">
+                    <span class="tile" style="background: var(--t-task-soft)"
+                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="m9 12 2 2 4-4" /></svg
+                    ></span>
+                    <div>
+                      <div class="id">new</div>
+                      <div class="ttl">Payout schedule job</div>
+                    </div>
+                    <span class="opbadge add"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.6"
+                      >
+                        <path d="M12 5v14M5 12h14" /></svg
+                      >add</span
+                    >
+                  </div>
+                  <div class="foot">
+                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                      >proposed</span
+                    >
+                  </div>
+                </div>
+                <div class="skeleton" style="left: 640px; top: 180px">drafting…</div>
+              </div>
+              <div
+                class="ovl"
+                style="left: 16px; bottom: 16px; display: flex; gap: 8px; align-items: center"
+              >
+                <span class="zoom"><button>−</button><button>+</button><button>⤢</button></span>
+                <span class="zlvl">Fit · 90%</span>
+              </div>
+            </div>
+            <aside class="rail">
+              <div class="railhead">
+                <span class="g" style="background: var(--info)"></span
+                ><span class="lab">Generating</span>
+              </div>
+              <div class="railbody">
+                <div class="msg">
+                  <span class="av">M</span>
+                  <div class="bubble">
+                    Reading your direction docs and your existing Payments core…
+                  </div>
+                </div>
+                <div class="msg">
+                  <span class="av">M</span>
+                  <div class="bubble">
+                    Drafting the payouts epic and its stories. They’ll appear on the canvas as I go
+                    — one level at a time.
+                  </div>
+                </div>
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: var(--muted);
+                    font-size: 12.5px;
+                  "
+                >
+                  <span
+                    class="spin"
+                    style="border-color: #cdbcf5; border-top-color: var(--accent)"
+                  ></span
+                  >Proposing items…
+                </div>
+              </div>
+              <div class="decide">
+                <button class="btn secondary" style="justify-content: center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <rect x="6" y="6" width="12" height="12" rx="2" /></svg
+                  >Stop generating
+                </button>
+                <span class="hint">Review &amp; Approve unlock when generation completes</span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL D — terminal states                                      -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">D</span>
+          <h2>Terminal states</h2>
+          <span class="note"
+            >empty (no direction) · failed (retry) · out of credits (metered — 7.2)</span
+          >
+        </div>
+        <div class="states">
+          <div class="estate">
+            <span class="glyph"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 4h18v4H3zM3 13h12v4H3z" />
+                <path d="M19 13l2 2-2 2" /></svg
+            ></span>
+            <h4>No plans yet</h4>
+            <p>
+              Motir AI plans from your direction docs. Finish discovery, then generate your first
+              plan.
+            </p>
+            <div class="acts">
+              <button class="btn ghost sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg
+                >Open discovery chat</button
+              ><button class="btn primary sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14" /></svg
+                >Generate your first plan
+              </button>
+            </div>
+          </div>
+          <div class="estate fail">
+            <span class="glyph"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+                /></svg
+            ></span>
+            <h4>Generation didn’t finish</h4>
+            <p>
+              The plan stopped partway. Your backlog is untouched — the partial proposed frontier
+              can be discarded.
+            </p>
+            <div class="acts">
+              <button class="btn ghost sm">Discard partial</button
+              ><button class="btn primary sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                  <path d="M3 3v5h5" /></svg
+                >Retry
+              </button>
+            </div>
+          </div>
+          <div class="estate credits">
+            <span class="glyph"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <path d="M2 10h20" /></svg
+            ></span>
+            <h4>You’re out of planning credits</h4>
+            <p>Generating a plan is metered. Top up to keep planning with Motir AI.</p>
+            <div class="acts">
+              <button class="btn primary sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14" /></svg
+                >Top up credits
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
