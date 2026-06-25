@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 4.4 — Sprint lifecycle (start / complete).
@@ -97,7 +97,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 4.4`. Matches the canonical
  * depth + string-literal style of Stories 4.1 / 4.5 / 3.7.
  */
-export const story_4_4: PlanStory = {
+export const story_4_4: SeedStory = {
   id: '4.4',
   title: 'Sprint lifecycle (start / complete)',
   status: 'done',

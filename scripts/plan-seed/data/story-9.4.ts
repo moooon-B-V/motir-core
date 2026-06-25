@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.4 — WF4: Hosted + start fresh. The FIRST hosted-execution workflow,
@@ -89,7 +89,7 @@ import type { PlanStory } from '../types';
  * carries no `design` card; a net-new combined affordance, if review reveals
  * one, is a NEW `design/` subtask, not improvised UI.
  */
-export const story_9_4: PlanStory = {
+export const story_9_4: SeedStory = {
   id: '9.4',
   title: 'WF4 — Hosted + start fresh (orchestration + verification)',
   status: 'planned',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 8.7 — the one-time Prodect → Motir rebrand cutover.
@@ -58,7 +58,7 @@ import type { PlanStory } from '../types';
  * history, notes.html mistakes, migration SQL — migrations are immutable)
  * KEEP the old name; everything forward-looking moves to Motir.
  */
-export const story_8_7: PlanStory = {
+export const story_8_7: SeedStory = {
   id: '8.7',
   title: 'Rebrand cutover: Prodect → Motir',
   status: 'in_progress',

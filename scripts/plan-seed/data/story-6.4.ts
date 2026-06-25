@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.4 — Roles & permissions (project membership + access gating).
@@ -35,7 +35,7 @@ import type { PlanStory } from '../types';
  * enroll the moooon team in the `motir` project (the project-gating half of
  * the workspace+project ask) — the workspace half already shipped.
  */
-export const story_6_4: PlanStory = {
+export const story_6_4: SeedStory = {
   id: '6.4',
   title: 'Roles & permissions — project membership + access gating',
   status: 'done',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.13 — Contextual planning from each work item. The AI planning layer
@@ -104,7 +104,7 @@ import type { PlanStory } from '../types';
  * EVERY UI-touching code subtask (7.13.4) depends on it and is `blocked` behind
  * it.
  */
-export const story_7_13: PlanStory = {
+export const story_7_13: SeedStory = {
   id: '7.13',
   title: 'Contextual planning from each work item',
   status: 'planned',

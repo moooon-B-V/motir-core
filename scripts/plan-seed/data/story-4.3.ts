@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 4.3 — Story-point estimation.
@@ -104,7 +104,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 4.3`. Matches the canonical
  * depth + string-literal style of Stories 4.1 / 4.2 / 4.5.
  */
-export const story_4_3: PlanStory = {
+export const story_4_3: SeedStory = {
   id: '4.3',
   title: 'Story-point estimation',
   status: 'done',

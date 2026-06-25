@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 5.5 — Activity history feed.
@@ -66,7 +66,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 5.5`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical style of 5.1–5.4.
  */
-export const story_5_5: PlanStory = {
+export const story_5_5: SeedStory = {
   id: '5.5',
   title: 'Activity history feed',
   status: 'done',

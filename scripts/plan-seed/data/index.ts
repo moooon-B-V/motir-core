@@ -1,4 +1,4 @@
-import { epicIdOf, type PlanEpic, type PlanItem, type PlanStory } from '../types';
+import { epicIdOf, type SeedEpic, type SeedItem, type SeedStory } from '../types';
 import { EPICS, PARENTLESS_BUGS } from './epics';
 import { STUB_STORIES } from './stubs';
 import { story_1_0 } from './story-1.0';
@@ -86,7 +86,7 @@ import { story_10_3 } from './story-10.3';
 import { story_10_4 } from './story-10.4';
 
 /** Every fully-expanded story module (canonical subtask depth). */
-const EXPANDED_STORIES: PlanStory[] = [
+const EXPANDED_STORIES: SeedStory[] = [
   story_1_0,
   story_1_0_5,
   story_1_1,
@@ -172,7 +172,7 @@ const EXPANDED_STORIES: PlanStory[] = [
   story_10_4,
 ];
 
-const ALL_STORIES: PlanStory[] = [...EXPANDED_STORIES, ...STUB_STORIES];
+const ALL_STORIES: SeedStory[] = [...EXPANDED_STORIES, ...STUB_STORIES];
 
 /** Natural sort over dotted ids: "1.0" < "1.0.5" < "1.1" < "1.10". */
 function cmpDotted(a: string, b: string): number {
@@ -190,7 +190,7 @@ function cmpDotted(a: string, b: string): number {
  * The full Motir v1 plan tree — the source of truth `pnpm db:seed` loads.
  * Each epic's stories are gathered by id prefix and ordered naturally.
  */
-export const PLAN: PlanEpic[] = EPICS.map((epic) => ({
+export const PLAN: SeedEpic[] = EPICS.map((epic) => ({
   ...epic,
   stories: ALL_STORIES.filter((s) => epicIdOf(s.id) === epic.id).sort((a, b) =>
     cmpDotted(a.id, b.id),
@@ -202,4 +202,4 @@ export const PLAN: PlanEpic[] = EPICS.map((epic) => ({
  * iterates this after the epic pass and creates each entry with
  * `parentId: null`. See `PARENTLESS_BUGS` in `./epics` for the rule.
  */
-export const ROOT_BUGS: PlanItem[] = PARENTLESS_BUGS;
+export const ROOT_BUGS: SeedItem[] = PARENTLESS_BUGS;

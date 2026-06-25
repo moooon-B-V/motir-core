@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 10.2 (Epic 10 — Platform administration & operations) — System
@@ -91,7 +91,7 @@ import type { PlanStory } from '../types';
  * design, 10.2.2 decision) are `planned`; everything chained behind them or
  * behind the not-yet-done 10.1.3 is `blocked`.
  */
-export const story_10_2: PlanStory = {
+export const story_10_2: SeedStory = {
   id: '10.2',
   title: 'System monitoring & health (Vercel + Inngest)',
   status: 'planned',

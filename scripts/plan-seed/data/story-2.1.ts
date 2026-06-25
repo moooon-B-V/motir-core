@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 2.1 — Issue types + the type-parent rule layer.
  * Faithful transcription of prodect_plan/story-2.1-issue-types.html (frozen archive).
  */
-export const story_2_1: PlanStory = {
+export const story_2_1: SeedStory = {
   id: '2.1',
   title: 'Issue types + the type-parent rule layer',
   status: 'done',

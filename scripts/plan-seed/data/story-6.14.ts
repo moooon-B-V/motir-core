@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.14 (Epic 6) — Epic-level privacy on public projects. On a project that
@@ -108,7 +108,7 @@ import type { PlanStory } from '../types';
  * 6.14.2 (decision) have `dependsOn: []` → `planned`; everything chained behind
  * them or behind 6.12.x / 6.14.3 → `blocked`.
  */
-export const story_6_14: PlanStory = {
+export const story_6_14: SeedStory = {
   id: '6.14',
   title: 'Epic-level privacy on public projects',
   status: 'planned',

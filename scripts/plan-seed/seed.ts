@@ -84,11 +84,11 @@ import { composeDescription, mapTypeAndExecutor } from './mapItem';
 import { MOTIR_PUBLIC_OVERVIEW_MD, MOTIR_PUBLIC_TAGLINE, MOTIR_PUBLIC_TAGS } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import {
-  PLAN_STATUS_MAP,
+  SEED_STATUS_MAP,
   epicIdOf,
-  type PlanItem,
-  type PlanLeafKind,
-  type PlanStatus,
+  type SeedItem,
+  type SeedLeafKind,
+  type SeedStatus,
 } from './types';
 
 const SEED_PASSWORD = '!QAZ1qaz';
@@ -431,7 +431,7 @@ async function main() {
       kind: 'epic',
       planId: epic.id,
       title: `Epic ${epic.id}: ${epic.title}`,
-      status: PLAN_STATUS_MAP[epic.status],
+      status: SEED_STATUS_MAP[epic.status],
       descriptionMd: epic.descriptionMd?.trim() ?? null,
       parentId: null,
     });
@@ -444,7 +444,7 @@ async function main() {
         kind: 'story',
         planId: story.id,
         title: `${story.id} ${story.title}`,
-        status: PLAN_STATUS_MAP[story.status],
+        status: SEED_STATUS_MAP[story.status],
         descriptionMd: storyDesc.length ? storyDesc : null,
         parentId: epicId,
       });
@@ -455,7 +455,7 @@ async function main() {
           kind: item.kind ?? 'subtask',
           planId: item.id,
           title: `${item.id} ${item.title}`,
-          status: PLAN_STATUS_MAP[item.status],
+          status: SEED_STATUS_MAP[item.status],
           descriptionMd: composeDescription(item),
           explanationMd: item.explanationMd?.trim() ?? null,
           estimateMinutes: item.estimateMinutes ?? null,
@@ -474,7 +474,7 @@ async function main() {
         kind: item.kind ?? 'bug',
         planId: item.id,
         title: `${item.id} ${item.title}`,
-        status: PLAN_STATUS_MAP[item.status],
+        status: SEED_STATUS_MAP[item.status],
         descriptionMd: composeDescription(item),
         explanationMd: item.explanationMd?.trim() ?? null,
         estimateMinutes: item.estimateMinutes ?? null,
@@ -495,7 +495,7 @@ async function main() {
       kind: item.kind ?? 'bug',
       planId: item.id,
       title: `${item.id} ${item.title}`,
-      status: PLAN_STATUS_MAP[item.status],
+      status: SEED_STATUS_MAP[item.status],
       descriptionMd: composeDescription(item),
       explanationMd: item.explanationMd?.trim() ?? null,
       estimateMinutes: item.estimateMinutes ?? null,
@@ -601,8 +601,8 @@ async function main() {
 interface SprintLeaf {
   planId: string;
   workItemId: string;
-  status: PlanStatus;
-  kind: PlanLeafKind;
+  status: SeedStatus;
+  kind: SeedLeafKind;
 }
 
 /** One sprint to create (computed dynamically — see `buildSprints`). */
@@ -784,18 +784,18 @@ async function runSprintPass(args: {
   });
   const leafWorkItemIds = new Set(leafKindRows.map((r) => r.id));
 
-  // Invert PLAN_STATUS_MAP (planned→todo, …) so an orphan's DB workflow status
+  // Invert SEED_STATUS_MAP (planned→todo, …) so an orphan's DB workflow status
   // maps back to a plan lifecycle bucket for the sweep below. The seed creates
   // items with these initial keys; anything unexpected falls back to `planned`.
-  const planStatusByWorkflowKey = new Map<string, PlanStatus>(
-    (Object.entries(PLAN_STATUS_MAP) as [PlanStatus, string][]).map(([plan, key]) => [key, plan]),
+  const planStatusByWorkflowKey = new Map<string, SeedStatus>(
+    (Object.entries(SEED_STATUS_MAP) as [SeedStatus, string][]).map(([plan, key]) => [key, plan]),
   );
 
   // Collect every LEAF in PLAN order (stable), resolving the created id.
-  const LEAF_KINDS: ReadonlySet<PlanLeafKind> = new Set(['subtask', 'bug', 'task']);
+  const LEAF_KINDS: ReadonlySet<SeedLeafKind> = new Set(['subtask', 'bug', 'task']);
   const leaves: SprintLeaf[] = [];
   const seen = new Set<string>(); // de-dupe colliding plan ids → one work_item once
-  const addLeaf = (item: PlanItem, defaultKind: PlanLeafKind) => {
+  const addLeaf = (item: SeedItem, defaultKind: SeedLeafKind) => {
     const kind = item.kind ?? defaultKind;
     if (!LEAF_KINDS.has(kind)) return;
     const workItemId = idMap.get(item.id);
@@ -821,7 +821,7 @@ async function runSprintPass(args: {
       planId: row.id,
       workItemId: row.id,
       status: planStatusByWorkflowKey.get(row.status) ?? 'planned',
-      kind: row.kind as PlanLeafKind,
+      kind: row.kind as SeedLeafKind,
     });
   }
 

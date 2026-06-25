@@ -8,7 +8,7 @@ import {
   composeDescription,
   mapTypeAndExecutor,
 } from '@/scripts/plan-seed/mapItem';
-import type { PlanItem } from '@/scripts/plan-seed/types';
+import type { SeedItem } from '@/scripts/plan-seed/types';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 
@@ -25,8 +25,8 @@ import { makeWorkItemFixture } from '../../fixtures';
 // values persist and the prose is gone "via a repository read" (the AC).
 
 /** A minimal plan leaf — only the fields the two pure functions read (`status`
- * is required by PlanItem but irrelevant to the mapping). */
-function leaf(overrides: Partial<PlanItem> & Pick<PlanItem, 'id'>): PlanItem {
+ * is required by SeedItem but irrelevant to the mapping). */
+function leaf(overrides: Partial<SeedItem> & Pick<SeedItem, 'id'>): SeedItem {
   return { title: 'A leaf', status: 'planned', ...overrides };
 }
 

@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.0.5 — Design system & brand.
  * Faithful transcription of prodect_plan/story-1.0.5-design-system.html (frozen archive).
  */
-export const story_1_0_5: PlanStory = {
+export const story_1_0_5: SeedStory = {
   id: '1.0.5',
   title: 'Design system & brand',
   status: 'done',

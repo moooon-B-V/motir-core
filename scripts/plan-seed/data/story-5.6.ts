@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 5.6 — Tests: the combined collaboration journey + the loaded issue at
@@ -44,7 +44,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 5.6`, on the standing
  * `seed/epic-5-plan` branch. Matches the canonical style of 4.7 / 5.1–5.5.
  */
-export const story_5_6: PlanStory = {
+export const story_5_6: SeedStory = {
   id: '5.6',
   title: 'Tests — the combined collaboration journey + the loaded issue at scale',
   status: 'done',

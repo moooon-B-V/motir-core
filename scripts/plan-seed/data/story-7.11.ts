@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.11 — Cadence: auto-planning trigger + AI sprint planning + AI
@@ -92,7 +92,7 @@ import type { PlanStory } from '../types';
  * `design` card producing `design/ai-settings/*.mock.html` + `design-notes.md`,
  * and the UI code subtask (7.11.6) depends on it and is `blocked` behind it.
  */
-export const story_7_11: PlanStory = {
+export const story_7_11: SeedStory = {
   id: '7.11',
   title: 'Cadence — auto-planning + AI sprint planning',
   status: 'planned',

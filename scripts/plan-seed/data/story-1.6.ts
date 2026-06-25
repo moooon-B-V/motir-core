@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.6 — Background job infrastructure.
  * Faithful transcription of prodect_plan/story-1.6-jobs.html (frozen archive).
  */
-export const story_1_6: PlanStory = {
+export const story_1_6: SeedStory = {
   id: '1.6',
   title: 'Background job infrastructure',
   status: 'done',

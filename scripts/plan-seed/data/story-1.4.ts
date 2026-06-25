@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.4 — Work-item (issue) data model.
  * Faithful transcription of prodect_plan/story-1.4-work-item-model.html (frozen archive).
  */
-export const story_1_4: PlanStory = {
+export const story_1_4: SeedStory = {
   id: '1.4',
   title: 'Work-item (issue) data model',
   status: 'done',

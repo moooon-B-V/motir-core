@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.9 — the Motir CLI (`motir`): terminal dispatch of the work loop.
@@ -187,7 +187,7 @@ import type { PlanStory } from '../types';
  * dep would fail the cross-epic audit, and in-repo install needs no
  * publish.
  */
-export const story_7_9: PlanStory = {
+export const story_7_9: SeedStory = {
   id: '7.9',
   title: 'Motir CLI — terminal dispatch of the work loop (`motir next` / `motir auto`)',
   status: 'planned',

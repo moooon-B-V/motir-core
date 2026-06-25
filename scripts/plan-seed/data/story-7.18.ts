@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.18 — WF3: BYOK + existing codebase + Jira/Linear import. The THIRD
@@ -90,7 +90,7 @@ import type { PlanStory } from '../types';
  * carries no `design` card; if review reveals the reconciliation needs its own
  * affordance, that is a NEW `design/` subtask, not improvised UI.
  */
-export const story_7_18: PlanStory = {
+export const story_7_18: SeedStory = {
   id: '7.18',
   title: 'WF3 — BYOK + existing codebase + Jira/Linear import (orchestration + verification)',
   status: 'planned',
