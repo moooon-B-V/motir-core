@@ -142,6 +142,53 @@ describe('workItemsService.getProjectRoadmap — per-level read', () => {
     });
   });
 
+  // Subtask 7.20.6 / MOTIR-1013 — the per-container PROGRESS roll-up.
+  it('carries a subtree progress roll-up on CONTAINER nodes; leaves carry null', async () => {
+    const fx = await makeFixture();
+    const f = await buildForest(fx);
+
+    // Roots: Epic E (a container) + Bug X (a leaf root).
+    const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
+    const rootById = new Map(roots.nodes.map((n) => [n.identifier, n]));
+    // E's subtree (depth>1): A, A1(done), A2(todo), B, B1(done), B2(cancelled), B3(in_review).
+    // total EXCLUDES the cancelled B2 → 6; done = A1 + B1 = 2 (stories/in_review are not done).
+    expect(rootById.get('PROD-1')!.progress).toEqual({ done: 2, total: 6 });
+    expect(rootById.get('PROD-9')!.progress).toBeNull(); // Bug X is a leaf → no meter
+
+    // Story level under E: each story rolls up its own subtasks.
+    const stories = await workItemsService.getProjectRoadmap(fx.projectId, f.E.id, fx.ctx);
+    const storyById = new Map(stories.nodes.map((n) => [n.identifier, n]));
+    expect(storyById.get('PROD-2')!.progress).toEqual({ done: 1, total: 2 }); // A: A1 done / A1,A2
+    expect(storyById.get('PROD-5')!.progress).toEqual({ done: 1, total: 2 }); // B: B1 done / B1,B3 (B2 cancelled excl.)
+
+    // Leaf level under Story A: both subtasks are leaves → null progress.
+    const leaves = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
+    expect(leaves.nodes.map((n) => n.progress)).toEqual([null, null]);
+  });
+
+  it('a container whose only live descendant is cancelled rolls up to 0 / 0 (no meter)', async () => {
+    const fx = await makeFixture();
+    const S = await createWorkItem(fx, { kind: 'story', title: 'Lonely story' });
+    const S1 = await createWorkItem(fx, { kind: 'subtask', title: 'Only child', parentId: S.id });
+    await setStatus(S1.id, 'cancelled');
+
+    const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
+    const s = roots.nodes.find((n) => n.id === S.id)!;
+    expect(s.hasChildren).toBe(true); // a non-archived child exists…
+    expect(s.progress).toEqual({ done: 0, total: 0 }); // …but cancelled is excluded from both
+  });
+
+  it('progress excludes ARCHIVED descendants', async () => {
+    const fx = await makeFixture();
+    const f = await buildForest(fx);
+    // Archive A2 (todo) — E's total drops from 6 to 5; done unchanged.
+    await db.workItem.update({ where: { id: f.A2.id }, data: { archivedAt: new Date() } });
+
+    const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
+    const e = roots.nodes.find((n) => n.identifier === 'PROD-1')!;
+    expect(e.progress).toEqual({ done: 2, total: 5 });
+  });
+
   it('a cross-workspace projectId is a ProjectNotFoundError (no existence leak)', async () => {
     const fxA = await makeFixture({ name: 'Acme', identifier: 'AAA' });
     const fxB = await makeFixture({ name: 'Other', identifier: 'BBB' });

@@ -59,7 +59,10 @@ export function WorkItemRoadmap({
         cacheRef.current.set(key, wi);
       }
       registerItems(wi);
-      return buildWorkItemLevel(wi);
+      // The persistent roadmap marks the in-progress frontier "you are here" at
+      // every level, and pins the collapsed planning-origin cluster at the ROOT
+      // (the road's start) — Subtask 7.20.6 / MOTIR-1013.
+      return buildWorkItemLevel(wi, { markActive: true, includeOrigin: parentId === null });
     },
     [projectKey, registerItems],
   );

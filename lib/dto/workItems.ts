@@ -388,18 +388,32 @@ export interface RoadmapProgressDto {
 }
 
 /**
- * One node of the project ROADMAP forest (Subtask 7.19.2) — the epic → story →
- * subtask tree the planning-canvas roadmap (Story 7.19) renders, windowed over
- * by the virtualized roadmap view (Subtask 7.19.3). A trimmed sibling of
- * {@link WorkItemTreeNodeDto}: only the fields a roadmap node draws (no
- * priority / assignee / estimate / filter metadata), plus the per-node
- * `isDone` flag and, on containers, a `progress` roll-up.
+ * A per-container PROGRESS roll-up (Subtask 7.20.6 / MOTIR-1013) — the done /
+ * total descendant counts the roadmap draws as a thin meter on an epic / story
+ * node. `total` is every non-archived descendant whose status is NOT the sealed
+ * `cancelled` key; `done` is the subset in a `done`-category status (also
+ * excluding `cancelled`) — so a container whose only remnants are cancelled is
+ * not held permanently incomplete (mirrors the public roadmap meter). Computed
+ * over the WHOLE subtree in one recursive-CTE round-trip, NOT a per-level read.
+ */
+export interface RoadmapProgressDto {
+  done: number;
+  total: number;
+}
+
+/**
+ * One node of the project ROADMAP (Subtask 7.20.4 / MOTIR-1010) — the epic →
+ * story → subtask tree the planning canvas (MOTIR-1194) renders ONE LEVEL at a
+ * time. A trimmed sibling of {@link WorkItemTreeNodeDto}: only the fields a
+ * roadmap node draws (no priority / assignee / estimate / filter metadata), plus
+ * the per-node `isDone` flag and, on containers, a `progress` roll-up.
  *
  * Roots and every sibling set come back `key`-asc (the stable PROD-N order).
- * `progress` is non-null EXACTLY on container nodes (those with `children` —
- * epics and stories, plus any task that has subtasks); leaves carry `null`.
- * `isDone` is `true` when the node's OWN `status` resolves to a `done`-category
- * status other than `cancelled` (the node's status, independent of its meter).
+ * `progress` is non-null EXACTLY on container nodes (those with `hasChildren` —
+ * epics and stories, plus any task that has subtasks); leaves carry `null`
+ * (Subtask 7.20.6 / MOTIR-1013). `isDone` is `true` when the node's OWN `status`
+ * resolves to a `done`-category status other than `cancelled` (the node's
+ * status, independent of its meter).
  */
 export interface RoadmapNodeDto {
   id: string;
@@ -415,6 +429,9 @@ export interface RoadmapNodeDto {
   /** Has at least one non-archived child → the canvas can DRILL into it. Computed
    *  lazily (an `EXISTS`), so the read never loads the subtree. */
   hasChildren: boolean;
+  /** The subtree done/total roll-up — non-null EXACTLY on container nodes
+   *  (`hasChildren`), `null` on leaves (Subtask 7.20.6 / MOTIR-1013). */
+  progress: RoadmapProgressDto | null;
 }
 
 /**
@@ -449,9 +466,10 @@ export interface RoadmapBlockerStubDto {
  * `hasChildren` drill flag, PLUS the `is_blocked_by` {@link RoadmapEdgeDto}s FROM
  * those nodes. The canvas (MOTIR-1194) displays one level at a time and fetches
  * the next on drill — so the read is per-level (reusing `findProjectTreeLevel`),
- * never a whole-tree round-trip (mistake #91). Per-container progress meters are
- * MOTIR-1013's work (they need the subtree, which a level read deliberately
- * avoids). An empty level → `{ nodes: [], edges: [] }`.
+ * never a whole-tree round-trip (mistake #91). Each container node ALSO carries a
+ * subtree `progress` roll-up (Subtask 7.20.6 / MOTIR-1013) — one extra recursive
+ * count over the level's containers, not a whole-tree load. An empty level →
+ * `{ nodes: [], edges: [] }`.
  */
 export interface ProjectRoadmapDto {
   nodes: RoadmapNodeDto[];

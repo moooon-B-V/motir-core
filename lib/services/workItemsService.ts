@@ -1934,7 +1934,30 @@ export const workItemsService = {
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
     ]);
     const doneKeys = roadmapDoneStatusKeys(statuses);
-    const nodes = rows.map((r) => toRoadmapNodeDto(r, doneKeys.has(r.status)));
+
+    // Per-container PROGRESS meters (Subtask 7.20.6 / MOTIR-1013): one recursive
+    // count over THIS level's CONTAINER nodes (leaves have no subtree, so they're
+    // skipped) — done = descendants in a `done`-category status, total = every
+    // descendant except the sealed `cancelled` key. A container with no live
+    // descendants is absent from the result → `0 / 0`. Leaves carry `progress:
+    // null`. Bounded by the level (≤ TREE_LEVEL_MAX_TAKE containers), not a
+    // whole-tree load.
+    const containerIds = rows.filter((r) => r.hasChildren).map((r) => r.id);
+    const progressRows = await workItemRepository.countRoadmapProgress(
+      containerIds,
+      [...doneKeys],
+      ROADMAP_CANCELLED_KEY,
+    );
+    const progressById = new Map(
+      progressRows.map((p) => [p.rootId, { done: p.done, total: p.total }]),
+    );
+    const nodes = rows.map((r) =>
+      toRoadmapNodeDto(
+        r,
+        doneKeys.has(r.status),
+        r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0 }) : null,
+      ),
+    );
 
     // The `is_blocked_by` edges FROM this level's items (the canvas draws the
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
