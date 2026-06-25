@@ -111,17 +111,18 @@ export function screenToWorld(view: View, sx: number, sy: number): { x: number; 
   return { x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale };
 }
 
-// Orthogonal routing constants. Every edge leaves its source on the RIGHT, rises
-// into an overhead channel, runs across, and DROPS straight down into the target's
-// TOP edge (arrow points down, lines turn at right angles). A GLOBAL lane pass then
-// gives every edge its OWN exit height, rise lane, channel row and entry column, so
-// no two segments lie on top of each other.
-const EXIT_STUB = 22; // first horizontal stub off the source's right edge
-const TOP_APPROACH = 34; // base height of the channel above the target top
-const SLOT_STEP = 16; // spacing between sibling exit/entry/rise slots
-const LANE_STEP = 16; // vertical spacing between overhead channel rows
-const CORNER_R = 12; // rounded-corner radius at each turn
-const MAX_LANE_BUMPS = 60; // safety cap on the greedy lane search
+// Orthogonal routing constants. Every edge leaves its source on the RIGHT and
+// enters its target on the LEFT (so the arrow follows the left→right flow); the
+// turns are right angles. A neighbour edge is a clean S-elbow through the gutter
+// between the two columns; a longer/back edge detours through a TOP band. A GLOBAL
+// lane pass then keeps BOTH axes apart: every VERTICAL in a column gutter gets its
+// own x-lane, every band HORIZONTAL its own y-lane, and sibling exits/entries their
+// own slot — so no segment is ever drawn on top of another.
+const SLOT_STEP = 13; // spacing between sibling exit/entry slots on a node edge
+const BAND_LANE_STEP = 16; // vertical spacing between top-band rows
+const BAND_RISE = 18; // stub before a band edge turns up out of its source
+const BAND_GAP_ABOVE = 50; // the first band sits this far above the topmost node
+const CORNER_R = 10; // rounded-corner radius at each turn
 
 type Point = { x: number; y: number };
 
@@ -135,14 +136,19 @@ export interface RoutedEdge {
 const round = (v: number): number => Math.round(v * 100) / 100;
 const fmt = (p: Point): string => `${round(p.x)},${round(p.y)}`;
 
-/** An SVG `d` string through `pts` with rounded corners of radius `r`. */
+/** An SVG `d` string through `pts` (collapsing repeats) with rounded corners. */
 function roundedPath(pts: Point[], r: number): string {
-  if (pts.length < 2) return '';
-  const d = [`M${fmt(pts[0]!)}`];
-  for (let i = 1; i < pts.length - 1; i++) {
-    const a = pts[i - 1]!;
-    const b = pts[i]!;
-    const c = pts[i + 1]!;
+  const u: Point[] = [];
+  for (const p of pts) {
+    const last = u[u.length - 1];
+    if (!last || Math.abs(p.x - last.x) > 0.01 || Math.abs(p.y - last.y) > 0.01) u.push(p);
+  }
+  if (u.length < 2) return `M${fmt(u[0] ?? pts[0]!)}`;
+  const d = [`M${fmt(u[0]!)}`];
+  for (let i = 1; i < u.length - 1; i++) {
+    const a = u[i - 1]!;
+    const b = u[i]!;
+    const c = u[i + 1]!;
     const ab = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const bc = Math.hypot(c.x - b.x, c.y - b.y) || 1;
     const r1 = Math.min(r, ab / 2);
@@ -151,16 +157,32 @@ function roundedPath(pts: Point[], r: number): string {
     const p2 = { x: b.x + ((c.x - b.x) / bc) * r2, y: b.y + ((c.y - b.y) / bc) * r2 };
     d.push(`L${fmt(p1)}`, `Q${fmt(b)} ${fmt(p2)}`);
   }
-  d.push(`L${fmt(pts[pts.length - 1]!)}`);
+  d.push(`L${fmt(u[u.length - 1]!)}`);
   return d.join(' ');
 }
 
 /** Centre `n` slots inside `[start, start+size]` spaced `SLOT_STEP` apart, returning
  *  the `idx`-th (clamped to a margin) — spreads sibling exits/entries along an edge. */
 function slotAt(start: number, size: number, idx: number, n: number): number {
-  const margin = Math.min(size * 0.18, 20);
+  const margin = Math.min(size * 0.16, 18);
   const v = start + size / 2 - ((n - 1) * SLOT_STEP) / 2 + idx * SLOT_STEP;
   return Math.max(start + margin, Math.min(start + size - margin, v));
+}
+
+/** Greedy interval colouring: assign each item the lowest lane index whose members'
+ *  spans (from `span`) do not overlap it — so two overlapping spans never coincide. */
+function assignLanes<T>(items: T[], span: (t: T) => [number, number]): Map<T, number> {
+  const lanes: Array<Array<[number, number]>> = [];
+  const idx = new Map<T, number>();
+  for (const it of [...items].sort((p, q) => span(p)[0] - span(q)[0])) {
+    const [lo, hi] = span(it);
+    let k = 0;
+    for (; k < lanes.length; k++) if (!lanes[k]!.some(([s, e]) => !(hi < s || lo > e))) break;
+    if (k === lanes.length) lanes.push([]);
+    lanes[k]!.push([lo, hi]);
+    idx.set(it, k);
+  }
+  return idx;
 }
 
 interface RouteItem {
@@ -171,25 +193,28 @@ interface RouteItem {
   outN: number;
   inIdx: number;
   inN: number;
-  ax: number;
+  sR: number;
+  tL: number;
   exitY: number;
-  riseX: number;
-  entryX: number;
-  bt: number;
-  baseChY: number;
-  xs: number;
-  xe: number;
-  chY: number;
+  entryY: number;
+  cs: number;
+  ct: number;
+  adjacent: boolean;
+  bandY: number;
+  vlaneX: number;
 }
 
 /**
  * Route ALL the edges of a level at once and return one {@link RoutedEdge} per input
- * edge (aligned to `edges`; `null` where an endpoint rect is missing). Going global
- * is what lets the router hand every edge its own track:
- *  - sibling edges off one source get distinct exit heights + rise lanes;
- *  - sibling edges into one target get distinct entry columns;
- *  - the overhead horizontals are greedily assigned to channel rows so two whose
- *    x-spans overlap never share a row → no line is ever drawn on top of another.
+ * edge (aligned to `edges`; `null` where an endpoint rect is missing). Routing the
+ * whole level together is what lets it keep every connector on its own track:
+ *  - sibling edges off one source get distinct exit heights; into one target,
+ *    distinct entry heights (no two arrowheads coincide);
+ *  - every VERTICAL run lives in the gutter just left of its target column and is
+ *    greedily assigned an x-lane there, so two verticals never share an x;
+ *  - a longer/back edge's long HORIZONTAL runs in a top band, greedily assigned a
+ *    y-lane, so two band runs never share a y.
+ * The result: no segment is ever drawn on top of another, on either axis.
  */
 export function routeEdges(
   edges: ReadonlyArray<{ from: string; to: string }>,
@@ -208,18 +233,31 @@ export function routeEdges(
         outN: 1,
         inIdx: 0,
         inN: 1,
-        ax: 0,
+        sR: 0,
+        tL: 0,
         exitY: 0,
-        riseX: 0,
-        entryX: 0,
-        bt: 0,
-        baseChY: 0,
-        xs: 0,
-        xe: 0,
-        chY: 0,
+        entryY: 0,
+        cs: 0,
+        ct: 0,
+        adjacent: false,
+        bandY: 0,
+        vlaneX: 0,
       });
     }
   });
+  if (items.length === 0) return edges.map(() => null);
+
+  // columns = the distinct node-x values, left→right; a node's column is its x rank.
+  const xs = [...new Set(items.flatMap((it) => [it.a.x, it.b.x]))].sort((p, q) => p - q);
+  const colOf = (x: number): number => xs.indexOf(x);
+  const colRight = new Map<number, number>();
+  for (const it of items) {
+    for (const r of [it.a, it.b]) {
+      const c = colOf(r.x);
+      colRight.set(c, Math.max(colRight.get(c) ?? -Infinity, r.x + r.w));
+    }
+  }
+  const minTop = Math.min(...items.flatMap((it) => [it.a.y, it.b.y]));
 
   // sibling slots: out-edges per source (ordered by target), in-edges per target.
   const groupBy = (pick: (it: RouteItem) => string): RouteItem[][] => {
@@ -248,46 +286,71 @@ export function routeEdges(
   }
 
   for (const it of items) {
-    it.ax = it.a.x + it.a.w;
+    it.sR = it.a.x + it.a.w;
+    it.tL = it.b.x;
     it.exitY = slotAt(it.a.y, it.a.h, it.outIdx, it.outN);
-    it.riseX = it.ax + EXIT_STUB + it.outIdx * SLOT_STEP;
-    it.entryX = slotAt(it.b.x, it.b.w, it.inIdx, it.inN);
-    it.bt = it.b.y;
-    it.baseChY = Math.round((it.b.y - TOP_APPROACH) / LANE_STEP) * LANE_STEP; // global grid
-    it.xs = Math.min(it.riseX, it.entryX) - 1;
-    it.xe = Math.max(it.riseX, it.entryX) + 1;
+    it.entryY = slotAt(it.b.y, it.b.h, it.inIdx, it.inN);
+    it.cs = colOf(it.a.x);
+    it.ct = colOf(it.b.x);
+    it.adjacent = it.ct === it.cs + 1;
   }
 
-  // greedy channel-row assignment: bump a horizontal UP a lane until its x-span
-  // clears every edge already placed on that exact row.
-  const occupied = new Map<number, Array<[number, number]>>();
-  for (const it of [...items].sort((p, q) => p.xs - q.xs)) {
-    let k = 0;
-    let y = it.baseChY;
-    for (; k <= MAX_LANE_BUMPS; k++) {
-      y = it.baseChY - k * LANE_STEP;
-      const occ = occupied.get(y);
-      if (!occ || !occ.some(([s, e]) => !(it.xe < s || it.xs > e))) {
-        (occ ?? occupied.set(y, []).get(y)!).push([it.xs, it.xe]);
-        break;
-      }
-    }
-    it.chY = y;
+  // top-band y-lanes for the long/back (non-adjacent) edges, by horizontal x-span.
+  const band = items.filter((it) => !it.adjacent);
+  const bandLane = assignLanes(band, (it) => [
+    Math.min(it.sR, it.tL) - 1,
+    Math.max(it.sR, it.tL) + 1,
+  ]);
+  for (const it of band)
+    it.bandY = minTop - BAND_GAP_ABOVE - (bandLane.get(it) ?? 0) * BAND_LANE_STEP;
+
+  // gutter x-lanes: EVERY edge's vertical run lives in the gutter just left of its
+  // target column; lane them together (per gutter) by y-span so none coincide.
+  const byGutter = new Map<number, RouteItem[]>();
+  for (const it of items) {
+    const arr = byGutter.get(it.ct);
+    if (arr) arr.push(it);
+    else byGutter.set(it.ct, [it]);
+  }
+  for (const [ct, arr] of byGutter) {
+    const lane = assignLanes(arr, (it) => {
+      const a = it.adjacent ? it.exitY : it.bandY;
+      return [Math.min(a, it.entryY), Math.max(a, it.entryY)];
+    });
+    const k = Math.max(...arr.map((it) => lane.get(it) ?? 0)) + 1;
+    const gutterRight = xs[ct]!;
+    const gutterLeft = ct > 0 ? (colRight.get(ct - 1) ?? gutterRight - 60) : gutterRight - 60;
+    const width = Math.max(24, gutterRight - gutterLeft);
+    for (const it of arr) it.vlaneX = gutterLeft + (width * ((lane.get(it) ?? 0) + 1)) / (k + 1);
   }
 
   const out: Array<RoutedEdge | null> = edges.map(() => null);
   for (const it of items) {
-    const pts: Point[] = [
-      { x: it.ax, y: it.exitY },
-      { x: it.riseX, y: it.exitY },
-      { x: it.riseX, y: it.chY },
-      { x: it.entryX, y: it.chY },
-      { x: it.entryX, y: it.bt },
-    ];
-    out[it.i] = {
-      d: roundedPath(pts, CORNER_R),
-      mid: { x: (it.riseX + it.entryX) / 2, y: it.chY },
-    };
+    let pts: Point[];
+    let mid: Point;
+    if (it.adjacent) {
+      // clean S-elbow through the single gutter: right → down/up the lane → left.
+      pts = [
+        { x: it.sR, y: it.exitY },
+        { x: it.vlaneX, y: it.exitY },
+        { x: it.vlaneX, y: it.entryY },
+        { x: it.tL, y: it.entryY },
+      ];
+      mid = { x: it.vlaneX, y: (it.exitY + it.entryY) / 2 };
+    } else {
+      // detour over a top band: right → up to the band → across → down the target
+      // gutter lane → into the target's left.
+      pts = [
+        { x: it.sR, y: it.exitY },
+        { x: it.sR + BAND_RISE, y: it.exitY },
+        { x: it.sR + BAND_RISE, y: it.bandY },
+        { x: it.vlaneX, y: it.bandY },
+        { x: it.vlaneX, y: it.entryY },
+        { x: it.tL, y: it.entryY },
+      ];
+      mid = { x: (it.sR + BAND_RISE + it.vlaneX) / 2, y: it.bandY };
+    }
+    out[it.i] = { d: roundedPath(pts, CORNER_R), mid };
   }
   return out;
 }

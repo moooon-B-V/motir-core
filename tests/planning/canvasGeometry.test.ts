@@ -122,30 +122,34 @@ describe('routeEdges', () => {
     expect(r[1]).toBeNull();
   });
 
-  it('leaves the source RIGHT-centre and enters the target TOP, pointing DOWN', () => {
+  it('leaves the source RIGHT and enters the target LEFT, pointing RIGHT (flow)', () => {
+    // A (col 0) → B (col 1): a neighbour edge.
     const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 200, w: 100, h: 50 } };
     const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
-    expect(pts[0]!.x).toBeCloseTo(100, 1); // a.x + a.w
-    expect(pts[0]!.y).toBeCloseTo(25, 1); // a single out-edge leaves at centre height
+    expect(pts[0]!.x).toBeCloseTo(100, 1); // leaves a.x + a.w (right edge)
+    expect(pts[0]!.y).toBeCloseTo(25, 1); // single out-edge → centre height
     const end = pts[pts.length - 1]!;
     const prev = pts[pts.length - 2]!;
-    expect(end.y).toBeCloseTo(200, 1); // lands on the target's TOP edge
-    expect(Math.abs(end.x - prev.x)).toBeLessThan(0.5); // final segment vertical → arrow down
-    expect(end.x).toBeGreaterThan(300);
-    expect(end.x).toBeLessThan(400);
+    expect(end.x).toBeCloseTo(300, 1); // lands on the target's LEFT edge (b.x)
+    expect(Math.abs(end.y - prev.y)).toBeLessThan(0.5); // final segment horizontal → arrow points right
+    expect(end.y).toBeGreaterThan(200); // …within the target's height
+    expect(end.y).toBeLessThan(250);
   });
 
-  it('runs through an overhead channel above the target top (right-angle turns)', () => {
-    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 200, w: 100, h: 50 } };
-    // TOP_APPROACH 34, snapped to the LANE_STEP(16) grid → 160.
-    expect(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d).toContain(',160');
+  it('routes a neighbour edge as an in-row S-elbow (no detour above the cards)', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 0, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    const minY = Math.min(...pts.map((p) => p.y));
+    expect(minY).toBeGreaterThanOrEqual(0); // never rises above the node row
   });
 
-  it('fans two edges into one target to DISTINCT entry columns AND channel rows', () => {
+  it('fans two edges into one target to DISTINCT entry heights AND vertical lanes', () => {
+    // A and B both drop a long way into T, so their gutter verticals OVERLAP in y
+    // and must be given separate lanes.
     const m: RMap = {
       A: { x: 0, y: 0, w: 100, h: 50 },
-      B: { x: 0, y: 200, w: 100, h: 50 },
-      T: { x: 400, y: 200, w: 100, h: 50 },
+      B: { x: 0, y: 80, w: 100, h: 50 },
+      T: { x: 300, y: 260, w: 100, h: 80 },
     };
     const [r1, r2] = routeEdges(
       [
@@ -156,8 +160,8 @@ describe('routeEdges', () => {
     );
     const e1 = points(r1!.d);
     const e2 = points(r2!.d);
-    expect(Math.abs(e1[e1.length - 1]!.x - e2[e2.length - 1]!.x)).toBeGreaterThan(1); // entry cols
-    expect(r1!.mid.y).not.toBe(r2!.mid.y); // distinct channel rows → no overlap
+    expect(e1[e1.length - 1]!.y).not.toBe(e2[e2.length - 1]!.y); // distinct entry heights
+    expect(r1!.mid.x).not.toBe(r2!.mid.x); // distinct gutter lanes → no vertical overlap
   });
 
   it('gives two edges off one source DISTINCT exit heights', () => {
@@ -176,21 +180,44 @@ describe('routeEdges', () => {
     expect(points(rx!.d)[0]!.y).not.toBe(points(ry!.d)[0]!.y);
   });
 
-  it('keeps two OVERLAPPING overhead runs on separate rows (no line on top of another)', () => {
+  it('detours a SKIP edge over a band above the cards', () => {
+    // three columns; A→C skips column B.
     const m: RMap = {
       A: { x: 0, y: 0, w: 100, h: 50 },
-      T: { x: 500, y: 300, w: 100, h: 50 },
-      U: { x: 900, y: 300, w: 100, h: 50 },
+      B: { x: 300, y: 0, w: 100, h: 50 },
+      C: { x: 600, y: 0, w: 100, h: 50 },
     };
-    // both run rightward from A across the same x band at the same base height — the
-    // router must put them on different channel rows.
-    const [rt, ru] = routeEdges(
+    const r = routeEdges(
       [
+        { from: 'A', to: 'B' },
+        { from: 'B', to: 'C' },
+        { from: 'A', to: 'C' },
+      ],
+      lookup(m),
+    );
+    const skip = points(r[2]!.d); // A→C
+    expect(Math.min(...skip.map((p) => p.y))).toBeLessThan(0); // rose above the row
+  });
+
+  it('keeps two OVERLAPPING band runs on separate rows (no line on top of another)', () => {
+    const m: RMap = {
+      A: { x: 0, y: 0, w: 100, h: 50 },
+      M: { x: 300, y: 0, w: 100, h: 50 },
+      T: { x: 600, y: 0, w: 100, h: 50 },
+      U: { x: 900, y: 0, w: 100, h: 50 },
+    };
+    // A→T and A→U both skip columns and run rightward across the same band x-range —
+    // the router must put them on different band rows.
+    const r = routeEdges(
+      [
+        { from: 'A', to: 'M' },
+        { from: 'M', to: 'T' },
+        { from: 'T', to: 'U' },
         { from: 'A', to: 'T' },
         { from: 'A', to: 'U' },
       ],
       lookup(m),
     );
-    expect(rt!.mid.y).not.toBe(ru!.mid.y);
+    expect(r[3]!.mid.y).not.toBe(r[4]!.mid.y);
   });
 });
