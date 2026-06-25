@@ -246,8 +246,11 @@ export function CycleGraphChart({
       </span>
     ) : null;
 
+  // compact (board slot): min-w-0 lets the chart subtree shrink within the
+  // fixed-width burndown slot so its data table can't force overflow
+  // (MOTIR-1329). full keeps its natural width inside the report card.
   return (
-    <div className={`flex flex-col ${full ? 'gap-2' : 'gap-1'}`}>
+    <div className={`flex flex-col ${full ? 'gap-2' : 'min-w-0 gap-1'}`}>
       {full ? (
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-(--el-text-muted)">{subLine}</span>
