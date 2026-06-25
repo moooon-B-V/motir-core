@@ -11,6 +11,7 @@ import { ADD_COMMENT_TOOL_NAME, registerAddComment } from './tools/addComment';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
+import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
@@ -60,6 +61,7 @@ export const MCP_TOOL_NAMES = [
   SEARCH_WORK_ITEMS_TOOL_NAME,
   WHOAMI_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
+  VALIDATE_SPRINT_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
   DELETE_SPRINT_TOOL_NAME,
@@ -118,6 +120,9 @@ export function registerMcpTools(
   registerWhoami(target, resolveContext);
   // Sprint tools (7.8.10) — the Scrum cadence over the shipped Epic-4 services.
   registerListSprints(target, resolveContext);
+  // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-
+  // sprint rule (plan-rules.md #94): a read over sprintsService.validateSprint.
+  registerValidateSprint(target, resolveContext);
   registerCreateSprint(target, resolveContext);
   registerUpdateSprint(target, resolveContext);
   registerDeleteSprint(target, resolveContext);

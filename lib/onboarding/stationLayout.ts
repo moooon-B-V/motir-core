@@ -6,7 +6,7 @@
 // The auto-layout is THREE left-aligned rows (Yue): the idea seed on top, the 4 tiers
 // (discovery…validation) across the middle, and design → plan on the bottom with the
 // "Your plan" preview beside them (OnboardingCanvas). idea sits directly above
-// discovery, so idea / "Understanding your idea" / "Design the look" share one clean
+// discovery, so idea / "Understanding your project" / "Design the look" share one clean
 // left edge and the journey reads idea ↓ discovery → … → wrap ↓ design → plan. Wrapping
 // the tail keeps the canvas compact, so fit-to-view renders the cards BIGGER and the
 // plan station stays on screen (no horizontal scroll). The user can drag any node; a
@@ -26,7 +26,7 @@ export const CANVAS_NODE_KEYS: readonly CanvasNodeKey[] = ['idea', ...STATION_OR
 // Row 1 (the tiers): discovery → vision → feasibility → validation, left→right. Row 2:
 // design → plan, with the "Your plan" preview to their right (OnboardingCanvas's
 // ROOT_X0/Y0). The idea sits directly ABOVE discovery (the tier that understands it),
-// so the journey reads idea ↓ discovery → … and "Understanding your idea" lines up at
+// so the journey reads idea ↓ discovery → … and "Understanding your project" lines up at
 // x=ORIGIN_X with "Design the look" two rows below. STEP_X = station card (300) + a
 // 40px gap; the row Ys clear the idea card / a tier row by its height + a band gap.
 const ROW_IDEA_Y = 40;

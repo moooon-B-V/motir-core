@@ -176,6 +176,54 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The `is_blocked_by` EDGES of many items at once (Subtask 7.8.15 —
+   * `validate_sprint`), each carrying the blocking item's id, `identifier`,
+   * `status`, `sprintId` and `projectId`. The sprint-finishability check walks
+   * every in-sprint item (∪ its ancestor chain) and asks, per blocker, "is it
+   * done OR also in this sprint?" — which needs the blocker's IDENTITY (`id` for
+   * the in-sprint membership test, `identifier` to NAME it) and `sprintId`
+   * (in-sprint?), which neither {@link findBlockerStatesForItems} (the
+   * `(status, projectId)` readiness pair) nor {@link findBlockedByEdges} (bare
+   * endpoints) carries. Hence a sibling read rather than an extension of either.
+   *
+   * ONE query. Empty `fromIds` short-circuits to `[]`. ARCHIVED blockers are
+   * EXCLUDED (`toItem.archivedAt IS NULL`; MOTIR-1328) — the same rule as the
+   * readiness reads, so a stale edge to a soft-removed item never phantom-gates a
+   * sprint. The blocker's `projectId` rides along because a block can be
+   * cross-project, so "done" is judged against the blocker's OWN project's
+   * terminal set. Read-only → `db` singleton.
+   */
+  async findBlockerEdgesForItems(fromIds: string[]): Promise<
+    Array<{
+      fromId: string;
+      blockerId: string;
+      blockerKey: string;
+      blockerStatus: string;
+      blockerSprintId: string | null;
+      blockerProjectId: string;
+    }>
+  > {
+    if (fromIds.length === 0) return [];
+    const rows = await db.workItemLink.findMany({
+      where: { fromId: { in: fromIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
+      select: {
+        fromId: true,
+        toItem: {
+          select: { id: true, identifier: true, status: true, sprintId: true, projectId: true },
+        },
+      },
+    });
+    return rows.map((r) => ({
+      fromId: r.fromId,
+      blockerId: r.toItem.id,
+      blockerKey: r.toItem.identifier,
+      blockerStatus: r.toItem.status,
+      blockerSprintId: r.toItem.sprintId,
+      blockerProjectId: r.toItem.projectId,
+    }));
+  },
+
+  /**
    * Create a link. Required `tx`. The DB triggers validate cycle /
    * self-link / workspace consistency on insert; their SQLSTATE-23514
    * rejections and a P2002 unique violation are translated to typed errors

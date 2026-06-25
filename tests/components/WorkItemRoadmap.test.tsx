@@ -1,8 +1,40 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
+
+// WorkItemRoadmap mounts the work-item quick-view peek (MOTIR-1352), whose body
+// reuses the shipped IssueQuickViewPanel (useTranslations) — so the tree needs a
+// NextIntl provider (renderWithIntl). The peek is LOCAL-state-driven (no `?peek`),
+// so no next/navigation mock is required.
+
+// A condensed peek payload the /api/work-items/peek read returns for MOTIR-1.
+const PEEK = {
+  identifier: 'MOTIR-1',
+  title: 'Epic one',
+  kind: 'epic',
+  statusLabel: 'In Progress',
+  statusCategory: 'in_progress',
+  descriptionMd: 'The first epic.',
+  type: null,
+  executor: null,
+  assigneeName: 'Marco Ortiz',
+  reporterName: 'Alice Chen',
+  priority: 'medium',
+  labels: [],
+  components: [],
+  dueLabel: null,
+  sprintName: null,
+  storyPoints: null,
+  estimateLabel: null,
+  customFields: [],
+  createdAt: '2026-06-02T00:00:00.000Z',
+  updatedAt: '2026-06-10T00:00:00.000Z',
+  parent: null,
+  readiness: null,
+};
 
 afterEach(() => {
   cleanup();
@@ -47,6 +79,7 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (url: string) => {
       const u = String(url);
+      if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
       if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
       return { ok: true, json: async () => root };
     }),
@@ -78,6 +111,25 @@ describe('WorkItemRoadmap', () => {
     fireEvent.keyDown(el('S1')!, { key: 'Enter' }); // S1 is a leaf → just selects
     expect(onSelect).toHaveBeenCalledWith('S1');
     expect(screen.queryByTestId('drill-button')).toBeNull(); // a leaf can't drill
+  });
+
+  it('opens the work-item quick-view peek from the selected card View button (MOTIR-1352)', async () => {
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+    // No peek until a card is selected and View is clicked.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' }); // select
+    fireEvent.click(await screen.findByTestId('view-button')); // View → opens the peek
+    // The peek modal opens and streams the item in from /api/work-items/peek.
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe(
+        '/items/MOTIR-1',
+      ),
+    );
+    // Closing via the header × dismisses the peek (local state, no URL).
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('offers the search overlay', async () => {

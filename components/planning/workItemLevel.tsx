@@ -63,6 +63,10 @@ export function buildWorkItemLevel(wi: RoadmapLevelData): {
     searchText: `${item.identifier} ${item.title}`,
     crumbLabel: item.identifier,
     drillable: item.hasChildren,
+    // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
+    // anchors below are off-level blocker STUBS, not items on this level, so they
+    // stay non-viewable (no `viewable` flag) — selecting one shows no View button.
+    viewable: true,
     content: (
       <WorkItemNode
         item={{

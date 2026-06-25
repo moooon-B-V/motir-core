@@ -37,6 +37,7 @@ import {
   InvalidCarryOverTargetError,
   InvalidSprintNameError,
   InvalidSprintTransitionError,
+  NoActiveSprintError,
   NotSprintAdminError,
   SprintAlreadyActiveError,
   SprintNotCompletableError,
@@ -186,6 +187,9 @@ export function toToolError(err: unknown): CallToolResult {
   // sprint is startable").
   if (
     err instanceof SprintNotFoundError ||
+    // validate_sprint (7.8.15): no active sprint + no sprintId → a clean tool
+    // error ("plan a sprint / pass a sprintId"), never an opaque 500.
+    err instanceof NoActiveSprintError ||
     err instanceof NotSprintAdminError ||
     err instanceof InvalidSprintNameError ||
     err instanceof SprintWindowInvalidError ||

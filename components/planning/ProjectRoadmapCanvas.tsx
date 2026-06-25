@@ -55,10 +55,12 @@ export interface ProjectRoadmapCanvasProps {
   onResetPositions?: (nodeIds: string[]) => void;
   /** A LEAF node (not drillable) was activated. */
   onSelect?: (id: string) => void;
-  /** A `viewable` node's "View" button was pressed — open its detail surface (a
-   *  work-item quick-view, MOTIR-1352; a tier-doc viewer, MOTIR-1355). Surfaced on
-   *  the selected card beside the "Open" drill pill. Distinct from drilling. */
-  onViewNode?: (id: string) => void;
+  /** Open the quick-view DETAIL surface for a node (MOTIR-1352). When wired, the
+   *  canvas renders a **View** button on the SELECTED card (beside the "Open" drill
+   *  pill) for every node flagged `viewable` — the work-item consumer opens the
+   *  quick-view peek, the onboarding consumer opens the tier doc. View (open detail)
+   *  is DISTINCT from select (highlight) and from "Open" (drill into children). */
+  onView?: (id: string) => void;
   /** Show the search-to-locate overlay (`/` shortcut) — locates within the level. */
   searchable?: boolean;
   /** The breadcrumb root label. */
@@ -78,7 +80,7 @@ export function ProjectRoadmapCanvas({
   onNodeMove,
   onResetPositions,
   onSelect,
-  onViewNode,
+  onView,
   searchable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
@@ -319,14 +321,14 @@ export function ProjectRoadmapCanvas({
           .join(' ')}
       >
         {node.content}
-        {/* The selected card's ACTION row — surfaced on the selected card so the
-            affordances are obvious without hijacking a plain click (which now just
-            selects + highlights). "View" opens a detail surface (quick-view /
-            tier-doc); "Open" drills into children. A node can carry either or both;
-            each stops the press from starting a canvas drag/select. */}
-        {selected && (node.viewable || node.drillable) && (
-          <div className="absolute -bottom-3.5 left-1/2 flex -translate-x-1/2 items-center gap-1.5">
-            {node.viewable && onViewNode && (
+        {/* The selected card's ACTION SLOT — surfaced on the bottom edge so the
+            detail / drill actions are obvious without hijacking a plain click
+            (which now just selects). VIEW (open the quick-view detail, MOTIR-1352)
+            and OPEN (drill into children) are DISTINCT and sit side by side; a leaf
+            shows View alone. Each stops the press from starting a canvas drag. */}
+        {selected && ((onView && node.viewable) || node.drillable) && (
+          <div className="absolute -bottom-3.5 left-1/2 flex -translate-x-1/2 items-center gap-2">
+            {onView && node.viewable && (
               <button
                 type="button"
                 data-testid="view-button"
@@ -334,9 +336,9 @@ export function ProjectRoadmapCanvas({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onViewNode(cn.id);
+                  onView(cn.id);
                 }}
-                className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-text) shadow-(--shadow-card) hover:bg-(--el-surface-soft) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                className="inline-flex items-center gap-1 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 <Eye className="size-3.5" aria-hidden="true" />
                 View
@@ -352,7 +354,7 @@ export function ProjectRoadmapCanvas({
                   e.stopPropagation();
                   handleDrill(cn.id);
                 }}
-                className="inline-flex items-center gap-1 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-accent-text) shadow-(--shadow-card) hover:bg-(--el-accent-pressed) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                className="inline-flex items-center gap-1 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold whitespace-nowrap text-(--el-accent-text) shadow-(--shadow-card) hover:bg-(--el-accent-pressed) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 Open
                 <ChevronRight className="size-3.5" aria-hidden="true" />

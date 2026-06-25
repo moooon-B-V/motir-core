@@ -114,7 +114,7 @@ export interface TierMeta {
 
 export const TIER_META: Record<DirectionDocKind, TierMeta> = {
   discovery: {
-    label: 'Understanding your idea',
+    label: 'Understanding your project',
     kicker: "What you're building & who for",
     optional: false,
     accentVar: '--el-info',

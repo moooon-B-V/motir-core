@@ -343,7 +343,8 @@
       "jobRuns": "任务运行",
       "docs": "文档",
       "backlog": "待办列表",
-      "triage": "分流"
+      "triage": "分流",
+      "roadmap": "路线图"
     },
     "topNav": {
       "global": "全局"
@@ -3903,7 +3904,7 @@
       "previewCaption": "接下来会发生什么",
       "footnote": "Motir 会带你走完每一步，并把它的发现整理成文 —— 你阅读、在对话中给出反馈，满意后继续。在生成计划之前，一切都不会被锁定。",
       "steps": {
-        "understandTitle": "理解你的想法",
+        "understandTitle": "理解你的项目",
         "understandDesc": "我们通过对话弄清你要做什么、面向谁 —— 并找出最接近的现有产品。",
         "scopeTitle": "我们要做什么",
         "scopeDesc": "我们就第一个版本的范围（做什么、不做什么）以及背后的关键决策达成一致。",
@@ -4082,5 +4083,14 @@
       "designDefault": "默认外观",
       "revisableNote": "没有任何内容被锁定。你可以随时返回修改某一步或设计——计划会随之更新。"
     }
+  },
+  "roadmap": {
+    "heading": "路线图",
+    "subtitle": "{project} 的路线图",
+    "noProjectTitle": "未选择项目",
+    "noProjectDescription": "从切换器中选择或创建一个项目，以查看其路线图。",
+    "emptyTitle": "路线图还是空的",
+    "emptyDescription": "随着计划成形，工作项会显示在这里。使用 Motir AI 进行规划以生成路线图，或手动添加一个史诗。",
+    "canvasAria": "{project} 路线图"
   }
 }

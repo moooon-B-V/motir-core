@@ -283,4 +283,15 @@ describe('QuickViewCloseButton — clears ?peek', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(historyPush).toHaveBeenCalledWith(null, '', '/items');
   });
+
+  // MOTIR-1352: a non-URL host (the roadmap-canvas peek) supplies its own close;
+  // the URL is never touched.
+  it('calls the supplied onClose and leaves the URL untouched when onClose is given', () => {
+    searchParamsString = 'view=list&peek=PROD-7';
+    const onClose = vi.fn();
+    render(<QuickViewCloseButton variant="icon" onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(historyPush).not.toHaveBeenCalled();
+  });
 });

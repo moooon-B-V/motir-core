@@ -56,7 +56,7 @@ describe('TierDocModal', () => {
 
     // The plain-language tier label (TIER_META.discovery.label) is the doc heading;
     // the jargon "# Discovery (Tier 1)" title is stripped by DirectionDocView.
-    expect(await screen.findByText('Understanding your idea')).toBeTruthy();
+    expect(await screen.findByText('Understanding your project')).toBeTruthy();
     expect(screen.getByText(/building an internal tool for a small team/i)).toBeTruthy();
     expect(global.fetch).toHaveBeenCalledWith('/api/ai/pre-plan', expect.anything());
   });
@@ -90,7 +90,7 @@ describe('TierDocModal', () => {
     const onClose = vi.fn();
     render(<TierDocModal tier="discovery" onClose={onClose} />);
 
-    await screen.findByText('Understanding your idea');
+    await screen.findByText('Understanding your project');
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
   });

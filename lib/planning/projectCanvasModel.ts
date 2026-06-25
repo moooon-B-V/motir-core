@@ -33,11 +33,11 @@ export interface ProjectCanvasNode {
   /** Has children → activating it DRILLS into the next level (the canvas fetches
    *  it). A non-drillable node is a leaf → `onSelect`. */
   drillable?: boolean;
-  /** Has a detail surface to peek → the selected card surfaces a "View" button
-   *  (beside "Open" on a drillable node) that fires the canvas's `onViewNode`. A
-   *  work-item node opens the quick-view (MOTIR-1352); a tier station opens the
-   *  tier-doc viewer (MOTIR-1355). View (open detail) is DISTINCT from Open
-   *  (drill into children) — both can sit on the same selected card. */
+  /** The consumer offers a quick-view DETAIL surface for this node → the canvas
+   *  renders a **View** button on the selected card (beside the "Open" drill pill;
+   *  MOTIR-1352). Off-level ghost-anchor stubs (and, for onboarding, not-yet-produced
+   *  tier stations) set this `false`/omit it, so they get no View action. The canvas
+   *  only surfaces View when both this is true AND an `onView` handler is wired. */
   viewable?: boolean;
   /** Explicit world position (fixed stations own theirs); else the deterministic
    *  auto-layout places the node. */

@@ -78,6 +78,42 @@ export interface StartSprintInput {
 export type CarryOverDestination = 'backlog' | { sprintId: string };
 
 /**
+ * One in-sprint item that the sprint cannot finish on its own (Subtask 7.8.15) —
+ * it is `blocked_by` work that is NOT done and NOT in the same sprint, so it can
+ * never reach the ready set before the sprint ends. The exact set a caller
+ * surfaces as "these items can't be finished; pull these blockers in or move
+ * them to the backlog" (the re-validate-the-active-sprint rule, `motir-meta`
+ * `plan-rules.md` #94).
+ */
+export interface SprintBlockerDto {
+  /** The in-sprint item gated by out-of-sprint, not-done work (e.g. "MOTIR-1356"). */
+  item: string;
+  /** The blocking item — not done and not in this sprint (e.g. "MOTIR-1354"). */
+  blockedBy: string;
+  /** The blocker's raw workflow status key (e.g. "todo"). */
+  blockerStatus: string;
+  /** The blocker's sprint id, or `null` when it sits in the backlog. */
+  blockerSprintId: string | null;
+}
+
+/**
+ * Whether a sprint is FINISHABLE (Subtask 7.8.15) — the productized form of the
+ * re-validate-the-active-sprint rule. A sprint is VALID ⟺ for EVERY in-sprint,
+ * not-done item, its ENTIRE transitive `blocked_by` closure is `done` OR also in
+ * the SAME sprint (walking the parent chain's blockers too — readiness cascades
+ * down the hierarchy). `blockers` is empty when `valid`; otherwise it names each
+ * in-sprint item gated by out-of-sprint, not-done work.
+ */
+export interface SprintValidityDto {
+  /** The sprint that was validated (the active sprint when none was named). */
+  sprintId: string;
+  /** True ⟺ every in-sprint item's blocked_by closure is done or in this sprint. */
+  valid: boolean;
+  /** The in-sprint items gated by out-of-sprint, not-done work; empty when valid. */
+  blockers: SprintBlockerDto[];
+}
+
+/**
  * Input to `sprintsService.completeSprint` (Story 4.4.3). `carryOverTo` defaults
  * to `'backlog'` when omitted. The done-category issues always STAY on the
  * completed sprint (the historical record); only the unfinished ones move to
