@@ -427,6 +427,47 @@ export const workItemRepository = {
   },
 
   /**
+   * Resolve many work items by id WITHIN one workspace, INCLUDING archived ones
+   * (no `archivedAt` filter) — the batched read behind plan-staleness detection
+   * (7.21.3 / MOTIR-1340), which must distinguish "still live" from "archived /
+   * gone" for a plan's referenced parents, blockers, and modify/remove targets
+   * in ONE round-trip (no N+1). Workspace-scoped (the explicit finding-#26
+   * tenant gate, since RLS is inert under the dev/CI superuser) so a cross-tenant
+   * id simply doesn't come back. Read-only path → `db` singleton. Empty input
+   * short-circuits to `[]` so we never issue a degenerate `IN ()`.
+   */
+  async findByIdsInWorkspace(ids: string[], workspaceId: string): Promise<WorkItem[]> {
+    if (ids.length === 0) return [];
+    return db.workItem.findMany({ where: { id: { in: ids }, workspaceId } });
+  },
+
+  /**
+   * Live (non-archived) children of MANY parents created strictly after a
+   * cutoff, in ONE query — the batched read behind plan-staleness `siblings_added`
+   * (7.21.3 / MOTIR-1340): a proposed `add` is stale when its parent gained a
+   * child AFTER the plan's `plannedAt` that the proposal has no dependency
+   * relation with. Mirrors {@link findChildren}'s `triagedAt: null` read-exclusion
+   * invariant. Workspace-scoped (finding-#26). Read-only path → `db` singleton;
+   * empty parent set short-circuits to `[]`.
+   */
+  async findChildrenCreatedAfter(
+    parentIds: string[],
+    workspaceId: string,
+    after: Date,
+  ): Promise<WorkItem[]> {
+    if (parentIds.length === 0) return [];
+    return db.workItem.findMany({
+      where: {
+        parentId: { in: parentIds },
+        workspaceId,
+        archivedAt: null,
+        triagedAt: null,
+        createdAt: { gt: after },
+      },
+    });
+  },
+
+  /**
    * Every work item currently recorded on a given session branch within a
    * workspace (Subtask 7.8.11) — the read backing `complete_session`'s bulk
    * close-out. Workspace-scoped (the explicit finding-#26 tenant gate, since RLS
