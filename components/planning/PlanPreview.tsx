@@ -1,13 +1,13 @@
 'use client';
 
-import { ArrowRight, Layers } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import type { RoadmapLevelItem } from '@/lib/planning/roadmapClient';
 
 // The "Your plan" PREVIEW cluster (Subtask 7.20.2 / MOTIR-1194 + the 1333 design)
 // — the partial work-item glimpse the onboarding canvas shows at the top level
-// instead of fanning every epic out. It signals "there's a plan here, explore it":
-// a summary (N epics · K done) + the first few epic mini-rows + a "+N more" tile +
-// an Explore affordance. The whole node is drillable — activating it opens the
+// instead of fanning every epic out. It signals "there's a plan here": a summary
+// (N epics · K done) + the first few epic mini-rows + a "+N more" tile. The node is
+// drillable — selecting it surfaces the canvas's "Open" affordance, which opens the
 // full per-level roadmap (it reads only the epic ROOTS, so a huge plan still inits
 // instantly). Tokens only.
 
@@ -34,10 +34,6 @@ export function PlanPreview({ epics }: { epics: RoadmapLevelItem[] }) {
             {total} {total === 1 ? 'epic' : 'epics'} · {done} done
           </span>
         </div>
-        <span className="ml-auto inline-flex items-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-semibold text-(--el-accent-text)">
-          Explore the plan
-          <ArrowRight className="size-3.5" aria-hidden="true" />
-        </span>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">

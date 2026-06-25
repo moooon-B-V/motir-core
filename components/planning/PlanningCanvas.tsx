@@ -349,7 +349,7 @@ export function PlanningCanvas({
             points blocker → blocked). MOTIR-1331. */}
         <svg className="absolute h-0 w-0" aria-hidden="true">
           <defs>
-            {(['committed', 'pending', 'warning'] as const).map((kind) => (
+            {(['committed', 'pending', 'warning', 'emphasis'] as const).map((kind) => (
               <marker
                 key={kind}
                 id={`${mId}-${kind}`}
@@ -365,9 +365,11 @@ export function PlanningCanvas({
                   className={
                     kind === 'warning'
                       ? 'fill-(--el-warning)'
-                      : kind === 'pending'
-                        ? 'fill-(--el-canvas-edge-pending)'
-                        : 'fill-(--el-canvas-edge-committed)'
+                      : kind === 'emphasis'
+                        ? 'fill-(--el-accent)'
+                        : kind === 'pending'
+                          ? 'fill-(--el-canvas-edge-pending)'
+                          : 'fill-(--el-canvas-edge-committed)'
                   }
                 />
               </marker>
@@ -387,9 +389,18 @@ export function PlanningCanvas({
             if (!route) return null;
             const pending = edge.variant === 'pending';
             const cross = edge.variant === 'cross';
-            const marker = cross ? 'warning' : pending ? 'pending' : 'committed';
-            // When a node is selected, only its own edges stay lit.
+            // When a node is selected, only its own edges stay lit; a lit non-cross
+            // edge is EMPHASISED in the accent (so even a faint dashed `pending`
+            // connector clearly pops, matching the selected card's accent ring).
             const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
+            const emph = lit && selectedId != null && !cross;
+            const marker = cross
+              ? 'warning'
+              : emph
+                ? 'emphasis'
+                : pending
+                  ? 'pending'
+                  : 'committed';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
@@ -398,13 +409,17 @@ export function PlanningCanvas({
                 className={
                   cross
                     ? 'stroke-(--el-warning)'
-                    : pending
-                      ? 'stroke-(--el-canvas-edge-pending)'
-                      : 'stroke-(--el-canvas-edge-committed)'
+                    : emph
+                      ? 'stroke-(--el-accent)'
+                      : pending
+                        ? 'stroke-(--el-canvas-edge-pending)'
+                        : 'stroke-(--el-canvas-edge-committed)'
                 }
                 strokeWidth={lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2}
                 strokeLinecap="round"
-                strokeDasharray={pending ? '2 7' : undefined}
+                // a denser dash when emphasised keeps the dashed line legible at the
+                // accent colour without losing the "pending" cue.
+                strokeDasharray={pending ? (emph ? '5 6' : '2 7') : undefined}
                 markerEnd={`url(#${mId}-${marker})`}
                 vectorEffect="non-scaling-stroke"
                 style={{ opacity: lit ? 1 : 0.12 }}

@@ -110,8 +110,21 @@ describe('PlanningCanvas', () => {
     // …and every edge path points at an arrowhead marker.
     const edgePaths = screen.getByTestId('canvas-edges').querySelectorAll('path');
     edgePaths.forEach((p) => expect(p.getAttribute('marker-end')).toMatch(/^url\(#/));
-    // three markers defined (firm / pending / cross)
-    expect(document.querySelectorAll('marker')).toHaveLength(3);
+    // four markers defined (firm / pending / cross / emphasis)
+    expect(document.querySelectorAll('marker')).toHaveLength(4);
+  });
+
+  it('emphasises a selected node’s edges in the accent (so a dashed one still pops)', () => {
+    // edges: a→b (firm), b→c (pending). Select b → both are b’s connections.
+    const { container } = render(
+      <PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} selectedId="b" />,
+    );
+    const paths = [...container.querySelectorAll('[data-testid="canvas-edges"] path')];
+    // every lit edge (here both) points at the accent emphasis marker…
+    paths.forEach((p) => expect(p.getAttribute('marker-end')).toContain('-emphasis'));
+    // …including the pending (dashed) one, which is now accent-stroked.
+    const dashed = paths.find((p) => p.getAttribute('stroke-dasharray'));
+    expect(dashed?.getAttribute('class')).toContain('stroke-(--el-accent)');
   });
 
   it('renders no cross-flag layer content when there are no cross edges', () => {
