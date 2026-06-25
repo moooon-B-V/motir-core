@@ -1,6 +1,7 @@
 import { Prisma, type SprintState } from '@prisma/client';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -20,8 +21,10 @@ import type {
   CompleteSprintInput,
   CreateSprintInput,
   GetSprintReportOptions,
+  SprintBlockerDto,
   SprintDto,
   SprintReportDto,
+  SprintValidityDto,
   StartSprintInput,
   UpdateSprintInput,
 } from '@/lib/dto/sprints';
@@ -31,6 +34,7 @@ import {
   InvalidCarryOverTargetError,
   InvalidSprintNameError,
   InvalidSprintTransitionError,
+  NoActiveSprintError,
   NotSprintAdminError,
   SprintAlreadyActiveError,
   SprintNotCompletableError,
@@ -123,6 +127,50 @@ export const sprintsService = {
   async getActiveSprint(projectId: string, ctx: ServiceContext): Promise<SprintDto | null> {
     const row = await sprintRepository.findActiveByProject(projectId, ctx.workspaceId);
     return row ? toSprintDto(row, 0) : null;
+  },
+
+  /**
+   * Is a sprint FINISHABLE? (Subtask 7.8.15) — the productized form of the
+   * *re-validate-the-active-sprint* rule (`motir-meta` `plan-rules.md` #94). A
+   * sprint is VALID ⟺ for EVERY in-sprint, NOT-done item, its ENTIRE transitive
+   * `blocked_by` closure is `done` OR also in the SAME sprint — walking the
+   * parent chain's blockers too (readiness cascades DOWN the hierarchy: a child
+   * inherits its ancestors' blockers). When `sprintId` is `null` the project's
+   * ACTIVE sprint is validated; an explicit id validates that sprint. The
+   * transitive closure is realized WITHOUT a recursive blocker walk: iterating
+   * over every not-done member and checking its own ∪ ancestors' direct blockers
+   * catches the whole chain, because a blocker that is itself in-sprint is
+   * checked as its OWN member, a `done` blocker terminates the path, and an
+   * out-of-sprint, not-done blocker is the violation we report at the nearest
+   * in-sprint item it gates. ARCHIVED items (and archived blockers) are ignored.
+   *
+   * A pure READ — no admin gate (mirroring `getActiveSprint` / `listByProject`;
+   * the owner gate guards sprint MANAGEMENT writes, not reads), `workspaceId`-
+   * gated throughout (finding #26). "Done" is the per-project terminal set
+   * (`category = 'done'`, so `done`/`cancelled`/any custom terminal count;
+   * finding #21), judged against each blocker's OWN project (blocks can be
+   * cross-project). Returns `{ valid: true, blockers: [] }` when finishable;
+   * otherwise `valid: false` + one `SprintBlockerDto` per (in-sprint item,
+   * out-of-sprint not-done blocker) pair — the exact set a caller surfaces as
+   * "pull these blockers in, or move the gated items to the backlog".
+   *
+   * Throws: `NoActiveSprintError` (409 — `sprintId` null + no active sprint),
+   * `SprintNotFoundError` (404 — unknown / cross-workspace `sprintId`).
+   */
+  async validateSprint(
+    projectId: string,
+    sprintId: string | null,
+    ctx: ServiceContext,
+  ): Promise<SprintValidityDto> {
+    const sprint =
+      sprintId === null
+        ? await sprintRepository.findActiveByProject(projectId, ctx.workspaceId)
+        : await sprintRepository.findById(sprintId, ctx.workspaceId);
+    if (!sprint) {
+      if (sprintId === null) throw new NoActiveSprintError(projectId);
+      throw new SprintNotFoundError(sprintId);
+    }
+    return computeSprintValidity(sprint.id, sprint.projectId, ctx);
   },
 
   /**
@@ -711,6 +759,98 @@ export function assertSprintTransition(from: SprintState, to: SprintState): void
   const allowed =
     (from === 'planned' && to === 'active') || (from === 'active' && to === 'complete');
   if (!allowed) throw new InvalidSprintTransitionError(from, to);
+}
+
+/**
+ * Compute a sprint's finishability (Subtask 7.8.15) — the engine behind
+ * `validateSprint`, given an already-resolved sprint. See the method's doc for
+ * the validity rule. Reads: the sprint's non-archived members (status + parent),
+ * the project terminal set ("done"), the not-done members' ancestor chains, and
+ * the `blocked_by` edges of every member ∪ ancestor (the probe set). Each probe
+ * is mapped back to the in-sprint not-done member(s) it gates, so a violation is
+ * attributed to the in-sprint item (a member's own blocker → that member; an
+ * ancestor's blocker → every descendant member in the sprint).
+ */
+async function computeSprintValidity(
+  sprintId: string,
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<SprintValidityDto> {
+  // ALL non-archived members (done + not-done): the in-sprint membership set the
+  // "blocker is also in the sprint?" test keys on. `findSprintIssuesExcludingStatuses`
+  // with an empty exclusion set is the whole committed set (it already filters
+  // archived + tenant).
+  const members = await workItemRepository.findSprintIssuesExcludingStatuses(
+    sprintId,
+    ctx.workspaceId,
+    [],
+  );
+  const memberIds = new Set(members.map((m) => m.id));
+  const membersById = new Map(members.map((m) => [m.id, m]));
+
+  // "Done" = the sprint project's terminal (category='done') status keys — only
+  // NOT-done members need a finishability check (a done item is already finished).
+  const terminalForSprint = await workflowsService.getTerminalStatusKeys(
+    projectId,
+    ctx.workspaceId,
+  );
+  const notDone = members.filter((m) => !terminalForSprint.has(m.status));
+  if (notDone.length === 0) {
+    return { sprintId, valid: true, blockers: [] };
+  }
+
+  // The PROBE set = each not-done member ∪ its ancestor chain (the cascade: a
+  // child inherits its ancestors' blockers). `gatedMembersByProbe` maps every
+  // probe id back to the in-sprint not-done member(s) it gates, so a violating
+  // blocker is reported at the in-sprint item, not the ancestor.
+  const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
+    notDone.map((m) => m.id),
+    ctx.workspaceId,
+  );
+  const gatedMembersByProbe = new Map<string, Set<string>>();
+  const gate = (probeId: string, memberId: string) => {
+    const set = gatedMembersByProbe.get(probeId);
+    if (set) set.add(memberId);
+    else gatedMembersByProbe.set(probeId, new Set([memberId]));
+  };
+  for (const m of notDone) {
+    gate(m.id, m.id);
+    for (const ancestorId of ancestorsByItem.get(m.id) ?? []) gate(ancestorId, m.id);
+  }
+
+  const edges = await workItemLinkRepository.findBlockerEdgesForItems([
+    ...gatedMembersByProbe.keys(),
+  ]);
+  // Per-project terminal sets — a block can be cross-project, so each blocker's
+  // done-ness is judged against its OWN project (finding #21).
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    edges.map((e) => e.blockerProjectId),
+    ctx.workspaceId,
+  );
+
+  const blockers: SprintBlockerDto[] = [];
+  const seen = new Set<string>();
+  for (const edge of edges) {
+    const inSprint = memberIds.has(edge.blockerId);
+    const done = terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false;
+    if (inSprint || done) continue; // satisfied: in the same sprint, or already done
+    for (const memberId of gatedMembersByProbe.get(edge.fromId) ?? []) {
+      const member = membersById.get(memberId);
+      if (!member) continue;
+      const key = `${member.identifier} ${edge.blockerKey}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      blockers.push({
+        item: member.identifier,
+        blockedBy: edge.blockerKey,
+        blockerStatus: edge.blockerStatus,
+        blockerSprintId: edge.blockerSprintId,
+      });
+    }
+  }
+  // Deterministic order (by gated item, then blocker) for a stable wire shape.
+  blockers.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
+  return { sprintId, valid: blockers.length === 0, blockers };
 }
 
 /**

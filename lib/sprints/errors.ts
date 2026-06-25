@@ -21,10 +21,28 @@ import type { SprintState } from '@prisma/client';
 //   SprintNotCompletableError          → 422 (Subtask 4.4.3)
 //   InvalidCarryOverTargetError        → 422 (Subtask 4.4.3)
 //   SprintNotStartedError              → 409 (Subtask 4.6.3)
+//   NoActiveSprintError                → 409 (Subtask 7.8.15)
 //
 // A foreign / unknown projectId (the create path) reuses `ProjectNotFoundError`
 // from `lib/projects/errors.ts` (already a 404) rather than inventing a parallel
 // project-not-found error — the same reuse `boardsService` makes.
+
+/**
+ * `validate_sprint` (Subtask 7.8.15) was asked to validate the ACTIVE sprint
+ * (no `sprintId` arg) but the project has none — there is nothing to validate.
+ * A clean typed error so the no-active-sprint case reads as an explainable tool
+ * error ("plan a sprint first / pass a sprintId"), never a 500. → 409 (the
+ * request is well-formed; the project's state has no active sprint to act on).
+ */
+export class NoActiveSprintError extends Error {
+  readonly code = 'NO_ACTIVE_SPRINT' as const;
+  readonly projectId: string;
+  constructor(projectId: string) {
+    super(`Project ${projectId} has no active sprint to validate; pass a sprintId or start one.`);
+    this.name = 'NoActiveSprintError';
+    this.projectId = projectId;
+  }
+}
 
 /** No sprint matched the id in the active workspace. → 404. */
 export class SprintNotFoundError extends Error {
