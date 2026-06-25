@@ -1,0 +1,708 @@
+<!doctype html>
+<!--
+  ROADMAP CANVAS — grid layout + initial arrangement (Subtask 7.20.9 / MOTIR-1333).
+  The per-level roadmap canvas (MOTIR-1194) needs (1) a GRID system so the init
+  layout is clean + reproducible, and (2) an init screen that shows BOTH the
+  pre-plan tier docs AND the existing work items on one screen — the work items
+  fit PARTIALLY, as a PREVIEW that signals the plan EXISTS and is explorable (Yue),
+  not the whole tree crammed in. Built on the shipped PlanningCanvas (pan/zoom/fit)
+  + the station / WorkItemNode languages + the per-level read (MOTIR-1010). Motir
+  light palette (app/globals.css --el-* values, inlined). Tokens only.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap canvas — grid + init (MOTIR-1333)</title>
+    <style>
+      :root {
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --muted: #787671;
+        --faint: #a4a097;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        --border: #e5e3df;
+        --borderstrong: #d3cfc8;
+        --hair: #ede9e4;
+        --accent: #5645d4;
+        --accent-soft: #efedfb;
+        --accent-text: #ffffff;
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --info: #0075de;
+        --sky: #dcecfa;
+        --lavender: #e6e0f5;
+        --mint: #d9f3e1;
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --yellow: #fef7d6;
+        --t-epic: #ff64c8;
+        --t-epic-soft: #ffe3f5;
+        --t-story: #1aae39;
+        --t-subtask: #2a9d99;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--text);
+        padding: 28px 22px 60px;
+      }
+      .pagehead {
+        max-width: 1180px;
+        margin: 0 auto 22px;
+      }
+      .pagehead h1 {
+        font-size: 21px;
+        margin: 0 0 4px;
+        color: var(--strong);
+      }
+      .pagehead p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--muted);
+        max-width: 940px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--hair);
+        background: var(--soft);
+      }
+      .sheethead .n {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .sheethead h2 {
+        font-size: 14.5px;
+        margin: 0;
+        color: var(--strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+      /* ── the canvas viewport: dot grid + faint CELL guides (the grid system) ── */
+      .viewport {
+        position: relative;
+        overflow: hidden;
+        background:
+          linear-gradient(#0000000a 1px, transparent 1px) 16px 16px / 268px 160px,
+          linear-gradient(90deg, #0000000a 1px, transparent 1px) 16px 16px / 268px 160px,
+          radial-gradient(circle, #00000010 1px, transparent 1.4px) 0 0 / 22px 22px,
+          var(--hub);
+      }
+      .world,
+      .edges {
+        position: absolute;
+        inset: 0;
+      }
+      .edges {
+        pointer-events: none;
+        overflow: visible;
+      }
+      /* ── compact STATION card (the pre-plan journey) ── */
+      .stn {
+        position: absolute;
+        width: 230px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px #0000000a;
+        padding: 10px 12px;
+      }
+      .stn.here {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 1px var(--accent) inset,
+          0 1px 3px #0000000f;
+      }
+      .stn.upcoming {
+        opacity: 0.62;
+      }
+      .stn .row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .stn .tile {
+        flex: none;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .stn .tile svg {
+        width: 15px;
+        height: 15px;
+      }
+      .stn .ti {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--strong);
+      }
+      .stn .sub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+      .stn .st {
+        margin-top: 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--strong);
+      }
+      .stn .st svg {
+        width: 12px;
+        height: 12px;
+      }
+      .st.done {
+        background: var(--mint);
+      }
+      .st.here {
+        background: var(--lavender);
+      }
+      /* ── the PLAN PREVIEW cluster — the partial work-item glimpse ── */
+      .planprev {
+        position: absolute;
+        width: 712px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: 0 2px 10px #00000010;
+        padding: 14px 15px 15px;
+      }
+      .planprev .ph {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .planprev .ptile {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: var(--t-epic-soft);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .planprev .ptile svg {
+        width: 17px;
+        height: 17px;
+      }
+      .planprev .pt {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--strong);
+      }
+      .planprev .pmeta {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .planprev .explore {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: var(--accent);
+        color: #fff;
+        border-radius: 9px;
+        padding: 6px 11px;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .planprev .explore svg {
+        width: 14px;
+        height: 14px;
+      }
+      .bar {
+        margin-top: 11px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--mutedfill);
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 41%;
+        background: var(--success);
+      }
+      .epics {
+        margin-top: 13px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 9px;
+      }
+      .em {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 9px 10px;
+        background: var(--soft);
+      }
+      .em .et {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .em .edot {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--t-epic);
+      }
+      .em .eid {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+        color: var(--faint);
+      }
+      .em .en {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--strong);
+        margin-top: 4px;
+        line-height: 1.25;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .em .ec {
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-top: 5px;
+      }
+      .em.more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background: var(--accent-soft);
+        border: 1px dashed #c7c0ef;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      /* overlays */
+      .ov {
+        position: absolute;
+        z-index: 5;
+      }
+      .crumb {
+        top: 14px;
+        left: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 5px 10px;
+        font-size: 12.5px;
+        color: var(--strong);
+        font-weight: 600;
+        box-shadow: 0 1px 3px #0000000d;
+      }
+      .crumb .pin {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .crumb .pin svg {
+        width: 10px;
+        height: 10px;
+      }
+      .zoom {
+        bottom: 14px;
+        right: 14px;
+        display: inline-flex;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px #0000000d;
+      }
+      .zoom button {
+        border: 0;
+        background: transparent;
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        color: var(--muted);
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--hair);
+      }
+      .zoomlvl {
+        bottom: 17px;
+        right: 116px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .gridnote {
+        bottom: 14px;
+        left: 14px;
+        background: #ffffffdd;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 6px 10px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .gridnote b {
+        color: var(--strong);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pagehead">
+      <h1>Roadmap canvas — grid system &amp; the init arrangement</h1>
+      <p>
+        MOTIR-1333 · the canvas init layout. Nodes snap to a fixed <b>grid</b> (reproducible, tidy;
+        the user can still drag — a saved position overrides). At init it shows, on
+        <b>one screen</b> (zoom-to-fit), the pre-plan tier docs AND the existing work items — but
+        the work items are fit <b>partially</b>, as a <b>preview</b> that shows the plan exists and
+        is explorable, not the whole tree crammed in.
+      </p>
+    </div>
+
+    <!-- SHEET 1 — the init screen: grid + stations + the plan preview, all on one screen -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">1</span>
+        <h2>Init — stations on the grid + a preview of the existing plan, fit to one screen</h2>
+        <span class="cap">a project that already has a planned tree</span>
+      </div>
+      <div class="viewport" style="height: 560px">
+        <svg class="edges" viewBox="0 0 1140 560" preserveAspectRatio="none">
+          <defs>
+            <marker
+              id="ah"
+              viewBox="0 0 10 10"
+              refX="8.5"
+              refY="5"
+              markerWidth="6.5"
+              markerHeight="6.5"
+              orient="auto-start-reverse"
+            >
+              <path d="M0 0L10 5L0 10z" fill="#d3cfc8" />
+            </marker>
+          </defs>
+          <!-- journey chain (idea → tiers → design → plan) -->
+          <path
+            d="M270,75 H300"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+          <path
+            d="M552,75 H584"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+          <path
+            d="M836,75 H868"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+          <path
+            d="M952,98 C952,150 300,150 286,196"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+          <path
+            d="M270,235 H300"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+          <path
+            d="M552,235 H584"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+          <!-- plan → the preview cluster -->
+          <path
+            d="M700,256 C700,300 430,300 430,330"
+            stroke="#d3cfc8"
+            stroke-width="2"
+            fill="none"
+            marker-end="url(#ah)"
+          />
+        </svg>
+
+        <div class="world">
+          <!-- ROW 0 — idea + the first three tiers -->
+          <div class="stn" style="left: 40px; top: 38px">
+            <div class="row">
+              <span class="tile" style="background: var(--yellow)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#b58a00" stroke-width="2">
+                  <path
+                    d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"
+                  />
+                </svg>
+              </span>
+              <div><div class="ti">Your idea</div></div>
+            </div>
+          </div>
+          <div class="stn here" style="left: 322px; top: 38px">
+            <div class="row">
+              <span class="tile" style="background: var(--sky)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              </span>
+              <div><div class="ti">Understanding your idea</div></div>
+            </div>
+            <span class="st here"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 21s-7-4.4-7-10a7 7 0 0 1 14 0c0 5.6-7 10-7 10Z" />
+                <circle cx="12" cy="11" r="2.5" /></svg
+              >You are here</span
+            >
+          </div>
+          <div class="stn upcoming" style="left: 604px; top: 38px">
+            <div class="row">
+              <span class="tile" style="background: var(--lavender)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#6a5acd" stroke-width="2">
+                  <path d="M3 7h18M3 12h18M3 17h12" />
+                </svg>
+              </span>
+              <div><div class="ti">What we'll build</div></div>
+            </div>
+          </div>
+          <div class="stn upcoming" style="left: 886px; top: 38px">
+            <div class="row">
+              <span class="tile" style="background: var(--mint)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
+                  <path d="M12 2 4 6v6c0 5 8 8 8 8s8-3 8-8V6Z" />
+                </svg>
+              </span>
+              <div><div class="ti">Is it worth building?</div></div>
+            </div>
+          </div>
+
+          <!-- ROW 1 — last tier + design + plan -->
+          <div class="stn upcoming" style="left: 40px; top: 198px">
+            <div class="row">
+              <span class="tile" style="background: var(--peach)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2">
+                  <path d="M9 11l3 3 8-8M3 12a9 9 0 1 0 9-9" />
+                </svg>
+              </span>
+              <div><div class="ti">Will people want it?</div></div>
+            </div>
+          </div>
+          <div class="stn upcoming" style="left: 322px; top: 198px">
+            <div class="row">
+              <span class="tile" style="background: var(--rose)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#d6336c" stroke-width="2">
+                  <circle cx="13.5" cy="6.5" r="2.5" />
+                  <circle cx="17.5" cy="10.5" r="2.5" />
+                  <circle cx="8.5" cy="7.5" r="2.5" />
+                  <path d="M12 22a5 5 0 0 1-5-5c0-2 2-3 2-5" />
+                </svg>
+              </span>
+              <div><div class="ti">Design your look</div></div>
+            </div>
+          </div>
+          <div class="stn" style="left: 604px; top: 198px">
+            <div class="row">
+              <span class="tile" style="background: var(--accent-soft)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+                  <path d="M5 3v18M5 8h12l-2-2.5L17 3M5 14h9l-2 2.5L14 19" />
+                </svg>
+              </span>
+              <div>
+                <div class="ti">Plan → your project</div>
+                <div class="sub">10 epics produced</div>
+              </div>
+            </div>
+            <span class="st done"
+              ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                <path d="m20 6-11 11-5-5" /></svg
+              >Ready</span
+            >
+          </div>
+
+          <!-- THE PLAN PREVIEW — partial work-item glimpse -->
+          <div class="planprev" style="left: 74px; top: 330px">
+            <div class="ph">
+              <span class="ptile">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                  <path d="M4 4h16v5H4zM4 13h10v5H4z" />
+                </svg>
+              </span>
+              <div>
+                <div class="pt">Your plan</div>
+                <div class="pmeta">10 epics · 142 work items · 58 done</div>
+              </div>
+              <span class="explore">
+                Explore the plan
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </span>
+            </div>
+            <div class="bar"><i></i></div>
+            <div class="epics">
+              <div class="em">
+                <div class="et"><span class="edot"></span><span class="eid">PROD-1</span></div>
+                <div class="en">Foundation</div>
+                <div class="ec">58 / 58 done</div>
+              </div>
+              <div class="em">
+                <div class="et"><span class="edot"></span><span class="eid">PROD-43</span></div>
+                <div class="en">Issue tracking core</div>
+                <div class="ec">40 / 40 done</div>
+              </div>
+              <div class="em">
+                <div class="et"><span class="edot"></span><span class="eid">PROD-211</span></div>
+                <div class="en">Agile planning</div>
+                <div class="ec">in progress</div>
+              </div>
+              <div class="em">
+                <div class="et"><span class="edot"></span><span class="eid">PROD-464</span></div>
+                <div class="en">AI Planning Layer</div>
+                <div class="ec">in progress</div>
+              </div>
+              <div class="em more">+ 6 more epics</div>
+            </div>
+          </div>
+        </div>
+
+        <span class="ov crumb"
+          ><span class="pin"
+            ><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4">
+              <path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" /></svg></span
+          >PayFlow · your project</span
+        >
+        <span class="ov gridnote"
+          ><b>Grid</b> · 268 × 160 cells — nodes snap on init; drag freely after</span
+        >
+        <span class="ov zoomlvl">Fit · 64%</span>
+        <span class="ov zoom"><button>−</button><button>+</button><button>⤢</button></span>
+      </div>
+    </section>
+
+    <!-- SHEET 2 — the preview, up close: how it reads + what a click does -->
+    <section class="sheet">
+      <div class="sheethead">
+        <span class="n">2</span>
+        <h2>The plan preview, up close — a glimpse that says “there's a plan here, explore it”</h2>
+        <span class="cap">partial by design — drill opens the full per-level tree</span>
+      </div>
+      <div class="viewport" style="height: 300px; padding: 26px">
+        <div
+          class="planprev"
+          style="position: relative; left: 0; top: 0; width: 760px; margin: 0 auto"
+        >
+          <div class="ph">
+            <span class="ptile">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                <path d="M4 4h16v5H4zM4 13h10v5H4z" />
+              </svg>
+            </span>
+            <div>
+              <div class="pt">Your plan</div>
+              <div class="pmeta">10 epics · 142 work items · 58 done</div>
+            </div>
+            <span class="explore">
+              Explore the plan
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </span>
+          </div>
+          <div class="bar"><i></i></div>
+          <div class="epics">
+            <div class="em">
+              <div class="et"><span class="edot"></span><span class="eid">PROD-1</span></div>
+              <div class="en">Foundation</div>
+              <div class="ec">58 / 58 done</div>
+            </div>
+            <div class="em">
+              <div class="et"><span class="edot"></span><span class="eid">PROD-43</span></div>
+              <div class="en">Issue tracking core</div>
+              <div class="ec">40 / 40 done</div>
+            </div>
+            <div class="em">
+              <div class="et"><span class="edot"></span><span class="eid">PROD-211</span></div>
+              <div class="en">Agile planning</div>
+              <div class="ec">in progress</div>
+            </div>
+            <div class="em">
+              <div class="et"><span class="edot"></span><span class="eid">PROD-464</span></div>
+              <div class="en">AI Planning Layer</div>
+              <div class="ec">in progress</div>
+            </div>
+            <div class="em more">+ 6 more epics</div>
+          </div>
+          <p style="margin: 13px 2px 0; font-size: 12px; color: var(--muted)">
+            Click an epic — or <b style="color: var(--accent)">Explore the plan</b> — to drill into
+            the full per-level roadmap (epic → story → subtask, MOTIR-1194). The preview never loads
+            the whole tree; it reads only the epic roots (the per-level read, MOTIR-1010).
+          </p>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>
