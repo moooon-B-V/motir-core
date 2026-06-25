@@ -51,7 +51,7 @@ describe('OnboardingCanvas', () => {
         onOpenDesign={vi.fn()}
       />,
     );
-    expect(await screen.findByText('Understanding your idea')).toBeTruthy();
+    expect(await screen.findByText('Understanding your project')).toBeTruthy();
     expect(screen.getByText("What we'll build")).toBeTruthy();
     expect(screen.getByText('Design the look')).toBeTruthy();
     expect(screen.getByText('Plan → your project')).toBeTruthy();
@@ -71,7 +71,7 @@ describe('OnboardingCanvas', () => {
     );
     expect(screen.getByRole('status', { name: 'Loading your roadmap…' })).toBeTruthy();
     // nodes are NOT painted yet (so they can't flash at the auto-layout first)
-    expect(screen.queryByText('Understanding your idea')).toBeNull();
+    expect(screen.queryByText('Understanding your project')).toBeNull();
   });
 
   it('draws the read-only dependency chain as edges', async () => {

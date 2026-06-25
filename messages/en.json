@@ -3907,7 +3907,7 @@
       "previewCaption": "Here's what happens next",
       "footnote": "Motir walks you through each step and writes up what it finds — you read it, react in the chat, and continue when it's right. Nothing's locked until your plan is generated.",
       "steps": {
-        "understandTitle": "Understanding your idea",
+        "understandTitle": "Understanding your project",
         "understandDesc": "We chat to figure out what you're building and who it's for — and find the closest existing products.",
         "scopeTitle": "What we'll build",
         "scopeDesc": "We agree on what's in and out for the first version, and the key decisions behind it.",

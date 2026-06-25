@@ -3903,7 +3903,7 @@
       "previewCaption": "接下来会发生什么",
       "footnote": "Motir 会带你走完每一步，并把它的发现整理成文 —— 你阅读、在对话中给出反馈，满意后继续。在生成计划之前，一切都不会被锁定。",
       "steps": {
-        "understandTitle": "理解你的想法",
+        "understandTitle": "理解你的项目",
         "understandDesc": "我们通过对话弄清你要做什么、面向谁 —— 并找出最接近的现有产品。",
         "scopeTitle": "我们要做什么",
         "scopeDesc": "我们就第一个版本的范围（做什么、不做什么）以及背后的关键决策达成一致。",
