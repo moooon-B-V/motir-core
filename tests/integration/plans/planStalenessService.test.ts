@@ -159,6 +159,38 @@ describe('planStalenessService — per-reason detection', () => {
     const v = verdictFor(result.items, items[0]!.id);
     expect(v.reasons).toEqual([{ code: 'base_revision_drift', change: 'archived' }]);
   });
+
+  it('multi-reason: one proposed add accumulates parent_removed AND blocker_removed', async () => {
+    const fx = await makeWorkItemFixture();
+    const parentId = await seed(fx, 'Parent story', 'story');
+    const blockerId = await seed(fx, 'Blocker');
+    const { planId, items } = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Child', kind: 'subtask' },
+        parentRef: parentId,
+        blockedByRefs: [blockerId],
+      },
+    ]);
+
+    // BOTH the proposal's real parent AND its real blocker are archived after
+    // planning — two independent rules fire on the SAME PlanItem.
+    await workItemsService.archiveWorkItem(parentId, fx.ctx);
+    await workItemsService.archiveWorkItem(blockerId, fx.ctx);
+
+    const result = await planStalenessService.computePlanStaleness(planId, fx.ctx);
+    expect(result.stale).toBe(true);
+    const v = verdictFor(result.items, items[0]!.id);
+    expect(v.stale).toBe(true);
+    // The verdict is a REASON LIST, not a boolean: a single item carries BOTH
+    // reasons, concatenated in the fixed `RULES` order (parent_removed before
+    // blocker_removed). `siblings_added` does NOT fire — its rule short-circuits
+    // once the parent is removed.
+    expect(v.reasons).toEqual([
+      { code: 'parent_removed', parentId },
+      { code: 'blocker_removed', blockerIds: [blockerId] },
+    ]);
+  });
 });
 
 describe('planStalenessService — all-clear + purity + tenancy', () => {
@@ -224,5 +256,36 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     await expect(
       planStalenessService.computePlanStaleness('plan_does_not_exist', fx.ctx),
     ).rejects.toBeInstanceOf(PlanNotFoundError);
+  });
+
+  it('tenant isolation: a change in ANOTHER tenant never flags this plan (workspace-scoped reads)', async () => {
+    const a = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
+    const b = await makeWorkItemFixture({ name: 'Globex', identifier: 'GLBX' });
+
+    // Tenant A's plan: an add under A's parent, blocked by A's blocker — both
+    // live, so on its own A's plan is all-clear.
+    const aParent = await seed(a, 'A parent', 'story');
+    const aBlocker = await seed(a, 'A blocker');
+    const { planId, items } = await plannedPlan(a, [
+      {
+        op: 'add',
+        proposedFields: { title: 'A child', kind: 'subtask' },
+        parentRef: aParent,
+        blockedByRefs: [aBlocker],
+      },
+    ]);
+
+    // Tenant B independently makes, in ITS OWN tree, exactly the mutations that
+    // WOULD flag staleness if they touched A's tree: a new sibling lands under a
+    // parent, and a parent is archived. The staleness reads are workspace-scoped
+    // (`findByIdsInWorkspace` / `findChildrenCreatedAfter`), so none of B's churn
+    // can leak into A's verdict.
+    const bParent = await seed(b, 'B parent', 'story');
+    await seed(b, 'B newcomer', 'subtask', bParent);
+    await workItemsService.archiveWorkItem(bParent, b.ctx);
+
+    const result = await planStalenessService.computePlanStaleness(planId, a.ctx);
+    expect(result.stale).toBe(false);
+    expect(verdictFor(result.items, items[0]!.id).reasons).toEqual([]);
   });
 });
