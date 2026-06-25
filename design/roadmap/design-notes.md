@@ -18,13 +18,15 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 
 ## Asset set (the three files)
 
-| File                | What it is                                                                       |
-| ------------------- | -------------------------------------------------------------------------------- |
-| `design-notes.md`   | this spec (primitives, copy, token roles, per-behaviour provenance)              |
-| `roadmap.mock.html` | the source of truth — a multi-panel mock built from the real tokens              |
-| `roadmap.png`       | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
-| `edges.mock.html`   | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story   |
-| `edges.png`         | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
+| File                  | What it is                                                                       |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `design-notes.md`     | this spec (primitives, copy, token roles, per-behaviour provenance)              |
+| `roadmap.mock.html`   | the source of truth — a multi-panel mock built from the real tokens              |
+| `roadmap.png`         | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
+| `edges.mock.html`     | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story   |
+| `edges.png`           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
+| `grid-init.mock.html` | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview   |
+| `grid-init.png`       | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
 
 The mock is a **multi-panel review board** — six sheets (5 spec + the multi-level
 drill-down sheet, below), every panel inspected (the multi-panel rule,
@@ -135,6 +137,62 @@ edge whose blocker is NOT in the level's node set, emit a `cross` dep + a ghost
 anchor node (id = the blocker, rendered as the anchor chip) so `PlanningCanvas`
 draws the red edge to a real anchored target, and flag the blocked node. The
 within-level firm/pending arrows are unchanged.
+
+---
+
+## ⭐ GRID system + INIT arrangement (Subtask 7.20.9 / MOTIR-1333 — `grid-init.mock.html`)
+
+This **refines** the deterministic initial layout (below) into a real GRID, and
+fixes what the init screen shows for a project that ALREADY has a planned tree.
+Drawn on **`grid-init.mock.html` sheet 1 (the init screen) + 2 (the preview up
+close)**.
+
+### 1. A grid SYSTEM (not an ad-hoc serpentine)
+
+Every node **initialises snapped to a fixed grid cell** — a reproducible,
+tidy arrangement (the mock uses a **268 × 160** cell; the build keys it off the
+node card width + a gutter). The grid is the INIT discipline only: the user can
+still **drag freely**, and a saved position (the 7.3.77 persistence) overrides the
+grid per node. The dot-grid the engine already paints stays; the cell guides are a
+faint `#0000000a` overlay so the grid reads without shouting. The stations lay out
+on the grid (idea → the four tiers → design → plan), `you-are-here` ringed,
+upcoming dimmed — the serpentine below, but cell-snapped.
+
+### 2. Init shows the WHOLE project on ONE screen — stations + the plan
+
+At init (no saved layout) the canvas `fit`s so BOTH halves are visible at once:
+the **pre-plan stations** (the journey) AND the **existing work items**. For a
+project with no tree yet (fresh onboarding) the plan slot is just the `Plan` node;
+once a tree exists, that node carries a **preview** (below). One screen, one
+glance — "here's the journey, and here's the plan it produced."
+
+### 3. The work items are fit PARTIALLY — a PREVIEW that says "there's a plan here" (Yue)
+
+The init screen must NOT cram the whole tree on. The produced epics render as a
+compact **plan-preview cluster** hung off the `Plan` station — a `--el-surface`
+card (`--radius-card`, `--shadow-card`) with:
+
+- a **header** — an epic-hued tile + **"Your plan"** + a summary line
+  `10 epics · 142 work items · 58 done`, and an **"Explore the plan →"** primary
+  button (`--el-accent`);
+- a thin **progress bar** (done / total, `--el-success` fill over `--el-muted`);
+- a **row of compact epic mini-cards** (the first ~4: an epic dot in `--el-type-epic`,
+  the identifier mono-faint, the title 2-line-clamped, a tiny count "58 / 58 done"
+  / "in progress"), capped by a dashed **"+ N more epics"** tile.
+
+It reads as **"the plan exists and is explorable"**, not the full graph. **Clicking
+an epic mini-card — or "Explore the plan" — DRILLS into the full per-level roadmap**
+(epic → story → subtask, MOTIR-1194); the preview only ever reads the **epic roots**
+(the per-level read, MOTIR-1010), so a 1000-item plan still inits instantly.
+
+### Build note
+
+The onboarding consumer already feeds `loadLevel(null)` = stations + the root
+epics. For the init preview, the root level renders the stations + a SINGLE
+`plan-preview` node (not the epics fanned out) that the consumer composes from the
+roots read (count + the first N + the done/total rollup if available, else just
+the count); its "Explore"/epic-click sets the canvas focus to drill. Snapping is a
+pure grid function in the deterministic layout (`col·cellW, row·cellH`).
 
 ---
 
