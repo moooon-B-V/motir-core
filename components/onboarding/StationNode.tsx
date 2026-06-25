@@ -117,7 +117,9 @@ export function StationCard({
   return (
     <div
       className={[
-        'w-[300px] rounded-(--radius-card) border p-(--spacing-card-padding)',
+        // p-4, not the roomy --spacing-card-padding: a canvas node reads tighter
+        // (matching the work-item card's density) so the top isn't over-padded.
+        'w-[300px] rounded-(--radius-card) border p-4',
         revisiting
           ? 'border-(--el-border-strong) bg-(--el-tint-peach) shadow-(--shadow-card)'
           : ringed
@@ -128,10 +130,12 @@ export function StationCard({
       ].join(' ')}
     >
       {/* The "can skip" tag sits in the card's TOP-LEFT corner — the same slot the
-          work-item card gives its status pill — not inline with the title. */}
+          work-item card gives its status pill — not inline with the title. It carries
+          a STRONG border so it still reads as a distinct chip on the near-white card
+          surfaces (--el-muted alone is ~the card colour and disappears). */}
       {showCanSkip && (
-        <div className="mb-2">
-          <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
+        <div className="mb-1.5">
+          <span className="inline-flex items-center rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
             {t('canSkip')}
           </span>
         </div>

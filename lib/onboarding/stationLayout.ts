@@ -3,13 +3,15 @@
 // spatial canvas (`PlanningCanvas`, 7.3.76). Pure (no React/DOM) so it is
 // unit-testable; `OnboardingCanvas` composes it.
 //
-// The auto-layout is TWO rows (Yue): row 0 reads straight across — idea → the 4
-// tiers (discovery…validation) — and the last two stations (design → plan) wrap to
-// row 1, with the "Your plan" preview beside them (OnboardingCanvas). Wrapping the
-// tail keeps the canvas compact (a ~3.5:1 box, not ~4.7:1), so fit-to-view renders
-// the cards BIGGER and the plan station stays on screen (no horizontal scroll). The
-// user can drag any node; a saved position (7.3.77) overrides the default. The edges
-// are the REAL pre-plan dependency chain (each tier builds on the previous) — read-only.
+// The auto-layout is THREE left-aligned rows (Yue): the idea seed on top, the 4 tiers
+// (discovery…validation) across the middle, and design → plan on the bottom with the
+// "Your plan" preview beside them (OnboardingCanvas). idea sits directly above
+// discovery, so idea / "Understanding your idea" / "Design the look" share one clean
+// left edge and the journey reads idea ↓ discovery → … → wrap ↓ design → plan. Wrapping
+// the tail keeps the canvas compact, so fit-to-view renders the cards BIGGER and the
+// plan station stays on screen (no horizontal scroll). The user can drag any node; a
+// saved position (7.3.77) overrides the default. The edges are the REAL pre-plan
+// dependency chain (each tier builds on the previous) — read-only.
 
 import { type StationKind, STATION_ORDER } from './canvasModel';
 
@@ -19,27 +21,27 @@ export type CanvasNodeKey = 'idea' | StationKind;
 /** Every canvas node in journey order (idea → the tiers → design → plan). */
 export const CANVAS_NODE_KEYS: readonly CanvasNodeKey[] = ['idea', ...STATION_ORDER];
 
-// Two rows. Row 0 (y=40): idea → the 4 tiers (discovery…validation), left→right.
-// Row 1 (y=260): the last two stations design → plan, wrapped under the start of
-// row 0, with the "Your plan" preview to their right (OnboardingCanvas's ROOT_X0/Y0).
-// STEP_X = the station card (300) + a 40px gap. The idea card is NARROWER (200), so
-// it gets its OWN tighter step (IDEA_STEP) — otherwise a full station step leaves an
-// oversized gap and pushes the first tier ("Understanding your idea") too far from
-// the idea card / the left edge. ROW1_Y clears row 0 by NODE_H + a band gap.
-const ROW0_Y = 40;
-const ROW1_Y = 260;
+// Three rows, all left-aligned at ORIGIN_X so the idea seed, the first tier, and the
+// design step share ONE clean left edge. Row 0 (idea): the seed, a narrow lead-in card.
+// Row 1 (the tiers): discovery → vision → feasibility → validation, left→right. Row 2:
+// design → plan, with the "Your plan" preview to their right (OnboardingCanvas's
+// ROOT_X0/Y0). The idea sits directly ABOVE discovery (the tier that understands it),
+// so the journey reads idea ↓ discovery → … and "Understanding your idea" lines up at
+// x=ORIGIN_X with "Design the look" two rows below. STEP_X = station card (300) + a
+// 40px gap; the row Ys clear the idea card / a tier row by its height + a band gap.
+const ROW_IDEA_Y = 40;
+const ROW_TIER_Y = 220;
+const ROW_DESIGN_Y = 440;
 const ORIGIN_X = 40;
 const STEP_X = 340; // station card (300) + 40px gap
-const IDEA_STEP = 240; // idea card (200) + 40px gap
-const TIER0_X = ORIGIN_X + IDEA_STEP; // the first tier, then the rest march by STEP_X
 export const STATION_AUTO_LAYOUT: Record<CanvasNodeKey, { x: number; y: number }> = {
-  idea: { x: ORIGIN_X, y: ROW0_Y },
-  discovery: { x: TIER0_X, y: ROW0_Y },
-  vision: { x: TIER0_X + STEP_X, y: ROW0_Y },
-  feasibility: { x: TIER0_X + 2 * STEP_X, y: ROW0_Y },
-  validation: { x: TIER0_X + 3 * STEP_X, y: ROW0_Y },
-  design: { x: ORIGIN_X, y: ROW1_Y },
-  plan: { x: ORIGIN_X + STEP_X, y: ROW1_Y },
+  idea: { x: ORIGIN_X, y: ROW_IDEA_Y },
+  discovery: { x: ORIGIN_X, y: ROW_TIER_Y },
+  vision: { x: ORIGIN_X + STEP_X, y: ROW_TIER_Y },
+  feasibility: { x: ORIGIN_X + 2 * STEP_X, y: ROW_TIER_Y },
+  validation: { x: ORIGIN_X + 3 * STEP_X, y: ROW_TIER_Y },
+  design: { x: ORIGIN_X, y: ROW_DESIGN_Y },
+  plan: { x: ORIGIN_X + STEP_X, y: ROW_DESIGN_Y },
 };
 
 /**

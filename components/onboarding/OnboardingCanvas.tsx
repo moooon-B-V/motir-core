@@ -41,11 +41,11 @@ const ROOT_KEY = '__root__';
 // compact "Your plan" PREVIEW (MOTIR-1333) instead of every epic fanned out. It
 // hangs off the `plan` station and drills into the real epic roots on activate.
 const PLAN_NODE_ID = '__plan__';
-// The preview sits in ROW 1 (y:260), to the RIGHT of the wrapped design → plan
-// stations (which occupy x:40 and x:380), so it lands in the SAME fit-to-view as the
-// stations (no scroll) and the second row reads design → plan → your plan.
+// The preview sits in the DESIGN row (y:440), to the RIGHT of the wrapped design →
+// plan stations (which occupy x:40 and x:380), so it lands in the SAME fit-to-view as
+// the stations (no scroll) and the bottom row reads design → plan → your plan.
 const ROOT_X0 = 760;
-const ROOT_Y0 = 260;
+const ROOT_Y0 = 440;
 
 export interface OnboardingCanvasProps {
   state: DiscoveryState;
