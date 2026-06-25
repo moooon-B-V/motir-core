@@ -181,7 +181,7 @@ export function BoardColumn({
         // is the dnd-kit droppable, so a drop anywhere in this region resolves
         // to this column.
         <div className="min-h-0 flex-1 p-2.5">
-          <p className="flex min-h-[120px] w-full items-center justify-center rounded-(--radius-card) border border-dashed border-(--el-border) px-2.5 py-4 text-center text-xs text-(--el-text-muted)">
+          <p className="flex min-h-[120px] w-full items-center justify-center rounded-(--radius-card) border border-dashed border-(--el-border) px-2.5 py-4 text-center text-xs text-(--el-text-secondary)">
             {t('emptyColumn')}
           </p>
         </div>
