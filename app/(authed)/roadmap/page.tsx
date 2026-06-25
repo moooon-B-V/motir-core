@@ -100,7 +100,7 @@ export default async function RoadmapPage() {
         // The canvas is `h-full`; give it a definite, viewport-relative height so it
         // fills the main area without a double scrollbar (topnav h-14 + the shell's
         // py-6 + this header ≈ 13rem of chrome above it).
-        <div className="h-[calc(100dvh-13rem)] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft)">
+        <div className="h-[calc(100dvh-13rem)] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
           <WorkItemRoadmap
             projectKey={ctx.project.identifier}
             ariaLabel={t('canvasAria', { project: ctx.project.name })}

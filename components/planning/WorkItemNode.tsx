@@ -104,10 +104,15 @@ export function WorkItemNode({
       // by NODE_H, so the card must honour it exactly. Compact: tight padding + a
       // small status chip, no wasted space (MOTIR-1194 review).
       style={{ width: NODE_W, height: NODE_H }}
+      // A raised `--el-surface` tile on the recessed `--el-canvas` board (the canvas
+      // background, MOTIR-1362): the fill is now clearly lighter than the board in
+      // BOTH themes, and the crisp `--el-border` + `--shadow-card` lift (matching the
+      // onboarding StationCard) defines the edge — so the card stands out instead of
+      // melting into the canvas.
       className={`flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
         crossBlocked
-          ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-subtle)'
-          : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)'
+          ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
+          : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }`}
     >
       {/* TOP ROW — a compact STATUS chip (top-left), and the cross-link tag (or the
