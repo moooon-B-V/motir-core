@@ -89,7 +89,7 @@ The scopes and the tools each one gates:
 
 | Scope                | Gates                                                                                                                                               |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`                                                          |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`                                       |
 | `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind` |
 | `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                |
 | `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                  |
@@ -561,6 +561,27 @@ read every other sprint tool depends on.
 | `projectKey` | string | yes      | The project key, e.g. `"PROD"`. |
 
 **Output** — `structuredContent`: `{ sprints: SprintDto[] }`.
+
+#### `validate_sprint`
+
+Check whether a sprint is **finishable**: a sprint is VALID ⟺ every in-sprint,
+not-done item has its ENTIRE transitive `blocked_by` closure either `done` or
+also in the sprint (the parent-ready cascade applied to the sprint — a child
+inherits its ancestors' blockers). Productizes the
+_re-validate-the-active-sprint_ rule a planning agent runs after any plan/re-plan
+that touches sprint membership or a sprint item's `blocked_by` edges. Read-only.
+
+| Input        | Type   | Required | Notes                                                           |
+| ------------ | ------ | -------- | --------------------------------------------------------------- |
+| `projectKey` | string | yes      | The project key, e.g. `"PROD"`.                                 |
+| `sprintId`   | string | no       | The sprint to validate; omit to validate the **active** sprint. |
+
+**Output** — `structuredContent`: a `SprintValidityDto` —
+`{ sprintId, valid, blockers }`. When `valid` is `false`, `blockers` lists each
+gated in-sprint item as `{ item, blockedBy, blockerStatus, blockerSprintId }`
+(the out-of-sprint, not-done work to pull in or move the gated item off). A
+missing active sprint (with no `sprintId`) returns a `NO_ACTIVE_SPRINT` tool
+error; an unknown `sprintId` returns `SPRINT_NOT_FOUND`.
 
 #### `create_sprint`
 
