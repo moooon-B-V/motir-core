@@ -158,15 +158,19 @@ export function Combobox<T extends string>({
   const query = serverFiltered ? (controlledQuery ?? '') : internalQuery;
   const setQuery = (q: string) => (serverFiltered ? onQueryChange(q) : setInternalQuery(q));
   const [activeIndex, setActiveIndex] = useState(0);
-  // The menu is portaled to <body> when the picker sits in a normal scroll
-  // context, so it escapes a short table's overflow:hidden
-  // (bug-inline-edit-clipped-when-table-short). Inside a focus-trapping dialog
-  // (Radix Dialog, role="dialog") we render the menu INLINE instead: a portaled
-  // menu would land outside the dialog's focus scope (focus-trap war → unstable)
-  // AND the dialog centers with a CSS transform, which would break a fixed-
-  // positioned child's viewport coordinates. A dialog scrolls rather than short-
-  // clips, so inline is both safe and the original, proven behaviour. Only render
-  // the portal once mounted, since createPortal needs document.body.
+  // The menu is portaled to <body> by default, so it escapes any clipping
+  // ancestor — a short table's overflow:hidden
+  // (bug-inline-edit-clipped-when-table-short) OR the Advanced-filter popover's
+  // overflow-hidden + overflow-y-auto body (MOTIR-1346). We render INLINE only
+  // inside a focus-trapping MODAL (the shared Modal primitive — `data-surface=
+  // "modal"`; `aria-modal` covers any other), where a portaled menu would land
+  // outside the dialog's focus scope (focus-trap war → a click on it hangs /
+  // dismisses) AND the modal centers with a CSS transform that breaks a fixed-
+  // positioned child's coords. A NON-modal Radix Popover (the filter builder,
+  // promote-sprint, mark-duplicate — `data-surface="popover"`) carries
+  // `role="dialog"` for a11y but does NOT trap focus, so it portals safely —
+  // keyed on the modal surface, NOT `role`, so those popovers escape the clip
+  // too. Only render the portal once mounted, since createPortal needs document.body.
   const mounted = useMounted();
   // Viewport-anchored position for the portaled menu + the listbox's available
   // height, recomputed from the trigger rect on open / scroll / resize.
@@ -288,7 +292,7 @@ export function Combobox<T extends string>({
   // Skip entirely for the inline (in-dialog) branch — it positions via CSS.
   useIsomorphicLayoutEffect(() => {
     if (!(open && mounted)) return;
-    if (triggerRef.current?.closest('[role="dialog"]')) return;
+    if (triggerRef.current?.closest('[data-surface="modal"],[aria-modal="true"]')) return;
     updatePosition();
     const onReflow = () => updatePosition();
     window.addEventListener('scroll', onReflow, true);
@@ -304,7 +308,7 @@ export function Combobox<T extends string>({
   // on capture-phase scroll so a scrolling dialog body re-anchors it).
   useIsomorphicLayoutEffect(() => {
     if (!(open && mounted)) return;
-    if (!triggerRef.current?.closest('[role="dialog"]')) return;
+    if (!triggerRef.current?.closest('[data-surface="modal"],[aria-modal="true"]')) return;
     updateInlinePosition();
     const onReflow = () => updateInlinePosition();
     window.addEventListener('scroll', onReflow, true);
@@ -406,7 +410,9 @@ export function Combobox<T extends string>({
   // comment above). Reading the ref in render is safe: by the time `open` flips
   // true via a click the trigger is mounted; the only ref-null case is autoOpen,
   // used solely by inline-edit cells (always in a table, never a dialog) → portal.
-  const inDialog = mounted ? !!triggerRef.current?.closest('[role="dialog"]') : false;
+  const inDialog = mounted
+    ? !!triggerRef.current?.closest('[data-surface="modal"],[aria-modal="true"]')
+    : false;
 
   const menuInner = (
     <>

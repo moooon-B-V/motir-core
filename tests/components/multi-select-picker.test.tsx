@@ -60,6 +60,48 @@ describe('MultiSelectPicker', () => {
     expect(options[1]?.getAttribute('aria-selected')).toBe('false');
   });
 
+  it('portals the listbox to <body> with fixed positioning so it escapes a clipping ancestor (MOTIR-1346)', () => {
+    renderPicker();
+    fireEvent.focus(input());
+    const listbox = screen.getByRole('listbox', { name: 'Labels' });
+    // The clip fix: the listbox is portaled OUT of the picker (to <body>) and
+    // viewport-anchored with position:fixed, so the Advanced-filter popover's
+    // overflow-hidden / overflow-y-auto ancestors can't cut it off. It scrolls
+    // internally under a capped height.
+    expect(listbox.style.position).toBe('fixed');
+    expect(listbox.className).toContain('overflow-y-auto');
+    // Portaled => NOT nested inside the picker's own root.
+    const root = document.querySelector('[data-inner-dismiss]');
+    expect(root?.contains(listbox)).toBe(false);
+  });
+
+  it('renders the listbox INLINE (not portaled) inside a focus-trapping modal (MOTIR-1346)', () => {
+    // Inside a Modal (data-surface="modal") a body-portaled menu would fight the
+    // focus trap / dismiss the modal, so the listbox renders inline in the
+    // picker's own subtree instead.
+    const { container } = render(
+      <div data-surface="modal">
+        <MultiSelectPicker
+          values={[]}
+          options={[api, designDebt, onboarding]}
+          onToggle={vi.fn()}
+          onRemove={vi.fn()}
+          query=""
+          onQueryChange={vi.fn()}
+          label="Labels"
+          placeholder="Add a label…"
+          removeLabel={(l) => `Remove ${l}`}
+        />
+      </div>,
+    );
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Labels' }));
+    const listbox = screen.getByRole('listbox', { name: 'Labels' });
+    expect(listbox.className).toContain('absolute'); // inline, glued to the box
+    expect(listbox.style.position).not.toBe('fixed');
+    // Inline => INSIDE the picker's root (which is inside the modal).
+    expect(container.contains(listbox)).toBe(true);
+  });
+
   it('toggles a row on click WITHOUT closing the menu (multi-select)', () => {
     const { props } = renderPicker();
     fireEvent.focus(input());
