@@ -27,14 +27,15 @@ describe('centerOn', () => {
 });
 
 describe('edgeMidpoint', () => {
-  it('is a point ON the connector curve (bowed off the centre chord)', () => {
+  it('rides the overhead channel the route runs across (above the target top)', () => {
     const a = { x: 0, y: 0, w: 100, h: 100 };
     const b = { x: 200, y: 400, w: 100, h: 100 };
-    // the curve midpoint, not the chord midpoint (150,250) — so a flag rides the
-    // line the reader sees.
     const m = edgeMidpoint(a, b);
-    expect(m.x).toBeCloseTo(199.5, 1);
-    expect(m.y).toBeCloseTo(225.25, 1);
+    // the channel sits TOP_APPROACH (40) above the target's top edge…
+    expect(m.y).toBeCloseTo(b.y - 40, 1);
+    // …and the midpoint lies horizontally between the source stub and the target.
+    expect(m.x).toBeGreaterThan(a.x + a.w);
+    expect(m.x).toBeLessThan(b.x + b.w);
   });
 });
 
@@ -105,30 +106,42 @@ describe('screenDeltaToWorld / screenToWorld', () => {
   });
 });
 
+// Parse an SVG `d` string into the ordered coordinate pairs it names (M/L
+// endpoints and Q control+end points), so we can assert route geometry.
+function points(d: string): Array<{ x: number; y: number }> {
+  const nums = d.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+  const pts: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
+  return pts;
+}
+
 describe('edgePath', () => {
-  it('anchors on each border along the LINE OF SIGHT (side-by-side, offset)', () => {
-    const p = edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 300, y: 10, w: 100, h: 50 });
-    expect(p.startsWith('M100,26.67')).toBe(true); // A right border, aimed at B
-    expect(p.endsWith('300,33.33')).toBe(true); // B left border, aimed at A
+  it('leaves the source on its RIGHT-centre', () => {
+    const pts = points(edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 300, y: 10, w: 100, h: 50 }));
+    expect(pts[0]!.x).toBeCloseTo(100, 1); // a.x + a.w
+    expect(pts[0]!.y).toBeCloseTo(25, 1); // a.y + a.h/2
   });
-  it('anchors on the facing border for stacked nodes', () => {
-    const p = edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 10, y: 200, w: 100, h: 50 });
-    expect(p.startsWith('M51.25,50')).toBe(true); // A bottom border, aimed at B
-    expect(p.endsWith('58.75,200')).toBe(true); // B top border, aimed at A
+  it('enters the target on its TOP edge, pointing DOWN (orthogonal turn)', () => {
+    const a = { x: 0, y: 0, w: 100, h: 50 };
+    const b = { x: 300, y: 200, w: 100, h: 50 };
+    const pts = points(edgePath(a, b));
+    const end = pts[pts.length - 1]!;
+    const prev = pts[pts.length - 2]!;
+    expect(end.y).toBeCloseTo(b.y, 1); // lands on the target's TOP edge
+    expect(Math.abs(end.x - prev.x)).toBeLessThan(0.5); // final segment vertical → arrow down
+    expect(end.x).toBeGreaterThan(b.x); // …within the target's span
+    expect(end.x).toBeLessThan(b.x + b.w);
   });
-  it('anchors left→right when B is to the left', () => {
-    const p = edgePath({ x: 300, y: 0, w: 100, h: 50 }, { x: 0, y: 0, w: 100, h: 50 });
-    expect(p.startsWith('M300,25')).toBe(true); // A left side
-    expect(p.endsWith('100,25')).toBe(true); // B right side
+  it('turns at right angles via a channel above the target top', () => {
+    const a = { x: 0, y: 0, w: 100, h: 50 };
+    const b = { x: 300, y: 200, w: 100, h: 50 };
+    // the overhead channel sits TOP_APPROACH (40) above the target's top edge.
+    expect(edgePath(a, b)).toContain(',160'); // chY = b.y(200) - 40
   });
-  it('the END tangent follows the line — a diagonal edge gets a diagonal arrow', () => {
-    // B is down-right of A: the last control point → endpoint vector (which the
-    // arrowhead `orient="auto"` follows) must have BOTH components, not be axis-
-    // locked to horizontal/vertical (the old perpendicular-entry bug).
-    const p = edgePath({ x: 0, y: 0, w: 100, h: 100 }, { x: 300, y: 300, w: 100, h: 100 });
-    const nums = p.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
-    const [c2x, c2y, bx, by] = [nums[4]!, nums[5]!, nums[6]!, nums[7]!];
-    expect(Math.abs(bx - c2x)).toBeGreaterThan(1);
-    expect(Math.abs(by - c2y)).toBeGreaterThan(1);
+  it('fans two edges into one target to DISTINCT top-entry points', () => {
+    const target = { x: 400, y: 200, w: 100, h: 50 };
+    const e1 = points(edgePath({ x: 0, y: 0, w: 100, h: 50 }, target));
+    const e2 = points(edgePath({ x: 200, y: 0, w: 100, h: 50 }, target));
+    expect(Math.abs(e1[e1.length - 1]!.x - e2[e2.length - 1]!.x)).toBeGreaterThan(1);
   });
 });

@@ -97,15 +97,14 @@ export function centerOn(rect: Rect, viewport: { w: number; h: number }, scale: 
   return { scale, tx: viewport.w / 2 - cx * scale, ty: viewport.h / 2 - cy * scale };
 }
 
-/** The world-space midpoint ON the connector curve (anchors a between-edge badge,
- *  so a cross-story flag rests on the line a reader sees, not on the chord). */
+/** A world-space point ON the connector route (anchors a between-edge badge, so a
+ *  cross-story flag rests on the line a reader sees) — the middle of the overhead
+ *  channel the route runs across. */
 export function edgeMidpoint(a: Rect, b: Rect): { x: number; y: number } {
-  const c = edgeCurve(a, b);
-  // the cubic evaluated at t=0.5
-  return {
-    x: 0.125 * c.ax + 0.375 * c.c1x + 0.375 * c.c2x + 0.125 * c.bx,
-    y: 0.125 * c.ay + 0.375 * c.c1y + 0.375 * c.c2y + 0.125 * c.by,
-  };
+  const pts = routePoints(a, b);
+  const p = pts[2]!;
+  const q = pts[3]!;
+  return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
 }
 
 /** Convert a SCREEN delta (px) to a WORLD delta — used when dragging a node. */
@@ -122,84 +121,70 @@ export function screenToWorld(view: View, sx: number, sy: number): { x: number; 
   return { x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale };
 }
 
-/** Where the ray from rect centre toward `(tx, ty)` crosses the rect border — the
- *  edge ANCHOR. Anchoring on the true line of sight (not a fixed mid-side point)
- *  makes the connector point AT the other node and lets several edges off one node
- *  fan out from distinct border points instead of stacking on one side. */
-function borderPoint(r: Rect, tx: number, ty: number): { x: number; y: number } {
-  const cx = r.x + r.w / 2;
-  const cy = r.y + r.h / 2;
-  const dx = tx - cx;
-  const dy = ty - cy;
-  if (dx === 0 && dy === 0) return { x: cx, y: cy };
-  const sx = dx !== 0 ? r.w / 2 / Math.abs(dx) : Infinity;
-  const sy = dy !== 0 ? r.h / 2 / Math.abs(dy) : Infinity;
-  const t = Math.min(sx, sy);
-  return { x: cx + dx * t, y: cy + dy * t };
-}
+// Orthogonal routing constants. Leave the source on its right; rise into a channel
+// just above the target; run across; DROP straight down into the target's TOP edge
+// (so the arrowhead points down into the card and the line turns at right angles).
+const EXIT_STUB = 26; // short horizontal stub off the source before the first turn
+const TOP_APPROACH = 40; // height of the channel above the target's top edge
+const CORNER_R = 16; // rounded-corner radius at each turn
+const SPREAD_FRAC = 0.06; // entry fan across the target top (per source offset)
+const SPREAD_MAX_FRAC = 0.3; // … capped to ±30% of the target width
 
-interface EdgeCurve {
-  ax: number;
-  ay: number;
-  c1x: number;
-  c1y: number;
-  c2x: number;
-  c2y: number;
-  bx: number;
-  by: number;
-}
-
-// Control-point reach along the line, and a perpendicular BOW that grows with
-// length (capped) so a long skip edge ARCS over the node it would otherwise pass
-// behind, while a short neighbour edge stays nearly straight.
-const CTRL_FRAC = 0.42;
-const CTRL_MAX = 130;
-const BOW_FRAC = 0.22;
-const BOW_MAX = 110;
+type Point = { x: number; y: number };
 
 /**
- * The cubic connector between two node rects (world coords): anchored at each
- * border on the line of sight to the other node, with control points reaching
- * ALONG that line (so the END tangent follows the line and the arrowhead points
- * the way the edge actually travels) plus a gentle perpendicular bow (so a long
- * skip edge arcs clear of an intermediate node and parallel edges separate).
+ * The orthogonal waypoints of the connector A→B: source right-centre → a short
+ * stub → up/down into a channel above the target → across → straight DOWN into the
+ * target's TOP edge. The top-entry x is fanned toward the source so several edges
+ * into one card land at DISTINCT points rather than merging at dead-centre.
  */
-function edgeCurve(a: Rect, b: Rect): EdgeCurve {
-  const acx = a.x + a.w / 2;
-  const acy = a.y + a.h / 2;
-  const bcx = b.x + b.w / 2;
-  const bcy = b.y + b.h / 2;
-  const A = borderPoint(a, bcx, bcy);
-  const B = borderPoint(b, acx, acy);
-  const dx = B.x - A.x;
-  const dy = B.y - A.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
-  const k = Math.min(len * CTRL_FRAC, CTRL_MAX);
-  const bow = Math.min(len * BOW_FRAC, BOW_MAX);
-  const px = uy; // left normal of the travel direction
-  const py = -ux;
-  return {
-    ax: A.x,
-    ay: A.y,
-    c1x: A.x + ux * k + px * bow,
-    c1y: A.y + uy * k + py * bow,
-    c2x: B.x - ux * k + px * bow,
-    c2y: B.y - uy * k + py * bow,
-    bx: B.x,
-    by: B.y,
-  };
+function routePoints(a: Rect, b: Rect): Point[] {
+  const ax = a.x + a.w; // source right edge
+  const ay = a.y + a.h / 2; // … centre height
+  const bcx = b.x + b.w / 2; // target centre x
+  const bt = b.y; // target top edge
+  const cap = b.w * SPREAD_MAX_FRAC;
+  const spread = Math.max(-cap, Math.min(cap, (ax - bcx) * SPREAD_FRAC));
+  const bx = bcx + spread;
+  const chY = bt - TOP_APPROACH; // overhead channel just above the target top
+  return [
+    { x: ax, y: ay },
+    { x: ax + EXIT_STUB, y: ay },
+    { x: ax + EXIT_STUB, y: chY },
+    { x: bx, y: chY },
+    { x: bx, y: bt },
+  ];
 }
 
 const round = (v: number): number => Math.round(v * 100) / 100;
+const fmt = (p: Point): string => `${round(p.x)},${round(p.y)}`;
+
+/** An SVG `d` string through `pts` with rounded corners of radius `r`. */
+function roundedPath(pts: Point[], r: number): string {
+  if (pts.length < 2) return '';
+  const d = [`M${fmt(pts[0]!)}`];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1]!;
+    const b = pts[i]!;
+    const c = pts[i + 1]!;
+    const ab = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const bc = Math.hypot(c.x - b.x, c.y - b.y) || 1;
+    const r1 = Math.min(r, ab / 2);
+    const r2 = Math.min(r, bc / 2);
+    const p1 = { x: b.x + ((a.x - b.x) / ab) * r1, y: b.y + ((a.y - b.y) / ab) * r1 };
+    const p2 = { x: b.x + ((c.x - b.x) / bc) * r2, y: b.y + ((c.y - b.y) / bc) * r2 };
+    d.push(`L${fmt(p1)}`, `Q${fmt(b)} ${fmt(p2)}`);
+  }
+  d.push(`L${fmt(pts[pts.length - 1]!)}`);
+  return d.join(' ');
+}
 
 /**
- * The READ-ONLY connector PATH (an SVG `d` string) between two node rects — a
- * direction-following cubic (see `edgeCurve`). Same input → same path; works for
- * any arrangement the user drags the nodes into.
+ * The READ-ONLY connector PATH (an SVG `d` string) between two node rects — an
+ * orthogonal route that turns at right angles and enters the target on its TOP
+ * edge (see `routePoints`). Same input → same path; works for any arrangement the
+ * user drags the nodes into.
  */
 export function edgePath(a: Rect, b: Rect): string {
-  const c = edgeCurve(a, b);
-  return `M${round(c.ax)},${round(c.ay)} C${round(c.c1x)},${round(c.c1y)} ${round(c.c2x)},${round(c.c2y)} ${round(c.bx)},${round(c.by)}`;
+  return roundedPath(routePoints(a, b), CORNER_R);
 }
