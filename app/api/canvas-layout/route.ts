@@ -60,7 +60,7 @@ export async function PATCH(req: Request): Promise<Response> {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     return badRequest('Expected a JSON object.');
   }
-  const { positions } = body as { positions?: unknown };
+  const { positions, remove } = body as { positions?: unknown; remove?: unknown };
   if (!Array.isArray(positions)) {
     return badRequest('`positions` must be an array.');
   }
@@ -79,10 +79,21 @@ export async function PATCH(req: Request): Promise<Response> {
     inputs.push({ nodeKey, x, y });
   }
 
+  // `remove` (optional) — node keys whose saved position is dropped (a layout
+  // RESET); the nodes fall back to the consumer's auto-layout.
+  let removeKeys: string[] = [];
+  if (remove !== undefined) {
+    if (!Array.isArray(remove) || remove.some((k) => typeof k !== 'string')) {
+      return badRequest('`remove` must be an array of node-key strings.');
+    }
+    removeKeys = remove as string[];
+  }
+
   try {
     const layout = await canvasLayoutService.savePositions(
       { userId: ctx.userId, projectId: ctx.projectId },
       inputs,
+      removeKeys,
     );
     return NextResponse.json({ layout });
   } catch (err) {

@@ -25,16 +25,21 @@ export const canvasLayoutService = {
     return toCanvasLayoutDTO(rows);
   },
 
-  // Persist the moved nodes — validate every input first (a bad one fails the
-  // whole save, atomically), then upsert each inside ONE transaction. Returns the
-  // user's full updated layout so the client reconciles from the committed truth.
+  // Persist the moved nodes and/or RESET (drop) others — validate every upsert
+  // first (a bad one fails the whole save, atomically), then delete the `remove`
+  // keys and upsert the moves inside ONE transaction. Returns the user's full
+  // updated layout so the client reconciles from the committed truth.
   async savePositions(
     ctx: { userId: string; projectId: string },
     positions: CanvasNodePositionInput[],
+    remove: string[] = [],
   ): Promise<CanvasLayoutDTO> {
     for (const position of positions) validatePosition(position);
 
     await db.$transaction(async (tx) => {
+      if (remove.length > 0) {
+        await canvasNodePositionRepository.deleteByKeys(ctx.userId, ctx.projectId, remove, tx);
+      }
       for (const position of positions) {
         await canvasNodePositionRepository.upsertPosition(
           {

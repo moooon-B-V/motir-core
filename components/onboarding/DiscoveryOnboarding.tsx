@@ -39,9 +39,13 @@ export interface DiscoveryOnboardingProps {
   /** The idea preserved across the auth redirect (the 7.3.14 cookie), seeded as
    *  the first turn for a fresh session. */
   initialIdea: string | null;
+  /** The active project's key — lets the canvas read the produced work-item tree
+   *  (`/api/projects/[key]/roadmap`) and show the whole project, not just the
+   *  pre-plan stations. */
+  projectKey?: string;
 }
 
-export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
+export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboardingProps) {
   const t = useTranslations('onboarding.chat');
   const {
     state,
@@ -168,16 +172,20 @@ export function DiscoveryOnboarding({ initialIdea }: DiscoveryOnboardingProps) {
           <OnboardingCanvas
             state={state}
             idea={idea}
+            projectKey={projectKey}
             onOpen={openTier}
             onOpenDesign={openDesign}
             revisitingKind={state.cascade?.directTier ?? null}
             willRefresh={willRefreshKinds(state)}
           />
+          {/* Stacked BELOW the canvas's own top-right search overlay (the reusable
+              foundation owns `top-3 right-3`); sharing the corner made the search
+              input intercept this button's clicks (E2E regression). */}
           {showDesign && complete && (
             <Button
               variant="secondary"
               size="sm"
-              className="absolute top-4 right-4 bg-(--el-page-bg)"
+              className="absolute top-20 right-4 bg-(--el-page-bg)"
               leftIcon={<Palette className="size-4" />}
               onClick={openDesign}
             >

@@ -2,14 +2,28 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_SCALE,
   MIN_SCALE,
+  centerOn,
   clampScale,
-  edgePath,
   fitView,
   nodesBounds,
+  routeEdges,
   screenDeltaToWorld,
   screenToWorld,
   zoomToward,
 } from '@/lib/planning/canvasGeometry';
+
+describe('centerOn', () => {
+  it('pans a node to the viewport centre, preserving scale', () => {
+    const rect = { x: 100, y: 200, w: 280, h: 132 };
+    const viewport = { w: 1000, h: 600 };
+    const v = centerOn(rect, viewport, 1.5);
+    expect(v.scale).toBe(1.5);
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2;
+    expect(v.tx + cx * v.scale).toBeCloseTo(viewport.w / 2);
+    expect(v.ty + cy * v.scale).toBeCloseTo(viewport.h / 2);
+  });
+});
 
 describe('clampScale', () => {
   it('bounds the zoom range', () => {
@@ -78,20 +92,118 @@ describe('screenDeltaToWorld / screenToWorld', () => {
   });
 });
 
-describe('edgePath', () => {
-  it('anchors right→left for side-by-side nodes', () => {
-    const p = edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 300, y: 10, w: 100, h: 50 });
-    expect(p.startsWith('M100,25')).toBe(true); // A right-centre
-    expect(p.endsWith('300,35')).toBe(true); // B left-centre
+// Parse an SVG `d` string into the ordered coordinate pairs it names (M/L
+// endpoints and Q control+end points), so we can assert route geometry.
+function points(d: string): Array<{ x: number; y: number }> {
+  const nums = d.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+  const pts: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i]!, y: nums[i + 1]! });
+  return pts;
+}
+
+type RMap = Record<string, { x: number; y: number; w: number; h: number }>;
+const lookup =
+  (m: RMap) =>
+  (id: string): RMap[string] | undefined =>
+    m[id];
+
+describe('routeEdges', () => {
+  it('returns one route per edge (aligned to input), null when an endpoint is missing', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 0, w: 100, h: 50 } };
+    const r = routeEdges(
+      [
+        { from: 'A', to: 'B' },
+        { from: 'A', to: 'GONE' },
+      ],
+      lookup(m),
+    );
+    expect(r).toHaveLength(2);
+    expect(r[0]).not.toBeNull();
+    expect(r[1]).toBeNull();
   });
-  it('anchors bottom→top for stacked nodes', () => {
-    const p = edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 10, y: 200, w: 100, h: 50 });
-    expect(p.startsWith('M50,50')).toBe(true); // A bottom-centre
-    expect(p.endsWith('60,200')).toBe(true); // B top-centre
+
+  it('connects the FACING sides — right→left for a forward edge, arrow pointing right', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 200, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d); // [A,c1,c2,B]
+    expect(pts[0]!.x).toBeCloseTo(100, 1); // leaves A's RIGHT side (a.x + a.w)
+    const end = pts[3]!;
+    expect(end.x).toBeCloseTo(300, 1); // arrives at B's LEFT side (b.x)
+    expect(end.y).toBeGreaterThan(200); // …within B's height
+    expect(end.y).toBeLessThan(250);
+    expect(end.x - pts[2]!.x).toBeGreaterThan(1); // end tangent points RIGHT into the left side
   });
-  it('anchors left→right when B is to the left', () => {
-    const p = edgePath({ x: 300, y: 0, w: 100, h: 50 }, { x: 0, y: 0, w: 100, h: 50 });
-    expect(p.startsWith('M300,25')).toBe(true); // A left side
-    expect(p.endsWith('100,25')).toBe(true); // B right side
+
+  it('connects the FACING sides for a BACK edge — left→right (no crossing the block)', () => {
+    // B sits to the LEFT of A: the edge must leave A's left and enter B's right.
+    const m: RMap = { A: { x: 300, y: 0, w: 100, h: 50 }, B: { x: 0, y: 0, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(pts[0]!.x).toBeCloseTo(300, 1); // leaves A's LEFT side (a.x)
+    expect(pts[3]!.x).toBeCloseTo(100, 1); // arrives at B's RIGHT side (b.x + b.w)
+  });
+
+  it('connects TOP/BOTTOM for a stacked pair (target directly below)', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 0, y: 300, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(pts[0]!.y).toBeCloseTo(50, 1); // leaves A's BOTTOM (a.y + a.h)
+    expect(pts[3]!.y).toBeCloseTo(300, 1); // arrives at B's TOP (b.y)
+  });
+
+  it('routes a row-WRAP edge through the inter-row band — bottom→top, not a backward horizontal sweep', () => {
+    // The end of row 0 (right) links to the start of row 1 (left): a backward step
+    // that changes row. It must leave the source's BOTTOM and enter the target's TOP
+    // (the empty band between rows), never exit a side and swim back across the row.
+    const m: RMap = {
+      end: { x: 1400, y: 40, w: 280, h: 124 }, // last card of row 0
+      start: { x: 40, y: 260, w: 280, h: 124 }, // first card of row 1
+    };
+    const pts = points(routeEdges([{ from: 'end', to: 'start' }], lookup(m))[0]!.d);
+    expect(pts[0]!.y).toBeCloseTo(164, 1); // leaves end's BOTTOM (40 + 124)
+    expect(pts[3]!.y).toBeCloseTo(260, 1); // arrives at start's TOP
+    expect(pts[3]!.y - pts[2]!.y).toBeGreaterThan(1); // end tangent points DOWN into the top
+  });
+
+  it('fans two edges into one target to DISTINCT entry points (no shared arrowhead)', () => {
+    const m: RMap = {
+      A: { x: 0, y: 0, w: 100, h: 50 },
+      B: { x: 0, y: 200, w: 100, h: 50 },
+      T: { x: 300, y: 80, w: 100, h: 80 },
+    };
+    const [r1, r2] = routeEdges(
+      [
+        { from: 'A', to: 'T' },
+        { from: 'B', to: 'T' },
+      ],
+      lookup(m),
+    );
+    expect(points(r1!.d)[3]!.y).not.toBe(points(r2!.d)[3]!.y); // distinct entry heights on T's left
+  });
+
+  it('fans two edges off one source to DISTINCT exit points', () => {
+    const m: RMap = {
+      S: { x: 0, y: 0, w: 100, h: 100 },
+      X: { x: 300, y: 0, w: 100, h: 50 },
+      Y: { x: 300, y: 300, w: 100, h: 50 },
+    };
+    const [rx, ry] = routeEdges(
+      [
+        { from: 'S', to: 'X' },
+        { from: 'S', to: 'Y' },
+      ],
+      lookup(m),
+    );
+    expect(points(rx!.d)[0]!.y).not.toBe(points(ry!.d)[0]!.y);
+  });
+
+  it('ARCS a long horizontal edge so it clears a card between the columns', () => {
+    // A and B are far apart on the same row → the curve must bow above the row.
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 900, y: 0, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(Math.min(...pts.map((p) => p.y))).toBeLessThan(0); // a control point rose above the row
+  });
+
+  it('does NOT arc a short neighbour edge (stays flat between adjacent cards)', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 200, y: 0, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThanOrEqual(0); // no bow
   });
 });

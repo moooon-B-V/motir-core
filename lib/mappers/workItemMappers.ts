@@ -9,7 +9,6 @@ import type {
 import type {
   ArchivedWorkItemDto,
   RoadmapNodeDto,
-  RoadmapProgressDto,
   WorkItemDto,
   WorkItemListItemDto,
   WorkItemSummaryDto,
@@ -150,19 +149,14 @@ export function toWorkItemTreeNodeDto(
 }
 
 /**
- * Roadmap-node DTO (Subtask 7.19.2). Maps one `findProjectForest` projection
- * row plus its ALREADY-BUILT `children` into a {@link RoadmapNodeDto}. The
- * per-node `isDone` flag and the container `progress` roll-up are the service's
- * tree work (workItemsService.getProjectRoadmap walks descendant leaves to
- * compute them) — this mapper just shapes the node from the row + the handed-in
- * computed fields, the same division of labour as `toWorkItemTreeNodeDto`.
+ * Roadmap LEVEL-node DTO (Subtask 7.20.4 re-plan, MOTIR-1010). Maps one
+ * `findProjectTreeLevel` row — already carrying the lazy `hasChildren` drill flag —
+ * into a flat {@link RoadmapNodeDto}. `isDone` (the node's own done-ness) is the
+ * service's call (it holds the project's done-status keys); per-container progress
+ * meters are MOTIR-1013's work and deliberately NOT computed here (a level read
+ * never loads the subtree).
  */
-export function toRoadmapNodeDto(
-  row: WorkItemForestRow,
-  children: RoadmapNodeDto[],
-  isDone: boolean,
-  progress: RoadmapProgressDto | null,
-): RoadmapNodeDto {
+export function toRoadmapNodeDto(row: WorkItemTreeRow, isDone: boolean): RoadmapNodeDto {
   return {
     id: row.id,
     parentId: row.parentId,
@@ -173,9 +167,7 @@ export function toRoadmapNodeDto(
     title: row.title,
     status: row.status,
     isDone,
-    depth: row.depth,
-    progress,
-    children,
+    hasChildren: row.hasChildren,
   };
 }
 

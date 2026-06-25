@@ -75,6 +75,30 @@ describe('canvasLayoutService', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('RESETS — `remove` drops the given nodes, leaving the rest (and re-saves atomically)', async () => {
+    const t = await makeTenant('reset');
+    await canvasLayoutService.savePositions(t, [
+      { nodeKey: 'epicA', x: 10, y: 10 },
+      { nodeKey: 'epicB', x: 20, y: 20 },
+      { nodeKey: 'discovery', x: 30, y: 30 }, // a station — untouched by the reset
+    ]);
+    // reset epicA/epicB AND move discovery in the same call
+    const after = await canvasLayoutService.savePositions(
+      t,
+      [{ nodeKey: 'discovery', x: 99, y: 99 }],
+      ['epicA', 'epicB'],
+    );
+    expect(after.positions).toEqual([{ nodeKey: 'discovery', x: 99, y: 99 }]);
+    expect(await canvasLayoutService.getLayout(t)).toEqual(after);
+  });
+
+  it('reset of an unknown key is a harmless no-op', async () => {
+    const t = await makeTenant('reset-noop');
+    await canvasLayoutService.savePositions(t, [{ nodeKey: 'plan', x: 1, y: 2 }]);
+    const after = await canvasLayoutService.savePositions(t, [], ['ghost']);
+    expect(after.positions).toEqual([{ nodeKey: 'plan', x: 1, y: 2 }]);
+  });
+
   it("isolates per user — one user cannot see another user's arrangement", async () => {
     const a = await makeTenant('iso-a');
     const b = await makeTenant('iso-b');

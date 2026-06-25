@@ -18,6 +18,9 @@ const SAVE_DEBOUNCE_MS = 500;
 export interface UseCanvasLayout {
   positions: Positions;
   savePosition: (nodeKey: string, x: number, y: number) => void;
+  /** Drop the saved positions for these nodes (a layout RESET) — they fall back to
+   *  the consumer's auto-layout. Optimistic + persisted. */
+  resetPositions: (nodeKeys: string[]) => void;
   /** False until the saved-layout load ATTEMPT completes (success OR failure).
    *  Consumers gate rendering on it so nodes never paint at the auto-layout first
    *  and then jump to the stored positions (the MOTIR-1253 reposition flash). */
@@ -88,5 +91,23 @@ export function useCanvasLayout(): UseCanvasLayout {
     [flush],
   );
 
-  return { positions, savePosition, loaded };
+  const resetPositions = useCallback((nodeKeys: string[]) => {
+    if (nodeKeys.length === 0) return;
+    setPositions((prev) => {
+      const next = { ...prev };
+      for (const k of nodeKeys) delete next[k];
+      return next;
+    });
+    for (const k of nodeKeys) delete pending.current[k];
+    // Persist the removal immediately (a reset is intentional; no debounce).
+    void fetch('/api/canvas-layout', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ positions: [], remove: nodeKeys }),
+    }).catch(() => {
+      /* best-effort */
+    });
+  }, []);
+
+  return { positions, savePosition, resetPositions, loaded };
 }

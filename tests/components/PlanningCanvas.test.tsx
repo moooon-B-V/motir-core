@@ -90,6 +90,70 @@ describe('PlanningCanvas', () => {
     expect(onNodeActivate).toHaveBeenCalledWith('b');
   });
 
+  it('draws a cross-story edge as ONE path plus a flag badge in its own layer', () => {
+    const crossEdges: CanvasEdge[] = [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'c', variant: 'cross' },
+    ];
+    render(<PlanningCanvas nodes={nodes} edges={crossEdges} renderNode={renderNode} />);
+    // the flag badge does NOT inflate the asserted edge-path count
+    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
+    const flags = screen.getAllByTestId('cross-flag');
+    expect(flags).toHaveLength(1);
+    expect(flags[0]!.textContent).toContain('cross-story');
+  });
+
+  it('gives every edge a directional arrowhead (marker-end), markers in their own defs', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    // the markers live OUTSIDE canvas-edges, so its path count is unchanged…
+    expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
+    // …and every edge path points at an arrowhead marker.
+    const edgePaths = screen.getByTestId('canvas-edges').querySelectorAll('path');
+    edgePaths.forEach((p) => expect(p.getAttribute('marker-end')).toMatch(/^url\(#/));
+    // four markers defined (firm / pending / cross / emphasis)
+    expect(document.querySelectorAll('marker')).toHaveLength(4);
+  });
+
+  it('emphasises a selected node’s edges in the accent (so a dashed one still pops)', () => {
+    // edges: a→b (firm), b→c (pending). Select b → both are b’s connections.
+    const { container } = render(
+      <PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} selectedId="b" />,
+    );
+    const paths = [...container.querySelectorAll('[data-testid="canvas-edges"] path')];
+    // every lit edge (here both) points at the accent emphasis marker…
+    paths.forEach((p) => expect(p.getAttribute('marker-end')).toContain('-emphasis'));
+    // …including the pending (dashed) one, which is now accent-stroked.
+    const dashed = paths.find((p) => p.getAttribute('stroke-dasharray'));
+    expect(dashed?.getAttribute('class')).toContain('stroke-(--el-accent)');
+  });
+
+  it('renders no cross-flag layer content when there are no cross edges', () => {
+    render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
+    expect(screen.queryByTestId('cross-flag')).toBeNull();
+  });
+
+  it('accepts focusNodeId / focusNonce without throwing (search-to-focus)', () => {
+    const { rerender } = render(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={edges}
+        renderNode={renderNode}
+        focusNodeId="c"
+        focusNonce={0}
+      />,
+    );
+    rerender(
+      <PlanningCanvas
+        nodes={nodes}
+        edges={edges}
+        renderNode={renderNode}
+        focusNodeId="c"
+        focusNonce={1}
+      />,
+    );
+    expect(screen.getByTestId('canvas-world')).toBeTruthy();
+  });
+
   it('exposes ONLY zoom controls — no link create / edit / delete affordance', () => {
     render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
     const labels = screen
