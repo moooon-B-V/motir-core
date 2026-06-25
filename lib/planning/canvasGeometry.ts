@@ -86,6 +86,17 @@ export function fitView(bounds: Bounds, viewport: { w: number; h: number }, padd
   };
 }
 
+/**
+ * The view that CENTRES a single world `rect` in the `viewport` at the current
+ * `scale` (the scale is left untouched — a pan, not a zoom). Used by
+ * search-to-focus: locate a node, then pan it to the middle of the screen.
+ */
+export function centerOn(rect: Rect, viewport: { w: number; h: number }, scale: number): View {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  return { scale, tx: viewport.w / 2 - cx * scale, ty: viewport.h / 2 - cy * scale };
+}
+
 /** Convert a SCREEN delta (px) to a WORLD delta — used when dragging a node. */
 export function screenDeltaToWorld(
   dx: number,
@@ -100,44 +111,171 @@ export function screenToWorld(view: View, sx: number, sy: number): { x: number; 
   return { x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale };
 }
 
+// Connector constants. An edge attaches to the SIDE of each card that faces the
+// other card (so the arrowhead lands where the line actually arrives, never
+// crossing the block) and is drawn as a smooth cubic that leaves/enters
+// perpendicular to that side. Curves have no long straight runs, so connectors
+// never stack on top of one another; siblings fan out along their shared side.
+const CTRL_FRAC = 0.45; // control-point reach as a fraction of the anchor distance
+const CTRL_MIN = 40;
+const CTRL_MAX = 150;
+const BOW_THRESHOLD = 420; // a horizontal edge longer than this starts to ARC…
+const BOW_FRAC = 0.5; // …by this much per px beyond the threshold…
+const BOW_MAX = 150; // …capped here, so it clears a card between the two columns.
+
+type Point = { x: number; y: number };
+type Side = 'left' | 'right' | 'top' | 'bottom';
+
+/** One placed connector: its SVG `d` string + a point ON it (for a between-edge
+ *  badge such as the cross-story flag). */
+export interface RoutedEdge {
+  d: string;
+  mid: Point;
+}
+
+const round = (v: number): number => Math.round(v * 100) / 100;
+
+const NORMALS: Record<Side, Point> = {
+  right: { x: 1, y: 0 },
+  left: { x: -1, y: 0 },
+  top: { x: 0, y: -1 },
+  bottom: { x: 0, y: 1 },
+};
+
+/** A point on `side` of `rect`, parameter `t` ∈ [0,1] along that side. */
+function sideAnchor(r: Rect, side: Side, t: number): Point {
+  if (side === 'right') return { x: r.x + r.w, y: r.y + r.h * t };
+  if (side === 'left') return { x: r.x, y: r.y + r.h * t };
+  if (side === 'top') return { x: r.x + r.w * t, y: r.y };
+  return { x: r.x + r.w * t, y: r.y + r.h }; // bottom
+}
+
+/** Where the `idx`-th of `n` siblings sits along a side (a band in the middle 44%
+ *  so several edges off/into one side fan out instead of stacking on one point). */
+function slotT(idx: number, n: number): number {
+  return n <= 1 ? 0.5 : 0.28 + 0.44 * (idx / (n - 1));
+}
+
+interface RouteItem {
+  i: number;
+  a: Rect;
+  b: Rect;
+  outIdx: number;
+  outN: number;
+  inIdx: number;
+  inN: number;
+}
+
 /**
- * The READ-ONLY connector path between two node rects (world coords): leave A on
- * the side facing B and enter B on the side facing A, as a cubic bezier. The
- * dominant axis (horizontal vs vertical) picks the anchor sides, so a side-by-side
- * pair connects right→left and a stacked pair connects bottom→top — keeping the
- * dependency graph legible whatever arrangement the user drags the nodes into.
+ * Route ALL the edges of a level at once and return one {@link RoutedEdge} per input
+ * edge (aligned to `edges`; `null` where an endpoint rect is missing). Each edge
+ * connects the two cards on the sides that FACE each other — chosen from the boxes'
+ * geometry (see the axis rule inline): right↔left for same-row neighbours, top↔bottom
+ * for a stacked pair OR a row-WRAP edge (one card a full row below the other), so the
+ * arrowhead always lands on the side the line arrives from and a wrap drops cleanly
+ * through the empty inter-row band. Siblings off one source (or into one target) fan
+ * along that shared side. A horizontal edge spanning more than a neighbour ARCS so it
+ * clears any card between the columns rather than hiding behind it.
  */
-export function edgePath(a: Rect, b: Rect): string {
-  const acx = a.x + a.w / 2,
-    acy = a.y + a.h / 2,
-    bcx = b.x + b.w / 2,
-    bcy = b.y + b.h / 2;
-  const dx = bcx - acx,
-    dy = bcy - acy;
-  let ax: number, ay: number, bx: number, by: number;
-  let c1x: number, c1y: number, c2x: number, c2y: number;
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    // horizontal-dominant
-    ax = dx > 0 ? a.x + a.w : a.x;
-    bx = dx > 0 ? b.x : b.x + b.w;
-    ay = acy;
-    by = bcy;
-    const mx = (ax + bx) / 2;
-    c1x = mx;
-    c1y = ay;
-    c2x = mx;
-    c2y = by;
-  } else {
-    // vertical-dominant
-    ay = dy > 0 ? a.y + a.h : a.y;
-    by = dy > 0 ? b.y : b.y + b.h;
-    ax = acx;
-    bx = bcx;
-    const my = (ay + by) / 2;
-    c1x = ax;
-    c1y = my;
-    c2x = bx;
-    c2y = my;
+export function routeEdges(
+  edges: ReadonlyArray<{ from: string; to: string }>,
+  rect: (id: string) => Rect | undefined,
+): Array<RoutedEdge | null> {
+  const items: RouteItem[] = [];
+  edges.forEach((e, i) => {
+    const a = rect(e.from);
+    const b = rect(e.to);
+    if (a && b) items.push({ i, a, b, outIdx: 0, outN: 1, inIdx: 0, inN: 1 });
+  });
+
+  // sibling slots: out-edges per source (ordered by the target they head to), and
+  // in-edges per target (ordered by the source they come from) — a stable fan order.
+  const cy = (r: Rect): number => r.y + r.h / 2;
+  const groupBy = (pick: (it: RouteItem) => string): RouteItem[][] => {
+    const m = new Map<string, RouteItem[]>();
+    for (const it of items) {
+      const k = pick(it);
+      const arr = m.get(k);
+      if (arr) arr.push(it);
+      else m.set(k, [it]);
+    }
+    return [...m.values()];
+  };
+  for (const arr of groupBy((it) => edges[it.i]!.from)) {
+    arr.sort((p, q) => cy(p.b) - cy(q.b) || p.b.x - q.b.x);
+    arr.forEach((it, k) => {
+      it.outIdx = k;
+      it.outN = arr.length;
+    });
   }
-  return `M${ax},${ay} C${c1x},${c1y} ${c2x},${c2y} ${bx},${by}`;
+  for (const arr of groupBy((it) => edges[it.i]!.to)) {
+    arr.sort((p, q) => cy(p.a) - cy(q.a) || p.a.x - q.a.x);
+    arr.forEach((it, k) => {
+      it.inIdx = k;
+      it.inN = arr.length;
+    });
+  }
+
+  const out: Array<RoutedEdge | null> = edges.map(() => null);
+  for (const it of items) {
+    const { a, b } = it;
+    const scx = a.x + a.w / 2;
+    const scy = a.y + a.h / 2;
+    const tcx = b.x + b.w / 2;
+    const tcy = b.y + b.h / 2;
+    const dx = tcx - scx;
+    const dy = tcy - scy;
+    // Pick the AXIS the connector runs along, then the facing side on each box.
+    // The choice is geometry-driven (never a per-edge hardcode): prefer the axis on
+    // which the two boxes are SEPARATED, so the line leaves/enters the sides that
+    // actually face each other. Same-row neighbours (their y-ranges overlap) connect
+    // left↔right; a stacked pair (x-ranges overlap) connects top↔bottom. When the
+    // boxes are offset on BOTH axes (a diagonal) the tell is DIRECTION, not distance:
+    // a BACKWARD step (target to the LEFT, dx < 0) that also changes row is a row-WRAP
+    // — the end of one row reaching back to the start of the next — so route it through
+    // the empty inter-row band (top↔bottom) instead of swimming back across the row it
+    // leaves. A FORWARD diagonal flows with the reading direction, so keep the
+    // horizontal facing sides. (These layouts read left→right.)
+    const overlapX = a.x < b.x + b.w && b.x < a.x + a.w;
+    const overlapY = a.y < b.y + b.h && b.y < a.y + a.h;
+    let axis: 'h' | 'v';
+    if (overlapY && !overlapX) axis = 'h';
+    else if (overlapX && !overlapY) axis = 'v';
+    else if (!overlapX && !overlapY) axis = dx < 0 ? 'v' : 'h';
+    else axis = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+    let exitSide: Side;
+    let entrySide: Side;
+    if (axis === 'h') {
+      exitSide = dx >= 0 ? 'right' : 'left';
+      entrySide = dx >= 0 ? 'left' : 'right';
+    } else {
+      exitSide = dy >= 0 ? 'bottom' : 'top';
+      entrySide = dy >= 0 ? 'top' : 'bottom';
+    }
+    const A = sideAnchor(a, exitSide, slotT(it.outIdx, it.outN));
+    const B = sideAnchor(b, entrySide, slotT(it.inIdx, it.inN));
+    const en = NORMALS[exitSide];
+    const xn = NORMALS[entrySide];
+    const k = Math.max(CTRL_MIN, Math.min(CTRL_MAX, Math.hypot(B.x - A.x, B.y - A.y) * CTRL_FRAC));
+    const c1 = { x: A.x + en.x * k, y: A.y + en.y * k };
+    const c2 = { x: B.x + xn.x * k, y: B.y + xn.y * k };
+    if (exitSide === 'left' || exitSide === 'right') {
+      // long horizontal edge → arc away from the lower endpoint to clear a card
+      // sitting between the columns.
+      const bow = Math.min(Math.max((Math.abs(dx) - BOW_THRESHOLD) * BOW_FRAC, 0), BOW_MAX);
+      const dir = scy <= tcy ? -1 : 1;
+      c1.y += dir * bow;
+      c2.y += dir * bow;
+    }
+    // the cubic point at t=0.5 — a stable spot ON the curve for a between-edge badge.
+    const mid = {
+      x: 0.125 * A.x + 0.375 * c1.x + 0.375 * c2.x + 0.125 * B.x,
+      y: 0.125 * A.y + 0.375 * c1.y + 0.375 * c2.y + 0.125 * B.y,
+    };
+    out[it.i] = {
+      d: `M${round(A.x)},${round(A.y)} C${round(c1.x)},${round(c1.y)} ${round(c2.x)},${round(c2.y)} ${round(B.x)},${round(B.y)}`,
+      mid,
+    };
+  }
+  return out;
 }

@@ -157,6 +157,25 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * The `is_blocked_by` EDGES among a set of items (the roadmap canvas draws these
+   * — within-parent arrow vs the cross-parent flag, Subtask 7.20.2 / MOTIR-1194).
+   * Unlike {@link findBlockerStatesForItems} (which carries the blocker's STATUS
+   * for a readiness verdict), this returns the edge ENDPOINTS: `blockedId` (the
+   * `fromId`) and `blockerId` (the `toId`). ONE query; empty `itemIds` → `[]`.
+   * Read-only → `db` singleton.
+   */
+  async findBlockedByEdges(
+    itemIds: string[],
+  ): Promise<Array<{ blockedId: string; blockerId: string }>> {
+    if (itemIds.length === 0) return [];
+    const rows = await db.workItemLink.findMany({
+      where: { fromId: { in: itemIds }, kind: 'is_blocked_by' },
+      select: { fromId: true, toId: true },
+    });
+    return rows.map((r) => ({ blockedId: r.fromId, blockerId: r.toId }));
+  },
+
+  /**
    * Create a link. Required `tx`. The DB triggers validate cycle /
    * self-link / workspace consistency on insert; their SQLSTATE-23514
    * rejections and a P2002 unique violation are translated to typed errors

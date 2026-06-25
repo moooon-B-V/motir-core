@@ -2,19 +2,21 @@
 
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent as RKeyboardEvent,
   type PointerEvent as RPointerEvent,
   type ReactNode,
 } from 'react';
-import { Maximize2, Minus, Plus } from 'lucide-react';
+import { Flag, Maximize2, Minus, Plus } from 'lucide-react';
 import {
   type Rect,
   type View,
-  edgePath,
+  centerOn,
   fitView,
   nodesBounds,
+  routeEdges,
   screenDeltaToWorld,
   zoomToward,
 } from '@/lib/planning/canvasGeometry';
@@ -46,8 +48,14 @@ export interface CanvasNode {
 export interface CanvasEdge {
   from: string;
   to: string;
-  /** `firm` = a hard dependency (solid); `pending` = a not-yet-done edge (dashed). */
-  variant?: 'firm' | 'pending';
+  /**
+   * `firm` = a hard dependency (solid); `pending` = a not-yet-done edge (dashed);
+   * `cross` = a dependency crossing a story/parent boundary — the bad-plan SIGNAL
+   * the dependency-arrow audit forbids (warning-toned + a flag badge at the
+   * midpoint, so a reviewer SEES the tangle). A correct plan is a TREE; a `cross`
+   * edge means the plan is wrong (design `design/roadmap/*`, MOTIR-1009/1194).
+   */
+  variant?: 'firm' | 'pending' | 'cross';
 }
 
 export interface PlanningCanvasProps {
@@ -59,6 +67,18 @@ export interface PlanningCanvasProps {
   onNodeMove?: (id: string, x: number, y: number) => void;
   /** A node was clicked/tapped (a press that did NOT become a drag). */
   onNodeActivate?: (id: string) => void;
+  /**
+   * Search-to-focus: the node to PAN to the centre of the viewport. Centring fires
+   * whenever `focusNonce` changes (so re-searching the SAME node re-centres it);
+   * the scale is left untouched. Omit either and no centring happens.
+   */
+  focusNodeId?: string;
+  focusNonce?: number;
+  /** The selected node — its edges (and their other ends) stay lit while every
+   *  other connector dims, so the selection's dependencies/blockers stand out. */
+  selectedId?: string | null;
+  /** A press on empty canvas that did not pan — used to clear the selection. */
+  onBackgroundClick?: () => void;
   ariaLabel?: string;
   className?: string;
 }
@@ -72,7 +92,7 @@ const WHEEL_STEP = 1.04;
 const PAN_KEY_STEP = 64;
 
 type Gesture =
-  | { kind: 'pan'; sx: number; sy: number; tx: number; ty: number }
+  | { kind: 'pan'; sx: number; sy: number; tx: number; ty: number; moved: boolean }
   | {
       kind: 'node';
       id: string;
@@ -90,6 +110,10 @@ export function PlanningCanvas({
   renderNode,
   onNodeMove,
   onNodeActivate,
+  focusNodeId,
+  focusNonce,
+  selectedId,
+  onBackgroundClick,
   ariaLabel,
   className,
 }: PlanningCanvasProps) {
@@ -101,6 +125,8 @@ export function PlanningCanvas({
   const nodeEls = useRef<Map<string, HTMLElement>>(new Map());
   const gesture = useRef<Gesture | null>(null);
   const didFit = useRef(false);
+  // Unique marker ids (a doc-global `<marker>` id collides across canvas instances).
+  const mId = useId().replace(/:/g, '');
 
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const rectOf = (n: CanvasNode): Rect => {
@@ -115,6 +141,13 @@ export function PlanningCanvas({
   };
   const computeFit = (vw: number, vh: number): View =>
     fitView(nodesBounds(nodes.map(rectOf)), { w: vw, h: vh });
+
+  // Route ALL edges together so the global lane pass keeps every connector on its
+  // own track (one entry per edge, aligned to `edges`; null where a node is gone).
+  const routes = routeEdges(edges, (id) => {
+    const n = nodeById.get(id);
+    return n ? rectOf(n) : undefined;
+  });
 
   // ── measure node sizes so edges anchor accurately (RO callback setState) ──
   useEffect(() => {
@@ -155,6 +188,20 @@ export function PlanningCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
+  // ── search-to-focus: pan the requested node to the viewport centre ──
+  // Keyed on `focusNonce` so a repeat search for the same node re-centres it; the
+  // scale is preserved (a pan, not a zoom). Reads the live node/rect each fire.
+  useEffect(() => {
+    if (focusNonce === undefined || !focusNodeId) return;
+    const vp = vpRef.current;
+    const n = nodeById.get(focusNodeId);
+    if (!vp || !n) return;
+    const r = vp.getBoundingClientRect();
+    if (r.width === 0) return;
+    setView((v) => centerOn(rectOf(n), { w: r.width, h: r.height }, v.scale));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNonce, focusNodeId]);
+
   // ── wheel zoom via a NON-passive native listener (so preventDefault holds) ──
   useEffect(() => {
     const vp = vpRef.current;
@@ -191,13 +238,26 @@ export function PlanningCanvas({
         moved: false,
       };
     } else {
-      gesture.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, tx: view.tx, ty: view.ty };
+      gesture.current = {
+        kind: 'pan',
+        sx: e.clientX,
+        sy: e.clientY,
+        tx: view.tx,
+        ty: view.ty,
+        moved: false,
+      };
     }
   }
   function onPointerMove(e: RPointerEvent<HTMLDivElement>) {
     const g = gesture.current;
     if (!g) return;
     if (g.kind === 'pan') {
+      if (
+        Math.abs(e.clientX - g.sx) > ACTIVATE_SLOP ||
+        Math.abs(e.clientY - g.sy) > ACTIVATE_SLOP
+      ) {
+        g.moved = true;
+      }
       setView((v) => ({ ...v, tx: g.tx + (e.clientX - g.sx), ty: g.ty + (e.clientY - g.sy) }));
     } else {
       if (
@@ -226,6 +286,9 @@ export function PlanningCanvas({
       });
       // A press that never moved is a click → activate the node.
       if (!g.moved) onNodeActivate?.(g.id);
+    } else if (g?.kind === 'pan' && !g.moved) {
+      // A press on empty canvas that did not pan → clear the selection.
+      onBackgroundClick?.();
     }
   }
 
@@ -280,6 +343,40 @@ export function PlanningCanvas({
         style={{ touchAction: 'none' }}
         data-testid="planning-canvas"
       >
+        {/* Arrowhead markers — in their OWN <svg> (marker refs are doc-global), so
+            the canvas-edges <path> count stays = the edge count. One per variant,
+            coloured to match its edge → a reader can tell DIRECTION (the arrow
+            points blocker → blocked). MOTIR-1331. */}
+        <svg className="absolute h-0 w-0" aria-hidden="true">
+          <defs>
+            {(['committed', 'pending', 'warning', 'emphasis'] as const).map((kind) => (
+              <marker
+                key={kind}
+                id={`${mId}-${kind}`}
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M0 0L10 5L0 10z"
+                  className={
+                    kind === 'warning'
+                      ? 'fill-(--el-warning)'
+                      : kind === 'emphasis'
+                        ? 'fill-(--el-accent)'
+                        : kind === 'pending'
+                          ? 'fill-(--el-canvas-edge-pending)'
+                          : 'fill-(--el-canvas-edge-committed)'
+                  }
+                />
+              </marker>
+            ))}
+          </defs>
+        </svg>
+
         {/* edges — read-only dependency connectors (non-scaling stroke) */}
         <svg
           className="pointer-events-none absolute top-0 left-0 h-full w-full"
@@ -288,28 +385,78 @@ export function PlanningCanvas({
           data-testid="canvas-edges"
         >
           {edges.map((edge, i) => {
-            const a = nodeById.get(edge.from);
-            const b = nodeById.get(edge.to);
-            if (!a || !b) return null;
+            const route = routes[i];
+            if (!route) return null;
             const pending = edge.variant === 'pending';
+            const cross = edge.variant === 'cross';
+            // When a node is selected, only its own edges stay lit; a lit non-cross
+            // edge is EMPHASISED in the accent (so even a faint dashed `pending`
+            // connector clearly pops, matching the selected card's accent ring).
+            const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
+            const emph = lit && selectedId != null && !cross;
+            const marker = cross
+              ? 'warning'
+              : emph
+                ? 'emphasis'
+                : pending
+                  ? 'pending'
+                  : 'committed';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
-                d={edgePath(rectOf(a), rectOf(b))}
+                d={route.d}
                 fill="none"
                 className={
-                  pending
-                    ? 'stroke-(--el-canvas-edge-pending)'
-                    : 'stroke-(--el-canvas-edge-committed)'
+                  cross
+                    ? 'stroke-(--el-warning)'
+                    : emph
+                      ? 'stroke-(--el-accent)'
+                      : pending
+                        ? 'stroke-(--el-canvas-edge-pending)'
+                        : 'stroke-(--el-canvas-edge-committed)'
                 }
-                strokeWidth={2}
+                strokeWidth={lit && selectedId != null ? (cross ? 3.5 : 3) : cross ? 2.5 : 2}
                 strokeLinecap="round"
-                strokeDasharray={pending ? '2 7' : undefined}
+                // a denser dash when emphasised keeps the dashed line legible at the
+                // accent colour without losing the "pending" cue.
+                strokeDasharray={pending ? (emph ? '5 6' : '2 7') : undefined}
+                markerEnd={`url(#${mId}-${marker})`}
                 vectorEffect="non-scaling-stroke"
+                style={{ opacity: lit ? 1 : 0.12 }}
               />
             );
           })}
         </svg>
+
+        {/* cross-story flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
+            the edge <svg>, whose <path> count is asserted): a warning chip + flag
+            glyph + label at each cross edge's midpoint, so the tangle never rests
+            on edge colour alone. Decorative — the dependency facts live in the
+            node list. */}
+        <div
+          className="pointer-events-none absolute top-0 left-0"
+          style={worldTransform}
+          aria-hidden="true"
+          data-testid="canvas-cross-flags"
+        >
+          {edges.map((edge, i) => {
+            if (edge.variant !== 'cross') return null;
+            const route = routes[i];
+            if (!route) return null;
+            const m = route.mid;
+            return (
+              <span
+                key={`flag~${edge.from}~${edge.to}~${i}`}
+                className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)"
+                style={{ left: m.x, top: m.y }}
+                data-testid="cross-flag"
+              >
+                <Flag className="size-3.5" />
+                cross-story
+              </span>
+            );
+          })}
+        </div>
 
         {/* nodes — caller content; the canvas owns the box + drag */}
         <div className="absolute top-0 left-0" style={worldTransform} data-testid="canvas-world">

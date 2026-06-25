@@ -102,15 +102,24 @@ export function StationCard({
   // A tier mid-draft is the live frontier too — ring it like "active" while it
   // loads (it just shows "Drafting now…" instead of a settled pill).
   const ringed = active || station.state === 'working';
-  const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
-  const subtitle = t(`stations.${station.kind}.subtitle`);
-  const showCaptured = tierKind !== null && (station.state === 'done' || active);
   const isDesign = station.kind === 'design';
+  const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
+  // The design step's CTA + state pill already say where it sits, so its "up next"
+  // subtitle is redundant noise — drop it (every tier keeps its captured-facts
+  // subtitle). The optional step instead carries the "can skip" tag below.
+  const subtitle = isDesign ? null : t(`stations.${station.kind}.subtitle`);
+  const showCaptured = tierKind !== null && (station.state === 'done' || active);
+  // An optional step shows a "can skip" tag while it is still ahead OR the current
+  // step (you can skip it right up to acting on it) — not once it's done/skipped.
+  const showCanSkip =
+    station.optional && (station.state === 'upcoming' || station.state === 'active');
 
   return (
     <div
       className={[
-        'w-[300px] rounded-(--radius-card) border p-(--spacing-card-padding)',
+        // p-3, not the roomy --spacing-card-padding: a canvas node reads tighter
+        // (matching the work-item card's density) so the top isn't over-padded.
+        'w-[300px] rounded-(--radius-card) border p-3',
         revisiting
           ? 'border-(--el-border-strong) bg-(--el-tint-peach) shadow-(--shadow-card)'
           : ringed
@@ -120,6 +129,18 @@ export function StationCard({
               : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)',
       ].join(' ')}
     >
+      {/* The "can skip" tag sits in the card's TOP-LEFT corner — the same slot the
+          work-item card gives its status pill — not inline with the title. It carries
+          a STRONG border so it still reads as a distinct chip on the near-white card
+          surfaces (--el-muted alone is ~the card colour and disappears). */}
+      {showCanSkip && (
+        <div className="mb-1.5">
+          <span className="inline-flex items-center rounded-(--radius-badge) border border-(--el-border-strong) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
+            {t('canSkip')}
+          </span>
+        </div>
+      )}
+
       {(revisiting || refreshing) && (
         <div
           className={`mb-2 inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-strong) ${
@@ -150,16 +171,11 @@ export function StationCard({
           <Icon className={tierKind ? 'size-4.5' : 'size-4 text-(--el-text-faint)'} />
         </span>
         <div className="min-w-0 flex-1">
-          {/* The title wraps in full (no truncation) — step names must read whole. */}
-          <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-            <span className="text-sm leading-snug font-semibold text-(--el-text)">{title}</span>
-            {station.optional && station.state === 'upcoming' && (
-              <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
-                {t('canSkip')}
-              </span>
-            )}
-          </div>
-          <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
+          {/* The title reads in full (no truncation) — step names must read whole. */}
+          <span className="block text-sm leading-snug font-semibold text-(--el-text)">{title}</span>
+          {subtitle && (
+            <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
+          )}
         </div>
       </div>
 

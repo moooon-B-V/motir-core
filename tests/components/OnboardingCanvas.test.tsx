@@ -54,7 +54,7 @@ describe('OnboardingCanvas', () => {
     expect(await screen.findByText('Understanding your idea')).toBeTruthy();
     expect(screen.getByText("What we'll build")).toBeTruthy();
     expect(screen.getByText('Design the look')).toBeTruthy();
-    expect(screen.getByText('Plan → your epics')).toBeTruthy();
+    expect(screen.getByText('Plan → your project')).toBeTruthy();
     expect(screen.getByText('Your idea')).toBeTruthy();
     // captured findings (the structured facts) render on the done discovery tier
     expect(screen.getByText('Type — startup')).toBeTruthy();
@@ -138,7 +138,7 @@ describe('OnboardingCanvas', () => {
     expect(document.querySelector('[data-node-id="design"]')).toBeNull();
     // idea→discovery→vision→feasibility→validation→plan (design contracted) = 5 edges
     expect(edges.querySelectorAll('path')).toHaveLength(5);
-    expect(screen.getByText('Plan → your epics')).toBeTruthy();
+    expect(screen.getByText('Plan → your project')).toBeTruthy();
   });
 
   // Step 5: the design station is VISIBLE on a web roadmap from the start, but is

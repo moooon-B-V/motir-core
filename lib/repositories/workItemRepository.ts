@@ -427,6 +427,29 @@ export const workItemRepository = {
   },
 
   /**
+   * Minimal STUBS for the roadmap's off-level blockers (Subtask 7.20.2 /
+   * MOTIR-1331) — an `is_blocked_by` blocker that lives on ANOTHER level has no
+   * node on screen, so the canvas anchors a red edge to a chip that NAMES it: its
+   * `identifier` + `title` + the title of the container it lives in (its parent
+   * story/epic). ONE query with the parent relation; empty input → `[]`.
+   */
+  async findRoadmapBlockerStubs(
+    ids: string[],
+  ): Promise<Array<{ id: string; identifier: string; title: string; parentTitle: string | null }>> {
+    if (ids.length === 0) return [];
+    const rows = await db.workItem.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, identifier: true, title: true, parent: { select: { title: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      identifier: r.identifier,
+      title: r.title,
+      parentTitle: r.parent?.title ?? null,
+    }));
+  },
+
+  /**
    * Every work item currently recorded on a given session branch within a
    * workspace (Subtask 7.8.11) — the read backing `complete_session`'s bulk
    * close-out. Workspace-scoped (the explicit finding-#26 tenant gate, since RLS
