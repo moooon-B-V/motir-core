@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.12 — Planning metering, token accounting & credit ledger. The story
@@ -107,7 +107,7 @@ import type { PlanStory } from '../types';
  * is `blocked` behind it. The gate is scoped to the cost VIEW only — the
  * checkout/pricing surface is Epic 8 and explicitly out of this design area.
  */
-export const story_7_12: PlanStory = {
+export const story_7_12: SeedStory = {
   id: '7.12',
   title: 'Planning metering + token accounting + credit ledger',
   status: 'planned',

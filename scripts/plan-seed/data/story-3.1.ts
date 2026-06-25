@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.1 — Board data model + column-from-workflow projection.
@@ -14,7 +14,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 3.1`. Matches the
  * canonical depth + string-literal style of the Epic-2 modules (e.g. 2.2).
  */
-export const story_3_1: PlanStory = {
+export const story_3_1: SeedStory = {
   id: '3.1',
   title: 'Board data model + column-from-workflow projection',
   status: 'done',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.3 — Issue-tree generation (chat → real issues in the PM core). The
@@ -80,7 +80,7 @@ import type { PlanStory } from '../types';
  * `design-notes.md`, and EVERY UI-touching code subtask (7.3.5) depends on it and
  * is `blocked` behind it.
  */
-export const story_7_3: PlanStory = {
+export const story_7_3: SeedStory = {
   id: '7.3',
   title: 'Issue-tree generation (chat → real issues)',
   status: 'planned',

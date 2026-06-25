@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.2 — Workspaces (multi-tenant).
  * Faithful transcription of prodect_plan/story-1.2-workspaces.html (frozen archive).
  */
-export const story_1_2: PlanStory = {
+export const story_1_2: SeedStory = {
   id: '1.2',
   title: 'Workspaces (multi-tenant)',
   status: 'done',

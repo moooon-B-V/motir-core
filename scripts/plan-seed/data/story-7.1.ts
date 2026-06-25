@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.1 — Core ↔ AI API contract (motir-core ↔ motir-ai) + motir-ai's
@@ -70,7 +70,7 @@ import type { PlanStory } from '../types';
  * internal endpoint, NOT the 7.8 MCP read tools, so 7.1 carries no
  * forward-pointing dep on 7.8 — 7.1 is the foundation and ships first.
  */
-export const story_7_1: PlanStory = {
+export const story_7_1: SeedStory = {
   id: '7.1',
   title: 'Core ↔ AI API contract + motir-ai persistence foundation',
   status: 'planned',

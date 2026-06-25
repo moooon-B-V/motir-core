@@ -1,4 +1,4 @@
-import type { EpicMeta, PlanItem } from '../types';
+import type { EpicMeta, SeedItem } from '../types';
 
 /**
  * The 8 v1 epics (metadata only — stories are attached in `index.ts`).
@@ -4004,7 +4004,7 @@ export const EPICS: EpicMeta[] = [
  * each entry with `parentId: null` and `kind: 'bug'`, so they appear at the
  * project root next to the epics in Motir's tree views.
  */
-export const PARENTLESS_BUGS: PlanItem[] = [
+export const PARENTLESS_BUGS: SeedItem[] = [
   {
     id: '11',
     kind: 'bug',

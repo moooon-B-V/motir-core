@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 2.2 — Status workflows (per-project, customizable).
  * Faithful transcription of prodect_plan/story-2.2-status-workflows.html (frozen archive).
  */
-export const story_2_2: PlanStory = {
+export const story_2_2: SeedStory = {
   id: '2.2',
   title: 'Status workflows (per-project, customizable)',
   status: 'done',

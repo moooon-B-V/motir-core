@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.6 — Prompt generation + external-agent dispatch. The story that
@@ -94,7 +94,7 @@ import type { PlanStory } from '../types';
  * 7.6.1 comes first under `design/dispatch/` and every UI code subtask blocks
  * on it.
  */
-export const story_7_6: PlanStory = {
+export const story_7_6: SeedStory = {
   id: '7.6',
   title: 'Prompt generation + external-agent dispatch',
   status: 'planned',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 5.7 — In-app notifications (bell + unread feed).
@@ -101,7 +101,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 5.7`. Matches the canonical
  * depth + string-literal style of Stories 5.1 / 7.1.
  */
-export const story_5_7: PlanStory = {
+export const story_5_7: SeedStory = {
   id: '5.7',
   title: 'In-app notifications (bell + unread feed)',
   status: 'done',

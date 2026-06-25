@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.6 — Board configuration: columns + status→column mapping.
@@ -38,7 +38,7 @@ import type { PlanStory } from '../types';
  * a `TODO(6.4)` to role-gate later, matching the 2.2.5 workflow editor + the 3.3
  * board config (no early RBAC build — roles are Epic 6).
  */
-export const story_3_6: PlanStory = {
+export const story_3_6: SeedStory = {
   id: '3.6',
   title: 'Board configuration — columns + status→column mapping',
   status: 'done',

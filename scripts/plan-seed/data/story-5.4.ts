@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 5.4 — Labels, components, watchers.
@@ -85,7 +85,7 @@ import type { PlanStory } from '../types';
  * `seed/epic-5-plan` branch. Matches the canonical depth + string-literal
  * style of Stories 5.1 / 5.2 / 5.3.
  */
-export const story_5_4: PlanStory = {
+export const story_5_4: SeedStory = {
   id: '5.4',
   title: 'Labels, components, watchers',
   status: 'done',

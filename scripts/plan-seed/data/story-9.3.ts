@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.3 — Hosted execution layer: repo PROVISIONING + SCAFFOLD + the STARTER
@@ -114,7 +114,7 @@ import type { PlanStory } from '../types';
  * `planned`; everything chained behind them or behind not-yet-done upstream ids is
  * `blocked`.
  */
-export const story_9_3: PlanStory = {
+export const story_9_3: SeedStory = {
   id: '9.3',
   title: 'Hosted execution layer — repo provisioning + scaffold + starter library + GitHub handoff',
   status: 'planned',

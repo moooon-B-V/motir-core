@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.8 — Edit project details + change project key (with old-key
@@ -77,7 +77,7 @@ import type { PlanStory } from '../types';
  * 6.8 siblings, 6.5 (same-epic, backward — 6.5 < 6.8), or shipped substrate
  * (1.3.x, 2.5.x, 6.4 done).
  */
-export const story_6_8: PlanStory = {
+export const story_6_8: SeedStory = {
   id: '6.8',
   title: 'Edit project details + change project key (with old-key redirects)',
   status: 'done',

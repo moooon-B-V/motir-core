@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.0 — Ready set: page + endpoint (the AI dispatch surface, front-half
@@ -79,7 +79,7 @@ import type { PlanStory } from '../types';
  * readiness count as a badge. Justified deviation from rung 1 (Jira/Linear
  * don't have one) for the reasons above.
  */
-export const story_7_0: PlanStory = {
+export const story_7_0: SeedStory = {
   id: '7.0',
   title: 'Ready set — page + endpoint (the AI dispatch surface)',
   status: 'done',

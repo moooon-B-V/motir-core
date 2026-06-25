@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.7 — GitHub integration + status sync + review loop + code-graph feed.
@@ -75,7 +75,7 @@ import type { PlanStory } from '../types';
  * (7.7.1) have empty `dependsOn` → `planned`; everything else chains behind
  * them or behind not-yet-done upstream ids → `blocked`.
  */
-export const story_7_7: PlanStory = {
+export const story_7_7: SeedStory = {
   id: '7.7',
   title: 'GitHub integration + status sync + review loop + code-graph feed',
   status: 'planned',

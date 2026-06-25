@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.13 (Epic 6) — The Project Square (a SYSTEM-level public-project
@@ -121,7 +121,7 @@ import type { PlanStory } from '../types';
  * `blocked`. 6.13.1 (design, `dependsOn: []`) is `planned`; every other card
  * (each chained behind 6.13.2 or 6.12.x) is `blocked`.
  */
-export const story_6_13: PlanStory = {
+export const story_6_13: SeedStory = {
   id: '6.13',
   title: 'The project square (system-level public-project directory)',
   status: 'planned',

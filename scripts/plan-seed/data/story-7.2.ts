@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.2 — Chat front door + stack/opinion discovery + direction docs. The
@@ -83,7 +83,7 @@ import type { PlanStory } from '../types';
  * 7.1.4 jobs, 7.1.5 client) — all backward/sideways, no forward-pointing dep.
  * 7.3+ depend on 7.2, never the reverse.
  */
-export const story_7_2: PlanStory = {
+export const story_7_2: SeedStory = {
   id: '7.2',
   title: 'Chat front door + discovery + direction docs',
   status: 'planned',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.1 — Hosted agent container: auth + gateway-metered token usage. The
@@ -144,7 +144,7 @@ import type { PlanStory } from '../types';
  *     beyond the 9.1.3 baseline. 9.1 ships the provisioning baseline; the
  *     hardening pass is a dedicated later story.
  */
-export const story_9_1: PlanStory = {
+export const story_9_1: SeedStory = {
   id: '9.1',
   title:
     'Hosted agent container — auth + gateway-metered token usage (the hosted-execution foundation)',

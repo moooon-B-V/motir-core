@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.14 — Coding convention + code-health audit (the engine). The
@@ -135,7 +135,7 @@ import type { PlanStory } from '../types';
  * the clean-code rule SET as a separately shippable product (it is an internal
  * input here, curated alongside the audit job).
  */
-export const story_7_14: PlanStory = {
+export const story_7_14: SeedStory = {
   id: '7.14',
   title: 'Coding convention + code-health audit (the engine)',
   status: 'planned',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 4.7 — Tests: the cross-cutting AT-SCALE Scrum journey (the Scrum
@@ -75,7 +75,7 @@ import type { PlanStory } from '../types';
  * 4.7.1 / 4.5.2 / 4.5.3 / 4.4.3 / 4.4.4 / 4.4.6 / 3.2.4 / 3.3.5 / 3.3.6. All ids
  * are epic ≤ 4 — no forward-pointing cross-epic dependency.
  */
-export const story_4_7: PlanStory = {
+export const story_4_7: SeedStory = {
   id: '4.7',
   title:
     'Tests — the cross-cutting Scrum journey at scale (sprint-scoped load · drag · swimlanes · WIP · complete + carry-over)',

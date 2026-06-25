@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.4 — Augmentation, expansion & completion-aware re-planning. The
@@ -100,7 +100,7 @@ import type { PlanStory } from '../types';
  * satisfied). No dep on 7.5+. The job handlers are the EXTENSION points 7.5
  * later wires retrieval into; 7.4 does not reach forward to do so.
  */
-export const story_7_4: PlanStory = {
+export const story_7_4: SeedStory = {
   id: '7.4',
   title: 'Augmentation, expansion & completion-aware re-planning',
   status: 'planned',

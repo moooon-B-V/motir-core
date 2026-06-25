@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.1 — Structured search + filter builder.
@@ -74,7 +74,7 @@ import type { PlanStory } from '../types';
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6.
  */
-export const story_6_1: PlanStory = {
+export const story_6_1: SeedStory = {
   id: '6.1',
   title: 'Structured search + filter builder',
   status: 'done',

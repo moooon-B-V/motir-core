@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 10.3 — Credit/account operations + governance toolkit. The Motir-INTERNAL
@@ -105,7 +105,7 @@ import type { PlanStory } from '../types';
  * These are deliberately OUT of 10.3's scope so the story stays the credit /
  * account / governance toolkit + its audit spine, not an unbounded admin grab-bag.
  */
-export const story_10_3: PlanStory = {
+export const story_10_3: SeedStory = {
   id: '10.3',
   title: 'Credit/account operations + governance toolkit',
   status: 'planned',

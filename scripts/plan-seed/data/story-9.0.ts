@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.0 — LLM metering gateway (fork of one-api). THE FOUNDATION of **Epic 9
@@ -91,7 +91,7 @@ import type { PlanStory } from '../types';
  * Because 9.0.1 is `dependsOn: []` it is `planned`; everything chained behind it
  * (or behind any not-yet-done 7.x id) is `blocked`.
  */
-export const story_9_0: PlanStory = {
+export const story_9_0: SeedStory = {
   id: '9.0',
   title:
     'LLM metering gateway (fork of one-api) — the authoritative meter every hosted run routes through',

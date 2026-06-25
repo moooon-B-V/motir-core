@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.15 — Board filtering (the disabled `[Filter]` seam, wired).
@@ -74,7 +74,7 @@ import type { PlanStory } from '../types';
  * read (6.15.2), the toolbar filter UI (6.15.3), the story tests (6.15.4), and
  * the quick-filter Work type facet (6.15.5).
  */
-export const story_6_15: PlanStory = {
+export const story_6_15: SeedStory = {
   id: '6.15',
   title: 'Board filtering (wire the disabled board `[Filter]` seam)',
   status: 'planned',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.7 — Multiple boards per project (board CRUD + switcher).
@@ -35,7 +35,7 @@ import type { PlanStory } from '../types';
  * page) is unspecified — so 3.7.7 is a `type: design` subtask producing it and
  * the code subtask (3.7.8) carries it in `dependsOn`.
  */
-export const story_3_7: PlanStory = {
+export const story_3_7: SeedStory = {
   id: '3.7',
   title: 'Multiple boards per project (board CRUD + switcher)',
   status: 'done',

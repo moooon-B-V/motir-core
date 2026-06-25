@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 10.1 — Superadmin console + platform overview + usage/cost rollups.
@@ -112,7 +112,7 @@ import type { PlanStory } from '../types';
  * this console later; 10.1 ships the estate overview + usage rollups + drill-down
  * they grow from.
  */
-export const story_10_1: PlanStory = {
+export const story_10_1: SeedStory = {
   id: '10.1',
   title: 'Superadmin console + platform overview + usage/cost rollups',
   status: 'planned',

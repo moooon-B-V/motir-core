@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.6 — Automation rules.
@@ -114,7 +114,7 @@ import type { PlanStory } from '../types';
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.1–5.6 / 6.1.
  */
-export const story_6_6: PlanStory = {
+export const story_6_6: SeedStory = {
   id: '6.6',
   title: 'Automation rules',
   status: 'done',
