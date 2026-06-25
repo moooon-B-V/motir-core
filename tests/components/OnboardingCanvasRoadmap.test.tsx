@@ -64,7 +64,7 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     );
     // The root level resolves: stations + the compact "Your plan" preview node —
     // the epic itself is NOT a top-level node, only previewed inside the card.
-    expect(await screen.findByText('Plan → your epics')).toBeTruthy();
+    expect(await screen.findByText('Plan → your project')).toBeTruthy();
     expect(await screen.findByText('Your plan')).toBeTruthy();
     expect(await screen.findByText('Billing epic')).toBeTruthy(); // inside the preview
     expect(document.querySelector('[data-node-id="__plan__"]')).not.toBeNull();
@@ -85,7 +85,7 @@ describe('OnboardingCanvas — produced work-item tree (per level)', () => {
     renderWithIntl(
       <OnboardingCanvas state={hubState()} idea="x" onOpen={vi.fn()} onOpenDesign={vi.fn()} />,
     );
-    expect(await screen.findByText('Plan → your epics')).toBeTruthy();
+    expect(await screen.findByText('Plan → your project')).toBeTruthy();
     expect(screen.queryByPlaceholderText('Search the roadmap')).toBeNull();
     const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) =>
       String(c[0]),

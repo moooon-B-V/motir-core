@@ -102,10 +102,17 @@ export function StationCard({
   // A tier mid-draft is the live frontier too — ring it like "active" while it
   // loads (it just shows "Drafting now…" instead of a settled pill).
   const ringed = active || station.state === 'working';
-  const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
-  const subtitle = t(`stations.${station.kind}.subtitle`);
-  const showCaptured = tierKind !== null && (station.state === 'done' || active);
   const isDesign = station.kind === 'design';
+  const title = tierKind ? TIER_META[tierKind].label : t(`stations.${station.kind}.title`);
+  // The design step's CTA + state pill already say where it sits, so its "up next"
+  // subtitle is redundant noise — drop it (every tier keeps its captured-facts
+  // subtitle). The optional step instead carries the "can skip" tag below.
+  const subtitle = isDesign ? null : t(`stations.${station.kind}.subtitle`);
+  const showCaptured = tierKind !== null && (station.state === 'done' || active);
+  // An optional step shows a "can skip" tag while it is still ahead OR the current
+  // step (you can skip it right up to acting on it) — not once it's done/skipped.
+  const showCanSkip =
+    station.optional && (station.state === 'upcoming' || station.state === 'active');
 
   return (
     <div
@@ -153,13 +160,15 @@ export function StationCard({
           {/* The title wraps in full (no truncation) — step names must read whole. */}
           <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <span className="text-sm leading-snug font-semibold text-(--el-text)">{title}</span>
-            {station.optional && station.state === 'upcoming' && (
+            {showCanSkip && (
               <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)">
                 {t('canSkip')}
               </span>
             )}
           </div>
-          <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
+          {subtitle && (
+            <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
+          )}
         </div>
       </div>
 

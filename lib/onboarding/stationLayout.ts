@@ -22,18 +22,22 @@ export const CANVAS_NODE_KEYS: readonly CanvasNodeKey[] = ['idea', ...STATION_OR
 // Two rows. Row 0 (y=40): idea → the 4 tiers (discovery…validation), left→right.
 // Row 1 (y=260): the last two stations design → plan, wrapped under the start of
 // row 0, with the "Your plan" preview to their right (OnboardingCanvas's ROOT_X0/Y0).
-// Step = NODE_W(280) + a gap, so the cards read as a clean pipeline and the four
-// tiers line up horizontally; ROW1_Y clears row 0 by NODE_H(124) + a band gap.
+// STEP_X = the station card (300) + a 40px gap. The idea card is NARROWER (200), so
+// it gets its OWN tighter step (IDEA_STEP) — otherwise a full station step leaves an
+// oversized gap and pushes the first tier ("Understanding your idea") too far from
+// the idea card / the left edge. ROW1_Y clears row 0 by NODE_H + a band gap.
 const ROW0_Y = 40;
 const ROW1_Y = 260;
 const ORIGIN_X = 40;
-const STEP_X = 340;
+const STEP_X = 340; // station card (300) + 40px gap
+const IDEA_STEP = 240; // idea card (200) + 40px gap
+const TIER0_X = ORIGIN_X + IDEA_STEP; // the first tier, then the rest march by STEP_X
 export const STATION_AUTO_LAYOUT: Record<CanvasNodeKey, { x: number; y: number }> = {
   idea: { x: ORIGIN_X, y: ROW0_Y },
-  discovery: { x: ORIGIN_X + STEP_X, y: ROW0_Y },
-  vision: { x: ORIGIN_X + 2 * STEP_X, y: ROW0_Y },
-  feasibility: { x: ORIGIN_X + 3 * STEP_X, y: ROW0_Y },
-  validation: { x: ORIGIN_X + 4 * STEP_X, y: ROW0_Y },
+  discovery: { x: TIER0_X, y: ROW0_Y },
+  vision: { x: TIER0_X + STEP_X, y: ROW0_Y },
+  feasibility: { x: TIER0_X + 2 * STEP_X, y: ROW0_Y },
+  validation: { x: TIER0_X + 3 * STEP_X, y: ROW0_Y },
   design: { x: ORIGIN_X, y: ROW1_Y },
   plan: { x: ORIGIN_X + STEP_X, y: ROW1_Y },
 };
