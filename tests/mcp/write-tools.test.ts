@@ -147,6 +147,47 @@ describe('create_work_item', () => {
     expect(JSON.stringify(res.content)).toContain('ILLEGAL_PARENT_TYPE');
   });
 
+  // Epic creation over the MCP (MOTIR-1345) — the planner generates the whole
+  // tree, epics included, so the agent surface must be able to create a
+  // top-level epic. The service is already total over `epic`; the tool only
+  // widened its input enum.
+  it('creates a top-level epic with no parent', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'epic', title: 'A brand-new capability area' },
+      fx.ctx,
+    );
+    expect(res.isError).toBeFalsy();
+    const dto = res.structuredContent as {
+      identifier: string;
+      kind: string;
+      parentId: string | null;
+      reporterId: string;
+    };
+    expect(dto.kind).toBe('epic');
+    expect(dto.parentId).toBeNull();
+    expect(dto.reporterId).toBe(fx.ownerId);
+
+    // It persisted and reads back through the tree as a root item.
+    const list = await workItemsService.listWorkItems(fx.projectId, {}, fx.ctx);
+    expect(list.map((i) => i.identifier)).toContain(dto.identifier);
+  });
+
+  it('rejects a parented epic with the typed kind-parent error (epic is root-only)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'A story' },
+      fx.ctx,
+    );
+    // No kind may parent an epic (matrix: epic → root only).
+    const res = await runCreateWorkItem(
+      { projectKey: 'PROD', kind: 'epic', title: 'Nested epic', parentKey: story.identifier },
+      fx.ctx,
+    );
+    expect(res.isError).toBe(true);
+    expect(JSON.stringify(res.content)).toContain('ILLEGAL_PARENT_TYPE');
+  });
+
   // Story points on create (Subtask 7.8.21) — born with a points value, and the
   // shared validation rejects a malformed one before a key is burned.
   it('creates an item with storyPoints set', async () => {
