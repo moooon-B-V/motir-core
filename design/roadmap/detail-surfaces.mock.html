@@ -1,0 +1,2127 @@
+<!doctype html>
+<!--
+  ROADMAP · CANVAS DETAIL SURFACES (MOTIR-1351 / 7.20.10) — the two DETAIL
+  surfaces the project-roadmap canvas opens, plus their on-canvas entry
+  affordances. This asset COMPOSES existing designs/components; it does NOT
+  redraw them (notes.html #82/#95 — reuse the real shipped COMPONENT + its
+  CONTRACT, never a stylized stand-in).
+
+  ⭐ GROUNDED IN THE SHIPPED CANVAS (MOTIR-1194 / PR #1398). Two DISTINCT
+  interactions on a node — do not conflate them:
+    · SELECT (click a card) = HIGHLIGHT only. ProjectRoadmapCanvas selects the
+      card (accent ring + offset) and highlights the dependency it is part of
+      (`connectedIds` — the selected node + everything it links to). Selecting
+      does NOT open detail.
+    · The DETAIL surface opens from a dedicated action surfaced ON the selected
+      card — the same place the shipped "Open ›" DRILL pill appears. This card
+      adds a **VIEW** button there:
+        – work-item node → View opens the quick-view peek (built by MOTIR-1352),
+        – tier station   → View opens the tier doc (built by MOTIR-1355).
+      DRILLING stays the separate "Open ›" pill (children); a drillable selected
+      node shows BOTH View + Open. `WorkItemNode` keeps its passive `ChevronRight`
+      has-children hint.
+  (Earlier drafts of this mock got this wrong twice — first a hover "Eye", then
+  "selection itself opens the detail". Both are wrong: selection only HIGHLIGHTS;
+  a dedicated VIEW button opens the surface.)
+
+  WHAT THIS DRAWS
+  1. Work-item QUICK-VIEW (peek). A VIEW button on the SELECTED WorkItemNode
+     (MOTIR-1194) opens the SHIPPED quick-view peek
+     (design/work-items/quick-view.mock.html), reused 1:1 (not redrawn).
+  2. TIER-DOC viewer. The 4 direction-tier docs live on the canvas as tier STATIONS
+     (StationCard, components/onboarding/StationNode.tsx). A VIEW button on the
+     selected station opens the doc in a modal that reuses the SAME Modal shell
+     (components/ui/Modal.tsx) as the quick-view, rendering DirectionDocView
+     (MOTIR-834, components/onboarding/DirectionDocView.tsx + direction-doc.css)
+     inside it; the modal carries 'Open full page' → a full-page reading route.
+
+  COMPOSED COMPONENTS + CONTRACTS (notes #95 — cite the component, not the story):
+    · ProjectRoadmapCanvas (MOTIR-1194)  — select=highlight(+connectedIds dim); selected-card action pills ("Open ›" drill); per-level drill-down (MOTIR-1010)
+    · WorkItemNode (MOTIR-1194)          — presentational canvas card (status chip · tile · id/title · drill hint)
+    · quick-view peek (Story 2.5/8.8)    — design/work-items/quick-view.mock.html, reused 1:1
+    · Modal (components/ui/Modal.tsx)    — size="xl" peek shell, srTitle, X close; the shared shell
+    · DirectionDocView (MOTIR-834)       — READ-ONLY editorial tier render; props { doc, availableDocs, onNavigate }
+    · StationCard (MOTIR-840)            — the tier station card on the canvas
+
+  Colours are the real Motir light palette (app/globals.css --el-* values, inlined
+  for the static mock, exactly as quick-view.mock.html / roadmap.mock.html do).
+  Shape via the element-semantic --radius-* / --shadow-* / --spacing-* tokens.
+  NOT the shipped component — a design artifact to pin the entry affordances +
+  the modal/full-page composition before the builds (MOTIR-1352 / MOTIR-1355).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — canvas detail surfaces: quick-view + tier-doc viewer (MOTIR-1351)</title>
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-pill: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* canvas dependency-edge tokens (committed/firm = neutral strong) */
+        --el-canvas-edge-committed: var(--color-hairline-strong);
+        /* issue-type hue (by kind) — IssueTypeIcon applies these */
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        /* per-tier station tile tints (--el-station-tier-*) */
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 34px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 10px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 23px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13.5px;
+        line-height: 1.55;
+        max-width: 880px;
+      }
+      .review-head .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .review-head .legend .chip {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 4px 9px;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 36px auto 0;
+        display: flex;
+        flex-direction: column;
+        gap: 46px;
+      }
+      .panel-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 6px;
+      }
+      .panel-label .n {
+        font: 700 11px var(--font-mono);
+        color: var(--el-accent);
+        background: #ece9fb;
+        padding: 2px 7px;
+        border-radius: var(--radius-control);
+        flex: none;
+      }
+      .panel-label h2 {
+        font-size: 15px;
+        margin: 0;
+        color: var(--el-text-strong);
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+        max-width: 940px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+        color: var(--el-text-secondary);
+      }
+
+      /* shared icon sizing */
+      .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+
+      /* annotation callout (mock-only) — a dashed pin + note tying an element to its spec */
+      .anno {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        background: var(--el-tint-yellow);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: 9px 12px;
+      }
+      .anno b {
+        color: var(--el-text-strong);
+      }
+      .anno .ic {
+        width: 15px;
+        height: 15px;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .node-caption {
+        margin-top: 30px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+        text-align: center;
+        max-width: 280px;
+      }
+      .node-caption b {
+        color: var(--el-text-strong);
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         CANVAS VIEWPORT (PlanningCanvas, MOTIR-1236) — the dot-grid surface the
+         entry affordances live on. Reused from design/roadmap/roadmap.mock.html.
+         ════════════════════════════════════════════════════════════════════ */
+      .viewport {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
+          #f6f5f4;
+        padding: 40px 36px 56px;
+      }
+      .canvas-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 56px;
+        flex-wrap: wrap;
+      }
+      .node-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      /* a connected cluster — two nodes joined by a neutral dependency edge, so the
+         SELECT=highlight-the-connection behaviour is visible. */
+      .cluster {
+        position: relative;
+        display: flex;
+        gap: 64px;
+        align-items: flex-start;
+      }
+      .edge-line {
+        position: absolute;
+        top: 74px; /* node mid-height (NODE_H 148 / 2) */
+        left: 280px; /* right edge of node A (NODE_W) */
+        width: 64px; /* = cluster gap */
+        height: 2px;
+        background: var(--el-canvas-edge-committed);
+      }
+
+      /* renderNode wrapper (ProjectRoadmapCanvas.renderNode): the SELECTION ring +
+         offset (ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)). */
+      .rn {
+        position: relative;
+        border-radius: var(--radius-card);
+      }
+      .rn.is-selected {
+        box-shadow:
+          0 0 0 2px var(--el-surface-soft),
+          0 0 0 4px var(--el-accent);
+      }
+      /* the action row surfaced on the SELECTED card (the shipped pattern: the
+         "Open ›" drill pill appears here on selection). This card ADDS the View
+         button beside it. Centred on the bottom edge. */
+      .node-actions {
+        position: absolute;
+        bottom: -16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .actbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-btn);
+        padding: var(--spacing-btn-y) var(--spacing-btn-x);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+        box-shadow: var(--shadow-card);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .actbtn .ic {
+        width: 14px;
+        height: 14px;
+      }
+      /* VIEW — the new affordance that opens the detail surface (secondary pill). */
+      .actbtn--view {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      /* OPEN — the shipped DRILL pill (accent), unchanged from MOTIR-1194. */
+      .actbtn--open {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── WorkItemNode (MOTIR-1194) — mirrored markup (status chip on top, tile +
+            id/title body, assignee foot; padding p-3.5 = 14px) ── */
+      .wnode {
+        width: 280px; /* NODE_W */
+        height: 148px; /* NODE_H */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        padding: 14px;
+      }
+      .wnode-top {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+      }
+      .status-pill {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .status-pill .ic {
+        width: 14px;
+        height: 14px;
+      }
+      .status-pill.s-inprogress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .status-pill.s-todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      /* passive has-children HINT (WorkItemNode drillable → ChevronRight, top-right) */
+      .drill-hint {
+        margin-left: auto;
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .wnode-body {
+        margin-top: 6px;
+        display: flex;
+        min-height: 0;
+        flex: 1;
+        align-items: flex-start;
+        gap: 8px;
+        overflow: hidden;
+      }
+      .wnode-tile {
+        display: flex;
+        width: 28px;
+        height: 28px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+      }
+      .wnode-tile.k-story {
+        background: var(--el-tint-mint);
+      }
+      .wnode-tile.k-story .ic {
+        color: var(--el-type-story);
+      }
+      .wnode-tile.k-subtask {
+        background: var(--el-tint-lavender);
+      }
+      .wnode-tile.k-subtask .ic {
+        color: var(--el-type-subtask);
+      }
+      .wnode-tile .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .wnode-main {
+        min-width: 0;
+        flex: 1;
+      }
+      .wnode-id {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      .wnode-title {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-top: 2px;
+        font-size: 14px;
+        line-height: 1.35;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .wnode-assignee {
+        flex: none;
+        padding-top: 6px;
+        text-align: right;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* ── StationCard (MOTIR-840) — the tier station, mirrored markup ── */
+      .station {
+        width: 300px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        padding: var(--spacing-card-padding);
+      }
+      .station.is-active {
+        border-color: var(--el-accent);
+        background: var(--el-surface-soft);
+        box-shadow: var(--shadow-card);
+      }
+      .station-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .station-tile {
+        display: flex;
+        width: 32px;
+        height: 32px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+      }
+      .station-tile.t-discovery {
+        background: var(--el-station-tier-discovery);
+        color: var(--el-info);
+      }
+      .station-tile.t-vision {
+        background: var(--el-station-tier-vision);
+        color: var(--el-accent-on-surface);
+      }
+      .station-tile.t-feasibility {
+        background: var(--el-station-tier-feasibility);
+        color: var(--el-success);
+      }
+      .station-tile.t-validation {
+        background: var(--el-station-tier-validation);
+        color: var(--el-warning);
+      }
+      .station-tile .ic {
+        width: 18px;
+        height: 18px;
+      }
+      .station-main {
+        min-width: 0;
+        flex: 1;
+      }
+      .station-title {
+        font-size: 14px;
+        line-height: 1.3;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .station-sub {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .station-captured {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid var(--el-border-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .station-captured .cap {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .station-captured .cap .ic {
+        width: 14px;
+        height: 14px;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .station-foot {
+        margin-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .state-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+      }
+      .state-pill .ic {
+        width: 14px;
+        height: 14px;
+      }
+      .state-pill.p-reviewed {
+        background: var(--el-tint-mint);
+      }
+      .state-pill.p-here {
+        background: var(--el-tint-lavender);
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         MODAL STAGE — the overlay context for a peek/modal (scrim + panel).
+         Mirrors quick-view.mock.html .stage / .modal.
+         ════════════════════════════════════════════════════════════════════ */
+      .stage {
+        position: relative;
+        width: 100%;
+        padding: 30px;
+        border-radius: var(--radius-card);
+        background:
+          repeating-linear-gradient(45deg, rgba(120, 118, 113, 0.06) 0 10px, transparent 10px 20px),
+          var(--el-surface);
+        display: flex;
+        justify-content: center;
+      }
+      .stage::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: var(--radius-card);
+        background: rgba(15, 15, 15, 0.4); /* Modal Dialog.Overlay --el-overlay-scrim */
+      }
+      .modal {
+        position: relative;
+        width: min(940px, 100%); /* Modal size="xl" — the large peek surface */
+        height: 600px;
+        max-height: 82vh;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* shared modal head bar (identity + Open-full-page + close) */
+      .m-head {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px 14px 20px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .m-head .type-icon {
+        width: 18px;
+        height: 18px;
+      }
+      .qv-id {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-link);
+        text-decoration: none;
+      }
+      .qv-id:hover {
+        text-decoration: underline;
+      }
+      .m-head .spacer {
+        flex: 1;
+      }
+      .m-head .kicker {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        padding: var(--spacing-icon-btn);
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        border-radius: var(--radius-control);
+        cursor: pointer;
+      }
+      .icon-btn:hover {
+        background: var(--el-muted);
+        color: var(--el-text);
+      }
+      .icon-btn .ic {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* ── Button (components/ui/Button.tsx) ── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border);
+      }
+      .btn-ghost:hover {
+        background: var(--el-muted);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* ── quick-view BODY (composed 1:1 from quick-view.mock.html) ── */
+      .qv-body {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+      }
+      .qv-main {
+        min-width: 0;
+        overflow-y: auto;
+        padding: 26px 30px 30px;
+      }
+      .qv-title {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        line-height: 1.25;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .qv-readiness {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-mint);
+      }
+      .qv-readiness .ic {
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        color: var(--el-success);
+      }
+      .qv-readiness .r-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .qv-readiness .r-detail {
+        margin-top: 2px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+        opacity: 0.9;
+      }
+      .qv-section-label {
+        display: block;
+        margin: 24px 0 9px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .qv-desc {
+        font-size: 15px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .qv-desc p {
+        margin: 0 0 14px;
+      }
+      .qv-desc p:last-child {
+        margin-bottom: 0;
+      }
+      .qv-more {
+        margin-top: 26px;
+        padding-top: 16px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        color: var(--el-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .qv-more a {
+        color: var(--el-link);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .qv-rail {
+        min-width: 0;
+        overflow-y: auto;
+        border-left: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 24px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .rail-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .rail-field dt {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .rail-field dd {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+      }
+      .rail-field dd .ic {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .rail-parent {
+        color: var(--el-link);
+        text-decoration: none;
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .rail-div {
+        height: 1px;
+        background: var(--el-border-soft);
+        margin: 2px 0;
+      }
+      .avatar {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        border-radius: var(--radius-pill);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 9px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         DirectionDocView (MOTIR-834) — direction-doc.css, embedded 1:1 so the
+         tier-doc modal + full page render the REAL component, not a stand-in.
+         ════════════════════════════════════════════════════════════════════ */
+      .dd-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 30px 34px 40px;
+      }
+      .dd-doc {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .dd-meta {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin-bottom: 13px;
+      }
+      .dd-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: var(--radius-pill);
+        background: var(--dd-accent, var(--el-accent-on-surface));
+        flex: none;
+      }
+      .dd-title {
+        font-family: var(--font-serif);
+        font-size: 31px;
+        font-weight: 700;
+        color: var(--el-text);
+        line-height: 1.1;
+        margin: 0 0 4px;
+      }
+      .dd-readhint {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        padding: 11px 0 4px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 8px;
+      }
+      .dd-readhint .ic {
+        width: 15px;
+        height: 15px;
+        color: var(--el-accent-on-surface);
+      }
+      .dd-readhint b {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .dd-prose > :first-child {
+        margin-top: 0;
+      }
+      .dd-prose h2 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--el-text);
+        margin: 30px 0 10px;
+        line-height: 1.2;
+      }
+      .dd-prose p {
+        font-family: var(--font-sans);
+        font-size: 14.5px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+      }
+      .dd-prose strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .dd-prose ul {
+        margin: 0 0 12px;
+        padding: 0;
+        list-style: none;
+      }
+      .dd-prose li {
+        font-family: var(--font-sans);
+        font-size: 14.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        padding: 4px 0 4px 24px;
+        position: relative;
+      }
+      .dd-prose li::before {
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 13px;
+        width: 6px;
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--dd-accent, var(--el-accent-on-surface));
+      }
+      .dd-prose li b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .dd-openq {
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+        background: var(--el-tint-peach);
+        border-radius: var(--radius-card);
+        padding: 16px 18px;
+        margin: 18px 0 4px;
+      }
+      .dd-openq-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .dd-openq-title {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        margin-bottom: 4px;
+      }
+      .dd-openq .dd-prose li,
+      .dd-openq .dd-prose p {
+        color: var(--el-text-strong);
+        font-size: 13.5px;
+      }
+      .dd-xlinks {
+        margin-top: 26px;
+        padding-top: 16px;
+        border-top: 1px solid var(--el-border);
+      }
+      .dd-xlinks-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        margin-bottom: 9px;
+      }
+      .dd-xlinks-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .dd-xlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        cursor: pointer;
+      }
+      .dd-xlink:hover {
+        border-color: var(--el-border-strong);
+        color: var(--el-text);
+      }
+      .dd-xlink .ic {
+        width: 13px;
+        height: 13px;
+      }
+      .dd-xlink-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: var(--radius-pill);
+        flex: none;
+      }
+
+      /* ════════════════════════════════════════════════════════════════════
+         TIER-DOC FULL PAGE — the read-only route the modal's Open-full-page opens.
+         The shipped app shell + a back affordance; DirectionDocView centred.
+         ════════════════════════════════════════════════════════════════════ */
+      .fullpage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
+      }
+      .fp-topbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .fp-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        border-radius: var(--radius-btn);
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .fp-back .ic {
+        width: 14px;
+        height: 14px;
+        transform: scaleX(-1);
+      }
+      .fp-crumb {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+      }
+      .fp-crumb b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .fp-crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .fp-route {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 3px 8px;
+      }
+      .fp-body {
+        padding: 44px 34px 56px;
+        background: var(--el-page-bg);
+        min-height: 360px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>Roadmap — canvas detail surfaces</h1>
+      <p>
+        The two DETAIL surfaces the project-roadmap canvas opens, and their on-canvas entry
+        affordances — grounded in the SHIPPED canvas (<code>ProjectRoadmapCanvas</code>, MOTIR-1194
+        / PR #1398). <b>Two distinct node interactions:</b> SELECTING a card (click) only HIGHLIGHTS
+        it + the dependency it's part of (accent ring; connected nodes stay lit, unconnected nodes
+        dim) — it does NOT open detail. A dedicated <b>View</b> button — surfaced on the selected
+        card, the same place the shipped <b>Open ›</b> drill pill appears — opens the detail.
+        Everything else is COMPOSED: the peek is the shipped
+        <code>design/work-items/quick-view</code> reused 1:1; the tier-doc modal reuses the
+        <code>Modal</code> shell and renders <code>DirectionDocView</code>
+        (MOTIR-834). Nothing is redrawn (notes #82/#95).
+      </p>
+      <div class="legend">
+        <span class="chip">Select = highlight card + connections (dim rest)</span>
+        <span class="chip">View button → opens detail · Open › → drills</span>
+        <span class="chip">work-item → quick-view (1352) · tier → doc (1355)</span>
+      </div>
+    </div>
+
+    <div class="stack">
+      <!-- ════════════════════ PANEL 1 — CANVAS ENTRY: select=highlight, View opens ════════════════════ -->
+      <section>
+        <div class="panel-label">
+          <span class="n">1</span>
+          <h2>Work-item quick-view — select HIGHLIGHTS the card; the VIEW button opens the peek</h2>
+        </div>
+        <p class="panel-note">
+          Two distinct interactions on a <code>WorkItemNode</code>. <b>Selecting</b> (click) only
+          HIGHLIGHTS: <code>ProjectRoadmapCanvas</code> rings the card (<code>--el-accent</code>)
+          and lights the dependency it belongs to (its <code>connectedIds</code>). To OPEN the peek
+          you click the dedicated <b>View</b> button surfaced on the selected card (Eye + "View") —
+          the same bottom-edge action slot the shipped <b>Open ›</b> DRILL pill uses; a drillable
+          node shows BOTH. So select = highlight, View = peek, Open = drill (per-level read,
+          MOTIR-1010); the MOTIR-1352 build adds the View action. Tokens: selection ring
+          <code>--el-accent</code> / offset <code>--el-surface-soft</code>; View pill
+          <code>--el-page-bg</code> + <code>--el-border</code>; Open pill <code>--el-accent</code>;
+          both <code>--radius-btn</code>.
+        </p>
+        <div class="viewport">
+          <div class="canvas-row" style="gap: 72px">
+            <!-- A connected cluster: SELECTED drillable story (highlighted) + a connected subtask
+                 (stays lit) joined by a neutral dependency edge. -->
+            <div class="cluster">
+              <div class="edge-line"></div>
+              <div class="node-col">
+                <div class="rn is-selected">
+                  <div class="wnode">
+                    <div class="wnode-top">
+                      <span class="status-pill s-inprogress">
+                        <svg
+                          class="ic"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <circle cx="12" cy="12" r="1" />
+                        </svg>
+                        In progress
+                      </span>
+                      <svg
+                        class="drill-hint"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </div>
+                    <div class="wnode-body">
+                      <span class="wnode-tile k-story">
+                        <svg
+                          class="ic"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M12 7v14" />
+                          <path
+                            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                          />
+                        </svg>
+                      </span>
+                      <div class="wnode-main">
+                        <span class="wnode-id">MOTIR-1301</span>
+                        <span class="wnode-title"
+                          >Reusable AI planning workspace + universal entrance</span
+                        >
+                      </div>
+                    </div>
+                    <span class="wnode-assignee">Mei L.</span>
+                  </div>
+                  <div class="node-actions">
+                    <span class="actbtn actbtn--view">
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+                        />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      View
+                    </span>
+                    <span class="actbtn actbtn--open">
+                      Open
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <p class="node-caption">
+                  <b>Selected (drillable story).</b> Ring + its connection stays lit.
+                  <b>View</b> opens the peek (panel 2); <b>Open ›</b> drills into its subtasks.
+                </p>
+              </div>
+              <div class="node-col">
+                <div class="rn">
+                  <div class="wnode">
+                    <div class="wnode-top">
+                      <span class="status-pill s-todo">
+                        <svg
+                          class="ic"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                        </svg>
+                        To do
+                      </span>
+                    </div>
+                    <div class="wnode-body">
+                      <span class="wnode-tile k-subtask">
+                        <svg
+                          class="ic"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M13 5h8" />
+                          <path d="M13 12h8" />
+                          <path d="M13 19h8" />
+                          <path d="m3 17 2 2 4-4" />
+                          <path d="m3 7 2 2 4-4" />
+                        </svg>
+                      </span>
+                      <div class="wnode-main">
+                        <span class="wnode-id">MOTIR-1352</span>
+                        <span class="wnode-title">Work-item quick-view modal on the canvas</span>
+                      </div>
+                    </div>
+                    <span class="wnode-assignee">Aanya K.</span>
+                  </div>
+                </div>
+                <p class="node-caption">
+                  <b>Connected.</b> Stays lit (in the selected node's dependency).
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="anno" style="margin-top: 26px; max-width: 760px">
+            <svg
+              class="ic"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+              />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span
+              ><b>Select highlights, View opens.</b> Clicking a card only selects it (ring + lights
+              its connections) — it does NOT open the peek. The dedicated <b>View</b> button on the
+              selected card opens the quick-view; on a drillable node it sits beside the shipped
+              <b>Open ›</b> drill pill. A leaf node shows <b>View</b> alone.</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════ PANEL 2 — QUICK-VIEW PEEK (composed 1:1) ════════════════════ -->
+      <section>
+        <div class="panel-label">
+          <span class="n">2</span>
+          <h2>Work-item quick-view (peek) — COMPOSED from design/work-items/quick-view</h2>
+        </div>
+        <p class="panel-note">
+          Opened by the <b>View</b> button on a selected work-item node (panel 1). This is the
+          <b>shipped</b> quick-view peek — the <code>Modal</code> <code>size="xl"</code> shell + the
+          two-column body (<code>quick-view.mock.html</code>), reused <b>verbatim</b>; shown here
+          only to confirm the entry → peek wiring, <b>not redrawn</b> (notes #82/#95). Read-only;
+          the one write path is <b>Open full page →</b>. The header peek key links to the work
+          item's full detail page.
+        </p>
+        <div class="stage">
+          <div class="modal" role="dialog" aria-label="MOTIR-1352 quick view">
+            <div class="m-head">
+              <span
+                class="wnode-tile k-subtask type-icon"
+                style="width: 20px; height: 20px; border-radius: var(--radius-control)"
+              >
+                <svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="width: 13px; height: 13px"
+                >
+                  <path d="M13 5h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 19h8" />
+                  <path d="m3 17 2 2 4-4" />
+                  <path d="m3 7 2 2 4-4" />
+                </svg>
+              </span>
+              <a class="qv-id" href="#">MOTIR-1352</a>
+              <span class="spacer"></span>
+              <a class="btn btn-ghost" href="#">
+                <svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M7 7h10v10" />
+                  <path d="M7 17 17 7" />
+                </svg>
+                Open full page
+              </a>
+              <button class="icon-btn" aria-label="Close">
+                <svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="qv-body">
+              <div class="qv-main">
+                <h1 class="qv-title">
+                  Work-item quick-view modal on the canvas + the card 'view' affordance
+                </h1>
+                <div class="qv-readiness">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  <div>
+                    <div class="r-title">Ready to start</div>
+                    <div class="r-detail">All blockers are done.</div>
+                  </div>
+                </div>
+                <span class="qv-section-label">Description</span>
+                <div class="qv-desc">
+                  <p>
+                    Add the <strong>View</strong> action to a selected
+                    <strong>WorkItemNode</strong> on the project-roadmap canvas (beside the shipped
+                    "Open" drill pill) and wire it to open this quick-view peek in the shared
+                    <strong>Modal</strong> over the canvas. Selecting a card still only highlights
+                    it + its connections.
+                  </p>
+                  <p>
+                    The peek shows the work item's core fields read-only — identifier, title, type,
+                    status, assignee, priority, parent, sprint, and description.
+                  </p>
+                </div>
+                <div class="qv-more">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    style="width: 15px; height: 15px; color: var(--el-text-faint)"
+                  >
+                    <path d="M7 7h10v10" />
+                    <path d="M7 17 17 7" />
+                  </svg>
+                  <span
+                    >Links, child items, comments &amp; activity live on the
+                    <a href="#">full page →</a></span
+                  >
+                </div>
+              </div>
+              <div class="qv-rail">
+                <div class="rail-field">
+                  <dt>Status</dt>
+                  <dd>
+                    <span class="status-pill s-todo" style="font-size: 12px">
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                      </svg>
+                      To do
+                    </span>
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Assignee</dt>
+                  <dd><span class="avatar">AK</span><span>Aanya K.</span></dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Type</dt>
+                  <dd>
+                    <svg
+                      class="ic"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      style="color: var(--el-type-subtask)"
+                    >
+                      <path d="M13 5h8" />
+                      <path d="M13 12h8" />
+                      <path d="M13 19h8" />
+                      <path d="m3 17 2 2 4-4" />
+                      <path d="m3 7 2 2 4-4" />
+                    </svg>
+                    Subtask
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Priority</dt>
+                  <dd>Medium</dd>
+                </div>
+                <div class="rail-div"></div>
+                <div class="rail-field">
+                  <dt>Parent</dt>
+                  <dd><a class="rail-parent" href="#">MOTIR-1301</a></dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Sprint</dt>
+                  <dd>Sprint 41</dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Story points</dt>
+                  <dd>3</dd>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════ PANEL 3 — TIER STATION: select=highlight, View opens ════════════════════ -->
+      <section>
+        <div class="panel-label">
+          <span class="n">3</span>
+          <h2>Tier-doc viewer — select HIGHLIGHTS the station; the VIEW button opens the doc</h2>
+        </div>
+        <p class="panel-note">
+          The 4 direction-tier docs sit on the canvas as the same <code>StationCard</code> the
+          onboarding canvas uses (tier-coloured tile, plain-language title, captured findings, state
+          pill). Same model as the work-item node: <b>selecting</b> a station only highlights it +
+          its chain; a dedicated <b>View</b> button on the selected station opens that tier's doc in
+          the modal (panel 4). Only PRODUCED tiers carry a View button. Plain-language labels +
+          per-tier accent come from <code>TIER_META</code> (<code>directionDoc.ts</code>): discovery
+          <code>--el-info</code>, vision <code>--el-accent-on-surface</code>, feasibility
+          <code>--el-success</code>, validation <code>--el-warning</code>.
+        </p>
+        <div class="viewport">
+          <div class="canvas-row" style="gap: 28px">
+            <!-- discovery (done) — SELECTED (accent ring) + View action -->
+            <div class="node-col">
+              <div class="rn is-selected">
+                <div class="station">
+                  <div class="station-head">
+                    <span class="station-tile t-discovery">
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="m21 21-4.34-4.34" />
+                        <circle cx="11" cy="11" r="8" />
+                      </svg>
+                    </span>
+                    <div class="station-main">
+                      <div class="station-title">Understanding your idea</div>
+                      <div class="station-sub">What you're building &amp; who for</div>
+                    </div>
+                  </div>
+                  <div class="station-captured">
+                    <div class="cap">
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      <span>Type — internal tool</span>
+                    </div>
+                    <div class="cap">
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      <span>Platform — web</span>
+                    </div>
+                  </div>
+                  <div class="station-foot">
+                    <span class="state-pill p-reviewed">
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      Reviewed
+                    </span>
+                  </div>
+                </div>
+                <div class="node-actions">
+                  <span class="actbtn actbtn--view">
+                    <svg
+                      class="ic"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+                      />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    View
+                  </span>
+                </div>
+              </div>
+              <p class="node-caption">
+                <b>Selected (produced tier).</b> <b>View</b> opens the doc (panel 4).
+              </p>
+            </div>
+
+            <!-- vision (done) -->
+            <div class="station">
+              <div class="station-head">
+                <span class="station-tile t-vision">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"
+                    />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <circle cx="17.5" cy="17.5" r="3.5" />
+                  </svg>
+                </span>
+                <div class="station-main">
+                  <div class="station-title">What we'll build</div>
+                  <div class="station-sub">The shape of v1</div>
+                </div>
+              </div>
+              <div class="station-captured">
+                <div class="cap">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  <span>14 features across 3 phases</span>
+                </div>
+              </div>
+              <div class="station-foot">
+                <span class="state-pill p-reviewed">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Reviewed
+                </span>
+              </div>
+            </div>
+
+            <!-- feasibility (active / you are here) -->
+            <div class="station is-active">
+              <div class="station-head">
+                <span class="station-tile t-feasibility">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                    />
+                  </svg>
+                </span>
+                <div class="station-main">
+                  <div class="station-title">Is it worth building?</div>
+                  <div class="station-sub">A reality check</div>
+                </div>
+              </div>
+              <div class="station-foot">
+                <span class="state-pill p-here">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+                    />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  You are here
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="anno" style="margin-top: 30px; max-width: 760px">
+            <svg
+              class="ic"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+              />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span
+              ><b>Same model as the work-item node:</b> selecting a station highlights it; the
+              <b>View</b> button on the selected station opens that tier's doc (panel 4). The 4th
+              tier — validation, <code>--el-warning</code>, "Will people want it?" — follows the
+              same pattern; only produced tiers are viewable.</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════ PANEL 4 — TIER-DOC MODAL ════════════════════ -->
+      <section>
+        <div class="panel-label">
+          <span class="n">4</span>
+          <h2>Tier-doc viewer — modal (DirectionDocView in the shared Modal shell)</h2>
+        </div>
+        <p class="panel-note">
+          Opened by the <b>View</b> button on a selected tier station (panel 3). Reuses the
+          <b>SAME</b> <code>Modal</code> shell as the quick-view (<code>size="xl"</code>,
+          <code>srTitle</code>, X close) and renders the shipped <code>DirectionDocView</code>
+          (MOTIR-834) inside — the read-only editorial tier render (kicker + plain-language title +
+          read-only hint + prose + open questions + cross-links), composed 1:1 from
+          <code>direction-doc.css</code>. The head is thin (the doc renders its own title) and
+          carries the <b>Open full page</b> button → panel 5. Per-tier accent via
+          <code>--dd-accent</code> (here discovery → <code>--el-info</code>).
+        </p>
+        <div class="stage">
+          <div class="modal" role="dialog" aria-label="Understanding your idea">
+            <div class="m-head">
+              <span class="kicker">Direction · Discovery</span>
+              <span class="spacer"></span>
+              <a class="btn btn-ghost" href="#">
+                <svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M7 7h10v10" />
+                  <path d="M7 17 17 7" />
+                </svg>
+                Open full page
+              </a>
+              <button class="icon-btn" aria-label="Close">
+                <svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="dd-scroll">
+              <article
+                class="dd-doc"
+                style="--dd-accent: var(--el-info)"
+                aria-label="Understanding your idea"
+              >
+                <div class="dd-meta">
+                  <span class="dd-dot"></span>
+                  <span>What you're building &amp; who for</span>
+                </div>
+                <h1 class="dd-title">Understanding your idea</h1>
+                <div class="dd-readhint">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+                    />
+                  </svg>
+                  <span
+                    ><b>Read-only.</b> Anything off? Just tell Motir in the chat — it rewrites the
+                    write-up for you. Nothing's locked yet.</span
+                  >
+                </div>
+                <div class="dd-prose">
+                  <p>
+                    You're building an <strong>internal tool</strong> for a small product team — a
+                    way to turn a rough idea into a planned, trackable backlog without leaving the
+                    chat. The people who'll use it are <strong>founders and PMs</strong> who think
+                    in outcomes, not tickets.
+                  </p>
+                  <h2>Who it's for</h2>
+                  <ul>
+                    <li>
+                      <b>The planner</b> — drafts direction, reviews each tier, decides scope.
+                    </li>
+                    <li><b>The team</b> — reads the plan as a roadmap, picks up work items.</li>
+                  </ul>
+                  <p>
+                    The core job is the loop from a sentence of intent to a structured plan you can
+                    edit before any code is written.
+                  </p>
+                </div>
+                <aside class="dd-openq" aria-label="Open questions">
+                  <span class="dd-openq-icon">
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                  </span>
+                  <div>
+                    <div class="dd-openq-title">Open questions</div>
+                    <div class="dd-prose">
+                      <ul>
+                        <li>
+                          Is the first audience internal-only, or will external teams onboard too?
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </aside>
+                <nav class="dd-xlinks" aria-label="Other parts of your direction">
+                  <div class="dd-xlinks-label">Related</div>
+                  <div class="dd-xlinks-row">
+                    <button class="dd-xlink">
+                      <span
+                        class="dd-xlink-dot"
+                        style="background: var(--el-accent-on-surface)"
+                      ></span>
+                      What we'll build
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="m12 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                    <button class="dd-xlink">
+                      <span class="dd-xlink-dot" style="background: var(--el-success)"></span>
+                      Is it worth building?
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="m12 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                    <button class="dd-xlink">
+                      <span class="dd-xlink-dot" style="background: var(--el-warning)"></span>
+                      Will people want it?
+                      <svg
+                        class="ic"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="m12 5 7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </nav>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════ PANEL 5 — TIER-DOC FULL PAGE ════════════════════ -->
+      <section>
+        <div class="panel-label">
+          <span class="n">5</span>
+          <h2>Tier-doc viewer — full page (the read-only route)</h2>
+        </div>
+        <p class="panel-note">
+          Reached from the modal's <b>Open full page</b> (panel 4). The same
+          <code>DirectionDocView</code> rendered in the app shell at full reading width — a new
+          read-only route <code>/projects/[key]/direction/[tier]</code> (the tier doc has no shipped
+          route yet — MOTIR-1194/PR #1398 renders it only inside the canvas; this design adds the
+          route). Access path back: the <b>← Back to roadmap</b> control + breadcrumb return to the
+          canvas. Still read-only — the chat is the only edit path, so there is no write affordance
+          here either.
+        </p>
+        <div class="fullpage">
+          <div class="fp-topbar">
+            <a class="fp-back" href="#">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+              Back to roadmap
+            </a>
+            <div class="fp-crumb">
+              <span>Roadmap</span>
+              <span class="sep">›</span>
+              <span>Direction</span>
+              <span class="sep">›</span>
+              <b>Understanding your idea</b>
+            </div>
+            <span class="fp-route">/projects/motir/direction/discovery</span>
+          </div>
+          <div class="fp-body">
+            <article
+              class="dd-doc"
+              style="--dd-accent: var(--el-info)"
+              aria-label="Understanding your idea"
+            >
+              <div class="dd-meta">
+                <span class="dd-dot"></span>
+                <span>What you're building &amp; who for</span>
+              </div>
+              <h1 class="dd-title">Understanding your idea</h1>
+              <div class="dd-readhint">
+                <svg
+                  class="ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"
+                  />
+                </svg>
+                <span
+                  ><b>Read-only.</b> Anything off? Just tell Motir in the chat — it rewrites the
+                  write-up for you. Nothing's locked yet.</span
+                >
+              </div>
+              <div class="dd-prose">
+                <p>
+                  You're building an <strong>internal tool</strong> for a small product team — a way
+                  to turn a rough idea into a planned, trackable backlog without leaving the chat.
+                  The people who'll use it are <strong>founders and PMs</strong> who think in
+                  outcomes, not tickets.
+                </p>
+                <h2>Who it's for</h2>
+                <ul>
+                  <li><b>The planner</b> — drafts direction, reviews each tier, decides scope.</li>
+                  <li><b>The team</b> — reads the plan as a roadmap, picks up work items.</li>
+                </ul>
+                <p>
+                  The core job is the loop from a sentence of intent to a structured plan you can
+                  edit before any code is written. The full page gives the doc the whole column for
+                  a long read; the modal (panel 4) is the in-flow peek.
+                </p>
+              </div>
+              <nav class="dd-xlinks" aria-label="Other parts of your direction">
+                <div class="dd-xlinks-label">Related</div>
+                <div class="dd-xlinks-row">
+                  <button class="dd-xlink">
+                    <span
+                      class="dd-xlink-dot"
+                      style="background: var(--el-accent-on-surface)"
+                    ></span>
+                    What we'll build
+                    <svg
+                      class="ic"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" />
+                    </svg>
+                  </button>
+                  <button class="dd-xlink">
+                    <span class="dd-xlink-dot" style="background: var(--el-success)"></span>
+                    Is it worth building?
+                    <svg
+                      class="ic"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </nav>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
