@@ -78,9 +78,9 @@ export function WorkItemStatusPill({ status }: { status: WorkItemStatus }) {
   const Icon = meta.icon;
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium ${meta.tint} ${meta.text}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-1.5 py-0.5 text-[11px] font-medium ${meta.tint} ${meta.text}`}
     >
-      <Icon className="size-3.5" aria-hidden="true" />
+      <Icon className="size-3" aria-hidden="true" />
       {STATUS_LABELS[status]}
     </span>
   );
@@ -101,9 +101,10 @@ export function WorkItemNode({
     <div
       // Fixed height (= the layout's NODE_H) so a long, two-line title can never
       // grow the card into the row below it — the deterministic layout spaces rows
-      // by NODE_H, so the card must honour it exactly (MOTIR-1194 review).
+      // by NODE_H, so the card must honour it exactly. Compact: tight padding + a
+      // small status chip, no wasted space (MOTIR-1194 review).
       style={{ width: NODE_W, height: NODE_H }}
-      className={`flex flex-col overflow-hidden rounded-(--radius-card) border p-(--spacing-card-padding) ${
+      className={`flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
         crossBlocked
           ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-subtle)'
           : 'border-(--el-border-soft) bg-(--el-surface) shadow-(--shadow-subtle)'
@@ -132,7 +133,7 @@ export function WorkItemNode({
       </div>
 
       {/* BODY — the kind tile + identifier + title; the title gets the room. */}
-      <div className="mt-2.5 flex min-h-0 flex-1 items-start gap-2.5 overflow-hidden">
+      <div className="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
         <span
           className={`flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[item.kind]}`}
           aria-hidden="true"

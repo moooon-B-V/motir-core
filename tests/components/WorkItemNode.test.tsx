@@ -33,7 +33,7 @@ describe('WorkItemNode', () => {
         item={{ ...item, title: 'A very long title that would wrap to many lines '.repeat(4) }}
       />,
     );
-    expect((container.firstChild as HTMLElement).style.height).toBe('148px');
+    expect((container.firstChild as HTMLElement).style.height).toBe('124px');
   });
 
   it('shows the drill affordance only when drillable', () => {

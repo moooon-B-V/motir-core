@@ -80,11 +80,11 @@ export interface CanvasCrumb {
 }
 
 // ── layout constants (exported so the canvas can hint node sizes for edge
-//    anchoring + measure the deterministic grid). A node card is ~280×148 — tall
-//    enough that a two-line title plus the status row fit inside the card's
-//    generous card-padding without clipping the status (MOTIR-1194 review). ──
+//    anchoring + measure the deterministic grid). A node card is ~280×124 — a
+//    COMPACT card (tight padding, a small top-left status chip, a two-line title)
+//    with no wasted vertical space (MOTIR-1194 review). ──
 export const NODE_W = 280;
-export const NODE_H = 148;
+export const NODE_H = 124;
 const GAP_X = 80;
 const GAP_Y = 72;
 const COLS = 3;
