@@ -91,6 +91,36 @@ describe('CycleGraphChart — states', () => {
     expect(screen.getByText(/10% scope creep/i)).toBeTruthy();
   });
 
+  // MOTIR-1329 — the scrum-header burndown slot is a fixed `w-[300px]` card, but
+  // the compact chart's data-table (`<table className="w-full">`, 5 columns)
+  // sizes to its min-content and used to overflow the card / push horizontal
+  // scroll. The containment is structural: the data table is wrapped in an
+  // `overflow-x-auto` block (so a wide/long-sprint or wide-locale table scrolls
+  // INSIDE the card), and the compact chart root carries `min-w-0` (so it can
+  // shrink within the slot instead of forcing overflow). These assertions lock
+  // the fix so a later edit can't silently reintroduce the overflow.
+  it('contains the compact data table: overflow-x-auto wrapper + min-w-0 root', () => {
+    const { container } = render(<CycleGraphChart cycle={cycle()} variant="compact" />);
+
+    // The data table scrolls inside its own block rather than overflowing.
+    const table = screen.getByRole('table');
+    const wrapper = table.parentElement;
+    expect(wrapper?.className).toMatch(/\boverflow-x-auto\b/);
+    expect(wrapper?.className).toMatch(/\bmin-w-0\b/);
+
+    // The compact chart root can shrink within the fixed-width slot.
+    const root = container.firstElementChild;
+    expect(root?.className).toMatch(/\bmin-w-0\b/);
+  });
+
+  it('keeps the full variant unconstrained (no min-w-0 on the report root)', () => {
+    // The full report card bounds the width itself, so the chart root stays at
+    // its natural width — the compact-only `min-w-0` must not leak into `full`.
+    const { container } = render(<CycleGraphChart cycle={cycle()} variant="full" />);
+    const root = container.firstElementChild;
+    expect(root?.className).not.toMatch(/\bmin-w-0\b/);
+  });
+
   it('shows the empty-sprint note when there is no scope', () => {
     const empty = cycle({
       committedAtStart: 0,

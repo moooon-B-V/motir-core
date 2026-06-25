@@ -56,7 +56,7 @@ export function SprintHeaderBurndown({ sprintId }: { sprintId: string }) {
   return (
     <div
       data-testid="sprint-burndown"
-      className="flex w-[300px] shrink-0 flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y)"
+      className="flex w-[300px] min-w-0 shrink-0 flex-col gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y)"
     >
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[10.5px] font-semibold tracking-wide text-(--el-text-muted) uppercase">
