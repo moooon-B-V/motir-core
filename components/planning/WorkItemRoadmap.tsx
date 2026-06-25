@@ -23,6 +23,7 @@ export interface WorkItemRoadmapProps {
   projectKey: string;
   positions?: Record<string, { x: number; y: number }>;
   onNodeMove?: (id: string, x: number, y: number) => void;
+  onResetPositions?: (nodeIds: string[]) => void;
   /** A LEAF work item (no children) was activated. */
   onSelect?: (id: string) => void;
   ariaLabel?: string;
@@ -32,6 +33,7 @@ export function WorkItemRoadmap({
   projectKey,
   positions,
   onNodeMove,
+  onResetPositions,
   onSelect,
   ariaLabel = 'Work-item roadmap',
 }: WorkItemRoadmapProps) {
@@ -57,6 +59,7 @@ export function WorkItemRoadmap({
       loadLevel={loadLevel}
       positions={positions}
       onNodeMove={onNodeMove}
+      onResetPositions={onResetPositions}
       onSelect={onSelect}
       searchable
       rootLabel="Roadmap"

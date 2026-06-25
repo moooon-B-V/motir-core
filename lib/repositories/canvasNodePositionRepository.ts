@@ -31,4 +31,19 @@ export const canvasNodePositionRepository = {
       update: { x: input.x, y: input.y },
     });
   },
+
+  // Drop the saved positions for the given node keys (a layout "reset" — the nodes
+  // fall back to the consumer's auto-layout). No-op on an empty key list.
+  async deleteByKeys(
+    userId: string,
+    projectId: string,
+    nodeKeys: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (nodeKeys.length === 0) return 0;
+    const r = await tx.canvasNodePosition.deleteMany({
+      where: { userId, projectId, nodeKey: { in: nodeKeys } },
+    });
+    return r.count;
+  },
 };

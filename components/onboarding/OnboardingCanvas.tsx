@@ -73,7 +73,7 @@ export function OnboardingCanvas({
   willRefresh = [],
 }: OnboardingCanvasProps) {
   const t = useTranslations('onboarding.chat.canvas');
-  const { positions, savePosition, loaded } = useCanvasLayout();
+  const { positions, savePosition, resetPositions, loaded } = useCanvasLayout();
 
   // Work-item levels cached (a mutable ref, keyed by project+parent — a new key
   // just misses); the stations are rebuilt from state on every call, so they
@@ -179,7 +179,9 @@ export function OnboardingCanvas({
     <ProjectRoadmapCanvas
       loadLevel={loadLevel}
       reloadKey={reloadKey}
+      positions={positions}
       onNodeMove={savePosition}
+      onResetPositions={resetPositions}
       onSelect={onActivate}
       searchable={!!projectKey}
       rootLabel={t('title')}

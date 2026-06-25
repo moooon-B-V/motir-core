@@ -80,6 +80,48 @@ describe('ProjectRoadmapCanvas', () => {
     expect(el('C')!.firstElementChild!.className).toContain('opacity-35'); // unrelated dims
   });
 
+  it('offers Reset layout only when an auto-laid node is arranged, and resets on click', async () => {
+    const onResetPositions = vi.fn();
+    const level: RoadmapLevel = { nodes: [node('A', 'a'), node('B', 'b')], deps: [] };
+    // no saved position → no reset affordance
+    const { rerender } = render(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(level)}
+        onResetPositions={onResetPositions}
+      />,
+    );
+    await screen.findByText('a');
+    expect(screen.queryByRole('button', { name: 'Reset layout' })).toBeNull();
+    // a saved position for an auto-laid node → the button appears
+    rerender(
+      <ProjectRoadmapCanvas
+        loadLevel={() => Promise.resolve(level)}
+        positions={{ A: { x: 9, y: 9 } }}
+        onResetPositions={onResetPositions}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset layout' }));
+    expect(onResetPositions).toHaveBeenCalledWith(expect.arrayContaining(['A', 'B']));
+  });
+
+  it('auto-resets a level when its auto-laid node set changes (a re-plan)', async () => {
+    const onResetPositions = vi.fn();
+    let levelNodes = [node('A', 'a'), node('B', 'b')];
+    const load = () => Promise.resolve({ nodes: levelNodes, deps: [] });
+    const { rerender } = render(
+      <ProjectRoadmapCanvas loadLevel={load} onResetPositions={onResetPositions} reloadKey="1" />,
+    );
+    await screen.findByText('a');
+    expect(onResetPositions).not.toHaveBeenCalled(); // first render: no prior signature
+    // the level's items change → bump reloadKey to refetch
+    levelNodes = [node('A', 'a'), node('C', 'c')];
+    rerender(
+      <ProjectRoadmapCanvas loadLevel={load} onResetPositions={onResetPositions} reloadKey="2" />,
+    );
+    await screen.findByText('c');
+    expect(onResetPositions).toHaveBeenCalledWith(expect.arrayContaining(['A', 'C']));
+  });
+
   it('search-to-focus highlights a match in the current level', async () => {
     render(<ProjectRoadmapCanvas loadLevel={loadLevel} searchable />);
     await screen.findByText('Epic one');

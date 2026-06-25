@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, Search } from 'lucide-react';
 import {
   PlanningCanvas,
   type CanvasEdge,
@@ -48,6 +48,11 @@ export interface ProjectRoadmapCanvasProps {
   /** Saved per-node world positions (consumer-owned persistence). */
   positions?: Record<string, { x: number; y: number }>;
   onNodeMove?: (id: string, x: number, y: number) => void;
+  /** Drop the saved positions for these nodes (a layout RESET) — the consumer
+   *  clears them from its store so the nodes fall back to the auto-layout. Fired by
+   *  the "Reset layout" button and automatically when a level's auto-laid node set
+   *  CHANGES (a re-plan), so stale positions never linger. */
+  onResetPositions?: (nodeIds: string[]) => void;
   /** A LEAF node (not drillable) was activated. */
   onSelect?: (id: string) => void;
   /** Show the search-to-locate overlay (`/` shortcut) — locates within the level. */
@@ -67,6 +72,7 @@ export function ProjectRoadmapCanvas({
   reloadKey,
   positions,
   onNodeMove,
+  onResetPositions,
   onSelect,
   searchable = false,
   rootLabel = 'Roadmap',
@@ -158,6 +164,54 @@ export function ProjectRoadmapCanvas({
     },
     [localPositions, positions, layout],
   );
+
+  // The AUTO-LAID nodes (work items) — the ones whose position the user can reset
+  // back to the dependency layout. Fixed-position nodes (stations / the plan
+  // preview carry an explicit x/y) are excluded: their arrangement is their own.
+  const autoLaidIds = useMemo(
+    () => nodes.filter((n) => n.x === undefined || n.y === undefined).map((n) => n.id),
+    [nodes],
+  );
+  const hasArrangement = autoLaidIds.some((id) => localPositions[id] ?? positions?.[id]);
+
+  // Reset this level's auto-laid nodes to the dependency layout (local + persisted).
+  const resetLayout = useCallback(() => {
+    if (autoLaidIds.length === 0) return;
+    setLocalPositions((prev) => {
+      const next = { ...prev };
+      for (const id of autoLaidIds) delete next[id];
+      return next;
+    });
+    onResetPositions?.(autoLaidIds);
+  }, [autoLaidIds, onResetPositions]);
+
+  // AUTO-RESET on a layer change: if a level's auto-laid node SET differs from the
+  // last time we rendered that level (a re-plan added/removed/reordered items), its
+  // saved positions are stale → drop them so the layout recomputes cleanly. Keyed
+  // by focus so each drill level tracks its own signature.
+  const layoutSigRef = useRef<Map<string, string>>(new Map());
+  const resetRef = useRef(onResetPositions);
+  useEffect(() => {
+    resetRef.current = onResetPositions;
+  }, [onResetPositions]);
+  useEffect(() => {
+    // Don't track until the level has auto-laid nodes — otherwise the empty
+    // pre-load render would register a signature and make the first load look
+    // like a change.
+    if (autoLaidIds.length === 0) return;
+    const sig = [...autoLaidIds].sort().join('|');
+    const key = focusId ?? '__root__';
+    const prev = layoutSigRef.current.get(key);
+    layoutSigRef.current.set(key, sig);
+    if (prev !== undefined && prev !== sig) {
+      resetRef.current?.(autoLaidIds);
+      setLocalPositions((p) => {
+        const next = { ...p };
+        for (const id of autoLaidIds) delete next[id];
+        return next;
+      });
+    }
+  }, [autoLaidIds, focusId]);
 
   const canvasNodes: CanvasNode[] = nodes.map((n) => ({
     id: n.id,
@@ -335,6 +389,20 @@ export function ProjectRoadmapCanvas({
             addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
           />
         </form>
+      )}
+
+      {/* RESET LAYOUT — only when the user has hand-arranged an auto-laid node on
+          this level; clears those positions back to the dependency layout. Sits at
+          the bottom-right, clear of the engine's bottom-left zoom controls. */}
+      {hasArrangement && onResetPositions && (
+        <button
+          type="button"
+          onClick={resetLayout}
+          className="absolute right-3 bottom-4 z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        >
+          <RotateCcw className="size-3.5" aria-hidden="true" />
+          Reset layout
+        </button>
       )}
 
       {/* edge LEGEND — shown when the level has real blocked-by DEPENDENCY edges,
