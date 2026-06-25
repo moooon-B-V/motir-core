@@ -148,11 +148,18 @@ async function dragWidgetToColumn(
     await page.mouse.move(fx + 10, fy + 10, { steps: 5 }); // clear the 8px activation
     await page.mouse.move(tx, ty, { steps: 18 });
     await page.mouse.move(tx, ty, { steps: 4 }); // settle so the over-target sticks
-    // Best-effort: prefer releasing while the column is the active droppable
-    // (the lavender isOver style). Don't fail the attempt if it doesn't show —
-    // the post-drop verification + retry is the real guarantee.
+    // Best-effort: prefer releasing while the column is the active droppable —
+    // EditColumn paints its `isOver` style as `bg-(--el-droptarget-bg)` (the
+    // lavender drop-zone fill), so gate on that class, NOT `tint-lavender`: the
+    // emitted class name is `bg-(--el-droptarget-bg)` and only *resolves* to
+    // `var(--color-tint-lavender)` in CSS, so the old `/tint-lavender/` regex
+    // never matched — the wait always timed out, was swallowed, and the pointer
+    // released BEFORE dnd-kit had resolved `over` to this column, letting
+    // `closestCorners` pick a stale source-column widget → a 422 move under CI
+    // load (MOTIR-1350). Don't fail the attempt if it doesn't show — the
+    // post-drop verification + retry is still the real guarantee.
     await expect(column)
-      .toHaveClass(/tint-lavender/, { timeout: 1_500 })
+      .toHaveClass(/droptarget-bg/, { timeout: 1_500 })
       .catch(() => {});
     const movePromise = page.waitForResponse(isMove, { timeout: 5_000 }).catch(() => null);
     await page.mouse.up();
