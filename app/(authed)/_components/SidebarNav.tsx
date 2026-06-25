@@ -14,6 +14,7 @@ import {
   ListChecks,
   Map,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
@@ -226,6 +227,19 @@ export function SidebarNav({
           label: t('nav.roadmap'),
           href: '/roadmap',
           active: isActive(pathname, '/roadmap'),
+        },
+        {
+          // The AI Plans index (Story 7.21 · Subtask 7.21.1 / MOTIR-1338) — the
+          // list of every AI-generated plan (proposal bundle) for the project,
+          // from which the user reviews + approves/declines one. The access path
+          // per the ai-planning design §5 (a planning surface reached from a
+          // left-nav entry beside the other project nav surfaces). `Sparkles` is
+          // the Motir-AI mark the shipped `PlanWithAILauncher` already uses. Sits
+          // beside Roadmap, the adjacent planning surface.
+          icon: <Sparkles />,
+          label: t('nav.plans'),
+          href: '/plans',
+          active: isActive(pathname, '/plans'),
         },
         {
           // The backlog / sprint-planning surface (Subtask 4.2.3) — between
