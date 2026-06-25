@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 2.3 — Issue create / edit (form + server actions).
  * Faithful transcription of prodect_plan/story-2.3-issue-create-edit.html (frozen archive).
  */
-export const story_2_3: PlanStory = {
+export const story_2_3: SeedStory = {
   id: '2.3',
   title: 'Issue create / edit (form + server actions)',
   status: 'done',

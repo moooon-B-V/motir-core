@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.2 — Kanban board UI + drag-drop transitions.
@@ -26,7 +26,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 3.2`. Matches the
  * canonical depth + string-literal style of Story 3.1 and the Epic-2 modules.
  */
-export const story_3_2: PlanStory = {
+export const story_3_2: SeedStory = {
   id: '3.2',
   title: 'Kanban board UI + drag-drop transitions',
   status: 'done',

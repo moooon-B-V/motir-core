@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.5 — Shared-context retrieval: plan-tree graph traversal + the
@@ -85,7 +85,7 @@ import type { PlanStory } from '../types';
  * rule: the spike (7.5.3, deps `[]`) is `'planned'`; everything chained behind
  * a not-yet-done 7.1.x / 7.3.2 / 7.5.x id is `'blocked'`.
  */
-export const story_7_5: PlanStory = {
+export const story_7_5: SeedStory = {
   id: '7.5',
   title: 'Shared-context retrieval (plan-tree graph + code graph)',
   status: 'planned',

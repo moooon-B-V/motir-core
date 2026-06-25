@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.5 — Tests: the cross-cutting AT-SCALE board journey.
@@ -55,7 +55,7 @@ import type { PlanStory } from '../types';
  * Kanban surface + swimlanes + WIP only; every `dependsOn` below points at an
  * Epic-3 (or earlier) subtask.
  */
-export const story_3_5: PlanStory = {
+export const story_3_5: SeedStory = {
   id: '3.5',
   title: 'Tests — the cross-cutting board journey at scale (load model · drag · swimlanes · WIP)',
   status: 'done',

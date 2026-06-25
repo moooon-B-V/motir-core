@@ -14,9 +14,11 @@ import {
   LogOut,
   Plus,
   Settings,
+  Sparkles,
   SunMoon,
   Users,
 } from 'lucide-react';
+import { planningWorkspaceHref } from '@/lib/planning/launcher';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { signOut } from '@/lib/auth/client';
@@ -59,6 +61,10 @@ export interface AppCommandPaletteProps {
   activeProjectId: string | null;
   /** Whether an active project exists — gates the project-scoped nav actions. */
   hasProject: boolean;
+  /** Whether AI planning is wired (the cloud/self-host gate) — gates the
+   *  "Plan with AI" command, the ⌘K twin of the top-nav hero launcher
+   *  (MOTIR-1299). */
+  aiPlanningConfigured?: boolean;
   /**
    * The actor's settings-area capabilities (Subtask 6.5.2) — filters the
    * per-section project-settings deep links to the ones they can open. Omitted
@@ -74,6 +80,7 @@ export function AppCommandPalette({
   activeProjectId,
   hasProject,
   settingsAccess,
+  aiPlanningConfigured = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -127,6 +134,24 @@ export function AppCommandPalette({
   }
 
   const groups: CommandGroup[] = [];
+
+  // Plan with AI — the ⌘K twin of the top-nav hero launcher (MOTIR-1299): the
+  // universal entrance to the AI planning workspace. Shown only when AI planning
+  // is wired AND there's a project to plan into (mirrors the hero pill's mount
+  // gate). Project-scoped context, like the header pill.
+  if (aiPlanningConfigured && hasProject) {
+    groups.push({
+      heading: t('commandPalette.aiHeading'),
+      actions: [
+        {
+          id: 'plan-with-ai',
+          label: t('planWithAI.label'),
+          icon: <Sparkles />,
+          onSelect: () => go(planningWorkspaceHref({ kind: 'project' })),
+        },
+      ],
+    });
+  }
 
   // Create — the create-issue entry point (one of three: also the top-nav "+"
   // and the "C" shortcut). Only with an active project to create into.

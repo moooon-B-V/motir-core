@@ -61,6 +61,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',
   transition_status: 'work_items:write',
+  // claim_next_ready flips the claimed item to in_progress — a status write
+  claim_next_ready: 'work_items:write',
   add_comment: 'work_items:write',
   link_work_items: 'work_items:write',
   unlink_work_items: 'work_items:write',

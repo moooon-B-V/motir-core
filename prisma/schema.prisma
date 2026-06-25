@@ -196,6 +196,9 @@ model User {
   // semantics). Modelled on both sides per the FK-`@relation` rule so
   // `migrate dev` reports no drift.
   lastActiveProject         Project?                  @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
+  // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
+  // deleted decider never blocks the plan's history; modelled both sides.
+  decidedPlans              Plan[]                    @relation("PlanDecidedBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -439,6 +442,10 @@ model Workspace {
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
   apiTokens                ApiToken[]
+  // AI-planning proposal bundles + their proposed-operation items (Story 7.21).
+  // Workspace-scoped tenant data — cascade with the workspace.
+  plans                    Plan[]
+  planItems                PlanItem[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -596,6 +603,8 @@ model Project {
   // deleting a project sheds its tag assignments; the tag rows are a shared
   // vocabulary and survive.
   tagAssignments         ProjectTagAssignment[]
+  // AI-planning proposal bundles for this project (Story 7.21). Cascade.
+  plans                  Plan[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -1045,6 +1054,10 @@ model WorkItem {
   // (the comments / notifications pattern). Modelled on both sides per the
   // FK-`@relation` rule.
   publicRequestVotes   PublicRequestVote[]
+  // Plan proposals targeting this work item (Story 7.21): a `modify`/`remove`
+  // points at the live row; SetNull on the FK so archiving the target leaves the
+  // PlanItem (history) intact. Modelled both sides per the FK-`@relation` rule.
+  planItems            PlanItem[]                @relation("PlanItemWorkItem")
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -2859,4 +2872,112 @@ model ApiToken {
   @@index([userId])
   @@index([workspaceId])
   @@map("api_token")
+}
+
+/// The lifecycle state of an AI-planning proposal bundle (Story 7.21).
+/// `generating` — the producer (7.4 generation / 7.11 re-planning) has opened
+/// the plan and is still appending proposals. `planned` — the generation
+/// frontier is complete; the plan is reviewable and decidable. `approved` /
+/// `declined` — terminal; the user has decided. Approve MATERIALIZES the items
+/// into the work-item tree; decline drops them with the tree untouched.
+enum PlanStatus {
+  generating
+  planned
+  approved
+  declined
+
+  @@map("plan_status")
+}
+
+/// The operation a `PlanItem` proposes against the work-item tree (Story 7.21).
+/// `add` — create a new node (its fields live in `proposedFields`; no WorkItem
+/// exists until approve). `modify` — patch an existing node (the sparse changed
+/// fields live in `patch`; the target keeps its committed values until approve).
+/// `remove` — archive an existing node.
+enum PlanItemOp {
+  add
+  modify
+  remove
+
+  @@map("plan_item_op")
+}
+
+/// An AI-planning proposal bundle (Story 7.21 — the Plan substrate). A `Plan`
+/// gathers proposed `PlanItem` operations the user reviews and approves/declines
+/// as ONE unit. Nothing it proposes is real until approve: an `add` lives only
+/// as a PlanItem (no WorkItem yet), and `modify`/`remove` leave their targets
+/// untouched. The lifecycle timestamps + decider ARE the history surface (when
+/// planned / when decided / by whom). Workspace-scoped tenant data (RLS).
+model Plan {
+  id          String     @id @default(cuid())
+  workspaceId String     @map("workspace_id")
+  projectId   String     @map("project_id")
+  status      PlanStatus @default(generating)
+  /// A short label for the plan — typically the idea/prompt the generation came from.
+  title       String?
+  /// Longer human summary of what the plan proposes (Markdown), when distinct from the title.
+  summary     String?    @db.Text
+  /// The motir-ai generation job that produced this plan, for provenance.
+  sourceJobId String?    @map("source_job_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  /// Set when generation completes (→ `planned`).
+  plannedAt   DateTime?  @map("planned_at")
+  /// Set on approve/decline, with the deciding actor.
+  decidedAt   DateTime?  @map("decided_at")
+  decidedById String?    @map("decided_by_id")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  decidedBy User?      @relation("PlanDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  items     PlanItem[]
+
+  @@index([workspaceId])
+  @@index([projectId, createdAt])
+  @@map("plan")
+}
+
+/// One proposed OPERATION inside a `Plan` (Story 7.21) — a PROPOSAL, never a row
+/// in the work-item tree. Op-typed (`add`/`modify`/`remove`). Identity is
+/// sacred: only `add` mints a new WorkItem id, and only at materialize; a
+/// `modify` NEVER mints a new id. The OLD side of any diff is read live from the
+/// target — this row stores only the NEW values. Workspace-scoped tenant data (RLS).
+model PlanItem {
+  id             String     @id @default(cuid())
+  workspaceId    String     @map("workspace_id")
+  planId         String     @map("plan_id")
+  op             PlanItemOp
+  /// NULL for `add` until it materializes (then the created id); the EXISTING
+  /// target for `modify` / `remove`.
+  workItemId     String?    @map("work_item_id")
+  /// `add` ONLY — the new node's proposed fields (title, descriptionMd, type,
+  /// priority, executor). The add's values live HERE (no WorkItem exists yet).
+  proposedFields Json?      @map("proposed_fields")
+  /// `modify` ONLY — the sparse changed fields ({ title?, descriptionMd?,
+  /// priority?, type?, blockedByAdd?, blockedByRemove? }).
+  patch          Json?
+  /// `add` (and edge changes): a parent ref that may point at a real workItemId
+  /// OR another PlanItem in the SAME plan (an intra-plan temp-ref, `planItem:<id>`),
+  /// resolved to a real id at materialize.
+  parentRef      String?    @map("parent_ref")
+  /// `add` / edge changes: blocked-by refs, each a real workItemId or an
+  /// intra-plan temp-ref, resolved at materialize.
+  blockedByRefs  String[]   @map("blocked_by_refs")
+  /// `modify`/`remove`: the target's revision the change was computed against
+  /// (the optimistic-concurrency anchor for the conflict check, 7.21.3).
+  baseRevision   String?    @map("base_revision")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan      Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  /// SetNull (not Cascade): archiving a target work item leaves the PlanItem as
+  /// history. `add` rows have a null target until materialize.
+  workItem  WorkItem? @relation("PlanItemWorkItem", fields: [workItemId], references: [id], onDelete: SetNull)
+
+  /// A `modify`/`remove` target is unique per plan (one op per target per plan).
+  /// Postgres treats NULLs as distinct, so multiple `add` rows (null target) in
+  /// one plan are allowed — only real targets are constrained.
+  @@unique([planId, workItemId])
+  @@index([planId])
+  @@index([workspaceId])
+  @@map("plan_item")
 }

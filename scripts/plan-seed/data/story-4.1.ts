@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 4.1 — Sprint + backlog data model.
@@ -51,7 +51,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 4.1`. Matches the canonical
  * depth + string-literal style of Stories 3.1 / 4.5.
  */
-export const story_4_1: PlanStory = {
+export const story_4_1: SeedStory = {
   id: '4.1',
   title: 'Sprint + backlog data model',
   status: 'done',

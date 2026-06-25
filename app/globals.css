@@ -3936,3 +3936,49 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   "Plan with AI" launcher — the hero pill's shimmer sweep (MOTIR-1299)
+   ═══════════════════════════════════════════════════════════════════════
+   A periodic light band sweeping across the gradient pill (the sweep colour is
+   palette-derived — the accent's white ink — set on the element itself). The
+   animation is GATED behind prefers-reduced-motion, matching the aurora /
+   immersive-menu pattern above, so a motion-sensitive user gets the static
+   pill (the band stays clipped off the left edge, never sweeping). */
+@keyframes plan-with-ai-shimmer {
+  0% {
+    transform: translateX(0) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(420%) skewX(-12deg);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-with-ai-shimmer {
+    animation: plan-with-ai-shimmer 4.5s ease-in-out 1.2s infinite;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   "Plan with AI" floating orb — the FAB's gently-pulsing aura (MOTIR-1299)
+   ═══════════════════════════════════════════════════════════════════════
+   A soft expanding halo so the orb reads as "glowing" (the halo colour is
+   palette-derived — --el-highlight — set on the element). GATED behind
+   prefers-reduced-motion, matching the shimmer + aurora pattern above, so a
+   motion-sensitive user gets the static orb (no pulse). */
+@keyframes plan-with-ai-fab-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-highlight) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--el-highlight) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--el-highlight) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plan-with-ai-fab-pulse {
+    animation: plan-with-ai-fab-pulse 3.2s ease-out infinite;
+  }
+}

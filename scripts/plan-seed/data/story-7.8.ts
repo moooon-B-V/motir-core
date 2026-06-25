@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.8 — Motir MCP server (the agent tool surface over the PM core).
@@ -77,7 +77,7 @@ import type { PlanStory } from '../types';
  * paginate — 7.0's cursor contract, 5.1's paged comments); no
  * load-everything tool.
  */
-export const story_7_8: PlanStory = {
+export const story_7_8: SeedStory = {
   id: '7.8',
   title: 'Motir MCP server (agent tool surface over the PM core)',
   status: 'planned',
@@ -424,7 +424,7 @@ export const story_7_8: PlanStory = {
         'current `workflow_status` of every existing plan work item keyed by its dotted plan ' +
         'id (the stable title prefix); after re-creating the tree, re-apply the snapshot to ' +
         'items that existed before (matched by plan id), leaving NEW items on their seed ' +
-        'status (`PLAN_STATUS_MAP` becomes initial-only). Statuses whose key no longer exists ' +
+        'status (`SEED_STATUS_MAP` becomes initial-only). Statuses whose key no longer exists ' +
         'in the target workflow fall back to the seed status with a loader warning. ' +
         'Re-running stays idempotent. Document the new invariant in the seed.ts header AND ' +
         "in `.github/workflows/seed.yml`'s comment block (whose current text states the OLD " +
@@ -438,7 +438,7 @@ export const story_7_8: PlanStory = {
         '- seed.ts + seed.yml comments state the new invariant; no doc still claims seed ' +
         'status wins.\n\n' +
         '## Context refs\n\n' +
-        '- `scripts/plan-seed/seed.ts`, `scripts/plan-seed/types.ts` (`PLAN_STATUS_MAP`)\n' +
+        '- `scripts/plan-seed/seed.ts`, `scripts/plan-seed/types.ts` (`SEED_STATUS_MAP`)\n' +
         '- `.github/workflows/seed.yml` (the invariant prose to rewrite)\n' +
         '- `lib/workflows/defaultWorkflow.ts` (status keys the snapshot maps over)\n\n' +
         '**Branch.** `subtask/PROD-7.8.7-reseed-preserves-status`.',

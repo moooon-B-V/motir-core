@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.6 — WF6: Hosted + existing codebase + Jira/Linear import. The SIXTH
@@ -84,7 +84,7 @@ import type { PlanStory } from '../types';
  * carries no `design` card; a net-new combined affordance, if review reveals
  * one, is a NEW `design/` subtask, not improvised UI.
  */
-export const story_9_6: PlanStory = {
+export const story_9_6: SeedStory = {
   id: '9.6',
   title: 'WF6 — Hosted + existing codebase + Jira/Linear import (orchestration + verification)',
   status: 'planned',

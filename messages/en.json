@@ -446,11 +446,15 @@
       "switchTo": "Switch to {name}",
       "current": "Current",
       "goToBacklog": "Go to Backlog",
-      "goToFilters": "Go to Filters"
+      "goToFilters": "Go to Filters",
+      "aiHeading": "AI"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
       "description": "Shortcuts available anywhere in the app."
+    },
+    "planWithAI": {
+      "label": "Plan with AI"
     }
   },
   "issueViews": {

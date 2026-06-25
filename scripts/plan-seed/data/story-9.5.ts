@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.5 — WF5: Hosted + existing codebase. The SECOND hosted-execution
@@ -93,7 +93,7 @@ import type { PlanStory } from '../types';
  * surface exists"), 9.5 carries no `design` card; a net-new combined affordance,
  * if review reveals one, is a NEW `design/` subtask, not improvised UI.
  */
-export const story_9_5: PlanStory = {
+export const story_9_5: SeedStory = {
   id: '9.5',
   title: 'WF5 — Hosted + existing codebase (orchestration + verification)',
   status: 'planned',

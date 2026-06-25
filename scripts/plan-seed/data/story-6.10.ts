@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.10 — The Organization (root-account) tier + org admin. Motir today
@@ -102,7 +102,7 @@ import type { PlanStory } from '../types';
  * card (6.10.1) and the decision card (6.10.2) have `dependsOn: []` → `planned`;
  * everything chained behind them is `blocked`.
  */
-export const story_6_10: PlanStory = {
+export const story_6_10: SeedStory = {
   id: '6.10',
   title: 'Organization (root-account) tier + org admin',
   status: 'done',

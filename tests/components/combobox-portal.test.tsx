@@ -65,13 +65,16 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
   function DialogHost() {
     const [value, setValue] = useState<string | null>('todo');
     return (
-      <div role="dialog">
+      // A focus-trapping Modal carries `data-surface="modal"` — the marker the
+      // inline-vs-portal decision keys on (NOT bare `role="dialog"`, which a
+      // non-modal Popover also sets; see the portal cases below).
+      <div role="dialog" data-surface="modal">
         <Combobox label="Status" options={OPTIONS} value={value} onChange={setValue} />
       </div>
     );
   }
 
-  it('renders inline (not portaled) inside a dialog, and still commits', () => {
+  it('renders inline (not portaled) inside a modal, and still commits', () => {
     render(<DialogHost />);
     const dialog = screen.getByRole('dialog');
 
@@ -114,11 +117,12 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     label: `Statistic ${i}`,
   }));
 
-  // A hard-clipping dialog panel = the centered Modal (`overflow-hidden`).
+  // A hard-clipping dialog panel = the centered Modal (`overflow-hidden`,
+  // `data-surface="modal"` — the focus-trapping marker that keeps the menu inline).
   function TallDialogHost() {
     const [value, setValue] = useState<string | null>(null);
     return (
-      <div role="dialog" style={{ overflowY: 'hidden' }}>
+      <div role="dialog" data-surface="modal" style={{ overflowY: 'hidden' }}>
         <Combobox
           label="Statistic type"
           options={TALL_OPTIONS}
@@ -161,18 +165,17 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     expect(listbox.className).toContain('overflow-y-auto');
   });
 
-  // Regression for the CI break the first fix caused: the Advanced-filter
-  // builder is an ANCHORED Popover with role="dialog" whose outer box does NOT
-  // clip (only an inner overflow-y-auto body). Clamping/flipping against that
-  // small content-sized box shoved the operator menu up under the popover's own
-  // header, which intercepted the option click. A non-clipping dialog must keep
-  // the original inline behaviour: menu opens BELOW, never flips.
+  // MOTIR-1346: the Advanced-filter builder is a NON-modal anchored Popover
+  // (role="dialog" but NO data-surface="modal") whose overflow-hidden panel +
+  // inner overflow-y-auto scroll body CLIP an inline menu — the field/operator
+  // menus were cut off at the popover edge. Because it does NOT trap focus, the
+  // menu must PORTAL to <body> (escaping every clip), exactly as it does in a
+  // table. Inline is reserved for true modals (the cases above).
   function PopoverDialogHost() {
     const [value, setValue] = useState<string | null>(null);
     return (
       // The Advanced-filter shape: an overflow-hidden popover whose body is an
-      // overflow-y-auto SCROLL region (the combobox's nearest clip scrolls, so
-      // the menu can be scrolled into view — no clamp/flip).
+      // overflow-y-auto SCROLL region. NO data-surface="modal" → portals.
       <div role="dialog" style={{ overflow: 'hidden' }}>
         <div style={{ overflowY: 'auto', maxHeight: 200 }}>
           <Combobox label="Operator" options={TALL_OPTIONS} value={value} onChange={setValue} />
@@ -181,39 +184,26 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     );
   }
 
-  it('leaves a non-clipping popover-dialog menu below the trigger (no flip)', () => {
+  it('PORTALS the menu out of a non-modal popover-dialog so it escapes the clip (MOTIR-1346)', () => {
     render(<PopoverDialogHost />);
     const dialog = screen.getByRole('dialog');
-    const trigger = screen.getByRole('combobox', { name: 'Operator' });
 
-    // Same lower-half geometry that flips inside a clipping Modal — but this
-    // dialog doesn't clip, so the menu must stay anchored below regardless.
-    dialog.getBoundingClientRect = () => rect(100, 420);
-    trigger.getBoundingClientRect = () => rect(300, 332);
-
-    fireEvent.click(trigger);
-    fireEvent.resize(window);
+    fireEvent.click(screen.getByRole('combobox', { name: 'Operator' }));
 
     const listbox = screen.getByRole('listbox', { name: 'Operator' });
-    const panel = listbox.parentElement as HTMLElement;
-    expect(panel.className).toContain('top-full');
-    expect(panel.className).not.toContain('bottom-full');
+    // Portaled to <body> — OUT of the clipping popover/scroll-body subtree.
+    expect(dialog.contains(listbox)).toBe(false);
+    expect(document.body.contains(listbox)).toBe(true);
+    expect((listbox.parentElement as HTMLElement).style.position).toBe('fixed');
   });
 
-  // Regression for bug-combobox-menu-clipped-inside-popover: a `role="dialog"`
-  // ancestor whose `overflow` is VISIBLE — the shape `Popover.Content` takes
-  // when its `overflowVisible` prop is set so a Combobox menu can render past
-  // the popover's edge. The clamp+flip logic must NOT engage here (it would
-  // clamp against the next clip box up, which on a triage popover is uselessly
-  // small): the menu must render at its full natural height (max-h-64), inline
-  // below the trigger, free to extend past the popover's edge.
+  // The triage promote-sprint / mark-duplicate shape: a non-modal `role="dialog"`
+  // Popover (no data-surface="modal"). Same rule — it portals to <body>, the
+  // proven escape these popovers already relied on (they carry overflowVisible so
+  // an inline menu COULD render past the edge, but portaling is uniform + clip-proof).
   function OverflowVisibleDialogHost() {
     const [value, setValue] = useState<string | null>(null);
     return (
-      // Triage promote-sprint shape: a `role="dialog"` ancestor with no clip.
-      // The clip-box walk in `nearestClipBox` skips this and either finds a
-      // further-up clip OR returns null — both branches leave the menu at the
-      // default max-h-64 with no flip.
       <div role="dialog" style={{ overflow: 'visible' }}>
         <Combobox
           label="Sprint"
@@ -226,21 +216,13 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     );
   }
 
-  it('keeps a Popover-with-overflow-visible dialog menu at its natural height (no clamp)', () => {
+  it('PORTALS the menu out of a non-modal overflow-visible popover-dialog too (MOTIR-1346)', () => {
     render(<OverflowVisibleDialogHost />);
-    const trigger = screen.getByRole('combobox', { name: 'Sprint' });
-    fireEvent.click(trigger);
-    fireEvent.resize(window);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(screen.getByRole('combobox', { name: 'Sprint' }));
 
     const listbox = screen.getByRole('listbox', { name: 'Sprint' });
-    const panel = listbox.parentElement as HTMLElement;
-
-    // No flip — menu stays below the trigger…
-    expect(panel.className).toContain('top-full');
-    expect(panel.className).not.toContain('bottom-full');
-
-    // …and the listbox keeps the default 256px cap (max-h-64), NOT clamped
-    // down to the 80px floor a tiny clip box would have forced.
-    expect(listbox.style.maxHeight).toBe('256px');
+    expect(dialog.contains(listbox)).toBe(false);
+    expect(document.body.contains(listbox)).toBe(true);
   });
 });

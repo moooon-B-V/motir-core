@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.3 — Swimlanes + WIP limits.
@@ -26,7 +26,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 3.3`. Matches the
  * canonical depth + string-literal style of Stories 3.1 / 3.2.
  */
-export const story_3_3: PlanStory = {
+export const story_3_3: SeedStory = {
   id: '3.3',
   title: 'Swimlanes + WIP limits',
   status: 'done',

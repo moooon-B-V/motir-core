@@ -10,7 +10,7 @@
  */
 import { defaultExecutorForType } from '@/lib/issues/executorDefaults';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
-import type { PlanItem } from './types';
+import type { SeedItem } from './types';
 
 /**
  * Compose the work-item description: a metadata blockquote + the card prose.
@@ -22,7 +22,7 @@ import type { PlanItem } from './types';
  * description stays the card's real prose; the blockquote keeps only the
  * estimate + depends-on hints (no structured surface renders those yet).
  */
-export function composeDescription(item: PlanItem): string | null {
+export function composeDescription(item: SeedItem): string | null {
   const meta: string[] = [];
   if (item.estimateMinutes) meta.push(`**Estimate:** ${item.estimateMinutes}m`);
   if (item.dependsOn?.length) meta.push(`**Depends on:** ${item.dependsOn.join(', ')}`);
@@ -33,7 +33,7 @@ export function composeDescription(item: PlanItem): string | null {
 }
 
 /**
- * The plan's free-string `type` (PlanItem.type — `string` in types.ts) → the
+ * The plan's free-string `type` (SeedItem.type — `string` in types.ts) → the
  * frozen ten-member `WorkItemType` enum (the 2.7.2 ADR;
  * `lib/issues/executorDefaults.ts`). The ten members map to themselves; the
  * plan's richer / legacy vocabulary normalises DOWN to the enum:
@@ -81,7 +81,7 @@ export const PLAN_TYPE_TO_WORK_ITEM_TYPE: Record<string, WorkItemTypeDto> = {
  * would default; an explicit `executor` always wins. Containers (epic/story)
  * never reach this — they get `{ null, null }` directly (leaf-only).
  */
-export function mapTypeAndExecutor(item: PlanItem): {
+export function mapTypeAndExecutor(item: SeedItem): {
   type: WorkItemTypeDto | null;
   executor: ExecutorDto | null;
 } {

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 5.3 — Custom fields (per-project definitions).
@@ -64,7 +64,7 @@ import type { PlanStory } from '../types';
  * `seed/epic-5-plan` branch. Matches the canonical depth + string-literal
  * style of Stories 5.1 / 5.2.
  */
-export const story_5_3: PlanStory = {
+export const story_5_3: SeedStory = {
   id: '5.3',
   title: 'Custom fields (per-project definitions)',
   status: 'done',

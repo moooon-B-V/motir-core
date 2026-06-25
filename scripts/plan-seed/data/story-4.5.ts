@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 4.5 — Scrum board (sprint-scoped view).
@@ -49,7 +49,7 @@ import type { PlanStory } from '../types';
  * Expanded from its `stubs.ts` entry per `motir plan 4.5`. Matches the
  * canonical depth + string-literal style of Stories 3.1 / 3.2 / 3.3.
  */
-export const story_4_5: PlanStory = {
+export const story_4_5: SeedStory = {
   id: '4.5',
   title: 'Scrum board (sprint-scoped view)',
   status: 'done',

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.7 — Tests: the combined Epic-6 journey + search / reporting /
@@ -74,7 +74,7 @@ import type { PlanStory } from '../types';
  * `seed/epic-5-plan` branch (Epic-5/6 planning). Matches the canonical style
  * of 5.6 / 6.1.
  */
-export const story_6_7: PlanStory = {
+export const story_6_7: SeedStory = {
   id: '6.7',
   title:
     'Tests — the combined Epic-6 journey (build → save → gate → fire) + search/reporting/automation at scale',

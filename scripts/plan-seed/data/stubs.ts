@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Summary-level (subtasks-deferred) stories: Epics 3–8 (Epic 2 is fully
@@ -7,7 +7,7 @@ import type { PlanStory } from '../types';
  * module) when the ready set drains, per the async-expansion rule. Transcribed
  * from the epic-*.html cards.
  */
-export const STUB_STORIES: PlanStory[] = [
+export const STUB_STORIES: SeedStory[] = [
   // ── Epic 2: Issue tracking core ──────────────────────────────────────────
   // Epic 2 was fully expanded + done; RE-OPENED 2026-06-12 with one new story:
   // 2.7 (Work-item type + executor) — data/story-2.7.ts. Adds the structural

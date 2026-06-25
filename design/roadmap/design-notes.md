@@ -16,21 +16,25 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 > roadmap (**7.19** / `MOTIR-1011`, which this card `blocks`), and the public
 > project page (unplanned). Design it surface-agnostic.
 
-## Asset set (the three files)
+## Asset set (the files)
 
-| File                  | What it is                                                                       |
-| --------------------- | -------------------------------------------------------------------------------- |
-| `design-notes.md`     | this spec (primitives, copy, token roles, per-behaviour provenance)              |
-| `roadmap.mock.html`   | the source of truth — a multi-panel mock built from the real tokens              |
-| `roadmap.png`         | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
-| `edges.mock.html`     | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story   |
-| `edges.png`           | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
-| `grid-init.mock.html` | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview   |
-| `grid-init.png`       | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px) |
+| File                        | What it is                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `design-notes.md`           | this spec (primitives, copy, token roles, per-behaviour provenance)                                           |
+| `roadmap.mock.html`         | the canvas source of truth — a multi-panel mock built from the real tokens                                    |
+| `roadmap.png`               | the full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                              |
+| `edges.mock.html`           | the dependency-edge spec (7.20.8 / MOTIR-1331) — arrows + legend + cross-story                                |
+| `edges.png`                 | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                              |
+| `grid-init.mock.html`       | grid + init arrangement (7.20.9 / MOTIR-1333) — grid system + the plan preview                                |
+| `grid-init.png`             | its full-page export (Playwright chromium, light, `deviceScaleFactor 2`, 1200px)                              |
+| `detail-surfaces.mock.html` | the canvas **detail surfaces** (MOTIR-1351): work-item quick-view + tier-doc viewer + their on-canvas entries |
+| `detail-surfaces.png`       | the detail-surfaces export (same render settings)                                                             |
 
-The mock is a **multi-panel review board** — six sheets (5 spec + the multi-level
-drill-down sheet, below), every panel inspected (the multi-panel rule,
-`notes.html` #31).
+The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
+multi-level drill-down sheet, below), every panel inspected (the multi-panel
+rule, `notes.html` #31). The `detail-surfaces` mock is the
+**[Canvas detail surfaces](#-canvas-detail-surfaces-the-quick-view--tier-doc-viewer-motir-1351)**
+the canvas OPENS — documented in its own section below.
 
 ---
 
@@ -345,9 +349,126 @@ off on its own with a `STANDALONE` chip). Part of the 7.15 migrate flow.
   `aria-current="step"`; edges are `aria-hidden` (the dependency facts live in
   the node list).
 
+---
+
+## ⭐ Canvas detail surfaces — the quick-view + tier-doc viewer (MOTIR-1351)
+
+`detail-surfaces.mock.html` designs the two DETAIL surfaces the roadmap canvas
+**opens**, plus their on-canvas **entry affordances**. The card's mandate is to
+**COMPOSE existing designs / components, not redraw them** — `notes.html`
+**#82** (reuse the real shipped COMPONENT + its markup, never a stylized
+stand-in) and **#95** (ground a composing design in the COMPONENT and its
+CONTRACT — not an asset path or the parent story). So every element here is the
+real shipped surface, annotated with the component it composes.
+
+> **⚠️ Grounded in the SHIPPED canvas `ProjectRoadmapCanvas` (MOTIR-1194 / PR
+> #1398) — two DISTINCT node interactions, do not conflate them:**
+>
+> 1. **SELECT (click a card) = HIGHLIGHT only.** `ProjectRoadmapCanvas` rings the
+>    selected card (`--el-accent` + `--el-surface-soft` offset) and lights the
+>    dependency it belongs to (its `connectedIds` — the node + everything it links
+>    to). Selecting does **NOT** open a detail surface.
+> 2. **A dedicated VIEW button opens the detail** — surfaced **on the selected
+>    card**, the same bottom-edge action slot where the shipped **"Open ›" DRILL
+>    pill** appears (the canvas renders that pill on a _selected drillable_ card).
+>    This card ADDS a **View** button there: a work-item node's View opens the
+>    quick-view (MOTIR-1352); a tier station's View opens the tier doc
+>    (MOTIR-1355). A drillable selected node shows **both** View + Open ›;
+>    `WorkItemNode` keeps its passive `ChevronRight` has-children hint.
+>
+> So: **select = highlight, View = open detail, Open › = drill.** (Two earlier
+> drafts of this mock got the entry wrong — first a hover "Eye", then "selection
+> itself opens the detail". Both wrong: selection only HIGHLIGHTS; a dedicated
+> View button opens the surface. This is the #82/#95 trap — read the composed
+> component's _interaction contract_ — `handleActivate` + `connectedIds` + the
+> selected-card action pills — not just its markup.)
+
+### Composed components + their contracts (notes #95)
+
+| Composed thing     | Source (component / asset)                                                                         | Contract this design honours                                                                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| canvas interaction | `ProjectRoadmapCanvas` (`components/planning/ProjectRoadmapCanvas.tsx`, MOTIR-1194)                | click SELECTS = highlight (`connectedIds` lit, rest dim); selected card surfaces action pills ("Open ›" drill shipped; **View** added here); per-level drill-down (MOTIR-1010) |
+| canvas card        | `WorkItemNode` (`components/planning/WorkItemNode.tsx`, MOTIR-1194)                                | presentational; fixed `NODE_W 280 × NODE_H 148`; status chip top · tile + id/title body · passive drill `ChevronRight` hint                                                    |
+| tier station       | `StationCard` (`components/onboarding/StationNode.tsx`, MOTIR-840)                                 | tier-coloured tile + title/sub + captured rows + state pill; per-tier accent from `TIER_META`                                                                                  |
+| work-item peek     | `design/work-items/quick-view.mock.html` (Story 2.5 / 8.8)                                         | reused **1:1**; read-only; the one write path is **Open full page →**                                                                                                          |
+| modal shell        | `Modal` (`components/ui/Modal.tsx`)                                                                | `size="xl"` peek shell, `srTitle` (the body owns its heading), X close, `data-surface="modal"`                                                                                 |
+| tier-doc render    | `DirectionDocView` (`components/onboarding/DirectionDocView.tsx`, MOTIR-834) + `direction-doc.css` | READ-ONLY editorial render; props `{ doc, availableDocs, onNavigate }`; accent via `--dd-accent`                                                                               |
+
+### The five panels (`detail-surfaces.mock.html`)
+
+| Panel | Surface                | What it draws                                                                                                                                                                                                                              |
+| ----- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | Quick-view **entry**   | a **SELECTED** `WorkItemNode` (accent ring) with its connection lit (select = highlight); the selected card's **View** button opens the peek, beside the shipped **"Open ›"** drill pill on a drillable node (a leaf shows **View** alone) |
+| **2** | Quick-view **peek**    | the shipped `quick-view` modal (Modal `size="xl"` + the two-column head/main/rail body), reused **verbatim** to confirm the entry → peek wiring                                                                                            |
+| **3** | Tier-doc **entry**     | the 4 tier **stations** (`StationCard`) on the canvas; a **SELECTED** station (accent ring) surfaces a **View** button → opens the doc; only PRODUCED tiers carry it                                                                       |
+| **4** | Tier-doc **modal**     | the **same** `Modal` shell rendering `DirectionDocView` inside; thin head carries **Open full page**; discovery accent `--el-info`                                                                                                         |
+| **5** | Tier-doc **full page** | the read-only route `/projects/[key]/direction/[tier]` (NEW — no shipped route yet) — app shell + **← Back to roadmap** + breadcrumb; `DirectionDocView` at full reading width                                                             |
+
+### Access paths (DRAW THE DOOR — `run.md` design gate)
+
+- **Quick-view:** **select** a work-item node on the canvas (highlights it) →
+  click the **View** button on the selected card (panel 1) → peek modal (panel 2)
+  → **Open full page** → the work item's `/items/[key]` detail page. **View**
+  (open peek) is DISTINCT from the **"Open ›" drill** pill (drillable nodes,
+  MOTIR-1010) — both sit on the selected card.
+- **Tier-doc:** **select** a produced tier station (highlights it) → click its
+  **View** button (panel 3) → tier-doc modal (panel 4) → **Open full page** →
+  `/projects/[key]/direction/[tier]` (panel 5) → **← Back to roadmap** returns to
+  the canvas.
+
+### New decisions this card makes (resolved from the decision ladder, not asked)
+
+- **A dedicated VIEW button is the entry; selection only highlights.** In the
+  shipped `ProjectRoadmapCanvas` (PR #1398), clicking a card SELECTS it = rings it
+  and highlights the dependency it's part of (`connectedIds` lit); selection does
+  **not** open anything. So the detail surface
+  needs its own affordance: this design adds a **View** button on the selected
+  card, in the same bottom-edge action slot the shipped **"Open ›"** drill pill
+  uses. The builds add it: MOTIR-1352 adds View → quick-view on the work-item
+  node; MOTIR-1355 adds View → tier doc on the station. View (open) and Open ›
+  (drill) are distinct; a leaf shows View alone. (The onboarding consumer today
+  opens a station's doc on bare select; this design refines that to the explicit
+  View action so the on-canvas roadmap reads consistently — select highlights,
+  View opens.)
+- **The tier-doc FULL-PAGE route is NEW** (`/projects/[key]/direction/[tier]`).
+  `DirectionDocView` is shipped but rendered in **no app route** today (only the
+  onboarding gate embeds it, and PR #1398 renders it only inside the canvas). The
+  MOTIR-1355 build adds the route; this design fixes its layout (app shell +
+  back/breadcrumb + centred doc, read-only).
+- Both surfaces stay **read-only** — the chat is the only edit path (the
+  conversation-only model, MOTIR-1100); there is no inline-edit affordance.
+
+### Token / a11y discipline (same rules as the canvas)
+
+- **Colour** via `--el-*` only (inlined light palette, as `quick-view.mock.html`
+  does). Status pills + tier tiles put the hue in a **tint background** with
+  `--el-text-strong` (AA, finding #35); the selection ring is `--el-accent` with
+  an `--el-surface-soft` offset (the shipped `ring-offset`). Tier accents:
+  discovery `--el-info`, vision `--el-accent-on-surface`, feasibility
+  `--el-success`, validation `--el-warning`; per-tier station tiles use
+  `--el-station-tier-*`. Work-item kind tiles use `--el-type-*`.
+- **Shape** via element-semantic tokens: card/modal/doc-table = `--radius-card`
+  / `--radius-modal`; pills/chips = `--radius-badge`; close/menu rows =
+  `--radius-control`; buttons + the "Open ›" drill pill = `--radius-btn`;
+  elevation `--shadow-{subtle,card,modal}`. `--radius-pill` only on dots /
+  avatars.
+- **A11y** — selection is keyboard-reachable on the shipped canvas; the **View**
+  and shipped **"Open ›"** drill buttons are labelled `button`s ("View
+  &lt;identifier&gt;" / "Open this item's children"); the modal is the shipped
+  `Modal` (Radix focus-trap, ESC, `srTitle`); `DirectionDocView` keeps its
+  `aria-label` (tier label) + read-only hint; decorative icons `aria-hidden`; the
+  full page leads with a back
+  affordance + breadcrumb.
+
+---
+
 ## Deliverable
 
-The three-file set under `design/roadmap/`: `design-notes.md` (this file) ·
-`roadmap.mock.html` (source) · `roadmap.png` (export). Rendered with Playwright
-chromium — full-page, light theme, `deviceScaleFactor: 2`, 1200px wide;
-`prettier --check` clean.
+Two three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+
+- **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
+- **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
+  (MOTIR-1351).
+
+Both rendered with Playwright chromium — full-page, light theme,
+`deviceScaleFactor: 2`, 1200px wide; `prettier --check` clean.

@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.5 — Web app shell + navigation.
  * Faithful transcription of prodect_plan/story-1.5-app-shell.html (frozen archive).
  */
-export const story_1_5: PlanStory = {
+export const story_1_5: SeedStory = {
   id: '1.5',
   title: 'Web app shell + navigation',
   status: 'done',

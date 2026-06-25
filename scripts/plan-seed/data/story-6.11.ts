@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.11 (Epic 6) — Triage inbox (bug/feature intake → promote). The
@@ -106,7 +106,7 @@ import type { PlanStory } from '../types';
  * unbuilt higher-numbered story. 6.11.1 (design) and 6.11.2 (decision) have
  * empty deps → `planned`; everything chained behind them → `blocked`.
  */
-export const story_6_11: PlanStory = {
+export const story_6_11: SeedStory = {
   id: '6.11',
   title: 'Triage inbox (bug/feature intake → promote)',
   status: 'done',

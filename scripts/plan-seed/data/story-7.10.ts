@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.10 — Planning-mistakes store + the learning loop (the productized
@@ -183,7 +183,7 @@ import type { PlanStory } from '../types';
  * historical); the prompt-generation moat (7.6) and the discovery docs (7.2) are
  * SEPARATE context stores — 7.10 is the mistakes store only.
  */
-export const story_7_10: PlanStory = {
+export const story_7_10: SeedStory = {
   id: '7.10',
   title: 'Planning-mistakes store + learning loop (productized notes.html)',
   status: 'planned',

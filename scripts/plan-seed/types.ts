@@ -29,19 +29,19 @@
  * so the board shows it in the Cancelled column. A cancelled card is NEVER in
  * the ready set and is not drawn into a demo sprint.
  */
-export type PlanStatus = 'planned' | 'blocked' | 'in_progress' | 'done' | 'cancelled';
+export type SeedStatus = 'planned' | 'blocked' | 'in_progress' | 'done' | 'cancelled';
 
 /** Work-item kind a plan LEAF maps to (epics/stories get their kind implicitly). */
-export type PlanLeafKind = 'subtask' | 'bug' | 'task';
+export type SeedLeafKind = 'subtask' | 'bug' | 'task';
 
 /** A leaf plan card (the historical "Subtask" — a story's unit of execution). */
-export interface PlanItem {
+export interface SeedItem {
   /** Dotted plan id, e.g. "2.5.16". Carried into the work-item title prefix. */
   id: string;
   /** Defaults to 'subtask' when omitted. Use 'bug' for defect cards. */
-  kind?: PlanLeafKind;
+  kind?: SeedLeafKind;
   title: string;
-  status: PlanStatus;
+  status: SeedStatus;
   /** Plan card type: code / design / test / copy / content / manual / review / … */
   type?: string;
   executor?: 'coding_agent' | 'human';
@@ -56,41 +56,41 @@ export interface PlanItem {
 }
 
 /** A story — parent of leaf items, child of an epic. */
-export interface PlanStory {
+export interface SeedStory {
   /** Dotted id, e.g. "2.5" (or "1.0.5"). */
   id: string;
   title: string;
-  status: PlanStatus;
+  status: SeedStatus;
   /** Long-lived feature branch (story-level metadata, informational). */
   gitBranch?: string;
   /** Story overview prose (Markdown). */
   descriptionMd?: string;
   /** What the user does to accept the story (Markdown) — appended to the description. */
   verificationRecipeMd?: string;
-  items: PlanItem[];
+  items: SeedItem[];
 }
 
 /** An epic — a top-level (root) work item. */
-export interface PlanEpic {
+export interface SeedEpic {
   /** Numeric id, "1".."8". */
   id: string;
   title: string;
-  status: PlanStatus;
+  status: SeedStatus;
   descriptionMd?: string;
-  stories: PlanStory[];
+  stories: SeedStory[];
   /**
    * Epic-direct leaf items — typically standalone **bugs** parented to the
    * Epic (Jira shape: a Bug is a sibling of Stories, not nested under one).
    * `bug.parent ∈ {epic, story, task}` so an epic parent is legal.
    */
-  items?: PlanItem[];
+  items?: SeedItem[];
 }
 
 /** Epic metadata as authored in `data/epics.ts` (stories attached in `index.ts`). */
-export type EpicMeta = Omit<PlanEpic, 'stories'>;
+export type EpicMeta = Omit<SeedEpic, 'stories'>;
 
 /** Plan status → the project's default workflow_status key (lib/workflows/defaultWorkflow.ts). */
-export const PLAN_STATUS_MAP: Record<PlanStatus, string> = {
+export const SEED_STATUS_MAP: Record<SeedStatus, string> = {
   planned: 'todo',
   blocked: 'blocked',
   in_progress: 'in_progress',

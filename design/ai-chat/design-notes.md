@@ -326,3 +326,277 @@ Invoices`, `Foundation → Reminders`) — but it is **not a hard rule**, so ind
 (pan/zoom/drag/fit + node + read-only edge rendering — MOTIR-1236), per-user layout
 persistence (MOTIR-1237), composed by the onboarding shell (MOTIR-840) and reused by
 generation review (7.4) and the persistent roadmap (7.19).
+
+---
+
+## ⭐ The reusable AI planning workspace — shell + universal entrance (MOTIR-1193 / 7.20.1)
+
+**THE ONE SHARED PLANNING INTERFACE.** Every AI-planning surface uses the SAME
+structure — a full-screen **canvas (left) + chat (right)** workspace. Onboarding
+(above) is one specialization; **generation review (7.4), re-planning (7.11),
+contextual planning (7.12) and the persistent roadmap (7.19) REUSE this same
+surface** as MODES (states), not separate UIs. This is the SINGLE design for it —
+it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
+`7.12.1`/`MOTIR-907`.
+
+**Asset:** `planning-workspace.mock.html` (source) + `planning-workspace.png`
+(full-page export). A five-sheet review board:
+
+| Sheet | What it shows                                                                                                                                   |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                               |
+| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                             |
+| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                  |
+| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating "M" universal AI callout; context → mode adapts   |
+| **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)       |
+| **6** | Opening & exiting — a full-screen overlay ON TOP of the app; Close (✕ / Esc / "Back to …") + the confirm-to-persist guard on close-with-pending |
+
+### ⚠️ SCOPE — this designs the SHELL + ENTRANCE, NOT the canvas pane
+
+The canvas pane is the **standalone work-item canvas** — already designed +
+owned elsewhere; this asset **COMPOSES it, it does NOT redesign it**:
+
+- **The canvas DESIGN** = **MOTIR-1009** (`7.3.76`, done) → the three-file asset
+  at **`design/roadmap/`** (the deterministic auto-layout, the work-item tree,
+  the dependency edges — within-story arrow vs the cross-story warning edge —
+  zoom / fit, search-to-focus, filters, node states, drill-down, empty/loading/
+  error). This asset READS it and reuses its node + edge language; it does **not**
+  re-draw the tree / edges / zoom / search.
+- **The canvas COMPONENT** = **MOTIR-1194** (`7.3.77`, the reusable
+  `WorkItemCanvas`) → the code this workspace's canvas pane MOUNTS. A FOUNDATION
+  (it does not depend on this design); this workspace is one of its consumers.
+
+So the mock's canvas panes are the `design/roadmap/` canvas language reproduced
+faithfully (the `StationCard` node + the `PlanningCanvas` neutral firm /
+dashed-pending edges + the cross-story `--el-warning` edge), **never a new
+canvas**.
+
+### ⭐ Built on SHIPPED REALITY (design-against-shipped-reality)
+
+The shell is **already shipped** and reused, not reinvented:
+
+- **The shell** = `components/planning/PlanningWorkspace.tsx` — the full-screen
+  two-pane frame: `grid h-dvh w-full grid-cols-1 md:grid-cols-[1fr_22rem]`
+  (canvas left, a **22rem** chat rail right), **no app shell / sidebar / top
+  nav** — a focused planning surface. The mock mirrors this exactly.
+- **The chat rail** = `components/onboarding/DiscoveryChatRail.tsx` — the mock
+  reproduces its real markup: the rail header (a `--el-success` status dot + the
+  mono uppercase **"Motir AI"** label), the `Bubble` + `Avatar` language
+  (AI = `--el-accent` avatar + soft bubble; user = accent bubble), the drafting
+  `Spinner` indicator, and the composer (`Input` + a primary `Send` button).
+  The one new rail element is a small **mode chip** (mono, accent tint) naming
+  the active mode — the only per-mode difference in the rail.
+- **The global launcher** composes `components/ui/CommandPalette.tsx` (the wired
+  ⌘K palette, app composition in `(authed)/_components/AppCommandPalette.tsx`):
+  a **"Plan with AI"** command in a `Plan` group.
+
+### Chat-to-plan, on-canvas incremental placement & confirm-to-persist (sheet 2)
+
+> **⚠️ No "plan" button INSIDE the workspace (Yue, 2026-06-24).** Inside, the
+> user **just chats** — there is **no "Plan with AI" action/button** on the canvas
+> or anywhere in the shell. The **conversation itself turns into a plan**: as you
+> talk, proposed cards appear on the canvas. "Plan with AI" names **only the
+> ENTRANCE** (the affordance that opens this from the app); once you're in, the
+> canvas is just the project roadmap and the **chat is the sole input**. (The
+> canvas chrome shows the project / roadmap context + Close + search — never a
+> "plan" button; the composer reads "Message Motir AI…", not "describe what to
+> plan".)
+
+- **The chat drives; the conductor proposes work.** Free-form chat in the rail
+  → the conductor proposes work items. The user never presses "plan" — talking
+  is planning.
+- **On-canvas incremental placement.** Proposed work items appear on the
+  standalone canvas **one by one**, each drawn with its **relationship edges** —
+  parent→child, the within-story `depends_on` arrow, and the cross-story
+  `blocked_by` warning edge — in the canvas's own node + edge language.
+- **Confirm-to-persist.** The proposed set is a **STATE of the canvas** —
+  pending nodes (a dashed `--el-accent` border + a `proposed` `Pill`) and
+  pending edges (dashed). **Nothing is written to the DB until the user presses
+  Confirm**; **Discard** drops the whole proposal. This IS the diff/review
+  surface — there is no separate review screen. The gate is a floating bar:
+  _"N proposed work items · Nothing saved yet"_ + **Discard** / **Confirm & add
+  to project**.
+
+### The MODES — states of the one surface, each opened by a door (sheet 3)
+
+All four differ ONLY in (a) what the canvas is seeded with and (b) the chat
+driver's framing — the shell, the placement, and the confirm gate are identical.
+**Grounded in the workflow-defining stories** (design TO the spec, never invent
+the flow):
+
+- **Generation review — 7.4 (`MOTIR-805`).** Door: a project surface with **no
+  plan yet** → generate the first fresh tree from the frozen baseline → review →
+  Confirm persists. (7.4 is fresh, empty-skeleton generation.)
+- **Augment / re-plan — 7.11 (`MOTIR-811`).** Door: a project surface **with a
+  plan** → expand / re-sequence; **completion-aware** — done work stays locked,
+  new cards propose around it.
+- **Contextual planning — 7.12 (`MOTIR-812`).** Door: **from a specific work
+  item** (detail page / row action) → planning **scoped to that item's subtree**
+  (the canvas focuses that item; proposals are its children).
+- **Roadmap read + augment — 7.19 (`MOTIR-1008`).** Door: the **Board ↔
+  Roadmap** toggle → the persistent roadmap; read the whole tree, augment in
+  place.
+
+Onboarding (7.3) is the one specialization that wraps this shell in its gated
+per-tier pre-plan review loop (see `onboarding.mock.html`).
+
+### ⚠️ The universal entrance — global hero affordances, not per-surface (sheet 4)
+
+**Corrected 2026-06-24 (Yue): NOT one door per screen.** The global **header**
+(`TopNav`) and the **⌘K** command menu are present on **every** PM screen, so AI
+is reachable everywhere via **global** affordances, not a per-surface button. And
+because this is the
+**product's headline feature / selling point**, the affordance is a **hero
+control** — gradient fill, a soft glow / aura, a `Sparkles` mark, a subtle
+shimmer — **never a plain toolbar button**. (This supersedes the earlier
+per-surface in-situ grid, which multiplied a regular button across seven
+surfaces — wrong on both counts.)
+
+**We ship BOTH entrances** (refined 2026-06-24, Yue) — they are complementary,
+both always-present, and both restyle with the active design style (sheet 5);
+⌘K opens the workspace too:
+
+- **A — the header "Plan with AI" pill.** A gradient hero pill in `TopNav`'s
+  right cluster, present on every screen, never covering content — the direct
+  **planning** entrance; opens the workspace in the current context's mode.
+- **B — the floating "M" button = the universal AI callout.** A glowing orb (the
+  **M** logo) afloat bottom-right on every screen; tapping it opens the AI
+  callout — **the home of ALL AI**, where **Plan with AI is ONE action**
+  alongside **"Ask about this project"** (Q&A over the plan / docs / work items)
+  and **"Help with a task"** (draft / summarise / assist). Planning is the
+  capability this design+story deliver now; project Q&A and task assistance are
+  **future capabilities reached through the same button**. **Built now with a
+  mock `M` logo** — the real brand logo replaces it later (the orb is the logo's
+  home). The callout menu composes `Card` + list rows + an "Ask Motir anything…"
+  input.
+
+**⚠️ The hero control is STYLE-AWARE — special in every design style (sheet 5).**
+It is not a fixed gradient: each `data-style` gives the "Plan with AI" control a
+**distinct, special treatment** — Warm Editorial (gradient + glow + shimmer),
+Soft/Playful (rounded, pillowy stacked shadow), Swiss/Minimal-Flat (flat solid,
+sharp, uppercase), Neo-Brutalism (hard border + offset hard shadow), Glassmorphism
+(frosted translucent over a colourful surface), Cybercore/Y2K (dark surface + neon
+glow + mono). The floating **M** orb adopts each style's material the same way.
+Implemented as a **per-style material surface** (the sanctioned exception, like
+glassmorphism): `[data-style='id'] [data-surface='ai-cta'] { … }` rules whose
+colour is **palette-DERIVED** (`color-mix()` / `var(--el-accent|--el-highlight)`,
+no raw hex) and whose radius/padding/shadow flow through element-semantic **shape**
+tokens — so a `data-palette` swap re-tints every style's treatment and a
+`data-style` swap re-shapes it (the axes stay disjoint). **AA holds in each**
+(label over the accent-dominant region; Cybercore renders its native dark
+register).
+
+**The anatomy of the hero control** (drawn in the sheet-4 close-up):
+
+- **Gradient fill** — `--el-accent` → an `--el-highlight`-derived violet/pink;
+  white label text sits over the **accent-dominant** region so **AA holds** (the
+  brand pink lives only in the glow/aura, never under text).
+- **Aura / outer glow** — a soft pink + violet halo so it lifts off the chrome.
+- **Sparkle mark** (lucide `Sparkles`) + a **shimmer sweep** (a slow loop in the
+  build) — the living, AI feel.
+- An optional **conic-gradient ring** for a premium rim (shown on the close-up).
+- This is a **sanctioned "feature surface" exception** to the flat-button norm
+  (like the surface-material styles): the gradient + glow are **palette-DERIVED**
+  (`color-mix()` / `var(--el-accent | --el-highlight)`, **no raw hex hue**), so a
+  `data-palette` swap re-tints the hero and a `data-style` swap leaves its hue
+  alone. Shape (radius/padding) still flows through semantic tokens.
+
+**ONE door that ADAPTS — context → mode** (not seven doors). The single
+affordance opens the workspace in the mode for the **current context**:
+
+| Current context                                | Mode it opens                            | Story |
+| ---------------------------------------------- | ---------------------------------------- | ----- |
+| viewing a **work item**                        | contextual planning, scoped to that item | 7.12  |
+| a **project surface** (board / backlog / list) | augment / re-plan                        | 7.11  |
+| an **empty project** (no plan yet)             | generation                               | 7.4   |
+| the **roadmap**                                | roadmap read + augment                   | 7.19  |
+
+- **Implementation** = the reusable **`PlanWithAILauncher`** (**`MOTIR-1299`** /
+  `7.20.3`, `blocked_by` this design): it renders **both** hero controls (the
+  header pill + the floating **M** callout), opens the `PlanningWorkspace`, and
+  passes the originating context so it lands in the matching state (sheet 3). The
+  callout's non-planning actions (project Q&A, task assistance) are future
+  capabilities that mount in the same menu.
+- The **work-item detail door** (`MOTIR-910`) and the **Board ↔ Roadmap toggle**
+  (`MOTIR-1011`) are **the same launcher in context**, not separate inventions.
+  (The authed roadmap + toggle are owned by 7.19/`MOTIR-1011` and not shipped yet
+  — only the public roadmap exists today; that door reuses this launcher when
+  1011 lands.)
+
+### ⚠️ Opening & exiting — a full-screen overlay ON TOP of the app (sheet 6)
+
+The workspace **covers the screen** (the canvas + chat need the room) but it is a
+**full-screen overlay LAYERED ON TOP of the PM app — not a route change**. The app
+stays mounted, dimmed + inert, behind it; the overlay sits with a slight inset +
+drop shadow so the reader SEES it is a layer on top. **Closing returns you to the
+exact screen you launched from** (same route, scroll, filters) with **no reload or
+lost state** — so it is "full-screen" for working AND "on top" for context.
+
+**The shell carries its OWN exit chrome** (it has no app nav to leave through):
+
+- **Close** — a `✕ Close` control **top-left** of the workspace (it can name the
+  origin, e.g. "↩ Back to board"), drawn on the shell in every sheet.
+- **`Esc`** — closes from anywhere in the workspace (keyboard).
+- **Close-with-pending guard** — because **confirm-to-persist** means nothing is
+  saved until Confirm, dismissing with proposed (pending) cards opens a guard:
+  **Discard N proposed · Keep planning · Confirm & add** — never a silent loss.
+
+**No browser / window chrome** — it is an in-app overlay, not a browser mock; the
+only chrome is the workspace's own top-left controls.
+
+**The canvas title is a drill-down breadcrumb (Yue, 2026-06-24).** The button-
+shaped chip top-left is the project **root** (`PayFlow`); drilling into a node
+grows it to **`PayFlow › Epic 1 › Story 1`** and walks back up — the **canvas's
+own drill-down breadcrumb** (reused from the canvas design, `MOTIR-1009` sheet 6),
+not a "plan" action.
+
+**Onboarding is the one exception** — a genuine full-page first-run _route_ (a
+dedicated journey), not this dismissable overlay.
+
+### Primitives composed (no hand-rolling)
+
+| Element                                            | Built from                                                                                                                                                                 |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the workspace shell                                | the shipped `PlanningWorkspace` (`grid-cols-[1fr_22rem]`)                                                                                                                  |
+| canvas pane (nodes + edges + zoom + search)        | the standalone `WorkItemCanvas` (`MOTIR-1194`; design `design/roadmap/`) over the shipped `PlanningCanvas` — composed, never redrawn                                       |
+| chat rail (header + bubbles + drafting + composer) | the shipped `DiscoveryChatRail` language — `Card`/`Avatar`/`Input`/`Spinner`/`Button`                                                                                      |
+| proposed (pending) node + edge                     | the canvas's `StationCard` + `PlanningCanvas` edge language in a `proposed` state (dashed `--el-accent`)                                                                   |
+| confirm-to-persist bar                             | `Card` (accent border) + `Button` (Confirm primary, Discard ghost)                                                                                                         |
+| "Plan with AI" hero launcher                       | NEW reusable affordance — a `Button`-based gradient pill (header) OR a floating orb (FAB), palette-derived gradient + glow + `Sparkles` + shimmer; ⌘K via `CommandPalette` |
+| host context (sheet 4)                             | the real shipped `TopNav` (Option A host) + the global `AppCommandPalette` (⌘K); the FAB docks into any route                                                              |
+| icons                                              | lucide-react (`Sparkles` for the launcher)                                                                                                                                 |
+
+### Token / a11y discipline
+
+- **Colour** strictly via `--el-*` (the mock inlines the real light-palette
+  values, as the sibling canvas mocks do). The **hero launcher** is a
+  palette-DERIVED gradient (`--el-accent` → `--el-highlight`) + glow — a
+  sanctioned feature-surface exception (no raw hex), with the white label kept
+  over the **accent-dominant** region so **AA holds** and the brand pink confined
+  to the glow/aura. The proposed state uses `--el-accent` border over a faint
+  accent-tinted surface + a soft pink glow; the cross-story edge is
+  `--el-warning`. Work-item type hues are `--el-type-{epic,story,subtask,…}`; type
+  dots/tiles put the hue in a tint with strong text (finding #35, AA).
+- **Shape** strictly via element-semantic tokens (node = `--radius-card`, pills =
+  `--radius-badge`, buttons = `--radius-btn`, menu/list rows = `--radius-control`,
+  the palette = `--radius-modal`; shadows = `--shadow-{subtle,card,modal}`) so a
+  `[data-style]` swap reshapes the whole surface. `rounded-full` only on dots /
+  avatars.
+- **Not colour alone** — the proposed state pairs the dashed border + a
+  `proposed` pill + a label; pending edges are dashed (not just tinted); each
+  mode pairs an icon + label; the launcher pairs the `✦` icon + the "Plan with
+  AI" text everywhere.
+- **A11y** — the canvas + chat are labelled regions (`role="application"` /
+  `aria-label`, shipped on `PlanningCanvas` / the rail); the launcher is a real
+  `Button` / menu `option`, keyboard-reachable; the ⌘K command follows the
+  shipped palette's combobox/listbox pattern; decorative icons are
+  `aria-hidden`.
+
+### Deliverable
+
+The three-file set under `design/ai-chat/` for this surface:
+`design-notes.md` (this section) · `planning-workspace.mock.html` (source) ·
+`planning-workspace.png` (full-page export, Playwright chromium — light,
+`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
+`7.4`/`7.11`/`7.12`/`7.19` (the modes) + `7.20.3`/`MOTIR-1299` (the launcher it
+gates); supersedes `MOTIR-898` + `MOTIR-907`.

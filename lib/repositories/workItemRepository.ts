@@ -642,6 +642,40 @@ export const workItemRepository = {
   },
 
   /**
+   * The ATOMIC claim read for `claim_next_ready` (MOTIR-1330) — the dispatch
+   * race-fix. Given the service's pre-computed ready candidate ids in
+   * dispatch-rank order, LOCK the highest-ranked one that is still claimable and
+   * return its id, under the caller's transaction. `FOR UPDATE … SKIP LOCKED` is
+   * what makes two concurrent claimers take DIFFERENT items: the loser SKIPS the
+   * row another transaction already holds (rather than blocking on it), and
+   * `array_position` keeps the service's rank so each caller still takes the best
+   * row still available to it. A row is claimable iff it is NOT archived and its
+   * status is still in the `todo` category — a sibling that already claimed it
+   * flipped it to `in_progress` (category `in_progress`), dropping it out.
+   * Returns `null` when every candidate is locked or no longer `todo`; the caller
+   * treats that as "retry / nothing claimable". `tx` REQUIRED — this read GUARDS
+   * the immediately-following status write.
+   */
+  async claimNextReadyCandidate(
+    orderedIds: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string } | null> {
+    if (orderedIds.length === 0) return null;
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT w."id"
+        FROM "work_item" w
+        JOIN "workflow_status" ws
+          ON ws."project_id" = w."projectId" AND ws."key" = w."status"
+       WHERE w."id" = ANY(${orderedIds}::text[])
+         AND w."archivedAt" IS NULL
+         AND ws."category" = 'todo'
+       ORDER BY array_position(${orderedIds}::text[], w."id")
+       FOR UPDATE OF w SKIP LOCKED
+       LIMIT 1`;
+    return rows[0] ?? null;
+  },
+
+  /**
    * The triage QUEUE read (Subtask 6.11.3, per docs/decisions/triage-model.md
    * §2) — the ONE read that INVERTS the `notInTriageSql` exclusion: it returns
    * ONLY triage-marked items for a project, never the planned tree. The ACTIVE

@@ -16,19 +16,29 @@ import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
 import { normalizeIdentifier } from './workItemRef';
 
-// `create_work_item` (Story 7.8 · Subtask 7.8.5) — create a work item (story /
-// task / bug / subtask) under a project, optionally parented. A THIN adapter
-// over `workItemsService.createWorkItem`: the kind-parent matrix (finding #41),
-// the per-project key allocation, the initial-status seed, the revision row,
-// and the 6.4 edit gate all run in the service UNCHANGED — this tool adds no
-// business logic, it only resolves the project + parent KEYS to ids and pins
-// the reporter to the token's owning user (`ctx.userId`).
+// `create_work_item` (Story 7.8 · Subtask 7.8.5) — create a work item (epic /
+// story / task / bug / subtask) under a project, optionally parented. A THIN
+// adapter over `workItemsService.createWorkItem`: the kind-parent matrix
+// (finding #41), the per-project key allocation, the initial-status seed, the
+// revision row, and the 6.4 edit gate all run in the service UNCHANGED — this
+// tool adds no business logic, it only resolves the project + parent KEYS to
+// ids and pins the reporter to the token's owning user (`ctx.userId`).
 //
 // `kind: bug` under a story/epic IS the findings bug-logging protocol — the
 // description below says so, so an agent told to "log this bug in Motir" finds
-// THIS tool. (Epic is deliberately NOT an offered kind: epics are structural
-// plan scaffolding created by the planner/seed; the agent surface creates the
-// executable tree — stories, tasks, subtasks — and bugs.)
+// THIS tool.
+//
+// `kind: epic` creates a TOP-LEVEL epic (MOTIR-1345). Epic was previously
+// EXCLUDED from this tool on the theory that epics are seed/scaffolding-only —
+// but the AI Planning Layer (Epic 7) GENERATES the whole work-item tree, epics
+// included (7.4 / MOTIR-805), so the agent surface that planner rides MUST be
+// able to create one; there is no other MCP path to a top-level epic. The
+// service is already total over `epic` — the kind-parent matrix
+// (`lib/issues/parentRules.ts`) places an epic at the ROOT only:
+// `assertValidParent(null, 'epic')` passes (an epic is not in
+// `TYPES_REQUIRING_PARENT`), while any `parentKey` is rejected with the typed
+// `IllegalParentTypeError` (no kind lists `epic` as a legal child). So widening
+// this input enum is the entire fix; the gate + DB trigger stay the backstops.
 //
 // Leaf-authoring fields (MOTIR-1081): besides `storyPoints`, this tool also
 // accepts `estimateMinutes`, `type`, and `executor` — the same leaf fields
@@ -46,9 +56,10 @@ export const CREATE_WORK_ITEM_TOOL_NAME = 'create_work_item';
 const inputSchema = {
   projectKey: z.string().min(1).describe('The project key the item is created in, e.g. "PROD".'),
   kind: z
-    .enum(['story', 'task', 'bug', 'subtask'])
+    .enum(['epic', 'story', 'task', 'bug', 'subtask'])
     .describe(
-      'The work item kind. Use "bug" under a story/epic to log a defect (the bug-logging protocol).',
+      'The work item kind. Use "epic" (no parentKey) to create a top-level capability ' +
+        'area; "bug" under a story/epic to log a defect (the bug-logging protocol).',
     ),
   title: z.string().min(1).describe('The work item title (one line).'),
   parentKey: z
@@ -105,7 +116,7 @@ const inputSchema = {
 
 interface CreateWorkItemArgs {
   projectKey: string;
-  kind: 'story' | 'task' | 'bug' | 'subtask';
+  kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
   title: string;
   parentKey?: string;
   descriptionMd?: string;
@@ -182,12 +193,13 @@ export function registerCreateWorkItem(
     {
       title: 'Create work item',
       description:
-        'Create a work item (story, task, bug, or subtask) in a project, optionally under a ' +
-        'parent. The reporter is the token owner. Use kind "bug" under a story/epic to LOG A ' +
-        'BUG. Optionally set the leaf-authoring fields up front — story points, estimate ' +
+        'Create a work item (epic, story, task, bug, or subtask) in a project, optionally ' +
+        'under a parent. The reporter is the token owner. Use kind "epic" with no parent to ' +
+        'create a top-level capability area; kind "bug" under a story/epic to LOG A BUG. ' +
+        'Optionally set the leaf-authoring fields up front — story points, estimate ' +
         '(minutes), work type, and executor — so a subtask can be created fully-specified in ' +
-        'one call. Honors the same kind-parent rules, leaf-only type/executor rule, and access ' +
-        'checks as the UI.',
+        'one call. Honors the same kind-parent rules (an epic is root-only — a parented epic ' +
+        'is rejected), leaf-only type/executor rule, and access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runCreateWorkItem(args, resolveContext(extra)),

@@ -1,11 +1,11 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 2.7 — Work-item TYPE + EXECUTOR model. The story that turns a piece of
  * planning PROSE into a structural, queryable, dispatch-routing field. Today the
  * seed loader writes "Type: code" / "Executor: coding_agent" as free text in the
  * description (see every leaf in story-7.1.ts / story-7.3.ts: `type` + `executor`
- * already live on `PlanItem`, but they have NOWHERE structural to land — they are
+ * already live on `SeedItem`, but they have NOWHERE structural to land — they are
  * stringified into prose). This story adds the real columns, the picker UI, and
  * the filter integration so `type`/`executor` become first-class.
  *
@@ -74,7 +74,7 @@ import type { PlanStory } from '../types';
  * the taxonomy decision (2.7.2) — are `planned`; everything chained behind them is
  * `blocked` until they merge.
  */
-export const story_2_7: PlanStory = {
+export const story_2_7: SeedStory = {
   id: '2.7',
   title: 'Work-item type + executor',
   status: 'done',
@@ -313,7 +313,7 @@ export const story_2_7: PlanStory = {
         '## Context refs\n\n' +
         '- This module header (the locked taxonomy + the deviation rationale).' +
         '\n' +
-        '- `scripts/plan-seed/types.ts` — `PlanItem.type` / `PlanItem.executor` ' +
+        '- `scripts/plan-seed/types.ts` — `SeedItem.type` / `SeedItem.executor` ' +
         '(the plan-side fields already carrying these values as the loader ' +
         'input 2.7.5 maps).\n' +
         '- Atlassian Support — "What are work types?" (issue-type = the kind ' +
@@ -463,7 +463,7 @@ export const story_2_7: PlanStory = {
     {
       id: '2.7.5',
       title:
-        'Seed loader — map PlanItem.type/executor to the structured fields (stop emitting prose)',
+        'Seed loader — map SeedItem.type/executor to the structured fields (stop emitting prose)',
       status: 'done',
       type: 'code',
       executor: 'coding_agent',
@@ -476,7 +476,7 @@ export const story_2_7: PlanStory = {
         'STRINGIFIES them into the work-item description ("Type: code", ' +
         '"Executor: coding_agent"). Now that 2.7.3 gives them real columns, map ' +
         'them STRUCTURALLY and stop emitting the prose.\n\n' +
-        '- **Map** `PlanItem.type` → `work_item.type` and `PlanItem.executor` ' +
+        '- **Map** `SeedItem.type` → `work_item.type` and `SeedItem.executor` ' +
         '→ `work_item.executor` (both written through `workItemsService`, the ' +
         'create authority — the loader already uses it). When a leaf omits ' +
         '`executor` but has a `type`, SEED it from 2.7.3’s ' +
@@ -488,7 +488,7 @@ export const story_2_7: PlanStory = {
         '(the card’s real prose: description + acceptance criteria + context ' +
         'refs). The structured fields are now the source of truth; the chips ' +
         'render from them (2.7.4).\n' +
-        '- **Validate against the loader’s own values.** `PlanItem.type` is a ' +
+        '- **Validate against the loader’s own values.** `SeedItem.type` is a ' +
         'free `string` on the plan side (types.ts), so the loader must map it ' +
         'to the `WorkItemType` enum and FAIL LOUDLY on an unknown type (a typo ' +
         'in a plan module is a seed-time error, not a silently-dropped field) — ' +
@@ -501,7 +501,7 @@ export const story_2_7: PlanStory = {
         '- A leaf with a `type` but no explicit `executor` is seeded with the ' +
         '`defaultExecutorForType` value; epics/stories are seeded `type = ' +
         'null`.\n' +
-        '- An unknown `PlanItem.type` string aborts the seed with a clear error ' +
+        '- An unknown `SeedItem.type` string aborts the seed with a clear error ' +
         '(no silent drop); the mapping goes through `workItemsService` (not raw ' +
         'Prisma).\n' +
         '- Re-seeding is idempotent in the established loader way (no duplicate ' +
@@ -511,8 +511,8 @@ export const story_2_7: PlanStory = {
         '- `motir-core/scripts/plan-seed/seed.ts` — the loader that currently ' +
         'emits type/executor as prose (the lines to remove + the mapping to ' +
         'add).\n' +
-        '- `motir-core/scripts/plan-seed/types.ts` — `PlanItem.type` ' +
-        '(string) / `PlanItem.executor` — the loader input shape.\n' +
+        '- `motir-core/scripts/plan-seed/types.ts` — `SeedItem.type` ' +
+        '(string) / `SeedItem.executor` — the loader input shape.\n' +
         '- 2.7.3 — the `WorkItemType`/`Executor` enums + the ' +
         '`defaultExecutorForType` helper the loader maps to + seeds from.\n' +
         '- `motir-core/lib/services/workItemsService.ts` — the create authority ' +

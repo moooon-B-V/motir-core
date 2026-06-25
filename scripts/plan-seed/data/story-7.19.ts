@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.19 — Design-system selection (palette / typography / shape → project
@@ -151,7 +151,7 @@ import type { PlanStory } from '../types';
  * end user of the built product (Motir builds the project's design system; how
  * the built app exposes theming to ITS users is that app's own scope).
  */
-export const story_7_19: PlanStory = {
+export const story_7_19: SeedStory = {
   id: '7.19',
   title:
     'Design-system selection (palette / typography / shape → project design tokens), recorded in motir-ai',

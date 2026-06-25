@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.16 — Migrate-existing-codebase onboarding flow (guided wizard).
@@ -96,7 +96,7 @@ import type { PlanStory } from '../types';
  * (7.16.1, `dependsOn: []`) is `planned`; every other card chains behind it or
  * behind a not-yet-done upstream id → `blocked`.
  */
-export const story_7_16: PlanStory = {
+export const story_7_16: SeedStory = {
   id: '7.16',
   title: 'Migrate-existing-codebase onboarding flow (guided wizard)',
   status: 'planned',

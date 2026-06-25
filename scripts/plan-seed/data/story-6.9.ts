@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.9 — Quick issue search (server-side issue-picker search).
@@ -51,7 +51,7 @@ import type { PlanStory } from '../types';
  * phantom-Search-Story gap). Canonical depth: a reusable read (6.9.1), the
  * picker retrofit (6.9.2), and the story tests (6.9.3).
  */
-export const story_6_9: PlanStory = {
+export const story_6_9: SeedStory = {
   id: '6.9',
   title: 'Quick issue search (server-side issue-picker search)',
   status: 'done',

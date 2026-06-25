@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 2.6 — Epic 2 test consolidation, coverage hardening & acceptance journeys.
@@ -64,7 +64,7 @@ import type { PlanStory } from '../types';
  * depth + string-literal style of the Epic-2 modules (2.2 / 2.5) and the 1.4.7
  * coverage-matrix convention.
  */
-export const story_2_6: PlanStory = {
+export const story_2_6: SeedStory = {
   id: '2.6',
   title: 'Tests — Epic 2 consolidation, coverage hardening & acceptance journeys',
   status: 'done',

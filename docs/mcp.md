@@ -218,6 +218,34 @@ to `excludeIds`.
 with `descriptionMd`, `contextRefs`, `blockerKeys`, `parentKey`, and
 `runCommand` (`motir run <key>`).
 
+#### `claim_next_ready`
+
+ATOMICALLY **claim** the next ready Subtask for dispatch and return the same
+dispatch payload as `next_ready`. Unlike `next_ready` (which only READS), this is
+the race-safe write that two concurrent `motir run` sessions use: in one
+transaction it locks the highest-ranked ready item (`SELECT … FOR UPDATE SKIP
+LOCKED`), transitions it to **In Progress**, and returns it. Two concurrent
+callers therefore never claim the same item — the loser takes the next-best, or
+gets an empty result and **retries**. The claim **IS** the dispatch status flip,
+so do NOT call `transition_status` afterwards.
+
+**Scope** — resolved server-side: when the project has an **active sprint**, the
+claim is scoped to it (dispatch only committed work); when there is **no active
+sprint** — Motir used without sprint planning (plain Kanban) — the claim widens
+to the whole project. A missing sprint is therefore never an error, and no sprint
+id is passed.
+
+| Input        | Type   | Required | Notes        |
+| ------------ | ------ | -------- | ------------ |
+| `projectKey` | string | yes      | Project key. |
+
+**Output** — `structuredContent`: `{ item: ReadyItemDispatchDto | null, reason? }`.
+On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
+`status` now in the `in_progress` category). When nothing could be claimed,
+`item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
+claimed the last one — or check there is unblocked work to start). Scope token:
+`work_items:write` (it flips status).
+
 #### `get_work_item`
 
 Read one work item by identifier as the full issue-detail aggregate — the same
@@ -235,23 +263,27 @@ links, and a readiness verdict.
 
 #### `create_work_item`
 
-Create a work item (story / task / bug / subtask) under a project, optionally
-parented. The reporter is pinned to the token owner. Use `kind: "bug"` under a
-story/epic to **log a bug** (the bug-logging protocol). Epic is deliberately not
-an offered kind.
+Create a work item (epic / story / task / bug / subtask) under a project,
+optionally parented. The reporter is pinned to the token owner. Use
+`kind: "epic"` with no `parentKey` to create a **top-level capability area**;
+`kind: "bug"` under a story/epic to **log a bug** (the bug-logging protocol). An
+epic is **root-only** — the kind-parent matrix admits no parent for it, so
+passing a `parentKey` alongside `kind: "epic"` is rejected with
+`ILLEGAL_PARENT_TYPE` (MOTIR-1345 — the AI planner generates the whole tree,
+epics included, so the agent surface can create one).
 
-| Input             | Type                                      | Required | Notes                                                                                                                                                                         |
-| ----------------- | ----------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `projectKey`      | string                                    | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                            |
-| `kind`            | `"story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind.                                                                                                                                                           |
-| `title`           | string                                    | yes      | The title (one line).                                                                                                                                                         |
-| `parentKey`       | string                                    | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                |
-| `descriptionMd`   | string                                    | no       | Markdown description body.                                                                                                                                                    |
-| `priority`        | priority enum                             | no       | Omit for the project default.                                                                                                                                                 |
-| `storyPoints`     | number \| null                            | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                      |
-| `estimateMinutes` | number \| null                            | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                   |
-| `type`            | type enum \| null                         | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped. |
-| `executor`        | `"coding_agent" \| "human"` \| null       | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                               |
+| Input             | Type                                                | Required | Notes                                                                                                                                                                         |
+| ----------------- | --------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey`      | string                                              | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                            |
+| `kind`            | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                     |
+| `title`           | string                                              | yes      | The title (one line).                                                                                                                                                         |
+| `parentKey`       | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                |
+| `descriptionMd`   | string                                              | no       | Markdown description body.                                                                                                                                                    |
+| `priority`        | priority enum                                       | no       | Omit for the project default.                                                                                                                                                 |
+| `storyPoints`     | number \| null                                      | no       | Story-point estimate (non-negative, ≤ 9999.99, ≤ 2 decimals). Omit/`null` → unestimated.                                                                                      |
+| `estimateMinutes` | number \| null                                      | no       | Time estimate in minutes (non-negative integer). Omit/`null` → unestimated.                                                                                                   |
+| `type`            | type enum \| null                                   | no       | Work type (code / design / test / …) — leaf kinds only; rejected on a story. Seeds the executor from the type default unless `executor` is also given. Omit/`null` → untyped. |
+| `executor`        | `"coding_agent" \| "human"` \| null                 | no       | Who executes the work — leaf kinds only; overrides the type default. Omit/`null` → the type default (or unset).                                                               |
 
 **Output** — `structuredContent`: the created `WorkItemDto`.
 

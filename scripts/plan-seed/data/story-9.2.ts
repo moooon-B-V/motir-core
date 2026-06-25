@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 9.2 — Design approval gate (hosted-run design review + revise loop).
@@ -127,7 +127,7 @@ import type { PlanStory } from '../types';
  *     approvers, per-role routing). 9.2's approver is the dispatching user /
  *     project member; richer routing is later.
  */
-export const story_9_2: PlanStory = {
+export const story_9_2: SeedStory = {
   id: '9.2',
   title:
     'Design approval gate — hosted-run design review + revise loop (runtime human-in-the-loop, distinct from the planning-time design gate)',

@@ -113,6 +113,19 @@ export const sprintsService = {
   },
 
   /**
+   * The project's single `active` sprint as a DTO, or `null` when none is active
+   * (the `sprint_one_active_per_project` partial-unique index guarantees AT MOST
+   * one). The `claim_next_ready` dispatch path resolves the active sprint through
+   * this before claiming; a `null` here is the "no active sprint — run `motir
+   * plan sprint`" signal. A pure read — no admin gate (reading the active sprint
+   * is not a mutation; the same workspace tenancy the repo enforces applies).
+   */
+  async getActiveSprint(projectId: string, ctx: ServiceContext): Promise<SprintDto | null> {
+    const row = await sprintRepository.findActiveByProject(projectId, ctx.workspaceId);
+    return row ? toSprintDto(row, 0) : null;
+  },
+
+  /**
    * Update a sprint's editable metadata — rename, edit goal, adjust the planned
    * window. An undefined field is left unchanged; an explicit `null` clears
    * `goal` / a date. The effective window (the patch merged over the current

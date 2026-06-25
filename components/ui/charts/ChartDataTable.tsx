@@ -59,51 +59,61 @@ export function ChartDataTable({
         <TableIcon aria-hidden="true" className="w-3.5 h-3.5 text-(--el-text-muted)" />
         {summaryLabel}
       </summary>
-      <table className="w-full mt-2.5 text-xs border-collapse">
-        <caption className="text-left text-[11px] text-(--el-text-muted) mb-1.5">{caption}</caption>
-        <thead>
-          <tr>
-            <th
-              scope="col"
-              className="text-left font-semibold border border-(--el-border) px-2 py-1 bg-(--el-surface-soft) text-(--el-text)"
-            >
-              {first ?? ''}
-            </th>
-            {rest.map((col, i) => (
+      {/* The table sizes to its column min-content; in a narrow host (the
+          scrum-header's fixed w-[300px] burndown slot) the 5-column table
+          exceeds the card, so this wrapper scrolls it horizontally INSIDE the
+          card instead of overflowing the page. A wide host (the full report
+          card) fits, so no scrollbar shows — the `full` variant is unaffected
+          (MOTIR-1329, the min-w-0 overflow bug class). */}
+      <div className="mt-2.5 min-w-0 overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <caption className="text-left text-[11px] text-(--el-text-muted) mb-1.5">
+            {caption}
+          </caption>
+          <thead>
+            <tr>
               <th
-                key={`${col}-${i}`}
                 scope="col"
-                className="text-right font-semibold border border-(--el-border) px-2 py-1 bg-(--el-surface-soft) text-(--el-text)"
+                className="text-left font-semibold border border-(--el-border) px-2 py-1 bg-(--el-surface-soft) text-(--el-text)"
               >
-                {col}
+                {first ?? ''}
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, ri) => (
-            <tr key={`${row.header}-${ri}`}>
-              <th
-                scope="row"
-                className="text-left font-normal border border-(--el-border) px-2 py-1 text-(--el-text-secondary)"
-              >
-                {row.header}
-              </th>
-              {row.cells.map((cell, ci) => (
-                <td
-                  key={ci}
-                  className={cn(
-                    'text-right border border-(--el-border) px-2 py-1',
-                    cell.numeric ? 'font-mono text-(--el-text)' : 'text-(--el-text-secondary)',
-                  )}
+              {rest.map((col, i) => (
+                <th
+                  key={`${col}-${i}`}
+                  scope="col"
+                  className="text-right font-semibold border border-(--el-border) px-2 py-1 bg-(--el-surface-soft) text-(--el-text)"
                 >
-                  {cell.value}
-                </td>
+                  {col}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={`${row.header}-${ri}`}>
+                <th
+                  scope="row"
+                  className="text-left font-normal border border-(--el-border) px-2 py-1 text-(--el-text-secondary)"
+                >
+                  {row.header}
+                </th>
+                {row.cells.map((cell, ci) => (
+                  <td
+                    key={ci}
+                    className={cn(
+                      'text-right border border-(--el-border) px-2 py-1',
+                      cell.numeric ? 'font-mono text-(--el-text)' : 'text-(--el-text-secondary)',
+                    )}
+                  >
+                    {cell.value}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </details>
   );
 }

@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 6.12 (Epic 6) — Public projects (open project management). A project can
@@ -136,7 +136,7 @@ import type { PlanStory } from '../types';
  * 6.12.1 (design) and 6.12.2 (decision) have `dependsOn: []` → `planned`;
  * everything chained behind them or behind 6.11.x → `blocked`.
  */
-export const story_6_12: PlanStory = {
+export const story_6_12: SeedStory = {
   id: '6.12',
   title: 'Public projects (open project management)',
   status: 'planned',

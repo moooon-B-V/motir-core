@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.17 — Issue importer (Jira / Linear / GitHub Issues / CSV → Motir
@@ -86,7 +86,7 @@ import type { PlanStory } from '../types';
  * are `planned`; every card chained behind a not-yet-done 7.17.x id is
  * `blocked`.
  */
-export const story_7_17: PlanStory = {
+export const story_7_17: SeedStory = {
   id: '7.17',
   title: 'Issue importer (Jira / Linear / GitHub / CSV → Motir work items)',
   status: 'planned',

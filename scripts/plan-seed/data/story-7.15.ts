@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 7.15 — Start-fresh onboarding flow (guided wizard). The "Workflow A"
@@ -96,7 +96,7 @@ import type { PlanStory } from '../types';
  * `design-notes.md`, and EVERY UI-touching code subtask (7.15.4) depends on it
  * and is `blocked` behind it.
  */
-export const story_7_15: PlanStory = {
+export const story_7_15: SeedStory = {
   id: '7.15',
   title: 'Start-fresh onboarding flow (guided wizard)',
   status: 'planned',

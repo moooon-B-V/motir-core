@@ -23,6 +23,7 @@ import { CreateIssueProvider } from './_components/CreateIssueProvider';
 import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
 import { ReportProvider } from './_components/ReportProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
+import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
 // top-nav + centered <main> into the full AppLayout shell: a full-width top
@@ -141,6 +142,14 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
 
   const activeWorkspaceId = ctx?.workspaceId ?? null;
 
+  // The "Plan with AI" universal launcher (MOTIR-1299) — the hero entrance to
+  // the AI planning workspace. Shown only when AI planning is wired (the
+  // cloud/self-host gate, the same `isMotirAiConfigured` probe the create
+  // modal's "Draft with AI" uses) AND there's an active project to plan into.
+  // A server-side boolean so the client launcher needs no `server-only` read.
+  const aiPlanningConfigured = isMotirAiConfigured();
+  const showPlanWithAi = aiPlanningConfigured && Boolean(activeProject);
+
   // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
   // partial-index aggregate (5.7.4 getUnreadCount), resolved once here and
   // threaded into TopNav so the badge paints without a client round-trip; the
@@ -186,6 +195,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     buildInPublicProjectKey={buildInPublicProjectKey}
                     buildingInPublic={buildingInPublic}
                     cloudBilling={cloudBilling}
+                    showPlanWithAi={showPlanWithAi}
                   />
                 }
                 sidebar={
@@ -236,7 +246,14 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 activeProjectId={activeProject?.id ?? null}
                 hasProject={Boolean(activeProject)}
                 settingsAccess={settingsAccess}
+                aiPlanningConfigured={aiPlanningConfigured}
               />
+
+              {/* The floating "M" entrance (MOTIR-1299) — the second of the two
+                  planning-workspace doors the design ships (alongside the
+                  header pill). A fixed bottom-right orb, mounted once at the
+                  layout root, under the same gate as the pill. */}
+              {showPlanWithAi ? <PlanWithAIFab /> : null}
             </ReportProvider>
           </ProjectAccessProvider>
         </CreateIssueProvider>

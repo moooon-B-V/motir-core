@@ -50,6 +50,19 @@ export async function setup(): Promise<void> {
       const name = workerDbName(i);
       await dropWorkerDb(admin, name);
       await admin.query(`CREATE DATABASE "${name}" TEMPLATE "${base}"`);
+      // MOTIR-1265 — kill the truncate-hook-timeout flake at the root. Every
+      // DB-backed suite resets in a `beforeEach` via `TRUNCATE … CASCADE`
+      // (tests/helpers/db.ts) — a WAL-logged, multi-table DDL. With all N
+      // worker DBs hosted by ONE cluster, those resets fire concurrently and
+      // their WAL fsyncs contend on the shared disk, so a truncate occasionally
+      // stalls past the hook budget (observed: `kind-parent-matrix` beforeEach
+      // > 10s). A test worker DB is a disposable per-run clone, so durability
+      // across an OS crash is irrelevant — `synchronous_commit = off` drops the
+      // commit fsync wait, which is exactly the cost that spikes under
+      // concurrent load. Set per-database so every worker connection inherits
+      // it (no app/test code change). The on-disk data is still crash-safe to
+      // the extent TRUNCATE is; only the last few commits' durability is traded.
+      await admin.query(`ALTER DATABASE "${name}" SET synchronous_commit = off`);
     }
   } finally {
     await admin.end();

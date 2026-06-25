@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.3 — Projects.
  * Faithful transcription of prodect_plan/story-1.3-projects.html (frozen archive).
  */
-export const story_1_3: PlanStory = {
+export const story_1_3: SeedStory = {
   id: '1.3',
   title: 'Projects',
   status: 'done',

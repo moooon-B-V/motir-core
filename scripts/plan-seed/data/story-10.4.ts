@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 10.4 (Epic 10 — Platform administration & operations) — Test
@@ -48,7 +48,7 @@ import type { PlanStory } from '../types';
  * exists (Epic-1 / Story 2.6 lineage), so `dependsOn: []` and the card is
  * `planned` (not `blocked`). No forward-pointing dep.
  */
-export const story_10_4: PlanStory = {
+export const story_10_4: SeedStory = {
   id: '10.4',
   title: 'Test infrastructure & CI performance',
   status: 'done',

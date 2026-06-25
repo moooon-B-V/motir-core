@@ -1,4 +1,4 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 3.8 — Board load model: filtered-set + virtualize + over-cap warning
@@ -32,7 +32,7 @@ import type { PlanStory } from '../types';
  * code subtask (3.8.3 / 3.8.4 / 3.8.5) carries 3.8.1 in `dependsOn` and names the
  * asset in Context-refs (Principle #13: design before code).
  */
-export const story_3_8: PlanStory = {
+export const story_3_8: SeedStory = {
   id: '3.8',
   title:
     'Board load model — filtered-set + virtualize + over-cap warning (replaces per-column "Load more")',

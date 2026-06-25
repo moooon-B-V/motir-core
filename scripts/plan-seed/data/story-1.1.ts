@@ -1,10 +1,10 @@
-import type { PlanStory } from '../types';
+import type { SeedStory } from '../types';
 
 /**
  * Story 1.1 — Auth & user accounts.
  * Faithful transcription of prodect_plan/story-1.1-auth.html (frozen archive).
  */
-export const story_1_1: PlanStory = {
+export const story_1_1: SeedStory = {
   id: '1.1',
   title: 'Auth & user accounts',
   status: 'done',
