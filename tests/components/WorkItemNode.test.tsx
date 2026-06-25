@@ -48,6 +48,19 @@ describe('WorkItemNode', () => {
     const flag = screen.getByTestId('cross-blocked-flag');
     expect(flag.textContent).toContain('cross-story');
   });
+
+  // MOTIR-1362 — the card sits on the canvas's near-identical `--el-surface-soft`
+  // background, so it MUST carry the crisp `--el-border` + a `--shadow-card` lift to
+  // stay legible (the weak `border-soft` + `shadow-subtle` made cards vanish, esp. in
+  // dark mode). Lock that so a future tweak can't quietly drop the contrast.
+  it('renders the card with a crisp border + card shadow for canvas contrast', () => {
+    const { container } = render(<WorkItemNode item={item} />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.className).toContain('border-(--el-border)');
+    expect(card.className).not.toContain('border-(--el-border-soft)');
+    expect(card.className).toContain('shadow-(--shadow-card)');
+    expect(card.className).not.toContain('shadow-(--shadow-subtle)');
+  });
 });
 
 describe('GhostAnchor', () => {
