@@ -1,11 +1,37 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { OnboardingCanvas } from '@/components/onboarding/OnboardingCanvas';
 import { type DiscoveryState, initialDiscoveryState } from '@/lib/onboarding/discoveryLoop';
 import type { DirectionDocView } from '@/lib/onboarding/directionDoc';
+
+// A condensed peek payload the /api/work-items/peek read returns for MOTIR-1.
+const PEEK = {
+  identifier: 'MOTIR-1',
+  title: 'Epic one',
+  kind: 'epic',
+  statusLabel: 'In Progress',
+  statusCategory: 'in_progress',
+  descriptionMd: 'The first epic.',
+  type: null,
+  executor: null,
+  assigneeName: 'Marco Ortiz',
+  reporterName: 'Alice Chen',
+  priority: 'medium',
+  labels: [],
+  components: [],
+  dueLabel: null,
+  sprintName: null,
+  storyPoints: null,
+  estimateLabel: null,
+  customFields: [],
+  createdAt: '2026-06-02T00:00:00.000Z',
+  updatedAt: '2026-06-10T00:00:00.000Z',
+  parent: null,
+  readiness: null,
+};
 
 beforeEach(() => {
   // useCanvasLayout fetches the saved layout on mount — stub it (empty → auto-layout).
@@ -154,6 +180,67 @@ describe('OnboardingCanvas', () => {
     expect(screen.queryByText('Design your look')).toBeNull(); // entry CTA absent
     fireEvent.keyDown(document.querySelector('[data-node-id="design"]')!, { key: 'Enter' });
     expect(onOpenDesign).not.toHaveBeenCalled(); // click is inert
+  });
+
+  // MOTIR-1352: the work-item quick-view peek works on the onboarding canvas too —
+  // once the user drills from the "Your plan" preview into the produced tree, a
+  // work-item node's View button opens the SAME peek the roadmap uses.
+  it('opens the work-item quick-view from a drilled work-item node', async () => {
+    const epic = {
+      id: 'EP1',
+      parentId: null,
+      kind: 'epic',
+      identifier: 'MOTIR-1',
+      title: 'Epic one',
+      status: 'in_progress',
+      isDone: false,
+      hasChildren: false,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('/api/canvas-layout'))
+          return { ok: true, json: async () => ({ layout: { positions: [] } }) };
+        if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+        if (u.includes('/roadmap'))
+          return { ok: true, json: async () => ({ nodes: [epic], edges: [] }) };
+        return { ok: true, json: async () => ({}) };
+      }),
+    );
+    renderWithIntl(
+      <OnboardingCanvas
+        state={hubState()}
+        idea="x"
+        onOpen={vi.fn()}
+        onOpenDesign={vi.fn()}
+        projectKey="MOTIR"
+      />,
+    );
+    // The "Your plan" preview node appears at the root once the tree loads; select
+    // it and drill into the produced epics.
+    const planNode = await waitFor(() => {
+      const n = document.querySelector('[data-node-id="__plan__"]');
+      if (!n) throw new Error('plan preview not yet rendered');
+      return n;
+    });
+    fireEvent.keyDown(planNode, { key: 'Enter' }); // select the preview
+    fireEvent.click(await screen.findByTestId('drill-button')); // Open → drill to epics
+    // The epic now renders as a real (viewable) work-item node — select it + View.
+    const epicNode = await waitFor(() => {
+      const n = document.querySelector('[data-node-id="EP1"]');
+      if (!n) throw new Error('epic node not yet rendered');
+      return n;
+    });
+    fireEvent.keyDown(epicNode, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('view-button'));
+    // The shipped peek opens and streams the item from /api/work-items/peek.
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe(
+        '/items/MOTIR-1',
+      ),
+    );
   });
 
   it('makes the design station enterable once the tiers are complete (web)', async () => {

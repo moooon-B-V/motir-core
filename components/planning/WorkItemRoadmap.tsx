@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
 } from '@/components/planning/ProjectRoadmapCanvas';
-import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
+import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
 
@@ -46,11 +46,9 @@ export function WorkItemRoadmap({
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
   // project+parent (a ref — mutable — so a new key just misses; no reset needed).
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
-  // node id → its identifier (`MOTIR-12`), accumulated as levels load — the canvas
-  // hands the View handler a node id; the peek read keys off the identifier.
-  const identifierByIdRef = useRef(new Map<string, string>());
-  // The work-item currently peeked (its identifier), or null when the peek is closed.
-  const [peekKey, setPeekKey] = useState<string | null>(null);
+  // The shared work-item quick-view peek (MOTIR-1352) — the same one the onboarding
+  // canvas uses; opened by the canvas "View" button.
+  const { registerItems, onView, quickView } = useWorkItemQuickView();
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
@@ -60,19 +58,11 @@ export function WorkItemRoadmap({
         wi = await fetchRoadmapLevel(projectKey, parentId);
         cacheRef.current.set(key, wi);
       }
-      for (const item of wi.items) identifierByIdRef.current.set(item.id, item.identifier);
+      registerItems(wi);
       return buildWorkItemLevel(wi);
     },
-    [projectKey],
+    [projectKey, registerItems],
   );
-
-  // Open the quick-view peek for a node's work item (the canvas "View" button).
-  // A node with no mapped identifier (only the real items are `viewable`, so this
-  // is defensive) opens nothing.
-  const handleView = useCallback((id: string) => {
-    const identifier = identifierByIdRef.current.get(id);
-    if (identifier) setPeekKey(identifier);
-  }, []);
 
   return (
     <>
@@ -82,12 +72,12 @@ export function WorkItemRoadmap({
         onNodeMove={onNodeMove}
         onResetPositions={onResetPositions}
         onSelect={onSelect}
-        onView={handleView}
+        onView={onView}
         searchable
         rootLabel="Roadmap"
         ariaLabel={ariaLabel}
       />
-      <WorkItemQuickView peekKey={peekKey} onClose={() => setPeekKey(null)} />
+      {quickView}
     </>
   );
 }
