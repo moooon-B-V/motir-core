@@ -148,6 +148,20 @@ describe('routeEdges', () => {
     expect(pts[3]!.y).toBeCloseTo(300, 1); // arrives at B's TOP (b.y)
   });
 
+  it('routes a row-WRAP edge through the inter-row band — bottom→top, not a backward horizontal sweep', () => {
+    // The end of row 0 (right) links to the start of row 1 (left): a backward step
+    // that changes row. It must leave the source's BOTTOM and enter the target's TOP
+    // (the empty band between rows), never exit a side and swim back across the row.
+    const m: RMap = {
+      end: { x: 1400, y: 40, w: 280, h: 124 }, // last card of row 0
+      start: { x: 40, y: 260, w: 280, h: 124 }, // first card of row 1
+    };
+    const pts = points(routeEdges([{ from: 'end', to: 'start' }], lookup(m))[0]!.d);
+    expect(pts[0]!.y).toBeCloseTo(164, 1); // leaves end's BOTTOM (40 + 124)
+    expect(pts[3]!.y).toBeCloseTo(260, 1); // arrives at start's TOP
+    expect(pts[3]!.y - pts[2]!.y).toBeGreaterThan(1); // end tangent points DOWN into the top
+  });
+
   it('fans two edges into one target to DISTINCT entry points (no shared arrowhead)', () => {
     const m: RMap = {
       A: { x: 0, y: 0, w: 100, h: 50 },

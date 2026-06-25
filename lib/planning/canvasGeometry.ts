@@ -169,12 +169,13 @@ interface RouteItem {
 /**
  * Route ALL the edges of a level at once and return one {@link RoutedEdge} per input
  * edge (aligned to `edges`; `null` where an endpoint rect is missing). Each edge
- * connects the two cards on the sides that FACE each other — by the dominant axis
- * between their centres: mostly right→left for the left→right flow, but left→right
- * for a back edge and bottom→top for a stacked pair — so the arrowhead always lands
- * on the side the line arrives from. Siblings off one source (or into one target)
- * fan along that shared side. A horizontal edge spanning more than a neighbour ARCS
- * so it clears any card between the columns rather than hiding behind it.
+ * connects the two cards on the sides that FACE each other — chosen from the boxes'
+ * geometry (see the axis rule inline): right↔left for same-row neighbours, top↔bottom
+ * for a stacked pair OR a row-WRAP edge (one card a full row below the other), so the
+ * arrowhead always lands on the side the line arrives from and a wrap drops cleanly
+ * through the empty inter-row band. Siblings off one source (or into one target) fan
+ * along that shared side. A horizontal edge spanning more than a neighbour ARCS so it
+ * clears any card between the columns rather than hiding behind it.
  */
 export function routeEdges(
   edges: ReadonlyArray<{ from: string; to: string }>,
@@ -224,9 +225,27 @@ export function routeEdges(
     const tcy = b.y + b.h / 2;
     const dx = tcx - scx;
     const dy = tcy - scy;
+    // Pick the AXIS the connector runs along, then the facing side on each box.
+    // The choice is geometry-driven (never a per-edge hardcode): prefer the axis on
+    // which the two boxes are SEPARATED, so the line leaves/enters the sides that
+    // actually face each other. Same-row neighbours (their y-ranges overlap) connect
+    // left↔right; a stacked pair (x-ranges overlap) connects top↔bottom. When the
+    // boxes are offset on BOTH axes (a diagonal) the tell is DIRECTION, not distance:
+    // a BACKWARD step (target to the LEFT, dx < 0) that also changes row is a row-WRAP
+    // — the end of one row reaching back to the start of the next — so route it through
+    // the empty inter-row band (top↔bottom) instead of swimming back across the row it
+    // leaves. A FORWARD diagonal flows with the reading direction, so keep the
+    // horizontal facing sides. (These layouts read left→right.)
+    const overlapX = a.x < b.x + b.w && b.x < a.x + a.w;
+    const overlapY = a.y < b.y + b.h && b.y < a.y + a.h;
+    let axis: 'h' | 'v';
+    if (overlapY && !overlapX) axis = 'h';
+    else if (overlapX && !overlapY) axis = 'v';
+    else if (!overlapX && !overlapY) axis = dx < 0 ? 'v' : 'h';
+    else axis = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
     let exitSide: Side;
     let entrySide: Side;
-    if (Math.abs(dx) >= Math.abs(dy)) {
+    if (axis === 'h') {
       exitSide = dx >= 0 ? 'right' : 'left';
       entrySide = dx >= 0 ? 'left' : 'right';
     } else {
