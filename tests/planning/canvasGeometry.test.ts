@@ -4,10 +4,9 @@ import {
   MIN_SCALE,
   centerOn,
   clampScale,
-  edgeMidpoint,
-  edgePath,
   fitView,
   nodesBounds,
+  routeEdges,
   screenDeltaToWorld,
   screenToWorld,
   zoomToward,
@@ -23,19 +22,6 @@ describe('centerOn', () => {
     const cy = rect.y + rect.h / 2;
     expect(v.tx + cx * v.scale).toBeCloseTo(viewport.w / 2);
     expect(v.ty + cy * v.scale).toBeCloseTo(viewport.h / 2);
-  });
-});
-
-describe('edgeMidpoint', () => {
-  it('rides the overhead channel the route runs across (above the target top)', () => {
-    const a = { x: 0, y: 0, w: 100, h: 100 };
-    const b = { x: 200, y: 400, w: 100, h: 100 };
-    const m = edgeMidpoint(a, b);
-    // the channel sits TOP_APPROACH (40) above the target's top edge…
-    expect(m.y).toBeCloseTo(b.y - 40, 1);
-    // …and the midpoint lies horizontally between the source stub and the target.
-    expect(m.x).toBeGreaterThan(a.x + a.w);
-    expect(m.x).toBeLessThan(b.x + b.w);
   });
 });
 
@@ -115,33 +101,96 @@ function points(d: string): Array<{ x: number; y: number }> {
   return pts;
 }
 
-describe('edgePath', () => {
-  it('leaves the source on its RIGHT-centre', () => {
-    const pts = points(edgePath({ x: 0, y: 0, w: 100, h: 50 }, { x: 300, y: 10, w: 100, h: 50 }));
-    expect(pts[0]!.x).toBeCloseTo(100, 1); // a.x + a.w
-    expect(pts[0]!.y).toBeCloseTo(25, 1); // a.y + a.h/2
+type RMap = Record<string, { x: number; y: number; w: number; h: number }>;
+const lookup =
+  (m: RMap) =>
+  (id: string): RMap[string] | undefined =>
+    m[id];
+
+describe('routeEdges', () => {
+  it('returns one route per edge (aligned to input), null when an endpoint is missing', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 0, w: 100, h: 50 } };
+    const r = routeEdges(
+      [
+        { from: 'A', to: 'B' },
+        { from: 'A', to: 'GONE' },
+      ],
+      lookup(m),
+    );
+    expect(r).toHaveLength(2);
+    expect(r[0]).not.toBeNull();
+    expect(r[1]).toBeNull();
   });
-  it('enters the target on its TOP edge, pointing DOWN (orthogonal turn)', () => {
-    const a = { x: 0, y: 0, w: 100, h: 50 };
-    const b = { x: 300, y: 200, w: 100, h: 50 };
-    const pts = points(edgePath(a, b));
+
+  it('leaves the source RIGHT-centre and enters the target TOP, pointing DOWN', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 200, w: 100, h: 50 } };
+    const pts = points(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d);
+    expect(pts[0]!.x).toBeCloseTo(100, 1); // a.x + a.w
+    expect(pts[0]!.y).toBeCloseTo(25, 1); // a single out-edge leaves at centre height
     const end = pts[pts.length - 1]!;
     const prev = pts[pts.length - 2]!;
-    expect(end.y).toBeCloseTo(b.y, 1); // lands on the target's TOP edge
+    expect(end.y).toBeCloseTo(200, 1); // lands on the target's TOP edge
     expect(Math.abs(end.x - prev.x)).toBeLessThan(0.5); // final segment vertical → arrow down
-    expect(end.x).toBeGreaterThan(b.x); // …within the target's span
-    expect(end.x).toBeLessThan(b.x + b.w);
+    expect(end.x).toBeGreaterThan(300);
+    expect(end.x).toBeLessThan(400);
   });
-  it('turns at right angles via a channel above the target top', () => {
-    const a = { x: 0, y: 0, w: 100, h: 50 };
-    const b = { x: 300, y: 200, w: 100, h: 50 };
-    // the overhead channel sits TOP_APPROACH (40) above the target's top edge.
-    expect(edgePath(a, b)).toContain(',160'); // chY = b.y(200) - 40
+
+  it('runs through an overhead channel above the target top (right-angle turns)', () => {
+    const m: RMap = { A: { x: 0, y: 0, w: 100, h: 50 }, B: { x: 300, y: 200, w: 100, h: 50 } };
+    // TOP_APPROACH 34, snapped to the LANE_STEP(16) grid → 160.
+    expect(routeEdges([{ from: 'A', to: 'B' }], lookup(m))[0]!.d).toContain(',160');
   });
-  it('fans two edges into one target to DISTINCT top-entry points', () => {
-    const target = { x: 400, y: 200, w: 100, h: 50 };
-    const e1 = points(edgePath({ x: 0, y: 0, w: 100, h: 50 }, target));
-    const e2 = points(edgePath({ x: 200, y: 0, w: 100, h: 50 }, target));
-    expect(Math.abs(e1[e1.length - 1]!.x - e2[e2.length - 1]!.x)).toBeGreaterThan(1);
+
+  it('fans two edges into one target to DISTINCT entry columns AND channel rows', () => {
+    const m: RMap = {
+      A: { x: 0, y: 0, w: 100, h: 50 },
+      B: { x: 0, y: 200, w: 100, h: 50 },
+      T: { x: 400, y: 200, w: 100, h: 50 },
+    };
+    const [r1, r2] = routeEdges(
+      [
+        { from: 'A', to: 'T' },
+        { from: 'B', to: 'T' },
+      ],
+      lookup(m),
+    );
+    const e1 = points(r1!.d);
+    const e2 = points(r2!.d);
+    expect(Math.abs(e1[e1.length - 1]!.x - e2[e2.length - 1]!.x)).toBeGreaterThan(1); // entry cols
+    expect(r1!.mid.y).not.toBe(r2!.mid.y); // distinct channel rows → no overlap
+  });
+
+  it('gives two edges off one source DISTINCT exit heights', () => {
+    const m: RMap = {
+      S: { x: 0, y: 0, w: 100, h: 100 },
+      X: { x: 300, y: 0, w: 100, h: 50 },
+      Y: { x: 300, y: 300, w: 100, h: 50 },
+    };
+    const [rx, ry] = routeEdges(
+      [
+        { from: 'S', to: 'X' },
+        { from: 'S', to: 'Y' },
+      ],
+      lookup(m),
+    );
+    expect(points(rx!.d)[0]!.y).not.toBe(points(ry!.d)[0]!.y);
+  });
+
+  it('keeps two OVERLAPPING overhead runs on separate rows (no line on top of another)', () => {
+    const m: RMap = {
+      A: { x: 0, y: 0, w: 100, h: 50 },
+      T: { x: 500, y: 300, w: 100, h: 50 },
+      U: { x: 900, y: 300, w: 100, h: 50 },
+    };
+    // both run rightward from A across the same x band at the same base height — the
+    // router must put them on different channel rows.
+    const [rt, ru] = routeEdges(
+      [
+        { from: 'A', to: 'T' },
+        { from: 'A', to: 'U' },
+      ],
+      lookup(m),
+    );
+    expect(rt!.mid.y).not.toBe(ru!.mid.y);
   });
 });

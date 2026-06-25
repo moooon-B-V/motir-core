@@ -97,16 +97,6 @@ export function centerOn(rect: Rect, viewport: { w: number; h: number }, scale: 
   return { scale, tx: viewport.w / 2 - cx * scale, ty: viewport.h / 2 - cy * scale };
 }
 
-/** A world-space point ON the connector route (anchors a between-edge badge, so a
- *  cross-story flag rests on the line a reader sees) — the middle of the overhead
- *  channel the route runs across. */
-export function edgeMidpoint(a: Rect, b: Rect): { x: number; y: number } {
-  const pts = routePoints(a, b);
-  const p = pts[2]!;
-  const q = pts[3]!;
-  return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-}
-
 /** Convert a SCREEN delta (px) to a WORLD delta — used when dragging a node. */
 export function screenDeltaToWorld(
   dx: number,
@@ -121,39 +111,25 @@ export function screenToWorld(view: View, sx: number, sy: number): { x: number; 
   return { x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale };
 }
 
-// Orthogonal routing constants. Leave the source on its right; rise into a channel
-// just above the target; run across; DROP straight down into the target's TOP edge
-// (so the arrowhead points down into the card and the line turns at right angles).
-const EXIT_STUB = 26; // short horizontal stub off the source before the first turn
-const TOP_APPROACH = 40; // height of the channel above the target's top edge
-const CORNER_R = 16; // rounded-corner radius at each turn
-const SPREAD_FRAC = 0.06; // entry fan across the target top (per source offset)
-const SPREAD_MAX_FRAC = 0.3; // … capped to ±30% of the target width
+// Orthogonal routing constants. Every edge leaves its source on the RIGHT, rises
+// into an overhead channel, runs across, and DROPS straight down into the target's
+// TOP edge (arrow points down, lines turn at right angles). A GLOBAL lane pass then
+// gives every edge its OWN exit height, rise lane, channel row and entry column, so
+// no two segments lie on top of each other.
+const EXIT_STUB = 22; // first horizontal stub off the source's right edge
+const TOP_APPROACH = 34; // base height of the channel above the target top
+const SLOT_STEP = 16; // spacing between sibling exit/entry/rise slots
+const LANE_STEP = 16; // vertical spacing between overhead channel rows
+const CORNER_R = 12; // rounded-corner radius at each turn
+const MAX_LANE_BUMPS = 60; // safety cap on the greedy lane search
 
 type Point = { x: number; y: number };
 
-/**
- * The orthogonal waypoints of the connector A→B: source right-centre → a short
- * stub → up/down into a channel above the target → across → straight DOWN into the
- * target's TOP edge. The top-entry x is fanned toward the source so several edges
- * into one card land at DISTINCT points rather than merging at dead-centre.
- */
-function routePoints(a: Rect, b: Rect): Point[] {
-  const ax = a.x + a.w; // source right edge
-  const ay = a.y + a.h / 2; // … centre height
-  const bcx = b.x + b.w / 2; // target centre x
-  const bt = b.y; // target top edge
-  const cap = b.w * SPREAD_MAX_FRAC;
-  const spread = Math.max(-cap, Math.min(cap, (ax - bcx) * SPREAD_FRAC));
-  const bx = bcx + spread;
-  const chY = bt - TOP_APPROACH; // overhead channel just above the target top
-  return [
-    { x: ax, y: ay },
-    { x: ax + EXIT_STUB, y: ay },
-    { x: ax + EXIT_STUB, y: chY },
-    { x: bx, y: chY },
-    { x: bx, y: bt },
-  ];
+/** One placed connector: its SVG `d` string + a point ON it (for a between-edge
+ *  badge such as the cross-story flag). */
+export interface RoutedEdge {
+  d: string;
+  mid: Point;
 }
 
 const round = (v: number): number => Math.round(v * 100) / 100;
@@ -179,12 +155,139 @@ function roundedPath(pts: Point[], r: number): string {
   return d.join(' ');
 }
 
+/** Centre `n` slots inside `[start, start+size]` spaced `SLOT_STEP` apart, returning
+ *  the `idx`-th (clamped to a margin) — spreads sibling exits/entries along an edge. */
+function slotAt(start: number, size: number, idx: number, n: number): number {
+  const margin = Math.min(size * 0.18, 20);
+  const v = start + size / 2 - ((n - 1) * SLOT_STEP) / 2 + idx * SLOT_STEP;
+  return Math.max(start + margin, Math.min(start + size - margin, v));
+}
+
+interface RouteItem {
+  i: number;
+  a: Rect;
+  b: Rect;
+  outIdx: number;
+  outN: number;
+  inIdx: number;
+  inN: number;
+  ax: number;
+  exitY: number;
+  riseX: number;
+  entryX: number;
+  bt: number;
+  baseChY: number;
+  xs: number;
+  xe: number;
+  chY: number;
+}
+
 /**
- * The READ-ONLY connector PATH (an SVG `d` string) between two node rects — an
- * orthogonal route that turns at right angles and enters the target on its TOP
- * edge (see `routePoints`). Same input → same path; works for any arrangement the
- * user drags the nodes into.
+ * Route ALL the edges of a level at once and return one {@link RoutedEdge} per input
+ * edge (aligned to `edges`; `null` where an endpoint rect is missing). Going global
+ * is what lets the router hand every edge its own track:
+ *  - sibling edges off one source get distinct exit heights + rise lanes;
+ *  - sibling edges into one target get distinct entry columns;
+ *  - the overhead horizontals are greedily assigned to channel rows so two whose
+ *    x-spans overlap never share a row → no line is ever drawn on top of another.
  */
-export function edgePath(a: Rect, b: Rect): string {
-  return roundedPath(routePoints(a, b), CORNER_R);
+export function routeEdges(
+  edges: ReadonlyArray<{ from: string; to: string }>,
+  rect: (id: string) => Rect | undefined,
+): Array<RoutedEdge | null> {
+  const items: RouteItem[] = [];
+  edges.forEach((e, i) => {
+    const a = rect(e.from);
+    const b = rect(e.to);
+    if (a && b) {
+      items.push({
+        i,
+        a,
+        b,
+        outIdx: 0,
+        outN: 1,
+        inIdx: 0,
+        inN: 1,
+        ax: 0,
+        exitY: 0,
+        riseX: 0,
+        entryX: 0,
+        bt: 0,
+        baseChY: 0,
+        xs: 0,
+        xe: 0,
+        chY: 0,
+      });
+    }
+  });
+
+  // sibling slots: out-edges per source (ordered by target), in-edges per target.
+  const groupBy = (pick: (it: RouteItem) => string): RouteItem[][] => {
+    const m = new Map<string, RouteItem[]>();
+    for (const it of items) {
+      const k = pick(it);
+      const arr = m.get(k);
+      if (arr) arr.push(it);
+      else m.set(k, [it]);
+    }
+    return [...m.values()];
+  };
+  for (const arr of groupBy((it) => edges[it.i]!.from)) {
+    arr.sort((p, q) => p.b.y - q.b.y || p.b.x - q.b.x);
+    arr.forEach((it, k) => {
+      it.outIdx = k;
+      it.outN = arr.length;
+    });
+  }
+  for (const arr of groupBy((it) => edges[it.i]!.to)) {
+    arr.sort((p, q) => p.a.y - q.a.y || p.a.x - q.a.x);
+    arr.forEach((it, k) => {
+      it.inIdx = k;
+      it.inN = arr.length;
+    });
+  }
+
+  for (const it of items) {
+    it.ax = it.a.x + it.a.w;
+    it.exitY = slotAt(it.a.y, it.a.h, it.outIdx, it.outN);
+    it.riseX = it.ax + EXIT_STUB + it.outIdx * SLOT_STEP;
+    it.entryX = slotAt(it.b.x, it.b.w, it.inIdx, it.inN);
+    it.bt = it.b.y;
+    it.baseChY = Math.round((it.b.y - TOP_APPROACH) / LANE_STEP) * LANE_STEP; // global grid
+    it.xs = Math.min(it.riseX, it.entryX) - 1;
+    it.xe = Math.max(it.riseX, it.entryX) + 1;
+  }
+
+  // greedy channel-row assignment: bump a horizontal UP a lane until its x-span
+  // clears every edge already placed on that exact row.
+  const occupied = new Map<number, Array<[number, number]>>();
+  for (const it of [...items].sort((p, q) => p.xs - q.xs)) {
+    let k = 0;
+    let y = it.baseChY;
+    for (; k <= MAX_LANE_BUMPS; k++) {
+      y = it.baseChY - k * LANE_STEP;
+      const occ = occupied.get(y);
+      if (!occ || !occ.some(([s, e]) => !(it.xe < s || it.xs > e))) {
+        (occ ?? occupied.set(y, []).get(y)!).push([it.xs, it.xe]);
+        break;
+      }
+    }
+    it.chY = y;
+  }
+
+  const out: Array<RoutedEdge | null> = edges.map(() => null);
+  for (const it of items) {
+    const pts: Point[] = [
+      { x: it.ax, y: it.exitY },
+      { x: it.riseX, y: it.exitY },
+      { x: it.riseX, y: it.chY },
+      { x: it.entryX, y: it.chY },
+      { x: it.entryX, y: it.bt },
+    ];
+    out[it.i] = {
+      d: roundedPath(pts, CORNER_R),
+      mid: { x: (it.riseX + it.entryX) / 2, y: it.chY },
+    };
+  }
+  return out;
 }

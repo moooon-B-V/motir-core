@@ -14,10 +14,9 @@ import {
   type Rect,
   type View,
   centerOn,
-  edgeMidpoint,
-  edgePath,
   fitView,
   nodesBounds,
+  routeEdges,
   screenDeltaToWorld,
   zoomToward,
 } from '@/lib/planning/canvasGeometry';
@@ -135,6 +134,13 @@ export function PlanningCanvas({
   };
   const computeFit = (vw: number, vh: number): View =>
     fitView(nodesBounds(nodes.map(rectOf)), { w: vw, h: vh });
+
+  // Route ALL edges together so the global lane pass keeps every connector on its
+  // own track (one entry per edge, aligned to `edges`; null where a node is gone).
+  const routes = routeEdges(edges, (id) => {
+    const n = nodeById.get(id);
+    return n ? rectOf(n) : undefined;
+  });
 
   // ── measure node sizes so edges anchor accurately (RO callback setState) ──
   useEffect(() => {
@@ -354,16 +360,15 @@ export function PlanningCanvas({
           data-testid="canvas-edges"
         >
           {edges.map((edge, i) => {
-            const a = nodeById.get(edge.from);
-            const b = nodeById.get(edge.to);
-            if (!a || !b) return null;
+            const route = routes[i];
+            if (!route) return null;
             const pending = edge.variant === 'pending';
             const cross = edge.variant === 'cross';
             const marker = cross ? 'warning' : pending ? 'pending' : 'committed';
             return (
               <path
                 key={`${edge.from}~${edge.to}~${i}`}
-                d={edgePath(rectOf(a), rectOf(b))}
+                d={route.d}
                 fill="none"
                 className={
                   cross
@@ -395,10 +400,9 @@ export function PlanningCanvas({
         >
           {edges.map((edge, i) => {
             if (edge.variant !== 'cross') return null;
-            const a = nodeById.get(edge.from);
-            const b = nodeById.get(edge.to);
-            if (!a || !b) return null;
-            const m = edgeMidpoint(rectOf(a), rectOf(b));
+            const route = routes[i];
+            if (!route) return null;
+            const m = route.mid;
             return (
               <span
                 key={`flag~${edge.from}~${edge.to}~${i}`}
