@@ -17,6 +17,20 @@ export const planRepository = {
     return client.plan.findFirst({ where: { id, workspaceId } });
   },
 
+  /**
+   * The plan a generation job is producing into, resolved by its `sourceJobId`
+   * (the generate seam sets `sourceJobId = jobId` at `createPlan`). Scoped to
+   * the workspace so a job token for one tenant can never reach another's plan
+   * — a cross-tenant lookup returns `null` (→ 404, never 403). Newest-first so a
+   * re-submitted job resolves to its latest plan. Read-only.
+   */
+  async findBySourceJobId(sourceJobId: string, workspaceId: string): Promise<Plan | null> {
+    return db.plan.findFirst({
+      where: { sourceJobId, workspaceId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.create({ data });
   },
