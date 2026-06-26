@@ -4153,7 +4153,13 @@
     "noProjectDescription": "从切换器中选择或创建一个项目，以查看其路线图。",
     "emptyTitle": "路线图还是空的",
     "emptyDescription": "随着计划成形，工作项会显示在这里。使用 Motir AI 进行规划以生成路线图，或手动添加一个史诗。",
-    "canvasAria": "{project} 路线图"
+    "canvasAria": "{project} 路线图",
+    "scopeAriaLabel": "路线图范围",
+    "scopeWholeProject": "整个项目",
+    "scopeActiveSprint": "当前冲刺",
+    "scopeChip": "冲刺范围",
+    "noActiveSprintTitle": "暂无进行中的冲刺",
+    "noActiveSprintDescription": "该项目当前没有进行中的冲刺。从看板启动一个冲刺即可查看其在路线图中的部分，或切换回“整个项目”。"
   },
   "aiPlanning": {
     "heading": "计划",
