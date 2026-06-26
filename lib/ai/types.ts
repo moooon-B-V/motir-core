@@ -215,16 +215,31 @@ export interface RawPreplanRevisionEntry {
   createdAt: string;
 }
 
+// One labelled key→value finding in a tier's structured SUMMARY (MOTIR-1392 →
+// MOTIR-1225) — the at-a-glance breakdown the canvas captured-findings renders.
+// `tone` is the design's visual treatment: `positive` (a captured fact),
+// `neutral` (the deliberate negative space — the muted "Out" row), `caution` (a
+// still-to-prove finding). motir-ai derives these from the structured tier docs.
+export interface RawPreplanFinding {
+  label: string;
+  value: string;
+  tone: 'positive' | 'neutral' | 'caution';
+}
+
 // `currentBody` / `currentVersion` are the latest version's rendered Markdown
 // body + its number (the fields 7.3.72/MOTIR-1188 added to the motir-ai docs[]
 // entry) — what the 7.3.5 gate's `DirectionDocView` renders for the read-only
 // tier review. A kind only appears in `docs` once it has ≥1 version, so motir-ai
 // always populates both (defensively `''` / fallback in its no-current-doc
-// guard); forward-only revision diffs stay in `versions`.
+// guard); forward-only revision diffs stay in `versions`. `summary` is the
+// structured per-tier breakdown (MOTIR-1392) the canvas captured-findings
+// renders — `[]` when motir-ai has a rendered body but no structured doc yet (an
+// older Markdown-only session).
 export interface RawPreplanArtifactLog {
   kind: 'discovery' | 'vision' | 'feasibility' | 'validation';
   currentBody: string;
   currentVersion: number;
+  summary: RawPreplanFinding[];
   versions: RawPreplanRevisionEntry[];
 }
 

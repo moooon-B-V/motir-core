@@ -138,6 +138,10 @@ function mapPreplanState(raw: RawPreplanStateResponse): PreplanStateDTO {
       // passed through verbatim alongside the forward revision log.
       currentBody: doc.currentBody,
       currentVersion: doc.currentVersion,
+      // The structured per-tier summary the canvas captured-findings renders
+      // (MOTIR-1392 producer → MOTIR-1225 consumer), passed through verbatim
+      // ({ label, value, tone } per finding). `[]` for a not-yet-summarized tier.
+      summary: doc.summary.map((f) => ({ label: f.label, value: f.value, tone: f.tone })),
       versions: doc.versions.map((v) => ({
         version: v.version,
         changeReason: v.changeReason,

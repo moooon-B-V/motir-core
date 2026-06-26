@@ -99,8 +99,14 @@ describe('mapRevisions', () => {
       session: null,
       catalog: null,
       docs: [
-        { kind: 'discovery', currentBody: '', currentVersion: 2, versions: [rev(1), rev(2)] },
-        { kind: 'vision', currentBody: '', currentVersion: 1, versions: [rev(1)] },
+        {
+          kind: 'discovery',
+          currentBody: '',
+          currentVersion: 2,
+          summary: [],
+          versions: [rev(1), rev(2)],
+        },
+        { kind: 'vision', currentBody: '', currentVersion: 1, summary: [], versions: [rev(1)] },
       ],
     };
     const byKind = mapRevisions(dto);

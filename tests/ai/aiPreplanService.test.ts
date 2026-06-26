@@ -50,6 +50,7 @@ const fullRaw: RawPreplanStateResponse = {
       kind: 'discovery',
       currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nB2B teams.',
       currentVersion: 2,
+      summary: [],
       versions: [
         {
           version: 1,
@@ -71,6 +72,7 @@ const fullRaw: RawPreplanStateResponse = {
       kind: 'vision',
       currentBody: '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
       currentVersion: 1,
+      summary: [],
       versions: [
         {
           version: 1,
@@ -171,6 +173,7 @@ describe('aiPreplanService.getPreplanState', () => {
         kind: 'discovery',
         currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nB2B teams.',
         currentVersion: 2,
+        summary: [],
         versions: [
           {
             version: 1,
@@ -192,6 +195,7 @@ describe('aiPreplanService.getPreplanState', () => {
         kind: 'vision',
         currentBody: '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
         currentVersion: 1,
+        summary: [],
         versions: [
           {
             version: 1,
@@ -216,10 +220,13 @@ describe('aiPreplanService.getPreplanState', () => {
       ['vision', '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.', 1],
     ]);
     // …and folds straight onto 834's read-only view model at the 7.3.5 gate.
+    // The structured `summary` (MOTIR-1225) is carried through verbatim — `[]`
+    // here since this fixture's tiers have no structured findings.
     expect(toDirectionDocView(dto.docs[1]!)).toEqual({
       kind: 'vision',
       contentMd: '# Vision (Tier 2)\n\n## 1. Pitch\n\nThe shape of v1.',
       version: 1,
+      summary: [],
     });
   });
 

@@ -150,6 +150,7 @@ function tierDoc(kind: Tier) {
     kind,
     currentBody: `# ${kind} (Tier)\n\n${TIER_BODY[kind]}`,
     currentVersion: 1,
+    summary: [],
     versions: [
       {
         version: 1,
