@@ -1,0 +1,1348 @@
+<!doctype html>
+<!--
+  ROADMAP — SCOPE TOGGLE + sprint-scoped states (MOTIR-1380 / Story MOTIR-1379).
+  COMPOSES the shipped roadmap canvas (ProjectRoadmapCanvas, MOTIR-1194; design
+  MOTIR-1009 / roadmap.mock.html) under a NEW header scope control — it does NOT
+  redraw the canvas (notes.html #82/#95). The only new pixels are: the `Segmented`
+  scope toggle in the page header, the per-scope subtitle, the no-active-sprint
+  empty state, and how the per-node progress meters read sprint-scoped. Node cards,
+  edges, drill, zoom, and the "you are here" overlay are the SHIPPED canvas, reused
+  unchanged — depicted here only enough to show the narrowed node set.
+
+  Built from the real design system: every value below is the light-theme
+  resolution of a `globals.css` token, referenced through its `--el-*` /
+  shape-token name (the colour + shape swap rules — never a Tier-0 --color-* name
+  nor a raw rounded-*/p-*/h-* in the composed surfaces).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — scope toggle + sprint-scoped states (MOTIR-1380)</title>
+    <style>
+      :root {
+        /* ── colour (Tier-3 --el-*, light theme) ── */
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-subtitle: #5d5b54;
+        --el-icon-muted: #787671;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-on-surface: #5645d4;
+        --el-success: #1aae39;
+        --el-tabnav-track: #f6f5f4;
+        --el-tabnav-active: #5645d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-peach: #ffe8d4;
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --el-danger: #e03131;
+        /* ── shape (element-semantic tokens) ── */
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --height-control: 36px;
+        --spacing-control-x: 10px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+      }
+      .body {
+        padding: 20px;
+      }
+
+      /* ── the PAGE HEADER (the shipped <header> + the new scope toggle) ── */
+      .pagehead {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .pagehead .htext {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .pagehead h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+        line-height: 1.1;
+      }
+      .pagehead .sub {
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .pagehead .sub .sname {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .scopechip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 8px;
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 600;
+        vertical-align: middle;
+      }
+      .scopechip svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-accent-on-surface);
+      }
+      .grow {
+        margin-left: auto;
+      }
+
+      /* ── Segmented (components/ui/Segmented.tsx) — the scope toggle ── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .seg-opt .ic {
+        display: inline-flex;
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .seg-opt.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-opt.on .ic {
+        color: var(--el-tabnav-active);
+      }
+      .seg-opt.hov {
+        color: var(--el-text);
+      }
+
+      /* ── the canvas (COMPOSED — the shipped ProjectRoadmapCanvas) ── */
+      .canvas {
+        position: relative;
+        height: 372px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow: hidden;
+      }
+      .crumb {
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .crumb .pin {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        background: var(--el-accent);
+        display: grid;
+        place-items: center;
+      }
+      .crumb .pin svg {
+        width: 10px;
+        height: 10px;
+        color: var(--el-accent-text);
+      }
+      .crumb .scopetag {
+        margin-left: 4px;
+        padding-left: 8px;
+        border-left: 1px solid var(--el-border);
+        color: var(--el-accent-on-surface);
+        font-size: 11.5px;
+      }
+      .zoom {
+        position: absolute;
+        right: 16px;
+        bottom: 14px;
+        display: inline-flex;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        box-shadow: var(--shadow-subtle);
+      }
+      .zoom button {
+        width: 32px;
+        height: 30px;
+        border: 0;
+        background: transparent;
+        font-size: 16px;
+        color: var(--el-text-secondary);
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--el-border);
+      }
+
+      /* connector edges between nodes */
+      .edges {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .edges path {
+        fill: none;
+        stroke: var(--el-border-strong);
+        stroke-width: 1.5;
+      }
+
+      /* ── node card (components/planning/WorkItemNode.tsx) ── */
+      .node {
+        position: absolute;
+        width: 214px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 13px 13px 12px;
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .node.here {
+        border-color: var(--el-accent);
+      }
+      .ntop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .spill.done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .spill.prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .spill.review {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .spill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .spill.here {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .drill {
+        margin-left: auto;
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+      }
+      .tile.epic {
+        background: var(--el-tint-rose);
+      }
+      .tile.epic svg {
+        color: var(--el-type-epic);
+      }
+      .tile.story {
+        background: var(--el-tint-mint);
+      }
+      .tile.story svg {
+        color: var(--el-type-story);
+      }
+      .tile.subtask {
+        background: var(--el-tint-lavender);
+      }
+      .tile.subtask svg {
+        color: var(--el-type-subtask);
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .meter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .mtrack {
+        flex: 1;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .mfill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-success);
+      }
+      .mnum {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── EmptyState (components/ui/EmptyState.tsx) — no active sprint ── */
+      .emptywrap {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+      }
+      .empty {
+        width: 420px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 30px 26px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .eicon {
+        color: var(--el-icon-muted);
+        margin-bottom: 12px;
+      }
+      .empty .eicon svg {
+        width: 44px;
+        height: 44px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .empty p {
+        margin: 8px 0 0;
+        max-width: 30rem;
+        font-size: 13.5px;
+        color: var(--el-text-subtitle);
+      }
+
+      /* ── caption / notes under a panel ── */
+      .note {
+        margin-top: 14px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+
+      /* ── the control / access-path study ── */
+      .study {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+      }
+      .studycol h4 {
+        margin: 0 0 12px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-muted);
+      }
+      .statelist {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .stateitem {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .stateitem .lbl {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        width: 92px;
+        flex: none;
+      }
+      /* the left-nav entry (access path) */
+      .rail {
+        width: 220px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .navrow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 34px;
+        padding: 0 10px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .navrow svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-icon-muted);
+      }
+      .navrow.on {
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .navrow.on svg {
+        color: var(--el-accent-on-surface);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — scope toggle &amp; sprint-scoped states · MOTIR-1380</h1>
+    <p class="docsub">
+      A header scope toggle that switches the SAME roadmap canvas between the whole project
+      (default) and the active sprint. Composes the shipped canvas (MOTIR-1194); only the header
+      control and the scope-dependent states are new.
+    </p>
+
+    <!-- ════════════ PANEL 1 — Whole project (default) ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>1 · Whole project</b
+        ><span>— the default scope; the full tree renders, canvas unchanged</span>
+        <span class="cap">app/(authed)/roadmap/page.tsx · header</span>
+      </div>
+      <div class="body">
+        <div class="pagehead">
+          <div class="htext">
+            <h2>Roadmap</h2>
+            <div class="sub">Acme Mobile's roadmap</div>
+          </div>
+          <div class="grow"></div>
+          <div class="seg" role="group" aria-label="Roadmap scope">
+            <button class="seg-opt on" aria-pressed="true">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="7" height="7" x="3" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="14" rx="1" />
+                  <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+              ></span>
+              Whole project
+            </button>
+            <button class="seg-opt" aria-pressed="false">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" /></svg
+              ></span>
+              Active sprint
+            </button>
+          </div>
+        </div>
+
+        <div class="canvas">
+          <div class="crumb">
+            <span class="pin"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /></svg
+            ></span>
+            Project root
+          </div>
+          <svg class="edges">
+            <path d="M 250 118 C 300 118, 300 118, 340 118" />
+            <path d="M 250 250 C 300 250, 300 188, 340 150" />
+          </svg>
+          <!-- ROOT level: every epic -->
+          <div class="node" style="left: 36px; top: 84px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-464</div>
+                <div class="ntitle">Epic 7: AI Planning Layer</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 30%"></div></div>
+              <span class="mnum">12 / 40</span>
+            </div>
+          </div>
+
+          <div class="node" style="left: 36px; top: 218px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-300</div>
+                <div class="ntitle">Epic 6: Collaboration</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 36%"></div></div>
+              <span class="mnum">8 / 22</span>
+            </div>
+          </div>
+
+          <div class="node" style="left: 340px; top: 84px">
+            <div class="ntop">
+              <span class="spill done"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Done</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-210</div>
+                <div class="ntitle">Epic 5: Reporting</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 100%"></div></div>
+              <span class="mnum">30 / 30</span>
+            </div>
+          </div>
+
+          <div class="node" style="left: 340px; top: 218px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-120</div>
+                <div class="ntitle">Epic 4: Boards &amp; Sprints</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 72%"></div></div>
+              <span class="mnum">18 / 25</span>
+            </div>
+          </div>
+
+          <div class="zoom"><button>−</button><button>+</button></div>
+        </div>
+
+        <p class="note">
+          <b>Whole project (default).</b> The header gains a <code>Segmented</code> control with
+          <b>"Whole project"</b> selected; the canvas, drill, edges, and progress meters are the
+          shipped <code>ProjectRoadmapCanvas</code> — reused unchanged. Each container's meter is
+          its whole-subtree done/total (e.g. Epic 7 → <code>12 / 40</code>).
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL 2 — Active sprint (pruned) ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>2 · Active sprint</b
+        ><span>— SAME canvas, pruned to member-or-ancestor; meters read sprint-scoped</span>
+        <span class="cap">scope = sprint</span>
+      </div>
+      <div class="body">
+        <div class="pagehead">
+          <div class="htext">
+            <h2>Roadmap</h2>
+            <div class="sub">
+              <span class="sname">Sprint 32</span> · Three Epic-7 stories
+              <span class="scopechip"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" /></svg
+                >Sprint scope</span
+              >
+            </div>
+          </div>
+          <div class="grow"></div>
+          <div class="seg" role="group" aria-label="Roadmap scope">
+            <button class="seg-opt" aria-pressed="false">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="7" height="7" x="3" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="14" rx="1" />
+                  <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+              ></span>
+              Whole project
+            </button>
+            <button class="seg-opt on" aria-pressed="true">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" /></svg
+              ></span>
+              Active sprint
+            </button>
+          </div>
+        </div>
+
+        <div class="canvas" style="height: 408px">
+          <div class="crumb">
+            <span class="pin"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /></svg
+            ></span>
+            Project root
+            <span class="scopetag">Sprint 32</span>
+          </div>
+          <svg class="edges">
+            <path d="M 250 204 C 300 204, 300 90, 340 90" />
+            <path d="M 250 204 C 300 204, 300 204, 340 204" />
+            <path d="M 250 204 C 300 204, 300 318, 340 318" />
+          </svg>
+          <!-- ROOT under sprint scope: only Epic 7 (ancestor of the in-sprint stories) -->
+          <div class="node here" style="left: 36px; top: 150px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-464</div>
+                <div class="ntitle">Epic 7: AI Planning Layer</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 33%"></div></div>
+              <span class="mnum">1 / 3</span>
+            </div>
+          </div>
+
+          <!-- drilled story slice (the three in-sprint stories) shown for context -->
+          <div class="node" style="left: 340px; top: 36px">
+            <div class="ntop">
+              <span class="spill done"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Done</span
+              >
+            </div>
+            <div class="nbody">
+              <span class="tile story"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-1300</div>
+                <div class="ntitle">Draft with AI</div>
+              </div>
+            </div>
+          </div>
+          <div class="node" style="left: 340px; top: 150px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile story"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-1379</div>
+                <div class="ntitle">Sprint-scoped roadmap</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 40%"></div></div>
+              <span class="mnum">2 / 5</span>
+            </div>
+          </div>
+          <div class="node" style="left: 340px; top: 264px">
+            <div class="ntop">
+              <span class="spill todo"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-dasharray="3 3"
+                >
+                  <circle cx="12" cy="12" r="10" /></svg
+                >To do</span
+              >
+            </div>
+            <div class="nbody">
+              <span class="tile story"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-1208</div>
+                <div class="ntitle">Planner gateway routing</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="zoom"><button>−</button><button>+</button></div>
+        </div>
+
+        <p class="note">
+          <b>Active sprint.</b> The toggle flips to <b>"Active sprint"</b>; the subtitle shows the
+          sprint's name + goal and a quiet <b>Sprint scope</b> chip. The canvas renders the SAME
+          node treatment but <b>pruned to the member-or-ancestor set</b> — only epics/stories that
+          <i>are</i> in the sprint or <i>contain</i> in-sprint work appear (the three other epics
+          from panel 1 are gone). Progress meters re-read <b>sprint-scoped</b>: Epic 7 →
+          <code>1 / 3</code> (its three committed stories), not <code>12 / 40</code>. Drill + edges
+          + zoom are unchanged.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL 3 — No active sprint ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>3 · No active sprint</b
+        ><span>— Active-sprint scope with no sprint running; default scope is unaffected</span>
+        <span class="cap">EmptyState</span>
+      </div>
+      <div class="body">
+        <div class="pagehead">
+          <div class="htext">
+            <h2>Roadmap</h2>
+            <div class="sub">Acme Mobile's roadmap</div>
+          </div>
+          <div class="grow"></div>
+          <div class="seg" role="group" aria-label="Roadmap scope">
+            <button class="seg-opt" aria-pressed="false">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="7" height="7" x="3" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="14" rx="1" />
+                  <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+              ></span>
+              Whole project
+            </button>
+            <button class="seg-opt on" aria-pressed="true">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" /></svg
+              ></span>
+              Active sprint
+            </button>
+          </div>
+        </div>
+
+        <div class="canvas">
+          <div class="emptywrap">
+            <div class="empty">
+              <div class="eicon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 13V2l8 4-8 4" />
+                  <path d="M20.55 10.23A9 9 0 1 1 8 4.94" />
+                  <path d="M8 10a5 5 0 1 0 8.9 2.02" />
+                </svg>
+              </div>
+              <h3>No active sprint</h3>
+              <p>
+                This project has no sprint running right now. Start a sprint from the board to see
+                its slice of the roadmap, or switch back to Whole project.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>No active sprint.</b> When <code>getActiveSprint</code> is null the scoped read returns
+          an empty roadmap and the canvas shows an in-place <code>EmptyState</code> (the
+          <b>Goal</b> icon, title <b>"No active sprint"</b>, a one-line hint). The toggle stays
+          available and <b>Whole project scope is unaffected</b> — switching back restores the full
+          tree.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL 4 — control states + access path ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>4 · The control &amp; the access path</b
+        ><span>— Segmented states + the Roadmap left-nav entry the page is reached from</span>
+        <span class="cap">components/ui/Segmented.tsx · SidebarNav</span>
+      </div>
+      <div class="body">
+        <div class="study">
+          <div class="studycol">
+            <h4>Scope toggle — states</h4>
+            <div class="statelist">
+              <div class="stateitem">
+                <span class="lbl">default</span>
+                <div class="seg" role="group" aria-label="Roadmap scope">
+                  <button class="seg-opt on" aria-pressed="true">
+                    <span class="ic"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect width="7" height="7" x="3" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="14" rx="1" />
+                        <rect width="7" height="7" x="3" y="14" rx="1" /></svg></span
+                    >Whole project
+                  </button>
+                  <button class="seg-opt" aria-pressed="false">
+                    <span class="ic"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" /></svg></span
+                    >Active sprint
+                  </button>
+                </div>
+              </div>
+              <div class="stateitem">
+                <span class="lbl">hover (right)</span>
+                <div class="seg" role="group" aria-label="Roadmap scope">
+                  <button class="seg-opt on" aria-pressed="true">
+                    <span class="ic"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect width="7" height="7" x="3" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="14" rx="1" />
+                        <rect width="7" height="7" x="3" y="14" rx="1" /></svg></span
+                    >Whole project
+                  </button>
+                  <button class="seg-opt hov" aria-pressed="false">
+                    <span class="ic"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" /></svg></span
+                    >Active sprint
+                  </button>
+                </div>
+              </div>
+              <div class="stateitem">
+                <span class="lbl">sprint active</span>
+                <div class="seg" role="group" aria-label="Roadmap scope">
+                  <button class="seg-opt" aria-pressed="false">
+                    <span class="ic"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <rect width="7" height="7" x="3" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="3" rx="1" />
+                        <rect width="7" height="7" x="14" y="14" rx="1" />
+                        <rect width="7" height="7" x="3" y="14" rx="1" /></svg></span
+                    >Whole project
+                  </button>
+                  <button class="seg-opt on" aria-pressed="true">
+                    <span class="ic"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" /></svg></span
+                    >Active sprint
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="studycol">
+            <h4>Access path — Roadmap left-nav entry</h4>
+            <div class="rail">
+              <div class="navrow">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="7" height="7" x="3" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="14" rx="1" />
+                  <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+                >Board
+              </div>
+              <div class="navrow on">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+                  <line x1="9" x2="9" y1="3" y2="18" />
+                  <line x1="15" x2="15" y1="6" y2="21" /></svg
+                >Roadmap
+              </div>
+              <div class="navrow">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="8" x2="21" y1="6" y2="6" />
+                  <line x1="8" x2="21" y1="12" y2="12" />
+                  <line x1="8" x2="21" y1="18" y2="18" />
+                  <line x1="3" x2="3.01" y1="6" y2="6" />
+                  <line x1="3" x2="3.01" y1="12" y2="12" />
+                  <line x1="3" x2="3.01" y1="18" y2="18" /></svg
+                >Backlog
+              </div>
+            </div>
+            <p class="note" style="margin-top: 12px">
+              The Roadmap page is reached from the shipped <b>Roadmap</b> primary left-nav entry
+              (MOTIR-1011). The scope toggle lives in that page's header — there is no new route or
+              nav affordance.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>
