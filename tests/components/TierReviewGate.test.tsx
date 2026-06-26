@@ -51,6 +51,26 @@ describe('TierReviewGate', () => {
     expect(screen.getByText(/nothing locks until your plan generates/)).toBeTruthy();
   });
 
+  it('locks the Back + Continue bar BELOW the scroll region (MOTIR-1365)', () => {
+    renderWithIntl(
+      <TierReviewGate
+        doc={doc}
+        availableKinds={['vision']}
+        revisions={[]}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+      />,
+    );
+    const continueBtn = screen.getByRole('button', { name: 'Looks good — continue' });
+    // The footer must NOT be a descendant of the scrolling doc region — otherwise it
+    // scrolls away on a long tier. Walk ancestors and assert none scrolls.
+    let inScroll = false;
+    for (let el = continueBtn.parentElement; el; el = el.parentElement) {
+      if (el.className.includes('overflow-y-auto')) inScroll = true;
+    }
+    expect(inScroll).toBe(false);
+  });
+
   it('folds the feature catalog into the VISION tier review (7.3.79)', () => {
     renderWithIntl(
       <TierReviewGate

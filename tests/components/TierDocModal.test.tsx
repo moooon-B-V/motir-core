@@ -66,7 +66,19 @@ describe('TierDocModal', () => {
     render(<TierDocModal tier="discovery" onClose={() => {}} />);
 
     const link = await screen.findByRole('link', { name: /open full page/i });
+    // Default (roadmap) origin → in-shell route, same tab.
     expect(link.getAttribute('href')).toBe('/direction/discovery');
+    expect(link.getAttribute('target')).toBeNull();
+  });
+
+  it('opens the SHELL-LESS route in a NEW TAB when origin is onboarding (MOTIR-1366)', async () => {
+    mockFetchResolving(stateWith([discoveryDoc]));
+    render(<TierDocModal tier="discovery" origin="onboarding" onClose={() => {}} />);
+
+    const link = await screen.findByRole('link', { name: /open full page/i });
+    expect(link.getAttribute('href')).toBe('/onboarding/direction/discovery');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
   });
 
   it('shows the empty state when the project has not drafted that tier', async () => {
