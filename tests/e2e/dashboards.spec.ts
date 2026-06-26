@@ -148,11 +148,18 @@ async function dragWidgetToColumn(
     await page.mouse.move(fx + 10, fy + 10, { steps: 5 }); // clear the 8px activation
     await page.mouse.move(tx, ty, { steps: 18 });
     await page.mouse.move(tx, ty, { steps: 4 }); // settle so the over-target sticks
-    // Best-effort: prefer releasing while the column is the active droppable
-    // (the lavender isOver style). Don't fail the attempt if it doesn't show —
-    // the post-drop verification + retry is the real guarantee.
+    // Best-effort: prefer releasing while the column is the active droppable —
+    // EditColumn paints its `isOver` style as `bg-(--el-droptarget-bg)` (the
+    // lavender drop-zone fill), so gate on that class, NOT `tint-lavender`: the
+    // emitted class name is `bg-(--el-droptarget-bg)` and only *resolves* to
+    // `var(--color-tint-lavender)` in CSS, so the old `/tint-lavender/` regex
+    // never matched — the wait always timed out, was swallowed, and the pointer
+    // released BEFORE dnd-kit had resolved `over` to this column, letting
+    // `closestCorners` pick a stale source-column widget → a 422 move under CI
+    // load (MOTIR-1350). Don't fail the attempt if it doesn't show — the
+    // post-drop verification + retry is still the real guarantee.
     await expect(column)
-      .toHaveClass(/tint-lavender/, { timeout: 1_500 })
+      .toHaveClass(/droptarget-bg/, { timeout: 1_500 })
       .catch(() => {});
     const movePromise = page.waitForResponse(isMove, { timeout: 5_000 }).catch(() => null);
     await page.mouse.up();
@@ -192,6 +199,25 @@ async function saveWidget(page: Page) {
   );
   await page.getByTestId('widget-config-save').click();
   expect((await created).status()).toBe(201);
+}
+
+// Switch the column layout and WAIT for the change to commit server-side before
+// continuing. `changeLayout` fires a fire-and-forget PATCH /api/dashboards/{id}
+// {layout} then GETs the dashboard back to apply the authoritative reflowed
+// widget columns — neither is awaited by the client. A cross-column drag that
+// races ahead of that PATCH POSTs its move against the SERVER's stale layout, so
+// the server rejects the new column as "outside the layout" → 422 (MOTIR-1350:
+// every one of the move helper's 8 retries got that 422 because the layout-save
+// hadn't landed yet under CI load). Gate on the PATCH's 200 AND the follow-up GET
+// so both the server layout and the client grid are settled before the drag.
+async function switchLayout(page: Page, dashId: string, layoutTestId: string) {
+  const isDash = (r: import('@playwright/test').Response, method: string) =>
+    new RegExp(`/api/dashboards/${dashId}$`).test(r.url()) && r.request().method() === method;
+  const saved = page.waitForResponse((r) => isDash(r, 'PATCH'));
+  const reflowed = page.waitForResponse((r) => isDash(r, 'GET'));
+  await page.getByTestId(layoutTestId).click();
+  expect((await saved).status()).toBe(200);
+  await reflowed; // authoritative reflowed widget columns/positions applied client-side
 }
 
 test.beforeEach(async () => {
@@ -249,14 +275,17 @@ test.describe('dashboards @smoke', () => {
     // All three widget cards are present (one drag grip per card in edit mode).
     await expect(page.locator('[data-testid^="dashboard-widget-grip-"]')).toHaveCount(3);
 
-    // Switch the column layout: one → three columns (the picker reflows).
-    await page.getByTestId('layout-one').click();
+    // Switch the column layout: two (default) → one → three. WAIT for each
+    // layout-save to commit server-side + its reflow to land before continuing,
+    // so the cross-column drag below cannot out-race the layout PATCH (a move
+    // POSTed against the stale layout is rejected → 422; MOTIR-1350).
+    const dashId = page.url().split('/').pop()!;
+    await switchLayout(page, dashId, 'layout-one');
     await expect(page.getByTestId('dashboard-column-0')).toBeVisible();
-    await page.getByTestId('layout-three').click();
+    await switchLayout(page, dashId, 'layout-three');
     await expect(page.getByTestId('dashboard-column-2')).toBeVisible();
 
     // All three widgets appended into column 0; drag the first across to column 1.
-    const dashId = page.url().split('/').pop()!;
     const firstGrip = page.locator('[data-testid^="dashboard-widget-grip-"]').first();
     const grip = firstGrip;
     const movedWidgetId = (await grip.getAttribute('data-testid'))!.replace(
