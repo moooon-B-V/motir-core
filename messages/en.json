@@ -395,7 +395,8 @@
       "docs": "Docs",
       "backlog": "Backlog",
       "triage": "Triage",
-      "roadmap": "Roadmap"
+      "roadmap": "Roadmap",
+      "plans": "Plans"
     },
     "topNav": {
       "global": "Global"
@@ -4147,5 +4148,29 @@
     "emptyTitle": "Nothing on the roadmap yet",
     "emptyDescription": "Work items will appear here as the plan takes shape. Plan with Motir AI to generate one, or add an epic by hand.",
     "canvasAria": "{project} roadmap"
+  },
+  "aiPlanning": {
+    "heading": "Plans",
+    "subtitle": "every plan Motir AI proposed for {project}",
+    "noProjectTitle": "No project selected",
+    "noProjectDescription": "Switch to a project to see its plans.",
+    "emptyTitle": "No plans yet",
+    "emptyDescription": "Motir AI plans from your direction docs. Generate your first plan to see proposed work here.",
+    "untitledPlan": "Untitled plan",
+    "itemCount": "{count, plural, one {# item} other {# items}}",
+    "mayBeOutOfDate": "{count} may be out of date",
+    "createdAt": "created {when}",
+    "plannedAt": "planned {when}",
+    "approvedAt": "approved {when}",
+    "declinedAt": "declined {when}",
+    "status": {
+      "generating": "Generating",
+      "planned": "Planned",
+      "approved": "Approved",
+      "declined": "Declined"
+    },
+    "listAria": "Plans",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…"
   }
 }

@@ -395,7 +395,8 @@
       "docs": "文档",
       "backlog": "待办列表",
       "triage": "分流",
-      "roadmap": "路线图"
+      "roadmap": "路线图",
+      "plans": "计划"
     },
     "topNav": {
       "global": "全局"
@@ -4143,5 +4144,29 @@
     "emptyTitle": "路线图还是空的",
     "emptyDescription": "随着计划成形，工作项会显示在这里。使用 Motir AI 进行规划以生成路线图，或手动添加一个史诗。",
     "canvasAria": "{project} 路线图"
+  },
+  "aiPlanning": {
+    "heading": "计划",
+    "subtitle": "Motir AI 为 {project} 提出的所有计划",
+    "noProjectTitle": "未选择项目",
+    "noProjectDescription": "切换到某个项目以查看其计划。",
+    "emptyTitle": "还没有计划",
+    "emptyDescription": "Motir AI 会根据你的方向文档进行规划。生成你的第一个计划，提出的工作就会显示在这里。",
+    "untitledPlan": "未命名计划",
+    "itemCount": "{count, plural, other {# 个工作项}}",
+    "mayBeOutOfDate": "{count} 项可能已过期",
+    "createdAt": "创建于 {when}",
+    "plannedAt": "规划于 {when}",
+    "approvedAt": "批准于 {when}",
+    "declinedAt": "拒绝于 {when}",
+    "status": {
+      "generating": "生成中",
+      "planned": "已规划",
+      "approved": "已批准",
+      "declined": "已拒绝"
+    },
+    "listAria": "计划",
+    "loadMore": "加载更多",
+    "loadingMore": "加载中…"
   }
 }
