@@ -462,13 +462,87 @@ real shipped surface, annotated with the component it composes.
 
 ---
 
+## ⭐ Scope toggle + sprint-scoped states (MOTIR-1380 / Story MOTIR-1379 — `scope-toggle.mock.html`)
+
+`scope-toggle.mock.html` adds a header **scope control** that switches the SAME
+roadmap canvas between **the whole project** (default) and **the active sprint**.
+The card's mandate is to **COMPOSE the shipped canvas, not redraw it** (`notes.html`
+**#82**/**#95**): the canvas (`ProjectRoadmapCanvas`, MOTIR-1194; design MOTIR-1009
+/ `roadmap.mock.html`) is reused UNCHANGED — same node treatment, drill, edges,
+zoom, and "you are here" overlay. The only NEW pixels are the toggle, the
+per-scope subtitle, the no-active-sprint empty state, and how the per-node
+**progress meters** read when scoped. The behaviour the toggle depicts is defined
+by the backend read subtask (member-or-ancestor pruning + sprint-scoped progress,
+MOTIR-1381), which this card `relates_to` and grounds in (not invented here).
+
+### Composed components + their contracts (notes #95)
+
+| Composed thing | Source                                                     | Contract this design honours                                                                                                                                                                                             |
+| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| scope toggle   | `Segmented` (`components/ui/Segmented.tsx`, Subtask 3.3.5) | labelled `role="group"`; each option a real `<button aria-pressed>`; `--el-tabnav-track` track, active = `--el-page-bg` + `--shadow-subtle` raised fill, leading glyph takes `--el-tabnav-active`                        |
+| canvas + nodes | `ProjectRoadmapCanvas` / `WorkItemNode` (MOTIR-1194)       | reused unchanged; status pill · `--el-type-*` kind tile · id/title · subtree progress meter (`--el-success` fill on `--el-muted` track) · passive drill `ChevronRight`; only the FED node set + the meter numbers narrow |
+| empty state    | `EmptyState` (`components/ui/EmptyState.tsx`)              | `Card` + centred icon (`--el-icon-muted`) + serif title + `--el-text-subtitle` description; the no-active-sprint case                                                                                                    |
+| page header    | `app/(authed)/roadmap/page.tsx` `<header>` (MOTIR-1011)    | serif `text-2xl` `<h1>` + `--el-text-muted` subtitle; the toggle is added to this header by the frontend's client wrapper (MOTIR-1382)                                                                                   |
+
+### The four panels (`scope-toggle.mock.html`)
+
+| Panel | Scope/state             | What it draws                                                                                                                                                                                                                                            |
+| ----- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | Whole project (default) | header with the `Segmented` toggle (**Whole project** selected) + the project subtitle; the full root level (every epic), whole-subtree meters (Epic 7 → `12 / 40`)                                                                                      |
+| **2** | Active sprint           | toggle flipped to **Active sprint**; subtitle = sprint name + goal + a quiet **Sprint scope** chip; the canvas PRUNED to member-or-ancestor (only Epic 7 survives, its three in-sprint stories drilled), meters re-read sprint-scoped (Epic 7 → `1 / 3`) |
+| **3** | No active sprint        | toggle on **Active sprint** but no sprint running → an in-canvas `EmptyState` (**Goal** icon, **"No active sprint"**, a one-line hint); the toggle stays available, Whole-project scope unaffected                                                       |
+| **4** | Control + access path   | the `Segmented` toggle states (default / hover / sprint-active) + the **Roadmap** primary left-nav entry the page is reached from (MOTIR-1011)                                                                                                           |
+
+### Exact copy (the labels + strings the frontend ships — MOTIR-1382 `messages/en.json`)
+
+- **Toggle option labels:** `Whole project` (default, selected) · `Active sprint`.
+  (Distinct enough to avoid the getByRole superstring pitfall, `notes.html`
+  aria-selector entries — neither is a substring of the other.)
+- **Whole-project subtitle:** the existing `roadmap.subtitle` — `{project}'s roadmap`.
+- **Active-sprint subtitle:** the sprint's **name** + goal — e.g. `Sprint 32 · Three Epic-7 stories`;
+  the trailing **Sprint scope** chip marks the canvas as scoped.
+- **No-active-sprint empty state:** title `No active sprint`; description
+  `This project has no sprint running right now. Start a sprint from the board to see its slice of the roadmap, or switch back to Whole project.`
+
+### Access path (DRAW THE DOOR — `run.md` design gate)
+
+The Roadmap page is reached from the shipped **Roadmap** primary left-nav entry
+(MOTIR-1011, panel 4) — there is **no new route or nav affordance**. The scope
+toggle lives **in that page's header**, right-aligned beside the title/subtitle
+(panels 1–3 draw it in place at the page's real width above the canvas).
+
+### Token / a11y discipline (same rules as the canvas)
+
+- **Colour** via `--el-*` only (light palette inlined, as the sibling mocks do).
+  The Segmented track is `--el-tabnav-track` / `--el-border`; the active option is
+  the raised `--el-page-bg` fill + `--shadow-subtle` with `--el-text-strong` text
+  and the `--el-tabnav-active` glyph; inactive options are `--el-text-secondary`.
+  The **Sprint scope** chip puts the hue in a `--el-tint-lavender` background with
+  `--el-text-strong` text (AA, finding #35) and an `--el-accent-on-surface` glyph;
+  never a page-level tint. Node status pills / kind tiles / progress meters are the
+  shipped `WorkItemNode` tokens, unchanged.
+- **Shape** via element-semantic tokens: the Segmented track = `--radius-btn`, each
+  option = `calc(--radius-btn - 2px)` (nests in the track at any style) sized by
+  `--height-control` + `--spacing-control-x`; the scope chip = `--radius-badge`;
+  cards/canvas = `--radius-card`; elevation `--shadow-{subtle,card}`. No raw
+  `rounded-*`/`p-*`/`h-*`.
+- **A11y** — the toggle is the shipped `Segmented`: a labelled `role="group"` whose
+  options are keyboard-operable `<button aria-pressed>`s announced as toggles; the
+  selected scope carries `aria-pressed="true"`. The no-active-sprint surface is the
+  shipped `EmptyState` (`Card` + heading + description); decorative icons are
+  `aria-hidden`. Switching scope is a client-island refetch (the canvas reload),
+  not a `router.refresh()` (the page-state contract; MOTIR-1382).
+
+---
+
 ## Deliverable
 
-Two three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Three three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
   (MOTIR-1351).
+- **Scope toggle** — `scope-toggle.mock.html` + `scope-toggle.png` (MOTIR-1380).
 
-Both rendered with Playwright chromium — full-page, light theme,
-`deviceScaleFactor: 2`, 1200px wide; `prettier --check` clean.
+All rendered with Playwright chromium — full-page, light theme,
+`deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
