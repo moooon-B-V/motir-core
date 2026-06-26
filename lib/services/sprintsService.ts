@@ -132,17 +132,23 @@ export const sprintsService = {
   /**
    * Is a sprint FINISHABLE? (Subtask 7.8.15) — the productized form of the
    * *re-validate-the-active-sprint* rule (`motir-meta` `plan-rules.md` #94). A
-   * sprint is VALID ⟺ for EVERY in-sprint, NOT-done item, its ENTIRE transitive
-   * `blocked_by` closure is `done` OR also in the SAME sprint — walking the
-   * parent chain's blockers too (readiness cascades DOWN the hierarchy: a child
-   * inherits its ancestors' blockers). When `sprintId` is `null` the project's
-   * ACTIVE sprint is validated; an explicit id validates that sprint. The
-   * transitive closure is realized WITHOUT a recursive blocker walk: iterating
-   * over every not-done member and checking its own ∪ ancestors' direct blockers
-   * catches the whole chain, because a blocker that is itself in-sprint is
-   * checked as its OWN member, a `done` blocker terminates the path, and an
-   * out-of-sprint, not-done blocker is the violation we report at the nearest
-   * in-sprint item it gates. ARCHIVED items (and archived blockers) are ignored.
+   * sprint is VALID ⟺ for EVERY in-sprint, NOT-done item, BOTH (a) its ENTIRE
+   * transitive `blocked_by` closure and (b) ALL of its children are `done` OR
+   * also in the SAME sprint. Two cascades meet here:
+   *   - blockers cascade DOWN the hierarchy (a child inherits its ancestors'
+   *     blockers — we walk the parent chain's blockers too), and
+   *   - completion cascades UP it (a parent can only be finished once every
+   *     child is done — the parent-ready rule). So a parent in the sprint with
+   *     an out-of-sprint, not-done child can NEVER be finished within the sprint
+   *     and the sprint is INVALID (MOTIR-1337) — the bug this rule was missing.
+   * When `sprintId` is `null` the project's ACTIVE sprint is validated; an
+   * explicit id validates that sprint. The transitive blocker closure is
+   * realized WITHOUT a recursive walk: iterating over every not-done member and
+   * checking its own ∪ ancestors' direct blockers (and its own direct children)
+   * catches the whole chain, because a gating item that is itself in-sprint is
+   * checked as its OWN member, a `done` one terminates the path, and an
+   * out-of-sprint, not-done one is the violation we report at the nearest
+   * in-sprint item it gates. ARCHIVED items (blockers and children) are ignored.
    *
    * A pure READ — no admin gate (mirroring `getActiveSprint` / `listByProject`;
    * the owner gate guards sprint MANAGEMENT writes, not reads), `workspaceId`-
@@ -151,8 +157,8 @@ export const sprintsService = {
    * finding #21), judged against each blocker's OWN project (blocks can be
    * cross-project). Returns `{ valid: true, blockers: [] }` when finishable;
    * otherwise `valid: false` + one `SprintBlockerDto` per (in-sprint item,
-   * out-of-sprint not-done blocker) pair — the exact set a caller surfaces as
-   * "pull these blockers in, or move the gated items to the backlog".
+   * out-of-sprint not-done blocker/child) pair — the exact set a caller surfaces
+   * as "pull these into the sprint, or move the gated items to the backlog".
    *
    * Throws: `NoActiveSprintError` (409 — `sprintId` null + no active sprint),
    * `SprintNotFoundError` (404 — unknown / cross-workspace `sprintId`).
@@ -765,11 +771,19 @@ export function assertSprintTransition(from: SprintState, to: SprintState): void
  * Compute a sprint's finishability (Subtask 7.8.15) — the engine behind
  * `validateSprint`, given an already-resolved sprint. See the method's doc for
  * the validity rule. Reads: the sprint's non-archived members (status + parent),
- * the project terminal set ("done"), the not-done members' ancestor chains, and
- * the `blocked_by` edges of every member ∪ ancestor (the probe set). Each probe
- * is mapped back to the in-sprint not-done member(s) it gates, so a violation is
- * attributed to the in-sprint item (a member's own blocker → that member; an
- * ancestor's blocker → every descendant member in the sprint).
+ * the project terminal set ("done"), the not-done members' ancestor chains, the
+ * `blocked_by` edges of every member ∪ ancestor (the probe set), and the DIRECT
+ * children of every not-done member. A not-done in-sprint item is gated by:
+ *   - an unsatisfied `blocked_by` edge (its own, or an ancestor's — a child
+ *     inherits its ancestors' blockers), AND
+ *   - any of its OWN children that is neither done nor also in the sprint (the
+ *     parent-ready cascade: a parent can only be finished once every child is
+ *     done, so an out-of-sprint not-done child means the parent can never close
+ *     within the sprint — MOTIR-1337).
+ * In every case "satisfied" means the gating item is done OR also in this
+ * sprint; a violation is attributed to the in-sprint item it gates (a member's
+ * own blocker/child → that member; an ancestor's blocker → every descendant
+ * member in the sprint).
  */
 async function computeSprintValidity(
   sprintId: string,
@@ -821,32 +835,53 @@ async function computeSprintValidity(
   const edges = await workItemLinkRepository.findBlockerEdgesForItems([
     ...gatedMembersByProbe.keys(),
   ]);
-  // Per-project terminal sets — a block can be cross-project, so each blocker's
-  // done-ness is judged against its OWN project (finding #21).
+  // The parent-ready cascade: a not-done in-sprint item is also gated by its OWN
+  // not-done children (a parent can only be finished once every child is done).
+  // Keyed on the not-done MEMBERS directly (not the ancestor probe set) — this is
+  // a direct parent→child dependency owned by the member.
+  const childEdges = await workItemRepository.findChildrenForItems(
+    notDone.map((m) => m.id),
+    ctx.workspaceId,
+  );
+  // Per-project terminal sets — a block can be cross-project, so each gating
+  // item's done-ness is judged against its OWN project (finding #21). Children
+  // share their parent's project but are resolved through the same map.
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
-    edges.map((e) => e.blockerProjectId),
+    [...edges.map((e) => e.blockerProjectId), ...childEdges.map((c) => c.childProjectId)],
     ctx.workspaceId,
   );
 
   const blockers: SprintBlockerDto[] = [];
   const seen = new Set<string>();
+  // Attribute one blocker per (in-sprint member, gating item) pair — deduped, so
+  // a member gated via several probes for the same blocker is reported once.
+  const addBlocker = (
+    memberId: string,
+    blockedBy: string,
+    blockerStatus: string,
+    blockerSprintId: string | null,
+  ) => {
+    const member = membersById.get(memberId);
+    if (!member) return;
+    const key = `${member.identifier} ${blockedBy}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    blockers.push({ item: member.identifier, blockedBy, blockerStatus, blockerSprintId });
+  };
+
   for (const edge of edges) {
     const inSprint = memberIds.has(edge.blockerId);
     const done = terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false;
     if (inSprint || done) continue; // satisfied: in the same sprint, or already done
     for (const memberId of gatedMembersByProbe.get(edge.fromId) ?? []) {
-      const member = membersById.get(memberId);
-      if (!member) continue;
-      const key = `${member.identifier} ${edge.blockerKey}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      blockers.push({
-        item: member.identifier,
-        blockedBy: edge.blockerKey,
-        blockerStatus: edge.blockerStatus,
-        blockerSprintId: edge.blockerSprintId,
-      });
+      addBlocker(memberId, edge.blockerKey, edge.blockerStatus, edge.blockerSprintId);
     }
+  }
+  for (const child of childEdges) {
+    const inSprint = memberIds.has(child.childId);
+    const done = terminalByProject.get(child.childProjectId)?.has(child.childStatus) ?? false;
+    if (inSprint || done) continue; // satisfied: child is done, or also in this sprint
+    addBlocker(child.parentId, child.childKey, child.childStatus, child.childSprintId);
   }
   // Deterministic order (by gated item, then blocker) for a stable wire shape.
   blockers.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));

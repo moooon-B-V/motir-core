@@ -12,9 +12,11 @@ import { projectKeyField, sprintIdField } from './sprintRef';
 // productized form of the *re-validate-the-active-sprint* rule (`motir-meta`
 // `plan-rules.md` #94): a planning agent calls this after any plan/re-plan that
 // touches sprint membership or a sprint item's `blocked_by` edges. A sprint is
-// VALID ⟺ every in-sprint, not-done item's ENTIRE transitive `blocked_by`
-// closure is `done` OR also in the sprint (the parent-ready cascade applied to
-// the sprint). With NO `sprintId`, the project's ACTIVE sprint is validated.
+// VALID ⟺ every in-sprint, not-done item has BOTH its ENTIRE transitive
+// `blocked_by` closure AND all of its children `done` OR also in the sprint —
+// the parent-ready cascade applied to the sprint: a parent with an out-of-sprint
+// not-done child can never be finished within it. With NO `sprintId`, the
+// project's ACTIVE sprint is validated.
 //
 // A thin READ adapter over `sprintsService.validateSprint` — no business logic
 // here; the closure walk + the validity rule live in the service. READ scope
@@ -73,11 +75,12 @@ export function registerValidateSprint(
     {
       title: 'Validate sprint finishability',
       description:
-        'Check whether a sprint is FINISHABLE: every in-sprint item has its entire transitive ' +
-        'blocked_by closure either done or also in the sprint (the parent-ready cascade applied to ' +
-        'the sprint). Omit sprintId to validate the project’s ACTIVE sprint. Returns ' +
-        '`{ valid: true }` when finishable, else `{ valid: false, blockers: [...] }` naming each ' +
-        'in-sprint item and the out-of-sprint, not-done work gating it. Read-only.',
+        'Check whether a sprint is FINISHABLE: every in-sprint item has both its entire transitive ' +
+        'blocked_by closure AND all of its children either done or also in the sprint (the ' +
+        'parent-ready cascade applied to the sprint — a parent with an out-of-sprint, not-done ' +
+        'child can never be finished within it). Omit sprintId to validate the project’s ACTIVE ' +
+        'sprint. Returns `{ valid: true }` when finishable, else `{ valid: false, blockers: [...] }` ' +
+        'naming each in-sprint item and the out-of-sprint, not-done work gating it. Read-only.',
       inputSchema,
     },
     async (args, extra) => runValidateSprint(args, resolveContext(extra)),

@@ -17,9 +17,11 @@ import { truncateAuthTables } from '../helpers/db';
 // whether a sprint is FINISHABLE (the productized re-validate-the-active-sprint
 // rule, plan-rules.md #94). We assert the validity engine
 // (`sprintsService.validateSprint`) directly for the rule's branches — empty /
-// all-satisfied / direct violation / parent-cascade / transitive / cross-project
-// blocker / active-default vs explicit id / the two typed errors — and then the
-// MCP tool round-trip + summary branches through the in-memory client.
+// all-satisfied / direct violation / blocker parent-cascade / parent→child
+// completion cascade (out-of-sprint child, in-sprint child, done child, done
+// parent ignored, recursive grandchild) / transitive / cross-project blocker /
+// active-default vs explicit id / the two typed errors — and then the MCP tool
+// round-trip + summary branches through the in-memory client.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -150,6 +152,116 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
       {
         item: child.identifier,
         blockedBy: blocker.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('PARENT→CHILD — an in-sprint not-done parent with an out-of-sprint not-done child is INVALID (MOTIR-1337)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent in sprint' },
+      fx.ctx,
+    );
+    const child = await mk(fx, 'Child left in the backlog', parent.id); // subtask, todo
+    await putInSprint(parent.id, sprintId); // only the PARENT is in the sprint
+    // child stays out of the sprint, status todo
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(false);
+    // The parent can never be finished within the sprint while its child sits in
+    // the backlog — the violation is reported at the in-sprint parent.
+    expect(result.blockers).toEqual([
+      {
+        item: parent.identifier,
+        blockedBy: child.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('an in-sprint parent whose child is ALSO in the sprint is VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent' },
+      fx.ctx,
+    );
+    const child = await mk(fx, 'Child in sprint', parent.id);
+    await putInSprint(parent.id, sprintId);
+    await putInSprint(child.id, sprintId);
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.blockers).toEqual([]);
+  });
+
+  it('an in-sprint parent whose out-of-sprint child is DONE is VALID', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent' },
+      fx.ctx,
+    );
+    const child = await mk(fx, 'Child finished out of sprint', parent.id);
+    await putInSprint(parent.id, sprintId);
+    await markDone(child.id); // a done child is already finished — it never gates the parent
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(true);
+  });
+
+  it('a DONE in-sprint parent never gates on its undone children (the user decided it is done)', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent marked done' },
+      fx.ctx,
+    );
+    await mk(fx, 'Child still in the backlog', parent.id); // out of sprint, todo — never gates
+    await putInSprint(parent.id, sprintId);
+    await markDone(parent.id); // a done parent is finished — only NOT-done parents are checked
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(true);
+    expect(result.blockers).toEqual([]);
+  });
+
+  it('the parent→child cascade is RECURSIVE — a grandchild left out of the sprint gates its in-sprint parent', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent (in sprint)' },
+      fx.ctx,
+    );
+    const child = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Child (in sprint)', parentId: parent.id },
+      fx.ctx,
+    );
+    const grandchild = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'Grandchild (backlog)',
+        parentId: child.id,
+      },
+      fx.ctx,
+    );
+    await putInSprint(parent.id, sprintId);
+    await putInSprint(child.id, sprintId); // both parent and child are in the sprint
+    // grandchild stays out of the sprint, status todo
+
+    const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    expect(result.valid).toBe(false);
+    // parent is satisfied (its child is in-sprint); the cascade surfaces at the
+    // in-sprint child, whose own child is out of the sprint.
+    expect(result.blockers).toEqual([
+      {
+        item: child.identifier,
+        blockedBy: grandchild.identifier,
         blockerStatus: 'todo',
         blockerSprintId: null,
       },
