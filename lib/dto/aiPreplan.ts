@@ -44,18 +44,35 @@ export interface PreplanRevisionDTO {
 // The four pre-plan artifacts the onboarding loop produces, in journey order.
 export type PreplanArtifactKind = 'discovery' | 'vision' | 'feasibility' | 'validation';
 
+// The visual treatment of a summary finding (mirrors motir-ai's tone enum):
+// `positive` a captured fact, `neutral` the deliberate negative space (the muted
+// "Out" row), `caution` a still-to-prove finding.
+export type PreplanFindingTone = 'positive' | 'neutral' | 'caution';
+
+// One labelled key→value finding in a tier's structured summary (MOTIR-1392 →
+// MOTIR-1225). Passed through verbatim from motir-ai (the producer derives it
+// from the structured tier docs); the canvas captured-findings renders it.
+export interface PreplanFindingDTO {
+  label: string;
+  value: string;
+  tone: PreplanFindingTone;
+}
+
 // One artifact's CURRENT rendered body + its full forward revision LOG.
 // `currentBody` / `currentVersion` are the latest version's Markdown write-up +
 // its number — what the 7.3.5 read-only review renders through 834's
 // `DirectionDocView` (mapped via `toDirectionDocView` in lib/onboarding/
 // directionDoc.ts), so the body is NEVER invented client-side. Sourced from the
-// motir-ai `/v1/preplan` body (the field 7.3.72 added). `versions` is the
-// orthogonal when/why/what diff timeline the gate renders separately. A kind
-// present here always has ≥1 version, so both body fields are populated.
+// motir-ai `/v1/preplan` body (the field 7.3.72 added). `summary` is the
+// structured per-tier breakdown (MOTIR-1392) the canvas captured-findings
+// renders — `[]` when the tier has a body but no structured doc yet. `versions`
+// is the orthogonal when/why/what diff timeline the gate renders separately. A
+// kind present here always has ≥1 version, so both body fields are populated.
 export interface PreplanArtifactLogDTO {
   kind: PreplanArtifactKind;
   currentBody: string;
   currentVersion: number;
+  summary: PreplanFindingDTO[];
   versions: PreplanRevisionDTO[];
 }
 
