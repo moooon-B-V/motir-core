@@ -93,17 +93,26 @@ function toItem(n: RoadmapNode): RoadmapLevelItem {
   };
 }
 
+/** The roadmap SCOPE (MOTIR-1382): the whole project (default) or the active
+ *  sprint's member-or-ancestor slice (`&scope=sprint`, MOTIR-1381). */
+export type RoadmapScope = 'project' | 'sprint';
+
 /**
  * Fetch one level of the project roadmap: the roots when `parentId` is null, else
  * that parent's direct children — plus the `is_blocked_by` edges from the level.
- * Best-effort: any failure resolves to an empty level.
+ * `scope='sprint'` narrows every level to the active sprint (no active sprint →
+ * an empty level). Best-effort: any failure resolves to an empty level.
  */
 export async function fetchRoadmapLevel(
   projectKey: string,
   parentId: string | null,
+  scope: RoadmapScope = 'project',
   signal?: AbortSignal,
 ): Promise<RoadmapLevelData> {
-  const qs = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';
+  const params = new URLSearchParams();
+  if (parentId) params.set('parentId', parentId);
+  if (scope === 'sprint') params.set('scope', 'sprint');
+  const qs = params.toString() ? `?${params.toString()}` : '';
   try {
     const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/roadmap${qs}`, {
       headers: { Accept: 'application/json' },
