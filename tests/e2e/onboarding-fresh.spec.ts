@@ -366,7 +366,10 @@ test('fresh onboarding: 4 gated tiers → validate ask → design wizard → pla
   await decision.getByRole('button', { name: 'Prove demand first' }).click();
   await expect(decision).toBeHidden();
 
-  // Back to the hub — now complete, the design + plan affordances appear.
+  // Completing the last tier routes STRAIGHT into the design wizard (MOTIR-1376).
+  await expect(designPage(page)).toBeVisible();
+
+  // Step back out to the hub — now complete, the design + plan affordances appear.
   await page.getByRole('button', { name: 'Back' }).first().click();
   await expect(page.getByRole('button', { name: 'Go to plan phase' })).toBeVisible();
   await expect(designEntry(page)).toBeVisible();
@@ -431,6 +434,12 @@ test('fresh onboarding: an optional tier can be skipped from the chat', async ({
   const skip = page.getByRole('button', { name: 'Skip it' });
   await expect(skip).toBeVisible();
   await skip.click();
+
+  // Skipping the optional tier completes the direction. For a web project that now
+  // routes STRAIGHT into the design wizard (MOTIR-1376) — step back to the hub,
+  // where the "Go to plan phase" exit lives.
+  await expect(designPage(page)).toBeVisible();
+  await page.getByRole('button', { name: 'Back' }).first().click();
 
   await expect(page.getByRole('button', { name: 'Go to plan phase' })).toBeVisible();
   await expect(tierHeading(page, 'validation')).toHaveCount(0); // the optional tier was skipped
