@@ -67,6 +67,13 @@ export interface OnboardingCanvasProps {
   idea: string | null;
   /** Open the web-only design step (MOTIR-1040) — the `design` station's action. */
   onOpenDesign: () => void;
+  /** Advance the CURRENT "you are here" step (MOTIR-1372) — the Continue action on
+   *  the active station card and in its quick-view modal. Wired to `continueTier`. */
+  onContinueStep?: () => void;
+  /** Open a tier's in-page review GATE (MOTIR-1372 / 1355) — "open full screen" for
+   *  the CURRENT step lands here (the in-page gate with Back + Continue), not the
+   *  new-tab read-only page. Wired to `openTier`. */
+  onReviewStep?: (kind: DirectionDocKind) => void;
   /** The active project's key — the work-item tree is read per level from
    *  `/api/projects/[key]/roadmap?parentId=`. Omit (a pre-project state) and the
    *  canvas shows only the pre-plan stations. */
@@ -81,6 +88,8 @@ export function OnboardingCanvas({
   state,
   idea,
   onOpenDesign,
+  onContinueStep,
+  onReviewStep,
   projectKey,
   revisitingKind = null,
   willRefresh = [],
@@ -98,6 +107,15 @@ export function OnboardingCanvas({
   const { registerItems, onView: onViewWorkItem, quickView } = useWorkItemQuickView();
   // The tier whose doc is open in the on-canvas viewer (MOTIR-1355), or null.
   const [viewTier, setViewTier] = useState<DirectionDocKind | null>(null);
+
+  // The CURRENT "you are here" step (MOTIR-1372) — the active/deciding tier. Its
+  // card + quick-view modal carry a Continue, and "open full screen" for it lands on
+  // the in-page gate (Back + Continue), not the read-only new-tab page.
+  const currentStep = buildStations(state).find(
+    (s) => (s.state === 'active' || s.state === 'deciding') && isDirectionDocKind(s.kind),
+  );
+  const currentStepKind: DirectionDocKind | null =
+    currentStep && isDirectionDocKind(currentStep.kind) ? currentStep.kind : null;
 
   // The canvas's single View handler, routed by node kind: a tier station opens
   // the tier-doc viewer; any other `viewable` node (a drilled work item) opens the
@@ -131,7 +149,14 @@ export function OnboardingCanvas({
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
-      const r: LoadInputs = { state, idea, revisitingKind, willRefresh, onOpenDesign };
+      const r: LoadInputs = {
+        state,
+        idea,
+        revisitingKind,
+        willRefresh,
+        onOpenDesign,
+        onContinueStep,
+      };
 
       // The work-item READ for this level: the roots (the produced epics) back the
       // top-level PREVIEW and the synthetic plan level; else a parent's children.
@@ -182,7 +207,16 @@ export function OnboardingCanvas({
       }
       return { nodes: [...stationNodes, ...extra], deps: stationDeps };
     },
-    [projectKey, state, idea, revisitingKind, willRefresh, onOpenDesign, registerItems],
+    [
+      projectKey,
+      state,
+      idea,
+      revisitingKind,
+      willRefresh,
+      onOpenDesign,
+      onContinueStep,
+      registerItems,
+    ],
   );
 
   const onActivate = useCallback(
@@ -226,7 +260,31 @@ export function OnboardingCanvas({
         ariaLabel={t('title')}
       />
       {quickView}
-      <TierDocModal tier={viewTier} origin="onboarding" onClose={() => setViewTier(null)} />
+      <TierDocModal
+        tier={viewTier}
+        origin="onboarding"
+        // The current "you are here" step's modal is ACTIONABLE (MOTIR-1372): it
+        // carries Continue and its "open full page" lands on the in-page gate.
+        isCurrentStep={viewTier !== null && viewTier === currentStepKind}
+        onContinue={
+          onContinueStep
+            ? () => {
+                setViewTier(null);
+                onContinueStep();
+              }
+            : undefined
+        }
+        onOpenInPage={
+          onReviewStep
+            ? () => {
+                const kind = viewTier;
+                setViewTier(null);
+                if (kind) onReviewStep(kind);
+              }
+            : undefined
+        }
+        onClose={() => setViewTier(null)}
+      />
     </>
   );
 }
@@ -237,6 +295,7 @@ type LoadInputs = {
   revisitingKind: DirectionDocKind | null;
   willRefresh: DirectionDocKind[];
   onOpenDesign: () => void;
+  onContinueStep?: () => void;
 };
 
 /** The pre-plan station nodes (idea → tiers → design / plan), from the live state. */
@@ -263,6 +322,10 @@ function buildStationNodes(r: LoadInputs): ProjectCanvasNode[] {
           session={r.state.session}
           onOpenDesign={
             station.kind === 'design' && station.state === 'active' ? r.onOpenDesign : undefined
+          }
+          // The active "you are here" tier card carries a Continue (MOTIR-1372).
+          onContinue={
+            isDirectionDocKind(key) && station.state === 'active' ? r.onContinueStep : undefined
           }
           revisiting={r.revisitingKind === key}
           refreshing={willRefreshSet.has(key)}

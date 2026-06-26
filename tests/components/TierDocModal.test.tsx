@@ -81,6 +81,32 @@ describe('TierDocModal', () => {
     expect(link.getAttribute('rel')).toContain('noopener');
   });
 
+  it('the CURRENT step modal shows Continue and routes "Open full page" to the in-page gate (MOTIR-1372)', async () => {
+    mockFetchResolving(stateWith([discoveryDoc]));
+    const onContinue = vi.fn();
+    const onOpenInPage = vi.fn();
+    render(
+      <TierDocModal
+        tier="discovery"
+        origin="onboarding"
+        isCurrentStep
+        onContinue={onContinue}
+        onOpenInPage={onOpenInPage}
+        onClose={() => {}}
+      />,
+    );
+
+    // "Open full page" is now an in-page BUTTON (not a new-tab link).
+    const openBtn = await screen.findByRole('button', { name: /open full page/i });
+    fireEvent.click(openBtn);
+    expect(onOpenInPage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('link', { name: /open full page/i })).toBeNull();
+
+    // ...and a Continue button advances the step.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the empty state when the project has not drafted that tier', async () => {
     mockFetchResolving(stateWith([])); // no docs at all
     render(<TierDocModal tier="vision" onClose={() => {}} />);
