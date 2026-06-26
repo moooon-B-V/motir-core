@@ -16,6 +16,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import { toSprintDto, toSprintReportDto, toSprintReportPage } from '@/lib/mappers/sprintMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import type {
   CarryOverDestination,
   CompleteSprintInput,
@@ -27,6 +28,7 @@ import type {
   SprintValidityDto,
   StartSprintInput,
   UpdateSprintInput,
+  ValidityCondition,
 } from '@/lib/dto/sprints';
 import {
   CannotDeleteActiveSprintError,
@@ -150,6 +152,11 @@ export const sprintsService = {
    * out-of-sprint, not-done one is the violation we report at the nearest
    * in-sprint item it gates. ARCHIVED items (blockers and children) are ignored.
    *
+   * `condition` (Subtask 7.8.22) tunes how a `done`-but-out-of-sprint gating
+   * item is treated: `loose` (the default — today's behaviour) accepts it as
+   * satisfied; `tight` does not (only an in-sprint item satisfies, so a done
+   * item outside the sprint is reported as a blocker). See {@link ValidityCondition}.
+   *
    * A pure READ — no admin gate (mirroring `getActiveSprint` / `listByProject`;
    * the owner gate guards sprint MANAGEMENT writes, not reads), `workspaceId`-
    * gated throughout (finding #26). "Done" is the per-project terminal set
@@ -167,6 +174,7 @@ export const sprintsService = {
     projectId: string,
     sprintId: string | null,
     ctx: ServiceContext,
+    condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
   ): Promise<SprintValidityDto> {
     const sprint =
       sprintId === null
@@ -176,7 +184,7 @@ export const sprintsService = {
       if (sprintId === null) throw new NoActiveSprintError(projectId);
       throw new SprintNotFoundError(sprintId);
     }
-    return computeSprintValidity(sprint.id, sprint.projectId, ctx);
+    return computeSprintValidity(sprint.id, sprint.projectId, ctx, condition);
   },
 
   /**
@@ -789,7 +797,12 @@ async function computeSprintValidity(
   sprintId: string,
   projectId: string,
   ctx: ServiceContext,
+  condition: ValidityCondition,
 ): Promise<SprintValidityDto> {
+  // Under `tight`, a `done` gating item that is NOT in the sprint does NOT
+  // satisfy — only in-sprint membership does (the sprint must be self-contained).
+  // Under `loose` (default), a `done` item anywhere satisfies, as it always has.
+  const doneSatisfies = condition === 'loose';
   // ALL non-archived members (done + not-done): the in-sprint membership set the
   // "blocker is also in the sprint?" test keys on. `findSprintIssuesExcludingStatuses`
   // with an empty exclusion set is the whole committed set (it already filters
@@ -871,16 +884,20 @@ async function computeSprintValidity(
 
   for (const edge of edges) {
     const inSprint = memberIds.has(edge.blockerId);
-    const done = terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false;
-    if (inSprint || done) continue; // satisfied: in the same sprint, or already done
+    const done =
+      doneSatisfies &&
+      (terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false);
+    if (inSprint || done) continue; // satisfied: in the same sprint, or (loose) already done
     for (const memberId of gatedMembersByProbe.get(edge.fromId) ?? []) {
       addBlocker(memberId, edge.blockerKey, edge.blockerStatus, edge.blockerSprintId);
     }
   }
   for (const child of childEdges) {
     const inSprint = memberIds.has(child.childId);
-    const done = terminalByProject.get(child.childProjectId)?.has(child.childStatus) ?? false;
-    if (inSprint || done) continue; // satisfied: child is done, or also in this sprint
+    const done =
+      doneSatisfies &&
+      (terminalByProject.get(child.childProjectId)?.has(child.childStatus) ?? false);
+    if (inSprint || done) continue; // satisfied: in this sprint, or (loose) child already done
     addBlocker(child.parentId, child.childKey, child.childStatus, child.childSprintId);
   }
   // Deterministic order (by gated item, then blocker) for a stable wire shape.

@@ -353,6 +353,101 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
   });
 });
 
+describe('sprintsService.validateSprint — condition: loose vs tight (Subtask 7.8.22)', () => {
+  it('a DONE out-of-sprint BLOCKER satisfies under loose but gates under tight', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const a = await mk(fx, 'A');
+    const doneBlocker = await mk(fx, 'B done, out of sprint');
+    await putInSprint(a.id, sprintId);
+    await markDone(doneBlocker.id);
+    await link(fx, a.id, doneBlocker.id);
+
+    const loose = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx, 'loose');
+    expect(loose.valid).toBe(true);
+    expect(loose.blockers).toEqual([]);
+
+    const tight = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx, 'tight');
+    expect(tight.valid).toBe(false);
+    expect(tight.blockers).toEqual([
+      {
+        item: a.identifier,
+        blockedBy: doneBlocker.identifier,
+        blockerStatus: 'done',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('a DONE out-of-sprint CHILD satisfies under loose but gates under tight', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent in sprint' },
+      fx.ctx,
+    );
+    const child = await mk(fx, 'Child done, out of sprint', parent.id);
+    await putInSprint(parent.id, sprintId);
+    await markDone(child.id);
+
+    const loose = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx, 'loose');
+    expect(loose.valid).toBe(true);
+
+    const tight = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx, 'tight');
+    expect(tight.valid).toBe(false);
+    expect(tight.blockers).toEqual([
+      {
+        item: parent.identifier,
+        blockedBy: child.identifier,
+        blockerStatus: 'done',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('condition defaults to loose when omitted', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const a = await mk(fx, 'A');
+    const doneBlocker = await mk(fx, 'B done, out of sprint');
+    await putInSprint(a.id, sprintId);
+    await markDone(doneBlocker.id);
+    await link(fx, a.id, doneBlocker.id);
+
+    const omitted = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
+    const loose = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx, 'loose');
+    expect(omitted).toEqual(loose);
+    expect(omitted.valid).toBe(true);
+  });
+
+  it('tight leaves in-sprint and not-done-out-of-sprint outcomes unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    // a: gated by an IN-SPRINT (not-done) blocker → satisfied under both conditions.
+    const a = await mk(fx, 'A');
+    const inSprintBlocker = await mk(fx, 'C in sprint');
+    await putInSprint(a.id, sprintId);
+    await putInSprint(inSprintBlocker.id, sprintId);
+    await link(fx, a.id, inSprintBlocker.id);
+    // e: gated by an OUT-OF-SPRINT, not-done (todo) blocker → gates under both.
+    const e = await mk(fx, 'E');
+    const todoBlocker = await mk(fx, 'D todo, out of sprint');
+    await putInSprint(e.id, sprintId);
+    await link(fx, e.id, todoBlocker.id);
+
+    const tight = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx, 'tight');
+    // Only the not-done out-of-sprint blocker gates; the in-sprint one is unaffected.
+    expect(tight.blockers).toEqual([
+      {
+        item: e.identifier,
+        blockedBy: todoBlocker.identifier,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+});
+
 describe('workItemLinkRepository.findBlockerEdgesForItems', () => {
   it('short-circuits on an empty id set', async () => {
     expect(await workItemLinkRepository.findBlockerEdgesForItems([])).toEqual([]);
@@ -427,6 +522,33 @@ describe('validate_sprint MCP tool round-trip', () => {
     })) as CallToolResult;
     expect(res.isError).toBe(true);
     expect(text(res)).toContain('NO_ACTIVE_SPRINT');
+    await client.close();
+  });
+
+  it('condition: tight reports a done out-of-sprint blocker the loose default accepts', async () => {
+    const fx = await makeWorkItemFixture();
+    const sprintId = await planSprint(fx);
+    const a = await mk(fx, 'A');
+    const doneBlocker = await mk(fx, 'B done, out of sprint');
+    await putInSprint(a.id, sprintId);
+    await markDone(doneBlocker.id);
+    await link(fx, a.id, doneBlocker.id);
+
+    const client = await connectClient(fx.ctx);
+    const loose = (await client.callTool({
+      name: 'validate_sprint',
+      arguments: { projectKey: 'PROD', sprintId },
+    })) as CallToolResult;
+    expect(struct(loose).valid).toBe(true);
+
+    const tight = (await client.callTool({
+      name: 'validate_sprint',
+      arguments: { projectKey: 'PROD', sprintId, condition: 'tight' },
+    })) as CallToolResult;
+    expect(tight.isError).toBeFalsy();
+    expect(struct(tight).valid).toBe(false);
+    expect(struct(tight).blockers).toHaveLength(1);
+    expect(text(tight)).toContain('is INVALID');
     await client.close();
   });
 });

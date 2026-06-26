@@ -565,16 +565,18 @@ read every other sprint tool depends on.
 #### `validate_sprint`
 
 Check whether a sprint is **finishable**: a sprint is VALID ⟺ every in-sprint,
-not-done item has its ENTIRE transitive `blocked_by` closure either `done` or
-also in the sprint (the parent-ready cascade applied to the sprint — a child
-inherits its ancestors' blockers). Productizes the
-_re-validate-the-active-sprint_ rule a planning agent runs after any plan/re-plan
-that touches sprint membership or a sprint item's `blocked_by` edges. Read-only.
+not-done item has its ENTIRE transitive `blocked_by` closure AND all of its
+children either `done` or also in the sprint (the parent-ready cascade applied to
+the sprint — a child inherits its ancestors' blockers, and a parent needs its
+children). Productizes the _re-validate-the-active-sprint_ rule a planning agent
+runs after any plan/re-plan that touches sprint membership or a sprint item's
+`blocked_by` edges. Read-only.
 
-| Input        | Type   | Required | Notes                                                           |
-| ------------ | ------ | -------- | --------------------------------------------------------------- |
-| `projectKey` | string | yes      | The project key, e.g. `"PROD"`.                                 |
-| `sprintId`   | string | no       | The sprint to validate; omit to validate the **active** sprint. |
+| Input        | Type             | Required | Notes                                                                                                                                            |
+| ------------ | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `projectKey` | string           | yes      | The project key, e.g. `"PROD"`.                                                                                                                  |
+| `sprintId`   | string           | no       | The sprint to validate; omit to validate the **active** sprint.                                                                                  |
+| `condition`  | `loose`\|`tight` | no       | Default `loose` — a `done` gating item outside the sprint counts as satisfied. `tight` requires it to be IN the sprint, else it gates. (7.8.22.) |
 
 **Output** — `structuredContent`: a `SprintValidityDto` —
 `{ sprintId, valid, blockers }`. When `valid` is `false`, `blockers` lists each
