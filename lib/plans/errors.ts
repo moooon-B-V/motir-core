@@ -25,6 +25,16 @@ export class PlanNotFoundError extends Error {
   }
 }
 
+/** The plan-item id does not resolve within the given plan (the proposal-edit
+ *  path, 7.21.6 · MOTIR-1370). → 404 */
+export class PlanItemNotFoundError extends Error {
+  readonly code = 'PLAN_ITEM_NOT_FOUND' as const;
+  constructor(planItemId: string) {
+    super(`Plan item ${planItemId} was not found in this plan.`);
+    this.name = 'PlanItemNotFoundError';
+  }
+}
+
 /**
  * A proposal append was attempted on a plan that is no longer `generating`
  * (it has been planned/decided). Appending only makes sense while the producer

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
 import { buildPlanForest } from '@/components/planning/planLevel';
@@ -24,6 +24,9 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     identifier: null,
     title: 'A proposed item',
     kind: 'task',
+    priority: null,
+    type: null,
+    descriptionMd: null,
     status: null,
     hasChildren: false,
     changes: [],
@@ -95,6 +98,34 @@ describe('PlanItemNode', () => {
     );
     const badge = screen.getByTestId('stale-badge');
     expect(badge.getAttribute('title')).toContain('Parent removed');
+  });
+
+  it('renders an Edit trigger on an add node when onEdit is supplied; click fires it (7.21.6)', () => {
+    const onEdit = vi.fn();
+    renderWithIntl(
+      <PlanItemNode item={item({ op: 'add', planItemId: 'pi_42' })} onEdit={onEdit} />,
+    );
+    const trigger = screen.getByTestId('edit-proposal');
+    fireEvent.click(trigger);
+    expect(onEdit).toHaveBeenCalledWith('pi_42');
+  });
+
+  it('shows NO Edit trigger on a modify/remove node (only an add is editable)', () => {
+    const onEdit = vi.fn();
+    renderWithIntl(
+      <PlanItemNode item={item({ op: 'modify', nodeId: 'wi_1', title: 'X' })} onEdit={onEdit} />,
+    );
+    expect(screen.queryByTestId('edit-proposal')).toBeNull();
+    cleanup();
+    renderWithIntl(
+      <PlanItemNode item={item({ op: 'remove', nodeId: 'wi_2', title: 'Y' })} onEdit={onEdit} />,
+    );
+    expect(screen.queryByTestId('edit-proposal')).toBeNull();
+  });
+
+  it('shows NO Edit trigger when onEdit is omitted (an approved/declined plan is immutable)', () => {
+    renderWithIntl(<PlanItemNode item={item({ op: 'add' })} />);
+    expect(screen.queryByTestId('edit-proposal')).toBeNull();
   });
 });
 

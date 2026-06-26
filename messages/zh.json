@@ -56,7 +56,17 @@
     "staleConfirmTitle": "部分工作项可能已过期",
     "staleConfirmBody": "自该计划生成以来，有 {n} 个建议工作项发生了变化。仍要批准吗？",
     "staleConfirmCancel": "取消",
-    "staleConfirmApprove": "仍然批准"
+    "staleConfirmApprove": "仍然批准",
+    "editTriggerAria": "编辑建议工作项",
+    "editModalTitle": "编辑建议工作项",
+    "editLabelTitle": "标题",
+    "editLabelKind": "类型",
+    "editLabelType": "工作类型",
+    "editLabelPriority": "优先级",
+    "editLabelDescription": "描述",
+    "editTitleRequired": "请输入标题。",
+    "editSave": "保存更改",
+    "editCancel": "取消"
   },
   "projectAccess": {
     "noAccessTitle": "你无权访问此项目",

@@ -71,7 +71,9 @@ The composed canvas+chat shell, with the Plans chrome layered on:
   cross-blocked node — danger dashed border + `danger-surface` hatch). Red-hatch stays reserved
   for that dependency signal; the op treatments are a separate axis:
   - **`add`** → **dashed ACCENT (purple) border + accent-soft tint + a "+ add" badge** — a new
-    node not yet in the tree (proposed).
+    node not yet in the tree (proposed). An `add` node also carries an **Edit affordance** (a
+    pencil icon-button in the node's top-right, beside where a status pill sits on other ops) —
+    see the inline-edit bullet below (MOTIR-1370).
   - **`modify`** → the **EXISTING** node, **solid INFO (blue) ring + a "proposed change" badge** +
     an inline **old→new diff** (old read live from the target, new from `patch`) — SAME id, not a
     ghost copy.
@@ -80,8 +82,15 @@ The composed canvas+chat shell, with the Plans chrome layered on:
     red/dashed/hatched, since archive is reversible (the `cancelled`-status hue), not the
     error/attention signal cross-story deps carry. This is the fix for the original collision:
     `remove` previously read identically to a cross-level dependency.
-- **Per-item stale badges + reasons** (from MOTIR-1340): `parent_removed` / `siblings_added` /
-  `blocker_removed` / `base_revision_drift`, plus a plan-level **"N may be out of date"** summary.
+- **Inline edit of a proposed `add`** (MOTIR-1370). The Edit pencil on an `add` node opens a
+  **Modal** edit form over the add's proposed fields — **Title** (`Input`), **Type** (the kind
+  picker `TypePicker`), **Work type** (`WorkItemTypePicker`), **Priority** (`PriorityPicker`),
+  **Description** (`Textarea`) — Save / Cancel in the footer. The same field controls the
+  create-issue modal uses, so the form needs no new primitive. Editing patches the PlanItem's
+  `proposedFields`; **no WorkItem is created** (an `add` stays a proposal until approve), and on
+  save the canvas refetches the review model and re-renders. **Only an `add` is editable** —
+  `modify`/`remove` target existing items, so they carry no Edit affordance. The trigger and the
+  form are offered **only while the plan is `planned`**; a decided plan is read-only.
 - The decision gate: an **Approve** primary — **"Add N items to your backlog"** (→ MATERIALIZE),
   with a stale-warning confirm when items are stale — and a **Decline** secondary (drop). A
   decided plan is **read-only** with its outcome + history shown. (NO "Discard"; Approve =
@@ -109,8 +118,11 @@ composed canvas as the engine emits PlanItems (respecting drill-down — NOT a w
   badge all route through the semantic intent tokens (accent / warning / danger), not hand-picked
   hex.
 - **Composes ONLY shipped primitives** (`Card` / `Button` / status `Pill`/`Badge` /
-  `SectionLabel` / `Modal` / the list row + `useRowWindow`) + the real canvas. A genuinely new
-  primitive would be its OWN `design/` subtask — none is introduced here.
+  `SectionLabel` / `Modal` / the list row + `useRowWindow`) + the real canvas. The proposed-`add`
+  edit form (MOTIR-1370) likewise composes shipped controls only — `Input` / `Textarea` /
+  `TypePicker` / `WorkItemTypePicker` / `PriorityPicker` inside the shared `Modal` (the same set
+  the create-issue modal uses). A genuinely new primitive would be its OWN `design/` subtask —
+  none is introduced here.
 - **a11y**: status pills carry **text, not colour only**; the generating state is `aria-live`; the
   canvas keyboard/zoom affordances are inherited from the composed `ProjectRoadmapCanvas` (not
   re-specified). Copy lives in the `aiPlanning` i18n namespace.

@@ -62,7 +62,16 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
   }
 }
 
-export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
+export function PlanItemNode({
+  item,
+  onEdit,
+}: {
+  item: PlanReviewItemDto;
+  /** Open the inline-edit form for a proposed `add` (7.21.6 · MOTIR-1370). When
+   *  supplied, an `add` node shows an Edit affordance; only an `add` is editable
+   *  (modify/remove target existing items), so the trigger renders for `add` only. */
+  onEdit?: (planItemId: string) => void;
+}) {
   const t = useTranslations('planReview');
   const kind = toKind(item.kind);
   const status = toStatus(item.status);
@@ -105,6 +114,23 @@ export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
               aria-hidden="true"
               data-testid="drill-affordance"
             />
+          ) : null}
+          {item.op === 'add' && onEdit ? (
+            <button
+              type="button"
+              data-testid="edit-proposal"
+              aria-label={t('editTriggerAria')}
+              // Stop the press/click from starting a canvas drag or selecting the
+              // node — same guard the canvas's View/Open action buttons use.
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(item.planItemId);
+              }}
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            >
+              <Pencil className="size-3.5" aria-hidden="true" />
+            </button>
           ) : null}
         </div>
       </div>

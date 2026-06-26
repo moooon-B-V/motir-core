@@ -10,13 +10,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 import { PlanReviewRail } from '@/components/planning/PlanReviewRail';
+import { ProposalEditModal } from '@/components/planning/ProposalEditModal';
 import {
   approvePlanRequest,
   declinePlanRequest,
   fetchPlanReview,
+  updateProposalRequest,
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
-import type { PlanReviewDto } from '@/lib/dto/planReview';
+import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { UpdateProposalInput } from '@/lib/dto/plans';
 
 // The plan-detail island (Subtask 7.4.5 / MOTIR-847) — the generation-review MODE
 // of the canvas+chat workspace shell (MOTIR-1193). It composes the proposed-plan
@@ -99,6 +102,47 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
 
   const onDecline = useCallback(() => void runAction(declinePlanRequest), [runAction]);
 
+  // Inline edit of a proposed `add` (Subtask 7.21.6 / MOTIR-1370). The edit
+  // trigger on an `add` node opens the modal; save PATCHes the proposal and
+  // refetches the review model (the same client-island refetch the actions use —
+  // router.refresh can't reach this island's useState seed). Only offered while
+  // `planned` (an approved/declined plan is immutable).
+  const [editingItem, setEditingItem] = useState<PlanReviewItemDto | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editErrorCode, setEditErrorCode] = useState<string | null>(null);
+
+  const onEditAdd = useCallback(
+    (planItemId: string) => {
+      const found = review.items.find((i) => i.planItemId === planItemId) ?? null;
+      setEditErrorCode(null);
+      setEditingItem(found);
+    },
+    [review.items],
+  );
+
+  const onSubmitEdit = useCallback(
+    async (planItemId: string, input: UpdateProposalInput) => {
+      setEditBusy(true);
+      setEditErrorCode(null);
+      try {
+        await updateProposalRequest(planId, planItemId, input);
+        await refetch();
+        setEditingItem(null);
+      } catch (err) {
+        setEditErrorCode(err instanceof PlanRequestError ? (err.code ?? 'ERROR') : 'ERROR');
+        // A 409 means a concurrent reviewer decided the plan — it's no longer
+        // editable; refetch to show the new state and close the now-stale form.
+        if (err instanceof PlanRequestError && err.status === 409) {
+          await refetch().catch(() => {});
+          setEditingItem(null);
+        }
+      } finally {
+        setEditBusy(false);
+      }
+    },
+    [planId, refetch],
+  );
+
   // Terminal EMPTY — a plan with no proposed content (and not still generating):
   // hand off to the discovery chat to describe what to build (MOTIR-833).
   const isEmpty = review.items.length === 0 && review.status !== 'generating';
@@ -130,6 +174,8 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
             items={review.items}
             version={version}
             ariaLabel={ariaLabel ?? t('canvasAria')}
+            // Editable only while planned — an approved/declined plan is immutable.
+            onEditAdd={review.status === 'planned' ? onEditAdd : undefined}
           />
         }
         chat={
@@ -164,6 +210,16 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
           </Button>
         </div>
       </Modal>
+
+      <ProposalEditModal
+        item={editingItem}
+        onOpenChange={(open) => {
+          if (!open) setEditingItem(null);
+        }}
+        onSubmit={onSubmitEdit}
+        busy={editBusy}
+        errorCode={editErrorCode}
+      />
     </>
   );
 }

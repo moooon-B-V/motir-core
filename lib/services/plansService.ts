@@ -18,6 +18,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
 import {
   InvalidProposalError,
+  PlanItemNotFoundError,
   PlanItemTargetMissingError,
   PlanNotFoundError,
   PlanNotGeneratingError,
@@ -34,6 +35,7 @@ import type {
   PlanListPageDto,
   PlanWithItemsDto,
   ProposalInput,
+  UpdateProposalInput,
 } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
 
@@ -80,6 +82,26 @@ function validateProposal(p: ProposalInput): void {
     // remove
     if (!p.workItemId) throw new InvalidProposalError('A `remove` proposal requires workItemId.');
   }
+}
+
+/**
+ * Apply an `UpdateProposalInput` over an `add`'s existing `proposedFields`
+ * (7.21.6 · MOTIR-1370). SPARSE: only the keys PRESENT in the input change; an
+ * absent key (`undefined`) is left as-is, an explicit `null` on a nullable field
+ * clears it. `executor` is never touched (not in the editable set). The result is
+ * re-validated by the caller (title must stay non-empty).
+ */
+function mergeProposedFields(
+  current: PlanItemProposedFields,
+  input: UpdateProposalInput,
+): PlanItemProposedFields {
+  const next: PlanItemProposedFields = { ...current };
+  if (input.title !== undefined) next.title = input.title;
+  if (input.kind !== undefined) next.kind = input.kind;
+  if (input.descriptionMd !== undefined) next.descriptionMd = input.descriptionMd;
+  if (input.type !== undefined) next.type = input.type;
+  if (input.priority !== undefined) next.priority = input.priority;
+  return next;
 }
 
 /** A created-row revision diff ({ field: { from: null, to } }) for a materialized add. */
@@ -476,6 +498,61 @@ export const plansService = {
     await projectAccessService.assertCanBrowse(plan.projectId, ctx);
     const items = await planItemRepository.findByPlan(planId);
     return toPlanWithItemsDto(plan, items);
+  },
+
+  /**
+   * Edit a proposed `add` of a `planned` plan IN PLACE (7.21.6 · MOTIR-1370) —
+   * the review surface's inline edit. Patches the `add`'s `proposedFields`
+   * (title/kind/priority/type/description); NO WorkItem is created (an `add`
+   * stays a proposal until approve materializes it). The plan row is locked + its
+   * status re-read, so an edit racing an `approve`/`decline` is rejected once the
+   * plan leaves `planned` (`PlanNotInExpectedStatusError`, the same one-shot guard
+   * approve uses). Only an `add` is editable — `modify`/`remove` target existing
+   * items, so editing one is an `InvalidProposalError`. Returns the full
+   * `PlanWithItemsDto` so the caller reflects the change without a second read.
+   */
+  async updateProposal(
+    planId: string,
+    planItemId: string,
+    input: UpdateProposalInput,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    if (!plan) throw new PlanNotFoundError(planId);
+    await projectAccessService.assertCanEdit(plan.projectId, ctx);
+
+    const { row, items } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        if (fresh.status !== 'planned') {
+          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+        }
+        const item = await planItemRepository.findById(planItemId, tx);
+        if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
+        if (item.op !== 'add') {
+          throw new InvalidProposalError(
+            'Only an `add` proposal can be edited; modify/remove target existing items.',
+          );
+        }
+        const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+        const next = mergeProposedFields(current, input);
+        if (!next.title?.trim()) {
+          throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
+        }
+        await planItemRepository.update(
+          planItemId,
+          { proposedFields: next as unknown as Prisma.InputJsonValue },
+          tx,
+        );
+        const allItems = await planItemRepository.findByPlan(planId, tx);
+        return { row: fresh, items: allItems };
+      },
+    );
+    return toPlanWithItemsDto(row, items);
   },
 
   /**

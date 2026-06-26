@@ -617,6 +617,43 @@
         background: var(--accent);
         color: #fff;
       }
+      /* Edit pencil on a proposed `add` node (MOTIR-1370) — opens the edit modal.
+         Only an `add` carries it (modify/remove target existing items). */
+      .editbtn {
+        flex: none;
+        margin-left: 6px;
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--r-control);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .editbtn svg {
+        width: 13px;
+        height: 13px;
+      }
+      /* A combobox trigger as it reads at rest in the edit modal (MOTIR-1370) —
+         the shipped TypePicker / WorkItemTypePicker / PriorityPicker render this. */
+      .fakeselect {
+        height: 36px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-control);
+        padding: 0 10px;
+        font-size: 13px;
+        color: var(--text);
+      }
+      .fakeselect .chev {
+        width: 16px;
+        height: 16px;
+        margin-left: auto;
+        color: var(--muted);
+      }
       .node.modify {
         border-color: var(--info);
         box-shadow:
@@ -1543,6 +1580,16 @@
                         <path d="M12 5v14M5 12h14" /></svg
                       >add</span
                     >
+                    <!-- Edit a proposed add (MOTIR-1370) — opens the edit modal below. -->
+                    <button
+                      class="editbtn"
+                      aria-label="Edit proposed item"
+                      title="Edit proposed item"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
                   </div>
                   <div class="foot">
                     <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
@@ -1832,6 +1879,173 @@
                 >
               </div>
             </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- PANEL B′ — Edit a proposed `add` (the inline-edit modal, 1370)  -->
+      <!-- ============================================================= -->
+      <div class="panel">
+        <div class="panel-cap">
+          <span class="n">B</span>
+          <h2>Edit a proposed <code>add</code> — the inline-edit modal (MOTIR-1370)</h2>
+          <span class="note"
+            >opened by the Edit pencil on an <code>add</code> node · only an <code>add</code> is
+            editable · patches the proposal, no work item until approve</span
+          >
+        </div>
+        <div
+          class="frame"
+          style="display: grid; place-items: center; background: #2c2a2740; padding: 30px"
+        >
+          <!-- The shared Modal primitive, composing the same field controls the
+               create-issue modal uses (Input · TypePicker · WorkItemTypePicker ·
+               PriorityPicker · Textarea). -->
+          <div
+            style="
+              width: 430px;
+              max-width: 100%;
+              background: var(--surface);
+              border: 1px solid var(--border);
+              border-radius: var(--r-card);
+              box-shadow: var(--sh-elev);
+              overflow: hidden;
+            "
+          >
+            <div style="padding: 18px 20px 4px">
+              <div style="font-size: 17px; font-weight: 600; color: var(--strong)">
+                Edit proposed item
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 20px 4px">
+              <!-- Title (Input) -->
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <span style="font-size: 13px; font-weight: 500; color: var(--strong)">Title</span>
+                <div
+                  style="
+                    height: 36px;
+                    display: flex;
+                    align-items: center;
+                    border: 1px solid var(--border-strong);
+                    border-radius: var(--r-control);
+                    padding: 0 10px;
+                    font-size: 13px;
+                    color: var(--text);
+                  "
+                >
+                  Marketplace payouts
+                </div>
+              </div>
+              <!-- Type (kind) + Work type — two pickers side by side -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <span style="font-size: 13px; font-weight: 500; color: var(--strong)">Type</span>
+                  <div class="fakeselect">
+                    <span
+                      class="tile"
+                      style="
+                        width: 18px;
+                        height: 18px;
+                        background: var(--t-epic-soft);
+                        border-radius: 5px;
+                      "
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--t-epic)"
+                        stroke-width="2"
+                        style="width: 12px; height: 12px"
+                      >
+                        <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
+                    ></span>
+                    Epic
+                    <svg
+                      class="chev"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <span style="font-size: 13px; font-weight: 500; color: var(--strong)"
+                    >Work type</span
+                  >
+                  <div class="fakeselect">
+                    Code
+                    <svg
+                      class="chev"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <!-- Priority (picker) -->
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <span style="font-size: 13px; font-weight: 500; color: var(--strong)"
+                  >Priority</span
+                >
+                <div class="fakeselect">
+                  High
+                  <svg
+                    class="chev"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </div>
+              </div>
+              <!-- Description (Textarea) -->
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <span style="font-size: 13px; font-weight: 500; color: var(--strong)"
+                  >Description</span
+                >
+                <div
+                  style="
+                    min-height: 64px;
+                    border: 1px solid var(--border-strong);
+                    border-radius: var(--r-control);
+                    padding: 8px 10px;
+                    font-size: 13px;
+                    color: var(--muted);
+                    line-height: 1.45;
+                  "
+                >
+                  Stripe Connect payouts for marketplace sellers — onboarding, KYC, and the payout
+                  ledger.
+                </div>
+              </div>
+            </div>
+            <!-- Footer: Cancel (ghost) + Save (primary) -->
+            <div
+              style="
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
+                padding: 14px 20px;
+                margin-top: 6px;
+                border-top: 1px solid var(--border);
+              "
+            >
+              <button class="btn secondary" style="justify-content: center">Cancel</button>
+              <button class="btn primary" style="justify-content: center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                  <path d="m20 6-11 11-5-5" /></svg
+                >Save changes
+              </button>
+            </div>
           </div>
         </div>
       </div>

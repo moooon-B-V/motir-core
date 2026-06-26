@@ -44,6 +44,14 @@ export interface PlanReviewItemDto {
   title: string;
   /** The work-item kind (`epic`/`story`/`task`/`bug`/`subtask`); defaults `task`. */
   kind: string;
+  /** The `add`'s proposed PRIORITY — `null` for a `modify`/`remove` (only an
+   *  `add` is editable, 7.21.6 · MOTIR-1370) or an `add` with none set. */
+  priority: string | null;
+  /** The `add`'s proposed work-item TYPE (`code`/`design`/…) — `null` as above. */
+  type: string | null;
+  /** The `add`'s proposed DESCRIPTION (Markdown) — `null` as above. The inline
+   *  edit form seeds from these three; the compact canvas node never renders them. */
+  descriptionMd: string | null;
   /** The target's current status key — null for a proposed `add` (none yet). */
   status: string | null;
   /** Has children in the proposed forest → the canvas can DRILL into it. */

@@ -2,8 +2,14 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { PlanNotGeneratingError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
-import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import {
+  InvalidProposalError,
+  PlanItemNotFoundError,
+  PlanNotGeneratingError,
+  PlanNotInExpectedStatusError,
+} from '@/lib/plans/errors';
+import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
 /** Seed a pre-existing work item through the real service, so it carries a
@@ -293,5 +299,171 @@ describe('plansService.approvePlan — concurrency (atomic one-shot)', () => {
 
     const plan = await plansService.getPlan(planId, fx.ctx);
     expect(plan.status).toBe('approved');
+  });
+});
+
+// Subtask 7.21.6 / MOTIR-1370 — edit a proposed `add` in place while the plan is
+// `planned`. A PlanItem is a PROPOSAL: editing patches its `proposedFields`; no
+// WorkItem is created (that waits for approve). Real Postgres.
+describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
+  it('edits a planned plan’s add proposal in place; no WorkItem is created', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'P' }, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Old title', kind: 'task', priority: 'low' } }],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const updated = await plansService.updateProposal(
+      plan.id,
+      itemId,
+      {
+        title: 'New title',
+        kind: 'story',
+        priority: 'high',
+        type: 'design',
+        descriptionMd: 'Why this matters',
+      },
+      fx.ctx,
+    );
+    const edited = updated.items.find((i) => i.id === itemId)!;
+    expect(edited.proposedFields).toMatchObject({
+      title: 'New title',
+      kind: 'story',
+      priority: 'high',
+      type: 'design',
+      descriptionMd: 'Why this matters',
+    });
+    // Still a proposal — neither the old nor the new title exists in the tree.
+    expect(await db.workItem.findFirst({ where: { title: 'New title' } })).toBeNull();
+    expect(await db.workItem.findFirst({ where: { title: 'Old title' } })).toBeNull();
+  });
+
+  it('merges sparsely — an absent key is left untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Keep me', kind: 'task', priority: 'low' } }],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const updated = await plansService.updateProposal(
+      plan.id,
+      itemId,
+      { priority: 'highest' },
+      fx.ctx,
+    );
+    const edited = updated.items.find((i) => i.id === itemId)!;
+    expect(edited.proposedFields?.title).toBe('Keep me'); // untouched
+    expect(edited.proposedFields?.kind).toBe('task'); // untouched
+    expect(edited.proposedFields?.priority).toBe('highest'); // changed
+  });
+
+  it('rejects an edit that would empty the title (InvalidProposalError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Has a title', kind: 'task' } },
+    ]);
+    const item = (await plansService.getPlan(planId, fx.ctx)).items[0]!;
+    await expect(
+      plansService.updateProposal(planId, item.id, { title: '   ' }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('rejects editing a non-add (modify) proposal (InvalidProposalError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Existing target');
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target, patch: { title: 'X' }, baseRevision: 'r1' }],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await expect(
+      plansService.updateProposal(plan.id, itemId, { title: 'Y' }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('rejects an unknown plan item (PlanItemNotFoundError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'A', kind: 'task' } },
+    ]);
+    await expect(
+      plansService.updateProposal(planId, 'pi_does_not_exist', { title: 'Z' }, fx.ctx),
+    ).rejects.toBeInstanceOf(PlanItemNotFoundError);
+  });
+
+  it('rejects when the plan is not planned (generating, then approved)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'A', kind: 'task' } }],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    // generating
+    await expect(
+      plansService.updateProposal(plan.id, itemId, { title: 'B' }, fx.ctx),
+    ).rejects.toBeInstanceOf(PlanNotInExpectedStatusError);
+    // approved (immutable)
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+    await expect(
+      plansService.updateProposal(plan.id, itemId, { title: 'C' }, fx.ctx),
+    ).rejects.toBeInstanceOf(PlanNotInExpectedStatusError);
+  });
+
+  it('enforces canEdit — a non-member is denied', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'A', kind: 'task' } },
+    ]);
+    const item = (await plansService.getPlan(planId, fx.ctx)).items[0]!;
+    const outsider = await createTestUser();
+    const outsiderCtx = { userId: outsider.id, workspaceId: fx.ctx.workspaceId };
+    await expect(
+      plansService.updateProposal(planId, item.id, { title: 'B' }, outsiderCtx),
+    ).rejects.toBeInstanceOf(ProjectAccessDeniedError);
+  });
+});
+
+describe('plansService.updateProposal — concurrency (edit vs approve)', () => {
+  it('an edit racing an approve resolves consistently: plan approved once, one work item, no raw race', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Race', kind: 'task' } },
+    ]);
+    const item = (await plansService.getPlan(planId, fx.ctx)).items[0]!;
+
+    const results = await Promise.allSettled([
+      plansService.approvePlan(planId, fx.ctx),
+      plansService.updateProposal(planId, item.id, { title: 'Edited mid-approve' }, fx.ctx),
+    ]);
+
+    // Both lock the plan row, so they serialize: either the edit lands first then
+    // approve materializes the edited add (both succeed), or approve lands first
+    // and the edit observes `approved` and throws the typed guard. Never a raw race.
+    const rejected = results.filter((r) => r.status === 'rejected');
+    rejected.forEach((r) =>
+      expect((r as PromiseRejectedResult).reason).toBeInstanceOf(PlanNotInExpectedStatusError),
+    );
+    const plan = await plansService.getPlan(planId, fx.ctx);
+    expect(plan.status).toBe('approved');
+    // Exactly ONE work item materialized (no double-create, no orphan), titled by
+    // whichever ordering won.
+    const created = await db.workItem.findMany({
+      where: { projectId: fx.projectId, title: { in: ['Race', 'Edited mid-approve'] } },
+    });
+    expect(created).toHaveLength(1);
   });
 });
