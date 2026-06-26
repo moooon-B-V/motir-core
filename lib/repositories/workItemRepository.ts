@@ -1413,17 +1413,23 @@ export const workItemRepository = {
     rootIds: string[],
     doneStatusKeys: string[],
     excludedStatusKey: string,
+    sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ rootId: string; total: number; done: number }>> {
     if (rootIds.length === 0) return [];
     const client = tx ?? db;
+    // Sprint scope (MOTIR-1381): a container's progress meter counts only its
+    // IN-SPRINT descendants (sprint membership is the flat `sprintId`), so the
+    // meter reflects the sprint's slice of the branch, not the whole subtree.
+    // `null` ⇒ no restriction (the whole-project rollup, byte-for-byte unchanged).
+    const sprintFilter = sprintId ? Prisma.sql`AND "sprintId" = ${sprintId}` : Prisma.empty;
     return client.$queryRaw<Array<{ rootId: string; total: number; done: number }>>`
       WITH RECURSIVE subtree AS (
-        SELECT w."id", w."parentId", w."status", w."archivedAt", w."id" AS root_id, 1 AS depth
+        SELECT w."id", w."parentId", w."status", w."archivedAt", w."sprintId", w."id" AS root_id, 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ANY(${rootIds})
         UNION ALL
-        SELECT w."id", w."parentId", w."status", w."archivedAt", s.root_id, s.depth + 1
+        SELECT w."id", w."parentId", w."status", w."archivedAt", w."sprintId", s.root_id, s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
       )
@@ -1433,6 +1439,7 @@ export const workItemRepository = {
         FROM subtree
         WHERE depth > 1
           AND "archivedAt" IS NULL
+          ${sprintFilter}
         GROUP BY root_id`;
   },
 
@@ -2031,6 +2038,7 @@ export const workItemRepository = {
     parentId: string | null,
     sort: IssueSort,
     page: { take: number; offset: number },
+    sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemTreeRow[]> {
     const client = tx ?? db;
@@ -2038,6 +2046,12 @@ export const workItemRepository = {
     const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
     const parentPred =
       parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+    // Sprint scope (MOTIR-1381): when `sprintId` is set, narrow BOTH the level's
+    // rows AND the `hasChildren` probe to the member-or-ancestor set, so a
+    // container with no in-sprint descendants reports no drillable children and a
+    // fully-out-of-sprint branch never appears. `null` ⇒ `TRUE` (whole project).
+    const rowSprintScope = inSprintScopeSql('w', projectId, workspaceId, sprintId);
+    const childSprintScope = inSprintScopeSql('ch', projectId, workspaceId, sprintId);
 
     return client.$queryRaw<WorkItemTreeRow[]>`
       SELECT w."id",
@@ -2059,6 +2073,7 @@ export const workItemRepository = {
                SELECT 1 FROM "work_item" ch
                 WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL
                   AND ${notInTriageSql('ch')}
+                  AND ${childSprintScope}
              )                    AS "hasChildren"
         FROM "work_item" w
         LEFT JOIN "user" au ON au."id" = w."assigneeId"
@@ -2069,6 +2084,7 @@ export const workItemRepository = {
           AND w."workspaceId" = ${workspaceId}
           AND w."archivedAt" IS NULL
           AND ${notInTriageSql('w')}
+          AND ${rowSprintScope}
           AND ${parentPred}
         ORDER BY ${orderCol} ${dir} NULLS LAST, w."key" ASC
         LIMIT ${page.take + 1} OFFSET ${page.offset}`;
@@ -3745,6 +3761,46 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  */
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
+}
+
+/**
+ * The sprint-scope predicate for the per-level roadmap read (MOTIR-1381). The
+ * roadmap is a HIERARCHY shown one level at a time, but sprint membership is a
+ * FLAT `work_item.sprintId` — epics/stories carry no `sprintId` (only the leaves
+ * a sprint commits to do), so a naive `sprintId = ?` filter would empty the ROOT
+ * level (no epic is a member) and break drill-down. Instead a node is in scope
+ * iff it is ITSELF a sprint member OR an ANCESTOR of one: a recursive CTE seeds
+ * on every in-sprint item (non-archived, not-in-triage, same project+workspace)
+ * and walks UP the `parentId` edge, so the id set is `members ∪ all-ancestors`.
+ * The level read ANDs `<alias>."id" IN (that set)`; with no `sprintId` it returns
+ * `TRUE` (the whole-project read, byte-for-byte unchanged). The `alias` is a
+ * fixed internal literal (`w` for the row, `ch` for the hasChildren probe),
+ * never user input. The same `projectId`+`workspaceId` tenant gate (finding #26)
+ * is repeated inside the CTE seed so the scope set can never cross tenants.
+ */
+function inSprintScopeSql(
+  alias: 'w' | 'ch',
+  projectId: string,
+  workspaceId: string,
+  sprintId: string | null | undefined,
+): Prisma.Sql {
+  if (!sprintId) return Prisma.sql`TRUE`;
+  return Prisma.sql`${Prisma.raw(alias)}."id" IN (
+    WITH RECURSIVE in_sprint_scope AS (
+      SELECT m."id", m."parentId"
+        FROM "work_item" m
+        WHERE m."projectId" = ${projectId}
+          AND m."workspaceId" = ${workspaceId}
+          AND m."archivedAt" IS NULL
+          AND ${notInTriageSql('m')}
+          AND m."sprintId" = ${sprintId}
+      UNION
+      SELECT p."id", p."parentId"
+        FROM "work_item" p
+        JOIN in_sprint_scope sc ON p."id" = sc."parentId"
+    )
+    SELECT s."id" FROM in_sprint_scope s
+  )`;
 }
 
 /**

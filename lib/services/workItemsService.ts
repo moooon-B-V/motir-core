@@ -1917,12 +1917,31 @@ export const workItemsService = {
     projectId: string,
     parentId: string | null,
     ctx: ServiceContext,
+    opts: { scope?: 'project' | 'sprint' } = {},
   ): Promise<ProjectRoadmapDto> {
     const project = await projectRepository.findById(projectId);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    // Sprint scope (MOTIR-1381): when the caller asks for the active-sprint
+    // slice, resolve the one active sprint (partial-unique `state = 'active'`).
+    // NO active sprint → an EMPTY roadmap (the client renders the
+    // no-active-sprint state); this is not an error. The whole-project path
+    // (scope absent or `'project'`) leaves `sprintId` null and is byte-for-byte
+    // the shipped read.
+    let sprintId: string | null = null;
+    if (opts.scope === 'sprint') {
+      const activeSprint = await sprintRepository.findActiveByProject(
+        projectId,
+        project.workspaceId,
+      );
+      if (!activeSprint) {
+        return { nodes: [], edges: [], offLevelBlockers: [] };
+      }
+      sprintId = activeSprint.id;
+    }
 
     const [rows, statuses] = await Promise.all([
       workItemRepository.findProjectTreeLevel(
@@ -1934,6 +1953,7 @@ export const workItemsService = {
           take: TREE_LEVEL_MAX_TAKE,
           offset: 0,
         },
+        sprintId,
       ),
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
     ]);
@@ -1951,6 +1971,7 @@ export const workItemsService = {
       containerIds,
       [...doneKeys],
       ROADMAP_CANCELLED_KEY,
+      sprintId,
     );
     const progressById = new Map(
       progressRows.map((p) => [p.rootId, { done: p.done, total: p.total }]),
