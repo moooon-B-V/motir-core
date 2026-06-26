@@ -90,8 +90,12 @@ describe('createProject — happy path', () => {
       'id',
       'identifier',
       'name',
+      'onboardingRanAt',
       'slug',
     ]);
+    // A freshly created project has never onboarded — the marker is null until
+    // its first plan is approved + materialized (Subtask 7.4 / MOTIR-1264).
+    expect(project.onboardingRanAt).toBeNull();
     expect(project.avatarIcon).toBeNull();
     expect(project.avatarColor).toBeNull();
     expect(project.name).toBe('Motir Core');

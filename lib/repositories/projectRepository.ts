@@ -488,6 +488,23 @@ export const projectRepository = {
   },
 
   /**
+   * Stamp the immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264) the
+   * FIRST time a project's plan is approved + materialized. A NULL-guarded
+   * `updateMany` makes this SET-ONCE at the DB level: only the row whose
+   * `onboardingRanAt` is still NULL is written, so a re-approve OR two concurrent
+   * approves leave the original stamp untouched (the WHERE-on-NULL is the
+   * immutability guard — no `FOR UPDATE` needed, the conditional update is itself
+   * atomic). Returns the number of rows stamped: 1 on the first approve, 0 after.
+   */
+  async markOnboardingRan(id: string, at: Date, tx: Prisma.TransactionClient): Promise<number> {
+    const r = await tx.project.updateMany({
+      where: { id, onboardingRanAt: null },
+      data: { onboardingRanAt: at },
+    });
+    return r.count;
+  },
+
+  /**
    * Set the project's `identifier` (the "key") — the project-row half of the
    * key-change transaction (Story 6.8). The work-item identifier rewrite is the
    * separate bulk op `workItemRepository.rewriteIdentifiersForProject`, and the

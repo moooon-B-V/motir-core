@@ -517,6 +517,19 @@ model Project {
   /// `public`. Defaults to an empty array — an unset field shows no pills, so
   /// every existing project backfills to `[]` with no migration data step.
   publicTags          String[]            @default([]) @map("public_tags")
+  /// Immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264). Stamped ONCE —
+  /// with the approval timestamp — when the project's FIRST `Plan` is approved +
+  /// materialized (`plansService.approvePlan`), then NEVER cleared or re-written:
+  /// the SET is a null-guarded `updateMany`, so a re-approve or a concurrent
+  /// approve is a no-op and the original stamp survives (a set-once marker; the
+  /// WHERE-on-NULL is the immutability guard, no FOR UPDATE needed). NULL forever
+  /// means the project NEVER onboarded — a `db:seed` tree or a migrate-existing
+  /// project (MOTIR-815) has a work-item tree but no materialized plan, so it
+  /// still enters onboarding. Read by BOTH onboarding gates off this single
+  /// source of truth (no second derived signal): the `/onboarding` redirect and
+  /// the roadmap planning-origin cluster (MOTIR-1013), which assert a planning
+  /// journey only a truly-onboarded project has.
+  onboardingRanAt     DateTime?           @map("onboarding_ran_at")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read

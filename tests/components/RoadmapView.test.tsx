@@ -72,6 +72,7 @@ function baseProps(over: Partial<Parameters<typeof RoadmapView>[0]> = {}) {
     hasActiveSprint: true,
     sprintName: 'Sprint 32',
     sprintGoal: 'Three Epic-7 stories',
+    showPlanningOrigin: false,
     ...over,
   };
 }

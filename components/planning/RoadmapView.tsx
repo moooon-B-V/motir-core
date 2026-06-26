@@ -34,6 +34,9 @@ export interface RoadmapViewProps {
   /** The active sprint's name + goal, for the sprint-scope subtitle (null when none). */
   sprintName: string | null;
   sprintGoal: string | null;
+  /** Pin the planning-origin cluster at the root (MOTIR-1013) — gated on the
+   *  project's onboarding-ran marker (MOTIR-1264); forwarded to the canvas. */
+  showPlanningOrigin: boolean;
 }
 
 export function RoadmapView({
@@ -43,6 +46,7 @@ export function RoadmapView({
   hasActiveSprint,
   sprintName,
   sprintGoal,
+  showPlanningOrigin,
 }: RoadmapViewProps) {
   const t = useTranslations('roadmap');
   const [scope, setScope] = useState<RoadmapScope>('project');
@@ -109,6 +113,7 @@ export function RoadmapView({
             key={scope}
             projectKey={projectKey}
             scope={scope}
+            showPlanningOrigin={showPlanningOrigin}
             ariaLabel={ariaLabel}
           />
         )}

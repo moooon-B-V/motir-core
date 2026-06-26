@@ -115,6 +115,12 @@ export default async function RoadmapPage() {
       hasActiveSprint={activeSprint !== null}
       sprintName={activeSprint?.name ?? null}
       sprintGoal={activeSprint?.goal ?? null}
+      // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
+      // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
+      // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate → Plan"
+      // milestones assert a planning journey only a truly-onboarded project has,
+      // so a never-onboarded project (null marker) omits them.
+      showPlanningOrigin={ctx.project.onboardingRanAt != null}
     />
   );
 }

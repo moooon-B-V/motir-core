@@ -16,6 +16,20 @@ export class InvalidProposalError extends Error {
   }
 }
 
+/**
+ * No `generating` plan resolves for a generation job (the internal proposals
+ * seam, 7.4.4 · MOTIR-846): the job token's `sourceJobId` names no plan in this
+ * workspace — the plan was never opened, belongs to another tenant, or the
+ * generate seam's `createPlan` has not committed yet (the handler may retry).
+ * → 404 (never 403 — no cross-tenant existence leak). */
+export class NoPlanForJobError extends Error {
+  readonly code = 'NO_PLAN_FOR_JOB' as const;
+  constructor(jobId: string) {
+    super(`No generation plan was found for job ${jobId}.`);
+    this.name = 'NoPlanForJobError';
+  }
+}
+
 /** The plan id does not resolve (in this workspace). → 404 */
 export class PlanNotFoundError extends Error {
   readonly code = 'PLAN_NOT_FOUND' as const;

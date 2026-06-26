@@ -68,7 +68,12 @@ function clampLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(MAX_PAGE_LIMIT, Math.floor(limit)));
 }
 
-const TEMP_REF_PREFIX = 'planItem:';
+// The intra-plan temp-ref prefix: a `parentRef` / `blockedByRef` of the form
+// `planItem:<planItemId>` points at another `add` in the SAME plan (resolved to
+// the created work-item id at materialize). Exported so the pre-commit
+// projection engine (7.28.1 / planValidityService) resolves refs through the
+// EXACT same contract materialize uses — no second source of truth.
+export const TEMP_REF_PREFIX = 'planItem:';
 
 function validateProposal(p: ProposalInput): void {
   if (p.op === 'add') {
@@ -580,6 +585,13 @@ export const plansService = {
         }
         const proposals = await planItemRepository.findByPlan(planId, tx);
         await materialize(proposals, fresh, ctx, tx);
+        // Stamp the immutable onboarding-ran marker the FIRST time this project's
+        // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
+        // null-guarded write makes it set-once, so calling it on every approve is
+        // safe — only the first materialized tree writes it. This is the single
+        // source of truth the /onboarding redirect AND the roadmap planning-origin
+        // cluster (MOTIR-1013) read.
+        await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx);
         const updated = await planRepository.update(
           planId,
           { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },

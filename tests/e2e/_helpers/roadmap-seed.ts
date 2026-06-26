@@ -88,8 +88,20 @@ async function moveToDone(id: string, ctx: ServiceContext): Promise<void> {
 }
 
 /** The main fixture: a populated roadmap with an in-progress (drillable) epic
- *  carrying the "you are here" marker + a progress meter, and a sibling epic. */
-export async function seedRoadmap(email: string): Promise<RoadmapSeed> {
+ *  carrying the "you are here" marker + a progress meter, and a sibling epic.
+ *
+ *  `onboarded` (default true) stamps the immutable onboarding-ran marker
+ *  (Subtask 7.4 / MOTIR-1264) so the roadmap shows the planning-origin cluster —
+ *  the project's tree "came from" an approved plan. Pass `false` for a
+ *  never-onboarded project (an existing tree with no materialized plan, like a
+ *  db:seed tenant): same tree, but the marker is null so BOTH onboarding gates
+ *  flip — `/onboarding` renders instead of redirecting, and the roadmap omits the
+ *  planning-origin cluster. */
+export async function seedRoadmap(
+  email: string,
+  opts: { onboarded?: boolean } = {},
+): Promise<RoadmapSeed> {
+  const { onboarded = true } = opts;
   const { ctx, projectId, projectKey } = await makeTenant(email, 'Roadmap E2E', 'Roadmap', 'ROAD');
 
   // The active epic — created first so it is the root level's first item, and
@@ -127,6 +139,15 @@ export async function seedRoadmap(email: string): Promise<RoadmapSeed> {
     { projectId, kind: 'story', title: 'Referrals', parentId: otherEpic.id },
     ctx,
   );
+
+  // Stamp (or leave null) the immutable onboarding-ran marker — the single
+  // source of truth both onboarding gates read (Subtask 7.4 / MOTIR-1264). An
+  // onboarded project shows the planning-origin cluster + redirects away from
+  // /onboarding; a never-onboarded one omits the cluster + still enters
+  // onboarding. Raw db write, matching this seed's membership-pin approach.
+  if (onboarded) {
+    await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: new Date() } });
+  }
 
   return {
     email,
