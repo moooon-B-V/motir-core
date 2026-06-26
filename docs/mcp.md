@@ -89,7 +89,7 @@ The scopes and the tools each one gates:
 
 | Scope                | Gates                                                                                                                                               |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`                                       |
+| `read`               | `get_work_item`, `list_ready`, `next_ready`, `search_work_items`, `whoami`, `list_sprints`, `validate_sprint`, `validate_work_item`                 |
 | `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind` |
 | `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                |
 | `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                  |
@@ -157,7 +157,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **26 tools**.
+`initialize` handshake and registers **27 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -584,6 +584,26 @@ gated in-sprint item as `{ item, blockedBy, blockerStatus, blockerSprintId }`
 (the out-of-sprint, not-done work to pull in or move the gated item off). A
 missing active sprint (with no `sprintId`) returns a `NO_ACTIVE_SPRINT` tool
 error; an unknown `sprintId` returns `SPRINT_NOT_FOUND`.
+
+#### `validate_work_item`
+
+The single-item analogue of `validate_sprint`: is a work item **finishable**?
+Let `S` = the target + all its descendants (its **subtree**). The item is VALID
+⟺ every not-`done` item in `S` has each `blocked_by` dependency either inside `S`
+(its own work) or `done`. A blocker INSIDE the subtree never gates (it is the
+target's own work); only out-of-subtree work can. The target may be any non-leaf
+kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
+
+| Input       | Type             | Required | Notes                                                                                                                                                 |
+| ----------- | ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`       | string           | yes      | The work item identifier, e.g. `"MOTIR-1337"` (case-insensitive).                                                                                     |
+| `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
+
+**Output** — `structuredContent`: a `WorkItemValidityDto` —
+`{ key, valid, blockers }`. When `valid` is `false`, `blockers` lists each gated
+in-subtree item as `{ item, blockedBy, blockerStatus, blockerSprintId }` (the
+out-of-subtree, unsatisfied work gating it). An unknown / cross-workspace key
+returns a `WORK_ITEM_NOT_FOUND` tool error.
 
 #### `create_sprint`
 

@@ -10,6 +10,7 @@
 
 import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkflowDto } from './workflows';
+import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
 import type { LabelDto } from './labels';
 import type { ComponentDto } from './components';
@@ -841,4 +842,24 @@ export interface WorkItemDeletePreviewDto {
   byKind: Partial<Record<WorkItemKindDto, number>>;
   liveDescendantCount: number;
   liveByKind: Partial<Record<WorkItemKindDto, number>>;
+}
+
+/**
+ * Whether a work item is FINISHABLE (Subtask 7.8.23) — the single-item analogue
+ * of `SprintValidityDto`. Let `S` = the target + all its descendants (its
+ * subtree). The item is VALID ⟺ for every not-`done` item in `S`, every
+ * `blocked_by` dependency is satisfied — IN `S`, or (under `loose`) `done`. A
+ * blocker INSIDE the subtree is the target's own work and never gates; only an
+ * out-of-subtree dependency can. The `condition` (`loose`/`tight`) tunes the
+ * out-of-subtree `done` case exactly as for `validate_sprint` (see
+ * {@link ValidityCondition}). Reuses {@link SprintBlockerDto} for each blocker:
+ * `item` is the in-subtree item gated by out-of-subtree work `blockedBy`.
+ */
+export interface WorkItemValidityDto {
+  /** The validated work item's identifier (e.g. "MOTIR-1337"). */
+  key: string;
+  /** True ⟺ every in-subtree item's blocked_by closure is satisfied. */
+  valid: boolean;
+  /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
+  blockers: SprintBlockerDto[];
 }

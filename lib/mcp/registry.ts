@@ -12,6 +12,7 @@ import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/se
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints';
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
+import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
@@ -62,6 +63,7 @@ export const MCP_TOOL_NAMES = [
   WHOAMI_TOOL_NAME,
   LIST_SPRINTS_TOOL_NAME,
   VALIDATE_SPRINT_TOOL_NAME,
+  VALIDATE_WORK_ITEM_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
   DELETE_SPRINT_TOOL_NAME,
@@ -123,6 +125,9 @@ export function registerMcpTools(
   // Sprint finishability check (7.8.15) — productizes the re-validate-the-active-
   // sprint rule (plan-rules.md #94): a read over sprintsService.validateSprint.
   registerValidateSprint(target, resolveContext);
+  // Work-item finishability check (7.8.23) — the single-item analogue of
+  // validate_sprint, validating a target's whole subtree (any non-leaf kind).
+  registerValidateWorkItem(target, resolveContext);
   registerCreateSprint(target, resolveContext);
   registerUpdateSprint(target, resolveContext);
   registerDeleteSprint(target, resolveContext);

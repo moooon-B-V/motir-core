@@ -17,6 +17,7 @@ import { toSprintDto, toSprintReportDto, toSprintReportPage } from '@/lib/mapper
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
+import { gatingItemSatisfied } from '@/lib/workItems/validity';
 import type {
   CarryOverDestination,
   CompleteSprintInput,
@@ -799,10 +800,6 @@ async function computeSprintValidity(
   ctx: ServiceContext,
   condition: ValidityCondition,
 ): Promise<SprintValidityDto> {
-  // Under `tight`, a `done` gating item that is NOT in the sprint does NOT
-  // satisfy — only in-sprint membership does (the sprint must be self-contained).
-  // Under `loose` (default), a `done` item anywhere satisfies, as it always has.
-  const doneSatisfies = condition === 'loose';
   // ALL non-archived members (done + not-done): the in-sprint membership set the
   // "blocker is also in the sprint?" test keys on. `findSprintIssuesExcludingStatuses`
   // with an empty exclusion set is the whole committed set (it already filters
@@ -882,22 +879,21 @@ async function computeSprintValidity(
     blockers.push({ item: member.identifier, blockedBy, blockerStatus, blockerSprintId });
   };
 
+  // A gating item (a blocked_by edge OR a not-done child) satisfies when it is
+  // in the sprint, or — under `loose` — already done (the shared loose/tight
+  // predicate, also used by `validate_work_item`'s subtree check).
   for (const edge of edges) {
     const inSprint = memberIds.has(edge.blockerId);
-    const done =
-      doneSatisfies &&
-      (terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false);
-    if (inSprint || done) continue; // satisfied: in the same sprint, or (loose) already done
+    const isDone = terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false;
+    if (gatingItemSatisfied(inSprint, isDone, condition)) continue;
     for (const memberId of gatedMembersByProbe.get(edge.fromId) ?? []) {
       addBlocker(memberId, edge.blockerKey, edge.blockerStatus, edge.blockerSprintId);
     }
   }
   for (const child of childEdges) {
     const inSprint = memberIds.has(child.childId);
-    const done =
-      doneSatisfies &&
-      (terminalByProject.get(child.childProjectId)?.has(child.childStatus) ?? false);
-    if (inSprint || done) continue; // satisfied: in this sprint, or (loose) child already done
+    const isDone = terminalByProject.get(child.childProjectId)?.has(child.childStatus) ?? false;
+    if (gatingItemSatisfied(inSprint, isDone, condition)) continue;
     addBlocker(child.parentId, child.childKey, child.childStatus, child.childSprintId);
   }
   // Deterministic order (by gated item, then blocker) for a stable wire shape.
