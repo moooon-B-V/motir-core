@@ -29,6 +29,21 @@ export function isDirectionDocKind(value: string): value is DirectionDocKind {
   return (DIRECTION_DOC_ORDER as readonly string[]).includes(value);
 }
 
+/** The visual treatment of a summary finding (mirrors motir-ai's tone enum). */
+export type DirectionFindingTone = 'positive' | 'neutral' | 'caution';
+
+/**
+ * One labelled key→value finding in a tier's structured summary (MOTIR-1392 →
+ * MOTIR-1225) — the at-a-glance breakdown the canvas captured-findings renders
+ * (What/Who/Closest · In v1/Out · Market/Build risk · Demand/Make-or-break),
+ * derived by motir-ai from the structured tier docs. Mirrors `PreplanFindingDTO`.
+ */
+export interface DirectionFinding {
+  label: string;
+  value: string;
+  tone: DirectionFindingTone;
+}
+
 /** A produced tier doc — its kind + the persisted Markdown body. */
 export interface DirectionDocView {
   kind: DirectionDocKind;
@@ -36,6 +51,13 @@ export interface DirectionDocView {
   contentMd: string;
   /** Monotonic save version (motir-ai never clobbers); optional for display. */
   version?: number;
+  /**
+   * The structured per-tier summary the canvas captured-findings renders
+   * (MOTIR-1225). Empty/absent for a tier that has a body but no structured doc
+   * yet (an older Markdown-only session) — the canvas then falls back to
+   * `captureLines` so a not-yet-summarized tier still shows something.
+   */
+  summary?: DirectionFinding[];
 }
 
 /**
@@ -43,15 +65,22 @@ export interface DirectionDocView {
  * onto the read-only `DirectionDocView` the 7.3.5 gate renders. The body is the
  * artifact's CURRENT rendered Markdown (`currentBody`, threaded from motir-ai by
  * 7.3.72/MOTIR-1189) — never synthesized client-side; `currentVersion` carries
- * its monotonic save number. The forward `versions` diff timeline is a separate
- * concern (the revision history), so it is intentionally NOT folded in here.
+ * its monotonic save number; `summary` is the structured per-tier breakdown
+ * (MOTIR-1225), carried through verbatim. The forward `versions` diff timeline is
+ * a separate concern (the revision history), so it is intentionally NOT folded in.
  */
 export function toDirectionDocView(log: {
   kind: DirectionDocKind;
   currentBody: string;
   currentVersion: number;
+  summary?: DirectionFinding[];
 }): DirectionDocView {
-  return { kind: log.kind, contentMd: log.currentBody, version: log.currentVersion };
+  return {
+    kind: log.kind,
+    contentMd: log.currentBody,
+    version: log.currentVersion,
+    ...(log.summary ? { summary: log.summary } : {}),
+  };
 }
 
 // ── Feature catalog (structured; folded into the vision tier) ────────────────

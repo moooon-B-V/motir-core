@@ -110,6 +110,7 @@ describe('GET /api/ai/pre-plan', () => {
           kind: 'discovery',
           currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nFounders.',
           currentVersion: 1,
+          summary: [],
           versions: [
             { version: 1, changeReason: null, changeKind: null, diff: null, createdAt: 'iso1' },
           ],
@@ -155,6 +156,7 @@ describe('GET /api/ai/pre-plan', () => {
         kind: 'discovery',
         currentBody: '# Discovery (Tier 1)\n\n## 1. Audience\n\nFounders.',
         currentVersion: 1,
+        summary: [],
         versions: [
           { version: 1, changeReason: null, changeKind: null, diff: null, createdAt: 'iso1' },
         ],

@@ -60,6 +60,7 @@ function tierDoc(kind: Tier) {
     // the rest is the rendered body.
     currentBody: `# ${kind} (Tier)\n\n${TIER_BODY[kind]}`,
     currentVersion: 1,
+    summary: [],
     versions: [
       {
         version: 1,

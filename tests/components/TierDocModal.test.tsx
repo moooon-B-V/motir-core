@@ -33,6 +33,7 @@ const discoveryDoc = {
   kind: 'discovery' as const,
   currentBody: DISCOVERY_BODY,
   currentVersion: 1,
+  summary: [],
   versions: [],
 };
 

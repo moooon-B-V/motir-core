@@ -42,6 +42,9 @@ function mapDocs(dto: PreplanStateDTO) {
       kind: d.kind,
       currentBody: d.currentBody,
       currentVersion: d.currentVersion,
+      // The structured per-tier summary the canvas captured-findings renders
+      // (MOTIR-1225) — carried through so a resume/refresh keeps the breakdown.
+      summary: d.summary,
     }),
   );
 }

@@ -11,6 +11,7 @@ import {
   ListChecks,
   type LucideIcon,
   MapPin,
+  Minus,
   Network,
   Palette,
   RotateCw,
@@ -22,6 +23,8 @@ import {
 import {
   type DirectionDocKind,
   type DirectionDocView,
+  type DirectionFinding,
+  type DirectionFindingTone,
   TIER_META,
 } from '@/lib/onboarding/directionDoc';
 import type { DiscoverySession } from '@/lib/onboarding/discoveryLoop';
@@ -291,6 +294,45 @@ function StatePill({ state }: { state: StationView['state'] }) {
   return null;
 }
 
+// The per-tone treatment of a structured summary row (design `ai-chat` screen C
+// `.ecap-item`): positive = a captured fact (success check), neutral = the
+// deliberate negative space (muted, the "Out" row), caution = a still-to-prove
+// finding (the warning rows). Colour routes through `--el-*` only.
+const FINDING_TONE: Record<
+  DirectionFindingTone,
+  { Icon: LucideIcon; iconClass: string; textClass: string }
+> = {
+  positive: {
+    Icon: Check,
+    iconClass: 'text-(--el-success)',
+    textClass: 'text-(--el-text-secondary)',
+  },
+  neutral: {
+    Icon: Minus,
+    iconClass: 'text-(--el-text-faint)',
+    textClass: 'text-(--el-text-muted)',
+  },
+  caution: {
+    Icon: AlertTriangle,
+    iconClass: 'text-(--el-warning)',
+    textClass: 'text-(--el-text-strong)',
+  },
+};
+
+// One structured finding row: a bold label + its value (the design's
+// `<b>label</b> — value`), iconned + toned by `finding.tone`.
+function FindingRow({ finding }: { finding: DirectionFinding }) {
+  const { Icon, iconClass, textClass } = FINDING_TONE[finding.tone];
+  return (
+    <div className={`flex items-start gap-1.5 text-xs ${textClass}`}>
+      <Icon className={`mt-0.5 size-3.5 shrink-0 ${iconClass}`} aria-hidden="true" />
+      <span className="min-w-0">
+        <span className="font-semibold text-(--el-text)">{finding.label}</span> — {finding.value}
+      </span>
+    </div>
+  );
+}
+
 function CapturedFindings({
   kind,
   doc,
@@ -303,22 +345,34 @@ function CapturedFindings({
   deciding: boolean;
 }) {
   const t = useTranslations('onboarding.chat.canvas');
+
+  // The structured per-tier summary (MOTIR-1392 producer → MOTIR-1225) is the
+  // labelled breakdown the design specifies (What/Who/Closest · In v1/Out · …).
+  // When present, it REPLACES the Markdown-derived lines. A tier with a body but
+  // no structured doc yet (an older session) falls back to `captureLines` (+ the
+  // discovery framing facts) so a not-yet-summarized station still shows facts.
+  const summary = doc?.summary ?? [];
+  const hasSummary = summary.length > 0;
+
   const facts: string[] = [];
   if (kind === 'discovery') {
     if (session.classification) facts.push(`${t('facts.type')} — ${session.classification}`);
     if (session.platform) facts.push(`${t('facts.platform')} — ${session.platform}`);
   }
-  const lines = [...facts, ...captureLines(doc?.contentMd)];
-  if (lines.length === 0 && !deciding) return null;
+  const fallbackLines = hasSummary ? [] : [...facts, ...captureLines(doc?.contentMd)];
+
+  if (!hasSummary && fallbackLines.length === 0 && !deciding) return null;
 
   return (
     <div className="mt-2.5 flex flex-col gap-1.5 border-t border-(--el-border-soft) pt-2.5">
-      {lines.map((line, i) => (
-        <div key={i} className="flex items-start gap-1.5 text-xs text-(--el-text-secondary)">
-          <Check className="mt-0.5 size-3.5 shrink-0 text-(--el-success)" aria-hidden="true" />
-          <span className="min-w-0">{line}</span>
-        </div>
-      ))}
+      {hasSummary
+        ? summary.map((finding, i) => <FindingRow key={i} finding={finding} />)
+        : fallbackLines.map((line, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs text-(--el-text-secondary)">
+              <Check className="mt-0.5 size-3.5 shrink-0 text-(--el-success)" aria-hidden="true" />
+              <span className="min-w-0">{line}</span>
+            </div>
+          ))}
       {deciding && (
         <div className="flex items-start gap-1.5 text-xs text-(--el-text-strong)">
           <AlertTriangle
