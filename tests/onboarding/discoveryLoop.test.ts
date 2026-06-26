@@ -223,6 +223,52 @@ describe('reduceDiscovery — validate-early ask + completion', () => {
   });
 });
 
+describe('reduceDiscovery — auto-route to the design wizard after the last tier (MOTIR-1376)', () => {
+  it('routes into the design step on the transition to tiers_complete (web, no design yet)', () => {
+    const s = run([
+      { type: 'frame', frame: { event: 'state', data: { platform: 'web' } } },
+      { type: 'frame', frame: { event: 'state', data: { status: 'tiers_complete' } } },
+    ]);
+    expect(s.view).toBe('design');
+  });
+
+  it('does NOT route for a mobile project (no design step) — stays on the hub', () => {
+    const s = run([
+      { type: 'frame', frame: { event: 'state', data: { platform: 'mobile' } } },
+      { type: 'frame', frame: { event: 'state', data: { status: 'tiers_complete' } } },
+    ]);
+    expect(s.view).toBe('hub');
+  });
+
+  it('does NOT route when a design has already been chosen', () => {
+    const s = run([
+      { type: 'frame', frame: { event: 'state', data: { platform: 'web' } } },
+      {
+        type: 'setDesignChoice',
+        choice: { styleId: 'soft-playful', paletteId: 'cobalt', typeId: 'grotesk' },
+      },
+      { type: 'frame', frame: { event: 'state', data: { status: 'tiers_complete' } } },
+    ]);
+    expect(s.view).toBe('hub');
+  });
+
+  it('does NOT bounce a returning user — a re-affirmed tiers_complete (no transition) keeps the hub', () => {
+    const completed = run([
+      { type: 'frame', frame: { event: 'state', data: { platform: 'web' } } },
+      { type: 'frame', frame: { event: 'state', data: { status: 'tiers_complete' } } },
+    ]);
+    expect(completed.view).toBe('design'); // first completion routed in
+    const back = run(
+      [
+        { type: 'backToHub' },
+        { type: 'frame', frame: { event: 'state', data: { status: 'tiers_complete' } } },
+      ],
+      completed,
+    );
+    expect(back.view).toBe('hub'); // already complete → not a transition → no re-route
+  });
+});
+
 describe('reduceDiscovery — pre-plan → generation hand-off (7.3.28 / MOTIR-1041)', () => {
   // Drive the loop to tiers-complete (the exit affordance shows here).
   const complete = (): DiscoveryState =>

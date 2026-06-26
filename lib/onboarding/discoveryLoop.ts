@@ -483,7 +483,20 @@ function reduceFrame(state: DiscoveryState, frame: DiscoveryFrame): DiscoverySta
       };
       // A terminal completion clears any parked ask.
       const pendingAsk = session.status === 'tiers_complete' ? null : state.pendingAsk;
-      return { ...state, session, pendingAsk };
+      // After the LAST tier completes, send the user straight into the design
+      // wizard (MOTIR-1376) — don't strand them on the hub. Only on the TRANSITION
+      // to `tiers_complete` (old status differs), only for a web/desktop project
+      // that HAS a design step (`shouldShowDesignStep`), and only if no design has
+      // been chosen yet — so a returning user (already chose, or pressed Back out
+      // of the wizard) isn't bounced back in and can reach the hub. Otherwise the
+      // view is unchanged (mobile/other + the already-chosen case keep the hub).
+      const justCompleted =
+        session.status === 'tiers_complete' && state.session.status !== 'tiers_complete';
+      const view =
+        justCompleted && shouldShowDesignStep(session.platform) && session.designChoice === null
+          ? 'design'
+          : state.view;
+      return { ...state, session, pendingAsk, view };
     }
 
     case 'docs': {
