@@ -1479,6 +1479,61 @@ export const workItemRepository = {
   },
 
   /**
+   * The DIRECT children of a set of parents, in ONE round-trip — the
+   * parent→child completion dependency the sprint-finishability check walks
+   * (`validate_sprint`). A parent can only be finished once ALL its children
+   * are done, so each not-done in-sprint parent is gated by any child that is
+   * neither done nor also in the sprint — exactly as an unsatisfied
+   * `blocked_by` edge gates an item (mirrors {@link findBlockerEdgesForItems}).
+   * Each row carries the child's IDENTITY (`childId` for the in-sprint
+   * membership test, `childKey` to NAME it), its `childStatus`/`childProjectId`
+   * (done-ness against the child's OWN project terminal set) and `childSprintId`
+   * (in-sprint?). ARCHIVED and TRIAGE children are EXCLUDED (the same
+   * read-exclusion as {@link findChildren}), so a soft-removed or triage item
+   * never phantom-gates a sprint. `workspaceId`-gated (finding #26). Empty
+   * `parentIds` short-circuits to `[]`. Read-only → `db` singleton.
+   */
+  async findChildrenForItems(
+    parentIds: string[],
+    workspaceId: string,
+  ): Promise<
+    Array<{
+      parentId: string;
+      childId: string;
+      childKey: string;
+      childStatus: string;
+      childSprintId: string | null;
+      childProjectId: string;
+    }>
+  > {
+    if (parentIds.length === 0) return [];
+    const rows = await db.workItem.findMany({
+      where: {
+        parentId: { in: parentIds },
+        workspaceId,
+        archivedAt: null,
+        triagedAt: null,
+      },
+      select: {
+        id: true,
+        parentId: true,
+        identifier: true,
+        status: true,
+        sprintId: true,
+        projectId: true,
+      },
+    });
+    return rows.map((r) => ({
+      parentId: r.parentId as string,
+      childId: r.id,
+      childKey: r.identifier,
+      childStatus: r.status,
+      childSprintId: r.sprintId,
+      childProjectId: r.projectId,
+    }));
+  },
+
+  /**
    * The WHOLE non-archived issue forest of a project, in ONE round-trip via a
    * recursive CTE walking DOWN the `parentId` edge from the roots
    * (`parentId IS NULL`). Each row carries its `depth` (root = 1, for the
