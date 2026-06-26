@@ -174,6 +174,8 @@ export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboar
             idea={idea}
             projectKey={projectKey}
             onOpenDesign={openDesign}
+            onContinueStep={() => continueTier(t('replies.continue'))}
+            onReviewStep={openTier}
             revisitingKind={state.cascade?.directTier ?? null}
             willRefresh={willRefreshKinds(state)}
           />

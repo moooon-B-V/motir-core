@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
+  ArrowRight,
   Check,
   CornerUpLeft,
   Lightbulb,
@@ -81,6 +82,7 @@ export function StationCard({
   doc,
   session,
   onOpenDesign,
+  onContinue,
   revisiting = false,
   refreshing = false,
 }: {
@@ -89,6 +91,9 @@ export function StationCard({
   session: DiscoverySession;
   /** Present on the `design` station — opens the web-only design step (MOTIR-1040). */
   onOpenDesign?: () => void;
+  /** Present on the CURRENT "you are here" (active) tier — advances the step
+   *  (MOTIR-1372). Renders a Continue button on the card. */
+  onContinue?: () => void;
   /** This tier is the cascade-back target (G3, MOTIR-1179) — "Revisiting". */
   revisiting?: boolean;
   /** This tier re-derives downstream of the cascade — "Will refresh". */
@@ -96,6 +101,7 @@ export function StationCard({
 }) {
   const t = useTranslations('onboarding.chat.canvas');
   const tr = useTranslations('onboarding.chat.revisions');
+  const tc = useTranslations('onboarding.chat');
   const Icon = ICON[station.kind];
   const tierKind: DirectionDocKind | null = isTierKind(station.kind) ? station.kind : null;
   const active = station.state === 'active' || station.state === 'deciding';
@@ -209,6 +215,24 @@ export function StationCard({
         >
           <Palette className="size-4" aria-hidden="true" />
           {t('stations.design.cta')}
+        </button>
+      )}
+
+      {/* The Continue action on the CURRENT "you are here" tier card (MOTIR-1372) —
+          advances the step without opening the gate. Same in-block CTA pattern as
+          the design door (stopPropagation so the canvas drag/activate doesn't fire). */}
+      {onContinue && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onContinue();
+          }}
+          className="mt-2.5 inline-flex h-(--height-btn-sm) items-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        >
+          {tc('continueLabel')}
+          <ArrowRight className="size-4" aria-hidden="true" />
         </button>
       )}
 

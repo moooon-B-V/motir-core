@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { StationCard } from '@/components/onboarding/StationNode';
 import type { StationView } from '@/lib/onboarding/canvasModel';
@@ -78,5 +78,33 @@ describe('StationCard "can skip" tag (MOTIR-1363)', () => {
       />,
     );
     expect(screen.queryByText('can skip')).toBeNull();
+  });
+});
+
+describe('StationCard Continue on the active step (MOTIR-1372)', () => {
+  it('renders a Continue button on the active card when onContinue is provided', () => {
+    const onContinue = vi.fn();
+    renderWithIntl(
+      <StationCard
+        station={station({ kind: 'vision', state: 'active', openable: true })}
+        doc={undefined}
+        session={session}
+        onContinue={onContinue}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: 'Looks good — continue' });
+    fireEvent.click(btn);
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no Continue button when onContinue is absent', () => {
+    renderWithIntl(
+      <StationCard
+        station={station({ kind: 'vision', state: 'active', openable: true })}
+        doc={undefined}
+        session={session}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Looks good — continue' })).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, FileQuestion, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, FileQuestion, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { DirectionDocView } from '@/components/onboarding/DirectionDocView';
@@ -58,9 +58,29 @@ export interface TierDocModalProps {
    *   NEW TAB, full-screen, WITHOUT the app shell (`/onboarding/direction/[tier]`).
    */
   origin?: 'onboarding' | 'roadmap';
+  /**
+   * This tier IS the current "you are here" step (MOTIR-1372) — make the modal
+   * ACTIONABLE rather than a read-only review: show a Continue button (`onContinue`)
+   * and route "open full page" to the IN-PAGE gate (`onOpenInPage`) instead of the
+   * read-only new-tab page. For a produced/past tier these are omitted and the modal
+   * stays the read-only viewer (origin-aware "Open full page", MOTIR-1366).
+   */
+  isCurrentStep?: boolean;
+  /** Advance the current step (wired to `continueTier`). Only used when `isCurrentStep`. */
+  onContinue?: () => void;
+  /** Open the current step's in-page review gate (wired to `openTier`). Only used
+   *  when `isCurrentStep`; the consumer closes the modal + switches to the gate. */
+  onOpenInPage?: () => void;
 }
 
-export function TierDocModal({ tier, onClose, origin = 'roadmap' }: TierDocModalProps) {
+export function TierDocModal({
+  tier,
+  onClose,
+  origin = 'roadmap',
+  isCurrentStep = false,
+  onContinue,
+  onOpenInPage,
+}: TierDocModalProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   // Discard an out-of-order resolve (the tier changed mid-fetch) by sequence.
   const reqSeq = useRef(0);
@@ -123,11 +143,22 @@ export function TierDocModal({ tier, onClose, origin = 'roadmap' }: TierDocModal
         </span>
         <span className="flex-1" />
         {tier &&
-          (origin === 'onboarding' ? (
-            // Onboarding: open the SHELL-LESS full page in a NEW TAB so the user
-            // stays in the immersive onboarding flow (never dropped into the app
-            // shell they haven't seen). A plain anchor, not next/link — it's a
-            // cross-context, new-tab navigation.
+          (isCurrentStep && onOpenInPage ? (
+            // The CURRENT "you are here" step: "open full page" is the IN-PAGE gate
+            // (Back + Continue), in the SAME page — not the read-only new tab that a
+            // produced/past tier uses (MOTIR-1372). A button, not a link.
+            <button
+              type="button"
+              onClick={onOpenInPage}
+              className="inline-flex items-center gap-1.5 rounded-(--radius-btn) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            >
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+              Open full page
+            </button>
+          ) : origin === 'onboarding' ? (
+            // A produced/past tier in onboarding: open the SHELL-LESS full page in a
+            // NEW TAB so the user stays in the immersive onboarding flow (never
+            // dropped into the app shell they haven't seen). A plain anchor.
             <a
               href={`/onboarding/direction/${tier}`}
               target="_blank"
@@ -148,6 +179,18 @@ export function TierDocModal({ tier, onClose, origin = 'roadmap' }: TierDocModal
               Open full page
             </Link>
           ))}
+        {isCurrentStep && onContinue && (
+          // The current step is ACTIONABLE — advance it straight from the modal
+          // (MOTIR-1372). The consumer closes the modal as it advances.
+          <button
+            type="button"
+            onClick={onContinue}
+            className="inline-flex items-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+          >
+            Continue
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           aria-label="Close"
