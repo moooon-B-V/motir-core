@@ -35,7 +35,7 @@ export interface PlanDetailProps {
 }
 
 export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
-  const t = useTranslations('aiPlanning');
+  const t = useTranslations('planReview');
   const [review, setReview] = useState<PlanReviewDto>(initialReview);
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);

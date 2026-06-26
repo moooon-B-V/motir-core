@@ -27,7 +27,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ id:
   if (!session) redirect('/sign-in');
 
   const { id } = await params;
-  const t = await getTranslations('aiPlanning');
+  const t = await getTranslations('planReview');
 
   const ctx = await getWorkspaceContext();
   if (!ctx) notFound();

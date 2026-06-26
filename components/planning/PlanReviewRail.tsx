@@ -60,7 +60,7 @@ export function PlanReviewRail({
   busy,
   errorCode,
 }: PlanReviewRailProps) {
-  const t = useTranslations('aiPlanning');
+  const t = useTranslations('planReview');
   const decided = review.status === 'approved' || review.status === 'declined';
   const planned = review.status === 'planned';
   const staleItems = review.items.filter((i) => i.stale);
