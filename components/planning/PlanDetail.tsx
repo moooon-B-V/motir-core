@@ -145,7 +145,14 @@ export function PlanDetail({ initialReview, ariaLabel }: PlanDetailProps) {
 
   // Terminal EMPTY — a plan with no proposed content (and not still generating):
   // hand off to the discovery chat to describe what to build (MOTIR-833).
-  const isEmpty = review.items.length === 0 && review.status !== 'generating';
+  // A DECIDED plan (approved/declined) is NEVER empty even with zero items:
+  // `declinePlan` DROPS every PlanItem, so without the `!decided` short-circuit a
+  // declined plan falls into this empty state and SHADOWS the review rail's
+  // declined outcome ("Plan declined — your tree was left untouched") — MOTIR-1377.
+  // A decided plan's outcome lives in `PlanReviewRail`'s `DecidedOutcome`, so it
+  // must always flow to the rail regardless of item count.
+  const decided = review.status === 'approved' || review.status === 'declined';
+  const isEmpty = review.items.length === 0 && review.status !== 'generating' && !decided;
 
   if (isEmpty) {
     return (
