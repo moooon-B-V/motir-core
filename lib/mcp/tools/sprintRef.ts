@@ -27,6 +27,24 @@ export const sprintIdField = z
   .min(1)
   .describe('The sprint id (as returned by `list_sprints`).');
 
+/**
+ * The shared finishability-strictness field for the validation tools
+ * (`validate_sprint`, `validate_work_item`; Subtask 7.8.22). Defaults to
+ * `loose` so omitting it preserves the original behaviour — a `done` gating
+ * item outside the containing set counts as satisfied. `tight` requires every
+ * gating item to be IN the set (a `done` item outside it is reported instead).
+ */
+export const conditionField = z
+  .enum(['loose', 'tight'])
+  .optional()
+  .default('loose')
+  .describe(
+    'How strict to be about a DONE gating item that sits OUTSIDE the set ' +
+      '(sprint / subtree). `loose` (default): a done item outside the set counts ' +
+      'as satisfied. `tight`: only an in-set item satisfies — a done item outside ' +
+      'the set is reported as a blocker.',
+  );
+
 /** Compact human-readable summary of a sprint for the dual-content text block. */
 export function summarizeSprint(dto: SprintDto): string {
   const parts = [`Sprint "${dto.name}" (${dto.id})`, dto.state, `${dto.issueCount} issue(s)`];

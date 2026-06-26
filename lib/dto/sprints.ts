@@ -97,12 +97,35 @@ export interface SprintBlockerDto {
 }
 
 /**
+ * How strict the finishability check is about a gating item that is `done` but
+ * sits OUTSIDE the containing set (the sprint, for `validate_sprint`; the
+ * target's subtree, for `validate_work_item`). Shared by both validators
+ * (Subtask 7.8.22).
+ *
+ * - **`loose` (default):** an out-of-set gating item is satisfied when it is
+ *   `done` — a done blocker/child elsewhere counts. This is the original
+ *   `validate_sprint` behaviour, so omitting `condition` is a no-op.
+ * - **`tight`:** an out-of-set gating item is satisfied ONLY by being IN the
+ *   set; a `done` item outside the set is NOT enough and is reported as a
+ *   blocker (the set must be self-contained).
+ *
+ * In BOTH modes an in-set gating item always satisfies, and a not-done
+ * out-of-set gating item always gates.
+ */
+export type ValidityCondition = 'loose' | 'tight';
+
+/** The DEFAULT condition when a caller omits it — preserves legacy behaviour. */
+export const DEFAULT_VALIDITY_CONDITION: ValidityCondition = 'loose';
+
+/**
  * Whether a sprint is FINISHABLE (Subtask 7.8.15) — the productized form of the
  * re-validate-the-active-sprint rule. A sprint is VALID ⟺ for EVERY in-sprint,
- * not-done item, its ENTIRE transitive `blocked_by` closure is `done` OR also in
- * the SAME sprint (walking the parent chain's blockers too — readiness cascades
- * down the hierarchy). `blockers` is empty when `valid`; otherwise it names each
- * in-sprint item gated by out-of-sprint, not-done work.
+ * not-done item, its ENTIRE transitive `blocked_by` closure (and all its
+ * children) is `done` OR also in the SAME sprint (walking the parent chain's
+ * blockers too — readiness cascades down the hierarchy). Under `condition:
+ * 'tight'` a `done`-but-out-of-sprint gating item no longer satisfies — see
+ * {@link ValidityCondition}. `blockers` is empty when `valid`; otherwise it
+ * names each in-sprint item gated by out-of-sprint, not-done work.
  */
 export interface SprintValidityDto {
   /** The sprint that was validated (the active sprint when none was named). */
