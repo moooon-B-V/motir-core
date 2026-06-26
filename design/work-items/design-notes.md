@@ -3463,3 +3463,136 @@ The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `draft-with-ai.mock.html` (source of truth) · `draft-with-ai.png` (full-page
 export). Rendered with Playwright chromium (full-page, light, `deviceScaleFactor:
 2`, ~1500px wide); `prettier --check` clean.
+
+## Work-item mentions & internal links (Story 5.8 · 5.8.1 → 5.8.5 / 5.8.6)
+
+The asset for **`internal-links.mock.html`** — design Subtask **5.8.1**
+(MOTIR-1401), the gate that blocks the UI code subtasks **5.8.5** (MOTIR-1405,
+the unified `@` editor picker) and **5.8.6** (MOTIR-1404, the chip render + title
+linkify). It draws how a reference to ANOTHER work item — in a description,
+explanation, comment, or title — becomes a **live internal link** that always
+shows the target's current key · title · status, and is auto-added to **Relates
+to**. The pain it kills: today a reference is plain text ("see 7.4"), so it goes
+**stale** when the target is renamed and the relationship is invisible to the
+board / ready-set / relationships panel.
+
+### Shipped reality this design extends (verified, rung 2)
+
+This is the `@user` mention pattern (Story 5.1) one notch over — it COMPOSES the
+shipped machinery, it does not reinvent it:
+
+- **The `@` picker** EXTENDS the shipped member popup — `comments.mock.html`
+  panel 5 (`.pop` / `.pop-row`, the `Combobox` option-row vocabulary; the editor
+  side is `components/ui/markdownEditorMentions.tsx`, `MentionList`). This asset
+  adds a **"Work items" SECTION** to that same `@` popup; it does NOT redesign
+  the people popup (the reuse-axis / design-compose rule, notes #82).
+- **The chip row grammar** (type icon · mono identifier · title · status `Pill`)
+  is the shipped `relationships.mock.html` / `links.mock.html` link-row
+  vocabulary, reused 1:1 (`components/ui/Pill.tsx`, `IssueTypeIcon`).
+- **The inline `.mention` user chip** (the one new 5.1.4 treatment) is shown
+  beside the work-item chip for contrast — the work-item chip is the **richer
+  sibling**: it carries a type hue + a live status, because it points at a
+  navigable RECORD, not a person.
+- **The peek** the chip opens is the shipped `quick-view.mock.html` /
+  `/api/work-items/peek` (`RelationshipPeekLink`, 2.4 / MOTIR-1305).
+
+### Workflow grounding (the design-content dependency rule)
+
+The interaction is grounded in — not invented for — the `relates_to` subtasks
+that SPECIFY it (read at design time; cite in any build):
+
+- **5.8.3** (MOTIR-1403, service) — a reference auto-creates a `relates_to` link
+  **unless the pair is already linked in another relationship**; provenance
+  `source: mention`. → panel 0's auto-added rows, tagged `from mention`.
+- **5.8.5** (MOTIR-1405, editor) — `@` opens the unified people+work-item picker;
+  a work-item pick serializes to `[MOTIR-N](motir:<workItemId>)` (the parallel of
+  the user token `[@Name](mention:<userId>)`, 5.8.2). → panel 3.
+- **5.8.6** (MOTIR-1404, render) — the live chip shows the target's CURRENT
+  key/title/status; archived = muted, deleted = strikethrough, no-access = bare
+  key; a bare `MOTIR-N` in the plain-text title linkifies. → panels 1, 2, 4.
+
+### Access path (the entry affordance, drawn — not just named)
+
+- **Rich-text fields** (description / explanation / comment composer): the `@`
+  trigger INSIDE the `MarkdownEditor` — panel 3 (caret-anchored popup).
+- **Title** (a plain-text input, no editor): a bare `MOTIR-N` key, linkified on
+  the detail header + the quick-view peek header — panel 4.
+- **The chip's door to the target**: click → the quick-view PEEK (panel 5), a
+  glance, not a navigation; "Open full page →" navigates.
+
+### States (panel by panel)
+
+- **0 · Placement** — the chip in a real Description body (beside an `@Zhu Yue`
+  user chip for contrast) + the three auto-added "Relates to" rows in the
+  Relationships panel, each tagged `from mention`. Shows the chip in reading
+  context and the relationship it records.
+- **1 · Chip anatomy** — at rest (type icon · key · title · status dot) and
+  hovered (title underlined, `cursor: pointer`, opens the peek).
+- **2 · Target states** — **live**; **archived** → muted, dashed border + archive
+  glyph, still navigable; **deleted** → strikethrough, bare key kept, NOT
+  clickable; **no view access** → bare key only, no title/status leak.
+- **3 · The unified `@` picker** — People + Work items sections; the work-item
+  row (type icon · mono key · title · status Pill); short-query ("type to
+  search"), loading ("Searching…"), and no-results states; the inserted token.
+- **4 · Title link** — a bare `MOTIR-N` linkified on the detail header and the
+  peek header.
+- **5 · Peek on click** — the shipped quick-view peek frame on the referenced
+  item.
+
+### The status DOT vs the Pill (a deliberate density decision)
+
+In running prose the chip uses a 6px status **dot** (`s-todo` stone ·
+`s-inprogress` info-blue · `s-done` success-green · `s-blocked` warning-orange),
+not the full `Pill` — a Pill is too tall inline. The **Pill** appears only where
+rows have width: the picker (panel 3) and the relationships panel (panel 0). The
+dot reads the same `--el-type`/status hues as the Pill so the language is
+consistent.
+
+### Primitives composed (no hand-rolling)
+
+| Element                    | Primitive / source                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `@` picker popup + rows    | the shipped `MentionList` / `.pop` / `.pop-row` (comments 5.1.3) + a Work-items section                                |
+| chip type icon             | `IssueTypeIcon` (the `--el-type-*` hue by kind)                                                                        |
+| chip / picker / row status | `Pill` tones (`planned`/`inprogress`/`done`/`warning`) — dot mirrors the hue inline                                    |
+| relationship rows          | the `relationships.mock.html` / `links.mock.html` link-row                                                             |
+| peek on click              | `RelationshipPeekLink` + `/api/work-items/peek` (quick-view)                                                           |
+| user chip (contrast)       | the shipped `.mention` chip (5.1.4)                                                                                    |
+| icons                      | lucide (`book`/story, `square-check`/subtask, `list-checks`/task, `bug`, `eye`, `archive`, `loader`, `arrow-up-right`) |
+
+### Token / a11y discipline
+
+- **Colour** via `--el-*` only. The chip introduces **no new token** — it reuses
+  `--el-surface-soft` (rest fill), `--el-border` / `--el-border-strong` (rest /
+  hover), `--el-link` (the mono key), the `--el-type-*` hue, and the status hues.
+  Archived/deleted/no-access use `--el-text-faint` / `--el-text-muted` + a dashed
+  `--el-border`. AA holds: link-blue key + strong/standard text on light fills,
+  the strikethrough/muted states stay ≥ AA on the page surface.
+- **Shape** via element-semantic tokens — `--radius-control` (the chip + picker
+  rows), `--radius-badge` (Pills), `--radius-card` (the popup), `--radius-input`
+  (the editor surface). No raw `rounded-*` / `p-*` / `h-*`.
+- **Not colour-alone** — every state pairs a shape/icon cue with the hue:
+  archived = dashed border + archive glyph; deleted = strikethrough; no-access =
+  dashed border; live = solid fill + status dot.
+- **A11y** — the picker is `role="listbox"` with `aria-activedescendant` +
+  ↑/↓/Enter/Esc (the member-popup bar); each chip is a SINGLE interactive `<a>`
+  (no nested buttons / nested interactives); the deleted/no-access chips are
+  non-interactive spans (`cursor: default` / `not-allowed`); decorative icons are
+  `aria-hidden`. New picker / chip copy lands in en + zh (the i18n convention).
+
+### Out of scope (documented for the code subtasks)
+
+- The motir-ai planner EMITTING the token in generated text is **7.4 / 7.11**
+  (captured via the story's `relates_to`), not this design — motir-core parses
+  whatever lands on write, so the planner adopts the token format when those
+  engines ship.
+- An in-app "you were referenced" notification (bell) can fan in off the existing
+  mention event later, like 5.7 did for user mentions — the relationship edge is
+  this story's deliverable.
+
+### Deliverable
+
+The three-file set under `design/work-items/`: this `design-notes.md` section ·
+`internal-links.mock.html` (source of truth) · `internal-links.png` (full-page
+export). Rendered with Playwright chromium (full-page, light, `deviceScaleFactor:
+2`, ~1240px wide); `prettier --check` clean.
