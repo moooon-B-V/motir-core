@@ -23,10 +23,13 @@ export interface PlanReviewCanvasProps {
   /** Bumped by the parent on each poll update so the canvas refetches its level. */
   version: number;
   ariaLabel?: string;
+  /** Open the inline-edit form for a proposed `add` (7.21.6 · MOTIR-1370). Passed
+   *  only while the plan is `planned` (editable); each `add` node shows its trigger. */
+  onEditAdd?: (planItemId: string) => void;
 }
 
-export function PlanReviewCanvas({ items, version, ariaLabel }: PlanReviewCanvasProps) {
-  const forest = useMemo(() => buildPlanForest(items), [items]);
+export function PlanReviewCanvas({ items, version, ariaLabel, onEditAdd }: PlanReviewCanvasProps) {
+  const forest = useMemo(() => buildPlanForest(items, onEditAdd), [items, onEditAdd]);
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {

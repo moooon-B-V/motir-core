@@ -11,7 +11,12 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // PER LEVEL for the drill-down render (#91 — one level on screen, never the whole
 // forest at once).
 
-export function buildPlanForest(items: PlanReviewItemDto[]): {
+export function buildPlanForest(
+  items: PlanReviewItemDto[],
+  // Open the inline-edit form for a proposed `add` (7.21.6 · MOTIR-1370). Threaded
+  // into each node's pre-rendered content so an `add` node shows its Edit trigger.
+  onEditAdd?: (planItemId: string) => void,
+): {
   nodes: ProjectCanvasNode[];
   deps: ProjectCanvasDep[];
 } {
@@ -23,7 +28,7 @@ export function buildPlanForest(items: PlanReviewItemDto[]): {
     searchText: `${item.identifier ?? ''} ${item.title}`.trim(),
     crumbLabel: item.identifier ?? item.title,
     drillable: item.hasChildren,
-    content: <PlanItemNode item={item} />,
+    content: <PlanItemNode item={item} onEdit={onEditAdd} />,
   }));
 
   const deps: ProjectCanvasDep[] = [];

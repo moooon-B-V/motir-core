@@ -56,7 +56,17 @@
     "staleConfirmTitle": "Some items may be out of date",
     "staleConfirmBody": "{n, plural, one {# proposed item has} other {# proposed items have}} drifted since this plan was generated. Approve anyway?",
     "staleConfirmCancel": "Cancel",
-    "staleConfirmApprove": "Approve anyway"
+    "staleConfirmApprove": "Approve anyway",
+    "editTriggerAria": "Edit proposed item",
+    "editModalTitle": "Edit proposed item",
+    "editLabelTitle": "Title",
+    "editLabelKind": "Type",
+    "editLabelType": "Work type",
+    "editLabelPriority": "Priority",
+    "editLabelDescription": "Description",
+    "editTitleRequired": "Enter a title.",
+    "editSave": "Save changes",
+    "editCancel": "Cancel"
   },
   "projectAccess": {
     "noAccessTitle": "You don’t have access to this project",

@@ -131,6 +131,11 @@ export const planReviewService = {
             ? (proposed?.title ?? 'Untitled item')
             : (target?.title ?? 'Unavailable item'),
         kind: item.op === 'add' ? (proposed?.kind ?? 'task') : (target?.kind ?? 'task'),
+        // The add's editable proposed values (the inline edit form seeds from
+        // these); null for modify/remove — only an `add` is editable (7.21.6).
+        priority: item.op === 'add' ? (proposed?.priority ?? null) : null,
+        type: item.op === 'add' ? (proposed?.type ?? null) : null,
+        descriptionMd: item.op === 'add' ? (proposed?.descriptionMd ?? null) : null,
         status: item.op === 'add' ? null : (target?.status ?? null),
         hasChildren: childParentIds.has(nodeId),
         changes: item.op === 'modify' ? buildChanges(item.patch, target) : [],

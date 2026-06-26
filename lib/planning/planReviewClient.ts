@@ -1,5 +1,5 @@
 import type { PlanReviewDto } from '@/lib/dto/planReview';
-import type { PlanDto, PlanWithItemsDto } from '@/lib/dto/plans';
+import type { PlanDto, PlanWithItemsDto, UpdateProposalInput } from '@/lib/dto/plans';
 
 // Client reads/writes of the plan-detail substrate API (Subtask 7.4.5 /
 // MOTIR-847). The plan-detail island fetches the review model (and POLLS it while
@@ -58,4 +58,24 @@ export async function declinePlanRequest(planId: string): Promise<PlanDto> {
   });
   if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
   return (await res.json()) as PlanDto;
+}
+
+/** Edit a proposed `add`'s fields (Subtask 7.21.6 / MOTIR-1370). Throws
+ *  `PlanRequestError` — 409 when the plan is no longer `planned` (a concurrent
+ *  reviewer decided), 422 on an invalid edit (e.g. an empty title). */
+export async function updateProposalRequest(
+  planId: string,
+  planItemId: string,
+  input: UpdateProposalInput,
+): Promise<PlanWithItemsDto> {
+  const res = await fetch(
+    `/api/plans/${encodeURIComponent(planId)}/items/${encodeURIComponent(planItemId)}`,
+    {
+      method: 'PATCH',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
+  return (await res.json()) as PlanWithItemsDto;
 }

@@ -112,6 +112,21 @@ export interface ProposalInput {
   baseRevision?: string | null;
 }
 
+/**
+ * The editable fields of a proposed `add` (the proposal-edit path, 7.21.6 ·
+ * MOTIR-1370). A sparse patch over the `add`'s `proposedFields`: only the keys
+ * present are changed; the rest (incl. `executor`) are left untouched. Only an
+ * `add` proposal is editable — `modify`/`remove` target existing items. `title`,
+ * when present, must be non-empty (the same invariant `addProposals` enforces).
+ */
+export interface UpdateProposalInput {
+  title?: string;
+  kind?: string;
+  descriptionMd?: string | null;
+  type?: string | null;
+  priority?: string | null;
+}
+
 /** Options for `plansService.listPlans`. */
 export interface ListPlansOptions {
   cursor?: string | null;

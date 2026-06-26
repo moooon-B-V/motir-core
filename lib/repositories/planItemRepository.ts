@@ -43,6 +43,24 @@ export const planItemRepository = {
     return new Map(rows.map((r) => [r.planId, r._count._all]));
   },
 
+  /** A single PlanItem by id. Optional `tx` joins a surrounding transaction
+   *  (the proposal-edit path re-reads the item under the plan lock). */
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<PlanItem | null> {
+    const client = tx ?? db;
+    return client.planItem.findUnique({ where: { id } });
+  },
+
+  /** Edit a PlanItem's mutable JSON/columns in place — the proposal-edit path
+   *  (7.21.6 · MOTIR-1370) patches an `add`'s `proposedFields` while the plan is
+   *  `planned`. A write, so `tx` is required. */
+  async update(
+    id: string,
+    data: Prisma.PlanItemUncheckedUpdateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<PlanItem> {
+    return tx.planItem.update({ where: { id }, data });
+  },
+
   /** Write the materialized work-item id back onto an `add` PlanItem (approve). */
   async setWorkItemId(
     id: string,
