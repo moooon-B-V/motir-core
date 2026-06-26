@@ -16,11 +16,17 @@ export interface PlanningWorkspaceProps {
   canvas: ReactNode;
   /** The right pane — the AI planning chat rail. */
   chat: ReactNode;
+  /** Sizing override for the two-pane container. Defaults to the full-screen
+   *  `h-dvh w-full` the onboarding consumer wants; a surface mounted INSIDE the
+   *  app chrome (e.g. the plan detail) passes `h-full w-full` to fill a
+   *  chrome-fitted container instead of the viewport. The grid columns are
+   *  unchanged. */
+  className?: string;
 }
 
-export function PlanningWorkspace({ canvas, chat }: PlanningWorkspaceProps) {
+export function PlanningWorkspace({ canvas, chat, className }: PlanningWorkspaceProps) {
   return (
-    <div className="grid h-dvh w-full grid-cols-1 md:grid-cols-[1fr_22rem]">
+    <div className={`grid grid-cols-1 md:grid-cols-[1fr_22rem] ${className ?? 'h-dvh w-full'}`}>
       {canvas}
       {chat}
     </div>
