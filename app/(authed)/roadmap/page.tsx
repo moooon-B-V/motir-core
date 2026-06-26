@@ -103,6 +103,13 @@ export default async function RoadmapPage() {
         <div className="h-[calc(100dvh-13rem)] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
           <WorkItemRoadmap
             projectKey={ctx.project.identifier}
+            // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
+            // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
+            // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate →
+            // Plan" milestones assert a planning journey only a truly-onboarded
+            // project has, so a never-onboarded project (null marker — a db:seed
+            // tree or a migrated project) omits them.
+            showPlanningOrigin={ctx.project.onboardingRanAt != null}
             ariaLabel={t('canvasAria', { project: ctx.project.name })}
           />
         </div>

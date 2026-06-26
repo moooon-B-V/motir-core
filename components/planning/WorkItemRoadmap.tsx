@@ -27,6 +27,15 @@ const ROOT_KEY = '__root__';
 export interface WorkItemRoadmapProps {
   /** The project's `PROD`/`MOTIR` key — the per-level roadmap read source. */
   projectKey: string;
+  /**
+   * Pin the collapsed planning-origin cluster (MOTIR-1013) at the ROOT level —
+   * gated by the caller on the project's immutable onboarding-ran marker
+   * (Subtask 7.4 / MOTIR-1264). Only a project that actually onboarded shows it;
+   * a never-onboarded project (existing tree, no materialized plan) omits it.
+   * Defaults to false so a consumer that hasn't resolved the marker never asserts
+   * a planning journey that didn't happen.
+   */
+  showPlanningOrigin?: boolean;
   positions?: Record<string, { x: number; y: number }>;
   onNodeMove?: (id: string, x: number, y: number) => void;
   onResetPositions?: (nodeIds: string[]) => void;
@@ -37,6 +46,7 @@ export interface WorkItemRoadmapProps {
 
 export function WorkItemRoadmap({
   projectKey,
+  showPlanningOrigin = false,
   positions,
   onNodeMove,
   onResetPositions,
@@ -61,10 +71,14 @@ export function WorkItemRoadmap({
       registerItems(wi);
       // The persistent roadmap marks the in-progress frontier "you are here" at
       // every level, and pins the collapsed planning-origin cluster at the ROOT
-      // (the road's start) — Subtask 7.20.6 / MOTIR-1013.
-      return buildWorkItemLevel(wi, { markActive: true, includeOrigin: parentId === null });
+      // (the road's start) — Subtask 7.20.6 / MOTIR-1013 — but ONLY for a project
+      // that actually onboarded (Subtask 7.4 / MOTIR-1264; `showPlanningOrigin`).
+      return buildWorkItemLevel(wi, {
+        markActive: true,
+        includeOrigin: parentId === null && showPlanningOrigin,
+      });
     },
-    [projectKey, registerItems],
+    [projectKey, registerItems, showPlanningOrigin],
   );
 
   return (

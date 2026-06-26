@@ -33,6 +33,15 @@ export default async function OnboardingPage() {
     );
   }
 
+  // Onboarding-ran gate (Subtask 7.4 / MOTIR-1264): a project whose FIRST plan
+  // was approved + materialized has already produced its work-item tree through
+  // onboarding — never show the pre-plan canvas again. Redirect to the project's
+  // real planning surface. A NEVER-onboarded project (existing tree but no
+  // materialized plan — a db:seed tree or a migrate-existing project, MOTIR-815)
+  // has a null marker and still enters onboarding; the 7.3 restore resumes an
+  // in-progress session from there.
+  if (ctx.project.onboardingRanAt) redirect('/roadmap');
+
   const initialIdea = await readPendingIdea();
 
   return <DiscoveryOnboarding initialIdea={initialIdea} projectKey={ctx.project.identifier} />;

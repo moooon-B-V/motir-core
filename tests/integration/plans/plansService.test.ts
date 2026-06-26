@@ -467,3 +467,60 @@ describe('plansService.updateProposal — concurrency (edit vs approve)', () => 
     expect(created).toHaveLength(1);
   });
 });
+
+// The immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264): approving the
+// project's FIRST plan stamps `project.onboardingRanAt` (the single source of
+// truth the /onboarding redirect AND the roadmap planning-origin cluster read);
+// it is SET-ONCE — never re-written by a later approve — and a plan that never
+// materializes (declined) never stamps it.
+describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () => {
+  it('stamps onboardingRanAt on the FIRST plan approve + materialize', async () => {
+    const fx = await makeWorkItemFixture();
+    const before = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(before.onboardingRanAt).toBeNull(); // a fresh project never onboarded
+
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'First tree', kind: 'task' } },
+    ]);
+    const t0 = Date.now();
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const after = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(after.onboardingRanAt).toBeInstanceOf(Date);
+    // Stamped with the approval moment (allow generous clock slack on a slow CI box).
+    expect(Math.abs(after.onboardingRanAt!.getTime() - t0)).toBeLessThan(60_000);
+  });
+
+  it('is immutable — a SECOND approved plan never re-stamps the marker', async () => {
+    const fx = await makeWorkItemFixture();
+
+    const planA = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Tree A', kind: 'task' } },
+    ]);
+    await plansService.approvePlan(planA, fx.ctx);
+    const firstStamp = (await db.project.findUniqueOrThrow({ where: { id: fx.projectId } }))
+      .onboardingRanAt;
+    expect(firstStamp).toBeInstanceOf(Date);
+
+    // A later, separately-approved plan on the SAME project must NOT move the
+    // marker — the null-guarded write is a no-op once the stamp exists.
+    const planB = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Tree B', kind: 'task' } },
+    ]);
+    await plansService.approvePlan(planB, fx.ctx);
+    const secondStamp = (await db.project.findUniqueOrThrow({ where: { id: fx.projectId } }))
+      .onboardingRanAt;
+    expect(secondStamp!.getTime()).toBe(firstStamp!.getTime());
+  });
+
+  it('a DECLINED plan never stamps the marker (no materialize → never onboarded)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Dropped', kind: 'task' } },
+    ]);
+    await plansService.declinePlan(planId, fx.ctx);
+
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(project.onboardingRanAt).toBeNull();
+  });
+});

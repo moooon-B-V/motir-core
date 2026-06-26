@@ -138,6 +138,24 @@ describe('WorkItemRoadmap', () => {
     expect(screen.getByPlaceholderText('Search the roadmap')).toBeTruthy();
   });
 
+  // The onboarding-ran gate (Subtask 7.4 / MOTIR-1264): the planning-origin
+  // cluster (MOTIR-1013) is pinned at the ROOT level ONLY for a project that
+  // actually onboarded — the caller passes `showPlanningOrigin` from the
+  // project's immutable onboarding-ran marker.
+  it('pins the planning-origin cluster at the root when showPlanningOrigin is set', async () => {
+    render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+    await screen.findByText('Epic one');
+    expect(screen.getByTestId('planning-origin')).toBeTruthy();
+    expect(el('__planning_origin__')).not.toBeNull();
+  });
+
+  it('omits the planning-origin cluster for a never-onboarded project (default off)', async () => {
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    await screen.findByText('Epic one');
+    expect(screen.queryByTestId('planning-origin')).toBeNull();
+    expect(el('__planning_origin__')).toBeNull();
+  });
+
   it('renders the cross-story signal: a ghost anchor + a flagged node for an off-level blocker', async () => {
     // A level where T1 is blocked_by X, and X is NOT in the level → off-level.
     const crossLevel = {
