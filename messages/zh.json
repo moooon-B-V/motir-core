@@ -7,7 +7,7 @@
     "save": "保存",
     "loading": "加载中…"
   },
-  "aiPlanning": {
+  "planReview": {
     "backToPlans": "返回计划列表",
     "untitledPlan": "未命名计划",
     "canvasAria": "建议计划画布",

@@ -1,7 +1,75 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { locales } from '@/lib/i18n/locales';
+
+// Collect EVERY key path that appears more than once at the same object level in
+// the RAW catalog text. `import … from '*.json'` (and `JSON.parse`) silently keep
+// only the LAST of duplicate keys, so a second `"aiPlanning": { … }` block
+// shadows the first with NO parse error and NO key-set drift — invisible to the
+// parity check below. That is exactly what shipped a broken plan-review surface
+// (MOTIR-847 added a duplicate top-level `aiPlanning`, shadowing all its keys, so
+// every <PlanItemNode> rendered raw i18n keys; MOTIR-1373). Parse the text with a
+// reviver-free duplicate detector so the shadow surfaces as a unit failure.
+function duplicateKeyPaths(jsonText: string): string[] {
+  const dups: string[] = [];
+  const stack: { path: string; seen: Set<string> }[] = [{ path: '', seen: new Set() }];
+  // A minimal JSON tokenizer: we only need to know, at each `"key":` that is
+  // immediately followed by a value in an OBJECT, whether the key repeats at the
+  // current nesting level. Track container starts/ends and string keys.
+  let i = 0;
+  const n = jsonText.length;
+  const isObjectStack: boolean[] = [];
+  while (i < n) {
+    const ch = jsonText[i];
+    if (ch === '"') {
+      // read a string token
+      let j = i + 1;
+      let str = '';
+      while (j < n) {
+        const c = jsonText[j];
+        if (c === '\\') {
+          str += jsonText[j + 1];
+          j += 2;
+          continue;
+        }
+        if (c === '"') break;
+        str += c;
+        j += 1;
+      }
+      // is this string a KEY? (next non-space char is ':' and we're in an object)
+      let k = j + 1;
+      while (k < n && /\s/.test(jsonText[k]!)) k += 1;
+      const inObject = isObjectStack[isObjectStack.length - 1];
+      if (jsonText[k] === ':' && inObject) {
+        const top = stack[stack.length - 1]!;
+        const full = top.path ? `${top.path}.${str}` : str;
+        if (top.seen.has(str)) dups.push(full);
+        else top.seen.add(str);
+      }
+      i = j + 1;
+      continue;
+    }
+    if (ch === '{') {
+      isObjectStack.push(true);
+      const top = stack[stack.length - 1]!;
+      // the path of this new object is whatever key most recently preceded it;
+      // approximate via the last seen key at the parent level (good enough for
+      // reporting — correctness of detection does not depend on it).
+      stack.push({ path: top.path, seen: new Set() });
+    } else if (ch === '[') {
+      isObjectStack.push(false);
+    } else if (ch === '}') {
+      isObjectStack.pop();
+      stack.pop();
+    } else if (ch === ']') {
+      isObjectStack.pop();
+    }
+    i += 1;
+  }
+  return dups;
+}
 
 // Guards the message catalogs against drift: every locale must define EXACTLY
 // the same set of (nested) keys as the base `en` catalog — no missing keys (a
@@ -46,6 +114,16 @@ describe('message catalogs', () => {
     const orphanInZh = zhKeys.filter((k) => !enKeys.includes(k));
     expect(missingInZh, `keys missing from zh.json: ${missingInZh.join(', ')}`).toEqual([]);
     expect(orphanInZh, `orphan keys in zh.json: ${orphanInZh.join(', ')}`).toEqual([]);
+  });
+
+  // The parity check above parses the JSON, so duplicate keys are already
+  // collapsed (last wins) and invisible to it. Detect them on the RAW text so a
+  // shadowing duplicate (the MOTIR-1373 cause) fails loudly instead of silently
+  // dropping a whole namespace.
+  it.each(['en', 'zh'])('%s.json has no duplicate keys at any level', (locale) => {
+    const raw = readFileSync(new URL(`../messages/${locale}.json`, import.meta.url), 'utf8');
+    const dups = duplicateKeyPaths(raw);
+    expect(dups, `duplicate keys in ${locale}.json: ${dups.join(', ')}`).toEqual([]);
   });
 });
 

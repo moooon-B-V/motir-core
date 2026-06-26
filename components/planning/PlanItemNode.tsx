@@ -63,7 +63,7 @@ function staleReasonLabel(r: StaleReason, t: ReturnType<typeof useTranslations>)
 }
 
 export function PlanItemNode({ item }: { item: PlanReviewItemDto }) {
-  const t = useTranslations('aiPlanning');
+  const t = useTranslations('planReview');
   const kind = toKind(item.kind);
   const status = toStatus(item.status);
 
