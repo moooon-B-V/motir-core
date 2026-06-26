@@ -1170,6 +1170,44 @@ export const workItemRepository = {
   },
 
   /**
+   * EVERY non-archived, non-triage work item of a project, with the lean columns
+   * the pre-commit plan-validation projection needs (Subtask 7.28.1 / MOTIR-1386):
+   * id + identifier + status + parentId + sprintId + projectId. ONE round-trip,
+   * unpaginated — `planValidityService` builds an in-memory virtual graph of the
+   * whole project (live tree ⊕ a Plan's PlanItem delta) and runs the shipped
+   * finishability rules over it, so it needs the project's full node set, not a
+   * page. `workspaceId`-gated (finding #26; RLS is inert under the dev/CI
+   * superuser) and `archivedAt`/`triagedAt`-excluded (the same read-exclusion the
+   * validity engines use, so a soft-removed/triage row never phantom-projects).
+   * Read-only path → `db` singleton.
+   */
+  async findAllByProjectForValidity(
+    projectId: string,
+    workspaceId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      status: string;
+      parentId: string | null;
+      sprintId: string | null;
+      projectId: string;
+    }>
+  > {
+    return db.workItem.findMany({
+      where: { projectId, workspaceId, archivedAt: null, triagedAt: null },
+      select: {
+        id: true,
+        identifier: true,
+        status: true,
+        parentId: true,
+        sprintId: true,
+        projectId: true,
+      },
+    });
+  },
+
+  /**
    * The ids of every work item that DESCENDS from a PRIVATE epic
    * (`kind = 'epic' AND publicChildrenHidden = true`) in this project — the set a
    * public / non-member read must EXCLUDE (Story 6.14 · Subtask 6.14.4, per

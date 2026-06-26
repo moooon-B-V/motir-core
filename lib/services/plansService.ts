@@ -68,7 +68,12 @@ function clampLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(MAX_PAGE_LIMIT, Math.floor(limit)));
 }
 
-const TEMP_REF_PREFIX = 'planItem:';
+// The intra-plan temp-ref prefix: a `parentRef` / `blockedByRef` of the form
+// `planItem:<planItemId>` points at another `add` in the SAME plan (resolved to
+// the created work-item id at materialize). Exported so the pre-commit
+// projection engine (7.28.1 / planValidityService) resolves refs through the
+// EXACT same contract materialize uses — no second source of truth.
+export const TEMP_REF_PREFIX = 'planItem:';
 
 function validateProposal(p: ProposalInput): void {
   if (p.op === 'add') {
