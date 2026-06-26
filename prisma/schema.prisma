@@ -1174,6 +1174,14 @@ model WorkItemLink {
   fromId      String
   toId        String
   kind        WorkItemLinkKind
+  // Provenance (Subtask 5.8.3): `manual` for a link a user/agent created via the
+  // link UI / MCP, `mention` for a `relates_to` edge auto-created because one
+  // item's text/comment REFERENCED another (`[KEY](motir:<id>)` or a bare
+  // `KEY-N`). The `relates_to` row IS the durable record of the reference — there
+  // is deliberately no separate mention table; `source` is the only marker that
+  // distinguishes an auto-related edge from a hand-made one. Additive with a
+  // `manual` default so every pre-5.8.3 row reads as a manual link.
+  source      WorkItemLinkSource @default(manual)
   createdById String
   createdAt   DateTime         @default(now())
 
@@ -1243,6 +1251,17 @@ enum WorkItemLinkKind {
   clones
 
   @@map("work_item_link_kind")
+}
+
+// Where a work-item link came from (Subtask 5.8.3). `manual` — created through
+// the link UI / MCP / create-modal links. `mention` — auto-created `relates_to`
+// because a text field or comment referenced the other item. A Postgres enum
+// (like WorkItemLinkKind) since the value set is closed and tenant-agnostic.
+enum WorkItemLinkSource {
+  manual
+  mention
+
+  @@map("work_item_link_source")
 }
 
 enum WorkItemKind {
