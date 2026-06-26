@@ -36,6 +36,17 @@ export interface ProjectDTO {
   avatarIcon: string | null;
   avatarColor: string | null;
   /**
+   * The immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264) — the ISO
+   * timestamp the project's FIRST plan was approved + materialized, or null when
+   * the project NEVER onboarded (a `db:seed` tree or a migrate-existing project).
+   * Rides the BASE DTO (a single project-row column, like `accessLevel`) so the
+   * hot active-project read carries it WITHOUT a second round-trip: both gates —
+   * the `/onboarding` redirect and the roadmap planning-origin cluster — read it
+   * off `getActiveProject()`. null ⇒ enter onboarding / omit the cluster; a
+   * string ⇒ redirect away / show the cluster.
+   */
+  onboardingRanAt: string | null;
+  /**
    * ISO timestamp the project was created — the Details surface's "Created" row
    * (Story 6.5.3). OPTIONAL and loaded ONLY on the details-surface read path
    * (alongside `previousKeys`), so the hot reads (switcher list, active-project

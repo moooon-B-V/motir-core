@@ -25,6 +25,7 @@ export function toProjectDTO(project: Project, aliases?: ProjectKeyAlias[]): Pro
     accessLevel: project.accessLevel,
     avatarIcon: project.avatarIcon,
     avatarColor: project.avatarColor,
+    onboardingRanAt: project.onboardingRanAt ? project.onboardingRanAt.toISOString() : null,
     ...(aliases
       ? {
           createdAt: project.createdAt.toISOString(),
