@@ -121,10 +121,14 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await page.getByRole('button', { name: 'Decline' }).click();
   expect((await declineResponse).status()).toBe(200);
 
-  // Decline DROPS every proposed item, so the detail island refetches into its
-  // empty state ("no proposals") rather than a decided-outcome rail (the rail's
-  // declined branch is shadowed by that guard — logged as a follow-up bug). The
-  // authoritative "this plan is declined" surface is the list pill.
+  // Decline DROPS every proposed item, but a DECIDED plan still shows its outcome
+  // in the review rail — the detail island refetches into the declined-outcome
+  // rail, NOT the "no proposals" empty state (MOTIR-1377: the empty guard used to
+  // shadow the rail's declined branch for a zero-item declined plan).
+  await expect(page.getByTestId('plan-status-pill')).toContainText('Declined');
+  await expect(page.getByText('Plan declined — your tree was left untouched')).toBeVisible();
+
+  // The list also reflects the declined status on its pill.
   await page.goto('/plans');
   await expect(page.locator(`a[href="/plans/${seed.declinePlan.id}"]`)).toContainText('Declined');
 
