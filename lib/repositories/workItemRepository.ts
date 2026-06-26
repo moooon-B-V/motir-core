@@ -1324,6 +1324,42 @@ export const workItemRepository = {
   },
 
   /**
+   * The NON-archived members of a work item's subtree (the root + every live
+   * descendant) — the "containing set" the `validate_work_item` finishability
+   * check (Subtask 7.8.23) keys its "is this blocker IN the subtree?" test on.
+   * A recursive CTE walking DOWN `parentId` from `rootId`, mirroring
+   * {@link findSubtree} but trimmed to the validity columns (`id` for the
+   * membership test, `identifier` to NAME a gated item, `status` for the
+   * not-done filter) and, crucially, EXCLUDING archived/triage rows on BOTH the
+   * anchor and the recursive step (a soft-removed item is not real work and must
+   * never gate, mirroring the readiness reads). `workspaceId`-gated throughout
+   * (finding #26). Parent↔child is same-project, so the caller judges done-ness
+   * against the root's project terminal set. Read-only → `db` singleton.
+   */
+  async findSubtreeMembersForValidity(
+    rootId: string,
+    workspaceId: string,
+  ): Promise<Array<{ id: string; identifier: string; status: string }>> {
+    return db.$queryRaw<Array<{ id: string; identifier: string; status: string }>>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."parentId", w."identifier", w."status"
+          FROM "work_item" w
+          WHERE w."id" = ${rootId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."triagedAt" IS NULL
+        UNION ALL
+        SELECT w."id", w."parentId", w."identifier", w."status"
+          FROM "work_item" w
+          JOIN subtree s ON w."parentId" = s."id"
+          WHERE w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."triagedAt" IS NULL
+      )
+      SELECT "id", "identifier", "status" FROM subtree`;
+  },
+
+  /**
    * Per-kind count of the LIVE (non-archived) DESCENDANTS of a subtree, in ONE
    * round-trip via a recursive CTE (Story 2.9 · Subtask 2.9.9). The root is
    * EXCLUDED (`depth > 1`) and only rows with `archivedAt IS NULL` are counted,

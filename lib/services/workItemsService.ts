@@ -130,7 +130,11 @@ import type {
   WorkItemTreeNodeDto,
   TreeLevelDto,
   ProjectRoadmapDto,
+  WorkItemValidityDto,
 } from '@/lib/dto/workItems';
+import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
+import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
+import { gatingItemSatisfied } from '@/lib/workItems/validity';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
   LinkWorkItemsInput,
@@ -2515,6 +2519,36 @@ export const workItemsService = {
   },
 
   /**
+   * Is a work item FINISHABLE? (Subtask 7.8.23) — the single-item analogue of
+   * `sprintsService.validateSprint`, with the target's SUBTREE playing the role
+   * of the sprint. The target may be any non-leaf kind (epic / story / task /
+   * bug — a `subtask` is the leaf). VALID ⟺ for EVERY not-`done` item in the
+   * subtree (the target + every live descendant), every `blocked_by` dependency
+   * is SATISFIED: it is itself IN the subtree (the target's own work — never
+   * gates), or — under `condition: 'loose'` (the default) — already `done`.
+   * Under `tight`, a `done` dependency OUTSIDE the subtree no longer satisfies
+   * (the subtree must be self-contained). A not-done out-of-subtree dependency
+   * gates under both. The parent→child completion cascade is automatic: a child
+   * is always in the subtree, so it never gates — its own out-of-subtree
+   * blockers surface when the child itself is checked.
+   *
+   * A pure READ gated like `get_work_item` (tenant gate + `assertCanBrowse` via
+   * `getWorkItemByIdentifier`, throwing `WorkItemNotFoundError` for an unknown /
+   * cross-workspace key). "Done" is the project's terminal set (`category =
+   * 'done'`; finding #21), judged against each blocker's OWN project (blocks can
+   * be cross-project). Archived/triage members and archived blockers are ignored.
+   */
+  async validateWorkItem(
+    projectId: string,
+    identifier: string,
+    ctx: ServiceContext,
+    condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
+  ): Promise<WorkItemValidityDto> {
+    const root = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
+    return computeWorkItemValidity(root, ctx, condition);
+  },
+
+  /**
    * The aggregate read backing the issue DETAIL page (Subtask 2.4.1, grown by
    * 2.4.5): one service call assembling the item + its immediate parent +
    * direct children + ALL of its relationship links (resolved to summaries,
@@ -3324,4 +3358,68 @@ async function computeOwnBlockerReadiness(
     ready.set(fromId, classifyBlockerReadiness(itemBlockers, terminalByProject).ready);
   }
   return ready;
+}
+
+/**
+ * Compute a work item's finishability (Subtask 7.8.23) — the engine behind
+ * `validateWorkItem`, given an already-resolved root. See the method's doc for
+ * the rule. The "containing set" is the root's SUBTREE (root + live
+ * descendants); the structure mirrors `computeSprintValidity` with that set
+ * standing in for the sprint, but is SIMPLER: a subtree is closed under
+ * descendants, so a member's children are always in-set (the parent→child
+ * cascade is auto-satisfied) and only `blocked_by` edges can gate. We probe the
+ * not-done members' direct blockers (no ancestor walk — finishing the target's
+ * subtree does not depend on work ABOVE it), and report each unsatisfied
+ * out-of-subtree blocker at the in-subtree member it gates.
+ */
+async function computeWorkItemValidity(
+  root: WorkItemDto,
+  ctx: ServiceContext,
+  condition: ValidityCondition,
+): Promise<WorkItemValidityDto> {
+  // The containing set S: the root + every non-archived descendant.
+  const members = await workItemRepository.findSubtreeMembersForValidity(root.id, ctx.workspaceId);
+  const memberIds = new Set(members.map((m) => m.id));
+  const membersById = new Map(members.map((m) => [m.id, m]));
+
+  // Only NOT-done members need a finishability check. Parent↔child is
+  // same-project, so the root's terminal set classifies every member.
+  const terminalForProject = await workflowsService.getTerminalStatusKeys(
+    root.projectId,
+    ctx.workspaceId,
+  );
+  const notDone = members.filter((m) => !terminalForProject.has(m.status));
+  if (notDone.length === 0) {
+    return { key: root.identifier, valid: true, blockers: [] };
+  }
+
+  const edges = await workItemLinkRepository.findBlockerEdgesForItems(notDone.map((m) => m.id));
+  // Per-project terminal sets — a block can be cross-project, so each blocker's
+  // done-ness is judged against its OWN project (finding #21).
+  const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+    edges.map((e) => e.blockerProjectId),
+    ctx.workspaceId,
+  );
+
+  const blockers: SprintBlockerDto[] = [];
+  const seen = new Set<string>();
+  for (const edge of edges) {
+    const inSubtree = memberIds.has(edge.blockerId);
+    const isDone = terminalByProject.get(edge.blockerProjectId)?.has(edge.blockerStatus) ?? false;
+    if (gatingItemSatisfied(inSubtree, isDone, condition)) continue;
+    const member = membersById.get(edge.fromId);
+    if (!member) continue;
+    const key = `${member.identifier} ${edge.blockerKey}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    blockers.push({
+      item: member.identifier,
+      blockedBy: edge.blockerKey,
+      blockerStatus: edge.blockerStatus,
+      blockerSprintId: edge.blockerSprintId,
+    });
+  }
+  // Deterministic order (by gated item, then blocker) for a stable wire shape.
+  blockers.sort((a, b) => a.item.localeCompare(b.item) || a.blockedBy.localeCompare(b.blockedBy));
+  return { key: root.identifier, valid: blockers.length === 0, blockers };
 }

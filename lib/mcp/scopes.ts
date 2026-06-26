@@ -58,6 +58,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   whoami: 'read',
   list_sprints: 'read',
   validate_sprint: 'read',
+  validate_work_item: 'read',
   // work_items:write
   create_work_item: 'work_items:write',
   update_work_item: 'work_items:write',

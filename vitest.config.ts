@@ -218,6 +218,10 @@ export default defineConfig({
         'lib/mcp/tools/whoami.ts',
         'lib/mcp/tools/listSprints.ts',
         'lib/mcp/tools/validateSprint.ts',
+        // Work-item finishability — the tool, plus the shared loose/tight
+        // predicate both validators use (Subtask 7.8.23).
+        'lib/mcp/tools/validateWorkItem.ts',
+        'lib/workItems/validity.ts',
         'lib/mcp/tools/createSprint.ts',
         'lib/mcp/tools/updateSprint.ts',
         'lib/mcp/tools/deleteSprint.ts',
