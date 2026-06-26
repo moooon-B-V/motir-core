@@ -627,6 +627,8 @@
     "relationshipsGloss": "dependencies & links",
     "noLinkedIssues": "No linked work items yet.",
     "openBlocker": "Open blocker",
+    "refDeletedTitle": "This work item no longer exists",
+    "refNoAccessTitle": "You don't have access to this work item",
     "linkIssue": "Link work item",
     "removeLinkAria": "Remove {relationship} link to {target}",
     "removeConfirmBefore": "Remove the {relationship} link to",

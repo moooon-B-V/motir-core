@@ -3,6 +3,8 @@
 // returning (CLAUDE.md — services never return raw Prisma models). Dates are
 // ISO strings, matching the work-items DTO convention.
 
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+
 /** The comment author as the thread renders it (Avatar · name). */
 export interface CommentAuthorDTO {
   id: string;
@@ -42,4 +44,12 @@ export interface CommentsPageDTO {
   nextCursor: string | null;
   /** The page-walk direction this window was read in. */
   order: 'asc' | 'desc';
+  /**
+   * Resolved work-item references (Subtask 5.8.6) found in THIS page's comment
+   * bodies — `[KEY](motir:<id>)` tokens, keyed by id, so the bodies render the
+   * live internal-link chip (current key · title · status). The client merges
+   * each page's map as it extends the window. Optional for fixture back-compat;
+   * the live read always sets it.
+   */
+  workItemRefs?: WorkItemRefMap;
 }

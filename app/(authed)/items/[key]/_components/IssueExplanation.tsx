@@ -2,7 +2,7 @@ import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
-import type { WorkItemExplanationSourceDto } from '@/lib/dto/workItems';
+import type { WorkItemExplanationSourceDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import { ContentSectionCard } from './ContentSectionCard';
 
 // The issue's "why this matters" axis (Story 1.4's `explanationMd`), rendered
@@ -22,12 +22,15 @@ export interface IssueExplanationProps {
    * "Edit" link entirely rather than showing one that bounces off the gate.
    */
   editHref?: string;
+  /** Resolved `motir:` references in `explanationMd` (Subtask 5.8.6) → live chips. */
+  workItemRefs?: WorkItemRefMap;
 }
 
 export function IssueExplanation({
   explanationMd,
   explanationSource,
   editHref,
+  workItemRefs,
 }: IssueExplanationProps) {
   const t = useTranslations('issueViews');
   return (
@@ -45,7 +48,11 @@ export function IssueExplanation({
       }
     >
       {explanationMd ? (
-        <MarkdownView value={explanationMd} aria-label={t('issueExplanationAria')} />
+        <MarkdownView
+          value={explanationMd}
+          aria-label={t('issueExplanationAria')}
+          workItemRefs={workItemRefs}
+        />
       ) : (
         <p className="font-sans text-sm text-(--el-text-secondary) italic">{t('noExplanation')}</p>
       )}

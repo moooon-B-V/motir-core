@@ -10,7 +10,9 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
+import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   extractReferencedBlobUrls,
@@ -473,7 +475,7 @@ export const commentsService = {
     options: ListCommentsOptions,
     ctx: ServiceContext,
   ): Promise<CommentsPageDTO> {
-    await resolveGatedWorkItem(workItemId, ctx);
+    const gate = await resolveGatedWorkItem(workItemId, ctx);
     const order = options.order ?? 'asc';
 
     // take+1 probes for a next page without a second count read.
@@ -500,11 +502,23 @@ export const commentsService = {
     }
     const authorsById = new Map(authors.map((u) => [u.id, u]));
 
+    // Resolve the `motir:` token references in this page's comment bodies to
+    // live summaries (Subtask 5.8.6), so MarkdownView renders the internal-link
+    // chip. Token ids only — a bare `KEY-N` inside a comment body is the
+    // deferred body-bare-key linkify (it needs the editor's 5.8.5 token anyway).
+    const tokenIds = [...new Set(pageComments.flatMap((c) => parseWorkItemTokenIds(c.bodyMd)))];
+    const workItemRefs = await resolveWorkItemRefSummaries(
+      { ids: tokenIds, keys: [] },
+      gate.item.projectId,
+      ctx,
+    );
+
     return {
       threads: roots.map((root) => toCommentThreadDto(root, authorsById, mentionsByCommentId)),
       totalCount,
       nextCursor: hasMore ? (roots[roots.length - 1]?.id ?? null) : null,
       order,
+      workItemRefs,
     };
   },
 };

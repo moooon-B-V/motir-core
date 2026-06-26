@@ -40,6 +40,8 @@ afterEach(() => {
 const DATA: QuickViewData = {
   identifier: 'PROD-7',
   title: 'Email + password sign-in',
+  projectIdentifier: 'PROD',
+  workItemRefs: {},
   kind: 'story',
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',

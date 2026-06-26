@@ -35,6 +35,7 @@ import type {
   WorkflowStatusDto,
   WorkflowTransitionDto,
 } from '@/lib/dto/workflows';
+import type { WorkItemRefStatusDto } from '@/lib/dto/workItems';
 
 /**
  * Project-admin gate (Subtask 2.2.5). v1 routes "project admin" to the
@@ -227,6 +228,34 @@ export const workflowsService = {
     const statuses = await workflowsRepository.findStatusesByProjects(unique, workspaceId);
     for (const s of statuses) {
       if (s.category === 'done') map.get(s.projectId)?.add(s.key);
+    }
+    return map;
+  },
+
+  /**
+   * The status META (key · label · category) for MANY projects at once, as
+   * `Map<projectId, Map<statusKey, WorkItemRefStatusDto>>` from ONE query (no
+   * N+1) — the batched read behind the internal-link chip's status dot (Subtask
+   * 5.8.6), where referenced targets can span several projects (each with its
+   * own workflow). Every requested projectId is present in the outer map (empty
+   * inner map when it has no statuses / isn't in the workspace), so callers can
+   * `.get(pid)` without a null gap. Mirrors {@link getTerminalStatusKeysByProjects}.
+   */
+  async getStatusMetaByProjects(
+    projectIds: string[],
+    workspaceId: string,
+  ): Promise<Map<string, Map<string, WorkItemRefStatusDto>>> {
+    const unique = [...new Set(projectIds)];
+    const map = new Map<string, Map<string, WorkItemRefStatusDto>>(
+      unique.map((pid) => [pid, new Map<string, WorkItemRefStatusDto>()]),
+    );
+    const statuses = await workflowsRepository.findStatusesByProjects(unique, workspaceId);
+    for (const s of statuses) {
+      map.get(s.projectId)?.set(s.key, {
+        key: s.key,
+        label: s.label,
+        category: s.category as StatusCategoryDto,
+      });
     }
     return map;
   },

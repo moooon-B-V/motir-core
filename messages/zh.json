@@ -627,6 +627,8 @@
     "relationshipsGloss": "依赖与关联",
     "noLinkedIssues": "还没有关联工作项。",
     "openBlocker": "未解决的阻塞项",
+    "refDeletedTitle": "该工作项已不存在",
+    "refNoAccessTitle": "你无权访问该工作项",
     "linkIssue": "关联工作项",
     "removeLinkAria": "移除与 {target} 之间「{relationship}」的关联",
     "removeConfirmBefore": "移除与",

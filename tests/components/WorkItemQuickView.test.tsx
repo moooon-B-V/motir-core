@@ -16,6 +16,8 @@ import type { QuickViewData } from '@/lib/dto/quickView';
 const DATA: QuickViewData = {
   identifier: 'MOTIR-12',
   title: 'Build the planning canvas',
+  projectIdentifier: 'MOTIR',
+  workItemRefs: {},
   kind: 'subtask',
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',

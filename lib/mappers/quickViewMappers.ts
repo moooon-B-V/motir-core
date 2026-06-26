@@ -1,4 +1,4 @@
-import type { IssueDetailDto } from '@/lib/dto/workItems';
+import type { IssueDetailDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
@@ -19,11 +19,18 @@ import { formatDurationMinutes } from '@/lib/utils/duration';
 // SAME detail aggregate read EXCEPT the sprint NAME — `sprintId` is on the
 // detail item but the name is not, so the service resolves it and hands it in
 // as `sprintName` (the one field this mapper cannot derive from `detail`).
+//
+// 5.8.6 threads in `workItemRefs` (resolved `motir:` references in the
+// description, for the peek body's live chips) + `projectIdentifier` (the prefix
+// the peek header's title-linkify matches bare keys against) — both resolved by
+// the service, since neither rides the detail aggregate.
 export function toQuickViewData(
   detail: IssueDetailDto,
   members: WorkspaceMemberDTO[],
   locale: Locale,
   sprintName: string | null,
+  workItemRefs: WorkItemRefMap,
+  projectIdentifier: string,
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -32,6 +39,8 @@ export function toQuickViewData(
   return {
     identifier: item.identifier,
     title: item.title,
+    projectIdentifier,
+    workItemRefs,
     kind: item.kind,
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,

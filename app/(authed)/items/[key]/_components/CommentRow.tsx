@@ -7,6 +7,7 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Popover } from '@/components/ui/Popover';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import type { CommentAuthorDTO, CommentDTO } from '@/lib/dto/comments';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { Avatar } from '../../_components/issueCellPrimitives';
 import { CommentComposer } from './CommentComposer';
 import { deleteCommentAction, editCommentAction } from '../commentActions';
@@ -30,6 +31,7 @@ export function CommentRow({
   canModerate,
   currentUserId,
   mentionCandidates,
+  workItemRefs,
   onStartReply,
   onEdited,
   onDeleted,
@@ -41,6 +43,8 @@ export function CommentRow({
   canModerate: boolean;
   currentUserId: string;
   mentionCandidates: MentionCandidate[];
+  /** Resolved `motir:` references in the comment body (Subtask 5.8.6) → chips. */
+  workItemRefs?: WorkItemRefMap;
   /** Open the thread's reply composer, pre-mentioning this row's author. */
   onStartReply?: (author: CommentAuthorDTO) => void;
   onEdited: (updated: CommentDTO) => void;
@@ -128,7 +132,7 @@ export function CommentRow({
             onCancel={closeEdit}
           />
         ) : (
-          <MarkdownView value={comment.bodyMd} className="text-sm" />
+          <MarkdownView value={comment.bodyMd} className="text-sm" workItemRefs={workItemRefs} />
         )}
 
         {/* The whole action row is gated on the commenting role — a viewer

@@ -127,12 +127,15 @@ import type {
   PagedArchivedWorkItemsDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
+  WorkItemRefMap,
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
   TreeLevelDto,
   ProjectRoadmapDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
@@ -2746,7 +2749,22 @@ export const workItemsService = {
       const sprint = await sprintRepository.findById(detail.item.sprintId, ctx.workspaceId);
       sprintName = sprint?.name ?? null;
     }
-    return toQuickViewData(detail, members, locale, sprintName);
+    // Work-item references (5.8.6) — `motir:` tokens in the description (live
+    // body chips) + bare `MOTIR-N` in the title (the peek header's title link).
+    // The project identifier prefix is `identifier` minus its `-<key>` suffix.
+    const prefix = detail.item.identifier.slice(
+      0,
+      detail.item.identifier.length - String(detail.item.key).length - 1,
+    );
+    const workItemRefs = await resolveWorkItemRefSummaries(
+      parseWorkItemRefs(
+        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        prefix,
+      ),
+      projectId,
+      ctx,
+    );
+    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix);
   },
 
   /**
@@ -2893,6 +2911,24 @@ export const workItemsService = {
       opts.excludeIds ?? [],
     );
     return rows.map(toWorkItemSummaryDto);
+  },
+
+  /**
+   * Resolve the work-item references parsed out of a body / title to the LIVE
+   * summaries the internal-link chip + title-linkify render (Subtask 5.8.6) —
+   * current key · title · status, with the archived / deleted / no-access state.
+   * Thin service entry over the shared {@link resolveWorkItemRefSummaries}
+   * helper (the read-side parallel of auto-relate, reusing the SAME
+   * `filterBrowsable` view gate `quickSearch` rides). The caller parses the body
+   * with `parseWorkItemRefs` and passes its active project; the map is keyed by
+   * id (token) and current identifier (bare key / title).
+   */
+  async resolveReferenceSummaries(
+    refs: WorkItemRefs,
+    activeProjectId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRefMap> {
+    return resolveWorkItemRefSummaries(refs, activeProjectId, ctx);
   },
 
   /**
