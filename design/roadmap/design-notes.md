@@ -647,9 +647,65 @@ mock.
 
 ---
 
+## ⭐ Locate control (MOTIR-1427 / Story MOTIR-1421 — `locate.mock.html`)
+
+`locate.mock.html` adds a **Locate** affordance to the roadmap canvas: a button that
+**recentres the viewport on the actionable node** so a viewer never has to hunt for where
+to work next. COMPOSES the shipped canvas + overlay chrome (`ProjectRoadmapCanvas` /
+`PlanningCanvas`, MOTIR-1194) — the breadcrumb (top-left), search + Expand (top-right,
+MOTIR-1420), and the zoom + fit-view cluster (bottom-left) are the real shipped controls;
+only the Locate button + its position hint are new.
+
+### What it targets
+
+- **Priority — the "you are here" frontier first.** If the level has the in-progress
+  current-position node (MOTIR-1013), Locate centres + highlights THAT (a single
+  destination — no cycling).
+- **Otherwise the READY nodes** (the mint "Ready" highlight, `RoadmapNodeDto.ready`,
+  MOTIR-1417). With **multiple ready nodes**, repeated clicks **cycle** to the next ready
+  node in a stable order and **wrap** to the first after the last.
+- **Disabled** when there is NEITHER a frontier NOR a ready node on the level.
+
+### The control
+
+- **Placement:** the Locate button joins the **bottom-left** cluster, beside the shipped
+  zoom + fit-view (it is a viewport-navigation control, so it lives with them) — an
+  `--el-surface` icon button (`--radius-btn`, `--shadow-card`, `--height-control`).
+- **Glyph + label:** **LocateFixed** (a crosshair), deliberately UNLIKE the `Maximize` /
+  `Maximize2` of Expand + fit-view. Accessible name **"Locate the current item"** (or
+  **"Locate the next ready item"** in the cycling state).
+- **Cycling signal:** when there is more than one ready node, a quiet **"n of m"** position
+  hint chip (`--el-surface`, `--radius-badge`, mono) sits beside the button so the cycle
+  reads. The centred node carries the **accent focus ring** (the `data-highlighted`
+  treatment the `/`-search locate already applies — so locate visually marks AND is
+  assertable on the same attribute).
+- **Disabled state:** `aria-disabled`, faint `--el-text-faint`, with a tooltip
+  ("Nothing to locate — no in-progress or ready item on this level.").
+
+### Behaviour (the code subtask, MOTIR-1428, builds it)
+
+Pure-client: targets are read from the CURRENT level's already-loaded nodes (the active
+frontier + the `ready` flags), so no new fetch. Centring reuses the shipped pan-to-node
+machinery — set the focused id + bump `focusNonce` so `PlanningCanvas` recentres, and set
+the highlight so the node lights up. The cycle cursor is a ref over the ordered ready-id
+list, **reset when the level changes**. Gated behind a `locatable` prop the work-item
+roadmap passes (like `fullScreenable`, MOTIR-1420); the onboarding canvas — which has no
+work-item frontier / ready flags — does not show it.
+
+### Token / a11y discipline
+
+Colour via `--el-*` only (the accent ring for the located node; mint for Ready;
+lavender for the frontier pill); shape via `--radius-btn` (button) / `--radius-control`
+(overlay icon buttons) / `--radius-badge` (the hint chip) — no Tier-0 `--color-*` or raw
+`rounded-*`. The Locate button is a labelled `<button>` (icon-only → `aria-label`);
+decorative glyphs are `aria-hidden`. The three panels (frontier · ready-cycling ·
+disabled) are in the mock.
+
+---
+
 ## Deliverable
 
-Five three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Six three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
@@ -658,6 +714,7 @@ Five three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`
 - **Ready highlight** — `ready-highlight.mock.html` + `ready-highlight.png`
   (MOTIR-1416).
 - **Full-screen** — `full-screen.mock.html` + `full-screen.png` (MOTIR-1423).
+- **Locate control** — `locate.mock.html` + `locate.png` (MOTIR-1427).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
