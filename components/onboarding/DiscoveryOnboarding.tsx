@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,7 @@ import { DiscoveryChatRail } from './DiscoveryChatRail';
 import { TierReviewGate } from './TierReviewGate';
 import { DesignStep } from './DesignStep';
 import { GenerationHandoff } from './GenerationHandoff';
+import { GenerationFlow } from '@/components/planning/GenerationFlow';
 import { OnboardingCanvas } from './OnboardingCanvas';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { clearPendingIdeaAction } from '@/app/(onboarding)/onboarding/actions';
@@ -64,6 +65,14 @@ export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboar
   // chat rail (proactive tier-gate / out-of-credits block; reactive on a refusal).
   const { access: aiAccess } = useAiAccess();
 
+  // Whether the 7.4 generation flow (MOTIR-1396) is running INSIDE the generation
+  // hand-off view: the hand-off shows the frozen baseline + a "Generate" trigger;
+  // pressing it mounts `GenerationFlow` (POST → live reveal → hand off to /plans).
+  // It only flips back to the baseline via `GenerationFlow`'s `onExit`; leaving the
+  // generation view entirely happens from the baseline (already false) or via the
+  // /plans navigation (unmount), so no effect-driven reset is needed.
+  const [generating, setGenerating] = useState(false);
+
   // The loop seeds the first turn from the preserved idea (the 7.3.14 cookie);
   // clear that cookie once, on mount, so it can't re-seed a later visit.
   const clearedRef = useRef(false);
@@ -118,12 +127,19 @@ export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboar
   if (state.view === 'generation') {
     return (
       <div className="h-dvh w-full">
-        <GenerationHandoff
-          onBack={back}
-          reviewedCount={state.producedKinds.length}
-          designChoice={state.session.designChoice}
-          designApplied={showDesign}
-        />
+        {generating ? (
+          // 7.4 generation entry (MOTIR-1396) — runs the job + reveals proposals
+          // live, then hands off to /plans/:id; Back returns to the baseline.
+          <GenerationFlow onExit={() => setGenerating(false)} />
+        ) : (
+          <GenerationHandoff
+            onBack={back}
+            onGenerate={() => setGenerating(true)}
+            reviewedCount={state.producedKinds.length}
+            designChoice={state.session.designChoice}
+            designApplied={showDesign}
+          />
+        )}
       </div>
     );
   }
