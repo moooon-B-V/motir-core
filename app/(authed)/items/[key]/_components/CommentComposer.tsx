@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { MarkdownEditor, type MentionCandidate } from '@/components/ui/MarkdownEditor';
+import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
 import { Avatar } from '../../_components/issueCellPrimitives';
 
 // The comment composer (Subtask 5.1.5) — the shipped MarkdownEditor in its
@@ -121,6 +122,7 @@ export function CommentComposer({
           size="compact"
           readOnly={submitting}
           mentionCandidates={mentionCandidates}
+          workItemSearch={searchWorkItemMentions}
         />
         {error ? (
           <p

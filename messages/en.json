@@ -1,4 +1,11 @@
 {
+  "markdownEditor": {
+    "mentionPeople": "People",
+    "mentionWorkItems": "Work items",
+    "mentionTypeToSearch": "Keep typing to search work items…",
+    "mentionSearching": "Searching…",
+    "mentionNoResults": "No work items match “{query}”."
+  },
   "common": {
     "close": "Close",
     "dialog": "Dialog",

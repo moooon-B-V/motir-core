@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Image } from '@tiptap/extension-image';
@@ -27,8 +28,10 @@ import { cn } from '@/lib/utils/cn';
 import { MarkdownView } from './MarkdownView';
 import {
   buildMentionExtension,
+  buildWorkItemMentionExtension,
   type MentionCandidate,
   type MentionWiring,
+  type WorkItemMentionSearch,
 } from './markdownEditorMentions';
 import './markdown-editor.css';
 
@@ -56,7 +59,7 @@ import './markdown-editor.css';
 // source (or pasted) is treated as plain text, never rendered — there is no
 // HTML/script injection surface through the editor.
 
-export type { MentionCandidate };
+export type { MentionCandidate, WorkItemMentionSearch };
 
 // `compact` is the comment-composer mode (Story 5.1 · the comments mockup's
 // panel 3): the shortest editing area (~72px) with the inline-format toolbar.
@@ -74,6 +77,10 @@ type Size = 'compact' | 'min' | 'full';
  * `mentions` (Subtask 5.1.4) appends the configured Mention extension — the
  * `@`-picker plus the `[@Name](mention:<userId>)` token round-trip. Absent, the
  * schema (and so every existing consumer) is exactly what it was before 5.1.4.
+ * When the wiring also carries `searchWorkItems` (Subtask 5.8.5) the picker is
+ * the UNIFIED `@` (people + work items) and the `workItemMention` node is
+ * registered so `[<KEY>](motir:<id>)` tokens round-trip too; without it the
+ * schema is exactly the pre-5.8.5 one (the token degrades to plain text).
  */
 export function buildEditorExtensions(opts?: { mentions?: MentionWiring }) {
   return [
@@ -92,6 +99,7 @@ export function buildEditorExtensions(opts?: { mentions?: MentionWiring }) {
       transformCopiedText: true,
     }),
     ...(opts?.mentions ? [buildMentionExtension(opts.mentions)] : []),
+    ...(opts?.mentions?.searchWorkItems ? [buildWorkItemMentionExtension()] : []),
   ];
 }
 
@@ -161,6 +169,17 @@ export interface MarkdownEditorProps {
    * `[@Display Name](mention:<userId>)`.
    */
   mentionCandidates?: MentionCandidate[];
+  /**
+   * The async, DEBOUNCED work-item search behind the unified `@` picker's "Work
+   * items" section (Subtask 5.8.5). The host supplies a fetcher scoped to the
+   * active workspace (the `/api/work-items/mention-search` read); the editor
+   * stays data-source-agnostic. Omit and the picker is people-only — no "Work
+   * items" section, and the `[<KEY>](motir:<id>)` node isn't registered (the
+   * pre-5.8.5 schema). Read at mount (the tiptap schema is fixed per editor
+   * instance). A picked work item inserts a node serializing to
+   * `[<KEY>](motir:<workItemId>)`.
+   */
+  workItemSearch?: WorkItemMentionSearch;
 }
 
 export function MarkdownEditor({
@@ -173,9 +192,11 @@ export function MarkdownEditor({
   onFileUpload,
   readOnly = false,
   mentionCandidates,
+  workItemSearch,
 }: MarkdownEditorProps) {
   const theme = useOptionalTheme();
   const colorMode = theme?.resolvedPattern ?? 'light';
+  const tMention = useTranslations('markdownEditor');
 
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -209,13 +230,24 @@ export function MarkdownEditor({
   const anchorRef = useRef<HTMLDivElement>(null);
   // Created ONCE (lazy initializer) so the wiring closures are stable; they
   // dereference the refs only when the suggestion plugin invokes them (typing
-  // `@`), never during render.
+  // `@`), never during render. The unified picker (5.8.5) turns on when EITHER
+  // people candidates OR the work-item search is supplied; `searchWorkItems` +
+  // the localised picker copy are captured here at mount (the schema is fixed
+  // per editor instance, so locale stays stable for the popup's lifetime).
   const [mentionOpts] = useState<{ mentions: MentionWiring } | undefined>(() =>
-    mentionCandidates !== undefined
+    mentionCandidates !== undefined || workItemSearch !== undefined
       ? {
           mentions: {
             getCandidates: () => mentionCandidatesRef.current ?? [],
             getAnchor: () => anchorRef.current,
+            searchWorkItems: workItemSearch,
+            labels: {
+              people: tMention('mentionPeople'),
+              workItems: tMention('mentionWorkItems'),
+              typeToSearch: tMention('mentionTypeToSearch'),
+              searching: tMention('mentionSearching'),
+              noResults: (query: string) => tMention('mentionNoResults', { query }),
+            },
           },
         }
       : undefined,

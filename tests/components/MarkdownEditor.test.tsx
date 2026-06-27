@@ -6,6 +6,11 @@ import { Editor } from '@tiptap/core';
 import { EditorContent, useEditor } from '@tiptap/react';
 
 import { MarkdownEditor, buildEditorExtensions } from '@/components/ui/MarkdownEditor';
+import type {
+  MentionWiring,
+  WorkItemMentionCandidate,
+} from '@/components/ui/markdownEditorMentions';
+import { renderWithIntl } from '../helpers/renderWithIntl';
 
 afterEach(cleanup);
 
@@ -101,14 +106,14 @@ describe('Markdown round-trip fidelity (storage invariant)', () => {
 // ── Component wiring ────────────────────────────────────────────────────────
 describe('MarkdownEditor (component)', () => {
   it('renders a labelled, editable textbox with a formatting toolbar', async () => {
-    render(<MarkdownEditor label="Description" value="hello" onChange={() => {}} />);
+    renderWithIntl(<MarkdownEditor label="Description" value="hello" onChange={() => {}} />);
     await waitFor(() => expect(screen.getByLabelText('Description')).toBeTruthy());
     expect(screen.getByRole('toolbar')).toBeTruthy();
     expect(screen.getByLabelText('Bold')).toBeTruthy();
   });
 
   it('full size exposes the rich toolbar; min size the compact one', async () => {
-    const { unmount } = render(
+    const { unmount } = renderWithIntl(
       <MarkdownEditor label="d" size="full" value="" onChange={() => {}} />,
     );
     await waitFor(() => expect(screen.getByLabelText('Heading')).toBeTruthy());
@@ -116,7 +121,7 @@ describe('MarkdownEditor (component)', () => {
     unmount();
     cleanup();
 
-    render(<MarkdownEditor label="d" size="min" value="" onChange={() => {}} />);
+    renderWithIntl(<MarkdownEditor label="d" size="min" value="" onChange={() => {}} />);
     await waitFor(() => expect(screen.getByLabelText('Bold')).toBeTruthy());
     // The compact toolbar omits the block-level controls.
     expect(screen.queryByLabelText('Heading')).toBeNull();
@@ -124,7 +129,7 @@ describe('MarkdownEditor (component)', () => {
   });
 
   it('readOnly renders the rendered document with no toolbar', () => {
-    render(<MarkdownEditor label="d" readOnly value="# hi" onChange={() => {}} />);
+    renderWithIntl(<MarkdownEditor label="d" readOnly value="# hi" onChange={() => {}} />);
     expect(screen.queryByRole('toolbar')).toBeNull();
     // The read surface renders the heading text (via MarkdownView).
     expect(screen.getByText('hi')).toBeTruthy();
@@ -132,7 +137,7 @@ describe('MarkdownEditor (component)', () => {
 
   it('picking a file with NO upload handler surfaces a notice (never silent)', async () => {
     const onChange = vi.fn();
-    const { container } = render(<MarkdownEditor label="d" value="" onChange={onChange} />);
+    const { container } = renderWithIntl(<MarkdownEditor label="d" value="" onChange={onChange} />);
     await waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
 
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -144,7 +149,7 @@ describe('MarkdownEditor (component)', () => {
 
   it('picking an allowed file WITH a handler calls the uploader', async () => {
     const onFileUpload = vi.fn().mockResolvedValue('https://blob.example/shot.png');
-    const { container } = render(
+    const { container } = renderWithIntl(
       <MarkdownEditor label="d" value="" onChange={() => {}} onFileUpload={onFileUpload} />,
     );
     await waitFor(() => expect(screen.getByLabelText('Attach file')).toBeTruthy());
@@ -314,7 +319,7 @@ describe('Mention picker (component, 5.1.4)', () => {
   });
 
   it('the MarkdownEditor component wires mentionCandidates through (no popup until @)', async () => {
-    const { container } = render(
+    const { container } = renderWithIntl(
       <MarkdownEditor
         label="Comment"
         value=""
@@ -324,5 +329,199 @@ describe('Mention picker (component, 5.1.4)', () => {
     );
     await waitFor(() => expect(screen.getByLabelText('Comment')).toBeTruthy());
     expect(container.querySelector('[role="listbox"]')).toBeNull(); // closed until @
+  });
+});
+
+// ── Work-item mentions (Subtask 5.8.5) ──────────────────────────────────────
+// The unified `@` picker offers People AND work items. A work-item pick inserts
+// a `workItemMention` node serializing to `[<KEY>](motir:<workItemId>)` — the
+// durable token, the parallel of the user `[@Name](mention:<userId>)`. Two
+// storage invariants mirror the user-mention ones: (1) the `motir:` token
+// round-trips load → edit → getMarkdown() unchanged; (2) WITHOUT `searchWorkItems`
+// the schema is the pre-5.8.5 one, so the token degrades to plain text exactly
+// like an existing consumer — and the people path is byte-identical.
+const WORK_ITEM_WIRING: MentionWiring = {
+  getCandidates: () => [],
+  getAnchor: () => null,
+  searchWorkItems: async () => [],
+};
+
+function roundTripWithWorkItems(markdown: string): string {
+  const element = document.createElement('div');
+  const editor = new Editor({
+    element,
+    extensions: buildEditorExtensions({ mentions: WORK_ITEM_WIRING }),
+    content: markdown,
+  });
+  const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+    getMarkdown: () => string;
+  };
+  const out = storage.getMarkdown();
+  editor.destroy();
+  return out.trim();
+}
+
+describe('Work-item mention token round-trip (storage invariant, 5.8.5)', () => {
+  it('preserves a work-item token through load → serialize', () => {
+    const doc = 'Blocks [MOTIR-805](motir:cm9zabc123) — wire that first.';
+    expect(roundTripWithWorkItems(doc)).toBe(doc);
+  });
+
+  it('is idempotent over a body with multiple work-item tokens', () => {
+    const doc = 'See [MOTIR-805](motir:wi_a) and [MOTIR-1404](motir:wi_b).';
+    const once = roundTripWithWorkItems(doc);
+    const twice = roundTripWithWorkItems(once);
+    expect(once).toBe(doc);
+    expect(twice).toBe(once);
+  });
+
+  it('keeps the user-mention token byte-identical alongside a work-item token', () => {
+    // The people path is unchanged: the user token round-trips exactly as before
+    // (5.1.4) even with the work-item node registered in the same schema.
+    const doc = 'cc [@Bo Philips](mention:user_bo) on [MOTIR-805](motir:wi_a)';
+    expect(roundTripWithWorkItems(doc)).toBe(doc);
+  });
+
+  it('a malformed work-item token (empty id) degrades to plain text', () => {
+    // The parseHTML rule rejects the empty id, so the anchor falls to the Link
+    // mark — and `motir:` is not an allowed link scheme, leaving the bare label.
+    const doc = 'ghost [MOTIR-9](motir:) here';
+    expect(roundTripWithWorkItems(doc)).toBe('ghost MOTIR-9 here');
+  });
+
+  it('WITHOUT searchWorkItems the motir token degrades to plain text (existing-consumer fallback)', () => {
+    // People-only wiring (no searchWorkItems) does NOT register the work-item
+    // node, so a `motir:` token loaded there becomes plain text — exactly the
+    // pre-5.8.5 schema, the same way a `mention:` token degrades without people.
+    const doc = 'Blocks [MOTIR-805](motir:cm9zabc123) please';
+    expect(roundTripWithMentions(doc)).toBe('Blocks MOTIR-805 please');
+  });
+});
+
+describe('Unified @ picker — People + Work items (component, 5.8.5)', () => {
+  const PEOPLE = [{ id: 'user_isaac', name: 'Isaac', email: 'isaac@motir.co' }];
+
+  const WORK_ITEMS: WorkItemMentionCandidate[] = [
+    {
+      id: 'wi_805',
+      identifier: 'MOTIR-805',
+      title: 'Issue-tree generation',
+      kind: 'story',
+      status: { label: 'To Do', tone: 'planned' },
+    },
+    {
+      id: 'wi_1404',
+      identifier: 'MOTIR-1404',
+      title: 'Render — live chip',
+      kind: 'subtask',
+      status: { label: 'Blocked', tone: 'warning' },
+    },
+  ];
+
+  function UnifiedHarness({
+    onReady,
+    searchWorkItems,
+  }: {
+    onReady: (editor: Editor) => void;
+    searchWorkItems?: (q: string) => Promise<WorkItemMentionCandidate[]>;
+  }) {
+    const anchorRef = useRef<HTMLDivElement>(null);
+    const editor = useEditor({
+      immediatelyRender: false,
+      extensions: buildEditorExtensions({
+        mentions: {
+          getCandidates: () => PEOPLE,
+          getAnchor: () => anchorRef.current,
+          searchWorkItems,
+        },
+      }),
+      content: '',
+    });
+    useEffect(() => {
+      if (editor) onReady(editor);
+    }, [editor, onReady]);
+    return (
+      <div ref={anchorRef} data-testid="anchor" className="relative">
+        {editor && <EditorContent editor={editor} />}
+      </div>
+    );
+  }
+
+  async function mount(searchWorkItems?: (q: string) => Promise<WorkItemMentionCandidate[]>) {
+    let editor: Editor | null = null;
+    render(<UnifiedHarness onReady={(e) => (editor = e)} searchWorkItems={searchWorkItems} />);
+    await waitFor(() => expect(editor).toBeTruthy());
+    return { editor: editor as unknown as Editor, anchor: screen.getByTestId('anchor') };
+  }
+
+  function markdownOf(editor: Editor): string {
+    const storage = (editor.storage as unknown as Record<string, unknown>).markdown as {
+      getMarkdown: () => string;
+    };
+    return storage.getMarkdown();
+  }
+
+  it('typing @ shows BOTH the People and Work items sections', async () => {
+    const { editor, anchor } = await mount(async () => WORK_ITEMS);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@');
+
+    // Empty query: People shows all candidates; Work items shows the
+    // "keep typing" prompt (below the search minimum) — both sections present.
+    await waitFor(() => {
+      const listbox = anchor.querySelector('[role="listbox"]');
+      expect(listbox?.getAttribute('aria-label')).toBe('Mention a person or work item');
+      expect(listbox?.textContent).toContain('People');
+      expect(listbox?.textContent).toContain('Work items');
+      expect(listbox?.textContent).toContain('Isaac');
+      expect(listbox?.textContent).toContain('Keep typing to search work items');
+    });
+  });
+
+  it('picking a work item inserts a node serializing to [KEY](motir:<id>)', async () => {
+    const search = vi.fn(async () => WORK_ITEMS);
+    const { editor, anchor } = await mount(search);
+    editor.commands.focus('end');
+    // "is" matches the person Isaac AND is past the work-item search minimum.
+    editor.commands.insertContent('@is');
+
+    // The debounced search resolves the Work items section.
+    await waitFor(() => {
+      const opts = anchor.querySelectorAll('[role="option"]');
+      // 1 person (Isaac) + 2 work items.
+      expect(opts.length).toBe(3);
+    });
+    expect(search).toHaveBeenCalledWith('is');
+    const options = anchor.querySelectorAll('[role="option"]');
+    expect(options[1]?.textContent).toContain('MOTIR-805');
+    expect(options[1]?.textContent).toContain('Issue-tree generation');
+    expect(options[1]?.textContent).toContain('To Do');
+
+    // ↓ from the person into the first work item, then Enter commits the token.
+    fireEvent.keyDown(editor.view.dom, { key: 'ArrowDown' });
+    await waitFor(() =>
+      expect(anchor.querySelector('[role="option"][aria-selected="true"]')?.textContent).toContain(
+        'MOTIR-805',
+      ),
+    );
+    expect(anchor.querySelector('[role="listbox"]')?.getAttribute('aria-activedescendant')).toBe(
+      'mention-option-1',
+    );
+
+    fireEvent.keyDown(editor.view.dom, { key: 'Enter' });
+    await waitFor(() => expect(markdownOf(editor)).toContain('[MOTIR-805](motir:wi_805)'));
+    expect(anchor.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  it('absent searchWorkItems → no Work items section (people-only fallback)', async () => {
+    const { editor, anchor } = await mount(undefined);
+    editor.commands.focus('end');
+    editor.commands.insertContent('@');
+
+    await waitFor(() => expect(anchor.querySelector('[role="listbox"]')).toBeTruthy());
+    const listbox = anchor.querySelector('[role="listbox"]');
+    expect(listbox?.getAttribute('aria-label')).toBe('Mention a member');
+    expect(listbox?.textContent).not.toContain('Work items');
+    expect(listbox?.textContent).toContain('Isaac');
   });
 });
