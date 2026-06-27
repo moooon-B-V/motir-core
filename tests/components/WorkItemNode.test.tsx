@@ -101,6 +101,58 @@ describe('WorkItemNode', () => {
     expect(screen.queryByText('You are here')).toBeNull();
     expect((container.firstChild as HTMLElement).getAttribute('aria-current')).toBeNull();
   });
+
+  // MOTIR-1422 — distinct, zoom-out-legible DONE + READY card styles (both carried in
+  // the card body, not a 3px edge).
+  it('styles a READY node with the whole-card mint wash + the "Ready" pill', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('ready');
+    expect(card.className).toContain('bg-(--el-tint-mint)');
+    expect(screen.getByTestId('ready-pill')).toBeTruthy();
+    expect(screen.queryByTestId('done-pill')).toBeNull();
+  });
+
+  it('styles a DONE node as a faded/recessed card + struck title + neutral "Done" pill', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('done');
+    expect(card.className).toContain('opacity-60');
+    expect(card.className).toContain('bg-(--el-surface-soft)');
+    // a neutral Done pill (NOT the success-green ready treatment)
+    expect(screen.getByTestId('done-pill')).toBeTruthy();
+    expect(screen.queryByTestId('ready-pill')).toBeNull();
+    expect(card.className).not.toContain('bg-(--el-tint-mint)');
+    // the title is struck
+    expect(screen.getByText(item.title).className).toContain('line-through');
+  });
+
+  it('keeps done and ready DISTINCT (mint-forward vs faded-back)', () => {
+    const { container: r } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
+    const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
+    const ready = r.firstChild as HTMLElement;
+    const done = d.firstChild as HTMLElement;
+    expect(ready.getAttribute('data-node-state')).not.toBe(done.getAttribute('data-node-state'));
+    expect(ready.className).toContain('bg-(--el-tint-mint)'); // ready advances
+    expect(done.className).toContain('opacity-60'); // done recedes
+  });
+
+  it('the accent "you are here" frontier wins over the done style', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} here />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('here');
+    expect(screen.getByText('You are here')).toBeTruthy();
+    expect(screen.queryByTestId('done-pill')).toBeNull();
+    expect(card.className).not.toContain('opacity-60');
+  });
+
+  it('the red cross-blocked flag wins over the done style', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} crossBlocked />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(card.className).not.toContain('opacity-60');
+  });
 });
 
 describe('GhostAnchor', () => {

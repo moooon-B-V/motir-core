@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   Ban,
   Check,
+  CheckCircle2,
   ChevronRight,
   CircleDashed,
   CircleDot,
@@ -137,6 +138,21 @@ export function WorkItemNode({
   // The ready treatment is suppressed on the "you are here" frontier (its accent
   // treatment is the louder, must-not-miss signal) — MOTIR-1417.
   const showReady = ready && !here;
+  // DONE + READY card styles (MOTIR-1422) — both carried IN THE CARD body so they
+  // survive zoom-out (the old 3px ready bar vanished) and read as opposites:
+  // READY = a whole-card mint wash; DONE = a faded/recessed card + struck title.
+  // The accent "you are here" and the red cross-blocked flag are louder than both.
+  const showDone = item.status === 'done' && !here && !crossBlocked;
+  const showReadyWash = showReady && !crossBlocked;
+  const nodeState = crossBlocked
+    ? 'cross-blocked'
+    : here
+      ? 'here'
+      : showDone
+        ? 'done'
+        : showReadyWash
+          ? 'ready'
+          : 'normal';
   return (
     <div
       // Fixed height (= the layout's NODE_H) so a long, two-line title can never
@@ -148,42 +164,39 @@ export function WorkItemNode({
       // "You are here" semantics — a step in the journey), so AT it reads as the
       // active waypoint, not just a visual ring.
       aria-current={here ? 'step' : undefined}
+      // A stable state hook for the canvas + E2E (MOTIR-1422): cross-blocked / here /
+      // done / ready / normal — the card's authoritative visual state.
+      data-node-state={nodeState}
       // A raised `--el-surface` tile on the recessed `--el-canvas` board (the canvas
-      // background, MOTIR-1362): the fill is now clearly lighter than the board in
-      // BOTH themes, and the crisp `--el-border` + `--shadow-card` lift (matching the
-      // onboarding StationCard) defines the edge — so the card stands out instead of
-      // melting into the canvas. The active "you are here" node takes an accent
-      // border (the StationCard ringed-active language); a cross-story tangle still
-      // wins the border (it's the louder, must-not-miss signal).
-      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 bg-(--el-surface) shadow-(--shadow-card) ${
+      // background, MOTIR-1362): the fill is clearly lighter than the board, and the
+      // crisp border + `--shadow-card` lift defines the edge. The active "you are
+      // here" node takes an accent border; a cross-story tangle wins the border (the
+      // louder signal). MOTIR-1422 adds the card-level DONE (faded/recessed) + READY
+      // (mint wash) fills — both legible zoomed out, unlike the old 3px ready edge.
+      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
         crossBlocked
-          ? 'border-(--el-danger) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
+          ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
           : here
-            ? 'border-(--el-accent)'
-            : 'border-(--el-border)'
+            ? 'border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)'
+            : showDone
+              ? 'border-(--el-border-soft) bg-(--el-surface-soft) opacity-60 shadow-(--shadow-subtle)'
+              : showReadyWash
+                ? 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
+                : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }`}
     >
-      {/* READY left accent bar (MOTIR-1417) — a 3px `--el-success` strip clipped to
-          the card radius by `overflow-hidden`, so a ready-to-start node is scannable
-          at zoom. Suppressed on "you are here" / a cross-blocked node (louder signals
-          win the edge). */}
-      {showReady && !crossBlocked ? (
-        <span
-          data-testid="ready-bar"
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-(--el-success)"
-        />
-      ) : null}
-
       {/* TOP ROW — the compact STATUS chip (top-left) — REPLACED by the accent
-          "You are here" pill on the current-position node, or the success "Ready"
-          pill on a ready-to-start node — and the cross-link tag (or the has-children
-          hint) pushed to the right. */}
+          "You are here" pill on the current-position node, the success "Ready" pill
+          on a ready-to-start node, or the neutral "Done" pill on a done node — and
+          the cross-link tag (or the has-children hint) pushed to the right. The
+          READY treatment is now the whole-card mint wash (MOTIR-1422), not a 3px bar. */}
       <div className="flex shrink-0 items-center gap-2">
         {here ? (
           <HerePill />
         ) : showReady ? (
           <ReadyPill />
+        ) : showDone ? (
+          <DonePill />
         ) : (
           <WorkItemStatusPill status={item.status} />
         )}
@@ -214,7 +227,11 @@ export function WorkItemNode({
         </span>
         <div className="min-w-0 flex-1">
           <span className="block font-mono text-xs text-(--el-text-faint)">{item.identifier}</span>
-          <span className="mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold text-(--el-text)">
+          <span
+            className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
+              showDone ? 'text-(--el-text-muted) line-through' : 'text-(--el-text)'
+            }`}
+          >
             {item.title}
           </span>
         </div>
@@ -270,10 +287,28 @@ function ReadyPill() {
   return (
     <span
       data-testid="ready-pill"
-      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-mint) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-strong)"
+      // A white chip on the mint card wash (MOTIR-1422) — the success icon carries
+      // the "go" hue; the chip surface lifts off the tint for contrast.
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-strong)"
     >
       <CirclePlay className="size-3 text-(--el-success)" aria-hidden="true" />
       Ready
+    </span>
+  );
+}
+
+/** The "Done" pill (MOTIR-1422) — a NEUTRAL check chip (deliberately NOT
+ *  success-green, so it can't be confused with the ready highlight). Takes the
+ *  status slot on a done node; the card itself recedes (faded surface + struck
+ *  title), so done reads as the opposite of ready's mint-forward wash. */
+function DonePill() {
+  return (
+    <span
+      data-testid="done-pill"
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-secondary)"
+    >
+      <CheckCircle2 className="size-3 text-(--el-text-muted)" aria-hidden="true" />
+      Done
     </span>
   );
 }
