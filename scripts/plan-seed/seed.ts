@@ -83,6 +83,7 @@ import { PLAN, ROOT_BUGS } from './data';
 import { composeDescription, mapTypeAndExecutor } from './mapItem';
 import { MOTIR_PUBLIC_OVERVIEW_MD, MOTIR_PUBLIC_TAGLINE, MOTIR_PUBLIC_TAGS } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
+import { SEED_TEST_PROJECT_NAME, seedGenerationTestProject } from './testProject';
 import {
   SEED_STATUS_MAP,
   epicIdOf,
@@ -348,6 +349,23 @@ async function main() {
     );
   });
 
+  // ── A SECOND, onboarding-ready project: the AI-generation TEST BED (MOTIR-1426) ──
+  // A fresh project under the SAME `moooon` workspace, with NO seeded tree and no
+  // approved plan, so `onboardingRanAt` stays null and `/onboarding` LOADS for it
+  // (the gate redirects to /roadmap only AFTER a plan is approved). AI access is
+  // inherited from the org's `isMeta` flag. It is the test bed for the generation
+  // ENTRY (MOTIR-1396) — distinct from the real `motir` plan project; reaching the
+  // "Generate plan" entry then needs a `tiers_complete` pre-plan baseline seeded
+  // in motir-ai (MOTIR-1430). The active-project pin above is deliberately NOT
+  // touched — `motir` stays the default landing project; testers switch to this
+  // one via the project switcher. Idempotent across reseeds (the clear pass
+  // deletes the workspace, cascading its projects).
+  const testProject = await seedGenerationTestProject({
+    workspaceId: workspace.id,
+    ownerUserId: ownerId,
+    memberUserIds: SEED_USERS.map((u) => userIdByEmail.get(u.email)!),
+  });
+
   // ── Tree pass: create every epic → story → leaf through the shipped path ──
   let created = 0;
   const idMap = new Map<string, string>(); // dotted plan id → work_item id
@@ -591,6 +609,9 @@ async function main() {
   console.log(`  Project:   ${SEED_PROJECT_NAME} (${project.identifier})`);
   console.log(`  Project:   access=public · ${OWNER_EMAIL}=admin, rest=member (Story 6.4/6.12)`);
   console.log(`  Public:    /p/${project.identifier} — anonymous public view (Story 6.12.4)`);
+  console.log(
+    `  Test bed:  ${SEED_TEST_PROJECT_NAME} (${testProject.identifier}) — onboarding-ready for AI generation (MOTIR-1396); open /onboarding`,
+  );
   console.log('  Open the project to browse the plan as an issue tree.');
   console.log('────────────────────────────────────────────────────────');
 }
