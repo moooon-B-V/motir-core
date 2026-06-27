@@ -362,3 +362,27 @@ describe('activityService.listAll — the composite-cursor page walk', () => {
     expect(second.totalChanges).toBe(1); // noise is not a change
   });
 });
+
+describe('activityService.listAll — work-item reference resolution (5.8.6)', () => {
+  it('resolves the comment bodies’ motir: tokens so the All view chips render LIVE, not struck-through', async () => {
+    const fx = await makeWorkItemFixture();
+    const issue = await createIssue(fx);
+    const target = await createIssue(fx, 'Referenced target');
+
+    // A comment on the issue references the target via the durable token the
+    // editor emits — exactly what the dedicated Comments tab resolves.
+    await commentsService.addComment(
+      issue.id,
+      { bodyMd: `See [${target.identifier}](motir:${target.id}) for context.` },
+      fx.ctx,
+    );
+
+    const page = await activityService.listAll(issue.id, {}, fx.ctx);
+
+    // The All page carries the resolved summary keyed by the token id — without
+    // it the chip falls into the "deleted" (strikethrough) branch (the bug).
+    const summary = page.workItemRefs[target.id];
+    expect(summary).toBeDefined();
+    expect(summary).toMatchObject({ accessible: true, identifier: target.identifier });
+  });
+});

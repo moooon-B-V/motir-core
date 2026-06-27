@@ -7,6 +7,7 @@
 // 5.5.3 design owns the row grammar.
 
 import type { CommentThreadDTO } from '@/lib/dto/comments';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 /**
  * One side of a change, resolved to its display form. Discriminated by
@@ -109,6 +110,13 @@ export interface ActivityAllPageDto {
   totalComments: number;
   /** Displayable revisions in the whole trail (the History count). */
   totalChanges: number;
+  /**
+   * Resolved `motir:` work-item references across THIS page's comment bodies
+   * (Subtask 5.8.6) — the internal-link chips render against it, exactly as the
+   * dedicated Comments tab does. Sourced from the nested `listComments` read, so
+   * the All view never shows a struck-through (unresolved) reference.
+   */
+  workItemRefs: WorkItemRefMap;
 }
 
 /** One page of the History feed. */

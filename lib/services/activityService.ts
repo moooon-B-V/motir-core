@@ -370,6 +370,10 @@ export const activityService = {
           : null,
       totalComments: commentsPage.totalCount,
       totalChanges,
+      // The comment refs the nested listComments already resolved (5.8.6) — the
+      // All view threads them to its CommentRows so chips render live, not as a
+      // struck-through bare key.
+      workItemRefs: commentsPage.workItemRefs ?? {},
     };
   },
 };
