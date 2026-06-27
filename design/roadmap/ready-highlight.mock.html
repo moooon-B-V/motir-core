@@ -1,0 +1,703 @@
+<!doctype html>
+<!--
+  ROADMAP — READY-TO-START highlight (MOTIR-1416 / Story MOTIR-1415).
+  COMPOSES the shipped roadmap node (WorkItemNode, MOTIR-1194) — adds ONE quiet
+  affordance marking a work item that is READY TO START (not yet started/done, and
+  every blocked_by dependency is done → no open blocker; the shipped
+  ReadinessDto.ready). It does NOT redraw the node (notes.html #82/#95): the card,
+  status pill, kind tile, identifier/title, drill chevron and "you are here" pill
+  are the real shipped structure; only the ready treatment is new.
+
+  Built from the real design system: every value is the light-theme resolution of
+  a globals.css token, referenced through its --el-* / shape-token name (never a
+  Tier-0 --color-* or a raw rounded-*/p-*/h-*).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — ready-to-start highlight (MOTIR-1416)</title>
+    <style>
+      :root {
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-danger: #e03131;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-peach: #ffe8d4;
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+      }
+      .body {
+        padding: 22px 20px 24px;
+      }
+
+      /* recessed canvas strip the nodes sit on */
+      .canvasrow {
+        display: flex;
+        gap: 16px;
+        padding: 22px 18px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow-x: auto;
+      }
+      .cell {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 214px;
+        flex: none;
+      }
+      .celltag {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        text-align: center;
+      }
+      .celltag b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── WorkItemNode (components/planning/WorkItemNode.tsx) ── */
+      .node {
+        position: relative;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 13px;
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .node.here {
+        border-color: var(--el-accent);
+      }
+      /* THE READY TREATMENT — a --el-success left accent bar (inset, respects the
+         card radius) + the "Ready" pill below. Distinct from the accent (purple)
+         "you are here" BORDER by both hue (green) and shape (left bar, not border). */
+      .node.ready {
+        box-shadow:
+          var(--shadow-card),
+          inset 3px 0 0 var(--el-success);
+      }
+      .ntop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .spill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .spill.prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .spill.done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .spill.here {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* the NEW ready pill — success-toned, in the status slot (a ready item is a
+         to-do whose blockers are all done; "Ready" is the informative label). */
+      .spill.ready {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .spill.ready svg {
+        color: var(--el-success);
+      }
+      .blockflag {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .blockflag svg {
+        width: 11px;
+        height: 11px;
+      }
+      .drill {
+        margin-left: auto;
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+      }
+      .tile.story {
+        background: var(--el-tint-mint);
+      }
+      .tile.story svg {
+        color: var(--el-type-story);
+      }
+      .tile.subtask {
+        background: var(--el-tint-lavender);
+      }
+      .tile.subtask svg {
+        color: var(--el-type-subtask);
+      }
+      .tile.epic {
+        background: var(--el-tint-rose);
+      }
+      .tile.epic svg {
+        color: var(--el-type-epic);
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+
+      /* ── anatomy callouts ── */
+      .anatomy {
+        display: flex;
+        gap: 40px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .bignode {
+        width: 280px;
+        flex: none;
+        transform: scale(1.18);
+        transform-origin: left center;
+        margin: 18px 40px 18px 12px;
+      }
+      .callouts {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        min-width: 320px;
+        flex: 1;
+      }
+      .callouts li {
+        list-style: none;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .callouts .dot {
+        margin-top: 4px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex: none;
+        background: var(--el-success);
+      }
+      .callouts b {
+        color: var(--el-text-strong);
+      }
+      .callouts code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      ul.callouts {
+        margin: 0;
+        padding: 0;
+      }
+      .note {
+        margin: 16px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 1000px;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — ready-to-start highlight · MOTIR-1416</h1>
+    <p class="docsub">
+      A quiet highlight on a work item that is READY to start — not yet started/done, with every
+      dependency it is blocked_by already done. Composes the shipped roadmap node; only the ready
+      treatment is new.
+    </p>
+
+    <!-- ════════ PANEL 1 — the ready state vs the others ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>1 · The ready state, beside the others</b
+        ><span>— the highlight fires ONLY on an unblocked, not-yet-started item</span>
+        <span class="cap">components/planning/WorkItemNode.tsx</span>
+      </div>
+      <div class="body">
+        <div class="canvasrow">
+          <!-- READY -->
+          <div class="cell">
+            <div class="node ready">
+              <div class="ntop">
+                <span class="spill ready"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon
+                      points="10 8 16 12 10 16 10 8"
+                      fill="currentColor"
+                      stroke="none"
+                    /></svg
+                  >Ready</span
+                >
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+              <div class="nbody">
+                <span class="tile story"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1402</div>
+                  <div class="ntitle">Saved roadmap views</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag"><b>Ready</b> — every blocker done, not started</div>
+          </div>
+
+          <!-- TO DO, BLOCKED (not ready) -->
+          <div class="cell">
+            <div class="node">
+              <div class="ntop">
+                <span class="spill todo"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-dasharray="3 3"
+                  >
+                    <circle cx="12" cy="12" r="10" /></svg
+                  >To do</span
+                >
+                <span class="blockflag"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect width="18" height="11" x="3" y="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg
+                  >blocked</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile subtask"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m3 17 2 2 4-4" />
+                    <path d="m3 7 2 2 4-4" />
+                    <path d="M13 6h8" />
+                    <path d="M13 12h8" />
+                    <path d="M13 18h8" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1404</div>
+                  <div class="ntitle">Persist view per user</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag">Not ready — an <b>open blocker</b></div>
+          </div>
+
+          <!-- IN PROGRESS -->
+          <div class="cell">
+            <div class="node">
+              <div class="ntop">
+                <span class="spill prog"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                  >In progress</span
+                >
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+              <div class="nbody">
+                <span class="tile story"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1379</div>
+                  <div class="ntitle">Sprint-scoped roadmap</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag">Started — already moving, not "ready"</div>
+          </div>
+
+          <!-- DONE -->
+          <div class="cell">
+            <div class="node">
+              <div class="ntop">
+                <span class="spill done"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                  >Done</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile subtask"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m3 17 2 2 4-4" />
+                    <path d="m3 7 2 2 4-4" />
+                    <path d="M13 6h8" />
+                    <path d="M13 12h8" />
+                    <path d="M13 18h8" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1381</div>
+                  <div class="ntitle">Sprint-scoped read</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag">Done — finished, not "ready"</div>
+          </div>
+
+          <!-- YOU ARE HERE -->
+          <div class="cell">
+            <div class="node here">
+              <div class="ntop">
+                <span class="spill here"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                    <circle cx="12" cy="10" r="3" /></svg
+                  >You are here</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile story"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1382</div>
+                  <div class="ntitle">Scope toggle UI</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag">Distinct: <b>accent border</b>, not the green ready bar</div>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>The rule.</b> A node is <b>ready</b> iff it is not yet started/done (a to-do status)
+          AND every item it is <code>blocked_by</code> is done — the shipped
+          <code>ReadinessDto.ready</code>
+          / dispatch-ready set. The highlight marks the actionable frontier, so it fires on
+          <b>exactly one</b> of the states above. It is deliberately distinct from the accent
+          <b>"you are here"</b> border (in-progress frontier), the red dependency flag, and the
+          status pill — by both <b>hue</b> (success green) and <b>shape</b> (a left accent bar + a
+          pill, not a full border). Holds in both Whole-project and Active-sprint scope.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ PANEL 2 — anatomy ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>2 · Anatomy of the ready treatment</b><span>— two parts, both --el-success</span>
+      </div>
+      <div class="body">
+        <div class="anatomy">
+          <div class="bignode">
+            <div class="node ready">
+              <div class="ntop">
+                <span class="spill ready"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon
+                      points="10 8 16 12 10 16 10 8"
+                      fill="currentColor"
+                      stroke="none"
+                    /></svg
+                  >Ready</span
+                >
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+              <div class="nbody">
+                <span class="tile story"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1402</div>
+                  <div class="ntitle">Saved roadmap views</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ul class="callouts">
+            <li>
+              <span class="dot"></span>
+              <span
+                ><b>"Ready" pill</b> in the status slot (replacing the dim "To&nbsp;do" pill — a
+                ready item IS a to-do whose blockers are all done, so "Ready" is the informative
+                label). <code>--el-tint-mint</code> background, <code>--el-text-strong</code> text
+                (AA), a <code>CirclePlay</code> glyph in <code>--el-success</code>.</span
+              >
+            </li>
+            <li>
+              <span class="dot"></span>
+              <span
+                ><b>Success left accent bar</b> — a 3px <code>--el-success</code> inset bar (<code
+                  >box-shadow: inset 3px 0 0</code
+                >, respects <code>--radius-card</code>) so a ready node is scannable across a dense
+                canvas at zoom, without adding a full border that would read like the accent "you
+                are here" frame.</span
+              >
+            </li>
+            <li>
+              <span class="dot" style="background: var(--el-text-faint)"></span>
+              <span
+                >Everything else is the shipped <code>WorkItemNode</code> unchanged — kind tile,
+                identifier, title, drill chevron, progress meter (on containers).</span
+              >
+            </li>
+          </ul>
+        </div>
+        <p class="note">
+          <b>Copy + tokens.</b> Pill label <b>"Ready"</b>; glyph
+          <code>CirclePlay</code> (<code>--el-success</code>). Colour via
+          <code>--el-tint-mint</code> / <code>--el-text-strong</code> / <code>--el-success</code>;
+          shape via <code>--radius-badge</code> (pill) + <code>--radius-card</code> (the card the
+          inset bar rides). No Tier-0 <code>--color-*</code> or raw
+          <code>rounded-*</code>/<code>p-*</code>. The code subtask (MOTIR-1417) renders this when
+          the read returns <code>ready: true</code> for a node.
+        </p>
+      </div>
+    </section>
+  </body>
+</html>

@@ -535,14 +535,65 @@ toggle lives **in that page's header**, right-aligned beside the title/subtitle
 
 ---
 
+## ⭐ Ready-to-start highlight (MOTIR-1416 / Story MOTIR-1415 — `ready-highlight.mock.html`)
+
+`ready-highlight.mock.html` adds a quiet highlight marking a roadmap node that is
+**ready to start** — not yet started/done, and every item it is `blocked_by` is done
+(no open blocker; the shipped `ReadinessDto.ready` / dispatch-ready set). It makes the
+actionable FRONTIER obvious. COMPOSES the shipped `WorkItemNode` (MOTIR-1194,
+`notes.html` #82/#95) — the card, status pill, kind tile, identifier/title, drill
+chevron and "you are here" pill are the real shipped structure; only the ready
+treatment is new. Works in BOTH project and sprint scope (the readiness rule is
+scope-independent).
+
+### The treatment (two parts, both `--el-success`)
+
+1. **The "Ready" pill** — in the status slot, REPLACING the dim "To do" pill (a ready
+   item IS a to-do whose blockers are all done, so "Ready" is the informative label).
+   `--el-tint-mint` background + `--el-text-strong` text (AA, finding #35) + a
+   `CirclePlay` glyph in `--el-success`.
+2. **A success LEFT accent bar** — a 3px `--el-success` inset bar
+   (`box-shadow: inset 3px 0 0`, respecting `--radius-card`) so a ready node is
+   scannable across a dense canvas at zoom — WITHOUT a full border that would read
+   like the accent "you are here" frame.
+
+### Distinct from the existing node affordances (the AC)
+
+The ready highlight fires on **exactly one** node state — a startable, unblocked item —
+and is deliberately distinct from each existing signal by **hue + shape**:
+
+| Signal          | Treatment                                  | Hue             |
+| --------------- | ------------------------------------------ | --------------- |
+| **Ready** (new) | "Ready" pill + 3px left accent bar         | `--el-success`  |
+| "You are here"  | accent BORDER + accent map-pin pill        | `--el-accent`   |
+| dependency flag | red chip ("cross-story" / "not in sprint") | `--el-danger`   |
+| status pill     | tinted chip (To do / In progress / Done)   | per-status tint |
+
+An in-progress or done node is NOT ready (already started/finished); a to-do with an
+open blocker is NOT ready (the dim "To do" pill stays). The mock's panel 1 shows the
+ready node beside all four non-ready states; panel 2 is the anatomy.
+
+### Exact copy + tokens
+
+- **Pill label:** `Ready`; glyph `CirclePlay` (`--el-success`).
+- **Colour:** `--el-tint-mint` / `--el-text-strong` / `--el-success` only (no Tier-0
+  `--color-*`). **Shape:** `--radius-badge` (pill) + `--radius-card` (the card the
+  inset bar rides). No raw `rounded-*` / `p-*`.
+- The code subtask (MOTIR-1417) renders this when the per-level roadmap read returns
+  `ready: true` for a node (and the node is not the "you are here" / done state).
+
+---
+
 ## Deliverable
 
-Three three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Four three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
   (MOTIR-1351).
 - **Scope toggle** — `scope-toggle.mock.html` + `scope-toggle.png` (MOTIR-1380).
+- **Ready highlight** — `ready-highlight.mock.html` + `ready-highlight.png`
+  (MOTIR-1416).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
