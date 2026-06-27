@@ -290,7 +290,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
       {/* People section. In the people-only path no header is shown (byte-
           identical to before 5.8.5); the unified picker labels it. */}
       {unified && people.length > 0 ? (
-        <p className="text-(--el-text-faint) px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
+        <p className="text-(--el-text-secondary) px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
           {copy.people}
         </p>
       ) : null}
@@ -342,7 +342,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
           search / loading / no-results states per the design, else the rows. */}
       {unified ? (
         <>
-          <p className="text-(--el-text-faint) px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
+          <p className="text-(--el-text-secondary) px-(--spacing-control-x) pt-1.5 pb-1 font-mono text-[10px] font-semibold tracking-wider uppercase">
             {copy.workItems}
           </p>
           {tooShort ? (
@@ -381,7 +381,15 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
                     type={item.kind as IssueType}
                     className="h-[15px] w-[15px] shrink-0"
                   />
-                  <span className="text-(--el-text-muted) shrink-0 font-mono text-xs">
+                  <span
+                    className={cn(
+                      'shrink-0 font-mono text-xs',
+                      // muted drops under AA (4.5:1) on the active row's
+                      // --el-surface tint — step up to secondary there, as the
+                      // people row's email does.
+                      index === active ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)',
+                    )}
+                  >
                     {item.identifier}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{item.title}</span>
