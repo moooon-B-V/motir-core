@@ -12,12 +12,13 @@ import type { WorkItemFixture } from '../../fixtures';
 
 // STORY-LEVEL INTEGRATION SEAM (MOTIR-1383) for the sprint-scoped roadmap read.
 // Drives the ASSEMBLED `workItemsService.getProjectRoadmap(..., { scope: 'sprint' })`
-// DTO — the shape `fetchRoadmapLevel` actually consumes — over a tree seeded
-// across sprint-membership boundaries. This verifies the SERVICE wires the active
-// sprint + the member-or-ancestor repo read + the scoped progress + the edges into
-// ONE coherent DTO (the drift the per-subtask units mask), NOT a repeat of those
-// units (the repo-method assertions live in `roadmap-sprint-scope.test.ts`,
-// notes.html #102). Real Postgres, no mocks (Yue's rule).
+// DTO — the shape `fetchRoadmapLevel` consumes — over a tree seeded across sprint
+// membership boundaries. The sprint-scoped roadmap is rooted at the TOPMOST in-sprint
+// items (a member story, or the in-sprint subtasks of a non-member story); epics and
+// non-member ancestors are elided; below a shown member the tree is the normal,
+// unscoped read. This verifies the SERVICE wires the active sprint + the root-member
+// selection + the (full-subtree) progress + the edges into ONE DTO — NOT a repeat of
+// the repo units (notes.html #102). Real Postgres, no mocks (Yue's rule).
 
 async function truncateAll(): Promise<void> {
   await db.$executeRawUnsafe(
@@ -52,7 +53,7 @@ async function setSprint(id: string, sprintId: string | null): Promise<void> {
 async function setStatus(id: string, status: string): Promise<void> {
   await db.workItem.update({ where: { id }, data: { status } });
 }
-/** `is_blocked_by`: from = the blocked item, to = the blocker (mirrors project-roadmap.test). */
+/** `is_blocked_by`: from = the blocked item, to = the blocker. */
 async function link(fx: WorkItemFixture, blockedId: string, blockerId: string): Promise<void> {
   await createTestLink({
     workspaceId: fx.workspaceId,
@@ -64,14 +65,13 @@ async function link(fx: WorkItemFixture, blockedId: string, blockerId: string): 
 }
 
 /**
- * The seam tree (membership boundaries + edges):
+ * The seam tree (members = a1, Story A2):
  *   Epic A
- *     ├─ Story A1 (blocked_by Story A3) ─ a1 (IN sprint, done) · a2 (backlog)
- *     ├─ Story A2 (entirely backlog)
- *     └─ Story A3 (IN sprint itself — story-grain membership; no children)
+ *     ├─ Story A1 (NOT a member) ─ a1 (IN sprint, done; blocked_by Story A2) · a2 (backlog)
+ *     ├─ Story A2 (IN sprint)    ─ a3 (backlog, done)
  *   Epic B
- *     └─ Story B1 ─ b1 (backlog) — Epic B has NO in-sprint descendant
- * Members: a1, A3 → member-or-ancestor set = { a1, A3, Story A1, Epic A }.
+ *     └─ Story B1 ─ b1 (backlog) — wholly backlog
+ * Topmost in-sprint members ("root members"): { a1, Story A2 }.
  */
 async function seedTree(fx: WorkItemFixture, sprintId: string) {
   const epicA = await createWorkItem(fx, { kind: 'epic', title: 'Epic A' });
@@ -87,11 +87,7 @@ async function seedTree(fx: WorkItemFixture, sprintId: string) {
     title: 'Story A2',
     parentId: epicA.id,
   });
-  const storyA3 = await createWorkItem(fx, {
-    kind: 'story',
-    title: 'Story A3',
-    parentId: epicA.id,
-  });
+  const a3 = await createWorkItem(fx, { kind: 'subtask', title: 'a3', parentId: storyA2.id });
   const epicB = await createWorkItem(fx, { kind: 'epic', title: 'Epic B' });
   const storyB1 = await createWorkItem(fx, {
     kind: 'story',
@@ -101,16 +97,17 @@ async function seedTree(fx: WorkItemFixture, sprintId: string) {
   const b1 = await createWorkItem(fx, { kind: 'subtask', title: 'b1', parentId: storyB1.id });
 
   await setSprint(a1.id, sprintId);
-  await setSprint(storyA3.id, sprintId);
+  await setSprint(storyA2.id, sprintId);
   await setStatus(a1.id, 'done');
-  // Within-level edge under Epic A: Story A1 blocked_by Story A3 (both in scope).
-  await link(fx, storyA1.id, storyA3.id);
+  await setStatus(a3.id, 'done');
+  // A within-(root)-level edge: a1 blocked_by Story A2 (both are root members).
+  await link(fx, a1.id, storyA2.id);
 
-  return { epicA, storyA1, a1, a2, storyA2, storyA3, epicB, storyB1, b1 };
+  return { epicA, storyA1, a1, a2, storyA2, a3, epicB, storyB1, b1 };
 }
 
-describe('getProjectRoadmap seam — sprint scope', () => {
-  it('case 1 — ROOT level returns only the epic that contains/ is in-sprint work; Epic B absent', async () => {
+describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => {
+  it('case 1 — ROOT level is the topmost members; epics and non-member ancestors are elided', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
@@ -118,55 +115,47 @@ describe('getProjectRoadmap seam — sprint scope', () => {
     const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',
     });
-    expect(roadmap.nodes.map((n) => n.id)).toEqual([t.epicA.id]);
-    expect(roadmap.nodes[0]!.hasChildren).toBe(true);
+    expect(roadmap.nodes.map((n) => n.id).sort()).toEqual([t.a1.id, t.storyA2.id].sort());
+    expect(roadmap.nodes.find((n) => n.id === t.a1.id)!.hasChildren).toBe(false);
+    expect(roadmap.nodes.find((n) => n.id === t.storyA2.id)!.hasChildren).toBe(true);
   });
 
-  it('case 2 — DRILL Story A1 returns only the in-sprint leaf; backlog sibling absent', async () => {
+  it('case 2 — DRILL a root-member story returns its NORMAL (unscoped) children', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, t.storyA1.id, fx.ctx, {
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, t.storyA2.id, fx.ctx, {
       scope: 'sprint',
     });
-    expect(roadmap.nodes.map((n) => n.id)).toEqual([t.a1.id]);
-    expect(roadmap.nodes[0]!.hasChildren).toBe(false);
+    expect(roadmap.nodes.map((n) => n.id)).toEqual([t.a3.id]);
   });
 
-  it('case 3 — PROGRESS counts only in-sprint descendants', async () => {
+  it('case 3 — PROGRESS on a root-member is the FULL subtree rollup', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    // Epic A (root) in-sprint descendants: a1 (done) + Story A3 (todo) → 1 / 2.
-    const root = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',
     });
-    expect(root.nodes.find((n) => n.id === t.epicA.id)!.progress).toEqual({ done: 1, total: 2 });
-
-    // Story A1's only in-sprint descendant is a1 (done) → 1 / 1; member-leaf A3 → null.
-    const children = await workItemsService.getProjectRoadmap(fx.projectId, t.epicA.id, fx.ctx, {
-      scope: 'sprint',
-    });
-    expect(children.nodes.find((n) => n.id === t.storyA1.id)!.progress).toEqual({
+    // Story A2's subtree { a3 } (done) → 1 / 1; a1 is a leaf → null.
+    expect(roadmap.nodes.find((n) => n.id === t.storyA2.id)!.progress).toEqual({
       done: 1,
       total: 1,
     });
-    expect(children.nodes.find((n) => n.id === t.storyA3.id)!.progress).toBeNull();
+    expect(roadmap.nodes.find((n) => n.id === t.a1.id)!.progress).toBeNull();
   });
 
-  it('exercises within-level is_blocked_by edges UNDER sprint scope', async () => {
+  it('exercises within-level is_blocked_by edges across the root members', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    const children = await workItemsService.getProjectRoadmap(fx.projectId, t.epicA.id, fx.ctx, {
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',
     });
-    // The Epic-A child level under scope is [Story A1, Story A3]; the A1→A3 edge holds.
-    expect(children.nodes.map((n) => n.id).sort()).toEqual([t.storyA1.id, t.storyA3.id].sort());
-    expect(children.edges).toEqual([{ blockedId: t.storyA1.id, blockerId: t.storyA3.id }]);
+    expect(roadmap.edges).toEqual([{ blockedId: t.a1.id, blockerId: t.storyA2.id }]);
   });
 
   it('case 4 — whole-project parity: scope:project equals the pre-existing read (full tree)', async () => {
@@ -186,7 +175,6 @@ describe('getProjectRoadmap seam — sprint scope', () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     await seedTree(fx, sprintId);
-    // Complete the sprint so none is active.
     await db.sprint.update({ where: { id: sprintId }, data: { state: 'complete' } });
 
     const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
@@ -201,7 +189,6 @@ describe('getProjectRoadmap seam — sprint scope', () => {
     await seedTree(fx, sprintId);
     const other = await makeFixture({ name: 'Other', identifier: 'OTHR' });
 
-    // fx's project id read under the OTHER workspace's context → not found.
     await expect(
       workItemsService.getProjectRoadmap(fx.projectId, null, other.ctx, { scope: 'sprint' }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);

@@ -176,27 +176,33 @@ export interface SprintRoadmapSeed {
   password: string;
   projectKey: string;
   sprintName: string;
-  /** Epic that CONTAINS in-sprint work — present in BOTH scopes; drill target. */
-  inSprintEpicTitle: string;
-  /** Epic with NO in-sprint descendants — present in project scope, PRUNED in sprint scope. */
+  /** Epic shown in PROJECT scope but elided in SPRINT scope (an epic is never a member). */
+  epicTitle: string;
+  /** A second, wholly-backlog epic — present in project scope, absent in sprint scope. */
   backlogEpicTitle: string;
-  /** The in-sprint epic's child story (ancestor of the in-sprint leaf) — present on drill in sprint scope. */
-  inSprintStoryTitle: string;
-  /** A sibling story under the in-sprint epic with no in-sprint work — PRUNED on drill in sprint scope. */
-  backlogStoryTitle: string;
+  /** A story that is ITSELF a sprint member → a TOP-IN-SPRINT root; drillable. */
+  memberStoryTitle: string;
+  /** The member story's child (backlog) — shown on drill (the member is the unit). */
+  memberStoryChildTitle: string;
+  /** An in-sprint subtask whose parent story is NOT a member → a TOP-IN-SPRINT root. */
+  memberSubtaskTitle: string;
+  /** The non-member parent story of the in-sprint subtask — elided in sprint scope. */
+  nonMemberStoryTitle: string;
 }
 
 /**
- * The SPRINT-SCOPE fixture (MOTIR-1384): a populated roadmap with an ACTIVE
- * SPRINT, shaped so project scope and sprint scope render visibly different node
- * sets. One epic CONTAINS an in-sprint leaf (so it survives the member-or-ancestor
- * prune), a sibling epic is wholly backlog (so it disappears under sprint scope),
- * and under the in-sprint epic one story is the in-sprint leaf's ancestor while a
- * sibling story is backlog (so drilling under scope prunes it too).
+ * The SPRINT-SCOPE fixture (MOTIR-1384): a populated roadmap with an ACTIVE SPRINT,
+ * shaped so project scope and sprint scope render visibly different node sets under
+ * the TOP-IN-SPRINT model. The sprint-scoped roadmap is rooted at the topmost
+ * in-sprint items:
+ *   - `memberStory` (a story that IS a member) → a root in sprint scope, drillable
+ *     to its full subtree (incl. its backlog child);
+ *   - `memberSubtask` (an in-sprint subtask of a NON-member story) → a root, while
+ *     its parent story + the epic above are elided;
+ *   - the epics and the wholly-backlog epic never appear in sprint scope.
  *
  * Sprint membership is the flat `work_item.sprintId`; this seed sets it directly
- * (the same sanctioned direct-`db` reach the tenant pin above uses) — the
- * board/backlog move flow only adds rank bookkeeping irrelevant to a read test.
+ * (the same sanctioned direct-`db` reach the tenant pin above uses).
  */
 export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSeed> {
   const { ctx, projectId, projectKey } = await makeTenant(
@@ -217,34 +223,40 @@ export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSee
     },
   });
 
-  // Epic that contains in-sprint work.
-  const inSprintEpicTitle = 'Platform foundation';
-  const inSprintEpic = await workItemsService.createWorkItem(
-    { projectId, kind: 'epic', title: inSprintEpicTitle },
+  const epicTitle = 'Platform foundation';
+  const epic = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: epicTitle },
     ctx,
   );
-  await workItemsService.updateStatus(inSprintEpic.id, 'in_progress', ctx);
+  await workItemsService.updateStatus(epic.id, 'in_progress', ctx);
 
-  // Its in-sprint branch: Story → an IN-SPRINT subtask leaf.
-  const inSprintStoryTitle = 'Authentication';
-  const inSprintStory = await workItemsService.createWorkItem(
-    { projectId, kind: 'story', title: inSprintStoryTitle, parentId: inSprintEpic.id },
+  // A NON-member story with an IN-SPRINT subtask → the subtask is a top-in-sprint root.
+  const nonMemberStoryTitle = 'Authentication';
+  const nonMemberStory = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: nonMemberStoryTitle, parentId: epic.id },
     ctx,
   );
-  const inSprintLeaf = await workItemsService.createWorkItem(
-    { projectId, kind: 'subtask', title: 'Login flow', parentId: inSprintStory.id },
+  const memberSubtaskTitle = 'Login flow';
+  const memberSubtask = await workItemsService.createWorkItem(
+    { projectId, kind: 'subtask', title: memberSubtaskTitle, parentId: nonMemberStory.id },
     ctx,
   );
-  await db.workItem.update({ where: { id: inSprintLeaf.id }, data: { sprintId: sprint.id } });
+  await db.workItem.update({ where: { id: memberSubtask.id }, data: { sprintId: sprint.id } });
 
-  // A sibling story under the same epic with NO in-sprint descendants.
-  const backlogStoryTitle = 'Billing';
+  // A MEMBER story → a top-in-sprint root; its (backlog) child shows on drill.
+  const memberStoryTitle = 'Billing';
+  const memberStory = await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: memberStoryTitle, parentId: epic.id },
+    ctx,
+  );
+  await db.workItem.update({ where: { id: memberStory.id }, data: { sprintId: sprint.id } });
+  const memberStoryChildTitle = 'Invoices';
   await workItemsService.createWorkItem(
-    { projectId, kind: 'story', title: backlogStoryTitle, parentId: inSprintEpic.id },
+    { projectId, kind: 'subtask', title: memberStoryChildTitle, parentId: memberStory.id },
     ctx,
   );
 
-  // A second epic that is wholly backlog (no in-sprint descendant) → pruned in sprint scope.
+  // A second epic that is wholly backlog → absent in sprint scope.
   const backlogEpicTitle = 'Growth experiments';
   const backlogEpic = await workItemsService.createWorkItem(
     { projectId, kind: 'epic', title: backlogEpicTitle },
@@ -260,9 +272,11 @@ export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSee
     password: ROADMAP_SEED_PASSWORD,
     projectKey,
     sprintName,
-    inSprintEpicTitle,
+    epicTitle,
     backlogEpicTitle,
-    inSprintStoryTitle,
-    backlogStoryTitle,
+    memberStoryTitle,
+    memberStoryChildTitle,
+    memberSubtaskTitle,
+    nonMemberStoryTitle,
   };
 }

@@ -9,14 +9,15 @@ import {
 } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
 
-// Unit coverage for the SPRINT-SCOPED per-level roadmap read (MOTIR-1381) — the
-// repository member-or-ancestor pruning + sprint-scoped progress, and the service
-// decisions it owns (no-active-sprint → empty, whole-project parity). Real
-// Postgres, no mocks (Yue's rule). The story-level SEAM test
-// (`roadmap-sprint-scope-seam.test.ts`, MOTIR-1383) drives the assembled
-// `getProjectRoadmap` DTO across a richer tree; this file targets the repo
-// methods directly + the service's empty/parity branches, so the two don't
-// overlap (notes.html #102).
+// Unit coverage for the SPRINT-SCOPED per-level roadmap read (MOTIR-1381). The
+// sprint-scoped roadmap is rooted at the TOPMOST in-sprint items — a member story
+// shows as a root; the in-sprint subtasks of a NON-member story show as roots while
+// the story/epic above them is elided; epics (never members) are never roots. Below
+// a shown root member the tree is the NORMAL, unscoped read. Real Postgres, no mocks
+// (Yue's rule). The story-level SEAM test (`roadmap-sprint-scope-seam.test.ts`,
+// MOTIR-1383) drives the assembled `getProjectRoadmap` DTO; this file targets the
+// repo's root-member selection + the service's empty/parity branches (notes.html
+// #102).
 
 const SORT = { column: 'key', direction: 'asc' } as const;
 const PAGE = { take: 200, offset: 0 };
@@ -58,15 +59,15 @@ async function setStatus(id: string, status: string): Promise<void> {
 }
 
 /**
- * The shared tree:
+ * The shared tree (sprint members = a1, Story A2):
  *   Epic A
- *     ├─ Story A1   ─ a1 (IN sprint, done) · a2 (backlog)
- *     ├─ Story A2   (backlog, no in-sprint descendants)
- *     └─ Story A3   (IN sprint itself — membership at the STORY grain; no kids)
+ *     ├─ Story A1  (NOT a member)  ─ a1 (IN sprint, done) · a2 (backlog)
+ *     ├─ Story A2  (IN sprint)     ─ a3 (backlog, done)
+ *     └─ Story A3  (backlog, no in-sprint descendant)
  *   Epic B
- *     └─ Story B1   ─ b1 (backlog) — Epic B has NO in-sprint descendant
- * Sprint members: a1, A3. So the member-or-ancestor set is
- *   { a1, A3, Story A1, Epic A }  (Epic B / Story A2 / Story B1 / a2 / b1 are OUT).
+ *     └─ Story B1  (backlog) ─ b1 (backlog)   — wholly backlog
+ * Topmost in-sprint members ("root members", no member ancestor): { a1, Story A2 }.
+ * Neither Epic A (contains members but isn't one) nor Story A1 (parent of a1) shows.
  */
 async function seedTree(fx: WorkItemFixture, sprintId: string) {
   const epicA = await createWorkItem(fx, { kind: 'epic', title: 'Epic A' });
@@ -82,6 +83,7 @@ async function seedTree(fx: WorkItemFixture, sprintId: string) {
     title: 'Story A2',
     parentId: epicA.id,
   });
+  const a3 = await createWorkItem(fx, { kind: 'subtask', title: 'a3', parentId: storyA2.id });
   const storyA3 = await createWorkItem(fx, {
     kind: 'story',
     title: 'Story A3',
@@ -96,14 +98,15 @@ async function seedTree(fx: WorkItemFixture, sprintId: string) {
   const b1 = await createWorkItem(fx, { kind: 'subtask', title: 'b1', parentId: storyB1.id });
 
   await setSprint(a1.id, sprintId);
-  await setSprint(storyA3.id, sprintId);
+  await setSprint(storyA2.id, sprintId);
   await setStatus(a1.id, 'done');
+  await setStatus(a3.id, 'done');
 
-  return { epicA, storyA1, a1, a2, storyA2, storyA3, epicB, storyB1, b1 };
+  return { epicA, storyA1, a1, a2, storyA2, a3, storyA3, epicB, storyB1, b1 };
 }
 
-describe('findProjectTreeLevel — sprint scope (member-or-ancestor)', () => {
-  it('ROOT level returns only ancestors of in-sprint items (Epic B is pruned)', async () => {
+describe('findProjectTreeLevel — sprint scope (top in-sprint roots)', () => {
+  it('ROOT level returns the TOPMOST members — a member story + the in-sprint subtask of a non-member story', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
@@ -116,12 +119,15 @@ describe('findProjectTreeLevel — sprint scope (member-or-ancestor)', () => {
       PAGE,
       sprintId,
     );
-    expect(rows.map((r) => r.id).sort()).toEqual([t.epicA.id].sort());
-    // Epic A still drillable under scope (its in-sprint branch survives).
-    expect(rows.find((r) => r.id === t.epicA.id)!.hasChildren).toBe(true);
+    // The roots are a1 (subtask under non-member Story A1) and Story A2 (a member).
+    // Epic A, Story A1, Story A3, Epic B are all ABSENT (epics/ancestors not pulled in).
+    expect(rows.map((r) => r.id).sort()).toEqual([t.a1.id, t.storyA2.id].sort());
+    // a1 is a leaf → not drillable; Story A2 has a child → drillable (normal probe).
+    expect(rows.find((r) => r.id === t.a1.id)!.hasChildren).toBe(false);
+    expect(rows.find((r) => r.id === t.storyA2.id)!.hasChildren).toBe(true);
   });
 
-  it('DRILL Epic A returns only member-or-ancestor children with scoped hasChildren', async () => {
+  it('DRILL a root-member story returns its NORMAL (unscoped) children — even backlog ones', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
@@ -129,35 +135,35 @@ describe('findProjectTreeLevel — sprint scope (member-or-ancestor)', () => {
     const rows = await workItemRepository.findProjectTreeLevel(
       fx.projectId,
       fx.workspaceId,
-      t.epicA.id,
+      t.storyA2.id,
       SORT,
       PAGE,
       sprintId,
     );
-    // Story A1 (ancestor of a1) + Story A3 (member); Story A2 (backlog) is absent.
-    expect(rows.map((r) => r.id).sort()).toEqual([t.storyA1.id, t.storyA3.id].sort());
-    // A1 has an in-sprint child (a1) → drillable; A3 is a leaf member → no children.
-    expect(rows.find((r) => r.id === t.storyA1.id)!.hasChildren).toBe(true);
-    expect(rows.find((r) => r.id === t.storyA3.id)!.hasChildren).toBe(false);
+    // a3 is backlog but Story A2 is the committed unit, so its full subtree shows.
+    expect(rows.map((r) => r.id)).toEqual([t.a3.id]);
   });
 
-  it('DRILL Story A1 returns only the in-sprint leaf (the backlog sibling is pruned)', async () => {
+  it('a member story whose subtask is ALSO a member still shows the STORY as the root', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
+    // Make a3 (under the member Story A2) a member too — A2 is still the topmost.
+    await setSprint(t.a3.id, sprintId);
 
     const rows = await workItemRepository.findProjectTreeLevel(
       fx.projectId,
       fx.workspaceId,
-      t.storyA1.id,
+      null,
       SORT,
       PAGE,
       sprintId,
     );
-    expect(rows.map((r) => r.id)).toEqual([t.a1.id]); // a2 (backlog) absent
+    // Still { a1, Story A2 } — a3 has a member ancestor (A2), so it is NOT a root.
+    expect(rows.map((r) => r.id).sort()).toEqual([t.a1.id, t.storyA2.id].sort());
   });
 
-  it('scope ABSENT (sprintId null) returns the unchanged whole-project level', async () => {
+  it('scope ABSENT (sprintId null) returns the unchanged whole-project root level (both epics)', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
@@ -170,42 +176,30 @@ describe('findProjectTreeLevel — sprint scope (member-or-ancestor)', () => {
       PAGE,
       null,
     );
-    // Both epics present in the whole-project read.
     expect(rows.map((r) => r.id).sort()).toEqual([t.epicA.id, t.epicB.id].sort());
   });
 });
 
-describe('countRoadmapProgress — sprint scope (in-sprint descendants only)', () => {
-  it('counts only in-sprint descendants for a container', async () => {
+describe('countRoadmapProgress — full subtree rollup (unchanged by scope)', () => {
+  it('rolls up a root-member story over its WHOLE subtree', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     const t = await seedTree(fx, sprintId);
 
-    // Epic A in-sprint descendants = a1 (done) + Story A3 (todo) → total 2, done 1.
-    const scoped = await workItemRepository.countRoadmapProgress(
-      [t.epicA.id],
+    // Story A2's subtree is { a3 } (done) → total 1, done 1 — the full subtree, not
+    // a sprint-pruned slice.
+    const rows = await workItemRepository.countRoadmapProgress(
+      [t.storyA2.id],
       ['done'],
       'cancelled',
-      sprintId,
     );
-    expect(scoped).toEqual([{ rootId: t.epicA.id, total: 2, done: 1 }]);
-
-    // Whole-project rollup over the SAME root counts every live descendant.
-    const whole = await workItemRepository.countRoadmapProgress(
-      [t.epicA.id],
-      ['done'],
-      'cancelled',
-      null,
-    );
-    // Descendants: A1, A2, A3, a1, a2 = 5 live; done = a1 = 1.
-    expect(whole).toEqual([{ rootId: t.epicA.id, total: 5, done: 1 }]);
+    expect(rows).toEqual([{ rootId: t.storyA2.id, total: 1, done: 1 }]);
   });
 });
 
 describe('getProjectRoadmap — service-owned sprint-scope branches', () => {
   it('returns an EMPTY roadmap when there is NO active sprint (not an error)', async () => {
     const fx = await makeFixture();
-    // Seed a tree but DO NOT create an active sprint.
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
     await createWorkItem(fx, { kind: 'story', title: 'Story', parentId: epic.id });
 
@@ -215,7 +209,7 @@ describe('getProjectRoadmap — service-owned sprint-scope branches', () => {
     expect(roadmap).toEqual({ nodes: [], edges: [], offLevelBlockers: [] });
   });
 
-  it('whole-project parity: scope omitted === scope:project (and both ignore the sprint)', async () => {
+  it('whole-project parity: scope omitted === scope:project (and both show the epics)', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     await seedTree(fx, sprintId);
@@ -225,7 +219,6 @@ describe('getProjectRoadmap — service-owned sprint-scope branches', () => {
       scope: 'project',
     });
     expect(explicit).toEqual(omitted);
-    // Whole project shows BOTH epics (sprint scoping is not applied).
     expect(omitted.nodes.map((n) => n.title).sort()).toEqual(['Epic A', 'Epic B']);
   });
 });

@@ -1966,12 +1966,15 @@ export const workItemsService = {
     // descendants is absent from the result → `0 / 0`. Leaves carry `progress:
     // null`. Bounded by the level (≤ TREE_LEVEL_MAX_TAKE containers), not a
     // whole-tree load.
+    // Progress is the FULL subtree rollup even in sprint scope: a shown root member
+    // is the committed unit and drills to its whole subtree, so its meter reflects
+    // that whole subtree (MOTIR-1381, revised) — sprint scope only re-roots the top
+    // level, it does not prune progress.
     const containerIds = rows.filter((r) => r.hasChildren).map((r) => r.id);
     const progressRows = await workItemRepository.countRoadmapProgress(
       containerIds,
       [...doneKeys],
       ROADMAP_CANCELLED_KEY,
-      sprintId,
     );
     const progressById = new Map(
       progressRows.map((p) => [p.rootId, { done: p.done, total: p.total }]),

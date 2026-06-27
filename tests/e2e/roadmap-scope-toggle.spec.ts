@@ -1,7 +1,8 @@
 // Roadmap SCOPE-TOGGLE E2E (Subtask MOTIR-1384 / Story MOTIR-1379) — the
 // browser-level proof of the sprint-scope toggle: reach /roadmap, default to
-// Whole project (full tree), switch to Active sprint (the canvas narrows to the
-// member-or-ancestor slice), drill an in-sprint branch, switch back (the full tree
+// Whole project (full tree), switch to Active sprint (the canvas re-roots at the
+// TOPMOST in-sprint items — a member story + the in-sprint subtask of a non-member
+// story, with the epics elided), drill a member root, switch back (the full tree
 // returns), and the no-active-sprint empty state.
 //
 // Drives the REAL stack (Next + Postgres). Waits on AUTHORITATIVE signals — the
@@ -85,10 +86,10 @@ test('Roadmap scope: Whole project → Active sprint narrows the canvas, drill, 
   const activeSprintBtn = scopeToggle(page).getByRole('button', { name: 'Active sprint' });
   await expect(wholeProjectBtn).toHaveAttribute('aria-pressed', 'true');
   // Both epics on the road in whole-project scope.
-  await expect(page.getByText(seed.inSprintEpicTitle, { exact: true })).toBeVisible();
+  await expect(page.getByText(seed.epicTitle, { exact: true })).toBeVisible();
   await expect(page.getByText(seed.backlogEpicTitle, { exact: true })).toBeVisible();
 
-  // ── 2. Switch to Active sprint → the canvas narrows (member-or-ancestor) ────
+  // ── 2. Switch to Active sprint → the canvas re-roots at the TOPMOST members ──
   const sprintLoaded = sprintRootLoad(page);
   await activeSprintBtn.click();
   await sprintLoaded;
@@ -96,28 +97,30 @@ test('Roadmap scope: Whole project → Active sprint narrows the canvas, drill, 
   // The sprint subtitle marks the scope.
   await expect(scopeToggle(page)).toBeVisible();
   await expect(page.getByText('Sprint scope')).toBeVisible();
-  // The in-sprint epic survives; the wholly-backlog epic is pruned.
-  await expect(page.getByText(seed.inSprintEpicTitle, { exact: true })).toBeVisible();
+  // Roots = the member story + the in-sprint subtask of the non-member story.
+  await expect(page.getByText(seed.memberStoryTitle, { exact: true })).toBeVisible();
+  await expect(page.getByText(seed.memberSubtaskTitle, { exact: true })).toBeVisible();
+  // The epics and the non-member parent story are elided (never "pulled in").
+  await expect(page.getByText(seed.epicTitle, { exact: true })).toHaveCount(0);
   await expect(page.getByText(seed.backlogEpicTitle, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(seed.nonMemberStoryTitle, { exact: true })).toHaveCount(0);
 
-  // ── 3. Drill the in-sprint epic UNDER sprint scope ─────────────────────────
-  const epicNode = page.locator('[data-node-id]').filter({ hasText: seed.inSprintEpicTitle });
-  await epicNode.click(); // select → reveals the Open affordance
+  // ── 3. Drill the member-story root → its NORMAL (unscoped) child shows ──────
+  const memberNode = page.locator('[data-node-id]').filter({ hasText: seed.memberStoryTitle });
+  await memberNode.click(); // select → reveals the Open affordance
   const openButton = page.getByTestId('drill-button');
   await expect(openButton).toBeVisible();
   const drilled = sprintDrillLoad(page);
   await openButton.click();
   await drilled;
-  // Only the member-or-ancestor story; the backlog sibling story is pruned.
-  await expect(page.getByText(seed.inSprintStoryTitle, { exact: true })).toBeVisible();
-  await expect(page.getByText(seed.backlogStoryTitle, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(seed.memberStoryChildTitle, { exact: true })).toBeVisible();
 
   // ── 4. Switch back to Whole project → the full tree returns ────────────────
   const backToProject = projectRootLoad(page);
   await wholeProjectBtn.click();
   await backToProject;
   await expect(wholeProjectBtn).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText(seed.inSprintEpicTitle, { exact: true })).toBeVisible();
+  await expect(page.getByText(seed.epicTitle, { exact: true })).toBeVisible();
   await expect(page.getByText(seed.backlogEpicTitle, { exact: true })).toBeVisible();
 });
 
