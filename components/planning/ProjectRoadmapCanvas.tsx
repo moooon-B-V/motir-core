@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  LocateFixed,
   Maximize,
   Minimize,
   RotateCcw,
@@ -76,6 +77,11 @@ export interface ProjectRoadmapCanvasProps {
    *  Takes the canvas full-viewport (via the Fullscreen API, with a fixed overlay as
    *  the always-deterministic base); ESC exits. */
   fullScreenable?: boolean;
+  /** Show the LOCATE control (MOTIR-1421) — recentres the canvas on the actionable
+   *  node: the "you are here" frontier first, else the ready-to-start nodes (cycling
+   *  with wrap). The work-item roadmap opts in (its nodes carry `here` / `ready`);
+   *  onboarding does not. */
+  locatable?: boolean;
   /** The breadcrumb root label. */
   rootLabel?: string;
   ariaLabel?: string;
@@ -90,6 +96,11 @@ interface Crumb {
   label: string;
 }
 
+// The readable default zoom the LOCATE control snaps to (MOTIR-1421) — 1× shows a
+// node at its natural authored card size, comfortably legible regardless of how far
+// the user had zoomed out/in.
+const LOCATE_ZOOM = 1;
+
 export function ProjectRoadmapCanvas({
   loadLevel,
   reloadKey,
@@ -100,6 +111,7 @@ export function ProjectRoadmapCanvas({
   onView,
   searchable = false,
   fullScreenable = false,
+  locatable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
   warningLegend = { label: 'cross-story', meaning: 'in another story' },
@@ -111,6 +123,11 @@ export function ProjectRoadmapCanvas({
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
+  // The ZOOM the next focus pan should land at: `undefined` preserves the current
+  // scale (the search-locate's pan-only behaviour); `LOCATE_ZOOM` resets to a readable
+  // default so a node found while zoomed far out/in lands at a comfortable card size
+  // (the locate control, MOTIR-1421).
+  const [focusScale, setFocusScale] = useState<number | undefined>(undefined);
   const [localPositions, setLocalPositions] = useState<Record<string, { x: number; y: number }>>(
     {},
   );
@@ -360,9 +377,66 @@ export function ProjectRoadmapCanvas({
     const ms = searchMatches(nodes, query);
     const target = ms[0];
     if (target === undefined) return;
+    setFocusScale(undefined); // search-locate pans only — keep the user's zoom
     setHighlightId(target);
     setFocusNonce((n) => n + 1);
   }, [nodes, query]);
+
+  // LOCATE control (MOTIR-1421) — centre the canvas on the ACTIONABLE node. The
+  // targets come from the level's nodes: the "you are here" frontier first (a single
+  // destination), else the READY nodes (cycled, wrapping). Centring reuses the same
+  // pan-to-node machinery the search-locate above uses (highlight + focusNonce bump),
+  // so the located node lights up AND is assertable on `data-highlighted`.
+  const hereId = useMemo(() => nodes.find((n) => n.here)?.id ?? null, [nodes]);
+  const readyIds = useMemo(() => nodes.filter((n) => n.ready).map((n) => n.id), [nodes]);
+  const readySig = readyIds.join('|');
+  const canLocate = hereId !== null || readyIds.length > 0;
+  // The index of the ready node centred by the LAST locate click (-1 = none yet).
+  const [locateIndex, setLocateIndex] = useState(-1);
+  // Reset the cycle cursor when the level's targets change (a drill / re-plan) so the
+  // cycle restarts cleanly — the React-sanctioned "adjust state during render when an
+  // input changes" pattern (NOT a setState-in-effect, which the lint rule forbids).
+  const targetSig = `${hereId ?? ''}|${readySig}`;
+  const [prevTargetSig, setPrevTargetSig] = useState(targetSig);
+  if (targetSig !== prevTargetSig) {
+    setPrevTargetSig(targetSig);
+    setLocateIndex(-1);
+  }
+
+  const locateActionable = useCallback(() => {
+    // Locate snaps to a readable default zoom (so a node found while zoomed far
+    // out/in lands at a comfortable size), then centres AND SELECTS the node — so its
+    // actions (View / Open) surface and its connections light up, ready to act on.
+    setFocusScale(LOCATE_ZOOM);
+    // Frontier wins: a single destination, no cycling.
+    if (hereId !== null) {
+      setHighlightId(hereId);
+      setSelectedId(hereId);
+      setFocusNonce((n) => n + 1);
+      return;
+    }
+    if (readyIds.length === 0) return;
+    // Advance to the next ready node, wrapping after the last.
+    const next = (locateIndex + 1) % readyIds.length;
+    setLocateIndex(next);
+    const targetId = readyIds[next] ?? null;
+    setHighlightId(targetId);
+    setSelectedId(targetId);
+    setFocusNonce((n) => n + 1);
+  }, [hereId, readyIds, locateIndex]);
+
+  // The "n of m" cycling hint — shown only while cycling MULTIPLE ready nodes (no
+  // frontier) and after the first locate, so it reflects the current position.
+  const cyclingHint =
+    hereId === null && readyIds.length > 1 && locateIndex >= 0
+      ? `${locateIndex + 1} / ${readyIds.length}`
+      : null;
+  const locateLabel =
+    hereId !== null
+      ? 'Locate the current item'
+      : readyIds.length > 1
+        ? 'Locate the next ready item'
+        : 'Locate the ready item';
 
   function renderNode(cn: CanvasNode) {
     const node = byId.get(cn.id);
@@ -533,6 +607,35 @@ export function ProjectRoadmapCanvas({
         </div>
       )}
 
+      {/* LOCATE control (MOTIR-1421) — recentres on the actionable node. Sits at the
+          bottom-left, just RIGHT of the engine's zoom + fit cluster (bottom-4 left-4,
+          ~7rem wide), so it reads as part of the viewport-navigation controls. */}
+      {locatable && (
+        <div className="absolute bottom-4 left-[8.25rem] z-10 flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="locate-button"
+            aria-label={locateLabel}
+            disabled={!canLocate}
+            title={canLocate ? locateLabel : 'Nothing to locate — no in-progress or ready item'}
+            onClick={locateActionable}
+            // size-9 to match the engine's bottom-left zoom +/- buttons (also size-9)
+            // exactly, so the locate control reads as part of that cluster.
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:cursor-not-allowed disabled:bg-(--el-surface-soft) disabled:text-(--el-text-faint) disabled:shadow-(--shadow-subtle) disabled:hover:bg-(--el-surface-soft)"
+          >
+            <LocateFixed className="size-4" aria-hidden="true" />
+          </button>
+          {cyclingHint && (
+            <span
+              data-testid="locate-hint"
+              className="inline-flex h-9 items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-3 font-mono text-xs font-semibold text-(--el-text-secondary) shadow-(--shadow-card)"
+            >
+              {cyclingHint}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* RESET LAYOUT — only when the user has hand-arranged an auto-laid node on
           this level; clears those positions back to the dependency layout. Sits at
           the bottom-right, clear of the engine's bottom-left zoom controls. */}
@@ -633,6 +736,7 @@ export function ProjectRoadmapCanvas({
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}
+          focusScale={focusScale}
           ariaLabel={ariaLabel}
         />
       )}

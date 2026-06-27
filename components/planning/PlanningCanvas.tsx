@@ -74,6 +74,13 @@ export interface PlanningCanvasProps {
    */
   focusNodeId?: string;
   focusNonce?: number;
+  /**
+   * Target ZOOM for the focus pan. When set, centring ALSO resets the scale to this
+   * value (a zoom-to-fit-the-card, so a node found while zoomed far out/in lands at a
+   * readable default size — the LOCATE control, MOTIR-1421). Omit → the scale is
+   * preserved (the search-locate's pan-only behaviour).
+   */
+  focusScale?: number;
   /** The selected node — its edges (and their other ends) stay lit while every
    *  other connector dims, so the selection's dependencies/blockers stand out. */
   selectedId?: string | null;
@@ -112,6 +119,7 @@ export function PlanningCanvas({
   onNodeActivate,
   focusNodeId,
   focusNonce,
+  focusScale,
   selectedId,
   onBackgroundClick,
   ariaLabel,
@@ -189,8 +197,10 @@ export function PlanningCanvas({
   }, [nodes]);
 
   // ── search-to-focus: pan the requested node to the viewport centre ──
-  // Keyed on `focusNonce` so a repeat search for the same node re-centres it; the
-  // scale is preserved (a pan, not a zoom). Reads the live node/rect each fire.
+  // Keyed on `focusNonce` so a repeat focus of the same node re-centres it. The scale
+  // is preserved (a pan) UNLESS `focusScale` is set, in which case the node is also
+  // zoomed to that readable default (the locate control, MOTIR-1421). Reads the live
+  // node/rect each fire.
   useEffect(() => {
     if (focusNonce === undefined || !focusNodeId) return;
     const vp = vpRef.current;
@@ -198,7 +208,7 @@ export function PlanningCanvas({
     if (!vp || !n) return;
     const r = vp.getBoundingClientRect();
     if (r.width === 0) return;
-    setView((v) => centerOn(rectOf(n), { w: r.width, h: r.height }, v.scale));
+    setView((v) => centerOn(rectOf(n), { w: r.width, h: r.height }, focusScale ?? v.scale));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNonce, focusNodeId]);
 

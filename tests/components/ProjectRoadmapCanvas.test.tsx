@@ -301,4 +301,122 @@ describe('ProjectRoadmapCanvas', () => {
       delete (Element.prototype as unknown as { requestFullscreen?: unknown }).requestFullscreen;
     }
   });
+
+  // LOCATE control (MOTIR-1421) — opt-in via `locatable`. The located node lights up
+  // via the same `data-highlighted` treatment the search-locate uses, so the test
+  // asserts which node carries it.
+  function hl(id: string) {
+    return el(id)!.querySelector('[data-highlighted]');
+  }
+  function sel(id: string) {
+    return el(id)!.querySelector('[data-selected]');
+  }
+
+  it('does not offer the locate control by default', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={loadLevel} />);
+    await screen.findByText('Epic one');
+    expect(screen.queryByTestId('locate-button')).toBeNull();
+  });
+
+  it('locates the "you are here" frontier first — single target, no cycling hint', async () => {
+    const level: RoadmapLevel = {
+      nodes: [
+        { ...node('A', 'a'), here: true },
+        { ...node('B', 'b'), ready: true },
+      ],
+      deps: [],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} locatable />);
+    await screen.findByText('a');
+    const btn = screen.getByTestId('locate-button');
+    expect(btn.getAttribute('aria-label')).toBe('Locate the current item');
+    fireEvent.click(btn);
+    expect(hl('A')).toBeTruthy(); // the frontier is centred, not the ready node
+    expect(hl('B')).toBeNull();
+    expect(sel('A')).toBeTruthy(); // ...and SELECTED, so its actions surface
+    expect(sel('B')).toBeNull();
+    expect(screen.queryByTestId('locate-hint')).toBeNull();
+  });
+
+  it('cycles the ready nodes with wrap when there is no frontier, showing the n/m hint', async () => {
+    const level: RoadmapLevel = {
+      nodes: [
+        { ...node('R1', 'r1'), ready: true },
+        { ...node('R2', 'r2'), ready: true },
+        { ...node('R3', 'r3'), ready: true },
+      ],
+      deps: [],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} locatable />);
+    await screen.findByText('r1');
+    const btn = screen.getByTestId('locate-button');
+    expect(btn.getAttribute('aria-label')).toBe('Locate the next ready item');
+    fireEvent.click(btn); // → R1
+    expect(hl('R1')).toBeTruthy();
+    expect(screen.getByTestId('locate-hint').textContent).toBe('1 / 3');
+    fireEvent.click(btn); // → R2
+    expect(hl('R2')).toBeTruthy();
+    expect(hl('R1')).toBeNull();
+    expect(sel('R2')).toBeTruthy(); // selection follows the cycle
+    expect(sel('R1')).toBeNull();
+    expect(screen.getByTestId('locate-hint').textContent).toBe('2 / 3');
+    fireEvent.click(btn); // → R3
+    expect(screen.getByTestId('locate-hint').textContent).toBe('3 / 3');
+    fireEvent.click(btn); // wrap → R1
+    expect(hl('R1')).toBeTruthy();
+    expect(screen.getByTestId('locate-hint').textContent).toBe('1 / 3');
+  });
+
+  it('a single ready node locates with no cycling hint', async () => {
+    const level: RoadmapLevel = {
+      nodes: [{ ...node('R', 'r'), ready: true }, node('X', 'x')],
+      deps: [],
+    };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} locatable />);
+    await screen.findByText('r');
+    const btn = screen.getByTestId('locate-button');
+    expect(btn.getAttribute('aria-label')).toBe('Locate the ready item');
+    fireEvent.click(btn);
+    expect(hl('R')).toBeTruthy();
+    expect(screen.queryByTestId('locate-hint')).toBeNull();
+  });
+
+  it('disables locate when nothing is actionable (no frontier, no ready)', async () => {
+    const level: RoadmapLevel = { nodes: [node('A', 'a'), node('B', 'b')], deps: [] };
+    render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} locatable />);
+    await screen.findByText('a');
+    expect(screen.getByTestId('locate-button').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('resets the cycle cursor when the level’s ready set changes', async () => {
+    let lvl: RoadmapLevel = {
+      nodes: [
+        { ...node('R1', 'r1'), ready: true },
+        { ...node('R2', 'r2'), ready: true },
+      ],
+      deps: [],
+    };
+    const load = () => Promise.resolve(lvl);
+    const { rerender } = render(<ProjectRoadmapCanvas loadLevel={load} locatable reloadKey="1" />);
+    await screen.findByText('r1');
+    const btn = screen.getByTestId('locate-button');
+    fireEvent.click(btn);
+    fireEvent.click(btn); // → 2 / 2
+    expect(screen.getByTestId('locate-hint').textContent).toBe('2 / 2');
+    // the level's ready set changes (a drill / re-plan) → bump reloadKey to refetch
+    lvl = {
+      nodes: [
+        { ...node('R3', 'r3'), ready: true },
+        { ...node('R4', 'r4'), ready: true },
+        { ...node('R5', 'r5'), ready: true },
+      ],
+      deps: [],
+    };
+    rerender(<ProjectRoadmapCanvas loadLevel={load} locatable reloadKey="2" />);
+    await screen.findByText('r3');
+    // cursor reset: the first click lands on the FIRST ready of the new set
+    fireEvent.click(btn);
+    expect(hl('R3')).toBeTruthy();
+    expect(screen.getByTestId('locate-hint').textContent).toBe('1 / 3');
+  });
 });

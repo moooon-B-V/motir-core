@@ -171,6 +171,82 @@ export async function seedEmptyRoadmapProject(
   return { email, password: ROADMAP_SEED_PASSWORD };
 }
 
+export interface LocateRoadmapSeed {
+  email: string;
+  password: string;
+  projectKey: string;
+  /** The in-progress epic at ROOT — the "you are here" frontier (locate's priority). */
+  frontierTitle: string;
+  /** A to-do (ready) epic at ROOT, drillable — the drill target for the cycling case. */
+  readyEpicTitle: string;
+  /** The ready epic's three to-do children, in cycle order (key-asc = creation order). */
+  readyChildTitles: [string, string, string];
+}
+
+/**
+ * The LOCATE fixture (MOTIR-1421): a roadmap shaped to exercise BOTH locate paths.
+ *   - ROOT level: an IN-PROGRESS epic (the "you are here" frontier) + a TO-DO epic.
+ *     So locate at root proves the frontier-FIRST priority (the frontier wins over
+ *     the ready epic).
+ *   - Drilling the to-do epic reveals THREE to-do children — all ready, none in
+ *     progress, so there is NO frontier at that level → locate CYCLES them (and
+ *     wraps), exercising the multi-ready path + the "n of m" hint.
+ *
+ * New items start at `todo` (a startable, category-`todo` status), so a freshly
+ * created item with no blockers is READY — the seed relies on that (the same default
+ * the other roadmap seeds lean on for their to-do nodes).
+ */
+export async function seedLocateRoadmap(email: string): Promise<LocateRoadmapSeed> {
+  const { ctx, projectId, projectKey } = await makeTenant(
+    email,
+    'Roadmap E2E — locate',
+    'Locate Roadmap',
+    'LOCT',
+  );
+
+  // The in-progress epic — created first so it is the root's first item, and moved
+  // IN PROGRESS so it becomes the "you are here" frontier. A child makes it drillable.
+  const frontierTitle = 'Active stream';
+  const frontier = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: frontierTitle },
+    ctx,
+  );
+  await workItemsService.updateStatus(frontier.id, 'in_progress', ctx);
+  await workItemsService.createWorkItem(
+    { projectId, kind: 'story', title: 'Active stream — build', parentId: frontier.id },
+    ctx,
+  );
+
+  // The to-do (ready) epic + three to-do children → the cycling case on drill.
+  const readyEpicTitle = 'Up next';
+  const readyEpic = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: readyEpicTitle },
+    ctx,
+  );
+  const readyChildTitles: [string, string, string] = [
+    'Up next — first',
+    'Up next — second',
+    'Up next — third',
+  ];
+  for (const title of readyChildTitles) {
+    await workItemsService.createWorkItem(
+      { projectId, kind: 'story', title, parentId: readyEpic.id },
+      ctx,
+    );
+  }
+
+  await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: new Date() } });
+
+  return {
+    email,
+    password: ROADMAP_SEED_PASSWORD,
+    projectKey,
+    frontierTitle,
+    readyEpicTitle,
+    readyChildTitles,
+  };
+}
+
 export interface SprintRoadmapSeed {
   email: string;
   password: string;
