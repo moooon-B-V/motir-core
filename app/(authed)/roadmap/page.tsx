@@ -7,8 +7,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
+import { RoadmapView } from '@/components/planning/RoadmapView';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
 // The project Roadmap VIEW (Story 7.20 · Subtask 7.20.5 / MOTIR-1011) — the route
@@ -80,40 +81,46 @@ export default async function RoadmapPage() {
   const isEmpty = roots.nodes.length === 0;
   const aiConfigured = isMotirAiConfigured();
 
-  return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-        <p className="text-sm text-(--el-text-muted)">
-          {t('subtitle', { project: ctx.project.name })}
-        </p>
-      </header>
-
-      {isEmpty ? (
+  // An empty PROJECT keeps the server empty state (the canvas never mounts). A
+  // populated project hands off to the client `RoadmapView`, which owns the scope
+  // toggle + the canvas (MOTIR-1382).
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-1">
+          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
+          <p className="text-sm text-(--el-text-muted)">
+            {t('subtitle', { project: ctx.project.name })}
+          </p>
+        </header>
         <EmptyState
           icon={<Map className="h-12 w-12" aria-hidden />}
           title={t('emptyTitle')}
           description={t('emptyDescription')}
           action={aiConfigured ? <PlanWithAILauncher context={{ kind: 'roadmap' }} /> : undefined}
         />
-      ) : (
-        // The canvas is `h-full`; give it a definite, viewport-relative height so it
-        // fills the main area without a double scrollbar (topnav h-14 + the shell's
-        // py-6 + this header ≈ 13rem of chrome above it).
-        <div className="h-[calc(100dvh-13rem)] min-h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)">
-          <WorkItemRoadmap
-            projectKey={ctx.project.identifier}
-            // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
-            // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
-            // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate →
-            // Plan" milestones assert a planning journey only a truly-onboarded
-            // project has, so a never-onboarded project (null marker — a db:seed
-            // tree or a migrated project) omits them.
-            showPlanningOrigin={ctx.project.onboardingRanAt != null}
-            ariaLabel={t('canvasAria', { project: ctx.project.name })}
-          />
-        </div>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  // Resolve the active sprint (MOTIR-1382) so the client wrapper can label the
+  // sprint-scope subtitle and render the no-active-sprint state for the toggle.
+  const activeSprint = await sprintsService.getActiveSprint(ctx.projectId, wsCtx);
+
+  return (
+    <RoadmapView
+      projectKey={ctx.project.identifier}
+      projectName={ctx.project.name}
+      ariaLabel={t('canvasAria', { project: ctx.project.name })}
+      hasActiveSprint={activeSprint !== null}
+      sprintName={activeSprint?.name ?? null}
+      sprintGoal={activeSprint?.goal ?? null}
+      // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
+      // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
+      // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate → Plan"
+      // milestones assert a planning journey only a truly-onboarded project has,
+      // so a never-onboarded project (null marker) omits them.
+      showPlanningOrigin={ctx.project.onboardingRanAt != null}
+    />
   );
 }

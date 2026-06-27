@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleDashed,
   CircleDot,
+  CirclePlay,
   Eye,
   Flag,
   MapPin,
@@ -104,14 +105,20 @@ export function WorkItemNode({
   item,
   drillable = false,
   crossBlocked = false,
+  crossBlockedLabel = 'cross-story',
   progress = null,
   here = false,
+  ready = false,
 }: {
   item: WorkItemNodeData;
   /** Has children — clicking DRILLS in; show the affordance. */
   drillable?: boolean;
-  /** Blocked by an item on ANOTHER level — flag the bad-plan tangle (MOTIR-1331). */
+  /** Blocked by an off-level dependency — flag it (MOTIR-1331). In project scope a
+   *  bad-plan tangle; in sprint scope an out-of-sprint, not-done dependency. */
   crossBlocked?: boolean;
+  /** The flag's copy — `'cross-story'` (project scope) or `'not in sprint'`
+   *  (sprint scope, MOTIR-1379). */
+  crossBlockedLabel?: string;
   /** Subtree done/total roll-up → a thin progress meter on a container node
    *  (Subtask 7.20.6 / MOTIR-1013). `null` (a leaf) or a `0`-total → no meter. */
   progress?: WorkItemProgress | null;
@@ -120,9 +127,16 @@ export function WorkItemNode({
    *  accent border, and it carries `aria-current="step"` (Subtask 7.20.6 /
    *  MOTIR-1013). */
   here?: boolean;
+  /** READY to start (MOTIR-1417) — a startable, fully-unblocked node. Its status
+   *  pill becomes the success "Ready" pill and the card gets a `--el-success` left
+   *  accent bar. Suppressed on the "you are here" node (its accent treatment wins). */
+  ready?: boolean;
 }) {
   const showMeter = progress !== null && progress.total > 0;
   const pct = showMeter ? Math.round((progress.done / progress.total) * 100) : 0;
+  // The ready treatment is suppressed on the "you are here" frontier (its accent
+  // treatment is the louder, must-not-miss signal) — MOTIR-1417.
+  const showReady = ready && !here;
   return (
     <div
       // Fixed height (= the layout's NODE_H) so a long, two-line title can never
@@ -141,7 +155,7 @@ export function WorkItemNode({
       // melting into the canvas. The active "you are here" node takes an accent
       // border (the StationCard ringed-active language); a cross-story tangle still
       // wins the border (it's the louder, must-not-miss signal).
-      className={`flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 bg-(--el-surface) shadow-(--shadow-card) ${
+      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 bg-(--el-surface) shadow-(--shadow-card) ${
         crossBlocked
           ? 'border-(--el-danger) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
           : here
@@ -149,18 +163,37 @@ export function WorkItemNode({
             : 'border-(--el-border)'
       }`}
     >
+      {/* READY left accent bar (MOTIR-1417) — a 3px `--el-success` strip clipped to
+          the card radius by `overflow-hidden`, so a ready-to-start node is scannable
+          at zoom. Suppressed on "you are here" / a cross-blocked node (louder signals
+          win the edge). */}
+      {showReady && !crossBlocked ? (
+        <span
+          data-testid="ready-bar"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 w-[3px] bg-(--el-success)"
+        />
+      ) : null}
+
       {/* TOP ROW — the compact STATUS chip (top-left) — REPLACED by the accent
-          "You are here" pill on the current-position node — and the cross-link tag
-          (or the has-children hint) pushed to the right. */}
+          "You are here" pill on the current-position node, or the success "Ready"
+          pill on a ready-to-start node — and the cross-link tag (or the has-children
+          hint) pushed to the right. */}
       <div className="flex shrink-0 items-center gap-2">
-        {here ? <HerePill /> : <WorkItemStatusPill status={item.status} />}
+        {here ? (
+          <HerePill />
+        ) : showReady ? (
+          <ReadyPill />
+        ) : (
+          <WorkItemStatusPill status={item.status} />
+        )}
         {crossBlocked ? (
           <span
             data-testid="cross-blocked-flag"
             className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
           >
             <Flag className="size-3" aria-hidden="true" />
-            cross-story
+            {crossBlockedLabel}
           </span>
         ) : drillable ? (
           <ChevronRight
@@ -230,6 +263,21 @@ function HerePill() {
   );
 }
 
+/** The "Ready" pill (MOTIR-1417) — a success-toned chip in the status slot for a
+ *  ready-to-start node (a to-do whose blockers are all done). Replaces the dim
+ *  "To do" pill; the card also gets a `--el-success` left accent bar. */
+function ReadyPill() {
+  return (
+    <span
+      data-testid="ready-pill"
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-mint) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-strong)"
+    >
+      <CirclePlay className="size-3 text-(--el-success)" aria-hidden="true" />
+      Ready
+    </span>
+  );
+}
+
 /**
  * The GHOST ANCHOR for an off-level blocker (MOTIR-1331) — a dashed-red, hatched
  * chip that names the blocker the canvas can't show a node for ("PROD-42 ↗ in
@@ -239,10 +287,14 @@ export function GhostAnchor({
   identifier,
   title,
   parentTitle,
+  outOfSprint = false,
 }: {
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** Sprint scope (MOTIR-1379): the anchor reads "not in this sprint" — the
+   *  blocker is an out-of-sprint, not-done dependency, not a cross-story tangle. */
+  outOfSprint?: boolean;
 }) {
   return (
     <div
@@ -258,7 +310,9 @@ export function GhostAnchor({
         {identifier}
       </span>
       <span className="mt-1 line-clamp-1 block text-xs text-(--el-text-secondary)">{title}</span>
-      {parentTitle ? (
+      {outOfSprint ? (
+        <span className="mt-0.5 block text-xs text-(--el-danger)">not in this sprint ↗</span>
+      ) : parentTitle ? (
         <span className="mt-0.5 block text-xs text-(--el-danger)">in {parentTitle} ↗</span>
       ) : (
         <span className="mt-0.5 block text-xs text-(--el-danger)">elsewhere in the plan ↗</span>

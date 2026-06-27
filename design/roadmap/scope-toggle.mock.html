@@ -404,6 +404,12 @@
         color: var(--el-text);
         line-height: 1.2;
       }
+      .nsub {
+        margin-top: 3px;
+        font-size: 10.5px;
+        color: var(--el-text-muted);
+        line-height: 1.25;
+      }
       .meter {
         display: flex;
         align-items: center;
@@ -824,11 +830,11 @@
       </div>
     </section>
 
-    <!-- ════════════ PANEL 2 — Active sprint (pruned) ════════════ -->
+    <!-- ════════════ PANEL 2 — Active sprint (top in-sprint roots) ════════════ -->
     <section class="sheet">
       <div class="sheethead">
         <b>2 · Active sprint</b
-        ><span>— SAME canvas, pruned to member-or-ancestor; meters read sprint-scoped</span>
+        ><span>— SAME canvas, re-rooted at the TOPMOST in-sprint items; epics elided</span>
         <span class="cap">scope = sprint</span>
       </div>
       <div class="body">
@@ -900,57 +906,10 @@
             Project root
             <span class="scopetag">Sprint 32</span>
           </div>
-          <svg class="edges">
-            <path d="M 250 204 C 300 204, 300 90, 340 90" />
-            <path d="M 250 204 C 300 204, 300 204, 340 204" />
-            <path d="M 250 204 C 300 204, 300 318, 340 318" />
-          </svg>
-          <!-- ROOT under sprint scope: only Epic 7 (ancestor of the in-sprint stories) -->
-          <div class="node here" style="left: 36px; top: 150px">
-            <div class="ntop">
-              <span class="spill prog"
-                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
-                >In progress</span
-              >
-              <svg
-                class="drill"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </div>
-            <div class="nbody">
-              <span class="tile epic"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
-              ></span>
-              <div>
-                <div class="nid">MOTIR-464</div>
-                <div class="ntitle">Epic 7: AI Planning Layer</div>
-              </div>
-            </div>
-            <div class="meter">
-              <div class="mtrack"><div class="mfill" style="width: 33%"></div></div>
-              <span class="mnum">1 / 3</span>
-            </div>
-          </div>
-
-          <!-- drilled story slice (the three in-sprint stories) shown for context -->
-          <div class="node" style="left: 340px; top: 36px">
+          <!-- ROOT under sprint scope = the TOPMOST in-sprint items themselves
+               (member stories + the in-sprint subtask of a non-member story);
+               the epics + non-member ancestors are elided, not pulled in. -->
+          <div class="node" style="left: 36px; top: 36px">
             <div class="ntop">
               <span class="spill done"
                 ><svg
@@ -984,13 +943,20 @@
               </div>
             </div>
           </div>
-          <div class="node" style="left: 340px; top: 150px">
+          <div class="node here" style="left: 36px; top: 150px">
             <div class="ntop">
-              <span class="spill prog"
-                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
-                >In progress</span
+              <span class="spill here"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                  <circle cx="12" cy="10" r="3" /></svg
+                >You are here</span
               >
               <svg
                 class="drill"
@@ -1027,7 +993,7 @@
               <span class="mnum">2 / 5</span>
             </div>
           </div>
-          <div class="node" style="left: 340px; top: 264px">
+          <div class="node" style="left: 36px; top: 264px">
             <div class="ntop">
               <span class="spill todo"
                 ><svg
@@ -1042,7 +1008,7 @@
               >
             </div>
             <div class="nbody">
-              <span class="tile story"
+              <span class="tile subtask"
                 ><svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -1051,12 +1017,16 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                  <path d="m3 17 2 2 4-4" />
+                  <path d="m3 7 2 2 4-4" />
+                  <path d="M13 6h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 18h8" /></svg
               ></span>
               <div>
-                <div class="nid">MOTIR-1208</div>
-                <div class="ntitle">Planner gateway routing</div>
+                <div class="nid">MOTIR-1305</div>
+                <div class="ntitle">Login flow</div>
+                <div class="nsub">parent story not in the sprint → shown as a root</div>
               </div>
             </div>
           </div>
@@ -1066,12 +1036,13 @@
 
         <p class="note">
           <b>Active sprint.</b> The toggle flips to <b>"Active sprint"</b>; the subtitle shows the
-          sprint's name + goal and a quiet <b>Sprint scope</b> chip. The canvas renders the SAME
-          node treatment but <b>pruned to the member-or-ancestor set</b> — only epics/stories that
-          <i>are</i> in the sprint or <i>contain</i> in-sprint work appear (the three other epics
-          from panel 1 are gone). Progress meters re-read <b>sprint-scoped</b>: Epic 7 →
-          <code>1 / 3</code> (its three committed stories), not <code>12 / 40</code>. Drill + edges
-          + zoom are unchanged.
+          sprint's name + goal and a quiet <b>Sprint scope</b> chip. The canvas is re-rooted at the
+          <b>TOPMOST in-sprint items</b> — a member <b>story</b> shows as a root (drillable to its
+          full subtree), and the <b>in-sprint subtask</b> of a non-member story shows as a root with
+          the story/epic above it <b>elided</b>. Epics are never members, so the view never pulls
+          the top-level epics in (the four epics from panel 1 are gone). Below a shown root the tree
+          is the normal, unscoped read — drill, edges, progress meters, and zoom are unchanged (a
+          root story's meter is its whole-subtree done/total).
         </p>
       </div>
     </section>

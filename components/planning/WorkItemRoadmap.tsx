@@ -7,7 +7,11 @@ import {
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { useWorkItemQuickView } from '@/components/planning/useWorkItemQuickView';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
-import { fetchRoadmapLevel, type RoadmapLevelData } from '@/lib/planning/roadmapClient';
+import {
+  fetchRoadmapLevel,
+  type RoadmapLevelData,
+  type RoadmapScope,
+} from '@/lib/planning/roadmapClient';
 
 // The WORK-ITEM consumer of the reusable `ProjectRoadmapCanvas` (Subtask 7.20.2 /
 // MOTIR-1194) — the adapter the persistent roadmap (MOTIR-1011) + the planning
@@ -27,6 +31,9 @@ const ROOT_KEY = '__root__';
 export interface WorkItemRoadmapProps {
   /** The project's `PROD`/`MOTIR` key — the per-level roadmap read source. */
   projectKey: string;
+  /** Whole project (default) or the active-sprint slice (MOTIR-1382). Threaded
+   *  into every per-level fetch as `&scope=sprint`. */
+  scope?: RoadmapScope;
   /**
    * Pin the collapsed planning-origin cluster (MOTIR-1013) at the ROOT level —
    * gated by the caller on the project's immutable onboarding-ran marker
@@ -46,6 +53,7 @@ export interface WorkItemRoadmapProps {
 
 export function WorkItemRoadmap({
   projectKey,
+  scope = 'project',
   showPlanningOrigin = false,
   positions,
   onNodeMove,
@@ -62,10 +70,14 @@ export function WorkItemRoadmap({
 
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
-      const key = `${projectKey}:${parentId ?? ROOT_KEY}`;
+      // Scope is part of the cache key so a project-scope level is never reused
+      // for sprint scope (MOTIR-1382). The page also remounts this component on a
+      // scope change (its React `key`), so the canvas re-loads the ROOT in the new
+      // scope; the scoped key is the belt-and-suspenders guard.
+      const key = `${projectKey}:${scope}:${parentId ?? ROOT_KEY}`;
       let wi = cacheRef.current.get(key);
       if (!wi) {
-        wi = await fetchRoadmapLevel(projectKey, parentId);
+        wi = await fetchRoadmapLevel(projectKey, parentId, scope);
         cacheRef.current.set(key, wi);
       }
       registerItems(wi);
@@ -73,12 +85,15 @@ export function WorkItemRoadmap({
       // every level, and pins the collapsed planning-origin cluster at the ROOT
       // (the road's start) — Subtask 7.20.6 / MOTIR-1013 — but ONLY for a project
       // that actually onboarded (Subtask 7.4 / MOTIR-1264; `showPlanningOrigin`).
+      // `scope` flips the off-level dependency signal from cross-story (project) to
+      // the sprint-validity "not in sprint" signal (MOTIR-1379).
       return buildWorkItemLevel(wi, {
         markActive: true,
         includeOrigin: parentId === null && showPlanningOrigin,
+        scope,
       });
     },
-    [projectKey, registerItems, showPlanningOrigin],
+    [projectKey, scope, registerItems, showPlanningOrigin],
   );
 
   return (
@@ -93,6 +108,11 @@ export function WorkItemRoadmap({
         searchable
         rootLabel="Roadmap"
         ariaLabel={ariaLabel}
+        warningLegend={
+          scope === 'sprint'
+            ? { label: 'not in sprint', meaning: 'not done & outside the sprint' }
+            : undefined
+        }
       />
       {quickView}
     </>

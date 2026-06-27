@@ -500,19 +500,35 @@ export const workItemRepository = {
    * `identifier` + `title` + the title of the container it lives in (its parent
    * story/epic). ONE query with the parent relation; empty input → `[]`.
    */
-  async findRoadmapBlockerStubs(
-    ids: string[],
-  ): Promise<Array<{ id: string; identifier: string; title: string; parentTitle: string | null }>> {
+  async findRoadmapBlockerStubs(ids: string[]): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      title: string;
+      parentTitle: string | null;
+      status: string;
+      sprintId: string | null;
+    }>
+  > {
     if (ids.length === 0) return [];
     const rows = await db.workItem.findMany({
       where: { id: { in: ids } },
-      select: { id: true, identifier: true, title: true, parent: { select: { title: true } } },
+      select: {
+        id: true,
+        identifier: true,
+        title: true,
+        status: true,
+        sprintId: true,
+        parent: { select: { title: true } },
+      },
     });
     return rows.map((r) => ({
       id: r.id,
       identifier: r.identifier,
       title: r.title,
       parentTitle: r.parent?.title ?? null,
+      status: r.status,
+      sprintId: r.sprintId,
     }));
   },
 
@@ -2095,13 +2111,26 @@ export const workItemRepository = {
     parentId: string | null,
     sort: IssueSort,
     page: { take: number; offset: number },
+    sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemTreeRow[]> {
     const client = tx ?? db;
     const orderCol = ISSUE_SORT_SQL[sort.column];
     const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+    // Sprint scope (MOTIR-1381): the ROOT level is re-rooted at the TOPMOST
+    // in-sprint members (a member story, or the in-sprint subtasks of a non-member
+    // story — never the epic/story ancestors), so the view never pulls the
+    // top-level epics in. Below a shown root member the tree is the NORMAL,
+    // UNSCOPED read (drill + hasChildren + progress are the whole subtree), since a
+    // shown member is the committed unit. So sprint scope only rewrites the root
+    // level's node selection; every other level is byte-for-byte the whole-project
+    // read. `sprintId` null (or a non-root drill) ⇒ the normal parent predicate.
     const parentPred =
-      parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
+      sprintId != null && parentId === null
+        ? Prisma.sql`w."id" IN ${topInSprintMembersSql(projectId, workspaceId, sprintId)}`
+        : parentId === null
+          ? Prisma.sql`w."parentId" IS NULL`
+          : Prisma.sql`w."parentId" = ${parentId}`;
 
     return client.$queryRaw<WorkItemTreeRow[]>`
       SELECT w."id",
@@ -3809,6 +3838,72 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  */
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
+}
+
+/**
+ * The sprint-scope predicate for the per-level roadmap read (MOTIR-1381). The
+ * roadmap is a HIERARCHY shown one level at a time, but sprint membership is a
+ * FLAT `work_item.sprintId` — epics/stories carry no `sprintId` (only the leaves
+ * a sprint commits to do), so a naive `sprintId = ?` filter would empty the ROOT
+ * level (no epic is a member) and break drill-down. Instead a node is in scope
+ * iff it is ITSELF a sprint member OR an ANCESTOR of one: a recursive CTE seeds
+ * on every in-sprint item (non-archived, not-in-triage, same project+workspace)
+ * and walks UP the `parentId` edge, so the id set is `members ∪ all-ancestors`.
+ * The level read ANDs `<alias>."id" IN (that set)`; with no `sprintId` it returns
+ * `TRUE` (the whole-project read, byte-for-byte unchanged). The `alias` is a
+ * fixed internal literal (`w` for the row, `ch` for the hasChildren probe),
+ * never user input. The same `projectId`+`workspaceId` tenant gate (finding #26)
+ * is repeated inside the CTE seed so the scope set can never cross tenants.
+ */
+/**
+ * The TOP-IN-SPRINT-MEMBER subquery for the sprint-scoped roadmap root level
+ * (MOTIR-1381, revised). The sprint-scoped roadmap is rooted at the TOPMOST
+ * in-sprint items — NOT their epic/story ancestors. A node is a "root member"
+ * iff it is itself a sprint member AND none of its ancestors is a sprint member:
+ * so a member STORY shows as a root (and its full subtree drills normally below
+ * it), while a non-member story whose SUBTASKS are members contributes only those
+ * subtasks (the story/epic above them is elided). Epics are never members, so they
+ * are never roots — the view never "pulls the top-level epics in".
+ *
+ * Computed with a recursive CTE that walks UP each member's `parentId` chain and
+ * keeps only members whose chain contains no other member. The same
+ * `projectId`+`workspaceId` tenant gate (finding #26) is repeated in the seed so
+ * the set can never cross tenants. Used ONLY at the root level; drilling below a
+ * shown root member is the normal, unscoped tree read.
+ */
+function topInSprintMembersSql(
+  projectId: string,
+  workspaceId: string,
+  sprintId: string,
+): Prisma.Sql {
+  return Prisma.sql`(
+    WITH RECURSIVE sprint_member AS (
+      SELECT m."id", m."parentId"
+        FROM "work_item" m
+        WHERE m."projectId" = ${projectId}
+          AND m."workspaceId" = ${workspaceId}
+          AND m."archivedAt" IS NULL
+          AND ${notInTriageSql('m')}
+          AND m."sprintId" = ${sprintId}
+    ),
+    -- every STRICT ancestor of each member, carried back to the member it came from
+    ancestor_walk AS (
+      SELECT sm."id" AS member_id, sm."parentId" AS anc_id
+        FROM sprint_member sm
+      UNION ALL
+      SELECT aw.member_id, p."parentId"
+        FROM ancestor_walk aw
+        JOIN "work_item" p ON p."id" = aw.anc_id
+    )
+    -- a member is a ROOT member iff NONE of its strict ancestors is itself a member
+    SELECT sm."id"
+      FROM sprint_member sm
+      WHERE NOT EXISTS (
+        SELECT 1 FROM ancestor_walk aw
+         WHERE aw.member_id = sm."id"
+           AND aw.anc_id IN (SELECT "id" FROM sprint_member)
+      )
+  )`;
 }
 
 /**

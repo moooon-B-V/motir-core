@@ -1970,12 +1970,31 @@ export const workItemsService = {
     projectId: string,
     parentId: string | null,
     ctx: ServiceContext,
+    opts: { scope?: 'project' | 'sprint' } = {},
   ): Promise<ProjectRoadmapDto> {
     const project = await projectRepository.findById(projectId);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    // Sprint scope (MOTIR-1381): when the caller asks for the active-sprint
+    // slice, resolve the one active sprint (partial-unique `state = 'active'`).
+    // NO active sprint → an EMPTY roadmap (the client renders the
+    // no-active-sprint state); this is not an error. The whole-project path
+    // (scope absent or `'project'`) leaves `sprintId` null and is byte-for-byte
+    // the shipped read.
+    let sprintId: string | null = null;
+    if (opts.scope === 'sprint') {
+      const activeSprint = await sprintRepository.findActiveByProject(
+        projectId,
+        project.workspaceId,
+      );
+      if (!activeSprint) {
+        return { nodes: [], edges: [], offLevelBlockers: [] };
+      }
+      sprintId = activeSprint.id;
+    }
 
     const [rows, statuses] = await Promise.all([
       workItemRepository.findProjectTreeLevel(
@@ -1987,6 +2006,7 @@ export const workItemsService = {
           take: TREE_LEVEL_MAX_TAKE,
           offset: 0,
         },
+        sprintId,
       ),
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
     ]);
@@ -1999,6 +2019,10 @@ export const workItemsService = {
     // descendants is absent from the result → `0 / 0`. Leaves carry `progress:
     // null`. Bounded by the level (≤ TREE_LEVEL_MAX_TAKE containers), not a
     // whole-tree load.
+    // Progress is the FULL subtree rollup even in sprint scope: a shown root member
+    // is the committed unit and drills to its whole subtree, so its meter reflects
+    // that whole subtree (MOTIR-1381, revised) — sprint scope only re-roots the top
+    // level, it does not prune progress.
     const containerIds = rows.filter((r) => r.hasChildren).map((r) => r.id);
     const progressRows = await workItemRepository.countRoadmapProgress(
       containerIds,
@@ -2008,11 +2032,24 @@ export const workItemsService = {
     const progressById = new Map(
       progressRows.map((p) => [p.rootId, { done: p.done, total: p.total }]),
     );
+
+    // READY-to-start (MOTIR-1417): a node is ready iff it is in a startable
+    // (`todo`-category) status AND every item it is `blocked_by` is done — the
+    // shipped own-blocker readiness (`computeOwnBlockerReadiness`, reused so the
+    // highlight never drifts from `list_ready`: it handles archived blockers,
+    // cross-project terminals, and integrated-awaiting-review). One extra blocker
+    // query for the whole level (no N+1). Done / in-progress nodes are never ready.
+    const startableKeys = new Set(statuses.filter((s) => s.category === 'todo').map((s) => s.key));
+    const ownReady = await computeOwnBlockerReadiness(
+      rows.map((r) => r.id),
+      ctx,
+    );
     const nodes = rows.map((r) =>
       toRoadmapNodeDto(
         r,
         doneKeys.has(r.status),
         r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0 }) : null,
+        startableKeys.has(r.status) && (ownReady.get(r.id) ?? true),
       ),
     );
 
@@ -2020,13 +2057,24 @@ export const workItemsService = {
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
     const edges = await workItemLinkRepository.findBlockedByEdges(rows.map((r) => r.id));
 
-    // A blocker NOT on this level is a cross-story tangle — fetch a NAMING stub so
-    // the canvas can anchor the red signal to a chip (MOTIR-1331).
+    // A blocker NOT on this level needs a NAMING stub so the canvas can anchor the
+    // signal to a chip (MOTIR-1331). The stub carries `isDone` + `inActiveSprint`
+    // so the SPRINT-scoped view can tell a sprint-validity problem (a blocker that
+    // is NOT done AND NOT in the active sprint) from a satisfied one — replacing the
+    // project-scope "cross-story" framing (MOTIR-1379).
     const levelIds = new Set(rows.map((r) => r.id));
     const offLevelIds = [
       ...new Set(edges.map((e) => e.blockerId).filter((id) => !levelIds.has(id))),
     ];
-    const offLevelBlockers = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+    const offLevelStubs = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+    const offLevelBlockers = offLevelStubs.map((s) => ({
+      id: s.id,
+      identifier: s.identifier,
+      title: s.title,
+      parentTitle: s.parentTitle,
+      isDone: doneKeys.has(s.status),
+      inActiveSprint: sprintId != null && s.sprintId === sprintId,
+    }));
 
     return { nodes, edges, offLevelBlockers };
   },

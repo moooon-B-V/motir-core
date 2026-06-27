@@ -470,28 +470,51 @@ The card's mandate is to **COMPOSE the shipped canvas, not redraw it** (`notes.h
 **#82**/**#95**): the canvas (`ProjectRoadmapCanvas`, MOTIR-1194; design MOTIR-1009
 / `roadmap.mock.html`) is reused UNCHANGED — same node treatment, drill, edges,
 zoom, and "you are here" overlay. The only NEW pixels are the toggle, the
-per-scope subtitle, the no-active-sprint empty state, and how the per-node
-**progress meters** read when scoped. The behaviour the toggle depicts is defined
-by the backend read subtask (member-or-ancestor pruning + sprint-scoped progress,
-MOTIR-1381), which this card `relates_to` and grounds in (not invented here).
+per-scope subtitle, the no-active-sprint empty state, and the narrowed root-level
+**node set** (the topmost in-sprint items). The behaviour the toggle depicts is defined
+by the backend read subtask (the sprint-scoped read re-rooted at the TOPMOST
+in-sprint items, MOTIR-1381), which this card `relates_to` and grounds in (not
+invented here).
 
 ### Composed components + their contracts (notes #95)
 
-| Composed thing | Source                                                     | Contract this design honours                                                                                                                                                                                             |
-| -------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| scope toggle   | `Segmented` (`components/ui/Segmented.tsx`, Subtask 3.3.5) | labelled `role="group"`; each option a real `<button aria-pressed>`; `--el-tabnav-track` track, active = `--el-page-bg` + `--shadow-subtle` raised fill, leading glyph takes `--el-tabnav-active`                        |
-| canvas + nodes | `ProjectRoadmapCanvas` / `WorkItemNode` (MOTIR-1194)       | reused unchanged; status pill · `--el-type-*` kind tile · id/title · subtree progress meter (`--el-success` fill on `--el-muted` track) · passive drill `ChevronRight`; only the FED node set + the meter numbers narrow |
-| empty state    | `EmptyState` (`components/ui/EmptyState.tsx`)              | `Card` + centred icon (`--el-icon-muted`) + serif title + `--el-text-subtitle` description; the no-active-sprint case                                                                                                    |
-| page header    | `app/(authed)/roadmap/page.tsx` `<header>` (MOTIR-1011)    | serif `text-2xl` `<h1>` + `--el-text-muted` subtitle; the toggle is added to this header by the frontend's client wrapper (MOTIR-1382)                                                                                   |
+| Composed thing | Source                                                     | Contract this design honours                                                                                                                                                                                                                                                                         |
+| -------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| scope toggle   | `Segmented` (`components/ui/Segmented.tsx`, Subtask 3.3.5) | labelled `role="group"`; each option a real `<button aria-pressed>`; `--el-tabnav-track` track, active = `--el-page-bg` + `--shadow-subtle` raised fill, leading glyph takes `--el-tabnav-active`                                                                                                    |
+| canvas + nodes | `ProjectRoadmapCanvas` / `WorkItemNode` (MOTIR-1194)       | reused unchanged; status pill · `--el-type-*` kind tile · id/title · subtree progress meter (`--el-success` fill on `--el-muted` track) · passive drill `ChevronRight`; only the root-level FED node set changes (re-rooted at the topmost members) — meters/drill are the normal full-subtree reads |
+| empty state    | `EmptyState` (`components/ui/EmptyState.tsx`)              | `Card` + centred icon (`--el-icon-muted`) + serif title + `--el-text-subtitle` description; the no-active-sprint case                                                                                                                                                                                |
+| page header    | `app/(authed)/roadmap/page.tsx` `<header>` (MOTIR-1011)    | serif `text-2xl` `<h1>` + `--el-text-muted` subtitle; the toggle is added to this header by the frontend's client wrapper (MOTIR-1382)                                                                                                                                                               |
 
 ### The four panels (`scope-toggle.mock.html`)
 
-| Panel | Scope/state             | What it draws                                                                                                                                                                                                                                            |
-| ----- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | Whole project (default) | header with the `Segmented` toggle (**Whole project** selected) + the project subtitle; the full root level (every epic), whole-subtree meters (Epic 7 → `12 / 40`)                                                                                      |
-| **2** | Active sprint           | toggle flipped to **Active sprint**; subtitle = sprint name + goal + a quiet **Sprint scope** chip; the canvas PRUNED to member-or-ancestor (only Epic 7 survives, its three in-sprint stories drilled), meters re-read sprint-scoped (Epic 7 → `1 / 3`) |
-| **3** | No active sprint        | toggle on **Active sprint** but no sprint running → an in-canvas `EmptyState` (**Goal** icon, **"No active sprint"**, a one-line hint); the toggle stays available, Whole-project scope unaffected                                                       |
-| **4** | Control + access path   | the `Segmented` toggle states (default / hover / sprint-active) + the **Roadmap** primary left-nav entry the page is reached from (MOTIR-1011)                                                                                                           |
+| Panel | Scope/state             | What it draws                                                                                                                                                                                                                                                                                                                                                                |
+| ----- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | Whole project (default) | header with the `Segmented` toggle (**Whole project** selected) + the project subtitle; the full root level (every epic), whole-subtree meters (Epic 7 → `12 / 40`)                                                                                                                                                                                                          |
+| **2** | Active sprint           | toggle flipped to **Active sprint**; subtitle = sprint name + goal + a quiet **Sprint scope** chip; the canvas RE-ROOTED at the topmost in-sprint items — a member story + the in-sprint subtask of a non-member story show as roots, the epics + non-member ancestors elided; below a root the tree is the normal unscoped read (a root story's meter is its whole subtree) |
+| **3** | No active sprint        | toggle on **Active sprint** but no sprint running → an in-canvas `EmptyState` (**Goal** icon, **"No active sprint"**, a one-line hint); the toggle stays available, Whole-project scope unaffected                                                                                                                                                                           |
+| **4** | Control + access path   | the `Segmented` toggle states (default / hover / sprint-active) + the **Roadmap** primary left-nav entry the page is reached from (MOTIR-1011)                                                                                                                                                                                                                               |
+
+### Sprint-scope dependency signal — "not in sprint", not "cross-story" (MOTIR-1379)
+
+The roadmap's off-level dependency signal (MOTIR-1331) MEANS something different in
+sprint scope, so it is RE-LABELLED. In **project** scope a `blocked_by` edge to an
+item on another level is the **cross-story tangle** (a bad plan — the red edge, the
+ghost anchor "in {story} ↗", and the node's red **cross-story** flag). In **sprint**
+scope the same edges become a **sprint-validity** signal (mirroring the MCP
+`validate_sprint` rule): a blocker is a problem ONLY when it is **not done AND not in
+the active sprint**. So:
+
+- a **done** dependency, or one **already in the sprint**, is SATISFIED → it is NOT
+  drawn (no edge, no anchor, no flag) — the sprint view stays focused on real risks;
+- an **out-of-sprint, open** dependency is the problem → the red edge + a ghost
+  anchor reading **"not in this sprint ↗"** + the node's red flag **"not in sprint"**;
+- the edge **legend**'s warning row reads **"not in sprint" — "not done & outside the
+  sprint"** (vs. project scope's "cross-story" — "in another story").
+
+This fixes the mis-label where two items in the SAME story showed as "cross-story"
+in sprint scope (they are siblings, not cross-story — the real issue is only whether
+the open dependency is inside the sprint). Same red `--el-danger` / `--el-warning`
+tokens; only the copy changes.
 
 ### Exact copy (the labels + strings the frontend ships — MOTIR-1382 `messages/en.json`)
 

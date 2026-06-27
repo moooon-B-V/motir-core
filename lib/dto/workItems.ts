@@ -484,6 +484,11 @@ export interface RoadmapNodeDto {
   /** The subtree done/total roll-up — non-null EXACTLY on container nodes
    *  (`hasChildren`), `null` on leaves (Subtask 7.20.6 / MOTIR-1013). */
   progress: RoadmapProgressDto | null;
+  /** READY TO START (MOTIR-1417): the node is in a startable (`todo`-category)
+   *  status AND every item it is `blocked_by` is done — the dispatch-ready
+   *  condition (the shipped own-blocker readiness). Drives the "ready" highlight.
+   *  A done / in-progress / open-blocked node is `false`. */
+  ready: boolean;
 }
 
 /**
@@ -510,6 +515,15 @@ export interface RoadmapBlockerStubDto {
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** Whether the blocker is in a terminal (`done`-category) status — a done
+   *  dependency is SATISFIED, so the sprint-scoped view does not flag it
+   *  (MOTIR-1379). */
+  isDone: boolean;
+  /** Whether the blocker is a member of the ACTIVE sprint. In sprint scope this
+   *  separates an in-sprint dependency (fine) from one OUTSIDE the sprint (the
+   *  sprint-validity signal, replacing "cross-story"). Always `false` in project
+   *  scope (no sprint is resolved). */
+  inActiveSprint: boolean;
 }
 
 /**
