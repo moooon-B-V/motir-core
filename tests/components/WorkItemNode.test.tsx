@@ -113,13 +113,14 @@ describe('WorkItemNode', () => {
     expect(screen.queryByTestId('done-pill')).toBeNull();
   });
 
-  it('styles a DONE node as a faded/recessed card + struck title + neutral "Done" pill', () => {
+  it('styles a DONE node as a board-recessed card + struck title + dark "Done" stamp', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
     const card = container.firstChild as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('done');
-    expect(card.className).toContain('opacity-60');
-    expect(card.className).toContain('bg-(--el-surface-soft)');
-    // a neutral Done pill (NOT the success-green ready treatment)
+    // the card sinks into the board — recessed canvas fill + a defined strong edge
+    expect(card.className).toContain('bg-(--el-canvas)');
+    expect(card.className).toContain('border-(--el-border-strong)');
+    // a dark Done stamp (NOT the success-green ready treatment, NOT the light todo chip)
     expect(screen.getByTestId('done-pill')).toBeTruthy();
     expect(screen.queryByTestId('ready-pill')).toBeNull();
     expect(card.className).not.toContain('bg-(--el-tint-mint)');
@@ -127,14 +128,24 @@ describe('WorkItemNode', () => {
     expect(screen.getByText(item.title).className).toContain('line-through');
   });
 
-  it('keeps done and ready DISTINCT (mint-forward vs faded-back)', () => {
+  it('keeps done and ready DISTINCT (mint-forward vs board-recessed)', () => {
     const { container: r } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
     const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
     const ready = r.firstChild as HTMLElement;
     const done = d.firstChild as HTMLElement;
     expect(ready.getAttribute('data-node-state')).not.toBe(done.getAttribute('data-node-state'));
-    expect(ready.className).toContain('bg-(--el-tint-mint)'); // ready advances
-    expect(done.className).toContain('opacity-60'); // done recedes
+    expect(ready.className).toContain('bg-(--el-tint-mint)'); // ready advances (mint)
+    expect(done.className).toContain('bg-(--el-canvas)'); // done recedes into the board
+  });
+
+  it('keeps done DISTINCT from a plain todo card (board-recessed vs raised surface)', () => {
+    const { container: t } = render(<WorkItemNode item={{ ...item, status: 'todo' }} />);
+    const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
+    const todo = t.firstChild as HTMLElement;
+    const done = d.firstChild as HTMLElement;
+    expect(todo.className).toContain('bg-(--el-surface)'); // raised white card
+    expect(done.className).toContain('bg-(--el-canvas)'); // recedes into the board
+    expect(done.className).not.toContain('bg-(--el-surface)'); // not the same fill as todo
   });
 
   it('the accent "you are here" frontier wins over the done style', () => {
@@ -143,7 +154,7 @@ describe('WorkItemNode', () => {
     expect(card.getAttribute('data-node-state')).toBe('here');
     expect(screen.getByText('You are here')).toBeTruthy();
     expect(screen.queryByTestId('done-pill')).toBeNull();
-    expect(card.className).not.toContain('opacity-60');
+    expect(card.className).not.toContain('bg-(--el-canvas)');
   });
 
   it('the red cross-blocked flag wins over the done style', () => {
@@ -151,7 +162,7 @@ describe('WorkItemNode', () => {
     const card = container.firstChild as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
     expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
-    expect(card.className).not.toContain('opacity-60');
+    expect(card.className).not.toContain('bg-(--el-canvas)');
   });
 });
 

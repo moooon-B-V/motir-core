@@ -179,7 +179,7 @@ export function WorkItemNode({
           : here
             ? 'border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)'
             : showDone
-              ? 'border-(--el-border-soft) bg-(--el-surface-soft) opacity-60 shadow-(--shadow-subtle)'
+              ? 'border-(--el-border-strong) bg-(--el-canvas) shadow-(--shadow-subtle)'
               : showReadyWash
                 ? 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
                 : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
@@ -297,17 +297,18 @@ function ReadyPill() {
   );
 }
 
-/** The "Done" pill (MOTIR-1422) — a NEUTRAL check chip (deliberately NOT
- *  success-green, so it can't be confused with the ready highlight). Takes the
- *  status slot on a done node; the card itself recedes (faded surface + struck
- *  title), so done reads as the opposite of ready's mint-forward wash. */
+/** The "Done" stamp (MOTIR-1422) — a SOLID DARK chip. Deliberately NOT
+ *  success-green (so it can't be confused with the ready highlight) AND far heavier
+ *  than the light "To do" chip (so done can't be confused with todo — the redo). The
+ *  card itself sinks into the board (recessed `--el-canvas` + struck title), so done
+ *  reads as the opposite of ready's mint-forward wash. */
 function DonePill() {
   return (
     <span
       data-testid="done-pill"
-      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-secondary)"
+      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-text-secondary) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-inverted)"
     >
-      <CheckCircle2 className="size-3 text-(--el-text-muted)" aria-hidden="true" />
+      <CheckCircle2 className="size-3 text-(--el-text-inverted)" aria-hidden="true" />
       Done
     </span>
   );

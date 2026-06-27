@@ -10,7 +10,8 @@
   THE FIX: ready shipped as a --el-success 3px LEFT BAR (MOTIR-1417) — a hairline
   that vanishes when zoomed out, and the same success-green a done border would use.
   So both signals move INTO THE CARD BODY: READY = a whole-card --el-tint-mint wash;
-  DONE = a faded/recessed card + struck title (NOT success-green). Card-level fills
+  DONE = a card that sinks into the board (recessed --el-canvas fill) + a dark "Done"
+  stamp + struck title (NOT success-green). Card-level fills
   survive zoom-out; the two are unmistakably different.
 
   Built from the real design system: every value is the light-theme resolution of a
@@ -37,6 +38,7 @@
         --el-text-secondary: #5d5b54;
         --el-text-muted: #787671;
         --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
         --el-accent: #5645d4;
         --el-accent-text: #ffffff;
         --el-success: #1aae39;
@@ -167,14 +169,16 @@
       .node.ready .ntitle {
         color: var(--el-text-strong);
       }
-      /* THE NEW DONE TREATMENT — a faded/recessed card (settled back) + a struck,
-         muted title. NOT success-green (that is ready's language); the fade is the
-         zoom-out signal. */
+      /* THE DONE TREATMENT (redo) — the card SINKS INTO THE BOARD: it takes the
+         recessed `--el-canvas` fill (clearly darker/greyer than the raised white
+         todo card) with a defined `--el-border-strong` edge + a flat `--shadow-subtle`
+         so it reads as settled-back, not raised. A struck, muted title + a SOLID dark
+         "Done" stamp finish it. NOT success-green (that is ready's language); the
+         board-coloured fill is the zoom-out signal. */
       .node.done {
-        background: var(--el-surface-soft);
-        border-color: var(--el-border-soft);
+        background: var(--el-canvas);
+        border-color: var(--el-border-strong);
         box-shadow: var(--shadow-subtle);
-        opacity: 0.62;
       }
       .node.done .ntitle {
         color: var(--el-text-muted);
@@ -214,14 +218,15 @@
       .spill.ready svg {
         color: var(--el-success);
       }
-      /* the NEW neutral "Done" pill — a check in a NEUTRAL chip (never green, so it
-         can't be mistaken for ready). */
+      /* the "Done" stamp (redo) — a SOLID DARK chip (never green, so it can't be
+         mistaken for ready; and clearly heavier than the light "To do" chip, so done
+         can't be mistaken for todo). */
       .spill.done {
-        background: var(--el-muted);
-        color: var(--el-text-secondary);
+        background: var(--el-text-secondary);
+        color: var(--el-text-inverted);
       }
       .spill.done svg {
-        color: var(--el-text-muted);
+        color: var(--el-text-inverted);
       }
       .spill.here {
         background: var(--el-accent);
@@ -418,7 +423,9 @@
                 </div>
               </div>
             </div>
-            <div class="celltag"><b>Done</b> — faded/recessed card + struck title</div>
+            <div class="celltag">
+              <b>Done</b> — recedes into the board + dark &ldquo;Done&rdquo; stamp
+            </div>
           </div>
 
           <!-- NORMAL -->
@@ -505,11 +512,14 @@
         <p class="note">
           <b>Ready</b> fills the whole card with <code>--el-tint-mint</code> (was a 3px
           <code>--el-success</code> left bar) + keeps the &ldquo;Ready&rdquo; pill; the title is
-          <code>--el-text-strong</code> for AA on the tint. <b>Done</b> recedes — a quieter
-          <code>--el-surface-soft</code> card at reduced opacity with a <b>struck</b>,
-          <code>--el-text-muted</code> title + a NEUTRAL &ldquo;Done&rdquo; check pill (never green,
-          so it can&rsquo;t be confused with ready). Mint-forward vs faded-back reads instantly;
-          neither collides with the accent <b>you-are-here</b> or the red blocked flag.
+          <code>--el-text-strong</code> for AA on the tint. <b>Done</b> SINKS INTO THE BOARD — it
+          takes the recessed <code>--el-canvas</code> fill (clearly darker than the raised white
+          todo card) with a defined <code>--el-border-strong</code> edge + a flat shadow, a
+          <b>struck</b> <code>--el-text-muted</code> title, and a SOLID DARK &ldquo;Done&rdquo;
+          stamp (never green, so it can&rsquo;t be confused with ready; and far heavier than the
+          light &ldquo;To do&rdquo; chip, so it can&rsquo;t be confused with todo). Mint-forward
+          (ready) vs board-recessed (done) reads instantly; neither collides with the accent
+          <b>you-are-here</b> or the red blocked flag.
         </p>
       </div>
     </section>
@@ -574,8 +584,8 @@
 
         <div class="zoomrow">
           <div class="zoomlbl">
-            <b>After</b> — mint (ready), faded (done), plain (normal), accent (here) stay tellable
-            apart.
+            <b>After</b> — mint (ready), board-recessed (done), plain (normal), accent (here) stay
+            tellable apart.
           </div>
           <div class="mini">
             <div class="node ready">
@@ -699,7 +709,7 @@
 
         <p class="note">
           A whole-card fill survives scale; a 3px edge does not. <b>Mint-forward</b> (ready) vs
-          <b>faded-back</b> (done) is a value + hue contrast that holds at any zoom — so a viewer
+          <b>board-recessed</b> (done) is a value contrast that holds at any zoom — so a viewer
           tells completed work from actionable work at a glance, exactly the legibility the thin bar
           lost.
         </p>
