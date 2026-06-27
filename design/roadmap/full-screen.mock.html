@@ -1,0 +1,729 @@
+<!doctype html>
+<!--
+  ROADMAP — FULL-SCREEN mode (MOTIR-1423 / Story MOTIR-1420).
+  COMPOSES the shipped roadmap canvas + its overlay chrome (ProjectRoadmapCanvas /
+  PlanningCanvas, MOTIR-1194): breadcrumb (top-left), search (top-right), the
+  zoom + fit-view cluster (bottom-left). Adds ONE new affordance — the EXPAND
+  button (top-right, beside search) that takes the canvas full screen; ESC exits.
+  It does NOT redraw the canvas (notes.html #82/#95) — nodes/edges/drill are the
+  shipped canvas, shown only enough to place the new control.
+
+  The Expand glyph (Maximize) is deliberately DISTINCT from the existing fit-view
+  control (Maximize2, diagonal arrows) which only resets zoom. Built from the real
+  design system: --el-* colour + element-semantic shape tokens, light values.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — full-screen mode (MOTIR-1423)</title>
+    <style>
+      :root {
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-rose: #fde0ec;
+        --el-tint-lavender: #e6e0f5;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --el-type-epic: #ff64c8;
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 5px;
+        --height-control: 36px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+      }
+      .body {
+        padding: 20px;
+      }
+
+      /* ── the canvas (COMPOSED — the shipped ProjectRoadmapCanvas) ── */
+      .canvas {
+        position: relative;
+        height: 360px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow: hidden;
+      }
+      /* the full-screen panel's canvas reads as the whole viewport: a darker
+         backdrop frame + the canvas filling it. */
+      .vp {
+        position: relative;
+        height: 470px;
+        border-radius: var(--radius-card);
+        background: #1c1b19;
+        padding: 10px;
+        overflow: hidden;
+      }
+      .vp .canvas {
+        height: 100%;
+        border-radius: 8px;
+      }
+
+      /* overlay controls (fixed; do not pan/zoom) */
+      .crumb {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px 4px 4px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .iconbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .iconbtn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .crumb b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+
+      /* TOP-RIGHT cluster: search + the NEW Expand button */
+      .topright {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .search {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        width: 232px;
+        height: var(--height-control);
+        padding: 0 10px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .search svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      /* the new control — a surface icon button matching the overlay chrome */
+      .ctrlbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        box-shadow: var(--shadow-card);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .ctrlbtn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .ctrlbtn.spotlight {
+        border-color: var(--el-accent);
+        box-shadow:
+          var(--shadow-card),
+          0 0 0 3px #5645d426;
+        color: var(--el-text);
+      }
+
+      /* bottom-left zoom + fit-view cluster (shipped, unchanged) */
+      .zoom {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        display: inline-flex;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .zoom .iconbtn {
+        border-radius: 0;
+      }
+      .zoom .iconbtn + .iconbtn {
+        border-left: 1px solid var(--el-border);
+      }
+
+      /* the ESC hint chip (full screen only) */
+      .eschint {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 10px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        box-shadow: var(--shadow-card);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .eschint kbd {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 1px 6px;
+      }
+
+      /* ── node card (shipped WorkItemNode) — minimal, just to populate the canvas ── */
+      .node {
+        position: absolute;
+        width: 196px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        box-shadow: var(--shadow-card);
+      }
+      .nrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-success);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 7px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--el-tint-mint);
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-type-story);
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+
+      .note {
+        margin-top: 14px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      .spot {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 4px;
+        border-radius: var(--radius-btn);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — full-screen mode · MOTIR-1423</h1>
+    <p class="docsub">
+      An Expand button (top-right, beside search) takes the roadmap canvas full screen; ESC exits.
+      Composes the shipped canvas + overlay chrome; only the Expand/Exit control + the ESC hint are
+      new.
+    </p>
+
+    <!-- helper: a small node cluster reused in both panels -->
+    <!-- ════════ PANEL 1 — embedded: the Expand button ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>1 · Embedded — the Expand button</b
+        ><span>— top-right, beside search; Maximize glyph (NOT the fit-view Maximize2)</span>
+        <span class="cap">ProjectRoadmapCanvas overlay</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="crumb">
+            <button class="iconbtn" aria-label="Back">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </button>
+            <span>Project root</span>
+          </div>
+          <div class="topright">
+            <span class="search">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              Search the roadmap
+            </span>
+            <button
+              class="ctrlbtn spotlight"
+              aria-label="Enter full screen"
+              title="Enter full screen"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- composed canvas content (a couple of nodes) -->
+          <div class="node" style="left: 90px; top: 116px">
+            <div class="nrow">
+              <span class="spill"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-464</div>
+                <div class="ntitle">Epic 7: AI Planning Layer</div>
+              </div>
+            </div>
+          </div>
+          <div class="node" style="left: 360px; top: 168px">
+            <div class="nrow">
+              <span class="spill"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+            </div>
+            <div class="nbody">
+              <span class="tile"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-300</div>
+                <div class="ntitle">Epic 6: Collaboration</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="zoom">
+            <button class="iconbtn" aria-label="Zoom out">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+            <button class="iconbtn" aria-label="Zoom in">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <path d="M5 12h14" />
+                <path d="M12 5v14" />
+              </svg>
+            </button>
+            <button class="iconbtn" aria-label="Fit to view">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M15 3h6v6" />
+                <path d="m21 3-7 7" />
+                <path d="m3 21 7-7" />
+                <path d="M9 21H3v-6" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>The Expand button</b> joins the top-right cluster (beside the shipped search), an
+          <code>--el-surface</code> icon button (<code>--radius-btn</code>,
+          <code>--shadow-card</code>) the size of the other overlay controls
+          (<code>--height-control</code>). Its glyph is <b>Maximize</b> (corner brackets) —
+          deliberately UNLIKE the bottom-left fit-view <code>Maximize2</code> (diagonal arrows),
+          which only resets zoom. Accessible name <b>"Enter full screen"</b>. (Dashed ring =
+          annotation, not part of the design.)
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ PANEL 2 — full screen: Exit + ESC ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>2 · Full screen — Exit + ESC</b
+        ><span
+          >— the canvas fills the viewport; the button flips to Minimize; an ESC hint shows</span
+        >
+        <span class="cap">document fullscreen</span>
+      </div>
+      <div class="body">
+        <div class="vp">
+          <div class="canvas">
+            <div class="crumb">
+              <button class="iconbtn" aria-label="Back">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </button>
+              <span>Project root</span>
+            </div>
+
+            <div class="eschint">Press <kbd>Esc</kbd> to exit full screen</div>
+
+            <div class="topright">
+              <span class="search">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                Search the roadmap
+              </span>
+              <button
+                class="ctrlbtn spotlight"
+                aria-label="Exit full screen"
+                title="Exit full screen"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                  <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                  <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                  <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="node" style="left: 150px; top: 150px">
+              <div class="nrow">
+                <span class="spill"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                  >In progress</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-464</div>
+                  <div class="ntitle">Epic 7: AI Planning Layer</div>
+                </div>
+              </div>
+            </div>
+            <div class="node" style="left: 470px; top: 230px">
+              <div class="nrow">
+                <span class="spill"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                  >In progress</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-300</div>
+                  <div class="ntitle">Epic 6: Collaboration</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="zoom">
+              <button class="iconbtn" aria-label="Zoom out">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Zoom in">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Fit to view">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M15 3h6v6" />
+                  <path d="m21 3-7 7" />
+                  <path d="m3 21 7-7" />
+                  <path d="M9 21H3v-6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>Full screen.</b> Clicking Expand takes the canvas to full screen (the browser
+          <b>Fullscreen API</b> on the canvas container — so the OS chrome is hidden and ESC exit is
+          native; a fixed full-viewport overlay is the fallback). The overlay controls stay
+          reachable; the Expand button flips to <b>Minimize</b> (accessible name
+          <b>"Exit full screen"</b>), and a quiet
+          <b>"Press <kbd>Esc</kbd> to exit full screen"</b> hint appears top-centre. Pan / zoom /
+          drill keep working. ESC — or the Minimize button — returns to the embedded view.
+        </p>
+      </div>
+    </section>
+  </body>
+</html>

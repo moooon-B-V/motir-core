@@ -607,9 +607,49 @@ ready node beside all four non-ready states; panel 2 is the anatomy.
 
 ---
 
+## ⭐ Full-screen mode (MOTIR-1423 / Story MOTIR-1420 — `full-screen.mock.html`)
+
+`full-screen.mock.html` adds a **full-screen** affordance to the roadmap canvas: an
+**Expand** button takes the canvas to full screen so a viewer can use the whole
+display for a large tree; **ESC exits**. COMPOSES the shipped canvas + overlay chrome
+(`ProjectRoadmapCanvas` / `PlanningCanvas`, MOTIR-1194) — the breadcrumb (top-left),
+search (top-right), and the zoom + fit-view cluster (bottom-left) are the real shipped
+controls; only the Expand/Exit button + the ESC hint are new (`notes.html` #82/#95).
+
+### The control
+
+- **Placement:** the Expand button joins the **top-right** cluster, beside the shipped
+  search — an `--el-surface` icon button (`--radius-btn`, `--shadow-card`) the size of
+  the other overlay controls (`--height-control`).
+- **Glyph + label:** **Maximize** (corner brackets) — deliberately UNLIKE the
+  bottom-left **fit-view** control's `Maximize2` (diagonal arrows), which only resets
+  zoom. Accessible name **"Enter full screen"**.
+- **Full-screen state:** the button flips to **Minimize** (accessible name **"Exit full
+  screen"**) and a quiet **"Press `Esc` to exit full screen"** hint chip appears
+  top-centre (a `<kbd>` on `--el-muted` / `--radius-kbd`). The other overlay controls
+  stay reachable; pan / zoom / drill keep working.
+
+### Behaviour (the code subtask, MOTIR-1424, decides + verifies)
+
+The browser **Fullscreen API** on the canvas container is the preferred approach — the
+OS chrome hides and **ESC exit is native** — with a `fullscreenchange` listener syncing
+the button state; a fixed full-viewport overlay + a manual `keydown` Escape handler is
+the fallback if the Fullscreen API doesn't compose with the app shell. Works in both
+project and sprint scope.
+
+### Token / a11y discipline
+
+Colour via `--el-*` only; shape via `--radius-btn` (the button) / `--radius-kbd` (the
+hint) / `--radius-control` (the overlay icon buttons) — no Tier-0 `--color-*` or raw
+`rounded-*`. The Expand/Exit button is a labelled `<button>` (icon-only → `aria-label`);
+decorative glyphs are `aria-hidden`. The two panels (embedded + full screen) are in the
+mock.
+
+---
+
 ## Deliverable
 
-Four three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Five three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
@@ -617,6 +657,7 @@ Four three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`
 - **Scope toggle** — `scope-toggle.mock.html` + `scope-toggle.png` (MOTIR-1380).
 - **Ready highlight** — `ready-highlight.mock.html` + `ready-highlight.png`
   (MOTIR-1416).
+- **Full-screen** — `full-screen.mock.html` + `full-screen.png` (MOTIR-1423).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
