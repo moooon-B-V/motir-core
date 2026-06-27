@@ -107,6 +107,7 @@ export function WorkItemRoadmap({
         onView={onView}
         searchable
         fullScreenable
+        locatable
         rootLabel="Roadmap"
         ariaLabel={ariaLabel}
         warningLegend={

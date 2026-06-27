@@ -39,6 +39,13 @@ export interface ProjectCanvasNode {
    *  tier stations) set this `false`/omit it, so they get no View action. The canvas
    *  only surfaces View when both this is true AND an `onView` handler is wired. */
   viewable?: boolean;
+  /** This node is the in-progress "you are here" FRONTIER (MOTIR-1013) — the LOCATE
+   *  control's first-priority target (MOTIR-1421). Set by the work-item consumer; the
+   *  content-agnostic canvas only reads it to centre on the current position. */
+  here?: boolean;
+  /** This node is READY to start (MOTIR-1417) — the LOCATE control's fallback target
+   *  when there is no frontier; multiple ready nodes are cycled. */
+  ready?: boolean;
   /** Explicit world position (fixed stations own theirs); else the deterministic
    *  auto-layout places the node. */
   x?: number;

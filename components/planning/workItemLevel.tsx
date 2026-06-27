@@ -118,6 +118,11 @@ export function buildWorkItemLevel(
     // anchors below are off-level blocker STUBS, not items on this level, so they
     // stay non-viewable (no `viewable` flag) — selecting one shows no View button.
     viewable: true,
+    // Surface the LOCATE targets (MOTIR-1421) onto the canvas node: the frontier
+    // ("you are here") and the ready-to-start flag, so the canvas can centre on the
+    // actionable node without knowing about work-item readiness itself.
+    here: item.id === activeId,
+    ready: item.ready ?? false,
     content: (
       <WorkItemNode
         item={{

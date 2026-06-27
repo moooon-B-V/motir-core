@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  LocateFixed,
   Maximize,
   Minimize,
   RotateCcw,
@@ -76,6 +77,11 @@ export interface ProjectRoadmapCanvasProps {
    *  Takes the canvas full-viewport (via the Fullscreen API, with a fixed overlay as
    *  the always-deterministic base); ESC exits. */
   fullScreenable?: boolean;
+  /** Show the LOCATE control (MOTIR-1421) — recentres the canvas on the actionable
+   *  node: the "you are here" frontier first, else the ready-to-start nodes (cycling
+   *  with wrap). The work-item roadmap opts in (its nodes carry `here` / `ready`);
+   *  onboarding does not. */
+  locatable?: boolean;
   /** The breadcrumb root label. */
   rootLabel?: string;
   ariaLabel?: string;
@@ -100,6 +106,7 @@ export function ProjectRoadmapCanvas({
   onView,
   searchable = false,
   fullScreenable = false,
+  locatable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
   warningLegend = { label: 'cross-story', meaning: 'in another story' },
@@ -364,6 +371,55 @@ export function ProjectRoadmapCanvas({
     setFocusNonce((n) => n + 1);
   }, [nodes, query]);
 
+  // LOCATE control (MOTIR-1421) — centre the canvas on the ACTIONABLE node. The
+  // targets come from the level's nodes: the "you are here" frontier first (a single
+  // destination), else the READY nodes (cycled, wrapping). Centring reuses the same
+  // pan-to-node machinery the search-locate above uses (highlight + focusNonce bump),
+  // so the located node lights up AND is assertable on `data-highlighted`.
+  const hereId = useMemo(() => nodes.find((n) => n.here)?.id ?? null, [nodes]);
+  const readyIds = useMemo(() => nodes.filter((n) => n.ready).map((n) => n.id), [nodes]);
+  const readySig = readyIds.join('|');
+  const canLocate = hereId !== null || readyIds.length > 0;
+  // The index of the ready node centred by the LAST locate click (-1 = none yet).
+  const [locateIndex, setLocateIndex] = useState(-1);
+  // Reset the cycle cursor when the level's targets change (a drill / re-plan) so the
+  // cycle restarts cleanly — the React-sanctioned "adjust state during render when an
+  // input changes" pattern (NOT a setState-in-effect, which the lint rule forbids).
+  const targetSig = `${hereId ?? ''}|${readySig}`;
+  const [prevTargetSig, setPrevTargetSig] = useState(targetSig);
+  if (targetSig !== prevTargetSig) {
+    setPrevTargetSig(targetSig);
+    setLocateIndex(-1);
+  }
+
+  const locateActionable = useCallback(() => {
+    // Frontier wins: a single destination, no cycling.
+    if (hereId !== null) {
+      setHighlightId(hereId);
+      setFocusNonce((n) => n + 1);
+      return;
+    }
+    if (readyIds.length === 0) return;
+    // Advance to the next ready node, wrapping after the last.
+    const next = (locateIndex + 1) % readyIds.length;
+    setLocateIndex(next);
+    setHighlightId(readyIds[next] ?? null);
+    setFocusNonce((n) => n + 1);
+  }, [hereId, readyIds, locateIndex]);
+
+  // The "n of m" cycling hint — shown only while cycling MULTIPLE ready nodes (no
+  // frontier) and after the first locate, so it reflects the current position.
+  const cyclingHint =
+    hereId === null && readyIds.length > 1 && locateIndex >= 0
+      ? `${locateIndex + 1} / ${readyIds.length}`
+      : null;
+  const locateLabel =
+    hereId !== null
+      ? 'Locate the current item'
+      : readyIds.length > 1
+        ? 'Locate the next ready item'
+        : 'Locate the ready item';
+
   function renderNode(cn: CanvasNode) {
     const node = byId.get(cn.id);
     if (!node) return null;
@@ -530,6 +586,33 @@ export function ProjectRoadmapCanvas({
             </kbd>
             to exit full screen
           </span>
+        </div>
+      )}
+
+      {/* LOCATE control (MOTIR-1421) — recentres on the actionable node. Sits at the
+          bottom-left, just RIGHT of the engine's zoom + fit cluster (bottom-4 left-4,
+          ~7rem wide), so it reads as part of the viewport-navigation controls. */}
+      {locatable && (
+        <div className="absolute bottom-4 left-[8.25rem] z-10 flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="locate-button"
+            aria-label={locateLabel}
+            disabled={!canLocate}
+            title={canLocate ? locateLabel : 'Nothing to locate — no in-progress or ready item'}
+            onClick={locateActionable}
+            className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:cursor-not-allowed disabled:bg-(--el-surface-soft) disabled:text-(--el-text-faint) disabled:shadow-(--shadow-subtle) disabled:hover:bg-(--el-surface-soft)"
+          >
+            <LocateFixed className="size-4" aria-hidden="true" />
+          </button>
+          {cyclingHint && (
+            <span
+              data-testid="locate-hint"
+              className="inline-flex h-(--height-control) items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-3 font-mono text-xs font-semibold text-(--el-text-secondary) shadow-(--shadow-card)"
+            >
+              {cyclingHint}
+            </span>
+          )}
         </div>
       )}
 
