@@ -156,3 +156,35 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(screen.queryByTestId(A1_FLAG)).toBeNull();
   });
 });
+
+describe('buildWorkItemLevel — ready highlight (MOTIR-1417)', () => {
+  it('a ready node shows the "Ready" pill + the success left bar', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'A1', kind: 'subtask', status: 'todo', ready: true })]),
+    );
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId('ready-pill')).toBeTruthy();
+    expect(screen.getByText('Ready')).toBeTruthy();
+    expect(screen.getByTestId('ready-bar')).toBeTruthy();
+  });
+
+  it('a NOT-ready node shows the normal status pill, no ready treatment', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'A1', kind: 'subtask', status: 'todo', ready: false })]),
+    );
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.queryByTestId('ready-pill')).toBeNull();
+    expect(screen.queryByTestId('ready-bar')).toBeNull();
+  });
+
+  it('the "you are here" frontier suppresses the ready treatment', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'A1', kind: 'story', status: 'in_progress', ready: true })]),
+      { markActive: true },
+    );
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByText('You are here')).toBeTruthy();
+    expect(screen.queryByTestId('ready-pill')).toBeNull();
+    expect(screen.queryByTestId('ready-bar')).toBeNull();
+  });
+});

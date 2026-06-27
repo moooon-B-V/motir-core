@@ -433,6 +433,11 @@ export interface RoadmapNodeDto {
   /** The subtree done/total roll-up — non-null EXACTLY on container nodes
    *  (`hasChildren`), `null` on leaves (Subtask 7.20.6 / MOTIR-1013). */
   progress: RoadmapProgressDto | null;
+  /** READY TO START (MOTIR-1417): the node is in a startable (`todo`-category)
+   *  status AND every item it is `blocked_by` is done — the dispatch-ready
+   *  condition (the shipped own-blocker readiness). Drives the "ready" highlight.
+   *  A done / in-progress / open-blocked node is `false`. */
+  ready: boolean;
 }
 
 /**

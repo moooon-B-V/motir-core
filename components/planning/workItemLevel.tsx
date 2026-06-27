@@ -132,6 +132,7 @@ export function buildWorkItemLevel(
         crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'cross-story'}
         progress={item.progress ?? null}
         here={item.id === activeId}
+        ready={item.ready ?? false}
       />
     ),
   }));

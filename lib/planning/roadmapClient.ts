@@ -28,6 +28,10 @@ export interface RoadmapLevelItem {
    *  (Subtask 7.20.6 / MOTIR-1013). Optional client-side: an older / onboarding
    *  read that omits it degrades to "no meter". */
   progress?: RoadmapProgress | null;
+  /** READY to start (MOTIR-1417): a startable, fully-unblocked node → the ready
+   *  highlight. Optional client-side: a read that omits it degrades to "no
+   *  highlight". */
+  ready?: boolean;
 }
 
 export interface RoadmapEdge {
@@ -65,6 +69,7 @@ interface RoadmapNode {
   isDone: boolean;
   hasChildren: boolean;
   progress?: { done: number; total: number } | null;
+  ready?: boolean;
 }
 
 const KNOWN_STATUSES: WorkItemStatus[] = [
@@ -95,6 +100,7 @@ function toItem(n: RoadmapNode): RoadmapLevelItem {
     status: toStatus(n.status, n.isDone),
     hasChildren: n.hasChildren,
     progress: n.progress ?? null,
+    ready: n.ready ?? false,
   };
 }
 

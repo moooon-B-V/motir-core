@@ -1979,11 +1979,24 @@ export const workItemsService = {
     const progressById = new Map(
       progressRows.map((p) => [p.rootId, { done: p.done, total: p.total }]),
     );
+
+    // READY-to-start (MOTIR-1417): a node is ready iff it is in a startable
+    // (`todo`-category) status AND every item it is `blocked_by` is done — the
+    // shipped own-blocker readiness (`computeOwnBlockerReadiness`, reused so the
+    // highlight never drifts from `list_ready`: it handles archived blockers,
+    // cross-project terminals, and integrated-awaiting-review). One extra blocker
+    // query for the whole level (no N+1). Done / in-progress nodes are never ready.
+    const startableKeys = new Set(statuses.filter((s) => s.category === 'todo').map((s) => s.key));
+    const ownReady = await computeOwnBlockerReadiness(
+      rows.map((r) => r.id),
+      ctx,
+    );
     const nodes = rows.map((r) =>
       toRoadmapNodeDto(
         r,
         doneKeys.has(r.status),
         r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0 }) : null,
+        startableKeys.has(r.status) && (ownReady.get(r.id) ?? true),
       ),
     );
 

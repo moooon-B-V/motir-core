@@ -162,6 +162,7 @@ export function toRoadmapNodeDto(
   row: WorkItemTreeRow,
   isDone: boolean,
   progress: RoadmapProgressDto | null,
+  ready: boolean,
 ): RoadmapNodeDto {
   return {
     id: row.id,
@@ -175,6 +176,7 @@ export function toRoadmapNodeDto(
     isDone,
     hasChildren: row.hasChildren,
     progress,
+    ready,
   };
 }
 
