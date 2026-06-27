@@ -9,6 +9,7 @@ import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -197,6 +198,17 @@ async function materialize(
     const prefix = refreshed?.identifier ?? project.identifier;
     const identifier = `${prefix}-${number}`;
 
+    // Normalize bare REAL work-item refs in the generated description to
+    // canonical link tokens (bug MOTIR-1440) so a materialized body chips
+    // (5.8.6) rather than staying plain text — the same write-path rule the
+    // service create/update applies, here on the inlined materialize insert.
+    // (Intra-plan temp refs are a separate concern, resolved at materialize by
+    // the temp-ref → motir:<id> pass; this only resolves EXISTING bare keys.)
+    const [normalizedDescriptionMd] = await normalizeBodyRefs(
+      { projectId: plan.projectId, projectIdentifier: prefix, fields: [pf.descriptionMd] },
+      tx,
+    );
+
     const siblings = await workItemRepository.findSiblings(plan.projectId, parentId, tx);
     const position = keyForAppend(siblings.length ? siblings[siblings.length - 1]!.position : null);
     const lastRank = await workItemRepository.findBoundaryBacklogRank(
@@ -216,7 +228,7 @@ async function materialize(
       key: number,
       identifier,
       title: pf.title,
-      descriptionMd: pf.descriptionMd ?? null,
+      descriptionMd: normalizedDescriptionMd ?? null,
       status: statusKey,
       ...(pf.priority
         ? { priority: pf.priority as Prisma.WorkItemUncheckedCreateInput['priority'] }
@@ -299,9 +311,21 @@ async function applyModify(
     update.title = patch.title;
     diff.title = { from: current.title, to: patch.title };
   }
-  if (patch.descriptionMd !== undefined && patch.descriptionMd !== current.descriptionMd) {
-    update.descriptionMd = patch.descriptionMd;
-    diff.descriptionMd = { from: current.descriptionMd, to: patch.descriptionMd };
+  // Normalize bare REAL work-item refs in a modified description to canonical
+  // link tokens (bug MOTIR-1440) so the patched body chips. The prefix is the
+  // target's own identifier minus its `-<key>` suffix (same derivation the
+  // quick-view read uses); a key that doesn't resolve is left plain.
+  const prefix = current.identifier.slice(
+    0,
+    current.identifier.length - String(current.key).length - 1,
+  );
+  const [normalizedDescriptionMd] = await normalizeBodyRefs(
+    { projectId: current.projectId, projectIdentifier: prefix, fields: [patch.descriptionMd] },
+    tx,
+  );
+  if (normalizedDescriptionMd !== undefined && normalizedDescriptionMd !== current.descriptionMd) {
+    update.descriptionMd = normalizedDescriptionMd;
+    diff.descriptionMd = { from: current.descriptionMd, to: normalizedDescriptionMd };
   }
   if (patch.priority !== undefined && patch.priority !== current.priority) {
     update.priority = patch.priority as Prisma.WorkItemUncheckedUpdateInput['priority'];

@@ -87,6 +87,48 @@ export function parseWorkItemKeys(text: string, projectIdentifier: string): stri
   return keys;
 }
 
+/**
+ * Rewrite every BARE project key (`MOTIR-11`) in `text` to the canonical
+ * work-item link token `[MOTIR-11](motir:<id>)`, using `resolve` (a canonical
+ * upper-case `KEY-N` → work-item id map). This is the WRITE-side companion to
+ * {@link parseWorkItemRefs}: parsing a bare key auto-creates the `relates_to`
+ * edge (5.8.3), but only the explicit token renders as a chip (5.8.6) — so
+ * without this rewrite a bare key wires the edge yet stays plain text. Resolving
+ * it to the canonical token closes that gap (bug MOTIR-1440): a bare key then
+ * BOTH relates AND chips. Idempotent + non-destructive:
+ *
+ *  - An already-explicit `[label](motir:<id>)` token is left verbatim — the
+ *    bare-key scan steps over the text INSIDE a token — so re-normalising a
+ *    stored body is a no-op (and the in-app editor's round-trip stays stable).
+ *  - A bare key absent from `resolve` (unknown / unresolved / cross-project)
+ *    stays plain text — never invent a token for a key that doesn't resolve.
+ *  - Only THIS project's prefix is a candidate (the parser's same-project rule).
+ *
+ * Pure string work — no Prisma, no IO. The caller resolves key → id ONCE
+ * (`workItemRepository.findByIdentifiers`) and passes the map in.
+ */
+export function normalizeWorkItemRefs(
+  text: string,
+  projectIdentifier: string,
+  resolve: ReadonlyMap<string, string>,
+): string {
+  if (resolve.size === 0) return text;
+  const prefix = projectIdentifier.toUpperCase();
+  // ONE pass alternating between a whole `motir:` token (group 1 — left
+  // verbatim) and a bare key (group 2 = its number). Matching the token form
+  // FIRST means a key sitting inside a token's label is consumed by the token
+  // branch and never re-wrapped — that is what makes the rewrite idempotent.
+  const tokenSrc = '\\[[^\\]]*\\]\\(motir:[A-Za-z0-9_-]+\\)';
+  const keySrc = `\\b${escapeRe(projectIdentifier)}-(\\d+)\\b`;
+  const re = new RegExp(`(${tokenSrc})|${keySrc}`, 'gi');
+  return text.replace(re, (match, tokenMatch, keyNum) => {
+    if (tokenMatch !== undefined) return match; // an existing token — untouched
+    const key = `${prefix}-${keyNum as string}`;
+    const id = resolve.get(key);
+    return id ? `[${key}](motir:${id})` : match; // unresolved key stays plain
+  });
+}
+
 /** The referenced ids (from `motir:` tokens) and bare keys found in a body. */
 export interface WorkItemRefs {
   /** Work-item ids captured from explicit `motir:` tokens. */
