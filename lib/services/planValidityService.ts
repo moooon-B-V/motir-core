@@ -6,6 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
@@ -242,6 +243,28 @@ function sortBlockers(blockers: SprintBlockerDto[]): SprintBlockerDto[] {
   );
 }
 
+/**
+ * Resolve the subtree-validation ROOT. A `planItem:<id>` temp-ref points at an
+ * `add` THIS plan proposes — it lives in the projection (keyed by its temp-ref),
+ * so resolve it there; an unknown temp-ref (no such proposed node) is a
+ * `WorkItemNotFoundError`. Any other key is a REAL item resolved against the live
+ * tree (the existing-anchor / extend case). Returns just `{ id, identifier }` —
+ * the only fields the subtree walk + verdict need (MOTIR-1431).
+ */
+async function resolveProjectedRoot(
+  proj: Projection,
+  targetKey: string,
+  ctx: ServiceContext,
+): Promise<{ id: string; identifier: string }> {
+  if (targetKey.startsWith(TEMP_REF_PREFIX)) {
+    const node = proj.nodes.get(targetKey);
+    if (!node) throw new WorkItemNotFoundError(targetKey);
+    return { id: node.id, identifier: node.identifier };
+  }
+  const wi = await workItemsService.getWorkItemByIdentifier(proj.projectId, targetKey, ctx);
+  return { id: wi.id, identifier: wi.identifier };
+}
+
 export const planValidityService = {
   /**
    * Is the PROJECTED subtree of `targetKey` finishable, once `planId` materializes?
@@ -252,11 +275,15 @@ export const planValidityService = {
    * the subtree, or (under `loose`) `done`. A blocker may be named by a
    * `planItem:<id>` temp-ref when the gating node is a not-yet-materialized `add`.
    *
-   * `targetKey` is resolved against the LIVE tree (the typical case is a real item
-   * the plan re-parents/extends); a target the plan `remove`s projects to an empty
-   * subtree → vacuously valid. Throws `WorkItemNotFoundError` for an unknown /
-   * cross-workspace key, `PlanNotFoundError` / `ProjectAccessDeniedError` from the
-   * plan read.
+   * The `targetKey` root may be a REAL committed item (resolved against the live
+   * tree — the re-parent/extend case) OR a `planItem:<id>` temp-ref for a node
+   * THIS plan proposes (resolved against the projection — the `add` already lives
+   * in `proj.nodes`). The temp-ref path is what lets a BRAND-NEW subtree the plan
+   * creates — a new epic, a new story + its new subtasks — be validated by its
+   * own temp-ref, not only an existing anchor (MOTIR-1431). A target the plan
+   * `remove`s projects to an empty subtree → vacuously valid. Throws
+   * `WorkItemNotFoundError` for an unknown real key OR an unknown temp-ref,
+   * `PlanNotFoundError` / `ProjectAccessDeniedError` from the plan read.
    */
   async validateProjectedWorkItem(
     planId: string,
@@ -265,7 +292,7 @@ export const planValidityService = {
     condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
   ): Promise<WorkItemValidityDto> {
     const proj = await buildProjection(planId, ctx);
-    const root = await workItemsService.getWorkItemByIdentifier(proj.projectId, targetKey, ctx);
+    const root = await resolveProjectedRoot(proj, targetKey, ctx);
 
     // The containing set S = the projected subtree of the root (root + descendants).
     const memberIds = new Set<string>();

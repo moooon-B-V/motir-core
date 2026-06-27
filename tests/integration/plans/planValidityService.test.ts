@@ -287,6 +287,91 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       ),
     ).rejects.toBeInstanceOf(PlanNotFoundError);
   });
+
+  // ── Validating a NEWLY-PROPOSED subtree by its temp-ref (MOTIR-1431) ──────────
+  // The root may be a node THIS plan creates — a new story + its new subtasks —
+  // not just an existing committed anchor.
+
+  it('validates a NEW story (a proposed `add` root) by its `planItem:` temp-ref — VALID when its subtasks self-contain', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    // A whole new subtree: a new story, and two new subtasks under it (one gating the other).
+    const pStory = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'New story', kind: 'story' },
+    });
+    const storyItemId = itemIdByTitle(pStory, 'New story');
+    const pDep = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Schema', kind: 'subtask' },
+      parentRef: `planItem:${storyItemId}`,
+    });
+    const depId = itemIdByTitle(pDep, 'Schema');
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Service', kind: 'subtask' },
+      parentRef: `planItem:${storyItemId}`,
+      blockedByRefs: [`planItem:${depId}`], // in-subtree blocker
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      `planItem:${storyItemId}`,
+      fx.ctx,
+    );
+    expect(res.key).toBe(`planItem:${storyItemId}`);
+    expect(res.valid).toBe(true);
+    expect(res.blockers).toEqual([]);
+  });
+
+  it('a new story whose subtask is blocked_by an OUT-OF-SUBTREE backlog add is INVALID, named by temp-refs', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    const pStory = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'New story', kind: 'story' },
+    });
+    const storyItemId = itemIdByTitle(pStory, 'New story');
+    // A backlog add OUTSIDE the new story's subtree (no parent), not done.
+    const pDep = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Backlog dep', kind: 'task' },
+    });
+    const depId = itemIdByTitle(pDep, 'Backlog dep');
+    const pGated = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Gated subtask', kind: 'subtask' },
+      parentRef: `planItem:${storyItemId}`,
+      blockedByRefs: [`planItem:${depId}`],
+    });
+    const gatedId = itemIdByTitle(pGated, 'Gated subtask');
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      `planItem:${storyItemId}`,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(false);
+    expect(res.blockers).toEqual([
+      {
+        item: `planItem:${gatedId}`,
+        blockedBy: `planItem:${depId}`,
+        blockerStatus: 'todo',
+        blockerSprintId: null,
+      },
+    ]);
+  });
+
+  it('an unknown `planItem:` temp-ref root throws WorkItemNotFoundError', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await freshPlan(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+    await expect(
+      planValidityService.validateProjectedWorkItem(planId, 'planItem:does_not_exist', fx.ctx),
+    ).rejects.toBeInstanceOf(WorkItemNotFoundError);
+  });
 });
 
 describe('planValidityService.validateProjectedSprint — the projected sprint rule', () => {
