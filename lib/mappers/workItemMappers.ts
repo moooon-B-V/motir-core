@@ -13,6 +13,8 @@ import type {
   WorkItemDto,
   WorkItemListItemDto,
   WorkItemSummaryDto,
+  WorkItemRefSummaryDto,
+  WorkItemRefStatusDto,
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
   WorkItemTreeRowDto,
@@ -87,6 +89,29 @@ export function toWorkItemSummaryDto(row: WorkItem): WorkItemSummaryDto {
     estimateMinutes: row.estimateMinutes,
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+  };
+}
+
+/**
+ * Accessible reference-summary DTO (Subtask 5.8.6) — the LIVE internal-link
+ * chip's payload for a target the caller may browse: the CURRENT identifier ·
+ * title · kind · archived flag, plus the resolved status meta (label + category
+ * for the dot) the service looks up against the target's project workflow.
+ * Inaccessible / deleted targets are NOT built here — the service emits the
+ * `{ accessible: false }` / absent forms directly (no title/status leak).
+ */
+export function toWorkItemRefSummaryDto(
+  row: WorkItem,
+  status: WorkItemRefStatusDto | null,
+): WorkItemRefSummaryDto {
+  return {
+    accessible: true,
+    id: row.id,
+    identifier: row.identifier,
+    title: row.title,
+    kind: row.kind,
+    archived: row.archivedAt != null,
+    status,
   };
 }
 

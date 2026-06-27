@@ -93,7 +93,7 @@ test('@smoke comment → mention → email → reply → edit → delete, end to
   await openComposer(page);
   await page.locator('.ProseMirror').click();
   await page.keyboard.type('Ping @Bo');
-  const picker = page.getByRole('listbox', { name: 'Mention a member' });
+  const picker = page.getByRole('listbox', { name: /^Mention a/ });
   await expect(picker).toBeVisible();
   await expect(picker.getByRole('option', { name: /Bo Philips/ })).toBeVisible();
   await page.keyboard.press('ArrowDown');

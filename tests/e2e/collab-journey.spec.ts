@@ -253,7 +253,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
   await expect(page.locator('.ProseMirror')).toBeVisible();
   await page.locator('.ProseMirror').click();
   await page.keyboard.type('Please review the shot @Bo');
-  const picker = page.getByRole('listbox', { name: 'Mention a member' });
+  const picker = page.getByRole('listbox', { name: /^Mention a/ });
   await expect(picker.getByRole('option', { name: /Bo Philips/ })).toBeVisible();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');

@@ -30,6 +30,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
+import { autoRelateWorkItemMentions, writeWorkItemLink } from '@/lib/workItems/autoRelateMentions';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { extractReferencedBlobUrlsFromBodies } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -126,12 +127,15 @@ import type {
   PagedArchivedWorkItemsDto,
   WorkItemRevisionDto,
   WorkItemSummaryDto,
+  WorkItemRefMap,
   WorkItemSubtreeDto,
   WorkItemTreeNodeDto,
   TreeLevelDto,
   ProjectRoadmapDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
@@ -900,6 +904,27 @@ export const workItemsService = {
       // opt-out preference will live inside the hook, not here.
       await watchersService.autoWatch(row.id, ctx.userId, tx);
 
+      // Auto-relate-on-mention (Subtask 5.8.3): any work-item reference in the
+      // birth title / description / explanation auto-creates a `relates_to`
+      // link (source = mention) to each viewable, same-workspace target — in
+      // THIS transaction (a DB write, correctly in-tx). ADD-only, idempotent,
+      // never throws out: an unresolved / cross-workspace / unviewable / self
+      // reference is dropped silently. One combined parse over all three bodies
+      // (the parser dedups). `prefix` is the in-tx project identifier.
+      await autoRelateWorkItemMentions(
+        {
+          source: {
+            id: row.id,
+            workspaceId,
+            projectId: input.projectId,
+            projectIdentifier: prefix,
+          },
+          text: [row.title, row.descriptionMd, row.explanationMd].filter(Boolean).join('\n'),
+          ctx,
+        },
+        tx,
+      );
+
       return { dto: toWorkItemDto(row), revisionId };
     });
 
@@ -1228,6 +1253,34 @@ export const workItemsService = {
         { workItemId: id, changedById: ctx.userId, changeKind: 'updated', diff: revisionDiff },
         tx,
       );
+
+      // Auto-relate-on-mention (Subtask 5.8.3): when this edit CHANGED a text
+      // field (title / description / explanation), parse the NEW bodies and
+      // auto-create a `relates_to` link to each newly-referenced target, in THIS
+      // transaction. ADD-only — a reference dropped by this edit never deletes
+      // an existing link — and idempotent, so a reference kept from before
+      // re-adds nothing (findAnyBetween skips it). Reads the project only when a
+      // text field actually moved (the in-tx identifier prefix for bare keys).
+      if (diff['title'] || diff['descriptionMd'] || diff['explanationMd']) {
+        const project = await projectRepository.findById(current.projectId, tx);
+        /* istanbul ignore else -- the item's project always resolves (it was read
+           to gate the edit above); the guard narrows the nullable type only */
+        if (project) {
+          await autoRelateWorkItemMentions(
+            {
+              source: {
+                id: row.id,
+                workspaceId: current.workspaceId,
+                projectId: current.projectId,
+                projectIdentifier: project.identifier,
+              },
+              text: [row.title, row.descriptionMd, row.explanationMd].filter(Boolean).join('\n'),
+              ctx,
+            },
+            tx,
+          );
+        }
+      }
       // The automatable built-in fields that actually changed (Story 6.6 ·
       // Subtask 6.6.2) — translated from the diff keys; drives the
       // `field.changed` emit below. Computed off `diff` (the field cells), so
@@ -2176,48 +2229,27 @@ export const workItemsService = {
       // editor only needs edit rights on the item they're linking FROM.
       await projectAccessService.assertCanEdit(fromItem.projectId, ctx, tx);
 
-      const link = await workItemLinkRepository.create(
+      // The forward edge + the `relates_to` reciprocal + the `links.added`
+      // revision, via the shared write-core (extracted in 5.8.3 so the
+      // auto-relate-on-mention path reuses the exact same logic). `idempotent:
+      // false` keeps the manual-link contract: a duplicate throws
+      // DuplicateLinkError → 409. The non-idempotent branch always returns the
+      // inserted row.
+      const link = await writeWorkItemLink(
         {
           workspaceId: fromItem.workspaceId,
           fromId: input.fromId,
           toId: input.toId,
           kind: input.kind,
           createdById: ctx.userId,
+          idempotent: false,
         },
         tx,
       );
 
-      if (input.kind === 'relates_to') {
-        const existingReciprocal = await workItemLinkRepository.findReciprocal(
-          input.toId,
-          input.fromId,
-          'relates_to',
-          tx,
-        );
-        if (!existingReciprocal) {
-          await workItemLinkRepository.create(
-            {
-              workspaceId: fromItem.workspaceId,
-              fromId: input.toId,
-              toId: input.fromId,
-              kind: 'relates_to',
-              createdById: ctx.userId,
-            },
-            tx,
-          );
-        }
-      }
-
-      await workItemRevisionsService.recordRevision(
-        {
-          workItemId: input.fromId,
-          changedById: ctx.userId,
-          changeKind: 'updated',
-          diff: { links: { added: [{ toId: input.toId, kind: input.kind }] } },
-        },
-        tx,
-      );
-
+      /* istanbul ignore next -- the non-idempotent branch never returns null (the
+         forward create throws on a duplicate rather than returning null) */
+      if (!link) throw new WorkItemLinkNotFoundError(input.fromId);
       return toWorkItemLinkDto(link);
     });
   },
@@ -2717,7 +2749,22 @@ export const workItemsService = {
       const sprint = await sprintRepository.findById(detail.item.sprintId, ctx.workspaceId);
       sprintName = sprint?.name ?? null;
     }
-    return toQuickViewData(detail, members, locale, sprintName);
+    // Work-item references (5.8.6) — `motir:` tokens in the description (live
+    // body chips) + bare `MOTIR-N` in the title (the peek header's title link).
+    // The project identifier prefix is `identifier` minus its `-<key>` suffix.
+    const prefix = detail.item.identifier.slice(
+      0,
+      detail.item.identifier.length - String(detail.item.key).length - 1,
+    );
+    const workItemRefs = await resolveWorkItemRefSummaries(
+      parseWorkItemRefs(
+        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        prefix,
+      ),
+      projectId,
+      ctx,
+    );
+    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix);
   },
 
   /**
@@ -2864,6 +2911,24 @@ export const workItemsService = {
       opts.excludeIds ?? [],
     );
     return rows.map(toWorkItemSummaryDto);
+  },
+
+  /**
+   * Resolve the work-item references parsed out of a body / title to the LIVE
+   * summaries the internal-link chip + title-linkify render (Subtask 5.8.6) —
+   * current key · title · status, with the archived / deleted / no-access state.
+   * Thin service entry over the shared {@link resolveWorkItemRefSummaries}
+   * helper (the read-side parallel of auto-relate, reusing the SAME
+   * `filterBrowsable` view gate `quickSearch` rides). The caller parses the body
+   * with `parseWorkItemRefs` and passes its active project; the map is keyed by
+   * id (token) and current identifier (bare key / title).
+   */
+  async resolveReferenceSummaries(
+    refs: WorkItemRefs,
+    activeProjectId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemRefMap> {
+    return resolveWorkItemRefSummaries(refs, activeProjectId, ctx);
   },
 
   /**

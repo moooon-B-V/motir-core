@@ -214,7 +214,7 @@ test.describe('@a11y populated issue surfaces', () => {
     await expect(page.locator('.ProseMirror')).toBeVisible();
     await page.locator('.ProseMirror').click();
     await page.keyboard.type('@Bo');
-    await expect(page.getByRole('listbox', { name: 'Mention a member' })).toBeVisible();
+    await expect(page.getByRole('listbox', { name: /^Mention a/ })).toBeVisible();
     const pickerResults = await new AxeBuilder({ page })
       .withTags(WCAG_TAGS)
       .exclude('.ProseMirror')

@@ -9,6 +9,7 @@ import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import type { CommentAuthorDTO, CommentDTO, CommentThreadDTO } from '@/lib/dto/comments';
 import type { ActivityAllEntryDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { useCommentsSort } from '@/lib/hooks/useCommentsSort';
 import { ContentSectionCard } from './ContentSectionCard';
 import { CommentComposer } from './CommentComposer';
@@ -66,6 +67,10 @@ export function AllSection({
   const [totalComments, setTotalComments] = useState(initialPage?.totalComments ?? 0);
   const [totalChanges, setTotalChanges] = useState(initialPage?.totalChanges ?? 0);
   const [nextCursor, setNextCursor] = useState<string | null>(initialPage?.nextCursor ?? null);
+  // Resolved `motir:` references across the loaded comment entries (Subtask
+  // 5.8.6) — the comment bodies' internal-link chips render against it, exactly
+  // like the dedicated Comments tab. Each fetched page merges in.
+  const [workItemRefs, setWorkItemRefs] = useState<WorkItemRefMap>(initialPage?.workItemRefs ?? {});
   const [order] = useCommentsSort();
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -89,6 +94,7 @@ export function AllSection({
         setTotalComments(page.totalComments);
         setTotalChanges(page.totalChanges);
         setNextCursor(page.nextCursor);
+        setWorkItemRefs(page.workItemRefs ?? {});
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
@@ -105,6 +111,7 @@ export function AllSection({
         setTotalComments(page.totalComments);
         setTotalChanges(page.totalChanges);
         setNextCursor(page.nextCursor);
+        setWorkItemRefs((current) => ({ ...current, ...(page.workItemRefs ?? {}) }));
         if (order === 'asc' && scroller) {
           requestAnimationFrame(() => {
             scroller.scrollTop += scroller.scrollHeight - prevHeight;
@@ -192,6 +199,7 @@ export function AllSection({
       <>
         <CommentRow
           comment={thread}
+          workItemRefs={workItemRefs}
           replyCount={thread.replies.length}
           canComment={canComment}
           canModerate={canModerate}
@@ -209,6 +217,7 @@ export function AllSection({
                   <li key={reply.id}>
                     <CommentRow
                       comment={reply}
+                      workItemRefs={workItemRefs}
                       canComment={canComment}
                       canModerate={canModerate}
                       currentUserId={currentUserId}

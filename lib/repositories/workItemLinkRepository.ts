@@ -76,6 +76,51 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * Any link joining the two items in ANY kind and EITHER direction (a→b or
+   * b→a) — the "are these two already linked at all?" gate the auto-relate-on-
+   * mention path (Subtask 5.8.3) reads before adding a `relates_to` edge: a pair
+   * already joined by e.g. `is_blocked_by` (or a manual `relates_to`) must NOT
+   * gain a second, auto edge, and an existing block must never be downgraded.
+   * ONE `findFirst` over the OR of the two orderings. Takes an optional `tx` so
+   * it joins the write transaction it guards.
+   */
+  async findAnyBetween(
+    aId: string,
+    bId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemLink | null> {
+    const client = tx ?? db;
+    return client.workItemLink.findFirst({
+      where: {
+        OR: [
+          { fromId: aId, toId: bId },
+          { fromId: bId, toId: aId },
+        ],
+      },
+    });
+  },
+
+  /**
+   * Idempotent create: insert the link unless its (fromId, toId, kind) triple
+   * already exists, via `ON CONFLICT DO NOTHING` (Prisma `createManyAndReturn`
+   * + `skipDuplicates`). Returns the inserted row, or `null` when the unique
+   * already held — WITHOUT raising P2002. This is the auto-relate path's
+   * concurrency guard (Subtask 5.8.3): catching a thrown P2002 inside a Prisma
+   * interactive transaction is impossible (the violation aborts the whole
+   * enclosing tx), so the duplicate is swallowed at the INSERT instead. The
+   * structural triggers still fire on the insert; for the only caller's shape
+   * (same-workspace, non-self `relates_to`, which is cycle-exempt) none of them
+   * reject, so no marker translation is needed here. Required `tx`.
+   */
+  async createIfAbsent(
+    data: Prisma.WorkItemLinkUncheckedCreateInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<WorkItemLink | null> {
+    const rows = await tx.workItemLink.createManyAndReturn({ data: [data], skipDuplicates: true });
+    return rows[0] ?? null;
+  },
+
+  /**
    * The `(status, projectId)` of every `is_blocked_by` blocker of `workItemId`
    * — the raw input the service's `isReady` reduces to a readiness verdict
    * (Subtask 2.2.6, resolving finding #21). ONE query, no fetch-then-filter

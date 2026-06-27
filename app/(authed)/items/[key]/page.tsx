@@ -23,6 +23,8 @@ import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
+import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
 import { Pill } from '@/components/ui/Pill';
 import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
@@ -244,6 +246,21 @@ export default async function IssueDetailPage({
   const locale = (await getLocale()) as Locale;
   const archivedAtLabel = item.archivedAt ? formatDate(item.archivedAt, locale) : '';
 
+  // Work-item references (Story 5.8 · 5.8.6) — resolve every `[KEY](motir:<id>)`
+  // token in the description / explanation AND every bare `MOTIR-N` in the title
+  // to its LIVE summary (current key · title · status · archived/no-access
+  // state), so the body chips + the title link render live and open the peek.
+  // The same `filterBrowsable` view gate `quickSearch` rides (reused, not
+  // reinvented); a deleted / forbidden reference degrades, never breaks.
+  const workItemRefs = await workItemsService.resolveReferenceSummaries(
+    parseWorkItemRefs(
+      [item.title, item.descriptionMd, item.explanationMd].filter(Boolean).join('\n'),
+      ctx.project.identifier,
+    ),
+    ctx.projectId,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+  );
+
   return (
     <EstimationConfigProvider config={estimationConfig} canEdit={canEdit}>
       <div className="flex flex-col gap-6">
@@ -320,7 +337,13 @@ export default async function IssueDetailPage({
               />
             </div>
           </div>
-          <h1 className="text-(--el-text) font-serif text-2xl font-semibold">{item.title}</h1>
+          <h1 className="text-(--el-text) font-serif text-2xl font-semibold">
+            <WorkItemTitle
+              title={item.title}
+              projectIdentifier={ctx.project.identifier}
+              workItemRefs={workItemRefs}
+            />
+          </h1>
         </header>
 
         {/* Body — two columns; later subtasks fill the regions. The `1fr` track is
@@ -349,7 +372,11 @@ export default async function IssueDetailPage({
               editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
             >
               {item.descriptionMd ? (
-                <MarkdownView value={item.descriptionMd} aria-label={t('issueDescriptionAria')} />
+                <MarkdownView
+                  value={item.descriptionMd}
+                  aria-label={t('issueDescriptionAria')}
+                  workItemRefs={workItemRefs}
+                />
               ) : (
                 <p className="font-sans text-sm text-(--el-text-secondary) italic">
                   {t('noDescription')}
@@ -360,6 +387,7 @@ export default async function IssueDetailPage({
               explanationMd={item.explanationMd}
               explanationSource={item.explanationSource}
               editHref={canEdit ? `/items/${item.identifier}/edit` : undefined}
+              workItemRefs={workItemRefs}
             />
             {/* 2.4.5: the relationships section + ready/blocked banner — a left-
               column section card (per the approved mockup), after Explanation.

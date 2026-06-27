@@ -471,6 +471,7 @@ describe('ActivitySection (5.5.4)', () => {
         nextCursor: null,
         totalComments: 12,
         totalChanges: 34,
+        workItemRefs: {},
       },
     });
 
@@ -497,6 +498,7 @@ describe('ActivitySection (5.5.4)', () => {
         nextCursor: null,
         totalComments: 1,
         totalChanges: 2,
+        workItemRefs: {},
       }),
     } as Response);
 
@@ -507,6 +509,7 @@ describe('ActivitySection (5.5.4)', () => {
         nextCursor: 'composite-1',
         totalComments: 1,
         totalChanges: 2,
+        workItemRefs: {},
       },
     });
 

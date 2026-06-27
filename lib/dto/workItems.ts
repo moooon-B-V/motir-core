@@ -9,7 +9,7 @@
 // JSON-serialize losslessly as numbers). The mapper owns those conversions.
 
 import type { FilterAst } from '@/lib/filters/ast';
-import type { WorkflowDto } from './workflows';
+import type { WorkflowDto, StatusCategoryDto } from './workflows';
 import type { SprintBlockerDto } from './sprints';
 import type { RelationshipKind } from './workItemLinks';
 import type { LabelDto } from './labels';
@@ -154,6 +154,57 @@ export interface WorkItemSummaryDto {
   storyPoints: number | null;
   archivedAt: string | null;
 }
+
+/**
+ * The CURRENT status of a referenced work item, shaped for the internal-link
+ * chip's status DOT (Story 5.8 · Subtask 5.8.6): the machine `key`, its display
+ * `label`, and the `category` that picks the dot hue (todo · in_progress · done).
+ */
+export interface WorkItemRefStatusDto {
+  key: string;
+  label: string;
+  category: StatusCategoryDto;
+}
+
+/**
+ * The resolved summary of ONE referenced work item, for rendering a
+ * `[KEY](motir:<id>)` token (or a bare `KEY-N` in a title) as a LIVE
+ * internal-link chip (Subtask 5.8.6). A reference NEVER breaks the body, so the
+ * shape is a small discriminated union by view scope:
+ *
+ *  - `accessible: true` — the caller may browse the target's project, so the
+ *    chip shows the CURRENT `identifier` · `title` · `status` (+ `archived` for
+ *    the muted/dashed treatment). `status` is null only when the stored
+ *    `work_item.status` no longer resolves to a workflow status.
+ *  - `accessible: false` — the target exists in the workspace but sits in a
+ *    project the caller can't view, so NOTHING but the id crosses the wire (no
+ *    title / status leak); the chip renders the bare authored key only.
+ *
+ * A token id that resolves to NOTHING (deleted / cross-workspace) is simply
+ * ABSENT from the map — the chip then renders the bare authored key struck
+ * through. Keyed in {@link WorkItemRefMap} by BOTH the work-item id (the token
+ * href payload) and, when accessible, its current identifier (the bare-key /
+ * title path).
+ */
+export type WorkItemRefSummaryDto =
+  | {
+      accessible: true;
+      id: string;
+      identifier: string;
+      title: string;
+      kind: WorkItemKindDto;
+      archived: boolean;
+      status: WorkItemRefStatusDto | null;
+    }
+  | { accessible: false; id: string };
+
+/**
+ * A body/title's resolved work-item references, keyed by the work-item id (the
+ * `motir:<id>` token payload the render layer looks up) AND, for accessible
+ * targets, the current identifier key (e.g. `MOTIR-805`, the title-linkify
+ * path). Unresolvable ids are absent (rendered as a struck-through bare key).
+ */
+export type WorkItemRefMap = Record<string, WorkItemRefSummaryDto>;
 
 /**
  * The aggregate read backing the issue DETAIL page (Story 2.4 · Subtask 2.4.1).

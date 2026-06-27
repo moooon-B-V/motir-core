@@ -13,6 +13,7 @@ import type {
   CommentsPageDTO,
   CommentThreadDTO,
 } from '@/lib/dto/comments';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { useCommentsSort } from '@/lib/hooks/useCommentsSort';
 import { ContentSectionCard } from './ContentSectionCard';
 import { CommentComposer } from './CommentComposer';
@@ -83,6 +84,10 @@ export function CommentsSection({
   const [threads, setThreads] = useState<CommentThreadDTO[]>(initialPage?.threads ?? []);
   const [totalCount, setTotalCount] = useState(initialPage?.totalCount ?? 0);
   const [nextCursor, setNextCursor] = useState<string | null>(initialPage?.nextCursor ?? null);
+  // Resolved `motir:` references across the loaded window (Subtask 5.8.6) — the
+  // bodies' internal-link chips render against it. Each fetched page's map
+  // merges in (ids are stable, so later pages never clobber an earlier entry).
+  const [workItemRefs, setWorkItemRefs] = useState<WorkItemRefMap>(initialPage?.workItemRefs ?? {});
   // Per-user sort (Jira's "Reverse sort direction"), localStorage-persisted
   // through the shared store hook — SSR paints the oldest-first default.
   const [order, setOrder] = useCommentsSort();
@@ -112,6 +117,7 @@ export function CommentsSection({
         setThreads(page.threads);
         setTotalCount(page.totalCount);
         setNextCursor(page.nextCursor);
+        setWorkItemRefs(page.workItemRefs ?? {});
       })
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));
@@ -131,6 +137,7 @@ export function CommentsSection({
         setThreads((current) => [...current, ...page.threads]);
         setTotalCount(page.totalCount);
         setNextCursor(page.nextCursor);
+        setWorkItemRefs((current) => ({ ...current, ...(page.workItemRefs ?? {}) }));
         if (order === 'asc' && scroller) {
           requestAnimationFrame(() => {
             scroller.scrollTop += scroller.scrollHeight - prevHeight;
@@ -293,6 +300,7 @@ export function CommentsSection({
                     canModerate={canModerate}
                     currentUserId={currentUserId}
                     mentionCandidates={mentionCandidates}
+                    workItemRefs={workItemRefs}
                     onStartReply={(author) => setReplyTarget({ rootId: thread.id, author })}
                     onEdited={handleEdited}
                     onDeleted={() => handleRootDeleted(thread)}
@@ -322,6 +330,7 @@ export function CommentsSection({
                                 canModerate={canModerate}
                                 currentUserId={currentUserId}
                                 mentionCandidates={mentionCandidates}
+                                workItemRefs={workItemRefs}
                                 onStartReply={(author) =>
                                   setReplyTarget({ rootId: thread.id, author })
                                 }

@@ -17,6 +17,7 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
@@ -268,7 +269,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
         {/* Main — title + the FULL description (scrollable). */}
         <div className="min-w-0 overflow-y-auto px-7 pt-6 pb-7">
           <h2 className="font-serif text-[27px] leading-tight font-semibold text-(--el-text)">
-            {data.title}
+            <WorkItemTitle
+              title={data.title}
+              projectIdentifier={data.projectIdentifier}
+              workItemRefs={data.workItemRefs}
+            />
           </h2>
           {/* Readiness banner (2.5.21) — the shipped ReadinessBadge, top of the
               main column under the title, per quick-view.mock.html (2.5.20). Shown
@@ -301,7 +306,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {t('description')}
           </span>
           {data.descriptionMd ? (
-            <MarkdownView value={data.descriptionMd} aria-label={t('issueDescriptionAria')} />
+            <MarkdownView
+              value={data.descriptionMd}
+              aria-label={t('issueDescriptionAria')}
+              workItemRefs={data.workItemRefs}
+            />
           ) : (
             <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
           )}

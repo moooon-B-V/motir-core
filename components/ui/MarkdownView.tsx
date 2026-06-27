@@ -1,4 +1,5 @@
 import { renderMarkdown } from '@/lib/markdown/render';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import './markdown-editor.css';
 
 // MarkdownView — the read-only render surface for work-item Markdown content
@@ -26,9 +27,16 @@ export interface MarkdownViewProps {
   className?: string;
   /** Optional accessible label for the rendered region. */
   'aria-label'?: string;
+  /**
+   * Resolved work-item reference summaries (Subtask 5.8.6) for the `motir:`
+   * token chips in `value` — current key · title · status. The surface resolves
+   * them (detail page · comments · peek) and passes them through to
+   * `renderMarkdown`; omitted, a token degrades to a struck-through bare key.
+   */
+  workItemRefs?: WorkItemRefMap;
 }
 
-export function MarkdownView({ value, className, ...rest }: MarkdownViewProps) {
+export function MarkdownView({ value, className, workItemRefs, ...rest }: MarkdownViewProps) {
   // Link underlining (WCAG link-in-text-block) is handled inside renderMarkdown
   // so every render surface — this view, the editor preview, the server render —
   // gets it from the ONE module.
@@ -37,7 +45,7 @@ export function MarkdownView({ value, className, ...rest }: MarkdownViewProps) {
       className={['wmde-markdown', 'motir-prose', className].filter(Boolean).join(' ')}
       {...rest}
     >
-      {renderMarkdown(value)}
+      {renderMarkdown(value, { workItemRefs })}
     </div>
   );
 }

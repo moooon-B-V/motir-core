@@ -1,4 +1,11 @@
 {
+  "markdownEditor": {
+    "mentionPeople": "People",
+    "mentionWorkItems": "Work items",
+    "mentionTypeToSearch": "Keep typing to search work items…",
+    "mentionSearching": "Searching…",
+    "mentionNoResults": "No work items match “{query}”."
+  },
   "common": {
     "close": "Close",
     "dialog": "Dialog",
@@ -627,6 +634,8 @@
     "relationshipsGloss": "dependencies & links",
     "noLinkedIssues": "No linked work items yet.",
     "openBlocker": "Open blocker",
+    "refDeletedTitle": "This work item no longer exists",
+    "refNoAccessTitle": "You don't have access to this work item",
     "linkIssue": "Link work item",
     "removeLinkAria": "Remove {relationship} link to {target}",
     "removeConfirmBefore": "Remove the {relationship} link to",

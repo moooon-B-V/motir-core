@@ -1,4 +1,11 @@
 {
+  "markdownEditor": {
+    "mentionPeople": "成员",
+    "mentionWorkItems": "工作项",
+    "mentionTypeToSearch": "继续输入以搜索工作项…",
+    "mentionSearching": "搜索中…",
+    "mentionNoResults": "没有与「{query}」匹配的工作项。"
+  },
   "common": {
     "close": "关闭",
     "dialog": "对话框",
@@ -627,6 +634,8 @@
     "relationshipsGloss": "依赖与关联",
     "noLinkedIssues": "还没有关联工作项。",
     "openBlocker": "未解决的阻塞项",
+    "refDeletedTitle": "该工作项已不存在",
+    "refNoAccessTitle": "你无权访问该工作项",
     "linkIssue": "关联工作项",
     "removeLinkAria": "移除与 {target} 之间「{relationship}」的关联",
     "removeConfirmBefore": "移除与",

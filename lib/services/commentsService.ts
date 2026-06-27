@@ -10,6 +10,10 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
+import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
+import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
+import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   extractReferencedBlobUrls,
   extractReferencedBlobUrlsFromBodies,
@@ -159,6 +163,39 @@ async function syncCommentAttachmentLinks(
   );
 }
 
+/**
+ * Auto-relate-on-mention for a comment body (Subtask 5.8.3): parse the
+ * work-item references in `bodyMd` and auto-create a `relates_to` link from the
+ * comment's work item to each viewable, same-workspace target — inside the
+ * comment write transaction. The project read supplies the identifier prefix
+ * bare keys (`KEY-N`) match against. Delegates the resolve / view-scope /
+ * idempotent-create rules to the shared module; ADD-only and never throws out.
+ */
+async function autoRelateForBody(
+  item: WorkItem,
+  bodyMd: string,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const project = await projectRepository.findById(item.projectId, tx);
+  /* istanbul ignore if -- the item's project always resolves (the comment gate
+     read it); the guard narrows the nullable type only */
+  if (!project) return;
+  await autoRelateWorkItemMentions(
+    {
+      source: {
+        id: item.id,
+        workspaceId: item.workspaceId,
+        projectId: item.projectId,
+        projectIdentifier: project.identifier,
+      },
+      text: bodyMd,
+      ctx,
+    },
+    tx,
+  );
+}
+
 /** Map one freshly-written comment row to its DTO (single-row side reads). */
 async function toSingleCommentDto(row: Comment, mentionedUserIds: string[]): Promise<CommentDTO> {
   const authors = await userRepository.findByIds([row.authorId]);
@@ -233,6 +270,12 @@ export const commentsService = {
         ctx.userId,
         tx,
       );
+
+      // Auto-relate-on-mention (Subtask 5.8.3): a work-item reference in the
+      // comment body auto-creates a `relates_to` link FROM the comment's work
+      // item TO each viewable, same-workspace target, in THIS transaction.
+      // ADD-only, idempotent, silent on a bad reference.
+      await autoRelateForBody(gate.item, bodyMd, ctx, tx);
 
       // Auto-watch (Subtask 5.4.4, the verified comment rule, constant-on):
       // commenting watches the issue, in this SAME transaction. Idempotent by
@@ -337,6 +380,12 @@ export const commentsService = {
           tx,
         );
 
+        // Auto-relate-on-mention (5.8.3): an edit can ADD a new work-item
+        // reference → a new `relates_to` link. ADD-only (a removed reference
+        // never deletes the link) and idempotent (a kept reference re-adds
+        // nothing). Parses the NEW body.
+        await autoRelateForBody(gate.item, bodyMd, ctx, tx);
+
         return { row: updated, storedMentionIds: stored, addedMentionIds: added, changed: true };
       },
     );
@@ -426,7 +475,7 @@ export const commentsService = {
     options: ListCommentsOptions,
     ctx: ServiceContext,
   ): Promise<CommentsPageDTO> {
-    await resolveGatedWorkItem(workItemId, ctx);
+    const gate = await resolveGatedWorkItem(workItemId, ctx);
     const order = options.order ?? 'asc';
 
     // take+1 probes for a next page without a second count read.
@@ -453,11 +502,23 @@ export const commentsService = {
     }
     const authorsById = new Map(authors.map((u) => [u.id, u]));
 
+    // Resolve the `motir:` token references in this page's comment bodies to
+    // live summaries (Subtask 5.8.6), so MarkdownView renders the internal-link
+    // chip. Token ids only — a bare `KEY-N` inside a comment body is the
+    // deferred body-bare-key linkify (it needs the editor's 5.8.5 token anyway).
+    const tokenIds = [...new Set(pageComments.flatMap((c) => parseWorkItemTokenIds(c.bodyMd)))];
+    const workItemRefs = await resolveWorkItemRefSummaries(
+      { ids: tokenIds, keys: [] },
+      gate.item.projectId,
+      ctx,
+    );
+
     return {
       threads: roots.map((root) => toCommentThreadDto(root, authorsById, mentionsByCommentId)),
       totalCount,
       nextCursor: hasMore ? (roots[roots.length - 1]?.id ?? null) : null,
       order,
+      workItemRefs,
     };
   },
 };

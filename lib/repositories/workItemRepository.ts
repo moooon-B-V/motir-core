@@ -388,6 +388,27 @@ export const workItemRepository = {
   },
 
   /**
+   * Batched form of {@link findByIdentifier} — resolve MANY bare project keys
+   * (`PROD-1`, `PROD-7`, …) to their work items within ONE project in a single
+   * round-trip (Subtask 5.8.3, the auto-relate-on-mention key resolution). Bare
+   * references are single-project by construction (the key parser only matches
+   * the source project's prefix), so this is project-scoped, not workspace-wide.
+   * Unresolved keys simply don't come back. Takes an optional `tx` so it joins
+   * the write transaction it feeds; empty input short-circuits to `[]`.
+   */
+  async findByIdentifiers(
+    projectId: string,
+    identifiers: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    if (identifiers.length === 0) return [];
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: { projectId, identifier: { in: identifiers } },
+    });
+  },
+
+  /**
    * Re-derive every work item's denormalized `identifier` for a project after a
    * key change (Story 6.8 · `changeKey`). The identifier is derived data —
    * `<project key>-<key number>` — so a rename is a single in-place bulk UPDATE,
@@ -436,9 +457,14 @@ export const workItemRepository = {
    * id simply doesn't come back. Read-only path → `db` singleton. Empty input
    * short-circuits to `[]` so we never issue a degenerate `IN ()`.
    */
-  async findByIdsInWorkspace(ids: string[], workspaceId: string): Promise<WorkItem[]> {
+  async findByIdsInWorkspace(
+    ids: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
-    return db.workItem.findMany({ where: { id: { in: ids }, workspaceId } });
+    const client = tx ?? db;
+    return client.workItem.findMany({ where: { id: { in: ids }, workspaceId } });
   },
 
   /**

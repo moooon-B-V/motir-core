@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
+import { searchWorkItemMentions } from '@/lib/mentions/workItemMentionSearch';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { ParentPicker } from '@/components/issues/ParentPicker';
 import { StatusPicker } from '@/components/issues/StatusPicker';
@@ -220,6 +221,7 @@ export function EditIssueForm({
         onChange={setDescription}
         size="full"
         onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
+        workItemSearch={searchWorkItemMentions}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -332,6 +334,7 @@ export function EditIssueForm({
         onChange={setExplanation}
         size="full"
         onFileUpload={(f) => uploadIssueAttachment(f, tErr)}
+        workItemSearch={searchWorkItemMentions}
       />
       {!aiConfigured ? <DraftGateNotice /> : null}
       {draft.phase === 'error' ? (

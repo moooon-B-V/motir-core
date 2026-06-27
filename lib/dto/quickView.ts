@@ -4,6 +4,7 @@ import type {
   WorkItemKindDto,
   WorkItemPriorityDto,
   WorkItemTypeDto,
+  WorkItemRefMap,
 } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 
@@ -27,10 +28,20 @@ import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 export interface QuickViewData {
   identifier: string;
   title: string;
+  /**
+   * This project's identifier prefix (e.g. `MOTIR`) — the bare-key match scope
+   * for the peek header's title-linkify (Subtask 5.8.6).
+   */
+  projectIdentifier: string;
   kind: WorkItemKindDto;
   statusLabel: string;
   statusCategory: StatusCategoryDto | null;
   descriptionMd: string | null;
+  /**
+   * Resolved `motir:` references in `descriptionMd` (Subtask 5.8.6) — keyed by
+   * id, so the peek's description renders the live internal-link chip.
+   */
+  workItemRefs: WorkItemRefMap;
   /** The NATURE of the work (Story 2.7) — null on a container kind / untyped leaf. */
   type: WorkItemTypeDto | null;
   /** WHO executes the work (Story 2.7) — null when no type is set. */
