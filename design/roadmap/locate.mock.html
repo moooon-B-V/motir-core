@@ -1,0 +1,927 @@
+<!doctype html>
+<!--
+  ROADMAP — LOCATE control (MOTIR-1427 / Story MOTIR-1421).
+  COMPOSES the shipped roadmap canvas + its overlay chrome (ProjectRoadmapCanvas /
+  PlanningCanvas, MOTIR-1194): breadcrumb (top-left), search + Expand (top-right,
+  MOTIR-1420), the zoom + fit-view cluster (bottom-left). Adds ONE new affordance —
+  the LOCATE button (bottom-left, beside the zoom/fit cluster) that recentres the
+  viewport on the actionable node: the "you are here" frontier (MOTIR-1013) if one
+  exists, else a READY node (MOTIR-1417); repeated clicks CYCLE the ready set, wrapping.
+
+  The Locate glyph (LocateFixed — crosshair) is deliberately DISTINCT from the
+  Maximize / Maximize2 used by Expand + fit-view. Built from the real design system:
+  --el-* colour + element-semantic shape tokens, light values. It does NOT redraw the
+  canvas — nodes/edges are the shipped canvas, shown only enough to place the control.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — locate control (MOTIR-1427)</title>
+    <style>
+      :root {
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --el-type-epic: #ff64c8;
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --height-control: 36px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead span {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .sheethead .cap {
+        margin-left: auto;
+      }
+      .body {
+        padding: 20px;
+      }
+
+      /* ── the canvas (COMPOSED — the shipped ProjectRoadmapCanvas) ── */
+      .canvas {
+        position: relative;
+        height: 380px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow: hidden;
+      }
+
+      /* overlay controls (fixed; do not pan/zoom) */
+      .crumb {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px 4px 4px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .crumb b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .iconbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .iconbtn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* top-right cluster: search + Expand (shipped, unchanged) */
+      .topright {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .search {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        width: 200px;
+        height: var(--height-control);
+        padding: 0 10px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .search svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .ctrlbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        box-shadow: var(--shadow-card);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .ctrlbtn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* bottom-left zoom + fit-view cluster (shipped, unchanged) */
+      .bottomleft {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .zoom {
+        display: inline-flex;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .zoom .iconbtn {
+        border-radius: 0;
+      }
+      .zoom .iconbtn + .iconbtn {
+        border-left: 1px solid var(--el-border);
+      }
+      /* the NEW Locate control — a surface icon button + an optional position hint */
+      .locate {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .locate .ctrlbtn.spotlight {
+        border-color: var(--el-accent);
+        box-shadow:
+          var(--shadow-card),
+          0 0 0 3px #5645d426;
+        color: var(--el-text);
+      }
+      .locate .ctrlbtn[aria-disabled='true'] {
+        color: var(--el-text-faint);
+        box-shadow: var(--shadow-subtle);
+        cursor: not-allowed;
+        background: var(--el-surface-soft);
+      }
+      /* the "n of m" cycling hint chip */
+      .poschip {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-control);
+        padding: 0 9px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        box-shadow: var(--shadow-card);
+        font:
+          600 12px ui-monospace,
+          monospace;
+        color: var(--el-text-secondary);
+      }
+      .poschip b {
+        color: var(--el-accent);
+      }
+      /* a disabled-state tooltip bubble */
+      .tip {
+        position: absolute;
+        bottom: 58px;
+        left: 14px;
+        max-width: 220px;
+        padding: 7px 10px;
+        background: var(--el-text-strong);
+        color: #fff;
+        border-radius: var(--radius-control);
+        font-size: 12px;
+        line-height: 1.4;
+        box-shadow: var(--shadow-card);
+      }
+
+      /* ── node card (shipped WorkItemNode) — minimal ── */
+      .node {
+        position: absolute;
+        width: 198px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        box-shadow: var(--shadow-card);
+      }
+      /* the CENTRED/located node lights up — the accent focus ring + offset (the
+         data-highlighted treatment the search-locate already uses) */
+      .node.located {
+        box-shadow:
+          var(--shadow-card),
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--el-accent);
+      }
+      /* a faint left success bar marks the READY cards (shipped ready highlight) */
+      .node.ready {
+        border-left: 3px solid var(--el-success);
+      }
+      .node.dim {
+        opacity: 0.55;
+      }
+      .nrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .pill.here {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill.here svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-accent);
+      }
+      .pill.rdy {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill.rdy svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-success);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        margin-top: 7px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--el-tint-mint);
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-type-story);
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+
+      .note {
+        margin-top: 14px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+      .spot {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 4px;
+        border-radius: var(--radius-btn);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — locate control · MOTIR-1427</h1>
+    <p class="docsub">
+      A Locate button (bottom-left, beside the zoom/fit cluster) recentres the canvas on the
+      actionable node — the "you are here" frontier if present, else a ready node; repeated clicks
+      cycle the ready set and wrap. Composes the shipped canvas + overlay chrome; only the Locate
+      button + its position hint are new.
+    </p>
+
+    <!-- ════════ PANEL 1 — you-are-here priority ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>1 · Locate the frontier</b
+        ><span>— centres + highlights the "you are here" node first</span>
+        <span class="cap">ProjectRoadmapCanvas overlay</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="crumb"><b>Roadmap</b></div>
+          <div class="topright">
+            <span class="search">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              Search the roadmap
+            </span>
+            <button class="ctrlbtn" aria-label="Enter full screen" title="Enter full screen">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- the located (you-are-here) node, centred -->
+          <div class="node located" style="left: 340px; top: 150px">
+            <div class="nrow">
+              <span class="pill here">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" />
+                </svg>
+                You are here
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1421</div>
+                <div class="ntitle">Roadmap locate control</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- a couple of dimmed siblings for context -->
+          <div class="node dim" style="left: 70px; top: 70px">
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1420</div>
+                <div class="ntitle">Roadmap full-screen mode</div>
+              </div>
+            </div>
+          </div>
+          <div class="node dim" style="left: 660px; top: 250px">
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1422</div>
+                <div class="ntitle">Distinct done-card style</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottomleft">
+            <div class="zoom">
+              <button class="iconbtn" aria-label="Zoom out">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Zoom in">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Fit to view">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M15 3h6v6" />
+                  <path d="m21 3-7 7" />
+                  <path d="m3 21 7-7" />
+                  <path d="M9 21H3v-6" />
+                </svg>
+              </button>
+            </div>
+            <div class="locate">
+              <button class="ctrlbtn spotlight" aria-label="Locate the current item" title="Locate">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="2" x2="5" y1="12" y2="12" />
+                  <line x1="19" x2="22" y1="12" y2="12" />
+                  <line x1="12" x2="12" y1="2" y2="5" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                  <circle cx="12" cy="12" r="7" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>The Locate button</b> joins the bottom-left cluster (right of the shipped zoom +
+          fit-view), an <code>--el-surface</code> icon button (<code>--radius-btn</code>,
+          <code>--shadow-card</code>, <code>--height-control</code>). Its glyph is
+          <b>LocateFixed</b> (a crosshair) — deliberately UNLIKE the <code>Maximize</code> /
+          <code>Maximize2</code> of Expand + fit-view. Clicking it pans + zooms the canvas to the
+          <b>"you are here"</b> in-progress frontier (MOTIR-1013) and lights it with the accent
+          focus ring (the <code>data-highlighted</code> treatment the <code>/</code>-search locate
+          already uses). Accessible name <b>"Locate the current item"</b>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ PANEL 2 — ready cycling + wrap ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>2 · Cycle the ready set</b
+        ><span>— no frontier → centres a ready node; clicks cycle + wrap</span>
+        <span class="cap">"n of m" position hint</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="crumb"><b>Roadmap</b></div>
+          <div class="topright">
+            <span class="search">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              Search the roadmap
+            </span>
+            <button class="ctrlbtn" aria-label="Enter full screen" title="Enter full screen">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- three ready nodes; the 2nd is the current cycle target (located) -->
+          <div class="node ready dim" style="left: 80px; top: 90px">
+            <div class="nrow">
+              <span class="pill rdy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+                </svg>
+                Ready
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1427</div>
+                <div class="ntitle">Locate control — design</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node ready located" style="left: 360px; top: 165px">
+            <div class="nrow">
+              <span class="pill rdy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+                </svg>
+                Ready
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1431</div>
+                <div class="ntitle">Done-card style — design</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="node ready dim" style="left: 650px; top: 255px">
+            <div class="nrow">
+              <span class="pill rdy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+                </svg>
+                Ready
+              </span>
+            </div>
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1433</div>
+                <div class="ntitle">Backlog grooming view</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottomleft">
+            <div class="zoom">
+              <button class="iconbtn" aria-label="Zoom out">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Zoom in">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Fit to view">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M15 3h6v6" />
+                  <path d="m21 3-7 7" />
+                  <path d="m3 21 7-7" />
+                  <path d="M9 21H3v-6" />
+                </svg>
+              </button>
+            </div>
+            <div class="locate">
+              <button
+                class="ctrlbtn spotlight"
+                aria-label="Locate the next ready item"
+                title="Next ready item"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="2" x2="5" y1="12" y2="12" />
+                  <line x1="19" x2="22" y1="12" y2="12" />
+                  <line x1="12" x2="12" y1="2" y2="5" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                  <circle cx="12" cy="12" r="7" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+              <span class="poschip"><b>2</b>&nbsp;/&nbsp;3</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          With <b>no frontier</b>, Locate targets the <b>ready</b> nodes (the mint "Ready"
+          highlight, MOTIR-1417). With multiple ready nodes a quiet <b>"n of m"</b> hint appears
+          beside the button; each click advances to the <b>next</b> ready node and <b>wraps</b> to
+          the first after the last. The current target carries the accent ring; the rest stay at
+          rest.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ PANEL 3 — disabled (nothing actionable) ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>3 · Nothing to locate</b
+        ><span>— no frontier and no ready node → the button is disabled</span>
+        <span class="cap">disabled + tooltip</span>
+      </div>
+      <div class="body">
+        <div class="canvas">
+          <div class="crumb"><b>Roadmap</b></div>
+          <div class="node dim" style="left: 300px; top: 150px">
+            <div class="nbody">
+              <span class="tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+              </span>
+              <div>
+                <div class="nid">MOTIR-1420</div>
+                <div class="ntitle">Roadmap full-screen mode · done</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tip">Nothing to locate — no in-progress or ready item on this level.</div>
+          <div class="bottomleft">
+            <div class="zoom">
+              <button class="iconbtn" aria-label="Zoom out">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Zoom in">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+              </button>
+              <button class="iconbtn" aria-label="Fit to view">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M15 3h6v6" />
+                  <path d="m21 3-7 7" />
+                  <path d="m3 21 7-7" />
+                  <path d="M9 21H3v-6" />
+                </svg>
+              </button>
+            </div>
+            <div class="locate">
+              <button
+                class="ctrlbtn"
+                aria-label="Locate the current item"
+                aria-disabled="true"
+                title="Nothing to locate"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="2" x2="5" y1="12" y2="12" />
+                  <line x1="19" x2="22" y1="12" y2="12" />
+                  <line x1="12" x2="12" y1="2" y2="5" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                  <circle cx="12" cy="12" r="7" />
+                  <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          When there is <b>neither</b> a you-are-here frontier <b>nor</b> any ready node (e.g. every
+          item on the level is done), the button is <b>disabled</b> (<code>aria-disabled</code>,
+          faint <code>--el-text-faint</code>) with a tooltip explaining why — so the control never
+          dead-ends on an empty target.
+        </p>
+      </div>
+    </section>
+  </body>
+</html>
