@@ -722,16 +722,19 @@ fill survives scale and the two can diverge.
 - **Ready (reworked):** the whole card fills with `--el-tint-mint` (was the 3px
   `--el-success` left bar) + the "Ready" pill (`CirclePlay`, `--el-success` icon) stays. The
   title goes `--el-text-strong` for AA on the tint. A ready node now **glows mint** at any zoom.
-- **Done (new):** the card **sinks into the board** — it takes the recessed `--el-canvas`
-  fill (clearly darker/greyer than the raised white todo card) with a defined
-  `--el-border-strong` edge + a flat `--shadow-subtle` so it reads as settled-back, plus a
-  **struck**, `--el-text-muted` title and a **solid dark "Done" stamp** (`bg --el-text-secondary` /
-  `text --el-text-inverted` + a `Check`). The stamp is deliberately **NOT success-green** (so it
-  can't be mistaken for ready) AND far heavier than the light `--el-muted` "To do" chip (so done
-  can't be mistaken for **todo** — the redo fixed a too-similar pair). The board-coloured fill is
-  the zoom-out signal.
-- **Mint-forward (ready) vs board-recessed (done)** is a value contrast that holds at any zoom;
-  the dark "Done" stamp vs the light "To do" chip separates done from todo.
+- **Done (new):** the card takes a **distinct palette tint — `--el-tint-sky`** (a clearly
+  different colour from the white todo card AND the mint ready card), `--el-border` + a flat
+  `--shadow-subtle`, a **struck**, `--el-text-muted` title, and a **solid dark "Done" stamp**
+  (`bg --el-text-secondary` / `text --el-text-inverted` + a `Check`). The stamp is deliberately
+  **NOT mint** (so it can't be mistaken for ready) AND far heavier than the light `--el-muted`
+  "To do" chip (so done can't be mistaken for **todo** — the redo fixed a too-similar pair). The
+  tint fill is the zoom-out signal. **Why a tint, not an invented colour:** `--el-tint-*` are
+  PALETTE tokens, so the four state colours flip together under `data-palette` and the palette
+  author keeps the six tints mutually distinct — so done stays distinct from ready under every
+  palette. An invented hex / `color-mix` over a raw hue would NOT swap (forbidden — see the
+  colour rule).
+- **Mint (ready) vs sky (done)** is a clear colour contrast that holds at any zoom; the dark
+  "Done" stamp vs the light "To do" chip separates done from todo.
 
 ### Precedence + boundaries
 

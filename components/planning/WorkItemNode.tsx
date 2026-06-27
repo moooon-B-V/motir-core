@@ -129,8 +129,9 @@ export function WorkItemNode({
    *  MOTIR-1013). */
   here?: boolean;
   /** READY to start (MOTIR-1417) — a startable, fully-unblocked node. Its status
-   *  pill becomes the success "Ready" pill and the card gets a `--el-success` left
-   *  accent bar. Suppressed on the "you are here" node (its accent treatment wins). */
+   *  pill becomes the success "Ready" pill and the card gets a whole-card
+   *  `--el-tint-mint` wash (MOTIR-1422). Suppressed on the "you are here" node (its
+   *  accent treatment wins). */
   ready?: boolean;
 }) {
   const showMeter = progress !== null && progress.total > 0;
@@ -140,7 +141,7 @@ export function WorkItemNode({
   const showReady = ready && !here;
   // DONE + READY card styles (MOTIR-1422) — both carried IN THE CARD body so they
   // survive zoom-out (the old 3px ready bar vanished) and read as opposites:
-  // READY = a whole-card mint wash; DONE = a faded/recessed card + struck title.
+  // READY = a whole-card mint wash; DONE = a distinct `--el-tint-sky` card + struck title.
   // The accent "you are here" and the red cross-blocked flag are louder than both.
   const showDone = item.status === 'done' && !here && !crossBlocked;
   const showReadyWash = showReady && !crossBlocked;
@@ -171,15 +172,16 @@ export function WorkItemNode({
       // background, MOTIR-1362): the fill is clearly lighter than the board, and the
       // crisp border + `--shadow-card` lift defines the edge. The active "you are
       // here" node takes an accent border; a cross-story tangle wins the border (the
-      // louder signal). MOTIR-1422 adds the card-level DONE (faded/recessed) + READY
-      // (mint wash) fills — both legible zoomed out, unlike the old 3px ready edge.
+      // louder signal). MOTIR-1422 adds the card-level DONE (`--el-tint-sky`) + READY
+      // (mint wash) fills — distinct palette tints, legible zoomed out, unlike the old
+      // 3px ready edge.
       className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
         crossBlocked
           ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
           : here
             ? 'border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)'
             : showDone
-              ? 'border-(--el-border-strong) bg-(--el-canvas) shadow-(--shadow-subtle)'
+              ? 'border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)'
               : showReadyWash
                 ? 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
                 : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
@@ -300,7 +302,7 @@ function ReadyPill() {
 /** The "Done" stamp (MOTIR-1422) — a SOLID DARK chip. Deliberately NOT
  *  success-green (so it can't be confused with the ready highlight) AND far heavier
  *  than the light "To do" chip (so done can't be confused with todo — the redo). The
- *  card itself sinks into the board (recessed `--el-canvas` + struck title), so done
+ *  card itself takes a distinct `--el-tint-sky` fill + a struck title, so done
  *  reads as the opposite of ready's mint-forward wash. */
 function DonePill() {
   return (

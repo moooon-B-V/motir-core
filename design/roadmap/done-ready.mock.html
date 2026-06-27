@@ -10,8 +10,8 @@
   THE FIX: ready shipped as a --el-success 3px LEFT BAR (MOTIR-1417) — a hairline
   that vanishes when zoomed out, and the same success-green a done border would use.
   So both signals move INTO THE CARD BODY: READY = a whole-card --el-tint-mint wash;
-  DONE = a card that sinks into the board (recessed --el-canvas fill) + a dark "Done"
-  stamp + struck title (NOT success-green). Card-level fills
+  DONE = a distinct palette-tint card (--el-tint-sky) + a dark "Done" stamp + struck
+  title (NOT mint, ready's colour). Card-level fills
   survive zoom-out; the two are unmistakably different.
 
   Built from the real design system: every value is the light-theme resolution of a
@@ -169,15 +169,15 @@
       .node.ready .ntitle {
         color: var(--el-text-strong);
       }
-      /* THE DONE TREATMENT (redo) — the card SINKS INTO THE BOARD: it takes the
-         recessed `--el-canvas` fill (clearly darker/greyer than the raised white
-         todo card) with a defined `--el-border-strong` edge + a flat `--shadow-subtle`
-         so it reads as settled-back, not raised. A struck, muted title + a SOLID dark
-         "Done" stamp finish it. NOT success-green (that is ready's language); the
-         board-coloured fill is the zoom-out signal. */
+      /* THE DONE TREATMENT — a DISTINCT palette-tint card: `--el-tint-sky`, a clearly
+         different colour from the white todo card AND the mint ready card. It is a
+         palette TOKEN, so it flips with `data-palette` and stays mutually distinct
+         from the other tints under every palette (no invented hex — that wouldn't
+         swap). A flat `--shadow-subtle` + a struck, muted title + a SOLID dark "Done"
+         stamp finish it. NOT mint (ready's colour). */
       .node.done {
-        background: var(--el-canvas);
-        border-color: var(--el-border-strong);
+        background: var(--el-tint-sky);
+        border-color: var(--el-border);
         box-shadow: var(--shadow-subtle);
       }
       .node.done .ntitle {
@@ -424,7 +424,8 @@
               </div>
             </div>
             <div class="celltag">
-              <b>Done</b> — recedes into the board + dark &ldquo;Done&rdquo; stamp
+              <b>Done</b> — a distinct <code>--el-tint-sky</code> card + dark &ldquo;Done&rdquo;
+              stamp
             </div>
           </div>
 
@@ -512,13 +513,13 @@
         <p class="note">
           <b>Ready</b> fills the whole card with <code>--el-tint-mint</code> (was a 3px
           <code>--el-success</code> left bar) + keeps the &ldquo;Ready&rdquo; pill; the title is
-          <code>--el-text-strong</code> for AA on the tint. <b>Done</b> SINKS INTO THE BOARD — it
-          takes the recessed <code>--el-canvas</code> fill (clearly darker than the raised white
-          todo card) with a defined <code>--el-border-strong</code> edge + a flat shadow, a
-          <b>struck</b> <code>--el-text-muted</code> title, and a SOLID DARK &ldquo;Done&rdquo;
-          stamp (never green, so it can&rsquo;t be confused with ready; and far heavier than the
-          light &ldquo;To do&rdquo; chip, so it can&rsquo;t be confused with todo). Mint-forward
-          (ready) vs board-recessed (done) reads instantly; neither collides with the accent
+          <code>--el-text-strong</code> for AA on the tint. <b>Done</b> takes a DISTINCT palette
+          tint — <code>--el-tint-sky</code>, a clearly different colour from the white todo card and
+          the mint ready card — with a <b>struck</b> <code>--el-text-muted</code> title and a SOLID
+          DARK &ldquo;Done&rdquo; stamp (never mint, so it can&rsquo;t be confused with ready; and
+          far heavier than the light &ldquo;To do&rdquo; chip, so it can&rsquo;t be confused with
+          todo). Every state is a palette TOKEN, so the colours flip together under
+          <code>data-palette</code> and stay mutually distinct. Neither collides with the accent
           <b>you-are-here</b> or the red blocked flag.
         </p>
       </div>
@@ -584,8 +585,8 @@
 
         <div class="zoomrow">
           <div class="zoomlbl">
-            <b>After</b> — mint (ready), board-recessed (done), plain (normal), accent (here) stay
-            tellable apart.
+            <b>After</b> — mint (ready), sky (done), plain (normal), accent (here) stay tellable
+            apart.
           </div>
           <div class="mini">
             <div class="node ready">
@@ -709,7 +710,7 @@
 
         <p class="note">
           A whole-card fill survives scale; a 3px edge does not. <b>Mint-forward</b> (ready) vs
-          <b>board-recessed</b> (done) is a value contrast that holds at any zoom — so a viewer
+          <b>sky-tinted</b> (done) is a clear colour contrast that holds at any zoom — so a viewer
           tells completed work from actionable work at a glance, exactly the legibility the thin bar
           lost.
         </p>
