@@ -32,6 +32,15 @@ export interface BuildWorkItemLevelOptions {
   markActive?: boolean;
   /** Pin the planning-origin cluster at the road's start (the ROOT level only). */
   includeOrigin?: boolean;
+  /**
+   * The roadmap SCOPE (MOTIR-1379). In `'project'` scope every off-level blocker is
+   * the CROSS-STORY tangle (a bad plan). In `'sprint'` scope the same edges become a
+   * SPRINT-VALIDITY signal: a blocker that is DONE or itself IN the active sprint is
+   * satisfied (not drawn), and only an out-of-sprint, NOT-done blocker is flagged —
+   * as "not in sprint", never "cross-story" (two items in the same story can still be
+   * an out-of-sprint dependency). Defaults to `'project'`.
+   */
+  scope?: 'project' | 'sprint';
 }
 
 export function buildWorkItemLevel(
@@ -41,6 +50,7 @@ export function buildWorkItemLevel(
   nodes: ProjectCanvasNode[];
   deps: ProjectCanvasDep[];
 } {
+  const scope = opts.scope ?? 'project';
   const itemIds = new Set(wi.items.map((i) => i.id));
   const statusById = new Map(wi.items.map((i) => [i.id, i.status]));
   const offById = new Map(wi.offLevelBlockers.map((b) => [b.id, b]));
@@ -58,28 +68,36 @@ export function buildWorkItemLevel(
         to: e.blockedId,
         variant: statusById.get(e.blockerId) === 'done' ? 'firm' : 'pending',
       });
-    } else {
-      // cross-story: a red edge to a ghost anchor naming the off-level blocker.
-      crossBlocked.add(e.blockedId);
-      deps.push({ from: e.blockerId, to: e.blockedId, variant: 'cross' });
-      if (!anchorAdded.has(e.blockerId)) {
-        anchorAdded.add(e.blockerId);
-        const stub = offById.get(e.blockerId);
-        anchorNodes.push({
-          id: e.blockerId,
-          parentId: null,
-          drillable: false,
-          searchText: stub ? `${stub.identifier} ${stub.title}` : e.blockerId,
-          crumbLabel: stub?.identifier,
-          content: (
-            <GhostAnchor
-              identifier={stub?.identifier ?? '—'}
-              title={stub?.title ?? 'Blocked across stories'}
-              parentTitle={stub?.parentTitle ?? null}
-            />
-          ),
-        });
-      }
+      continue;
+    }
+    const stub = offById.get(e.blockerId);
+    // SPRINT scope: the off-level signal is sprint VALIDITY, not "cross-story". A
+    // blocker that is DONE or itself IN the active sprint is satisfied → no signal
+    // (the dependency is not drawn). Only an out-of-sprint, NOT-done blocker is the
+    // problem. PROJECT scope: every off-level blocker is the cross-story tangle.
+    if (scope === 'sprint' && (!stub || stub.isDone || stub.inActiveSprint)) {
+      continue;
+    }
+    // a red edge to a ghost anchor naming the off-level blocker.
+    crossBlocked.add(e.blockedId);
+    deps.push({ from: e.blockerId, to: e.blockedId, variant: 'cross' });
+    if (!anchorAdded.has(e.blockerId)) {
+      anchorAdded.add(e.blockerId);
+      anchorNodes.push({
+        id: e.blockerId,
+        parentId: null,
+        drillable: false,
+        searchText: stub ? `${stub.identifier} ${stub.title}` : e.blockerId,
+        crumbLabel: stub?.identifier,
+        content: (
+          <GhostAnchor
+            identifier={stub?.identifier ?? '—'}
+            title={stub?.title ?? 'Blocked across stories'}
+            parentTitle={stub?.parentTitle ?? null}
+            outOfSprint={scope === 'sprint'}
+          />
+        ),
+      });
     }
   }
 
@@ -111,6 +129,7 @@ export function buildWorkItemLevel(
         }}
         drillable={item.hasChildren}
         crossBlocked={crossBlocked.has(item.id)}
+        crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'cross-story'}
         progress={item.progress ?? null}
         here={item.id === activeId}
       />

@@ -219,7 +219,16 @@ describe('workItemsService.getProjectRoadmap — dependency edges (per level)', 
     const lvl = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
     expect(lvl.edges).toEqual([{ blockedId: f.A2.id, blockerId: f.B1.id }]);
     expect(lvl.offLevelBlockers).toEqual([
-      { id: f.B1.id, identifier: 'PROD-6', title: 'Subtask B1', parentTitle: 'Story B' },
+      {
+        id: f.B1.id,
+        identifier: 'PROD-6',
+        title: 'Subtask B1',
+        parentTitle: 'Story B',
+        // Enriched for the sprint-validity signal (MOTIR-1379); in project scope
+        // `inActiveSprint` is always false (no sprint resolved).
+        isDone: true,
+        inActiveSprint: false,
+      },
     ]);
   });
 

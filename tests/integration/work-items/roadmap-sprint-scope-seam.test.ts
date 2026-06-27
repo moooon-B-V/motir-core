@@ -158,6 +158,43 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     expect(roadmap.edges).toEqual([{ blockedId: t.a1.id, blockerId: t.storyA2.id }]);
   });
 
+  it('off-level blockers carry isDone + inActiveSprint so the client can tell a sprint-validity problem from a satisfied dep (MOTIR-1379)', async () => {
+    const fx = await makeFixture();
+    const sprintId = await createActiveSprint(fx);
+    // A member story (a root member) blocked by THREE off-level items: an
+    // out-of-sprint OPEN dep (the sprint-validity PROBLEM), an out-of-sprint DONE
+    // dep (satisfied), and an IN-sprint dep that sits on another branch (satisfied).
+    const member = await createWorkItem(fx, { kind: 'story', title: 'Billing' });
+    await setSprint(member.id, sprintId);
+    const openExternal = await createWorkItem(fx, { kind: 'story', title: 'Open external' });
+    const doneExternal = await createWorkItem(fx, { kind: 'story', title: 'Done external' });
+    await setStatus(doneExternal.id, 'done');
+    // An in-sprint blocker nested under a different member story, so it is in the
+    // sprint but OFF the root level.
+    const otherMember = await createWorkItem(fx, { kind: 'story', title: 'Other member' });
+    await setSprint(otherMember.id, sprintId);
+    const inSprintDeep = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'In-sprint deep',
+      parentId: otherMember.id,
+    });
+    await setSprint(inSprintDeep.id, sprintId);
+    await link(fx, member.id, openExternal.id);
+    await link(fx, member.id, doneExternal.id);
+    await link(fx, member.id, inSprintDeep.id);
+
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      scope: 'sprint',
+    });
+    const byId = new Map(roadmap.offLevelBlockers.map((b) => [b.id, b]));
+    // The open external dep — NOT done, NOT in sprint → the flagged problem.
+    expect(byId.get(openExternal.id)).toMatchObject({ isDone: false, inActiveSprint: false });
+    // The done dep — satisfied.
+    expect(byId.get(doneExternal.id)).toMatchObject({ isDone: true, inActiveSprint: false });
+    // The in-sprint (deeper) dep — in the sprint, so not an out-of-sprint problem.
+    expect(byId.get(inSprintDeep.id)).toMatchObject({ isDone: false, inActiveSprint: true });
+  });
+
   it('case 4 — whole-project parity: scope:project equals the pre-existing read (full tree)', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);

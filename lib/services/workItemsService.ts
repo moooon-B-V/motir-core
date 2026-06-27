@@ -1991,13 +1991,24 @@ export const workItemsService = {
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
     const edges = await workItemLinkRepository.findBlockedByEdges(rows.map((r) => r.id));
 
-    // A blocker NOT on this level is a cross-story tangle — fetch a NAMING stub so
-    // the canvas can anchor the red signal to a chip (MOTIR-1331).
+    // A blocker NOT on this level needs a NAMING stub so the canvas can anchor the
+    // signal to a chip (MOTIR-1331). The stub carries `isDone` + `inActiveSprint`
+    // so the SPRINT-scoped view can tell a sprint-validity problem (a blocker that
+    // is NOT done AND NOT in the active sprint) from a satisfied one — replacing the
+    // project-scope "cross-story" framing (MOTIR-1379).
     const levelIds = new Set(rows.map((r) => r.id));
     const offLevelIds = [
       ...new Set(edges.map((e) => e.blockerId).filter((id) => !levelIds.has(id))),
     ];
-    const offLevelBlockers = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+    const offLevelStubs = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+    const offLevelBlockers = offLevelStubs.map((s) => ({
+      id: s.id,
+      identifier: s.identifier,
+      title: s.title,
+      parentTitle: s.parentTitle,
+      isDone: doneKeys.has(s.status),
+      inActiveSprint: sprintId != null && s.sprintId === sprintId,
+    }));
 
     return { nodes, edges, offLevelBlockers };
   },

@@ -494,6 +494,28 @@ invented here).
 | **3** | No active sprint        | toggle on **Active sprint** but no sprint running → an in-canvas `EmptyState` (**Goal** icon, **"No active sprint"**, a one-line hint); the toggle stays available, Whole-project scope unaffected                                                                                                                                                                           |
 | **4** | Control + access path   | the `Segmented` toggle states (default / hover / sprint-active) + the **Roadmap** primary left-nav entry the page is reached from (MOTIR-1011)                                                                                                                                                                                                                               |
 
+### Sprint-scope dependency signal — "not in sprint", not "cross-story" (MOTIR-1379)
+
+The roadmap's off-level dependency signal (MOTIR-1331) MEANS something different in
+sprint scope, so it is RE-LABELLED. In **project** scope a `blocked_by` edge to an
+item on another level is the **cross-story tangle** (a bad plan — the red edge, the
+ghost anchor "in {story} ↗", and the node's red **cross-story** flag). In **sprint**
+scope the same edges become a **sprint-validity** signal (mirroring the MCP
+`validate_sprint` rule): a blocker is a problem ONLY when it is **not done AND not in
+the active sprint**. So:
+
+- a **done** dependency, or one **already in the sprint**, is SATISFIED → it is NOT
+  drawn (no edge, no anchor, no flag) — the sprint view stays focused on real risks;
+- an **out-of-sprint, open** dependency is the problem → the red edge + a ghost
+  anchor reading **"not in this sprint ↗"** + the node's red flag **"not in sprint"**;
+- the edge **legend**'s warning row reads **"not in sprint" — "not done & outside the
+  sprint"** (vs. project scope's "cross-story" — "in another story").
+
+This fixes the mis-label where two items in the SAME story showed as "cross-story"
+in sprint scope (they are siblings, not cross-story — the real issue is only whether
+the open dependency is inside the sprint). Same red `--el-danger` / `--el-warning`
+tokens; only the copy changes.
+
 ### Exact copy (the labels + strings the frontend ships — MOTIR-1382 `messages/en.json`)
 
 - **Toggle option labels:** `Whole project` (default, selected) · `Active sprint`.

@@ -66,6 +66,10 @@ export interface ProjectRoadmapCanvasProps {
   /** The breadcrumb root label. */
   rootLabel?: string;
   ariaLabel?: string;
+  /** Override the WARNING (red) edge legend row. Defaults to the cross-story
+   *  meaning; the sprint-scoped roadmap passes the "not in sprint" meaning so the
+   *  legend matches the node flag + anchor (MOTIR-1379). */
+  warningLegend?: { label: string; meaning: string };
 }
 
 interface Crumb {
@@ -84,6 +88,7 @@ export function ProjectRoadmapCanvas({
   searchable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
+  warningLegend = { label: 'cross-story', meaning: 'in another story' },
 }: ProjectRoadmapCanvasProps) {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
@@ -457,7 +462,7 @@ export function ProjectRoadmapCanvas({
             [
               ['committed', 'blocks', 'blocker done'],
               ['pending', 'pending', 'not done yet'],
-              ['warning', 'cross-story', 'in another story'],
+              ['warning', warningLegend.label, warningLegend.meaning],
             ] as const
           ).map(([kind, label, meaning]) => (
             <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">

@@ -91,3 +91,68 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
     expect(screen.getByText('3 / 4')).toBeTruthy();
   });
 });
+
+// The off-level dependency signal (MOTIR-1331 cross-story; MOTIR-1379 sprint
+// validity). In PROJECT scope an off-level blocker is always the cross-story
+// tangle. In SPRINT scope it becomes a sprint-validity signal: a DONE or IN-sprint
+// blocker is satisfied (not drawn), and only an out-of-sprint, NOT-done blocker is
+// flagged — as "not in sprint", not "cross-story".
+function levelWithOffBlocker(stub: {
+  isDone?: boolean;
+  inActiveSprint?: boolean;
+}): RoadmapLevelData {
+  return {
+    items: [item({ id: 'A1', kind: 'subtask' })],
+    edges: [{ blockedId: 'A1', blockerId: 'X' }],
+    offLevelBlockers: [
+      { id: 'X', identifier: 'PROD-9', title: 'External dep', parentTitle: 'Story Z', ...stub },
+    ],
+  };
+}
+const A1_FLAG = 'cross-blocked-flag';
+
+describe('buildWorkItemLevel — off-level dependency signal', () => {
+  it('PROJECT scope: an off-level blocker is the cross-story tangle (red edge + anchor + flag)', () => {
+    const { nodes, deps } = buildWorkItemLevel(levelWithOffBlocker({ isDone: false }));
+    expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
+    expect(nodes.some((n) => n.id === 'X')).toBe(true); // ghost anchor
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('cross-story');
+  });
+
+  it('SPRINT scope: an out-of-sprint, NOT-done blocker is flagged "not in sprint"', () => {
+    const { nodes, deps } = buildWorkItemLevel(
+      levelWithOffBlocker({ isDone: false, inActiveSprint: false }),
+      { scope: 'sprint' },
+    );
+    expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
+    const anchor = nodes.find((n) => n.id === 'X');
+    expect(anchor).toBeTruthy();
+    render(<>{anchor!.content}</>);
+    expect(screen.getByText(/not in this sprint/)).toBeTruthy();
+    cleanup();
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('not in sprint');
+  });
+
+  it('SPRINT scope: a DONE off-level blocker is satisfied — no edge, no anchor, no flag', () => {
+    const { nodes, deps } = buildWorkItemLevel(levelWithOffBlocker({ isDone: true }), {
+      scope: 'sprint',
+    });
+    expect(deps).toEqual([]);
+    expect(nodes.some((n) => n.id === 'X')).toBe(false);
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.queryByTestId(A1_FLAG)).toBeNull();
+  });
+
+  it('SPRINT scope: an IN-sprint off-level blocker is satisfied — no edge, no anchor, no flag', () => {
+    const { nodes, deps } = buildWorkItemLevel(
+      levelWithOffBlocker({ isDone: false, inActiveSprint: true }),
+      { scope: 'sprint' },
+    );
+    expect(deps).toEqual([]);
+    expect(nodes.some((n) => n.id === 'X')).toBe(false);
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.queryByTestId(A1_FLAG)).toBeNull();
+  });
+});

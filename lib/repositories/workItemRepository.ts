@@ -474,19 +474,35 @@ export const workItemRepository = {
    * `identifier` + `title` + the title of the container it lives in (its parent
    * story/epic). ONE query with the parent relation; empty input → `[]`.
    */
-  async findRoadmapBlockerStubs(
-    ids: string[],
-  ): Promise<Array<{ id: string; identifier: string; title: string; parentTitle: string | null }>> {
+  async findRoadmapBlockerStubs(ids: string[]): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      title: string;
+      parentTitle: string | null;
+      status: string;
+      sprintId: string | null;
+    }>
+  > {
     if (ids.length === 0) return [];
     const rows = await db.workItem.findMany({
       where: { id: { in: ids } },
-      select: { id: true, identifier: true, title: true, parent: { select: { title: true } } },
+      select: {
+        id: true,
+        identifier: true,
+        title: true,
+        status: true,
+        sprintId: true,
+        parent: { select: { title: true } },
+      },
     });
     return rows.map((r) => ({
       id: r.id,
       identifier: r.identifier,
       title: r.title,
       parentTitle: r.parent?.title ?? null,
+      status: r.status,
+      sprintId: r.sprintId,
     }));
   },
 

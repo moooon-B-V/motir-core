@@ -104,14 +104,19 @@ export function WorkItemNode({
   item,
   drillable = false,
   crossBlocked = false,
+  crossBlockedLabel = 'cross-story',
   progress = null,
   here = false,
 }: {
   item: WorkItemNodeData;
   /** Has children — clicking DRILLS in; show the affordance. */
   drillable?: boolean;
-  /** Blocked by an item on ANOTHER level — flag the bad-plan tangle (MOTIR-1331). */
+  /** Blocked by an off-level dependency — flag it (MOTIR-1331). In project scope a
+   *  bad-plan tangle; in sprint scope an out-of-sprint, not-done dependency. */
   crossBlocked?: boolean;
+  /** The flag's copy — `'cross-story'` (project scope) or `'not in sprint'`
+   *  (sprint scope, MOTIR-1379). */
+  crossBlockedLabel?: string;
   /** Subtree done/total roll-up → a thin progress meter on a container node
    *  (Subtask 7.20.6 / MOTIR-1013). `null` (a leaf) or a `0`-total → no meter. */
   progress?: WorkItemProgress | null;
@@ -160,7 +165,7 @@ export function WorkItemNode({
             className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
           >
             <Flag className="size-3" aria-hidden="true" />
-            cross-story
+            {crossBlockedLabel}
           </span>
         ) : drillable ? (
           <ChevronRight
@@ -239,10 +244,14 @@ export function GhostAnchor({
   identifier,
   title,
   parentTitle,
+  outOfSprint = false,
 }: {
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** Sprint scope (MOTIR-1379): the anchor reads "not in this sprint" — the
+   *  blocker is an out-of-sprint, not-done dependency, not a cross-story tangle. */
+  outOfSprint?: boolean;
 }) {
   return (
     <div
@@ -258,7 +267,9 @@ export function GhostAnchor({
         {identifier}
       </span>
       <span className="mt-1 line-clamp-1 block text-xs text-(--el-text-secondary)">{title}</span>
-      {parentTitle ? (
+      {outOfSprint ? (
+        <span className="mt-0.5 block text-xs text-(--el-danger)">not in this sprint ↗</span>
+      ) : parentTitle ? (
         <span className="mt-0.5 block text-xs text-(--el-danger)">in {parentTitle} ↗</span>
       ) : (
         <span className="mt-0.5 block text-xs text-(--el-danger)">elsewhere in the plan ↗</span>

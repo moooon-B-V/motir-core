@@ -35,12 +35,17 @@ export interface RoadmapEdge {
   blockerId: string;
 }
 
-/** A naming stub for a blocker that lives on ANOTHER level (the cross-story anchor). */
+/** A naming stub for a blocker that lives on ANOTHER level (the off-level anchor). */
 export interface RoadmapBlockerStub {
   id: string;
   identifier: string;
   title: string;
   parentTitle: string | null;
+  /** Blocker is in a terminal (done) status → a SATISFIED dependency (MOTIR-1379). */
+  isDone?: boolean;
+  /** Blocker is a member of the active sprint → an in-sprint dependency, not an
+   *  out-of-sprint one. Only meaningful in sprint scope (false in project scope). */
+  inActiveSprint?: boolean;
 }
 
 export interface RoadmapLevelData {

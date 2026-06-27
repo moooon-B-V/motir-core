@@ -85,9 +85,12 @@ export function WorkItemRoadmap({
       // every level, and pins the collapsed planning-origin cluster at the ROOT
       // (the road's start) — Subtask 7.20.6 / MOTIR-1013 — but ONLY for a project
       // that actually onboarded (Subtask 7.4 / MOTIR-1264; `showPlanningOrigin`).
+      // `scope` flips the off-level dependency signal from cross-story (project) to
+      // the sprint-validity "not in sprint" signal (MOTIR-1379).
       return buildWorkItemLevel(wi, {
         markActive: true,
         includeOrigin: parentId === null && showPlanningOrigin,
+        scope,
       });
     },
     [projectKey, scope, registerItems, showPlanningOrigin],
@@ -105,6 +108,11 @@ export function WorkItemRoadmap({
         searchable
         rootLabel="Roadmap"
         ariaLabel={ariaLabel}
+        warningLegend={
+          scope === 'sprint'
+            ? { label: 'not in sprint', meaning: 'not done & outside the sprint' }
+            : undefined
+        }
       />
       {quickView}
     </>
