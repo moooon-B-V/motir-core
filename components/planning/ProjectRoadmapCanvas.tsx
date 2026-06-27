@@ -1,7 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Eye, RotateCcw, Search } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Maximize,
+  Minimize,
+  RotateCcw,
+  Search,
+} from 'lucide-react';
 import {
   PlanningCanvas,
   type CanvasEdge,
@@ -63,6 +71,11 @@ export interface ProjectRoadmapCanvasProps {
   onView?: (id: string) => void;
   /** Show the search-to-locate overlay (`/` shortcut) — locates within the level. */
   searchable?: boolean;
+  /** Show the EXPAND-to-full-screen control (MOTIR-1420). The roadmap consumer opts
+   *  in so a viewer can use the whole display for a large tree; onboarding does not.
+   *  Takes the canvas full-viewport (via the Fullscreen API, with a fixed overlay as
+   *  the always-deterministic base); ESC exits. */
+  fullScreenable?: boolean;
   /** The breadcrumb root label. */
   rootLabel?: string;
   ariaLabel?: string;
@@ -86,6 +99,7 @@ export function ProjectRoadmapCanvas({
   onSelect,
   onView,
   searchable = false,
+  fullScreenable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
   warningLegend = { label: 'cross-story', meaning: 'in another story' },
@@ -101,7 +115,52 @@ export function ProjectRoadmapCanvas({
     {},
   );
   const searchRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // FULL-SCREEN (MOTIR-1420). `expanded` is the authoritative state and drives a
+  // fixed full-viewport overlay — deterministic everywhere (and what the E2E
+  // asserts). On top of that we BEST-EFFORT call the browser Fullscreen API so the
+  // OS chrome hides too; if it rejects (e.g. headless / no user-gesture trust) the
+  // overlay still fills the viewport, so the feature degrades cleanly.
+  const [expanded, setExpanded] = useState(false);
   const reqSeq = useRef(0);
+
+  const enterFullScreen = useCallback(() => {
+    setExpanded(true);
+    const el = rootRef.current;
+    if (el?.requestFullscreen) void el.requestFullscreen().catch(() => {});
+  }, []);
+  const exitFullScreen = useCallback(() => {
+    setExpanded(false);
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  // ESC exits. Native fullscreen also handles ESC itself (caught by the
+  // `fullscreenchange` sync below), but this covers the overlay-only path where the
+  // Fullscreen API isn't active, so ESC always exits regardless.
+  useEffect(() => {
+    if (!expanded) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      exitFullScreen();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expanded, exitFullScreen]);
+
+  // Sync state when the user leaves native fullscreen by any route (the OS ESC, the
+  // browser's own exit affordance) so the button + overlay collapse with it.
+  useEffect(() => {
+    function onFsChange() {
+      if (typeof document !== 'undefined' && !document.fullscreenElement) {
+        setExpanded(false);
+      }
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
   // Hold the latest loadLevel so the load effect refetches on focus / reloadKey —
   // NOT on the fetcher's identity (a consumer's loadLevel may be recreated each
   // render; `reloadKey` is the explicit "the data changed" signal).
@@ -374,7 +433,12 @@ export function ProjectRoadmapCanvas({
   const drilled = crumbs.length > 0;
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      ref={rootRef}
+      data-testid="roadmap-canvas"
+      data-fullscreen={expanded || undefined}
+      className={expanded ? 'fixed inset-0 z-50 bg-(--el-canvas)' : 'relative h-full w-full'}
+    >
       {/* breadcrumb + Back overlay — only while drilled */}
       {drilled && (
         <nav
@@ -410,26 +474,63 @@ export function ProjectRoadmapCanvas({
         </nav>
       )}
 
-      {/* search-to-locate overlay (within the current level) */}
-      {searchable && (
-        <form
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            locate();
-          }}
-          className="absolute top-3 right-3 z-10 w-60"
+      {/* TOP-RIGHT cluster: search-to-locate (within the current level) + the
+          EXPAND-to-full-screen control, side by side (MOTIR-1420). */}
+      {(searchable || fullScreenable) && (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+          {searchable && (
+            <form
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                locate();
+              }}
+              className="w-60"
+            >
+              <Input
+                ref={searchRef}
+                type="search"
+                aria-label="Search the roadmap"
+                placeholder="Search the roadmap"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
+              />
+            </form>
+          )}
+          {fullScreenable && (
+            <button
+              type="button"
+              data-testid="fullscreen-toggle"
+              aria-label={expanded ? 'Exit full screen' : 'Enter full screen'}
+              aria-pressed={expanded}
+              onClick={expanded ? exitFullScreen : enterFullScreen}
+              className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+            >
+              {expanded ? (
+                <Minimize className="size-4" aria-hidden="true" />
+              ) : (
+                <Maximize className="size-4" aria-hidden="true" />
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ESC hint — only while full screen; the other overlay controls stay reachable. */}
+      {expanded && (
+        <div
+          data-testid="fullscreen-hint"
+          className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2"
         >
-          <Input
-            ref={searchRef}
-            type="search"
-            aria-label="Search the roadmap"
-            placeholder="Search the roadmap"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
-          />
-        </form>
+          <span className="inline-flex items-center gap-1.5 rounded-(--radius-kbd) bg-(--el-muted) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) text-xs text-(--el-text-secondary) shadow-(--shadow-subtle)">
+            Press
+            <kbd className="rounded-(--radius-kbd) border border-(--el-border) bg-(--el-surface) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px] text-(--el-text)">
+              Esc
+            </kbd>
+            to exit full screen
+          </span>
+        </div>
       )}
 
       {/* RESET LAYOUT — only when the user has hand-arranged an auto-laid node on

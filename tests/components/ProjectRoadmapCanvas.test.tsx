@@ -244,4 +244,61 @@ describe('ProjectRoadmapCanvas', () => {
     fireEvent.keyDown(el('V')!, { key: 'Enter' });
     expect(screen.queryByTestId('view-button')).toBeNull();
   });
+
+  // FULL-SCREEN mode (MOTIR-1420) — opt-in via `fullScreenable`.
+  it('does not offer the full-screen toggle by default', async () => {
+    render(<ProjectRoadmapCanvas loadLevel={loadLevel} />);
+    await screen.findByText('Epic one');
+    expect(screen.queryByTestId('fullscreen-toggle')).toBeNull();
+  });
+
+  it('expands to full screen (best-effort Fullscreen API + overlay), shows the ESC hint, and ESC exits', async () => {
+    // happy-dom has no Fullscreen API — stub the request so the best-effort call is
+    // observable; the overlay (data-fullscreen + state) works regardless.
+    const requestFs = vi.fn().mockResolvedValue(undefined);
+    (Element.prototype as unknown as { requestFullscreen: unknown }).requestFullscreen = requestFs;
+    try {
+      render(<ProjectRoadmapCanvas loadLevel={loadLevel} fullScreenable />);
+      await screen.findByText('Epic one');
+      const toggle = screen.getByTestId('fullscreen-toggle');
+      const canvas = screen.getByTestId('roadmap-canvas');
+      expect(toggle.getAttribute('aria-label')).toBe('Enter full screen');
+      expect(screen.queryByTestId('fullscreen-hint')).toBeNull();
+      expect(canvas.hasAttribute('data-fullscreen')).toBe(false);
+
+      fireEvent.click(toggle);
+      expect(requestFs).toHaveBeenCalled(); // Fullscreen API attempted
+      expect(toggle.getAttribute('aria-label')).toBe('Exit full screen');
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+      expect(canvas.getAttribute('data-fullscreen')).toBe('true');
+      expect(canvas.className).toContain('fixed');
+      expect(screen.getByTestId('fullscreen-hint')).toBeTruthy();
+
+      // ESC exits (the overlay-path keydown handler).
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(toggle.getAttribute('aria-label')).toBe('Enter full screen');
+      expect(screen.queryByTestId('fullscreen-hint')).toBeNull();
+      expect(canvas.hasAttribute('data-fullscreen')).toBe(false);
+    } finally {
+      delete (Element.prototype as unknown as { requestFullscreen?: unknown }).requestFullscreen;
+    }
+  });
+
+  it('the Exit button collapses full screen', async () => {
+    (Element.prototype as unknown as { requestFullscreen: unknown }).requestFullscreen = vi
+      .fn()
+      .mockResolvedValue(undefined);
+    try {
+      render(<ProjectRoadmapCanvas loadLevel={loadLevel} fullScreenable />);
+      await screen.findByText('Epic one');
+      const toggle = screen.getByTestId('fullscreen-toggle');
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute('aria-label')).toBe('Exit full screen');
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute('aria-label')).toBe('Enter full screen');
+      expect(screen.getByTestId('roadmap-canvas').hasAttribute('data-fullscreen')).toBe(false);
+    } finally {
+      delete (Element.prototype as unknown as { requestFullscreen?: unknown }).requestFullscreen;
+    }
+  });
 });
