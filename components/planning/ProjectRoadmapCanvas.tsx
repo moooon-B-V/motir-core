@@ -405,11 +405,13 @@ export function ProjectRoadmapCanvas({
 
   const locateActionable = useCallback(() => {
     // Locate snaps to a readable default zoom (so a node found while zoomed far
-    // out/in lands at a comfortable size), then centres.
+    // out/in lands at a comfortable size), then centres AND SELECTS the node — so its
+    // actions (View / Open) surface and its connections light up, ready to act on.
     setFocusScale(LOCATE_ZOOM);
     // Frontier wins: a single destination, no cycling.
     if (hereId !== null) {
       setHighlightId(hereId);
+      setSelectedId(hereId);
       setFocusNonce((n) => n + 1);
       return;
     }
@@ -417,7 +419,9 @@ export function ProjectRoadmapCanvas({
     // Advance to the next ready node, wrapping after the last.
     const next = (locateIndex + 1) % readyIds.length;
     setLocateIndex(next);
-    setHighlightId(readyIds[next] ?? null);
+    const targetId = readyIds[next] ?? null;
+    setHighlightId(targetId);
+    setSelectedId(targetId);
     setFocusNonce((n) => n + 1);
   }, [hereId, readyIds, locateIndex]);
 

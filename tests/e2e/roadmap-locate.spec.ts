@@ -50,6 +50,8 @@ const drillLevelLoad = (page: Page) =>
 
 // The single highlighted (located) node — its text identifies which node is centred.
 const located = (page: Page) => page.locator('[data-highlighted]');
+// The single SELECTED node — locate selects the located card (surfacing its actions).
+const selected = (page: Page) => page.locator('[data-selected]');
 
 // The canvas world transform's scale (matrix.a) — the live zoom level.
 const worldScale = (page: Page) =>
@@ -88,6 +90,7 @@ test('Roadmap: Locate centres the frontier first, then cycles the ready nodes wi
   await locate.click();
   await expect(located(page)).toHaveCount(1);
   await expect(located(page)).toContainText(seed.frontierTitle); // the "you are here" node
+  await expect(selected(page)).toContainText(seed.frontierTitle); // ...and selected
   await expect(hint).toHaveCount(0); // a single frontier target → no cycling hint
   await expect.poll(() => worldScale(page)).toBeCloseTo(1, 5); // reset to the readable default
 
@@ -108,6 +111,7 @@ test('Roadmap: Locate centres the frontier first, then cycles the ready nodes wi
 
   await locate.click();
   await expect(located(page)).toContainText(seed.readyChildTitles[1]);
+  await expect(selected(page)).toContainText(seed.readyChildTitles[1]); // selection follows
   await expect(hint).toHaveText('2 / 3');
 
   await locate.click();

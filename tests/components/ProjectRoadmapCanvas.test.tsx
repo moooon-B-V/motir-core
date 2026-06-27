@@ -308,6 +308,9 @@ describe('ProjectRoadmapCanvas', () => {
   function hl(id: string) {
     return el(id)!.querySelector('[data-highlighted]');
   }
+  function sel(id: string) {
+    return el(id)!.querySelector('[data-selected]');
+  }
 
   it('does not offer the locate control by default', async () => {
     render(<ProjectRoadmapCanvas loadLevel={loadLevel} />);
@@ -330,6 +333,8 @@ describe('ProjectRoadmapCanvas', () => {
     fireEvent.click(btn);
     expect(hl('A')).toBeTruthy(); // the frontier is centred, not the ready node
     expect(hl('B')).toBeNull();
+    expect(sel('A')).toBeTruthy(); // ...and SELECTED, so its actions surface
+    expect(sel('B')).toBeNull();
     expect(screen.queryByTestId('locate-hint')).toBeNull();
   });
 
@@ -352,6 +357,8 @@ describe('ProjectRoadmapCanvas', () => {
     fireEvent.click(btn); // → R2
     expect(hl('R2')).toBeTruthy();
     expect(hl('R1')).toBeNull();
+    expect(sel('R2')).toBeTruthy(); // selection follows the cycle
+    expect(sel('R1')).toBeNull();
     expect(screen.getByTestId('locate-hint').textContent).toBe('2 / 3');
     fireEvent.click(btn); // → R3
     expect(screen.getByTestId('locate-hint').textContent).toBe('3 / 3');
