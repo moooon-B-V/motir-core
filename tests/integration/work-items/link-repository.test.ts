@@ -361,3 +361,52 @@ describe('workItemLinkRepository.findById + delete', () => {
     expect(missing).toBeNull();
   });
 });
+
+describe('workItemLinkRepository.findAnyBetween — any kind, either direction (5.8.3)', () => {
+  it('finds an existing link in BOTH orderings via the read path (no tx → db), null when unrelated', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const c = await createWorkItem(fx, { kind: 'task', title: 'C' });
+    await createLink({
+      workspaceId: fx.workspace.id,
+      fromId: a.id,
+      toId: b.id,
+      kind: 'is_blocked_by',
+      createdById: fx.owner.id,
+    });
+
+    // No tx → exercises the `tx ?? db` fallback. The OR matches a→b…
+    expect(await workItemLinkRepository.findAnyBetween(a.id, b.id)).not.toBeNull();
+    // …and the reverse ordering b→a (the "either direction" gate).
+    expect(await workItemLinkRepository.findAnyBetween(b.id, a.id)).not.toBeNull();
+    // An unrelated pair is genuinely absent.
+    expect(await workItemLinkRepository.findAnyBetween(a.id, c.id)).toBeNull();
+  });
+});
+
+describe('workItemLinkRepository.createIfAbsent — idempotent insert (5.8.3)', () => {
+  it('inserts when absent, then returns null on the duplicate (skipDuplicates) — never raises P2002', async () => {
+    const fx = await makeFixture();
+    const a = await createWorkItem(fx, { kind: 'task', title: 'A' });
+    const b = await createWorkItem(fx, { kind: 'task', title: 'B' });
+    const data = {
+      workspaceId: fx.workspace.id,
+      fromId: a.id,
+      toId: b.id,
+      kind: 'relates_to' as const,
+      createdById: fx.owner.id,
+    };
+
+    // First insert → the row (the `rows[0]` branch).
+    const first = await db.$transaction((tx) => workItemLinkRepository.createIfAbsent(data, tx));
+    expect(first).not.toBeNull();
+    expect(first?.fromId).toBe(a.id);
+    expect(first?.kind).toBe('relates_to');
+
+    // Same (fromId, toId, kind) → the @@unique already holds → null (the
+    // `?? null` skip branch), and crucially NO P2002 escapes the transaction.
+    const second = await db.$transaction((tx) => workItemLinkRepository.createIfAbsent(data, tx));
+    expect(second).toBeNull();
+  });
+});
