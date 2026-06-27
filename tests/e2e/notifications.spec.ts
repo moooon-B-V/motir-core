@@ -113,7 +113,7 @@ async function postMention(
   await page.locator('.ProseMirror').click();
   for (const target of targets) {
     await page.keyboard.type(`@${target.query}`);
-    const picker = page.getByRole('listbox', { name: 'Mention a member' });
+    const picker = page.getByRole('listbox', { name: /^Mention a/ });
     await expect(picker).toBeVisible();
     // A unique-match query → the only option is the active row (index 0), so a
     // bare Enter selects it (the picker clamps active to the filtered set).

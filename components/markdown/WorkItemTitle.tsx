@@ -29,6 +29,11 @@ export function WorkItemTitle({
   projectIdentifier: string;
   workItemRefs?: WorkItemRefMap;
 }) {
+  // No project prefix → nothing to linkify; render the title verbatim. Guards
+  // any caller that doesn't supply a projectIdentifier (e.g. the quick-view
+  // peek's older test fixtures) — buildWorkItemKeyRe would otherwise throw on it.
+  if (!projectIdentifier) return <>{title}</>;
+
   const refs = workItemRefs ?? {};
   const re = buildWorkItemKeyRe(projectIdentifier);
   const prefix = projectIdentifier.toUpperCase();
