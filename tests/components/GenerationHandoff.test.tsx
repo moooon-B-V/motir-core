@@ -21,15 +21,17 @@ const CHOICE: DesignChoiceDTO = {
 
 function renderHandoff(props: Partial<React.ComponentProps<typeof GenerationHandoff>> = {}) {
   const onBack = props.onBack ?? vi.fn();
+  const onGenerate = props.onGenerate ?? vi.fn();
   renderWithIntl(
     <GenerationHandoff
       onBack={onBack}
+      onGenerate={onGenerate}
       reviewedCount={props.reviewedCount ?? 4}
       designChoice={props.designChoice ?? CHOICE}
       designApplied={props.designApplied ?? true}
     />,
   );
-  return { onBack };
+  return { onBack, onGenerate };
 }
 
 afterEach(() => cleanup());
@@ -69,8 +71,14 @@ describe('GenerationHandoff (MOTIR-1041)', () => {
     expect(screen.getByText('Default look')).toBeTruthy();
   });
 
-  it('does NOT render a generate/submit action — generation is 7.4, not this card', () => {
-    renderHandoff();
-    expect(screen.queryByRole('button', { name: /Generate/i })).toBeNull();
+  it('renders the 7.4 Generate trigger and clicking it calls onGenerate (MOTIR-1396)', () => {
+    // 7.4.9 mounts the generation entry INTO this hand-off view — the boundary the
+    // comment always anticipated ("7.4's generation surface mounts into this same
+    // view"). The earlier 7.3-only contract (no generate action) is now reversed.
+    const { onGenerate } = renderHandoff();
+    const trigger = screen.getByRole('button', { name: 'Generate plan' });
+    expect(trigger).toBeTruthy();
+    fireEvent.click(trigger);
+    expect(onGenerate).toHaveBeenCalledTimes(1);
   });
 });

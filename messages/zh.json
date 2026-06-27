@@ -4152,7 +4152,8 @@
       "stepsReviewed": "{count, plural, other {已审阅 # 步}}",
       "designLabel": "设计",
       "designDefault": "默认外观",
-      "revisableNote": "没有任何内容被锁定。你可以随时返回修改某一步或设计——计划会随之更新。"
+      "revisableNote": "没有任何内容被锁定。你可以随时返回修改某一步或设计——计划会随之更新。",
+      "generateCta": "生成计划"
     }
   },
   "roadmap": {
@@ -4192,6 +4193,27 @@
     },
     "listAria": "计划",
     "loadMore": "加载更多",
-    "loadingMore": "加载中…"
+    "loadingMore": "加载中…",
+    "generation": {
+      "canvasAria": "提议的计划",
+      "generatingTitle": "正在生成你的计划…",
+      "generatingCount": "{count, plural, other {# 个工作项}}",
+      "railTitle": "生成中",
+      "railLead": "正在阅读你的方向并起草计划。提议会随着进度逐层显示在画布上。",
+      "proposingItems": "正在提议工作项…",
+      "stopCta": "停止生成",
+      "stopHint": "生成完成后即可审阅并批准",
+      "redirecting": "正在打开你的计划…",
+      "emptyTitle": "暂无可审阅的计划",
+      "emptyBody": "生成结束但没有任何提议。请在探索对话中补充方向，然后重试。",
+      "openDiscoveryCta": "打开探索对话",
+      "retryCta": "重试",
+      "failedTitle": "生成未能完成",
+      "failedBody": "计划中途停止。你的待办列表未受影响——可以丢弃这部分提议。",
+      "discardCta": "丢弃部分结果",
+      "creditsTitle": "你的规划额度已用尽",
+      "creditsBody": "生成计划会计量消耗。充值即可继续用 Motir AI 规划。",
+      "topUpCta": "充值额度"
+    }
   }
 }

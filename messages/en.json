@@ -4156,7 +4156,8 @@
       "stepsReviewed": "{count, plural, one {# step reviewed} other {# steps reviewed}}",
       "designLabel": "Design",
       "designDefault": "Default look",
-      "revisableNote": "Nothing's locked. Go back any time to revise a step or the design — your plan will follow."
+      "revisableNote": "Nothing's locked. Go back any time to revise a step or the design — your plan will follow.",
+      "generateCta": "Generate plan"
     }
   },
   "roadmap": {
@@ -4196,6 +4197,27 @@
     },
     "listAria": "Plans",
     "loadMore": "Load more",
-    "loadingMore": "Loading…"
+    "loadingMore": "Loading…",
+    "generation": {
+      "canvasAria": "Proposed plan",
+      "generatingTitle": "Generating your plan…",
+      "generatingCount": "{count, plural, one {# item} other {# items}}",
+      "railTitle": "Generating",
+      "railLead": "Reading your direction and drafting the plan. Proposals appear on the canvas as I go — one level at a time.",
+      "proposingItems": "Proposing items…",
+      "stopCta": "Stop generating",
+      "stopHint": "Review & Approve unlock when generation completes",
+      "redirecting": "Opening your plan…",
+      "emptyTitle": "No plan to review",
+      "emptyBody": "Generation finished without proposals. Add direction in the discovery chat, then try again.",
+      "openDiscoveryCta": "Open discovery chat",
+      "retryCta": "Retry",
+      "failedTitle": "Generation didn’t finish",
+      "failedBody": "The plan stopped partway. Your backlog is untouched — the partial proposed frontier can be discarded.",
+      "discardCta": "Discard partial",
+      "creditsTitle": "You’re out of planning credits",
+      "creditsBody": "Generating a plan is metered. Top up to keep planning with Motir AI.",
+      "topUpCta": "Top up credits"
+    }
   }
 }

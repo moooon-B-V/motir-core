@@ -29,6 +29,11 @@ export interface GenerationHandoffProps {
   /** One-click re-entry into the pre-plan loop (the hub). The frozen baseline is
    *  revisable, not locked — going back re-opens the conductor loop unchanged. */
   onBack: () => void;
+  /** Trigger generation (Subtask 7.4.9 / MOTIR-1396) — the 7.4 generation entry
+   *  mounting INTO this hand-off view: it submits the `generate_tree` job and
+   *  reveals the proposed PlanItems live. This is the boundary the 7.3 hand-off
+   *  always anticipated ("7.4's generation surface mounts into this same view"). */
+  onGenerate: () => void;
   /** How many pre-plan tiers were produced + reviewed (the snapshot's docs). */
   reviewedCount: number;
   /** The persisted design-step choice frozen into the baseline, or null when the
@@ -41,6 +46,7 @@ export interface GenerationHandoffProps {
 
 export function GenerationHandoff({
   onBack,
+  onGenerate,
   reviewedCount,
   designChoice,
   designApplied,
@@ -110,6 +116,18 @@ export function GenerationHandoff({
               </li>
             </ul>
           </div>
+
+          {/* The 7.4 generation TRIGGER (MOTIR-1396) — clicking starts the
+              `generate_tree` job + the live reveal mounted into this view. */}
+          <Button
+            variant="primary"
+            size="lg"
+            leftIcon={<Sparkles className="size-4" />}
+            onClick={onGenerate}
+            className="mt-6"
+          >
+            {t('generateCta')}
+          </Button>
 
           <p className="mt-5 text-sm text-(--el-text-muted)">{t('revisableNote')}</p>
         </div>
