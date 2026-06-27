@@ -157,15 +157,16 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
   });
 });
 
-describe('buildWorkItemLevel — ready highlight (MOTIR-1417)', () => {
-  it('a ready node shows the "Ready" pill + the success left bar', () => {
+describe('buildWorkItemLevel — ready highlight (MOTIR-1417 / MOTIR-1422)', () => {
+  it('a ready node shows the "Ready" pill + the card mint wash', () => {
     const { nodes } = buildWorkItemLevel(
       level([item({ id: 'A1', kind: 'subtask', status: 'todo', ready: true })]),
     );
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
     expect(screen.getByTestId('ready-pill')).toBeTruthy();
     expect(screen.getByText('Ready')).toBeTruthy();
-    expect(screen.getByTestId('ready-bar')).toBeTruthy();
+    // The ready signal is now the whole-card wash (MOTIR-1422), not a 3px bar.
+    expect(document.querySelector('[data-node-state="ready"]')).toBeTruthy();
   });
 
   it('a NOT-ready node shows the normal status pill, no ready treatment', () => {
@@ -174,7 +175,7 @@ describe('buildWorkItemLevel — ready highlight (MOTIR-1417)', () => {
     );
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
     expect(screen.queryByTestId('ready-pill')).toBeNull();
-    expect(screen.queryByTestId('ready-bar')).toBeNull();
+    expect(document.querySelector('[data-node-state="ready"]')).toBeNull();
   });
 
   it('the "you are here" frontier suppresses the ready treatment', () => {
@@ -185,6 +186,16 @@ describe('buildWorkItemLevel — ready highlight (MOTIR-1417)', () => {
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
     expect(screen.getByText('You are here')).toBeTruthy();
     expect(screen.queryByTestId('ready-pill')).toBeNull();
-    expect(screen.queryByTestId('ready-bar')).toBeNull();
+    expect(document.querySelector('[data-node-state="ready"]')).toBeNull();
+  });
+
+  it('a DONE node shows the neutral "Done" pill + the recessed/done card state (distinct from ready)', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'A1', kind: 'story', status: 'done', ready: false })]),
+    );
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId('done-pill')).toBeTruthy();
+    expect(document.querySelector('[data-node-state="done"]')).toBeTruthy();
+    expect(document.querySelector('[data-node-state="ready"]')).toBeNull();
   });
 });

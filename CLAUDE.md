@@ -429,6 +429,24 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
   `--color-*`, so `ring-(--focus-ring-color)` is fine.)
 - ❌ Only `globals.css` (the Tier-0→Tier-3 wiring) and the `/tokens`
   specimen route name `--color-*` directly.
+- ❌ **NEVER INVENT A COLOUR.** Do not write a raw hex hue (`#3b82c4`,
+  `bg-[#dcecfa]`), an `rgb()/hsl()` literal, a named CSS colour, or a
+  `color-mix()` over a **raw hue** for any element's colour — in component
+  code **OR in a design mock**. Every colour MUST come from an existing
+  palette token (`--el-*`, including the `--el-tint-*` set; or a `color-mix`
+  whose inputs are ALL `--el-*`/`--color-*` tokens). If the palette has no
+  colour that fits, ADD an `--el-*` token to `globals.css` Tier 3 (mapped to
+  a `--color-*`) and consume THAT — never hardcode the hue inline. **Why it
+  matters:** a palette token flips with `data-palette` and is kept mutually
+  distinct from its siblings by the palette author; an invented hue does
+  neither — it won't swap, and it can collide with a token under another
+  palette. (When you need a card/state colour "clearly different" from
+  another, reach for a _different tint slot_ — e.g. `--el-tint-sky` vs
+  `--el-tint-mint` — not a new hex.) The ONLY raw values allowed in a mock
+  are NON-semantic decoration that never carries meaning (the canvas
+  grid-dot texture, the body backdrop) — never a card/pill/state fill,
+  border, or text colour. (Yue, 2026-06-27: a done-card mock used invented
+  `#3b82c4`/`#d98a3d` border hues — wrong; the fill must be a `--el-tint-*`.)
 
 This rule was adopted after finding #54 (the UI had collapsed to grey +
 primary because almost every component referenced Tier 0 directly).

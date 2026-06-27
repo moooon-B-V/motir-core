@@ -101,6 +101,68 @@ describe('WorkItemNode', () => {
     expect(screen.queryByText('You are here')).toBeNull();
     expect((container.firstChild as HTMLElement).getAttribute('aria-current')).toBeNull();
   });
+
+  // MOTIR-1422 — distinct, zoom-out-legible DONE + READY card styles (both carried in
+  // the card body, not a 3px edge).
+  it('styles a READY node with the whole-card mint wash + the "Ready" pill', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('ready');
+    expect(card.className).toContain('bg-(--el-tint-mint)');
+    expect(screen.getByTestId('ready-pill')).toBeTruthy();
+    expect(screen.queryByTestId('done-pill')).toBeNull();
+  });
+
+  it('styles a DONE node as a distinct sky-tint card + struck title + dark "Done" stamp', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('done');
+    // a distinct palette-tint fill (--el-tint-sky), clearly different from white todo + mint ready
+    expect(card.className).toContain('bg-(--el-tint-sky)');
+    // a dark Done stamp (NOT the success-green ready treatment, NOT the light todo chip)
+    expect(screen.getByTestId('done-pill')).toBeTruthy();
+    expect(screen.queryByTestId('ready-pill')).toBeNull();
+    expect(card.className).not.toContain('bg-(--el-tint-mint)');
+    // the title is struck
+    expect(screen.getByText(item.title).className).toContain('line-through');
+  });
+
+  it('keeps done and ready DISTINCT (mint vs sky)', () => {
+    const { container: r } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
+    const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
+    const ready = r.firstChild as HTMLElement;
+    const done = d.firstChild as HTMLElement;
+    expect(ready.getAttribute('data-node-state')).not.toBe(done.getAttribute('data-node-state'));
+    expect(ready.className).toContain('bg-(--el-tint-mint)'); // ready advances (mint)
+    expect(done.className).toContain('bg-(--el-tint-sky)'); // done is a distinct tint
+  });
+
+  it('keeps done DISTINCT from a plain todo card (sky tint vs white surface)', () => {
+    const { container: t } = render(<WorkItemNode item={{ ...item, status: 'todo' }} />);
+    const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
+    const todo = t.firstChild as HTMLElement;
+    const done = d.firstChild as HTMLElement;
+    expect(todo.className).toContain('bg-(--el-surface)'); // raised white card
+    expect(done.className).toContain('bg-(--el-tint-sky)'); // a distinct tint, not white
+    expect(done.className).not.toContain('bg-(--el-surface)'); // not the same fill as todo
+  });
+
+  it('the accent "you are here" frontier wins over the done style', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} here />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('here');
+    expect(screen.getByText('You are here')).toBeTruthy();
+    expect(screen.queryByTestId('done-pill')).toBeNull();
+    expect(card.className).not.toContain('bg-(--el-tint-sky)');
+  });
+
+  it('the red cross-blocked flag wins over the done style', () => {
+    const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} crossBlocked />);
+    const card = container.firstChild as HTMLElement;
+    expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    expect(card.className).not.toContain('bg-(--el-tint-sky)');
+  });
 });
 
 describe('GhostAnchor', () => {
