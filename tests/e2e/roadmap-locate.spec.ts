@@ -51,6 +51,12 @@ const drillLevelLoad = (page: Page) =>
 // The single highlighted (located) node — its text identifies which node is centred.
 const located = (page: Page) => page.locator('[data-highlighted]');
 
+// The canvas world transform's scale (matrix.a) — the live zoom level.
+const worldScale = (page: Page) =>
+  page
+    .getByTestId('canvas-world')
+    .evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+
 test('Roadmap: Locate centres the frontier first, then cycles the ready nodes with wrap', async ({
   page,
 }) => {
@@ -68,13 +74,22 @@ test('Roadmap: Locate centres the frontier first, then cycles the ready nodes wi
   const locate = page.getByTestId('locate-button');
   const hint = page.getByTestId('locate-hint');
 
-  // ── 1. Frontier priority — locate centres the in-progress epic, not the ready one ─
+  // ── 1. Frontier priority + zoom-to-readable-default ──────────────────────────────
   await expect(locate).toBeEnabled();
   await expect(located(page)).toHaveCount(0); // nothing highlighted until located
+  // Zoom out first so the located card would otherwise be small — locate must snap the
+  // zoom back to the readable 1× default.
+  const zoomOut = page.getByRole('button', { name: 'Zoom out' });
+  await zoomOut.click();
+  await zoomOut.click();
+  await zoomOut.click();
+  expect(await worldScale(page)).toBeLessThan(1);
+
   await locate.click();
   await expect(located(page)).toHaveCount(1);
   await expect(located(page)).toContainText(seed.frontierTitle); // the "you are here" node
   await expect(hint).toHaveCount(0); // a single frontier target → no cycling hint
+  await expect.poll(() => worldScale(page)).toBeCloseTo(1, 5); // reset to the readable default
 
   // ── 2. Drill into the to-do epic (no frontier there → ready cycling) ─────────────
   const readyEpicNode = page.locator('[data-node-id]').filter({ hasText: seed.readyEpicTitle });

@@ -96,6 +96,11 @@ interface Crumb {
   label: string;
 }
 
+// The readable default zoom the LOCATE control snaps to (MOTIR-1421) — 1× shows a
+// node at its natural authored card size, comfortably legible regardless of how far
+// the user had zoomed out/in.
+const LOCATE_ZOOM = 1;
+
 export function ProjectRoadmapCanvas({
   loadLevel,
   reloadKey,
@@ -118,6 +123,11 @@ export function ProjectRoadmapCanvas({
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusNonce, setFocusNonce] = useState(0);
+  // The ZOOM the next focus pan should land at: `undefined` preserves the current
+  // scale (the search-locate's pan-only behaviour); `LOCATE_ZOOM` resets to a readable
+  // default so a node found while zoomed far out/in lands at a comfortable card size
+  // (the locate control, MOTIR-1421).
+  const [focusScale, setFocusScale] = useState<number | undefined>(undefined);
   const [localPositions, setLocalPositions] = useState<Record<string, { x: number; y: number }>>(
     {},
   );
@@ -367,6 +377,7 @@ export function ProjectRoadmapCanvas({
     const ms = searchMatches(nodes, query);
     const target = ms[0];
     if (target === undefined) return;
+    setFocusScale(undefined); // search-locate pans only — keep the user's zoom
     setHighlightId(target);
     setFocusNonce((n) => n + 1);
   }, [nodes, query]);
@@ -393,6 +404,9 @@ export function ProjectRoadmapCanvas({
   }
 
   const locateActionable = useCallback(() => {
+    // Locate snaps to a readable default zoom (so a node found while zoomed far
+    // out/in lands at a comfortable size), then centres.
+    setFocusScale(LOCATE_ZOOM);
     // Frontier wins: a single destination, no cycling.
     if (hereId !== null) {
       setHighlightId(hereId);
@@ -601,14 +615,16 @@ export function ProjectRoadmapCanvas({
             disabled={!canLocate}
             title={canLocate ? locateLabel : 'Nothing to locate — no in-progress or ready item'}
             onClick={locateActionable}
-            className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:cursor-not-allowed disabled:bg-(--el-surface-soft) disabled:text-(--el-text-faint) disabled:shadow-(--shadow-subtle) disabled:hover:bg-(--el-surface-soft)"
+            // size-9 to match the engine's bottom-left zoom +/- buttons (also size-9)
+            // exactly, so the locate control reads as part of that cluster.
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:cursor-not-allowed disabled:bg-(--el-surface-soft) disabled:text-(--el-text-faint) disabled:shadow-(--shadow-subtle) disabled:hover:bg-(--el-surface-soft)"
           >
             <LocateFixed className="size-4" aria-hidden="true" />
           </button>
           {cyclingHint && (
             <span
               data-testid="locate-hint"
-              className="inline-flex h-(--height-control) items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-3 font-mono text-xs font-semibold text-(--el-text-secondary) shadow-(--shadow-card)"
+              className="inline-flex h-9 items-center rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-3 font-mono text-xs font-semibold text-(--el-text-secondary) shadow-(--shadow-card)"
             >
               {cyclingHint}
             </span>
@@ -716,6 +732,7 @@ export function ProjectRoadmapCanvas({
           onBackgroundClick={() => setSelectedId(null)}
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}
+          focusScale={focusScale}
           ariaLabel={ariaLabel}
         />
       )}
