@@ -1,0 +1,709 @@
+<!doctype html>
+<!--
+  ROADMAP — DONE + READY card styles (MOTIR-1434 / Story MOTIR-1422).
+  COMPOSES the shipped roadmap node (WorkItemNode, MOTIR-1194) — restyles TWO node
+  states so they read at a glance AND when zoomed out, and are clearly distinct from
+  each other (and from the accent "you are here" + the red blocked signal). It does
+  NOT redraw the node (notes.html #82/#95): the card, kind tile, identifier/title,
+  status slot are the real shipped structure.
+
+  THE FIX: ready shipped as a --el-success 3px LEFT BAR (MOTIR-1417) — a hairline
+  that vanishes when zoomed out, and the same success-green a done border would use.
+  So both signals move INTO THE CARD BODY: READY = a whole-card --el-tint-mint wash;
+  DONE = a faded/recessed card + struck title (NOT success-green). Card-level fills
+  survive zoom-out; the two are unmistakably different.
+
+  Built from the real design system: every value is the light-theme resolution of a
+  globals.css token, referenced through its --el-* / shape-token name — never a
+  Tier-0 --color-* or a raw rounded-*/p-*/h-*.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — done &amp; ready card styles (MOTIR-1434)</title>
+    <style>
+      :root {
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-soft: #efedea;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-danger: #e03131;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --el-type-epic: #ff64c8;
+        --radius-card: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead span {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .sheethead .cap {
+        margin-left: auto;
+      }
+      .body {
+        padding: 22px 20px;
+      }
+      .board {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        padding: 22px 18px;
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+      }
+      .cell {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 214px;
+        flex: none;
+      }
+      .celltag {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        text-align: center;
+      }
+      .celltag b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── WorkItemNode (components/planning/WorkItemNode.tsx) ── */
+      .node {
+        position: relative;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 13px;
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .node.here {
+        border-color: var(--el-accent);
+      }
+      /* THE NEW READY TREATMENT — a whole-card --el-tint-mint wash (in the CARD,
+         not a 3px edge), so a ready node glows green even at zoom. Title goes
+         --el-text-strong for AA on the tint. */
+      .node.ready {
+        background: var(--el-tint-mint);
+        border-color: color-mix(in srgb, var(--el-success) 22%, var(--el-border));
+      }
+      .node.ready .ntitle {
+        color: var(--el-text-strong);
+      }
+      /* THE NEW DONE TREATMENT — a faded/recessed card (settled back) + a struck,
+         muted title. NOT success-green (that is ready's language); the fade is the
+         zoom-out signal. */
+      .node.done {
+        background: var(--el-surface-soft);
+        border-color: var(--el-border-soft);
+        box-shadow: var(--shadow-subtle);
+        opacity: 0.62;
+      }
+      .node.done .ntitle {
+        color: var(--el-text-muted);
+        text-decoration: line-through;
+        text-decoration-color: var(--el-text-faint);
+      }
+      .node.done .nid {
+        color: var(--el-text-faint);
+      }
+      .ntop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .spill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      /* the success-toned "Ready" pill (unchanged from MOTIR-1417) */
+      .spill.ready {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+      }
+      .spill.ready svg {
+        color: var(--el-success);
+      }
+      /* the NEW neutral "Done" pill — a check in a NEUTRAL chip (never green, so it
+         can't be mistaken for ready). */
+      .spill.done {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .spill.done svg {
+        color: var(--el-text-muted);
+      }
+      .spill.here {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .spill.here svg {
+        color: var(--el-accent-text);
+      }
+      .drill {
+        margin-left: auto;
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+        background: var(--el-tint-mint);
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-type-story);
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+
+      /* the zoom-out comparison rows */
+      .zoomrow {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        flex-wrap: wrap;
+        padding: 20px 18px;
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+      }
+      .zoomrow + .zoomrow {
+        margin-top: 14px;
+      }
+      .zoomlbl {
+        width: 168px;
+        flex: none;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .zoomlbl b {
+        color: var(--el-text-strong);
+      }
+      .mini {
+        display: flex;
+        gap: 12px;
+        transform: scale(0.5);
+        transform-origin: left center;
+      }
+      /* the OLD ready treatment, for the "before" row — the 3px --el-success bar */
+      .node.oldbar {
+        box-shadow:
+          var(--shadow-card),
+          inset 3px 0 0 var(--el-success);
+      }
+
+      .note {
+        margin: 16px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 1040px;
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — done &amp; ready card styles · MOTIR-1434</h1>
+    <p class="docsub">
+      Done and ready both move their signal INTO the card body so they read at a glance and when
+      zoomed out — and stay clearly distinct from each other, from the accent &ldquo;you are
+      here&rdquo;, and from the red blocked flag. Composes the shipped roadmap node; only the two
+      fills are new.
+    </p>
+
+    <!-- ════════ PANEL 1 — the four states at 1x ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>1 · The states, side by side</b><span>— done · ready · normal · you-are-here</span>
+        <span class="cap">WorkItemNode</span>
+      </div>
+      <div class="body">
+        <div class="board">
+          <!-- READY -->
+          <div class="cell">
+            <div class="node ready">
+              <div class="ntop">
+                <span class="spill ready">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+                  </svg>
+                  Ready
+                </span>
+              </div>
+              <div class="nbody">
+                <span class="tile">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                </span>
+                <div>
+                  <div class="nid">MOTIR-1434</div>
+                  <div class="ntitle">Done &amp; ready card styles</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag"><b>Ready</b> — mint card wash + &ldquo;Ready&rdquo; pill</div>
+          </div>
+
+          <!-- DONE -->
+          <div class="cell">
+            <div class="node done">
+              <div class="ntop">
+                <span class="spill done">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                  Done
+                </span>
+              </div>
+              <div class="nbody">
+                <span class="tile">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                </span>
+                <div>
+                  <div class="nid">MOTIR-1420</div>
+                  <div class="ntitle">Roadmap full-screen mode</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag"><b>Done</b> — faded/recessed card + struck title</div>
+          </div>
+
+          <!-- NORMAL -->
+          <div class="cell">
+            <div class="node">
+              <div class="ntop">
+                <span class="spill todo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                  To do
+                </span>
+                <svg
+                  class="drill"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+              <div class="nbody">
+                <span class="tile">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                </span>
+                <div>
+                  <div class="nid">MOTIR-1422</div>
+                  <div class="ntitle">Distinct done &amp; ready styles</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag"><b>Normal</b> — plain surface card</div>
+          </div>
+
+          <!-- YOU ARE HERE -->
+          <div class="cell">
+            <div class="node here">
+              <div class="ntop">
+                <span class="spill here">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="1" fill="currentColor" />
+                  </svg>
+                  You are here
+                </span>
+              </div>
+              <div class="nbody">
+                <span class="tile">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                  </svg>
+                </span>
+                <div>
+                  <div class="nid">MOTIR-1421</div>
+                  <div class="ntitle">Roadmap locate control</div>
+                </div>
+              </div>
+            </div>
+            <div class="celltag"><b>You are here</b> — accent border + pill</div>
+          </div>
+        </div>
+
+        <p class="note">
+          <b>Ready</b> fills the whole card with <code>--el-tint-mint</code> (was a 3px
+          <code>--el-success</code> left bar) + keeps the &ldquo;Ready&rdquo; pill; the title is
+          <code>--el-text-strong</code> for AA on the tint. <b>Done</b> recedes — a quieter
+          <code>--el-surface-soft</code> card at reduced opacity with a <b>struck</b>,
+          <code>--el-text-muted</code> title + a NEUTRAL &ldquo;Done&rdquo; check pill (never green,
+          so it can&rsquo;t be confused with ready). Mint-forward vs faded-back reads instantly;
+          neither collides with the accent <b>you-are-here</b> or the red blocked flag.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════ PANEL 2 — legible when ZOOMED OUT ════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>2 · Holds up when zoomed out</b
+        ><span>— the reason the signal moved into the card body</span>
+        <span class="cap">~50% scale</span>
+      </div>
+      <div class="body">
+        <div class="zoomrow">
+          <div class="zoomlbl">
+            <b>Before</b> — the 3px left bar all but disappears; ready &amp; normal look the same.
+          </div>
+          <div class="mini">
+            <div class="node oldbar">
+              <div class="ntop"><span class="spill todo">To do</span></div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1434</div>
+                  <div class="ntitle">Ready (old bar)</div>
+                </div>
+              </div>
+            </div>
+            <div class="node">
+              <div class="ntop"><span class="spill todo">To do</span></div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1422</div>
+                  <div class="ntitle">Normal</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="zoomrow">
+          <div class="zoomlbl">
+            <b>After</b> — mint (ready), faded (done), plain (normal), accent (here) stay tellable
+            apart.
+          </div>
+          <div class="mini">
+            <div class="node ready">
+              <div class="ntop">
+                <span class="spill ready"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polygon
+                      points="10 8 16 12 10 16 10 8"
+                      fill="currentColor"
+                      stroke="none"
+                    /></svg
+                  >Ready</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1434</div>
+                  <div class="ntitle">Ready</div>
+                </div>
+              </div>
+            </div>
+            <div class="node done">
+              <div class="ntop">
+                <span class="spill done"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m9 12 2 2 4-4" /></svg
+                  >Done</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1420</div>
+                  <div class="ntitle">Done</div>
+                </div>
+              </div>
+            </div>
+            <div class="node">
+              <div class="ntop"><span class="spill todo">To do</span></div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1422</div>
+                  <div class="ntitle">Normal</div>
+                </div>
+              </div>
+            </div>
+            <div class="node here">
+              <div class="ntop">
+                <span class="spill here"
+                  ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                  >Here</span
+                >
+              </div>
+              <div class="nbody">
+                <span class="tile"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg
+                ></span>
+                <div>
+                  <div class="nid">MOTIR-1421</div>
+                  <div class="ntitle">Here</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="note">
+          A whole-card fill survives scale; a 3px edge does not. <b>Mint-forward</b> (ready) vs
+          <b>faded-back</b> (done) is a value + hue contrast that holds at any zoom — so a viewer
+          tells completed work from actionable work at a glance, exactly the legibility the thin bar
+          lost.
+        </p>
+      </div>
+    </section>
+  </body>
+</html>

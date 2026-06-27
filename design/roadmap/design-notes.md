@@ -703,9 +703,50 @@ disabled) are in the mock.
 
 ---
 
+## ⭐ Done & ready card styles (MOTIR-1434 / Story MOTIR-1422 — `done-ready.mock.html`)
+
+`done-ready.mock.html` restyles TWO node states of the roadmap `WorkItemNode` (MOTIR-1194)
+so each reads at a glance AND **when zoomed out**, and the two are **clearly distinct** from
+each other (and from the accent "you are here" + the red blocked flag). COMPOSES the shipped
+node — does NOT redraw it.
+
+### The problem it fixes
+
+Ready shipped (MOTIR-1417) as a `--el-success` **3px left bar** — a hairline that all but
+disappears when the canvas is zoomed out, AND the same success-green a done border would use,
+so done & ready would read identically. So BOTH signals move **into the card body**, where a
+fill survives scale and the two can diverge.
+
+### The two treatments
+
+- **Ready (reworked):** the whole card fills with `--el-tint-mint` (was the 3px
+  `--el-success` left bar) + the "Ready" pill (`CirclePlay`, `--el-success` icon) stays. The
+  title goes `--el-text-strong` for AA on the tint. A ready node now **glows mint** at any zoom.
+- **Done (new):** the card **recedes** — a quieter `--el-surface-soft` fill on
+  `--el-border-soft` at reduced opacity (`--shadow-subtle`), a **struck**, `--el-text-muted`
+  title, and a **neutral "Done" check pill** (`CheckCircle2` on `--el-muted` / `--el-text-secondary`
+  — **never green**, so it can't be mistaken for ready). The fade is the zoom-out signal.
+- **Mint-forward (ready) vs faded-back (done)** is a value + hue contrast that holds at any zoom.
+
+### Precedence + boundaries
+
+Done and ready never co-apply to one node; the accent **"you are here"** frontier (MOTIR-1013)
+still wins, and the red **cross-blocked / not-in-sprint** flag is louder than both. The data is
+already shipped: `RoadmapNodeDto.isDone` (own done-ness) + `RoadmapNodeDto.ready` (MOTIR-1417) —
+so the code subtask only plumbs `isDone` like `ready` and restyles; no backend change.
+
+### Token / a11y discipline
+
+Colour via `--el-*` only — **done avoids `--el-success`** (ready's hue); the mint tint carries
+`--el-text-strong` for AA. Shape via `--radius-card` / `--radius-badge` / `--radius-control` — no
+Tier-0 `--color-*` or raw `rounded-*`. The two panels (the four states at 1× · a zoomed-out
+before/after) are in the mock.
+
+---
+
 ## Deliverable
 
-Six three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Seven three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
@@ -715,6 +756,7 @@ Six three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
   (MOTIR-1416).
 - **Full-screen** — `full-screen.mock.html` + `full-screen.png` (MOTIR-1423).
 - **Locate control** — `locate.mock.html` + `locate.png` (MOTIR-1427).
+- **Done & ready styles** — `done-ready.mock.html` + `done-ready.png` (MOTIR-1434).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
