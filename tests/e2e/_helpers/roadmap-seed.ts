@@ -247,6 +247,59 @@ export async function seedLocateRoadmap(email: string): Promise<LocateRoadmapSee
   };
 }
 
+export interface DoneReadyRoadmapSeed {
+  email: string;
+  password: string;
+  projectKey: string;
+  /** An IN-PROGRESS epic — the "you are here" frontier (accent state). */
+  hereTitle: string;
+  /** A DONE epic — the faded/recessed done state. */
+  doneTitle: string;
+  /** A to-do, fully-unblocked epic — the ready (mint-wash) state. */
+  readyTitle: string;
+}
+
+/**
+ * The DONE + READY style fixture (MOTIR-1422): one ROOT level carrying THREE
+ * distinct node states side by side — an in-progress epic (the "you are here"
+ * frontier), a DONE epic, and a to-do/unblocked epic (READY) — so the E2E can
+ * assert each renders its own card state (`data-node-state`) and that done ≠ ready.
+ * New items start at `todo` (startable + unblocked → ready); `moveToDone` walks the
+ * legal path to a done status.
+ */
+export async function seedDoneReadyRoadmap(email: string): Promise<DoneReadyRoadmapSeed> {
+  const { ctx, projectId, projectKey } = await makeTenant(
+    email,
+    'Roadmap E2E — done/ready',
+    'Done Ready Roadmap',
+    'DRDY',
+  );
+
+  // The in-progress frontier (first item → "you are here").
+  const hereTitle = 'In flight';
+  const here = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: hereTitle },
+    ctx,
+  );
+  await workItemsService.updateStatus(here.id, 'in_progress', ctx);
+
+  // A DONE epic.
+  const doneTitle = 'Shipped';
+  const done = await workItemsService.createWorkItem(
+    { projectId, kind: 'epic', title: doneTitle },
+    ctx,
+  );
+  await moveToDone(done.id, ctx);
+
+  // A to-do, fully-unblocked epic → READY.
+  const readyTitle = 'Up next';
+  await workItemsService.createWorkItem({ projectId, kind: 'epic', title: readyTitle }, ctx);
+
+  await db.project.update({ where: { id: projectId }, data: { onboardingRanAt: new Date() } });
+
+  return { email, password: ROADMAP_SEED_PASSWORD, projectKey, hereTitle, doneTitle, readyTitle };
+}
+
 export interface SprintRoadmapSeed {
   email: string;
   password: string;
