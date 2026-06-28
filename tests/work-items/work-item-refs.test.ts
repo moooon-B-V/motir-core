@@ -6,6 +6,7 @@ import {
   parseWorkItemTokenIds,
   parseWorkItemKeys,
   parseWorkItemRefs,
+  normalizeWorkItemRefs,
 } from '@/lib/mentions/workItemRefs';
 
 // Pure unit tests for the work-item reference parser (Story 5.8 · Subtask
@@ -64,6 +65,61 @@ describe('parseWorkItemRefs', () => {
   it('returns both token ids and bare keys, each deduped first-seen', () => {
     const body = 'This [MOTIR-805](motir:cltX) blocks MOTIR-11 and also MOTIR-11 again.';
     expect(parseWorkItemRefs(body, 'MOTIR')).toEqual({ ids: ['cltX'], keys: ['MOTIR-11'] });
+  });
+});
+
+describe('normalizeWorkItemRefs (bug MOTIR-1440)', () => {
+  const resolve = new Map([
+    ['MOTIR-11', 'idEleven'],
+    ['MOTIR-12', 'idTwelve'],
+  ]);
+
+  it('rewrites a bare key to the canonical token', () => {
+    expect(normalizeWorkItemRefs('Depends on MOTIR-11 to ship.', 'MOTIR', resolve)).toBe(
+      'Depends on [MOTIR-11](motir:idEleven) to ship.',
+    );
+  });
+
+  it('canonicalises a lower-case bare key (label upper-cased)', () => {
+    expect(normalizeWorkItemRefs('see motir-11', 'MOTIR', resolve)).toBe(
+      'see [MOTIR-11](motir:idEleven)',
+    );
+  });
+
+  it('leaves an unresolved key as plain text', () => {
+    expect(normalizeWorkItemRefs('see MOTIR-999 here', 'MOTIR', resolve)).toBe(
+      'see MOTIR-999 here',
+    );
+  });
+
+  it('leaves an already-explicit token untouched (does not re-wrap its label key)', () => {
+    const body = 'cf. [MOTIR-11](motir:idEleven) already.';
+    expect(normalizeWorkItemRefs(body, 'MOTIR', resolve)).toBe(body);
+  });
+
+  it('is idempotent — normalising the result again is a no-op', () => {
+    const once = normalizeWorkItemRefs('blocks MOTIR-11 and MOTIR-12', 'MOTIR', resolve);
+    expect(normalizeWorkItemRefs(once, 'MOTIR', resolve)).toBe(once);
+  });
+
+  it('rewrites multiple distinct keys, each to its own token', () => {
+    expect(normalizeWorkItemRefs('MOTIR-11 then MOTIR-12', 'MOTIR', resolve)).toBe(
+      '[MOTIR-11](motir:idEleven) then [MOTIR-12](motir:idTwelve)',
+    );
+  });
+
+  it('mixes a bare key (rewritten) beside an existing token (kept)', () => {
+    expect(normalizeWorkItemRefs('MOTIR-11 and [MOTIR-12](motir:idTwelve)', 'MOTIR', resolve)).toBe(
+      '[MOTIR-11](motir:idEleven) and [MOTIR-12](motir:idTwelve)',
+    );
+  });
+
+  it('does not touch a foreign-project bare key', () => {
+    expect(normalizeWorkItemRefs('see OTHER-11', 'MOTIR', resolve)).toBe('see OTHER-11');
+  });
+
+  it('returns the text unchanged for an empty resolve map', () => {
+    expect(normalizeWorkItemRefs('see MOTIR-11', 'MOTIR', new Map())).toBe('see MOTIR-11');
   });
 });
 

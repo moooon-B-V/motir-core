@@ -136,6 +136,7 @@ import type {
 } from '@/lib/dto/workItems';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
+import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import type { SprintBlockerDto, ValidityCondition } from '@/lib/dto/sprints';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
@@ -705,6 +706,21 @@ export const workItemsService = {
       const prefix = refreshed?.identifier ?? project.identifier;
       const identifier = `${prefix}-${key}`;
 
+      // Normalize bare work-item refs in the markdown bodies to canonical link
+      // tokens (bug MOTIR-1440): a bare `MOTIR-N` becomes `[MOTIR-N](motir:<id>)`
+      // so it BOTH auto-relates (the hook below) AND renders as a chip (5.8.6),
+      // instead of staying plain text. Resolved against the in-tx prefix. The
+      // TITLE is plain text (no chip / no markdown), so it is left untouched —
+      // its bare key still auto-relates and resolves to a peek-header link.
+      const [normalizedDescriptionMd, normalizedExplanationMd] = await normalizeBodyRefs(
+        {
+          projectId: input.projectId,
+          projectIdentifier: prefix,
+          fields: [input.descriptionMd, input.explanationMd],
+        },
+        tx,
+      );
+
       // Append after the last sibling. Siblings are project-scoped and
       // parent-scoped (top-level when parentId is null) so the position only
       // orders true peers.
@@ -765,8 +781,8 @@ export const workItemsService = {
         key,
         identifier,
         title: input.title,
-        descriptionMd: input.descriptionMd ?? null,
-        explanationMd: input.explanationMd ?? null,
+        descriptionMd: normalizedDescriptionMd ?? null,
+        explanationMd: normalizedExplanationMd ?? null,
         status: statusKey,
         ...(input.explanationSource ? { explanationSource: input.explanationSource } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
@@ -1050,6 +1066,30 @@ export const workItemsService = {
         throw new StaleWorkItemError();
       }
 
+      // Normalize bare work-item refs in any EDITED body to canonical link
+      // tokens (bug MOTIR-1440) BEFORE diffing — so the stored body chips
+      // (5.8.6) instead of staying plain text, AND a re-save of an
+      // already-canonical body stays a no-op (the normalize is idempotent).
+      // Runs only when a body field is supplied; a field absent from the patch
+      // stays `undefined`, preserving the "was it supplied?" guards below.
+      let normalizedDescriptionMd: string | null | undefined = patch.descriptionMd;
+      let normalizedExplanationMd: string | null | undefined = patch.explanationMd;
+      if (patch.descriptionMd !== undefined || patch.explanationMd !== undefined) {
+        const refProject = await projectRepository.findById(current.projectId, tx);
+        /* istanbul ignore else -- the project always resolves (it was read to gate
+           the edit above); the guard narrows the nullable type only */
+        if (refProject) {
+          [normalizedDescriptionMd, normalizedExplanationMd] = await normalizeBodyRefs(
+            {
+              projectId: current.projectId,
+              projectIdentifier: refProject.identifier,
+              fields: [patch.descriptionMd, patch.explanationMd],
+            },
+            tx,
+          );
+        }
+      }
+
       const update: Prisma.WorkItemUncheckedUpdateInput = {};
       const diff: Record<string, DiffCell> = {};
 
@@ -1060,9 +1100,12 @@ export const workItemsService = {
         diff.title = { from: current.title, to: patch.title };
       }
       let addedDescMentionIds: string[] = [];
-      if (patch.descriptionMd !== undefined && patch.descriptionMd !== current.descriptionMd) {
-        update.descriptionMd = patch.descriptionMd;
-        diff.descriptionMd = { from: current.descriptionMd, to: patch.descriptionMd };
+      if (
+        normalizedDescriptionMd !== undefined &&
+        normalizedDescriptionMd !== current.descriptionMd
+      ) {
+        update.descriptionMd = normalizedDescriptionMd;
+        diff.descriptionMd = { from: current.descriptionMd, to: normalizedDescriptionMd };
         if (patchDescTokenIds.length > 0 && descMentionable !== null) {
           const mentionable = descMentionable;
           const prevIds = new Set(parseMentionIds(current.descriptionMd ?? ''));
@@ -1071,9 +1114,12 @@ export const workItemsService = {
           );
         }
       }
-      if (patch.explanationMd !== undefined && patch.explanationMd !== current.explanationMd) {
-        update.explanationMd = patch.explanationMd;
-        diff.explanationMd = { from: current.explanationMd, to: patch.explanationMd };
+      if (
+        normalizedExplanationMd !== undefined &&
+        normalizedExplanationMd !== current.explanationMd
+      ) {
+        update.explanationMd = normalizedExplanationMd;
+        diff.explanationMd = { from: current.explanationMd, to: normalizedExplanationMd };
       }
       if (patch.priority !== undefined && patch.priority !== current.priority) {
         update.priority = patch.priority;

@@ -187,6 +187,49 @@ describe('plansService.approvePlan — materialize per op', () => {
     expect(revisions[0]!.changeKind).toBe('created');
   });
 
+  it('normalizes a bare REAL work-item key in a materialized description to the canonical chip token (bug MOTIR-1440)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Referenced target');
+    const target = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'Generated card',
+          kind: 'task',
+          descriptionMd: `Builds on ${target.identifier} — see there.`,
+        },
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Generated card' } });
+    // The bare key was rewritten to the chip token (resolved against the real item).
+    expect(created.descriptionMd).toBe(
+      `Builds on [${target.identifier}](motir:${target.id}) — see there.`,
+    );
+  });
+
+  it('normalizes a bare REAL key in a materialized MODIFY patch description (bug MOTIR-1440)', async () => {
+    const fx = await makeWorkItemFixture();
+    const editTargetId = await seedItem(fx, 'Edit me');
+    const refId = await seedItem(fx, 'Ref target');
+    const ref = await db.workItem.findUniqueOrThrow({ where: { id: refId } });
+
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'modify',
+        workItemId: editTargetId,
+        patch: { descriptionMd: `Now mentions ${ref.identifier}.` },
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await db.workItem.findUniqueOrThrow({ where: { id: editTargetId } });
+    expect(modified.descriptionMd).toBe(`Now mentions [${ref.identifier}](motir:${ref.id}).`);
+  });
+
   it('materializes a modify: SAME id, fields updated, exactly ONE revision; and a remove: target archived', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Old title');

@@ -280,6 +280,93 @@ describe('auto-relate guards', () => {
   });
 });
 
+describe('normalize bare refs on write (bug MOTIR-1440)', () => {
+  /** The stored (canonical) description body, read back authoritatively. */
+  async function storedDescription(id: string): Promise<string | null> {
+    const row = await db.workItem.findUnique({ where: { id } });
+    return row?.descriptionMd ?? null;
+  }
+
+  it('CREATE rewrites a bare KEY-N in the description to the canonical token AND wires the edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', {
+      descriptionMd: `Depends on ${target.identifier} to ship.`,
+    });
+
+    // The stored body now carries the chip token, not the bare key.
+    expect(await storedDescription(dto.id)).toBe(`Depends on ${token(target)} to ship.`);
+    // The relates_to edge is still created (the 5.8.3 behaviour is preserved).
+    expect(await linkBetween(dto.id, target.id)).not.toBeNull();
+  });
+
+  it('CREATE leaves an already-explicit token unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const body = `cf. ${token(target)} here.`;
+
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', { descriptionMd: body });
+
+    expect(await storedDescription(dto.id)).toBe(body);
+  });
+
+  it('CREATE leaves an unknown bare key as plain text', async () => {
+    const fx = await makeWorkItemFixture();
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', {
+      descriptionMd: `ghost ${fx.projectIdentifier}-99999 not real`,
+    });
+    expect(await storedDescription(dto.id)).toBe(`ghost ${fx.projectIdentifier}-99999 not real`);
+  });
+
+  it('UPDATE rewrites a bare KEY-N added to the description', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source');
+
+    await workItemsService.updateWorkItem(
+      dto.id,
+      { descriptionMd: `Now relates to ${target.identifier}.` },
+      fx.ctx,
+    );
+
+    expect(await storedDescription(dto.id)).toBe(`Now relates to ${token(target)}.`);
+    expect(await linkBetween(dto.id, target.id)).not.toBeNull();
+  });
+
+  it('UPDATE re-saving an already-normalized body is a no-op (no spurious revision)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', {
+      descriptionMd: `see ${target.identifier}`,
+    });
+    const canonical = await storedDescription(dto.id);
+    expect(canonical).toBe(`see ${token(target)}`);
+
+    const revisionsBefore = await db.workItemRevision.count({ where: { workItemId: dto.id } });
+    // Re-submit the canonical token form (what the editor reloads + re-saves).
+    await workItemsService.updateWorkItem(dto.id, { descriptionMd: canonical! }, fx.ctx);
+
+    expect(await storedDescription(dto.id)).toBe(canonical);
+    // No body change → no new revision (the normalize is idempotent).
+    expect(await db.workItemRevision.count({ where: { workItemId: dto.id } })).toBe(
+      revisionsBefore,
+    );
+  });
+
+  it('also normalizes a bare key in the explanation body', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', {
+      explanationMd: `Implements ${target.identifier}.`,
+    });
+
+    const row = await db.workItem.findUnique({ where: { id: dto.id } });
+    expect(row?.explanationMd).toBe(`Implements ${token(target)}.`);
+  });
+});
+
 describe('auto-relate concurrency', () => {
   it('two near-simultaneous writes referencing the same target yield exactly ONE link', async () => {
     const fx = await makeWorkItemFixture();
