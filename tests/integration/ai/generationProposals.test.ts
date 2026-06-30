@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
 import { PATCH as proposalsPATCH } from '@/app/api/internal/ai/plan-proposals/[itemId]/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
@@ -385,5 +386,96 @@ describe('PATCH /api/internal/ai/plan-proposals/[itemId] — generation-time dee
       body: { patch: { descriptionMd: 'x' } },
     });
     expect(res.status).toBe(400);
+  });
+});
+
+// ─── RE-RUN isolation (Subtask 7.4.13 · MOTIR-1448) ──────────────────────────
+// Carved from MOTIR-1444 (mistake #112/#114): the "a mid-frontier failure → the
+// job is re-run → no duplicate `add` PlanItems in the resulting Plan" guarantee
+// is NOT a motir-ai handler capability (its only idempotency is in-memory,
+// within-run dedup — covered by motir-ai's generateTreeHandler.test.ts). It is
+// delivered HERE, by motir-core's PER-JOB Plan isolation: `startGeneration` mints
+// a fresh Plan per `sourceJobId`, and the append seam resolves the target Plan
+// strictly by `findBySourceJobId(jobId)` (no project fallback, no within-plan add
+// dedupe). So a re-run is a NEW job ⇒ a NEW Plan; the abandoned partial Plan
+// stays generating and isolated, and the resulting (re-run) Plan holds each
+// frontier `add` exactly once. Driven through the REAL route + real Postgres (no
+// stubbed dedupe), so it asserts the product, not the harness.
+describe('POST /api/internal/ai/plan-proposals — generate_tree RE-RUN isolation (per-job Plan)', () => {
+  // The full frontier the generator lays in one pass (epic → its stories → the
+  // first story's subtasks). Titles are distinct, and the re-run's first three
+  // OVERLAP the failed run's partial set — so a regression that reused the
+  // project's existing `generating` Plan would surface as duplicate titles.
+  const FRONTIER = [
+    { op: 'add' as const, proposedFields: { title: 'Epic: Auth', kind: 'epic' } },
+    { op: 'add' as const, proposedFields: { title: 'Story: Login', kind: 'story' } },
+    { op: 'add' as const, proposedFields: { title: 'Story: Signup', kind: 'story' } },
+    { op: 'add' as const, proposedFields: { title: 'Subtask: Login form', kind: 'subtask' } },
+    { op: 'add' as const, proposedFields: { title: 'Subtask: Session cookie', kind: 'subtask' } },
+    { op: 'add' as const, proposedFields: { title: 'Subtask: Logout', kind: 'subtask' } },
+  ];
+
+  it('a mid-frontier failure then a re-submit lands in a FRESH plan — the resulting plan holds each add exactly once, the abandoned partial plan stays isolated, no WorkItem', async () => {
+    const fx = await makeFixture();
+
+    // RUN 1 (job1) — appends a PARTIAL frontier (3 of 6), then the handler fails
+    // mid-frontier: it threw before sending `final:true`, so Plan A is left
+    // `generating` with only those 3 proposals (no markPlanned).
+    const job1 = 'job_gen_run1_partial';
+    const planA = await openPlan(fx, job1);
+    const r1 = await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { jobId: job1, proposals: FRONTIER.slice(0, 3) }, // partial, NO final
+      }),
+    );
+    expect(r1.status).toBe(200);
+    expect((await r1.json()).planned).toBe(false);
+
+    // RUN 2 (job2) — the user re-submits generation. A NEW job ⇒ a NEW Plan
+    // (`startGeneration` mints one per sourceJobId). The resumed run appends the
+    // FULL frontier into ITS OWN plan and closes it.
+    const job2 = 'job_gen_run2_full';
+    const planB = await openPlan(fx, job2);
+    const r2 = await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { jobId: job2, proposals: FRONTIER, final: true },
+      }),
+    );
+    expect(r2.status).toBe(200);
+    const b2 = await r2.json();
+
+    // The seam resolved job2 to ITS OWN plan (Plan B), never the failed job's
+    // Plan A — the route's returned planId IS the `findBySourceJobId` result.
+    expect(planB).not.toBe(planA);
+    expect(b2.planId).toBe(planB);
+    expect(b2.planned).toBe(true);
+    expect(b2.planItemIds).toHaveLength(FRONTIER.length);
+    const resolvedB = await planRepository.findBySourceJobId(job2, fx.ctx.workspaceId);
+    expect(resolvedB!.id).toBe(planB);
+    expect(resolvedB!.id).not.toBe(planA);
+
+    // The RESULTING (re-run) plan holds each frontier `add` EXACTLY ONCE — no
+    // duplicates — and the failed run's 3 partial proposals did NOT leak in.
+    const itemsB = await planItemRepository.findByPlan(planB);
+    expect(itemsB).toHaveLength(FRONTIER.length);
+    expect(itemsB.every((i) => i.op === 'add' && i.workItemId === null)).toBe(true);
+    const titlesB = itemsB.map((i) => (i.proposedFields as { title: string }).title);
+    expect([...titlesB].sort()).toEqual(FRONTIER.map((p) => p.proposedFields.title).sort());
+    expect(new Set(titlesB).size).toBe(titlesB.length); // no duplicate `add` PlanItems
+
+    // The abandoned plan stays ISOLATED: still `generating`, still exactly its 3
+    // partial proposals — the re-run never appended into it.
+    const itemsA = await planItemRepository.findByPlan(planA);
+    expect(itemsA).toHaveLength(3);
+    const abandoned = await db.plan.findFirst({ where: { id: planA } });
+    expect(abandoned!.status).toBe('generating');
+
+    // Generation NEVER materializes — neither run created a WorkItem (the partial
+    // proposal set was never dispatchable; materialize-on-approve is Story 7.21).
+    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
   });
 });
