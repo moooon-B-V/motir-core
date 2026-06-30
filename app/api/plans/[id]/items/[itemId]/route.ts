@@ -13,8 +13,9 @@ import type { UpdateProposalInput } from '@/lib/dto/plans';
 
 // PATCH /api/plans/[id]/items/[itemId] — edit a proposed `add` of a `planned`
 // plan (Subtask 7.21.6 / MOTIR-1370, calling the MOTIR-1336 substrate). Patches
-// the add's proposed fields (title/kind/priority/type/description) in place — NO
-// WorkItem until approve. Only an `add` is editable; the plan must be `planned`.
+// the add's proposed fields (title/kind/priority/type/description + leaf sizing
+// storyPoints/estimateMinutes, MOTIR-1433) in place — NO WorkItem until approve.
+// Only an `add` is editable; the plan must be `planned`.
 //
 // HTTP only (CLAUDE.md 4-layer): resolve the workspace, parse the body, call ONE
 // service method, map typed errors. `updateProposal` asserts `canEdit` (→ 403/404).
@@ -38,7 +39,10 @@ export async function PATCH(
   }
   const b = body as Record<string, unknown>;
   // Pick ONLY the editable fields (the service merges sparsely; an absent key is
-  // left untouched). Unknown keys are ignored, not an error.
+  // left untouched). Unknown keys are ignored, not an error. Leaf sizing
+  // (MOTIR-1433): storyPoints/estimateMinutes are numbers — a present-but-
+  // non-number value (other than the explicit clear) becomes `null`, and the
+  // service re-validates the merged values (Fibonacci range / non-negative int).
   const input: UpdateProposalInput = {
     ...(typeof b.title === 'string' ? { title: b.title } : {}),
     ...(typeof b.kind === 'string' ? { kind: b.kind } : {}),
@@ -47,6 +51,12 @@ export async function PATCH(
       : {}),
     ...('type' in b ? { type: typeof b.type === 'string' ? b.type : null } : {}),
     ...('priority' in b ? { priority: typeof b.priority === 'string' ? b.priority : null } : {}),
+    ...('storyPoints' in b
+      ? { storyPoints: typeof b.storyPoints === 'number' ? b.storyPoints : null }
+      : {}),
+    ...('estimateMinutes' in b
+      ? { estimateMinutes: typeof b.estimateMinutes === 'number' ? b.estimateMinutes : null }
+      : {}),
   };
 
   try {

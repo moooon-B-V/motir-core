@@ -43,3 +43,30 @@ export function validateStoryPoints(points: number | null): number | null {
   }
   return points;
 }
+
+/**
+ * Validate a TIME estimate in minutes. `null` clears (always valid). A number
+ * must be finite, a non-negative INTEGER (minutes are whole) — the SAME rule the
+ * MCP `create_work_item` / `update_work_item` tools enforce at their Zod
+ * boundary (`z.number().int().nonnegative()`). Extracted here so the
+ * boundary-less write paths (the plan substrate's `addProposals` /
+ * `updateProposal` → `materialize`, MOTIR-1433) validate `estimateMinutes` the
+ * SAME way before it reaches the `estimateMinutes` column. Returns the value
+ * unchanged on success.
+ *
+ * Throws: `InvalidEstimateError` (→ 422 on the route layer; a typed tool error
+ * on the MCP surface).
+ */
+export function validateEstimateMinutes(minutes: number | null): number | null {
+  if (minutes === null) return null;
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes)) {
+    throw new InvalidEstimateError('A time estimate must be a finite number of minutes.');
+  }
+  if (!Number.isInteger(minutes)) {
+    throw new InvalidEstimateError('A time estimate must be a whole number of minutes.');
+  }
+  if (minutes < 0) {
+    throw new InvalidEstimateError('A time estimate must not be negative.');
+  }
+  return minutes;
+}

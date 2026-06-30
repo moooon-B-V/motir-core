@@ -9,6 +9,7 @@ import {
   PlanNotInExpectedStatusError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { InvalidEstimateError } from '@/lib/estimation/errors';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -565,5 +566,136 @@ describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () =
 
     const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.onboardingRanAt).toBeNull();
+  });
+});
+
+// Bug MOTIR-1433 — the Plan substrate must CARRY leaf sizing (storyPoints +
+// estimateMinutes, the estimation gate) on a proposed `add`, round-trip it
+// through getPlan, MAP it onto the materialized WorkItem, and let updateProposal
+// patch it. Real Postgres.
+describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
+  it('round-trips storyPoints + estimateMinutes: addProposals → getPlan → materialize onto the WorkItem', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Sized' }, fx.ctx);
+    const after = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Sized leaf',
+            kind: 'task',
+            type: 'code',
+            storyPoints: 5,
+            estimateMinutes: 55,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    // The proposal carries the sizing (the DTO round-trips it from the JSON column).
+    expect(after.items[0]!.proposedFields).toMatchObject({ storyPoints: 5, estimateMinutes: 55 });
+
+    // getPlan reads it back identically (no WorkItem yet).
+    const reread = await plansService.getPlan(plan.id, fx.ctx);
+    expect(reread.items[0]!.proposedFields).toMatchObject({ storyPoints: 5, estimateMinutes: 55 });
+
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    // Materialize mapped the sizing onto the created WorkItem (the gate survives).
+    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Sized leaf' } });
+    expect(Number(created.storyPoints)).toBe(5);
+    expect(created.estimateMinutes).toBe(55);
+
+    // The 'created' revision records the sizing (mirrors the normal create diff).
+    const rev = await db.workItemRevision.findFirstOrThrow({
+      where: { workItemId: created.id, changeKind: 'created' },
+    });
+    expect(rev.diff).toMatchObject({
+      storyPoints: { from: null, to: 5 },
+      estimateMinutes: { from: null, to: 55 },
+    });
+  });
+
+  it('an add with no sizing materializes an unestimated WorkItem (sizing stays null)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'Unsized', kind: 'task' } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Unsized' } });
+    expect(created.storyPoints).toBeNull();
+    expect(created.estimateMinutes).toBeNull();
+  });
+
+  it('updateProposal patches sizing in place; an explicit null clears it', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Resize me', kind: 'subtask', storyPoints: 2 } }],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    // Patch the point value + set a minute estimate.
+    const patched = await plansService.updateProposal(
+      plan.id,
+      itemId,
+      { storyPoints: 8, estimateMinutes: 90 },
+      fx.ctx,
+    );
+    expect(patched.items.find((i) => i.id === itemId)!.proposedFields).toMatchObject({
+      storyPoints: 8,
+      estimateMinutes: 90,
+    });
+
+    // An explicit null clears one while leaving the other untouched (sparse).
+    const cleared = await plansService.updateProposal(
+      plan.id,
+      itemId,
+      { storyPoints: null },
+      fx.ctx,
+    );
+    const pf = cleared.items.find((i) => i.id === itemId)!.proposedFields!;
+    expect(pf.storyPoints).toBeNull();
+    expect(pf.estimateMinutes).toBe(90); // untouched
+  });
+
+  it('addProposals rejects malformed sizing (negative points, non-integer minutes) — InvalidEstimateError', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Bad points', storyPoints: -1 } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidEstimateError);
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [{ op: 'add', proposedFields: { title: 'Bad minutes', estimateMinutes: 12.5 } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidEstimateError);
+  });
+
+  it('updateProposal rejects a patched-in bad estimate (InvalidEstimateError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'OK', kind: 'subtask', storyPoints: 3 } }],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await expect(
+      plansService.updateProposal(plan.id, itemId, { estimateMinutes: -5 }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidEstimateError);
   });
 });
