@@ -10,6 +10,8 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
+import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
+import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
 
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -198,6 +200,10 @@ async function materialize(
 
   const adds = items.filter((i) => i.op === 'add');
   const planItemToWorkItem = new Map<string, string>();
+  // The created adds, collected for the post-creation body pass (Pass 3) — the
+  // intra-plan item-link tokens in a body can reference a sibling created LATER
+  // (a forward ref), so resolving them must wait until every add's id exists.
+  const createdAdds: Array<{ created: WorkItem; prefix: string }> = [];
 
   const resolveRef = (ref: string): string => {
     if (ref.startsWith(TEMP_REF_PREFIX)) {
@@ -273,15 +279,10 @@ async function materialize(
     const created = await workItemRepository.create(data, tx);
     planItemToWorkItem.set(item.id, created.id);
     await planItemRepository.setWorkItemId(item.id, created.id, tx);
-    await workItemRevisionsService.recordRevision(
-      {
-        workItemId: created.id,
-        changedById: ctx.userId,
-        changeKind: 'created',
-        diff: buildAddDiff(created),
-      },
-      tx,
-    );
+    // The `created` revision is recorded in Pass 3, after the body's intra-plan
+    // item-link tokens are resolved — so the revision (and the live row) carry the
+    // FINAL chip body, never the temp-ref form.
+    createdAdds.push({ created, prefix });
   }
 
   // Pass 2 — blocked-by edges for the adds (all add targets now exist).
@@ -299,6 +300,61 @@ async function materialize(
         tx,
       );
     }
+  }
+
+  // Pass 3 — resolve intra-plan item-link tokens in each add's body, then
+  // auto-relate + record the create revision (MOTIR-1418). Every add's WorkItem
+  // id now exists, so a `[label](motir-ref:planItem:<id>)` token (the form the
+  // 7.4 generator emits for a sibling it was still proposing) rewrites to a real
+  // `[label](motir:<workItemId>)` — even a forward ref to a later sibling. After
+  // the rewrite the body carries only real `motir:<id>` tokens, so the SAME
+  // auto-relate-on-mention pass workItemsService runs at create (5.8.3) wires the
+  // `relates_to` edges here too — materialize composes the leaf repos directly
+  // (it cannot nest `workItemsService.createWorkItem`'s own transaction), so this
+  // is where that hook belongs. ADD-only + idempotent, so it never duplicates or
+  // downgrades the structural `is_blocked_by` edges from Pass 2.
+  for (const { created, prefix } of createdAdds) {
+    let finalRow = created;
+    const { body: rewrittenDescription, unresolved } = rewriteIntraPlanRefs(
+      created.descriptionMd ?? '',
+      planItemToWorkItem,
+    );
+    for (const ref of unresolved) {
+      // A dangling intra-plan ref is left inert (never dropped/crashed); surface
+      // it — it means the generator referenced a sibling that wasn't proposed.
+      console.warn(
+        `[plansService.materialize] plan ${plan.id}: intra-plan ref planItem:${ref} in ${created.identifier} resolved to no item — left inert`,
+      );
+    }
+    if (rewrittenDescription !== (created.descriptionMd ?? '')) {
+      finalRow = await workItemRepository.update(
+        created.id,
+        { descriptionMd: rewrittenDescription },
+        tx,
+      );
+    }
+    await autoRelateWorkItemMentions(
+      {
+        source: {
+          id: finalRow.id,
+          workspaceId: ctx.workspaceId,
+          projectId: plan.projectId,
+          projectIdentifier: prefix,
+        },
+        text: finalRow.descriptionMd ?? '',
+        ctx,
+      },
+      tx,
+    );
+    await workItemRevisionsService.recordRevision(
+      {
+        workItemId: finalRow.id,
+        changedById: ctx.userId,
+        changeKind: 'created',
+        diff: buildAddDiff(finalRow),
+      },
+      tx,
+    );
   }
 
   // modify + remove against existing targets (locked + re-read inside the tx).

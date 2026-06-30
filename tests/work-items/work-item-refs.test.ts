@@ -7,6 +7,9 @@ import {
   parseWorkItemKeys,
   parseWorkItemRefs,
   normalizeWorkItemRefs,
+  INTRA_PLAN_REF_TOKEN_RE,
+  parseIntraPlanRefIds,
+  rewriteIntraPlanRefs,
 } from '@/lib/mentions/workItemRefs';
 
 // Pure unit tests for the work-item reference parser (Story 5.8 · Subtask
@@ -135,5 +138,55 @@ describe('WORKITEM_HREF_RE', () => {
     expect(parseWorkItemTokenIds(body)).toEqual(['a', 'b']);
     expect(parseWorkItemTokenIds(body)).toEqual(['a', 'b']);
     expect(WORKITEM_TOKEN_RE.lastIndex).toBe(0);
+  });
+});
+
+describe('intra-plan item-link tokens (MOTIR-1418)', () => {
+  // planItem id → created work-item id (the map materialize builds).
+  const resolve = new Map([
+    ['piA', 'wiA'],
+    ['piB', 'wiB'],
+  ]);
+
+  it('rewrites ONLY the intra-plan token; an existing motir: token + a bare key pass through', () => {
+    const body = 'See [A](motir-ref:planItem:piA), [B](motir:wiExisting), and MOTIR-11.';
+    const { body: out, unresolved } = rewriteIntraPlanRefs(body, resolve);
+    expect(out).toBe('See [A](motir:wiA), [B](motir:wiExisting), and MOTIR-11.');
+    expect(unresolved).toEqual([]);
+  });
+
+  it('leaves a dangling temp-ref inert and reports its id (never a half-token/crash)', () => {
+    const { body, unresolved } = rewriteIntraPlanRefs('[X](motir-ref:planItem:piGone)', resolve);
+    expect(body).toBe('[X](motir-ref:planItem:piGone)'); // untouched
+    expect(unresolved).toEqual(['piGone']);
+  });
+
+  it('preserves the label and rewrites multiple tokens', () => {
+    const { body } = rewriteIntraPlanRefs(
+      '[the schema](motir-ref:planItem:piA) then [the route](motir-ref:planItem:piB)',
+      resolve,
+    );
+    expect(body).toBe('[the schema](motir:wiA) then [the route](motir:wiB)');
+  });
+
+  it('returns the body unchanged when there is no intra-plan token', () => {
+    const body = 'plain text, a [k](motir:x) token and MOTIR-11';
+    expect(rewriteIntraPlanRefs(body, resolve).body).toBe(body);
+    expect(rewriteIntraPlanRefs(body, new Map()).body).toBe(body);
+  });
+
+  it('parseIntraPlanRefIds returns distinct planItem ids in first-seen order', () => {
+    expect(
+      parseIntraPlanRefIds(
+        '[a](motir-ref:planItem:piA) [a2](motir-ref:planItem:piA) [b](motir-ref:planItem:piB)',
+      ),
+    ).toEqual(['piA', 'piB']);
+  });
+
+  it('INTRA_PLAN_REF_TOKEN_RE carries no lastIndex state across calls', () => {
+    const body = '[a](motir-ref:planItem:piA)';
+    expect(parseIntraPlanRefIds(body)).toEqual(['piA']);
+    expect(parseIntraPlanRefIds(body)).toEqual(['piA']);
+    expect(INTRA_PLAN_REF_TOKEN_RE.lastIndex).toBe(0);
   });
 });

@@ -153,3 +153,76 @@ export function parseWorkItemRefs(text: string, projectIdentifier: string): Work
     keys: parseWorkItemKeys(withoutTokens, projectIdentifier),
   };
 }
+
+// --- Intra-plan item-link tokens (Story 7.4 generation · MOTIR-1418) ---------
+// The 7.4 generator (MOTIR-845 descriptions / MOTIR-850 explanations) references
+// work items as item-link tokens. For an EXISTING item it emits the real
+// `[label](motir:<id>)` token (handled by the parser above). But for an
+// INTRA-PLAN sibling — another `add` PlanItem in the SAME plan, with no real
+// WorkItem id yet — it emits `[label](motir-ref:planItem:<planItemId>)`, keyed
+// to the SAME `planItem:` temp-ref the structural `parentRef`/`blockedByRefs`
+// carry. `materialize` REWRITES every such token to the real `motir:<id>` once
+// the sibling becomes a WorkItem, so the stored body chips (5.8.6) and
+// auto-relates (5.8.3) like any other reference — instead of landing as a
+// broken temp-ref token.
+
+/**
+ * One intra-plan item-link token: `[<label>](motir-ref:planItem:<planItemId>)`.
+ * Group 1 = the display label; group 2 = the planItem id (the `planItem:` prefix
+ * stripped — the bare id materialize's temp-ref → work-item-id map is keyed by).
+ * `/g` for `matchAll`/`replace`. The `motir-ref:planItem:` prefix can't match an
+ * existing-item `motir:<id>` token or a bare key, so those pass through.
+ */
+export const INTRA_PLAN_REF_TOKEN_RE = /\[([^\]]*)\]\(motir-ref:planItem:([A-Za-z0-9_-]+)\)/g;
+
+/**
+ * Extract the intra-plan sibling planItem ids referenced in a body — one per
+ * distinct id in first-seen order. Pure string work; the structural `planItem:`
+ * prefix is already stripped (these are the bare ids).
+ */
+export function parseIntraPlanRefIds(text: string): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const match of text.matchAll(INTRA_PLAN_REF_TOKEN_RE)) {
+    const id = match[2] as string;
+    if (!seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
+/** The rewritten body + the temp-ref ids that did NOT resolve (left inert). */
+export interface IntraPlanRewriteResult {
+  body: string;
+  /** planItem ids whose token was left as-is because they resolved to no item. */
+  unresolved: string[];
+}
+
+/**
+ * Rewrite every intra-plan token `[label](motir-ref:planItem:<id>)` in `text` to
+ * the real work-item link token `[label](motir:<workItemId>)`, using `resolve`
+ * (a planItem id → created work-item id map — the SAME map materialize already
+ * builds for `parentRef` / edge refs). A token whose id does NOT resolve (a
+ * dangling ref) is left VERBATIM — inert text, never a half-token or crash — and
+ * its id is reported in `unresolved` so the caller can surface it. Existing
+ * `motir:<id>` tokens and bare keys are untouched (the `motir-ref:planItem:`
+ * prefix matches neither). Pure string work — no Prisma, no IO. Non-destructive
+ * and idempotent: a body with no intra-plan token returns unchanged.
+ */
+export function rewriteIntraPlanRefs(
+  text: string,
+  resolve: ReadonlyMap<string, string>,
+): IntraPlanRewriteResult {
+  const unresolved: string[] = [];
+  const body = text.replace(INTRA_PLAN_REF_TOKEN_RE, (match, label: string, planItemId: string) => {
+    const id = resolve.get(planItemId);
+    if (!id) {
+      unresolved.push(planItemId);
+      return match; // dangling temp-ref → left inert
+    }
+    return `[${label}](motir:${id})`;
+  });
+  return { body, unresolved };
+}

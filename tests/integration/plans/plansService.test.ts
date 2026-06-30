@@ -212,6 +212,70 @@ describe('plansService.approvePlan — materialize per op', () => {
     );
   });
 
+  it('rewrites an intra-plan motir-ref token in a materialized description to the real chip + relates_to (MOTIR-1418)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Tree' }, fx.ctx);
+    // Sibling B is proposed first — capture its PlanItem id (the temp-ref the
+    // generator embeds in a reference to a sibling it has no real id for yet).
+    const afterB = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Sibling B', kind: 'task' } }],
+      fx.ctx,
+    );
+    const bPlanItemId = afterB.items[0]!.id;
+    // Card A references B through the intra-plan item-link token.
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Card A',
+            kind: 'task',
+            descriptionMd: `Depends on [Sibling B](motir-ref:planItem:${bPlanItemId}).`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const a = await db.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await db.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
+    // The temp-ref token became a real chip token pointing at B's CREATED id.
+    expect(a.descriptionMd).toBe(`Depends on [Sibling B](motir:${b.id}).`);
+    // The now-real reference auto-created a `relates_to` edge A → B (source mention)
+    // — the materialize analogue of the create-time auto-relate — plus its reciprocal.
+    const forward = await db.workItemLink.findFirst({
+      where: { fromId: a.id, toId: b.id, kind: 'relates_to' },
+    });
+    expect(forward).not.toBeNull();
+    expect(forward!.source).toBe('mention');
+    expect(
+      await db.workItemLink.findFirst({ where: { fromId: b.id, toId: a.id, kind: 'relates_to' } }),
+    ).not.toBeNull();
+  });
+
+  it('leaves a DANGLING intra-plan ref inert when materialized (no crash, no edge)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'Orphan ref card',
+          kind: 'task',
+          descriptionMd: 'See [gone](motir-ref:planItem:pi_does_not_exist).',
+        },
+      },
+    ]);
+    // Must NOT throw — a dangling temp-ref is body text, never a materialize failure.
+    await plansService.approvePlan(planId, fx.ctx);
+    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Orphan ref card' } });
+    expect(created.descriptionMd).toBe('See [gone](motir-ref:planItem:pi_does_not_exist).');
+    expect(await db.workItemLink.count({ where: { fromId: created.id } })).toBe(0);
+  });
+
   it('normalizes a bare REAL key in a materialized MODIFY patch description (bug MOTIR-1440)', async () => {
     const fx = await makeWorkItemFixture();
     const editTargetId = await seedItem(fx, 'Edit me');
