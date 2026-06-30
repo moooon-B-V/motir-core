@@ -23,6 +23,16 @@ export interface PlanItemProposedFields {
   type?: string | null;
   priority?: string | null;
   executor?: string | null;
+  /**
+   * Leaf sizing (MOTIR-1433) — the agile point estimate + the time estimate the
+   * **estimation gate** requires on EVERY leaf (subtask / childless bug/task).
+   * They live HERE until materialize maps them onto the created WorkItem. Both
+   * optional/nullable (a non-leaf `add` carries neither); validated at
+   * `addProposals` / `updateProposal` the SAME way the create path validates
+   * them (Fibonacci-range points, non-negative integer minutes).
+   */
+  storyPoints?: number | null;
+  estimateMinutes?: number | null;
 }
 
 /**
@@ -125,6 +135,11 @@ export interface UpdateProposalInput {
   descriptionMd?: string | null;
   type?: string | null;
   priority?: string | null;
+  /** Leaf sizing (MOTIR-1433) — patchable on the proposal-edit / deepen path
+   *  exactly like the other proposed fields; an explicit `null` clears the
+   *  estimate, the same sparse-merge semantics the rest of this input uses. */
+  storyPoints?: number | null;
+  estimateMinutes?: number | null;
 }
 
 /** Options for `plansService.listPlans`. */

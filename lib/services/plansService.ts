@@ -17,6 +17,7 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
+import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import {
   InvalidProposalError,
   PlanItemNotFoundError,
@@ -76,11 +77,27 @@ function clampLimit(limit: number | undefined): number {
 // EXACT same contract materialize uses — no second source of truth.
 export const TEMP_REF_PREFIX = 'planItem:';
 
+/**
+ * Validate the leaf SIZING of an `add`'s proposed fields (MOTIR-1433) — the
+ * SAME rules the create path applies: a Fibonacci-range story-point value
+ * (`validateStoryPoints`) and a non-negative integer-minute time estimate
+ * (`validateEstimateMinutes`). Both `undefined`/`null` pass (an unsized or
+ * non-leaf `add`). Throws `InvalidEstimateError` on a malformed value, so a bad
+ * size is rejected at the proposal boundary rather than silently reaching the
+ * `estimateMinutes` / `storyPoints` columns at materialize (which bypasses the
+ * MCP/route Zod boundary the human-create path validates behind).
+ */
+function validateProposedSizing(pf: PlanItemProposedFields): void {
+  validateStoryPoints(pf.storyPoints ?? null);
+  validateEstimateMinutes(pf.estimateMinutes ?? null);
+}
+
 function validateProposal(p: ProposalInput): void {
   if (p.op === 'add') {
     if (!p.proposedFields || !p.proposedFields.title?.trim()) {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
     }
+    validateProposedSizing(p.proposedFields);
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
     if (!p.patch) throw new InvalidProposalError('A `modify` proposal requires a patch.');
@@ -107,6 +124,8 @@ function mergeProposedFields(
   if (input.descriptionMd !== undefined) next.descriptionMd = input.descriptionMd;
   if (input.type !== undefined) next.type = input.type;
   if (input.priority !== undefined) next.priority = input.priority;
+  if (input.storyPoints !== undefined) next.storyPoints = input.storyPoints;
+  if (input.estimateMinutes !== undefined) next.estimateMinutes = input.estimateMinutes;
   return next;
 }
 
@@ -120,6 +139,11 @@ function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }
   if (row.descriptionMd != null) diff.descriptionMd = { from: null, to: row.descriptionMd };
   if (row.type != null) diff.type = { from: null, to: row.type };
   if (row.executor != null) diff.executor = { from: null, to: row.executor };
+  // Leaf sizing (MOTIR-1433) — mirror `buildCreatedDiff`: record the estimate
+  // when set (null = unestimated is omitted). `storyPoints` is a Prisma Decimal,
+  // so record it numeric (the same `Number(...)` shape estimationService logs).
+  if (row.estimateMinutes != null) diff.estimateMinutes = { from: null, to: row.estimateMinutes };
+  if (row.storyPoints != null) diff.storyPoints = { from: null, to: Number(row.storyPoints) };
   return diff;
 }
 
@@ -236,6 +260,12 @@ async function materialize(
       reporterId: ctx.userId,
       type: (pf.type as Prisma.WorkItemUncheckedCreateInput['type']) ?? null,
       executor: (pf.executor as Prisma.WorkItemUncheckedCreateInput['executor']) ?? null,
+      // Leaf sizing (MOTIR-1433): flow the validated point + minute estimates
+      // onto the created item so the estimation gate satisfied on the proposal
+      // survives materialize (Prisma accepts a number for the Decimal(6,2)
+      // storyPoints column). Null when the `add` carried no estimate.
+      estimateMinutes: pf.estimateMinutes ?? null,
+      storyPoints: pf.storyPoints ?? null,
       position,
       backlogRank,
     };
@@ -572,6 +602,9 @@ export const plansService = {
         if (!next.title?.trim()) {
           throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
         }
+        // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in
+        // bad point/minute value is rejected here, the same as at create.
+        validateProposedSizing(next);
         await planItemRepository.update(
           planItemId,
           { proposedFields: next as unknown as Prisma.InputJsonValue },
