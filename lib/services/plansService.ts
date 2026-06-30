@@ -418,6 +418,65 @@ async function applyModify(
   );
 }
 
+/**
+ * Shared body of the two proposal-edit paths: lock the plan, assert it is in
+ * `expectedStatus`, sparse-merge the `UpdateProposalInput` over the `add`'s
+ * `proposedFields`, re-validate (non-empty title + leaf sizing), and persist —
+ * NO WorkItem. The plan row is locked + its status re-read inside the tx, so an
+ * edit racing the next lifecycle hop is rejected once the plan leaves
+ * `expectedStatus`. Only an `add` is editable. The two callers differ ONLY in
+ * which status the edit is legal from:
+ *   • `updateProposal` — the user review edit, `planned`        (7.21.6 · MOTIR-1370)
+ *   • `deepenProposal` — the generation-time deepen, `generating` (7.4.4a · MOTIR-1441)
+ */
+async function editAddProposal(
+  planId: string,
+  planItemId: string,
+  input: UpdateProposalInput,
+  ctx: ServiceContext,
+  expectedStatus: 'planned' | 'generating',
+): Promise<PlanWithItemsDto> {
+  const plan = await planRepository.findById(planId, ctx.workspaceId);
+  if (!plan) throw new PlanNotFoundError(planId);
+  await projectAccessService.assertCanEdit(plan.projectId, ctx);
+
+  const { row, items } = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+    async (tx) => {
+      const locked = await planRepository.lockById(planId, tx);
+      if (!locked) throw new PlanNotFoundError(planId);
+      const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+      if (!fresh) throw new PlanNotFoundError(planId);
+      if (fresh.status !== expectedStatus) {
+        throw new PlanNotInExpectedStatusError(planId, fresh.status, expectedStatus);
+      }
+      const item = await planItemRepository.findById(planItemId, tx);
+      if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
+      if (item.op !== 'add') {
+        throw new InvalidProposalError(
+          'Only an `add` proposal can be edited; modify/remove target existing items.',
+        );
+      }
+      const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
+      const next = mergeProposedFields(current, input);
+      if (!next.title?.trim()) {
+        throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
+      }
+      // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in bad
+      // point/minute value is rejected here, the same as at create.
+      validateProposedSizing(next);
+      await planItemRepository.update(
+        planItemId,
+        { proposedFields: next as unknown as Prisma.InputJsonValue },
+        tx,
+      );
+      const allItems = await planItemRepository.findByPlan(planId, tx);
+      return { row: fresh, items: allItems };
+    },
+  );
+  return toPlanWithItemsDto(row, items);
+}
+
 export const plansService = {
   /**
    * Open a `generating` Plan — the producer (7.4 generation / 7.11 re-planning)
@@ -576,45 +635,30 @@ export const plansService = {
     input: UpdateProposalInput,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
-    if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertCanEdit(plan.projectId, ctx);
+    return editAddProposal(planId, planItemId, input, ctx, 'planned');
+  },
 
-    const { row, items } = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      async (tx) => {
-        const locked = await planRepository.lockById(planId, tx);
-        if (!locked) throw new PlanNotFoundError(planId);
-        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-        if (!fresh) throw new PlanNotFoundError(planId);
-        if (fresh.status !== 'planned') {
-          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
-        }
-        const item = await planItemRepository.findById(planItemId, tx);
-        if (!item || item.planId !== planId) throw new PlanItemNotFoundError(planItemId);
-        if (item.op !== 'add') {
-          throw new InvalidProposalError(
-            'Only an `add` proposal can be edited; modify/remove target existing items.',
-          );
-        }
-        const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
-        const next = mergeProposedFields(current, input);
-        if (!next.title?.trim()) {
-          throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
-        }
-        // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in
-        // bad point/minute value is rejected here, the same as at create.
-        validateProposedSizing(next);
-        await planItemRepository.update(
-          planItemId,
-          { proposedFields: next as unknown as Prisma.InputJsonValue },
-          tx,
-        );
-        const allItems = await planItemRepository.findByPlan(planId, tx);
-        return { row: fresh, items: allItems };
-      },
-    );
-    return toPlanWithItemsDto(row, items);
+  /**
+   * Deepen a proposed `add` while the plan is still `generating` (7.4.4a ·
+   * MOTIR-1441) — the generation-time twin of `updateProposal`. The 7.4 issue-
+   * tree generation handler (MOTIR-844) runs the titles-first strategy
+   * (MOTIR-845): Phase 1 appends title-only `add`s via `addProposals`, then
+   * Phase 2 PATCHES each one's `descriptionMd` (and finalises
+   * type/priority/storyPoints/estimateMinutes) ONE AT A TIME — all BEFORE
+   * `markPlanned` closes the frontier, so the plan is `generating`, not
+   * `planned`. Identical to `updateProposal` (sparse merge, non-empty title +
+   * sizing re-validation, add-only, row-locked one-shot) EXCEPT the legal status
+   * is `generating`. NO WorkItem is created. Reached over the §4 job token via
+   * `aiGenerationService.patchProposal`; the user-facing `updateProposal`
+   * (`planned`) is unchanged.
+   */
+  async deepenProposal(
+    planId: string,
+    planItemId: string,
+    input: UpdateProposalInput,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    return editAddProposal(planId, planItemId, input, ctx, 'generating');
   },
 
   /**

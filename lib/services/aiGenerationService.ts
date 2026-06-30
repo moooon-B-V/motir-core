@@ -7,7 +7,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { plansService } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
-import type { ProposalInput } from '@/lib/dto/plans';
+import type { PlanItemDto, ProposalInput, UpdateProposalInput } from '@/lib/dto/plans';
 
 // Issue-tree generation, motir-core side (Subtask 7.4.4 · MOTIR-846). The thin
 // seam between the planning workspace and the motir-ai `generate_tree` handler
@@ -120,5 +120,30 @@ export const aiGenerationService = {
     }
 
     return { planId: plan.id, planItemIds: createdIds, planned };
+  },
+
+  // The INTERNAL generation-time DEEPEN seam (7.4.4a · MOTIR-1441): PATCH one
+  // already-appended `add` proposal on the job's `generating` Plan — Phase 2 of
+  // the titles-first strategy (MOTIR-844/845), where each title-only `add`'s
+  // `descriptionMd` (+ type/priority/sizing) is filled in one at a time, BEFORE
+  // the frontier is marked `planned`. Resolves the plan by `sourceJobId`
+  // (workspace-scoped → NoPlanForJobError/404 cross-tenant), then calls the 7.21
+  // `deepenProposal`, which re-asserts edit access + the `generating` status +
+  // the add-only / non-empty-title / sizing invariants under its own row lock.
+  // Creates NO WorkItem and leaves the plan `generating`. Returns the patched
+  // PlanItem (the handler only needs the confirmation, not the whole plan).
+  async patchProposal(
+    jobId: string,
+    planItemId: string,
+    input: UpdateProposalInput,
+    ctx: ServiceContext,
+  ): Promise<{ planId: string; item: PlanItemDto }> {
+    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    if (!plan) throw new NoPlanForJobError(jobId);
+    const result = await plansService.deepenProposal(plan.id, planItemId, input, ctx);
+    // `deepenProposal` throws `PlanItemNotFoundError` if the item isn't in the
+    // plan, so by here the patched item is guaranteed present in the returned set.
+    const item = result.items.find((i) => i.id === planItemId)!;
+    return { planId: plan.id, item };
   },
 };
