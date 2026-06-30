@@ -30,9 +30,10 @@ import {
 } from './_helpers/ai-plan-generation-seed';
 import { plansService, TEMP_REF_PREFIX } from '@/lib/services/plansService';
 
-// Seeding + sign-in + a cold-compiled /onboarding + /plans, plus the reveal-poll
-// cadence (2.5s), exceed the 30s default.
-test.describe.configure({ timeout: 120_000 });
+// Seeding + sign-in + cold-compiled /onboarding + /plans (dev mode compiles each
+// route on first hit), a warm-up mount of the generation surface, plus the
+// reveal-poll cadence (2.5s) — well beyond the 30s default.
+test.describe.configure({ timeout: 180_000 });
 
 // ── The stubbed browser→motir-ai boundary ──────────────────────────────────────
 
@@ -171,8 +172,11 @@ test('generation streams proposed PlanItems live into a planned Plan; the propos
   await page.getByRole('button', { name: 'Generate plan' }).click();
 
   // GenerationFlow mounts + auto-starts: the live "Generating your plan…" state.
+  // (The auto-start is StrictMode-safe so it survives dev's double-mount — see the
+  // GenerationFlow fix in this PR; otherwise the generate request is aborted and
+  // never retried, and this never appears under `next dev`.)
   const progress = page.getByRole('status').filter({ hasText: 'Generating your plan' });
-  await expect(progress).toBeVisible();
+  await expect(progress).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId('roadmap-canvas')).toBeVisible();
 
   // ── Epics first: append the top-level proposals (Billing blocked_by Auth) ──────
