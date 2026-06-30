@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -44,13 +44,15 @@ export function GenerationFlow({ onExit }: GenerationFlowProps) {
   const router = useRouter();
   const { phase, planId, items, version, start, stop } = usePlanGeneration();
 
-  // Auto-start once when this surface mounts (the hand-off's "Generate" click is
-  // the trigger that mounts it). StrictMode double-invokes effects; the hook's own
-  // in-flight guard makes a second `start()` a no-op.
-  const startedRef = useRef(false);
+  // Auto-start when this surface mounts (the hand-off's "Generate" click is the
+  // trigger that mounts it). `start()` is idempotent via the hook's own in-flight
+  // guard (`abortRef`), which is what makes this StrictMode-safe: dev double-invoke
+  // runs setup→cleanup(teardown aborts + clears `abortRef`)→setup, and the second
+  // setup re-`start()`s cleanly. A `started`-once ref would BREAK that — after the
+  // cleanup aborts the first request, the ref keeps the re-setup from restarting,
+  // so generation never begins under StrictMode (`next dev`) while prod, which
+  // never double-invokes, works. Relying on the in-flight guard fixes both.
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     start();
   }, [start]);
 
