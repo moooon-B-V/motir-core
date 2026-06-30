@@ -1,5 +1,5 @@
-import { timingSafeEqual } from 'node:crypto';
 import { verifyJobToken } from './jobToken';
+import { verifyServiceBearer } from './serviceBearer';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Authenticates an incoming ai→core read-back request (the /api/internal/ai/*
@@ -37,21 +37,11 @@ export interface JobRequestAuth {
   projectId: string;
 }
 
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
 // Verify both credentials and return the acting ServiceContext + the token's
 // project. Throws JobAuthError (401) on any failure. Fails CLOSED: an unset
-// CORE_CALLBACK_SECRET rejects every request.
+// CORE_CALLBACK_SECRET rejects every request (the shared `verifyServiceBearer`).
 export function authenticateJobRequest(req: Request): JobRequestAuth {
-  const expected = process.env['CORE_CALLBACK_SECRET'];
-  const header = req.headers.get('authorization') ?? '';
-  const bearer = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
-  if (!expected || !bearer || !safeEqual(bearer, expected)) {
+  if (!verifyServiceBearer(req)) {
     throw new JobAuthError('service_unauthorized', 'A valid service bearer is required.');
   }
 
