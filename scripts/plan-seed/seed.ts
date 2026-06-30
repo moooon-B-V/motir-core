@@ -84,6 +84,7 @@ import { composeDescription, mapTypeAndExecutor } from './mapItem';
 import { MOTIR_PUBLIC_OVERVIEW_MD, MOTIR_PUBLIC_TAGLINE, MOTIR_PUBLIC_TAGS } from './motirOverview';
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import { SEED_TEST_PROJECT_NAME, seedGenerationTestProject } from './testProject';
+import { seedSystemPrincipal } from './systemPrincipal';
 import {
   SEED_STATUS_MAP,
   epicIdOf,
@@ -365,6 +366,16 @@ async function main() {
     ownerUserId: ownerId,
     memberUserIds: SEED_USERS.map((u) => userIdByEmail.get(u.email)!),
   });
+
+  // ── The Motir SYSTEM PRINCIPAL (MOTIR-1451) ───────────────────────────────
+  // The reserved, non-loginnable service identity the AI self-learning loop
+  // writes AS when it files a `kind: bug` into THIS meta project (the foundation
+  // the `POST /api/internal/ai/work-items` route — MOTIR-1450 — consumes). A
+  // member of the `moooon` workspace + the `motir` project, so its
+  // service-authenticated creates satisfy `assertReporterMember` + the 6.4 edit
+  // gate. Idempotent across reseeds (the clear pass cascades its memberships;
+  // the user row is reused by email upsert).
+  await seedSystemPrincipal({ workspaceId: workspace.id, projectId: project.id });
 
   // ── Tree pass: create every epic → story → leaf through the shipped path ──
   let created = 0;
