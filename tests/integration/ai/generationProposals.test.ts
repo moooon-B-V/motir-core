@@ -4,6 +4,7 @@ import { mintJobToken } from '@/lib/ai/jobToken';
 import { plansService } from '@/lib/services/plansService';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
+import { PATCH as proposalsPATCH } from '@/app/api/internal/ai/plan-proposals/[itemId]/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -211,6 +212,178 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     const res = await proposalsPOST(
       proposalsReq({ bearer: SERVICE_SECRET, token: tokenFor(fx), body: { proposals: [] } }),
     );
+    expect(res.status).toBe(400);
+  });
+});
+
+function patchReq(
+  itemId: string,
+  opts: { bearer?: string; token?: string; body: unknown },
+): Request {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (opts.bearer !== undefined) headers['authorization'] = `Bearer ${opts.bearer}`;
+  if (opts.token !== undefined) headers['x-motir-job-token'] = opts.token;
+  return new Request(`http://core/api/internal/ai/plan-proposals/${itemId}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(opts.body),
+  });
+}
+
+/** Drive the PATCH route with its async `params` (the generation-time deepen). */
+function callPatch(
+  itemId: string,
+  opts: { bearer?: string; token?: string; body: unknown },
+): Promise<Response> {
+  return proposalsPATCH(patchReq(itemId, opts), { params: Promise.resolve({ itemId }) });
+}
+
+describe('PATCH /api/internal/ai/plan-proposals/[itemId] — generation-time deepen seam', () => {
+  /** Open a `generating` plan bound to `jobId` and append ONE title-only `add`
+   *  (the titles-first Phase-1 shape); return its echoed PlanItem id. */
+  async function appendTitleOnlyAdd(
+    fx: { ctx: { userId: string; workspaceId: string }; projectId: string },
+    jobId: string,
+  ): Promise<string> {
+    await openPlan(fx, jobId);
+    const res = await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: {
+          jobId,
+          proposals: [{ op: 'add', proposedFields: { title: 'Title only', kind: 'story' } }],
+        },
+      }),
+    );
+    return (await res.json()).planItemIds[0];
+  }
+
+  it('deepens a title-only add over the job token while generating; description persists', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_deepen';
+    const itemId = await appendTitleOnlyAdd(fx, jobId);
+
+    const res = await callPatch(itemId, {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(fx),
+      body: {
+        jobId,
+        patch: {
+          descriptionMd: 'Full body written in Phase 2.',
+          type: 'code',
+          storyPoints: 5,
+          estimateMinutes: 55,
+        },
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.planId).toBeTruthy();
+    expect(body.item.id).toBe(itemId);
+    expect(body.item.proposedFields).toMatchObject({
+      title: 'Title only',
+      descriptionMd: 'Full body written in Phase 2.',
+      type: 'code',
+      storyPoints: 5,
+      estimateMinutes: 55,
+    });
+
+    // Persisted, still a proposal, plan still open.
+    const item = await planItemRepository.findById(itemId);
+    expect((item!.proposedFields as { descriptionMd?: string }).descriptionMd).toBe(
+      'Full body written in Phase 2.',
+    );
+    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const plan = await db.plan.findFirst({ where: { sourceJobId: jobId } });
+    expect(plan!.status).toBe('generating');
+  });
+
+  it('401s a missing service bearer (before any DB work)', async () => {
+    const fx = await makeFixture();
+    const res = await callPatch('pi_x', {
+      token: tokenFor(fx),
+      body: { jobId: 'j', patch: { descriptionMd: 'x' } },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('404s a job with no plan in the token tenant (NoPlanForJobError)', async () => {
+    const fx = await makeFixture();
+    const res = await callPatch('pi_x', {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(fx),
+      body: { jobId: 'job_never_opened', patch: { descriptionMd: 'x' } },
+    });
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ code: 'NO_PLAN_FOR_JOB' });
+  });
+
+  it('404s a cross-tenant token (a foreign job-token cannot reach the plan)', async () => {
+    const a = await makeFixture();
+    const b = await makeFixture();
+    const jobId = 'job_tenant_a_deepen';
+    const itemId = await appendTitleOnlyAdd(a, jobId);
+    // B names A's job with B's token — workspace-scoped lookup finds no plan → 404.
+    const res = await callPatch(itemId, {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(b),
+      body: { jobId, patch: { descriptionMd: 'x' } },
+    });
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ code: 'NO_PLAN_FOR_JOB' });
+  });
+
+  it('404s an unknown plan item within the job plan (PlanItemNotFoundError)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_bad_item';
+    await appendTitleOnlyAdd(fx, jobId);
+    const res = await callPatch('pi_does_not_exist', {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(fx),
+      body: { jobId, patch: { descriptionMd: 'x' } },
+    });
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ code: 'PLAN_ITEM_NOT_FOUND' });
+  });
+
+  it('409s once the plan has left generating (planned)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_planned_then_deepen';
+    const itemId = await appendTitleOnlyAdd(fx, jobId);
+    // Close the frontier.
+    await proposalsPOST(
+      proposalsReq({ bearer: SERVICE_SECRET, token: tokenFor(fx), body: { jobId, final: true } }),
+    );
+    const res = await callPatch(itemId, {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(fx),
+      body: { jobId, patch: { descriptionMd: 'too late' } },
+    });
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: 'PLAN_NOT_IN_EXPECTED_STATUS' });
+  });
+
+  it('422s an edit that would empty the title (InvalidProposalError)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_empty_title';
+    const itemId = await appendTitleOnlyAdd(fx, jobId);
+    const res = await callPatch(itemId, {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(fx),
+      body: { jobId, patch: { title: '   ' } },
+    });
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ code: 'INVALID_PROPOSAL' });
+  });
+
+  it('400s a body with no jobId', async () => {
+    const fx = await makeFixture();
+    const res = await callPatch('pi_x', {
+      bearer: SERVICE_SECRET,
+      token: tokenFor(fx),
+      body: { patch: { descriptionMd: 'x' } },
+    });
     expect(res.status).toBe(400);
   });
 });

@@ -481,6 +481,133 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
   });
 });
 
+describe('plansService.deepenProposal — deepen a proposed add while generating (7.4.4a)', () => {
+  /** Open a `generating` plan with one title-only `add` (the titles-first Phase
+   *  1 shape) and return { planId, itemId }. NOT marked planned — the deepen
+   *  runs while still generating. */
+  async function generatingAdd(
+    fx: WorkItemFixture,
+    proposedFields: { title: string; kind?: string } = { title: 'Title only', kind: 'story' },
+  ): Promise<{ planId: string; itemId: string }> {
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Gen' }, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields }],
+      fx.ctx,
+    );
+    return { planId: plan.id, itemId: withItems.items[0]!.id };
+  }
+
+  it('patches a generating plan’s add in place (Phase-2 deepen); no WorkItem, stays generating', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await generatingAdd(fx);
+
+    const updated = await plansService.deepenProposal(
+      planId,
+      itemId,
+      {
+        descriptionMd: 'The full card body, written now.',
+        type: 'code',
+        priority: 'high',
+        storyPoints: 5,
+        estimateMinutes: 55,
+      },
+      fx.ctx,
+    );
+    const edited = updated.items.find((i) => i.id === itemId)!;
+    expect(edited.proposedFields).toMatchObject({
+      title: 'Title only', // untouched
+      descriptionMd: 'The full card body, written now.',
+      type: 'code',
+      priority: 'high',
+      storyPoints: 5,
+      estimateMinutes: 55,
+    });
+    // Still a proposal, and the plan is still open for more appends.
+    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    expect((await db.plan.findFirst({ where: { id: planId } }))!.status).toBe('generating');
+  });
+
+  it('merges sparsely — an explicit null clears the estimate, an absent key is untouched', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await generatingAdd(fx);
+    await plansService.deepenProposal(
+      planId,
+      itemId,
+      { storyPoints: 3, estimateMinutes: 30 },
+      fx.ctx,
+    );
+
+    const cleared = await plansService.deepenProposal(
+      planId,
+      itemId,
+      { estimateMinutes: null },
+      fx.ctx,
+    );
+    const item = cleared.items.find((i) => i.id === itemId)!;
+    expect(item.proposedFields?.storyPoints).toBe(3); // untouched
+    expect(item.proposedFields?.estimateMinutes).toBeNull(); // cleared
+    expect(item.proposedFields?.title).toBe('Title only'); // untouched
+  });
+
+  it('rejects once the plan is no longer generating (planned)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await generatingAdd(fx);
+    await plansService.markPlanned(planId, fx.ctx);
+    await expect(
+      plansService.deepenProposal(planId, itemId, { descriptionMd: 'too late' }, fx.ctx),
+    ).rejects.toBeInstanceOf(PlanNotInExpectedStatusError);
+  });
+
+  it('rejects an edit that would empty the title (InvalidProposalError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await generatingAdd(fx);
+    await expect(
+      plansService.deepenProposal(planId, itemId, { title: '   ' }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('rejects deepening a non-add (modify) proposal (InvalidProposalError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Existing');
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target, patch: { title: 'X' }, baseRevision: 'r1' }],
+      fx.ctx,
+    );
+    await expect(
+      plansService.deepenProposal(plan.id, withItems.items[0]!.id, { title: 'Y' }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('rejects an unknown plan item (PlanItemNotFoundError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId } = await generatingAdd(fx);
+    await expect(
+      plansService.deepenProposal(planId, 'pi_missing', { title: 'Z' }, fx.ctx),
+    ).rejects.toBeInstanceOf(PlanItemNotFoundError);
+  });
+
+  it('rejects a patched-in bad estimate (InvalidEstimateError)', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await generatingAdd(fx);
+    await expect(
+      plansService.deepenProposal(planId, itemId, { estimateMinutes: -5 }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidEstimateError); // minutes must be a non-negative integer
+  });
+
+  it('enforces canEdit — a non-member is denied', async () => {
+    const fx = await makeWorkItemFixture();
+    const { planId, itemId } = await generatingAdd(fx);
+    const outsider = await createTestUser();
+    const outsiderCtx = { userId: outsider.id, workspaceId: fx.ctx.workspaceId };
+    await expect(
+      plansService.deepenProposal(planId, itemId, { descriptionMd: 'x' }, outsiderCtx),
+    ).rejects.toBeInstanceOf(ProjectAccessDeniedError);
+  });
+});
+
 describe('plansService.updateProposal — concurrency (edit vs approve)', () => {
   it('an edit racing an approve resolves consistently: plan approved once, one work item, no raw race', async () => {
     const fx = await makeWorkItemFixture();
