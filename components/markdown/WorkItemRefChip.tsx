@@ -73,22 +73,22 @@ export function WorkItemRefChip({
   // shows the archived record).
   if (archived) {
     return (
-      <RelationshipPeekLink identifier={identifier} className="wi-chip is-archived">
+      <RelationshipPeekLink identifier={identifier} className="wi-chip is-archived max-w-full">
         <span className="wi-archive-glyph" aria-hidden>
           <Archive />
         </span>
         <span className="wi-key">{identifier}</span>
-        <span className="wi-title">{title}</span>
+        <span className="wi-title min-w-0 truncate">{title}</span>
       </RelationshipPeekLink>
     );
   }
 
   // Live — the full chip (type icon · key · title · status dot).
   return (
-    <RelationshipPeekLink identifier={identifier} className="wi-chip">
+    <RelationshipPeekLink identifier={identifier} className="wi-chip max-w-full">
       <IssueTypeIcon type={kind as IssueType} className="wi-type-icon shrink-0" />
       <span className="wi-key">{identifier}</span>
-      <span className="wi-title">{title}</span>
+      <span className="wi-title min-w-0 truncate">{title}</span>
       {status ? <span className={DOT_CLASS[status.category]} aria-hidden /> : null}
     </RelationshipPeekLink>
   );

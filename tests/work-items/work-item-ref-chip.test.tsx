@@ -75,6 +75,54 @@ describe('renderMarkdown — work-item reference chip', () => {
     expect(chip.querySelector('.wi-dot')).toBeNull();
   });
 
+  // Regression — MOTIR-1483: a linked item with a LONG title must not blow the
+  // chip past its description container. The chip is capped (`max-w-full`) and
+  // the title is the ONLY shrinkable child (`min-w-0 truncate` → ellipsis),
+  // upholding the invariant "A reference NEVER breaks the body". The key · type
+  // icon · status dot stay unshrunk. (happy-dom does no layout, so — matching
+  // the sibling containment fixes MOTIR-1307/1329 — we assert the containment
+  // MECHANISM: the utility tokens that produce it.)
+  const LONG_TITLE =
+    'Investigate the intermittent cross-workspace mention-resolution latency spike under sustained load';
+
+  it('caps the live chip and truncates the long title (never breaks the body)', () => {
+    const { container } = renderWithIntl(
+      <>
+        {renderMarkdown('Blocked on [MOTIR-805](motir:cmwi805) here.', {
+          workItemRefs: live({ title: LONG_TITLE }),
+        })}
+      </>,
+    );
+    const chip = container.querySelector('a.wi-chip') as HTMLAnchorElement;
+    // The chip is bounded to its inline container so it can never overflow it.
+    expect(chip.className).toMatch(/\bmax-w-full\b/);
+    const title = chip.querySelector('.wi-title') as HTMLElement;
+    // The title is the only shrinkable flex child + ellipsizes.
+    expect(title.className).toMatch(/\bmin-w-0\b/);
+    expect(title.className).toMatch(/\btruncate\b/);
+    // Truncation is visual only — the full title text is still present (a11y / DOM).
+    expect(title.textContent).toBe(LONG_TITLE);
+    // The key · type icon stay unshrunk (not made shrinkable).
+    expect((chip.querySelector('.wi-type-icon') as HTMLElement).className).toMatch(/\bshrink-0\b/);
+    expect((chip.querySelector('.wi-key') as HTMLElement).className).not.toMatch(/\bmin-w-0\b/);
+  });
+
+  it('caps the ARCHIVED chip and truncates its long title too', () => {
+    const { container } = renderWithIntl(
+      <>
+        {renderMarkdown('Superseded by [MOTIR-805](motir:cmwi805).', {
+          workItemRefs: live({ archived: true, title: LONG_TITLE }),
+        })}
+      </>,
+    );
+    const chip = container.querySelector('a.wi-chip.is-archived') as HTMLAnchorElement;
+    expect(chip.className).toMatch(/\bmax-w-full\b/);
+    const title = chip.querySelector('.wi-title') as HTMLElement;
+    expect(title.className).toMatch(/\bmin-w-0\b/);
+    expect(title.className).toMatch(/\btruncate\b/);
+    expect(title.textContent).toBe(LONG_TITLE);
+  });
+
   it('renders a missing id (deleted) as a struck-through bare key — NOT a link', () => {
     const { container } = renderWithIntl(
       <>{renderMarkdown('Gone: [MOTIR-742](motir:cmgone).', { workItemRefs: {} })}</>,
