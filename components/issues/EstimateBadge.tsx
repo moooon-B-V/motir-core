@@ -76,6 +76,13 @@ export interface EstimateBadgeProps {
   forceStoryPoints?: boolean;
   /** Extra classes for the surface's slot fit (alignment / width). */
   className?: string;
+  /**
+   * Fired AFTER an inline point edit COMMITS (the `PATCH …/estimate` 200). Lets a
+   * host surface refresh a derived roll-up the edit changed — the backlog sprint
+   * header uses it to re-fetch its committed-points badge (MOTIR-1495). Optional:
+   * surfaces without such a roll-up (board / list / detail rail) omit it.
+   */
+  onEstimateChanged?: () => void;
 }
 
 export function EstimateBadge({
@@ -85,6 +92,7 @@ export function EstimateBadge({
   readOnly = false,
   forceStoryPoints = false,
   className,
+  onEstimateChanged,
 }: EstimateBadgeProps) {
   const t = useTranslations('estimation');
   const config = useEstimationConfig();
@@ -105,6 +113,7 @@ export function EstimateBadge({
         storyPoints={storyPoints}
         config={config}
         className={className}
+        onEstimateChanged={onEstimateChanged}
       />
     );
   }
@@ -133,11 +142,13 @@ function EstimateBadgeEditor({
   storyPoints,
   config,
   className,
+  onEstimateChanged,
 }: {
   itemId: string;
   storyPoints: number | null;
   config: EstimationConfigContextValue;
   className?: string;
+  onEstimateChanged?: () => void;
 }) {
   const t = useTranslations('estimation');
   const { toast } = useToast();
@@ -182,6 +193,12 @@ function EstimateBadgeEditor({
         // pre-edit value (the inline-edit revert bug: a field-update success
         // path must never whole-tree-refresh). Sibling surfaces pick up the new
         // estimate on their next load / on reload.
+        //
+        // A DERIVED roll-up the host owns (the backlog sprint committed-points
+        // badge) can't wait for "next load" — signal it to re-fetch now that the
+        // estimate has committed server-side. This is a targeted refetch of one
+        // ON-READ aggregate, NOT a whole-tree refresh of this cell (MOTIR-1495).
+        onEstimateChanged?.();
       } catch {
         setOverride(undefined);
         toast({ variant: 'error', title: t('saveError') });

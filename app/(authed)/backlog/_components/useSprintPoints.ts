@@ -14,7 +14,19 @@ import type { SprintPointsDto } from '@/lib/dto/estimation';
 // Returns `null` until the first successful read; the UI renders "—" for a null
 // or wholly-unestimated roll-up (`committed === 0`), never `NaN` — the 4.5.2
 // "DTO stays total, UI owns the dash" pattern.
-export function useSprintPoints(sprintId: string, enabled = true): SprintPointsDto | null {
+//
+// `refreshKey` is a monotonic TICK the caller bumps whenever the sprint's
+// committed points could have changed — an item moved in/out, an inline create,
+// or an in-sprint point edit. The roll-up is computed ON-READ server-side (no
+// stored counter), so a stale badge only clears on a re-fetch; watching the tick
+// in the effect deps is that re-fetch (the CLAUDE.md client-island page-state
+// contract — this hook is a client island, so `router.refresh()` can't reach it;
+// it needs an explicit refetch trigger, MOTIR-1495).
+export function useSprintPoints(
+  sprintId: string,
+  enabled = true,
+  refreshKey = 0,
+): SprintPointsDto | null {
   const [points, setPoints] = useState<SprintPointsDto | null>(null);
 
   useEffect(() => {
@@ -31,7 +43,7 @@ export function useSprintPoints(sprintId: string, enabled = true): SprintPointsD
     return () => {
       cancelled = true;
     };
-  }, [sprintId, enabled]);
+  }, [sprintId, enabled, refreshKey]);
 
   return points;
 }

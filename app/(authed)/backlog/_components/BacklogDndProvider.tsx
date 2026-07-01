@@ -140,6 +140,16 @@ interface BacklogDndContextValue {
   getSprintIdFor: (id: string) => string | null | undefined;
   /** The project's planning sprints — the `⋯` "Move to sprint ▸" + bulk-bar submenu. */
   sprints: SprintDto[];
+  /**
+   * A monotonic TICK the sprint committed-points badges watch (via
+   * `useSprintPoints`) to re-fetch their ON-READ roll-up. Bumped AFTER a
+   * membership-changing write COMMITS (a move / inline-create / cross-region
+   * drag) and after an in-sprint point edit, so the badge recomputes without a
+   * page reload — the client-island page-state contract (MOTIR-1495).
+   */
+  sprintPointsRefreshKey: number;
+  /** Signal that a sprint's committed points may have changed → badges re-fetch. */
+  bumpSprintPoints: () => void;
 }
 
 const noop = () => {};
@@ -159,6 +169,8 @@ const BacklogDndContext = createContext<BacklogDndContextValue>({
   createInto: async () => false,
   getSprintIdFor: () => undefined,
   sprints: [],
+  sprintPointsRefreshKey: 0,
+  bumpSprintPoints: noop,
 });
 
 /** Read the coordinator (drag visuals + selection + grooming actions) inside a region/row. */
@@ -227,6 +239,15 @@ export function BacklogDndProvider({
   }, [selectedIds]);
   // How many rows a multi-select drag carries (drives the overlay's N badge).
   const [dragCount, setDragCount] = useState(1);
+
+  // The committed-points TICK (MOTIR-1495). The sprint-header `SprintPointsBadge`
+  // reads its figure from the ON-READ `/api/sprints/[id]/points` roll-up via
+  // `useSprintPoints`; a membership change (move / create / cross-region drag) or
+  // an in-sprint point edit changes that roll-up server-side but leaves the hook's
+  // cached read stale. Bumping this AFTER the write commits re-runs the hook's
+  // fetch, so the badge recomputes without a page reload.
+  const [sprintPointsRefreshKey, setSprintPointsRefreshKey] = useState(0);
+  const bumpSprintPoints = useCallback(() => setSprintPointsRefreshKey((k) => k + 1), []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -323,13 +344,24 @@ export function BacklogDndProvider({
   // Assumes the optimistic relocation has already been applied; fires the write
   // and runs `revert` (which restores state + toasts) on rejection. The drag, the
   // bulk bar, the `⋯` menu, and the inline create all funnel through it.
-  const runWrite = useCallback((write: BacklogWrite, revert: () => void) => {
-    void fetch(write.url, { method: 'POST', headers: POST_JSON, body: JSON.stringify(write.body) })
-      .then((res) => {
-        if (!res.ok) revert();
+  // `onSuccess` runs only after the write COMMITS (res.ok) — used to bump the
+  // committed-points tick once the server state is up to date, so a re-fetch
+  // reads the new roll-up rather than the pre-write one (MOTIR-1495).
+  const runWrite = useCallback(
+    (write: BacklogWrite, revert: () => void, onSuccess?: () => void) => {
+      void fetch(write.url, {
+        method: 'POST',
+        headers: POST_JSON,
+        body: JSON.stringify(write.body),
       })
-      .catch(revert);
-  }, []);
+        .then((res) => {
+          if (!res.ok) revert();
+          else onSuccess?.();
+        })
+        .catch(revert);
+    },
+    [],
+  );
 
   // ── The shared cross-region BULK executor (bulk bar · ⋯ menu · multi-drag) ────
   // `targetSprintId === null` → move to backlog; otherwise → assign to that
@@ -417,11 +449,14 @@ export function BacklogDndProvider({
       };
 
       const write = targetSprintId ? bulkAssignWrite(targetSprintId, ids) : bulkBacklogWrite(ids);
-      runWrite(write, revert);
+      // A bulk assign/move always changes a sprint's membership → refetch its
+      // committed-points badge once the write commits (MOTIR-1495).
+      runWrite(write, revert, bumpSprintPoints);
     },
     [
       adjustSprintCount,
       backlogRegion,
+      bumpSprintPoints,
       itemOf,
       regionContaining,
       regionOfSprint,
@@ -489,7 +524,12 @@ export function BacklogDndProvider({
           target.setItems((prev) => [...prev, summary]);
           target.setTotalCount((c) => c + 1);
         }
-        if (input.sprintId) adjustSprintCount(input.sprintId, 1);
+        if (input.sprintId) {
+          adjustSprintCount(input.sprintId, 1);
+          // A create INTO a sprint raises its committed points → refetch the
+          // badge (the create already committed server-side; MOTIR-1495).
+          bumpSprintPoints();
+        }
         return true;
       } catch {
         toast({
@@ -500,7 +540,7 @@ export function BacklogDndProvider({
         return false;
       }
     },
-    [adjustSprintCount, backlogRegion, regionOfSprint, t, toast],
+    [adjustSprintCount, backlogRegion, bumpSprintPoints, regionOfSprint, t, toast],
   );
 
   // ── Drag lifecycle ───────────────────────────────────────────────────────────
@@ -617,10 +657,15 @@ export function BacklogDndProvider({
         });
       };
 
-      runWrite(writeForPlan(plan), revert);
+      // A cross-region drag moves the row between a sprint and the backlog (or
+      // between two sprints) → the affected sprints' committed points change, so
+      // refetch on commit. A same-region reorder leaves membership (and points)
+      // untouched — no bump (MOTIR-1495).
+      runWrite(writeForPlan(plan), revert, crossRegion ? bumpSprintPoints : undefined);
     },
     [
       adjustSprintCount,
+      bumpSprintPoints,
       clearDrag,
       clearSelection,
       executeBulk,
@@ -674,6 +719,8 @@ export function BacklogDndProvider({
       createInto,
       getSprintIdFor,
       sprints,
+      sprintPointsRefreshKey,
+      bumpSprintPoints,
     }),
     [
       register,
@@ -691,6 +738,8 @@ export function BacklogDndProvider({
       createInto,
       getSprintIdFor,
       sprints,
+      sprintPointsRefreshKey,
+      bumpSprintPoints,
     ],
   );
 
