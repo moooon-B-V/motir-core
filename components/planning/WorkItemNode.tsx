@@ -34,11 +34,11 @@ import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 //
 // MOTIR-1379 (follow-up) adds the "NOT IN SPRINT" marker for the sprint-scoped
 // roadmap: drilling into a committed root reveals its WHOLE subtree, so a
-// drilled-in node the sprint did not commit to is shown with a receded `--el-muted`
-// fill + a "not in sprint" tag — an informational signal, kept deliberately
-// distinct from the red cross-blocked (broken-dependency) chrome. It uses the SAME
-// border token as committed cards so the active `data-style` frames it uniformly
-// (a distinct border STYLE would clash with styles that own the border/shadow).
+// drilled-in node the sprint did not commit to is shown with a DOTTED border + a
+// receded `--el-muted` fill + a "not in sprint" tag and NO shadow (flat) — an
+// informational signal, kept deliberately distinct from the red cross-blocked
+// (broken-dependency) chrome. The shadow is dropped so a hard offset-shadow style
+// (neo-brutalism) can't add a solid frame that reads as a second border.
 
 /** A container's subtree done/total roll-up — the data behind the progress meter
  *  (Subtask 7.20.6 / MOTIR-1013). Mirrors `RoadmapProgress` in `roadmapClient`;
@@ -132,11 +132,12 @@ export function WorkItemNode({
   /** NOT a member of the active sprint (MOTIR-1379 follow-up) — sprint scope only.
    *  A drilled-in node under a committed root that the sprint did not itself
    *  commit to. An INFORMATIONAL, non-error signal (unlike `crossBlocked`, which is
-   *  a real dependency problem): the card takes a receded `--el-muted` fill and a
-   *  small "not in sprint" tag (NOT a distinct border style, which would clash with
-   *  the active `data-style`'s border/shadow), so the committed unit stays visually
-   *  distinct from the rest of its subtree. The louder `crossBlocked` / `here`
-   *  chromes win the fill; the tag still shows alongside `here`. */
+   *  a real dependency problem): the card takes a DOTTED border + a receded
+   *  `--el-muted` fill + a small "not in sprint" tag and NO shadow (flat), so the
+   *  committed unit stays visually distinct from the rest of its subtree. Dropping
+   *  the shadow keeps a hard offset-shadow style (neo-brutalism) from adding a solid
+   *  frame that would double the dotted edge. The louder `crossBlocked` / `here`
+   *  chromes win; the tag still shows alongside `here`. */
   notInSprint?: boolean;
   /** Subtree done/total roll-up → a thin progress meter on a container node
    *  (Subtask 7.20.6 / MOTIR-1013). `null` (a leaf) or a `0`-total → no meter. */
@@ -203,25 +204,30 @@ export function WorkItemNode({
       // louder signal). MOTIR-1422 adds the card-level DONE (`--el-tint-sky`) + READY
       // (mint wash) fills — distinct palette tints, legible zoomed out, unlike the old
       // 3px ready edge.
-      // NOT-IN-SPRINT (MOTIR-1379 follow-up): marked by a receded `--el-muted` fill
-      // (fainter than the raised `--el-surface` committed siblings use) + the "not in
-      // sprint" tag — NOT by a distinct border style. A hard-coded dashed/dotted
-      // border is a STYLE-axis decision that clashes with whatever the active
-      // `data-style` does to `.border` / shadows (e.g. neo-brutalism turns every
-      // border solid + adds a hard offset-shadow frame → the dotted edge read as a
-      // second border). Keeping the SAME border token as committed cards means the
-      // active style frames it uniformly and nothing competes with it.
+      // NOT-IN-SPRINT (MOTIR-1379 follow-up): a DOTTED border (the "provisional, not
+      // committed" edge) + a receded `--el-muted` fill + the "not in sprint" tag, and
+      // crucially NO shadow. The shadow is dropped because the active `data-style`
+      // owns elevation: under neo-brutalism `--shadow-*` is a HARD offset block that
+      // reads as a solid frame — a dotted border ON TOP of that offset frame was the
+      // "dotted + solid" double border. With no shadow the card is FLAT (reinforcing
+      // "not committed") and the dotted edge is the only border, in every style. The
+      // louder `crossBlocked` / `here` chromes still win (they keep their solid
+      // borders + shadows).
       className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
         crossBlocked
           ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
           : here
             ? 'border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)'
             : showDone
-              ? 'border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)'
+              ? notInSprintChrome
+                ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-sky)'
+                : 'border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)'
               : showReadyWash
-                ? 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
+                ? notInSprintChrome
+                  ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-mint)'
+                  : 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
                 : notInSprintChrome
-                  ? 'border-(--el-border) bg-(--el-muted) shadow-(--shadow-subtle)'
+                  ? 'border-dotted border-(--el-border-strong) bg-(--el-muted)'
                   : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }`}
     >
