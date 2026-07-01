@@ -167,7 +167,7 @@ test('@smoke @-mention a work item → live chip + relates_to → peek, live ren
   await page.getByRole('button', { name: 'Save' }).click();
   expect((await save).status()).toBe(200);
   // The success toast is the action's committed-state confirmation.
-  await expect(page.getByText(`${source.identifier} saved`)).toBeVisible();
+  await expect(page.getByText(`${source.identifier} saved`, { exact: true })).toBeVisible();
 
   // The relates_to link is committed at the data layer, stamped source=mention.
   const link = await db.workItemLink.findFirst({

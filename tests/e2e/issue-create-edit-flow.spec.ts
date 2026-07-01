@@ -87,7 +87,7 @@ test('@smoke create → round-trips on the edit form', async ({ page }) => {
   await page.getByLabel('Title').fill('Wire the dashboard');
   await page.getByLabel('Description').fill('A short requirement for the dashboard view.');
   await page.getByRole('button', { name: 'Create' }).click();
-  await expect(page.getByText(/created$/).first()).toBeVisible();
+  await expect(page.getByText(/^\S+ created$/).first()).toBeVisible();
 
   // Resolve the created item via the service-layer list (robust vs toast parsing).
   const items = await listItems(page, projectId);
@@ -165,7 +165,7 @@ test('@smoke edit non-status fields persists + writes a revision', async ({ page
   await page.getByRole('combobox', { name: 'Priority' }).click();
   await page.getByRole('option', { name: 'High', exact: true }).click();
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText(/saved|updated/i).first()).toBeVisible();
+  await expect(page.getByText(/^\S+ (saved|updated)$/i).first()).toBeVisible();
 
   const after = await getItem(page, id);
   expect(after.title).toBe('Edited title');
@@ -195,7 +195,7 @@ test('@smoke status change goes through the gated path; illegal targets are not 
   await expect(page.getByRole('option', { name: 'In Progress' })).toBeVisible();
   await page.getByRole('option', { name: 'In Progress' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText(/saved|updated/i).first()).toBeVisible();
+  await expect(page.getByText(/^\S+ (saved|updated)$/i).first()).toBeVisible();
 
   expect((await getItem(page, id)).status).toBe('in_progress');
 });

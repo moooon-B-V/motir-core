@@ -93,7 +93,9 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   // Submit
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
   // Toast appears
-  await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
+    timeout: 5_000,
+  });
   // Top-nav switcher now shows Mobile App
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
   // /dashboard now lands on the dashboards home (Subtask 6.3.5 replaced the
@@ -120,7 +122,9 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.getByLabel('Project name').fill('Marketing Site');
   await expect(page.getByLabel('Identifier')).toHaveValue('MARKE');
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
-  await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
+    timeout: 5_000,
+  });
   // Second project becomes active
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
     'Marketing Site',
@@ -159,7 +163,9 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await applyTheme(page, 'light');
 
   await archiveBtn.click();
-  await expect(page.getByText('Project archived').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Project archived', { exact: true }).first()).toBeVisible({
+    timeout: 5_000,
+  });
   // Active project should fall back to Marketing Site. The project-settings AREA
   // (Story 6.5.2) shows the back-to-project/identity header instead of the
   // ProjectSwitcher, so the fallback surfaces in the settings rail itself (no
@@ -173,7 +179,9 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await page.getByLabel(/Type MARKE to confirm/).fill('MARKE');
   await page.getByRole('button', { name: 'Archive project' }).click();
-  await expect(page.getByText('Project archived').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Project archived', { exact: true }).first()).toBeVisible({
+    timeout: 5_000,
+  });
 
   // Navigate back to dashboard — empty state again
   await page.goto('/dashboard');

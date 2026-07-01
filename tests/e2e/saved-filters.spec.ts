@@ -227,7 +227,7 @@ test.describe('saved filters', () => {
     const saveBtn = page.getByRole('button', { name: 'Save', exact: true });
     await expect(saveBtn, 'the owner gets the overwrite-Save').toBeVisible();
     await saveBtn.click();
-    await expect(page.getByText('Filter updated').first()).toBeVisible();
+    await expect(page.getByText('Filter updated', { exact: true }).first()).toBeVisible();
     // Overwrite reconciled the row to the current URL → clean again.
     await expect(page.getByRole('status').filter({ hasText: 'Edited' })).toHaveCount(0);
 
@@ -369,7 +369,7 @@ test.describe('saved filters', () => {
       'the Cloud-style warning enumerates the dependents',
     ).toBeVisible();
     await delDialog.getByRole('button', { name: 'Delete filter' }).click();
-    await expect(adminPage.getByText('Filter deleted').first()).toBeVisible();
+    await expect(adminPage.getByText('Filter deleted', { exact: true }).first()).toBeVisible();
     await expect(
       adminPage.getByRole('button', { name: 'Apply Release gate on Work Items' }),
     ).toHaveCount(0);

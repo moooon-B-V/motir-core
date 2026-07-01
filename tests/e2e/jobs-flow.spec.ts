@@ -76,7 +76,9 @@ async function sendInvite(page: Page, inviteeEmail: string): Promise<void> {
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Email address').fill(inviteeEmail);
   await dialog.getByRole('button', { name: 'Send invite' }).click();
-  await expect(page.getByText(`Invite sent to ${inviteeEmail}`).first()).toBeVisible();
+  await expect(
+    page.getByText(`Invite sent to ${inviteeEmail}`, { exact: true }).first(),
+  ).toBeVisible();
 }
 
 async function gotoJobs(page: Page): Promise<void> {

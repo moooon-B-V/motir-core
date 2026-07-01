@@ -116,7 +116,7 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   const nameInput = page.getByLabel('Workspace name');
   await nameInput.fill('Acme Renamed');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Workspace renamed').first()).toBeVisible();
+  await expect(page.getByText('Workspace renamed', { exact: true }).first()).toBeVisible();
   // Top-nav switcher reflects the new name after the action revalidates.
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toContainText(
     'Acme Renamed',
@@ -134,7 +134,9 @@ test('@smoke workspace lifecycle: create, rename, invite, accept, switch, leave,
   await inviteDialog.getByRole('button', { name: 'Send invite' }).click();
   // Radix Toast renders the title twice (visible toast + an aria-live
   // status announcement), so scope to the first match.
-  await expect(page.getByText(`Invite sent to ${INVITEE_EMAIL}`).first()).toBeVisible();
+  await expect(
+    page.getByText(`Invite sent to ${INVITEE_EMAIL}`, { exact: true }).first(),
+  ).toBeVisible();
 
   // Read the accept link out of the file outbox.
   const inviteEmail = await waitForEmail(INVITEE_EMAIL);
