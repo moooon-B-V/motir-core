@@ -12,6 +12,7 @@ import { StartSprintDialog } from './StartSprintDialog';
 import { CompleteSprintDialog } from './CompleteSprintDialog';
 import { SprintActionsMenu } from './SprintActionsMenu';
 import { useSprintPoints } from './useSprintPoints';
+import { useBacklogDnd } from './BacklogDndProvider';
 import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
 
@@ -105,7 +106,11 @@ export function SprintContainer({
   const state = useRankedIssues(endpoint, issuesRefreshKey);
   // Live committed-points roll-up (Subtask 4.4.9 — finding #69) filling the
   // Story-4.3 seam: a null read or a wholly-unestimated sprint renders "—".
-  const points = useSprintPoints(sprint.id);
+  // `sprintPointsRefreshKey` is the tick the dnd coordinator bumps after a
+  // membership change / point edit commits, so the badge re-fetches its ON-READ
+  // roll-up instead of showing a stale figure until a page reload (MOTIR-1495).
+  const { sprintPointsRefreshKey } = useBacklogDnd();
+  const points = useSprintPoints(sprint.id, true, sprintPointsRefreshKey);
 
   const stateLabel = t(`sprintState.${sprint.state}`);
   const dateRange = formatDateRange(sprint.startDate, sprint.endDate, locale, t('notStarted'));

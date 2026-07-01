@@ -58,6 +58,7 @@ function BacklogRowBody({
   onRowClick,
   checkbox,
   actions,
+  onEstimateChanged,
 }: {
   item: WorkItemSummaryDto;
   statusByKey: StatusByKey;
@@ -71,6 +72,10 @@ function BacklogRowBody({
   onRowClick?: (e: React.MouseEvent) => void;
   checkbox?: ReactNode;
   actions?: ReactNode;
+  /** Fired after an inline point edit commits → the host re-fetches a derived
+   *  roll-up (the sprint committed-points badge). Omitted on the drag overlay
+   *  clone, which isn't an interactive edit surface (MOTIR-1495). */
+  onEstimateChanged?: () => void;
 }): ReactNode {
   const t = useTranslations('backlog');
   const status = statusByKey.get(item.status);
@@ -126,6 +131,7 @@ function BacklogRowBody({
           itemId={item.id}
           storyPoints={item.storyPoints}
           estimateMinutes={item.estimateMinutes}
+          onEstimateChanged={onEstimateChanged}
         />
       </span>
       {assigneeName ? (
@@ -210,7 +216,8 @@ export function BacklogSortableRow({
   /** The current sprint id (null in the backlog) — check-marked in the move submenu. */
   sprintId?: string;
 }) {
-  const { overRowId, activeId, selectedIds, activateRow, toggleRow } = useBacklogDnd();
+  const { overRowId, activeId, selectedIds, activateRow, toggleRow, bumpSprintPoints } =
+    useBacklogDnd();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -227,6 +234,9 @@ export function BacklogSortableRow({
       dragging={isDragging}
       dropBefore={overRowId === item.id && activeId !== item.id}
       selected={selected}
+      // An in-sprint point edit changes the sprint's committed roll-up → refetch
+      // its badge once the estimate commits (MOTIR-1495).
+      onEstimateChanged={bumpSprintPoints}
       onRowClick={(e) =>
         activateRow(item.id, { shiftKey: e.shiftKey, toggleKey: e.metaKey || e.ctrlKey })
       }
