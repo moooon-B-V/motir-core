@@ -33,6 +33,20 @@ export interface PlanItemProposedFields {
    */
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  /**
+   * AI-drafted explanation (Story 7.4 · MOTIR-850) — the "why this matters" prose
+   * the `generate_tree` planner drafts when the project opts in
+   * (`Project.aiGenerateExplanations`). Carried HERE through the proposal until
+   * materialize maps it onto the created WorkItem's `explanationMd` /
+   * `explanationSource`. `explanationSource` is normally `'ai_draft'` (the
+   * generator's default); materialize also defaults it to `ai_draft` when an
+   * `explanationMd` is present but no source is set. Both optional — a proposal
+   * with explanations OFF carries neither. Item-link convention (Story 5.8): a
+   * reference to another item in `explanationMd` is a link token
+   * (`motir:<id>` / `motir-ref:<tempRef>`), resolved at materialize.
+   */
+  explanationMd?: string | null;
+  explanationSource?: string | null;
 }
 
 /**
@@ -140,6 +154,12 @@ export interface UpdateProposalInput {
    *  estimate, the same sparse-merge semantics the rest of this input uses. */
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  /** AI-drafted explanation (Story 7.4 · MOTIR-850) — deepenable on the
+   *  proposal-edit / generation deepen path exactly like `descriptionMd`; an
+   *  explicit `null` clears it. Sparse-merged into the `add`'s `proposedFields`
+   *  (`mergeProposedFields`). `explanationSource` is not deepened here —
+   *  materialize defaults it to `ai_draft` when an explanation is present. */
+  explanationMd?: string | null;
 }
 
 /** Options for `plansService.listPlans`. */

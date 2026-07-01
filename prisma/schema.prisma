@@ -462,12 +462,12 @@ model Workspace {
 /// archive/delete clears a member's `activeProjectId` (onDelete: SetNull)
 /// rather than cascading the membership away.
 model Project {
-  id                  String              @id @default(cuid())
-  workspaceId         String
-  name                String
-  slug                String
-  identifier          String
-  lastWorkItemNumber  Int                 @default(0)
+  id                     String              @id @default(cuid())
+  workspaceId            String
+  name                   String
+  slug                   String
+  identifier             String
+  lastWorkItemNumber     Int                 @default(0)
   /// Per-project status-transition enforcement mode (Story 2.2). `restricted`
   /// (default) consults the `workflow_transition` rows — only an explicit
   /// edge is a legal move. `open` ignores them: any status → any status is
@@ -476,7 +476,7 @@ model Project {
   /// flipping to `open` does NOT delete the curated transition rows, so a
   /// flip back to `restricted` restores the graph. Jira and Linear both ship
   /// this same "guarded vs anything-goes" project-level toggle.
-  workflowPolicyMode  WorkflowPolicyMode  @default(restricted)
+  workflowPolicyMode     WorkflowPolicyMode  @default(restricted)
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
@@ -484,7 +484,7 @@ model Project {
   /// existing projects backfill to it on migration — a `private` default would
   /// lock every current member out. The browse/edit policy that reads this is
   /// computed at the service layer in Subtask 6.4.3.
-  accessLevel         ProjectAccessLevel  @default(open)
+  accessLevel            ProjectAccessLevel  @default(open)
   /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
   /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
   /// the project admin via the shipped `MarkdownEditor` in settings (6.12.8).
@@ -492,7 +492,7 @@ model Project {
   /// is `public`. Nullable — an empty field falls back to a slim auto-intro
   /// (never a blank page), so every existing project backfills to NULL with no
   /// migration data step.
-  publicOverviewMd    String?             @map("public_overview_md")
+  publicOverviewMd       String?             @map("public_overview_md")
   /// The moment the project most recently BECAME `public` (Story 6.13 · Subtask
   /// 6.13.4) — the "newest" axis the project square's Recent/New rank orders by
   /// (GitLab Explore → Newest). Stamped by `setAccessLevel` whenever the access
@@ -503,20 +503,20 @@ model Project {
   /// non-public project, backfill to NULL with no migration data step; the
   /// Recent rank COALESCEs NULL to `createdAt` so such rows still order
   /// deterministically (their creation moment as the fallback "made public").
-  madePublicAt        DateTime?           @map("made_public_at")
+  madePublicAt           DateTime?           @map("made_public_at")
   /// Public hero subtitle (Story 6.16 · Subtask 6.16.2) — the short tagline
   /// shown under the project name on the public hero, edited in-place by the
   /// project admin. A public-SAFE field: it rides the public projection only
   /// when the project is `public`. Nullable — unset falls back to a generic
   /// i18n tagline (never a blank subtitle), so every existing project backfills
   /// to NULL with no migration data step.
-  publicTagline       String?             @map("public_tagline")
+  publicTagline          String?             @map("public_tagline")
   /// Public hero meta pills (Story 6.16 · Subtask 6.16.2) — the short tags
   /// shown as pills on the public hero, edited in-place by the project admin. A
   /// public-SAFE field: it rides the public projection only when the project is
   /// `public`. Defaults to an empty array — an unset field shows no pills, so
   /// every existing project backfills to `[]` with no migration data step.
-  publicTags          String[]            @default([]) @map("public_tags")
+  publicTags             String[]            @default([]) @map("public_tags")
   /// Immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264). Stamped ONCE —
   /// with the approval timestamp — when the project's FIRST `Plan` is approved +
   /// materialized (`plansService.approvePlan`), then NEVER cleared or re-written:
@@ -529,7 +529,7 @@ model Project {
   /// source of truth (no second derived signal): the `/onboarding` redirect and
   /// the roadmap planning-origin cluster (MOTIR-1013), which assert a planning
   /// journey only a truly-onboarded project has.
-  onboardingRanAt     DateTime?           @map("onboarding_ran_at")
+  onboardingRanAt        DateTime?           @map("onboarding_ran_at")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read
@@ -541,17 +541,26 @@ model Project {
   /// default · Time estimate · Issue count — exactly Jira board Estimation
   /// settings). Defaults to `story_points` so every existing project backfills
   /// to the agile default (no lock-out).
-  estimationStatistic EstimationStatistic @default(story_points)
+  estimationStatistic    EstimationStatistic @default(story_points)
   /// The suggested-value DECK the estimate picker offers (it does not
   /// hard-constrain entry — story points stay a free numeric value): `fibonacci`
   /// (the planning-poker default — 1,2,3,5,8,13,21,…), `linear` (1,2,3,4,5,…),
   /// or `custom` (the project-defined list in `customScaleValues`).
-  pointScale          PointScale          @default(fibonacci)
+  pointScale             PointScale          @default(fibonacci)
   /// The project-defined deck values, used ONLY when `pointScale = custom`.
   /// These are UI SUGGESTIONS for the picker — summation uses the `Decimal`
   /// `work_item.storyPoints`, so a `Float[]` for the suggestion list is fine
   /// (avoids a Decimal-array column). Backfills to `[]` on migration.
-  customScaleValues   Float[]             @default([])
+  customScaleValues      Float[]             @default([])
+  /// AI-drafted explanations opt-in (Story 7.4 · MOTIR-850). When true, the
+  /// `generate_tree` planner drafts a "why this matters" `explanationMd`
+  /// (`explanationSource = ai_draft`) for every proposed item; the flag rides
+  /// the generate-job envelope (motir-ai never reads core config directly) and
+  /// materialize carries the drafted explanation onto the created work item.
+  /// Default `false` — proposals carry no explanation until a project opts in
+  /// (the toggle is SURFACED by the 7.13 AI-settings panel, MOTIR-919), so every
+  /// existing project backfills to OFF with no data step.
+  aiGenerateExplanations Boolean             @default(false) @map("ai_generate_explanations")
   /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
   /// validated at the service layer against the avatar registry
   /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
@@ -559,11 +568,11 @@ model Project {
   /// letters), so every existing row backfills with no migration data step.
   /// NOT an image upload — Jira's own default avatars are a preset library; the
   /// 2.3.7 upload primitive is attachment-scoped (the recorded deviation).
-  avatarIcon          String?
-  avatarColor         String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  archivedAt          DateTime?
+  avatarIcon             String?
+  avatarColor            String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  archivedAt             DateTime?
 
   workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly

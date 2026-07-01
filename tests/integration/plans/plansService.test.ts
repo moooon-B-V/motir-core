@@ -346,6 +346,86 @@ describe('plansService.approvePlan — materialize per op', () => {
   });
 });
 
+describe('plansService.approvePlan — AI-drafted explanations (MOTIR-850)', () => {
+  it('materializes an add WITH an explanation: explanationMd carried, source ai_draft, intra-plan ref resolved + related', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Tree' }, fx.ctx);
+    // Sibling B proposed first — the explanation of A references it by temp-ref.
+    const afterB = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Sibling B', kind: 'task' } }],
+      fx.ctx,
+    );
+    const bPlanItemId = afterB.items[0]!.id;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Card A',
+            kind: 'task',
+            explanationMd: `Matters because it unblocks [Sibling B](motir-ref:planItem:${bPlanItemId}).`,
+            explanationSource: 'ai_draft',
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const a = await db.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await db.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
+    // The explanation carried through, its source is ai_draft, and its intra-plan
+    // temp-ref was rewritten to a real chip token pointing at B's CREATED id
+    // (the same MOTIR-1418 seam the description path uses).
+    expect(a.explanationMd).toBe(`Matters because it unblocks [Sibling B](motir:${b.id}).`);
+    expect(a.explanationSource).toBe('ai_draft');
+    // The now-real reference in the EXPLANATION auto-created a relates_to edge A → B.
+    expect(
+      await db.workItemLink.findFirst({ where: { fromId: a.id, toId: b.id, kind: 'relates_to' } }),
+    ).not.toBeNull();
+    // The created revision records the explanation (renderers.ts has its disposition).
+    const rev = await db.workItemRevision.findFirstOrThrow({
+      where: { workItemId: a.id, changeKind: 'created' },
+    });
+    expect((rev.diff as Record<string, unknown>)['explanationMd']).toBeDefined();
+  });
+
+  it('respects an explicit explanationSource the proposal carried', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'Explicit source card',
+          kind: 'task',
+          explanationMd: 'A human already touched this.',
+          explanationSource: 'user_edited',
+        },
+      },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+    const created = await db.workItem.findFirstOrThrow({
+      where: { title: 'Explicit source card' },
+    });
+    expect(created.explanationMd).toBe('A human already touched this.');
+    expect(created.explanationSource).toBe('user_edited');
+  });
+
+  it('materializes an add with NO explanation: explanationMd null, source at the user_authored default', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlan(fx, [
+      { op: 'add', proposedFields: { title: 'No-explanation card', kind: 'task' } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+    const created = await db.workItem.findFirstOrThrow({ where: { title: 'No-explanation card' } });
+    expect(created.explanationMd).toBeNull();
+    expect(created.explanationSource).toBe('user_authored');
+  });
+});
+
 describe('plansService.declinePlan', () => {
   it('drops all PlanItems and leaves the work-item tree untouched', async () => {
     const fx = await makeWorkItemFixture();

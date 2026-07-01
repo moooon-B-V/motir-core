@@ -47,6 +47,17 @@ export interface ProjectDTO {
    */
   onboardingRanAt: string | null;
   /**
+   * AI-drafted explanations opt-in (Story 7.4 · MOTIR-850). When true, the
+   * `generate_tree` planner drafts a "why this matters" `explanationMd`
+   * (`explanationSource = ai_draft`) for every proposed item. Rides the BASE DTO
+   * (a single project-row column, like `accessLevel`) so `aiGenerationService`
+   * reads it off the hot active-project context and puts it in the generate-job
+   * envelope WITHOUT a second round-trip. Defaults to `false` — every existing
+   * project backfills to OFF (the toggle is SURFACED by the 7.13 AI-settings
+   * panel, MOTIR-919).
+   */
+  aiGenerateExplanations: boolean;
+  /**
    * ISO timestamp the project was created — the Details surface's "Created" row
    * (Story 6.5.3). OPTIONAL and loaded ONLY on the details-surface read path
    * (alongside `previousKeys`), so the hot reads (switcher list, active-project

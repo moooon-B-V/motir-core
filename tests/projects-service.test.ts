@@ -84,6 +84,7 @@ describe('createProject — happy path', () => {
     // only on the details-surface read path (6.8), not on a plain create.
     expect(Object.keys(project).sort()).toEqual([
       'accessLevel',
+      'aiGenerateExplanations',
       'archivedAt',
       'avatarColor',
       'avatarIcon',
@@ -93,6 +94,8 @@ describe('createProject — happy path', () => {
       'onboardingRanAt',
       'slug',
     ]);
+    // A freshly created project defaults to explanations OFF (Story 7.4 / MOTIR-850).
+    expect(project.aiGenerateExplanations).toBe(false);
     // A freshly created project has never onboarded — the marker is null until
     // its first plan is approved + materialized (Subtask 7.4 / MOTIR-1264).
     expect(project.onboardingRanAt).toBeNull();

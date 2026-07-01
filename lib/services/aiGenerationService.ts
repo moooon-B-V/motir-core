@@ -65,7 +65,15 @@ export const aiGenerationService = {
     const { jobId } = await submitJob(
       'generate_tree',
       tenant,
-      { prompt: input.prompt ?? null },
+      {
+        prompt: input.prompt ?? null,
+        // The AI-drafted-explanations opt-in (Story 7.4 · MOTIR-850) crosses the
+        // 7.1 boundary in the job envelope — motir-ai's `generate_tree` handler
+        // reads it from `context.generateExplanations` and, when true, drafts an
+        // `ai_draft` `explanationMd` per proposal (MOTIR-1468). motir-ai never
+        // reads motir-core config directly; the flag rides the envelope.
+        generateExplanations: ctx.project.aiGenerateExplanations,
+      },
       { userId: ctx.userId },
     );
     const plan = await plansService.createPlan(
