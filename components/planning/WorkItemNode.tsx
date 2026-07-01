@@ -34,7 +34,7 @@ import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 //
 // MOTIR-1379 (follow-up) adds the "NOT IN SPRINT" marker for the sprint-scoped
 // roadmap: drilling into a committed root reveals its WHOLE subtree, so a
-// drilled-in node the sprint did not commit to is shown with a neutral dashed
+// drilled-in node the sprint did not commit to is shown with a neutral dotted
 // edge + a receded fill + a "not in sprint" tag — an informational signal, kept
 // deliberately distinct from the red cross-blocked (broken-dependency) chrome.
 
@@ -130,7 +130,7 @@ export function WorkItemNode({
   /** NOT a member of the active sprint (MOTIR-1379 follow-up) — sprint scope only.
    *  A drilled-in node under a committed root that the sprint did not itself
    *  commit to. An INFORMATIONAL, non-error signal (unlike `crossBlocked`, which is
-   *  a real dependency problem): the card takes a NEUTRAL dashed edge + a receded
+   *  a real dependency problem): the card takes a NEUTRAL dotted edge + a receded
    *  `--el-muted` fill and a small "not in sprint" tag, so the committed unit stays
    *  visually distinct from the rest of its subtree. The louder `crossBlocked` /
    *  `here` chromes win the border; the tag still shows alongside `here`. */
@@ -163,7 +163,7 @@ export function WorkItemNode({
   // NOT-IN-SPRINT chrome (MOTIR-1379 follow-up) — an informational, NON-error
   // signal, deliberately never the red cross-blocked chrome. The louder
   // `crossBlocked` (a real dependency problem) and `here` (the frontier) own the
-  // border, so the dashed neutral edge + receded fill applies only OUTSIDE them;
+  // border, so the dotted neutral edge + receded fill applies only OUTSIDE them;
   // the "not in sprint" tag itself still shows alongside `here` (only the red
   // cross-blocked flag suppresses it, to avoid a double tag).
   const notInSprintChrome = notInSprint && !crossBlocked && !here;
@@ -200,9 +200,9 @@ export function WorkItemNode({
       // louder signal). MOTIR-1422 adds the card-level DONE (`--el-tint-sky`) + READY
       // (mint wash) fills — distinct palette tints, legible zoomed out, unlike the old
       // 3px ready edge.
-      // NOT-IN-SPRINT (MOTIR-1379 follow-up): a NEUTRAL dashed edge marks the card
+      // NOT-IN-SPRINT (MOTIR-1379 follow-up): a NEUTRAL dotted edge marks the card
       // as "part of the subtree, not the committed sprint" — never the red
-      // cross-blocked chrome. On a done/ready node the dashed edge rides on top of
+      // cross-blocked chrome. On a done/ready node the dotted edge rides on top of
       // its status fill; a plain node also recedes to the fainter `--el-muted` fill
       // (lighter than the raised `--el-surface` committed siblings use).
       className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
@@ -211,11 +211,11 @@ export function WorkItemNode({
           : here
             ? 'border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)'
             : showDone
-              ? `${notInSprintChrome ? 'border-dashed ' : ''}border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)`
+              ? `${notInSprintChrome ? 'border-dotted ' : ''}border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)`
               : showReadyWash
-                ? `${notInSprintChrome ? 'border-dashed ' : ''}border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)`
+                ? `${notInSprintChrome ? 'border-dotted ' : ''}border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)`
                 : notInSprintChrome
-                  ? 'border-dashed border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)'
+                  ? 'border-dotted border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)'
                   : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }`}
     >
@@ -243,7 +243,7 @@ export function WorkItemNode({
           {showNotInSprintTag ? (
             <span
               data-testid="not-in-sprint-tag"
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-dashed border-(--el-border-strong) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
+              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-dotted border-(--el-border-strong) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
             >
               <CircleDashed className="size-3" aria-hidden="true" />
               not in sprint
