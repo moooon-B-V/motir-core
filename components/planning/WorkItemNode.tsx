@@ -31,6 +31,14 @@ import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 // meter (the subtree done/total bar on an epic/story) and the "YOU ARE HERE"
 // current-position marker (the active node — its status pill is replaced by an
 // accent map-pin pill, the card gets an accent border, and `aria-current="step"`).
+//
+// MOTIR-1379 (follow-up) adds the "NOT IN SPRINT" marker for the sprint-scoped
+// roadmap: drilling into a committed root reveals its WHOLE subtree, so a
+// drilled-in node the sprint did not commit to is shown with a DOTTED border + a
+// receded `--el-muted` fill + a "not in sprint" tag and NO shadow (flat) — an
+// informational signal, kept deliberately distinct from the red cross-blocked
+// (broken-dependency) chrome. The shadow is dropped so a hard offset-shadow style
+// (neo-brutalism) can't add a solid frame that reads as a second border.
 
 /** A container's subtree done/total roll-up — the data behind the progress meter
  *  (Subtask 7.20.6 / MOTIR-1013). Mirrors `RoadmapProgress` in `roadmapClient`;
@@ -107,6 +115,7 @@ export function WorkItemNode({
   drillable = false,
   crossBlocked = false,
   crossBlockedLabel = 'cross-story',
+  notInSprint = false,
   progress = null,
   here = false,
   ready = false,
@@ -120,6 +129,16 @@ export function WorkItemNode({
   /** The flag's copy — `'cross-story'` (project scope) or `'not in sprint'`
    *  (sprint scope, MOTIR-1379). */
   crossBlockedLabel?: string;
+  /** NOT a member of the active sprint (MOTIR-1379 follow-up) — sprint scope only.
+   *  A drilled-in node under a committed root that the sprint did not itself
+   *  commit to. An INFORMATIONAL, non-error signal (unlike `crossBlocked`, which is
+   *  a real dependency problem): the card takes a DOTTED border + a receded
+   *  `--el-muted` fill + a small "not in sprint" tag and NO shadow (flat), so the
+   *  committed unit stays visually distinct from the rest of its subtree. Dropping
+   *  the shadow keeps a hard offset-shadow style (neo-brutalism) from adding a solid
+   *  frame that would double the dotted edge. The louder `crossBlocked` / `here`
+   *  chromes win; the tag still shows alongside `here`. */
+  notInSprint?: boolean;
   /** Subtree done/total roll-up → a thin progress meter on a container node
    *  (Subtask 7.20.6 / MOTIR-1013). `null` (a leaf) or a `0`-total → no meter. */
   progress?: WorkItemProgress | null;
@@ -145,6 +164,14 @@ export function WorkItemNode({
   // The accent "you are here" and the red cross-blocked flag are louder than both.
   const showDone = item.status === 'done' && !here && !crossBlocked;
   const showReadyWash = showReady && !crossBlocked;
+  // NOT-IN-SPRINT chrome (MOTIR-1379 follow-up) — an informational, NON-error
+  // signal, deliberately never the red cross-blocked chrome. The louder
+  // `crossBlocked` (a real dependency problem) and `here` (the frontier) own the
+  // fill, so the receded `--el-muted` fill applies only OUTSIDE them; the "not in
+  // sprint" tag itself still shows alongside `here` (only the red cross-blocked
+  // flag suppresses it, to avoid a double tag).
+  const notInSprintChrome = notInSprint && !crossBlocked && !here;
+  const showNotInSprintTag = notInSprint && !crossBlocked;
   const nodeState = crossBlocked
     ? 'cross-blocked'
     : here
@@ -153,7 +180,9 @@ export function WorkItemNode({
         ? 'done'
         : showReadyWash
           ? 'ready'
-          : 'normal';
+          : notInSprintChrome
+            ? 'not-in-sprint'
+            : 'normal';
   return (
     <div
       // Fixed height (= the layout's NODE_H) so a long, two-line title can never
@@ -166,7 +195,7 @@ export function WorkItemNode({
       // active waypoint, not just a visual ring.
       aria-current={here ? 'step' : undefined}
       // A stable state hook for the canvas + E2E (MOTIR-1422): cross-blocked / here /
-      // done / ready / normal — the card's authoritative visual state.
+      // done / ready / not-in-sprint / normal — the card's authoritative visual state.
       data-node-state={nodeState}
       // A raised `--el-surface` tile on the recessed `--el-canvas` board (the canvas
       // background, MOTIR-1362): the fill is clearly lighter than the board, and the
@@ -175,16 +204,31 @@ export function WorkItemNode({
       // louder signal). MOTIR-1422 adds the card-level DONE (`--el-tint-sky`) + READY
       // (mint wash) fills — distinct palette tints, legible zoomed out, unlike the old
       // 3px ready edge.
+      // NOT-IN-SPRINT (MOTIR-1379 follow-up): a DOTTED border (the "provisional, not
+      // committed" edge) + a receded `--el-muted` fill + the "not in sprint" tag, and
+      // crucially NO shadow. The shadow is dropped because the active `data-style`
+      // owns elevation: under neo-brutalism `--shadow-*` is a HARD offset block that
+      // reads as a solid frame — a dotted border ON TOP of that offset frame was the
+      // "dotted + solid" double border. With no shadow the card is FLAT (reinforcing
+      // "not committed") and the dotted edge is the only border, in every style. The
+      // louder `crossBlocked` / `here` chromes still win (they keep their solid
+      // borders + shadows).
       className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-3.5 ${
         crossBlocked
           ? 'border-(--el-danger) bg-(--el-surface) shadow-[0_0_0_1px_var(--el-danger)_inset] shadow-(--shadow-card)'
           : here
             ? 'border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)'
             : showDone
-              ? 'border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)'
+              ? notInSprintChrome
+                ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-sky)'
+                : 'border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)'
               : showReadyWash
-                ? 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
-                : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
+                ? notInSprintChrome
+                  ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-mint)'
+                  : 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
+                : notInSprintChrome
+                  ? 'border-dotted border-(--el-border-strong) bg-(--el-muted)'
+                  : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }`}
     >
       {/* TOP ROW — the compact STATUS chip (top-left) — REPLACED by the accent
@@ -202,21 +246,40 @@ export function WorkItemNode({
         ) : (
           <WorkItemStatusPill status={item.status} />
         )}
-        {crossBlocked ? (
-          <span
-            data-testid="cross-blocked-flag"
-            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
-          >
-            <Flag className="size-3" aria-hidden="true" />
-            {crossBlockedLabel}
-          </span>
-        ) : drillable ? (
-          <ChevronRight
-            className="ml-auto size-4 shrink-0 text-(--el-text-muted)"
-            aria-hidden="true"
-            data-testid="drill-affordance"
-          />
-        ) : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
+              NOT the red cross-blocked flag: this node is simply outside the
+              committed sprint, not a broken dependency. Suppressed when the card is
+              cross-blocked (its own flag already reads "not in sprint" in sprint
+              scope), so the card never carries two tags. */}
+          {showNotInSprintTag ? (
+            <span
+              data-testid="not-in-sprint-tag"
+              // A plain neutral chip (no border) — a bordered tag would read as an
+              // extra border on the card, and a border style would fight the active
+              // `data-style`. The card's muted fill + this tag carry the signal.
+              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
+            >
+              <CircleDashed className="size-3" aria-hidden="true" />
+              not in sprint
+            </span>
+          ) : null}
+          {crossBlocked ? (
+            <span
+              data-testid="cross-blocked-flag"
+              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
+            >
+              <Flag className="size-3" aria-hidden="true" />
+              {crossBlockedLabel}
+            </span>
+          ) : drillable ? (
+            <ChevronRight
+              className="size-4 shrink-0 text-(--el-text-muted)"
+              aria-hidden="true"
+              data-testid="drill-affordance"
+            />
+          ) : null}
+        </div>
       </div>
 
       {/* BODY — the kind tile + identifier + title; the title gets the room. */}

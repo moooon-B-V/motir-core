@@ -157,6 +157,60 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
   });
 });
 
+// The per-NODE "not in sprint" signal (MOTIR-1379 follow-up). In SPRINT scope the
+// root level shows only in-sprint members, but drilling into a committed root
+// reveals its WHOLE subtree — so a drilled-in node the sprint did not commit to
+// (`inActiveSprint: false`) is rendered with a neutral dashed edge + a "not in
+// sprint" tag, keeping the committed unit distinct from the rest of the subtree.
+// Never flags in PROJECT scope (no sprint resolved), and never the red chrome.
+const NOT_IN_SPRINT_TAG = 'not-in-sprint-tag';
+
+describe('buildWorkItemLevel — not-in-sprint node signal (MOTIR-1379)', () => {
+  it('SPRINT scope: a NON-member drilled-in node shows the "not in sprint" tag + card state', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'S1', kind: 'subtask', parentId: 'P1', inActiveSprint: false })]),
+      { scope: 'sprint' },
+    );
+    render(<>{nodes.find((n) => n.id === 'S1')!.content}</>);
+    expect(screen.getByTestId(NOT_IN_SPRINT_TAG).textContent).toContain('not in sprint');
+    // A neutral, informational state — NOT the red cross-blocked chrome.
+    expect(document.querySelector('[data-node-state="not-in-sprint"]')).toBeTruthy();
+    expect(screen.queryByTestId(A1_FLAG)).toBeNull();
+  });
+
+  it('SPRINT scope: an IN-sprint member is NOT flagged', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'S1', kind: 'subtask', parentId: 'P1', inActiveSprint: true })]),
+      { scope: 'sprint' },
+    );
+    render(<>{nodes.find((n) => n.id === 'S1')!.content}</>);
+    expect(screen.queryByTestId(NOT_IN_SPRINT_TAG)).toBeNull();
+    expect(document.querySelector('[data-node-state="not-in-sprint"]')).toBeNull();
+  });
+
+  it('PROJECT scope: a non-member is NEVER flagged (the flag is sprint-scope only)', () => {
+    const { nodes } = buildWorkItemLevel(
+      level([item({ id: 'S1', kind: 'subtask', parentId: 'P1', inActiveSprint: false })]),
+    );
+    render(<>{nodes.find((n) => n.id === 'S1')!.content}</>);
+    expect(screen.queryByTestId(NOT_IN_SPRINT_TAG)).toBeNull();
+    expect(document.querySelector('[data-node-state="not-in-sprint"]')).toBeNull();
+  });
+
+  it('a cross-blocked non-member shows ONLY the cross-blocked flag (no double tag)', () => {
+    // A1 in levelWithOffBlocker has no `inActiveSprint` → defaults to a non-member;
+    // in sprint scope it is BOTH cross-blocked and not-in-sprint. The red flag wins
+    // the slot; the neutral tag is suppressed so the card never carries two tags.
+    const { nodes } = buildWorkItemLevel(
+      levelWithOffBlocker({ isDone: false, inActiveSprint: false }),
+      { scope: 'sprint' },
+    );
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('not in sprint');
+    expect(screen.queryByTestId(NOT_IN_SPRINT_TAG)).toBeNull();
+  });
+});
+
 describe('buildWorkItemLevel — ready highlight (MOTIR-1417 / MOTIR-1422)', () => {
   it('a ready node shows the "Ready" pill + the card mint wash', () => {
     const { nodes } = buildWorkItemLevel(

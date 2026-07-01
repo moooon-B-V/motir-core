@@ -2142,12 +2142,20 @@ export const workItemsService = {
       rows.map((r) => r.id),
       ctx,
     );
+    // SPRINT-membership flag (MOTIR-1379 follow-up): in sprint scope the root
+    // level shows only in-sprint members, but drilling into a committed root
+    // reveals its WHOLE subtree — including children the sprint did not commit to.
+    // A node is an active-sprint member iff its own `sprintId` is the resolved
+    // active sprint; the canvas renders a drilled-in NON-member "not in sprint".
+    // In project scope `sprintId` is null, so every node is `false` (the flag is
+    // inert — the whole-project view ignores it).
     const nodes = rows.map((r) =>
       toRoadmapNodeDto(
         r,
         doneKeys.has(r.status),
         r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0 }) : null,
         startableKeys.has(r.status) && (ownReady.get(r.id) ?? true),
+        sprintId != null && r.sprintId === sprintId,
       ),
     );
 

@@ -32,6 +32,12 @@ export interface RoadmapLevelItem {
    *  highlight. Optional client-side: a read that omits it degrades to "no
    *  highlight". */
   ready?: boolean;
+  /** Member of the ACTIVE sprint (MOTIR-1379 follow-up). Only meaningful in
+   *  sprint scope: a drilled-in node whose `inActiveSprint` is false is part of a
+   *  committed root's subtree but was NOT itself committed to the sprint → the
+   *  "not in sprint" node treatment. Optional client-side: an older / project-scope
+   *  read that omits it degrades to "in sprint" (no signal). */
+  inActiveSprint?: boolean;
 }
 
 export interface RoadmapEdge {
@@ -70,6 +76,7 @@ interface RoadmapNode {
   hasChildren: boolean;
   progress?: { done: number; total: number } | null;
   ready?: boolean;
+  inActiveSprint?: boolean;
 }
 
 const KNOWN_STATUSES: WorkItemStatus[] = [
@@ -101,6 +108,7 @@ function toItem(n: RoadmapNode): RoadmapLevelItem {
     hasChildren: n.hasChildren,
     progress: n.progress ?? null,
     ready: n.ready ?? false,
+    inActiveSprint: n.inActiveSprint ?? false,
   };
 }
 

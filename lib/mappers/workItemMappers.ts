@@ -181,13 +181,17 @@ export function toWorkItemTreeNodeDto(
  * `progress` (the subtree done/total roll-up, Subtask 7.20.6 / MOTIR-1013) are the
  * service's call — it holds the project's done-status keys and runs the one extra
  * recursive count over the level's CONTAINERS. `progress` is `null` on a leaf
- * (`!hasChildren`); the service passes it through here.
+ * (`!hasChildren`); the service passes it through here. `inActiveSprint` is the
+ * service's call too — it holds the resolved active sprint and compares each
+ * row's `sprintId` to it (always `false` in project scope, where no sprint is
+ * resolved).
  */
 export function toRoadmapNodeDto(
   row: WorkItemTreeRow,
   isDone: boolean,
   progress: RoadmapProgressDto | null,
   ready: boolean,
+  inActiveSprint: boolean,
 ): RoadmapNodeDto {
   return {
     id: row.id,
@@ -202,6 +206,7 @@ export function toRoadmapNodeDto(
     hasChildren: row.hasChildren,
     progress,
     ready,
+    inActiveSprint,
   };
 }
 
