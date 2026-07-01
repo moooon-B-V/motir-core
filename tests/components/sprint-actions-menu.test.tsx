@@ -34,13 +34,14 @@ function sprint(over: Partial<SprintDto> = {}): SprintDto {
 
 function renderMenu(over: Partial<SprintDto> = {}) {
   const onDeleted = vi.fn();
+  const onUpdated = vi.fn();
   render(
     <ToastProvider>
-      <SprintActionsMenu sprint={sprint(over)} onDeleted={onDeleted} />
+      <SprintActionsMenu sprint={sprint(over)} onDeleted={onDeleted} onUpdated={onUpdated} />
     </ToastProvider>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Sprint actions' }));
-  return { onDeleted };
+  return { onDeleted, onUpdated };
 }
 
 afterEach(() => {
@@ -61,6 +62,92 @@ describe('SprintActionsMenu — state gate', () => {
     renderMenu({ state: 'active' });
     const del = screen.getByTestId('sprint-delete-sp7');
     expect(del.getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+describe('SprintActionsMenu — edit-dates state gate (MOTIR-1494)', () => {
+  it('offers an enabled Edit dates item for a planned sprint', () => {
+    renderMenu({ state: 'planned' });
+    const edit = screen.getByTestId('sprint-edit-dates-sp7');
+    expect(edit.getAttribute('aria-disabled')).not.toBe('true');
+    // An actionable menuitem button, not the disabled state-gate div.
+    expect(edit.tagName).toBe('BUTTON');
+  });
+
+  it('offers an enabled Edit dates item for an active sprint (window still editable)', () => {
+    renderMenu({ state: 'active' });
+    expect(screen.getByTestId('sprint-edit-dates-sp7').getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+  });
+
+  it('disables Edit dates for a completed sprint (its window is frozen)', () => {
+    renderMenu({ state: 'complete' });
+    expect(screen.getByTestId('sprint-edit-dates-sp7').getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+describe('SprintActionsMenu — edit-dates round-trip (MOTIR-1494)', () => {
+  it('saving PATCHes /api/sprints/[id] with { startDate, endDate } and fires onUpdated', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ id: 'sp7' }), { status: 200 }));
+    // Seed a window so the pickers are pre-filled → Save is enabled immediately.
+    const { onUpdated } = renderMenu({
+      state: 'planned',
+      startDate: '2026-07-01T00:00:00.000Z',
+      endDate: '2026-07-14T00:00:00.000Z',
+    });
+
+    fireEvent.click(screen.getByTestId('sprint-edit-dates-sp7'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Edit sprint dates')).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save dates' }));
+
+    await waitFor(() => expect(onUpdated).toHaveBeenCalled());
+    const patchCall = fetchSpy.mock.calls.find(([u]) => String(u) === '/api/sprints/sp7');
+    expect(patchCall).toBeTruthy();
+    const init = patchCall![1] as RequestInit;
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({
+      startDate: '2026-07-01',
+      endDate: '2026-07-14',
+    });
+  });
+
+  it('disables Save + shows the window-invalid alert when the end precedes the start', async () => {
+    renderMenu({
+      state: 'planned',
+      startDate: '2026-07-14T00:00:00.000Z',
+      endDate: '2026-07-01T00:00:00.000Z',
+    });
+
+    fireEvent.click(screen.getByTestId('sprint-edit-dates-sp7'));
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText('The end date must be on or after the start date.'),
+    ).toBeTruthy();
+    const save = within(dialog).getByRole('button', { name: 'Save dates' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+  });
+
+  it('does NOT fire onUpdated when the PATCH is rejected (e.g. window invalid)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ code: 'SPRINT_WINDOW_INVALID' }), { status: 422 }),
+    );
+    const { onUpdated } = renderMenu({
+      state: 'planned',
+      startDate: '2026-07-01T00:00:00.000Z',
+      endDate: '2026-07-14T00:00:00.000Z',
+    });
+
+    fireEvent.click(screen.getByTestId('sprint-edit-dates-sp7'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save dates' }));
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    expect(onUpdated).not.toHaveBeenCalled();
   });
 });
 

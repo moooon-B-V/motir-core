@@ -33,7 +33,7 @@ import {
 // warning). Defaults to `false`, so the active surfaces are byte-for-byte
 // unchanged. The host surface passes `archived` from its read.
 
-const ITEM_CLASS =
+export const ITEM_CLASS =
   'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none disabled:opacity-50';
 
 // Exported so single-action surfaces (e.g. the archived-list row's Delete-only

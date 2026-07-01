@@ -2325,6 +2325,21 @@
       "errorNotAdmin": "Only a project admin can delete a sprint.",
       "errorActive": "An active sprint can’t be deleted — complete it first."
     },
+    "editSprintDatesFlow": {
+      "menuItem": "Edit dates",
+      "completeDisabled": "A completed sprint’s dates can’t be changed.",
+      "title": "Edit sprint dates",
+      "subtitle": "Adjust the start and end of “{name}”.",
+      "startDateLabel": "Start date",
+      "endDateLabel": "End date",
+      "windowInvalid": "The end date must be on or after the start date.",
+      "confirm": "Save dates",
+      "savedToast": "Sprint “{name}” dates updated",
+      "errorTitle": "Couldn’t update the sprint dates",
+      "errorDescription": "Something went wrong updating the dates. Please try again.",
+      "errorNotAdmin": "Only a project admin can edit a sprint’s dates.",
+      "errorCompleted": "A completed sprint’s dates can’t be changed."
+    },
     "collapseSprint": "Collapse sprint",
     "expandSprint": "Expand sprint",
     "collapseBacklog": "Collapse backlog",
