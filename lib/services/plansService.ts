@@ -128,6 +128,7 @@ function mergeProposedFields(
   if (input.priority !== undefined) next.priority = input.priority;
   if (input.storyPoints !== undefined) next.storyPoints = input.storyPoints;
   if (input.estimateMinutes !== undefined) next.estimateMinutes = input.estimateMinutes;
+  if (input.explanationMd !== undefined) next.explanationMd = input.explanationMd;
   return next;
 }
 
@@ -139,6 +140,12 @@ function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }
     status: { from: null, to: row.status },
   };
   if (row.descriptionMd != null) diff.descriptionMd = { from: null, to: row.descriptionMd };
+  // AI-drafted explanation (MOTIR-850) — record it when set (null = none is
+  // omitted). `explanationMd` has an `editedField()` disposition in
+  // lib/activity/renderers.ts, so the created-revision feed renders it; the
+  // `explanationSource` metadata column is deliberately NOT diffed (no renderer
+  // disposition — the same rule the `modify` path follows for undispositioned keys).
+  if (row.explanationMd != null) diff.explanationMd = { from: null, to: row.explanationMd };
   if (row.type != null) diff.type = { from: null, to: row.type };
   if (row.executor != null) diff.executor = { from: null, to: row.executor };
   // Leaf sizing (MOTIR-1433) — mirror `buildCreatedDiff`: record the estimate
@@ -228,14 +235,19 @@ async function materialize(
     const prefix = refreshed?.identifier ?? project.identifier;
     const identifier = `${prefix}-${number}`;
 
-    // Normalize bare REAL work-item refs in the generated description to
-    // canonical link tokens (bug MOTIR-1440) so a materialized body chips
-    // (5.8.6) rather than staying plain text — the same write-path rule the
-    // service create/update applies, here on the inlined materialize insert.
+    // Normalize bare REAL work-item refs in the generated description AND the
+    // AI-drafted explanation (MOTIR-850) to canonical link tokens (bug MOTIR-1440)
+    // so a materialized body chips (5.8.6) rather than staying plain text — the
+    // same write-path rule the service create/update applies (it normalizes both
+    // `descriptionMd` and `explanationMd`), here on the inlined materialize insert.
     // (Intra-plan temp refs are a separate concern, resolved at materialize by
     // the temp-ref → motir:<id> pass; this only resolves EXISTING bare keys.)
-    const [normalizedDescriptionMd] = await normalizeBodyRefs(
-      { projectId: plan.projectId, projectIdentifier: prefix, fields: [pf.descriptionMd] },
+    const [normalizedDescriptionMd, normalizedExplanationMd] = await normalizeBodyRefs(
+      {
+        projectId: plan.projectId,
+        projectIdentifier: prefix,
+        fields: [pf.descriptionMd, pf.explanationMd],
+      },
       tx,
     );
 
@@ -259,6 +271,20 @@ async function materialize(
       identifier,
       title: pf.title,
       descriptionMd: normalizedDescriptionMd ?? null,
+      // AI-drafted explanation (MOTIR-850): flow `explanationMd` + its source onto
+      // the created item. `explanationSource` is set ONLY when an explanation is
+      // present — respect an explicit source the proposal carried, else default to
+      // `ai_draft` (the generator drafted it); with no explanation the column stays
+      // at its schema default (`user_authored`). Intra-plan temp-ref tokens in the
+      // explanation are rewritten in Pass 3, like the description.
+      explanationMd: normalizedExplanationMd ?? null,
+      ...(typeof normalizedExplanationMd === 'string' && normalizedExplanationMd.trim() !== ''
+        ? {
+            explanationSource:
+              (pf.explanationSource as Prisma.WorkItemUncheckedCreateInput['explanationSource']) ??
+              'ai_draft',
+          }
+        : {}),
       status: statusKey,
       ...(pf.priority
         ? { priority: pf.priority as Prisma.WorkItemUncheckedCreateInput['priority'] }
@@ -319,20 +345,34 @@ async function materialize(
       created.descriptionMd ?? '',
       planItemToWorkItem,
     );
-    for (const ref of unresolved) {
+    // The AI-drafted explanation (MOTIR-850) follows the SAME item-link convention
+    // as the description (rendered through the same markdown pipeline), so resolve
+    // its intra-plan `motir-ref:planItem:<id>` tokens into real `motir:<id>` links
+    // here too — even a forward ref to a sibling created later in this pass.
+    const { body: rewrittenExplanation, unresolved: unresolvedExplanation } = rewriteIntraPlanRefs(
+      created.explanationMd ?? '',
+      planItemToWorkItem,
+    );
+    for (const ref of [...unresolved, ...unresolvedExplanation]) {
       // A dangling intra-plan ref is left inert (never dropped/crashed); surface
       // it — it means the generator referenced a sibling that wasn't proposed.
       console.warn(
         `[plansService.materialize] plan ${plan.id}: intra-plan ref planItem:${ref} in ${created.identifier} resolved to no item — left inert`,
       );
     }
+    const bodyUpdate: Prisma.WorkItemUncheckedUpdateInput = {};
     if (rewrittenDescription !== (created.descriptionMd ?? '')) {
-      finalRow = await workItemRepository.update(
-        created.id,
-        { descriptionMd: rewrittenDescription },
-        tx,
-      );
+      bodyUpdate.descriptionMd = rewrittenDescription;
     }
+    if (rewrittenExplanation !== (created.explanationMd ?? '')) {
+      bodyUpdate.explanationMd = rewrittenExplanation;
+    }
+    if (Object.keys(bodyUpdate).length > 0) {
+      finalRow = await workItemRepository.update(created.id, bodyUpdate, tx);
+    }
+    // Auto-relate mentions in BOTH the description AND the explanation (5.8.3) —
+    // ADD-only + idempotent, so wiring `relates_to` from either body never
+    // duplicates or downgrades the structural `is_blocked_by` edges from Pass 2.
     await autoRelateWorkItemMentions(
       {
         source: {
@@ -341,7 +381,7 @@ async function materialize(
           projectId: plan.projectId,
           projectIdentifier: prefix,
         },
-        text: finalRow.descriptionMd ?? '',
+        text: `${finalRow.descriptionMd ?? ''}\n${finalRow.explanationMd ?? ''}`,
         ctx,
       },
       tx,

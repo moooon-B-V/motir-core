@@ -45,6 +45,13 @@ export interface JobContextBag {
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
   // like `discovery`); the motir-ai handler parses it into an ExplanationInput.
   explanation?: unknown;
+  // The AI-drafted-explanations opt-in (Story 7.4 · MOTIR-850), read from
+  // `Project.aiGenerateExplanations` and set by `aiGenerationService` on a
+  // `generate_tree` submit. When true, motir-ai's generator drafts a "why this
+  // matters" `explanationMd` (`explanationSource = ai_draft`) per proposed item
+  // (MOTIR-1468). Absent/false ⇒ proposals carry no explanation. The flag rides
+  // the envelope so motir-ai never reads motir-core config directly.
+  generateExplanations?: boolean;
 }
 
 export interface RequestEnvelope {

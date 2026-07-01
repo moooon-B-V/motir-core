@@ -150,7 +150,9 @@ describe('POST /api/ai/plan/generate', () => {
       projectId: fx.projectId,
       projectKey: fx.projectIdentifier,
     });
-    expect(context).toEqual({ prompt: 'build me a tracker' });
+    // The envelope carries the prompt + the project's AI-explanations opt-in
+    // (Story 7.4 · MOTIR-850) — OFF by default for a fresh project.
+    expect(context).toEqual({ prompt: 'build me a tracker', generateExplanations: false });
     expect(actor).toEqual({ userId: fx.ownerId });
 
     // The Plan really exists, is `generating`, and is bound to the job (sourceJobId).
@@ -159,6 +161,21 @@ describe('POST /api/ai/plan/generate', () => {
     expect(plan!.status).toBe('generating');
     expect(plan!.sourceJobId).toBe('job_gen_1');
     expect(plan!.projectId).toBe(fx.projectId);
+  });
+
+  it('threads the project aiGenerateExplanations opt-in into the generate_tree envelope (MOTIR-850)', async () => {
+    const fx = await seedActiveProject();
+    // Opt the active project INTO AI-drafted explanations — the flag rides the
+    // envelope context so motir-ai's generate_tree handler drafts explanations.
+    activeCtx.current!.project = { ...fx.project, aiGenerateExplanations: true };
+    submitJobMock.mockResolvedValue({ jobId: 'job_gen_expl' });
+
+    const res = await postReq({ prompt: 'with explanations' });
+    expect(res.status).toBe(200);
+
+    const [jobKind, , context] = submitJobMock.mock.calls[0]!;
+    expect(jobKind).toBe('generate_tree');
+    expect(context).toEqual({ prompt: 'with explanations', generateExplanations: true });
   });
 
   it('surfaces out-of-credits as a DISTINCT 402, leaving NO orphan Plan', async () => {
