@@ -121,6 +121,16 @@ export function BacklogContainer({
     await refetchSprints();
   }, [refetchSprints]);
 
+  // Deleting a sprint (Subtask 4.2.5 / MOTIR-1492) is the same two-surface
+  // refresh as completion: the sprint metadata re-reads (the deleted sprint drops
+  // out of the planning view) AND every region's issue list re-reads (the sprint's
+  // items fall back to the backlog via the SetNull FK, so the backlog must show
+  // them without a manual reload — the same bug-11 client-island shape).
+  const handleSprintDeleted = useCallback(async () => {
+    setIssuesRefreshKey((k) => k + 1);
+    await refetchSprints();
+  }, [refetchSprints]);
+
   // Keep a sprint header's issue-count badge in sync with an optimistic
   // cross-region drag (Subtask 4.2.4) — the badge reads `sprint.issueCount`, so a
   // row dragged into / out of a sprint adjusts it here; a rejected move reverts it.
@@ -176,6 +186,7 @@ export function BacklogContainer({
             plannedSprints={plannedSprints}
             onStarted={refetchSprints}
             onCompleted={handleSprintCompleted}
+            onDeleted={handleSprintDeleted}
             issuesRefreshKey={issuesRefreshKey}
             filterQuery={filterQuery}
             filterActive={filterActive}
