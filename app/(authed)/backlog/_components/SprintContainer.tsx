@@ -57,6 +57,7 @@ export function SprintContainer({
   plannedSprints,
   onStarted,
   onCompleted,
+  onRenamed,
   onDeleted,
   issuesRefreshKey,
   filterQuery,
@@ -79,6 +80,9 @@ export function SprintContainer({
   /** Refresh the sprint list after a sprint is completed (it drops out of the
    *  planning view). Fires on the complete dialog's close (Subtask 4.4.6). */
   onCompleted: () => void | Promise<void>;
+  /** Refresh the sprint list after this sprint is renamed (MOTIR-1493) — the
+   *  header name + region aria-label re-read from the refetched metadata. */
+  onRenamed: () => void | Promise<void>;
   /** Refresh the backlog after this sprint is deleted (Subtask 4.2.5 /
    *  MOTIR-1492) — the deleted sprint drops out of the planning view AND its
    *  work items fall back to the backlog list, so both must re-read. */
@@ -207,7 +211,7 @@ export function SprintContainer({
         ) : null}
         {/* `⋯` sprint actions menu — ENABLED + Delete wired (Subtask 4.2.5 /
             MOTIR-1492); rename + edit-dates land as sibling items (1493 / 1494). */}
-        <SprintActionsMenu sprint={sprint} onDeleted={onDeleted} />
+        <SprintActionsMenu sprint={sprint} onRenamed={onRenamed} onDeleted={onDeleted} />
       </div>
 
       {collapsed ? null : (

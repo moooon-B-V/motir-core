@@ -2325,6 +2325,18 @@
       "errorNotAdmin": "只有项目管理员才能删除Sprint。",
       "errorActive": "进行中的Sprint无法删除——请先完成它。"
     },
+    "renameSprintFlow": {
+      "menuItem": "重命名Sprint",
+      "completeDisabled": "已完成的Sprint无法重命名。",
+      "title": "重命名Sprint",
+      "label": "Sprint名称",
+      "renamedToast": "Sprint已重命名为“{name}”",
+      "errorTitle": "无法重命名Sprint",
+      "errorDescription": "重命名Sprint时出现问题。请重试。",
+      "errorEmpty": "Sprint名称不能为空。",
+      "errorNotAdmin": "只有项目管理员才能重命名Sprint。",
+      "errorCompleted": "已完成的Sprint无法重命名。"
+    },
     "collapseSprint": "收起Sprint",
     "expandSprint": "展开Sprint",
     "collapseBacklog": "收起待办列表",

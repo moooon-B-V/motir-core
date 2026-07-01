@@ -186,6 +186,7 @@ export function BacklogContainer({
             plannedSprints={plannedSprints}
             onStarted={refetchSprints}
             onCompleted={handleSprintCompleted}
+            onRenamed={refetchSprints}
             onDeleted={handleSprintDeleted}
             issuesRefreshKey={issuesRefreshKey}
             filterQuery={filterQuery}
