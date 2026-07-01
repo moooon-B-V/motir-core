@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CalendarRange, MoreHorizontal, Trash2 } from 'lucide-react';
+import { CalendarRange, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
@@ -12,38 +12,46 @@ import {
 } from '@/components/issues/actions/WorkItemActionsMenu';
 import type { SprintDto } from '@/lib/dto/sprints';
 import { DeleteSprintDialog } from './DeleteSprintDialog';
+import { RenameSprintDialog } from './RenameSprintDialog';
 import { EditSprintDatesDialog } from './EditSprintDatesDialog';
 
 // The sprint-header `⋯` actions menu (Story 4.2 · Subtask 4.2.5 — the menu was
 // placed-but-disabled; ENABLED here + wired to Delete in bug MOTIR-1492), per
 // design/backlog/design-notes.md ("`⋯` menu — sprint actions (rename · edit
 // dates · delete · start), the shipped dropdown Menu"). Reuses the shipped
-// `Popover` menu primitive and the SAME danger-row + trigger vocabulary as the
-// work-item `WorkItemActionsMenu` (one source of truth, no token drift) —
-// role="menu"/menuitem, keyboard-operable, no nested buttons.
+// `Popover` menu primitive and the SAME neutral-row + danger-row + trigger
+// vocabulary as the work-item `WorkItemActionsMenu` (one source of truth, no
+// token drift) — role="menu"/menuitem, keyboard-operable, no nested buttons.
 //
-// This card owns ENABLING the menu + the **Delete** action → the shipped
+// MOTIR-1492 owned ENABLING the menu + the **Delete** action → the shipped
 // `DELETE /api/sprints/[id]`. Delete is offered for a planned/complete sprint; an
 // ACTIVE sprint can't be deleted (the backend throws CannotDeleteActiveSprint →
 // 409 — an active sprint is ended via Story 4.4's complete flow, not deleted), so
 // the row is DISABLED with a reason there (a Tooltip state-gate, mirroring
-// WorkItemActionsMenu's "add to active sprint" disabled row). Rename (MOTIR-1493)
-// and Edit-dates (MOTIR-1494) land as sibling items in THIS menu (they build on
-// it); Start stays its own header button (already wired, Story 4.4).
+// WorkItemActionsMenu's "add to active sprint" disabled row).
 //
-// Edit-dates (MOTIR-1494) is now WIRED as a sibling item ABOVE Delete (the design
-// order rename · edit dates · delete · start; rename/MOTIR-1493 lands later). It
-// opens `EditSprintDatesDialog` → `PATCH /api/sprints/[id]`. A `complete` sprint's
-// window is frozen server-side (409), so the item is disabled-with-reason there,
-// mirroring Delete's active-disabled state-gate; the backlog planning view only
-// surfaces planned + active sprints, so in practice it is always enabled here.
+// The items land in the design order **rename · edit dates · delete · start**:
+//   • **Rename (MOTIR-1493)** → `PATCH /api/sprints/[id]` `{ name }`
+//     (`RenameSprintDialog`).
+//   • **Edit dates (MOTIR-1494)** → `PATCH /api/sprints/[id]` (window)
+//     (`EditSprintDatesDialog`).
+// Both edits are frozen server-side on a `complete` sprint (`updateSprint` throws
+// CannotModifyCompletedSprint → 409), so each row is disabled-with-reason there,
+// the same Tooltip state-gate shape as Delete's active-disabled; the backlog
+// planning view surfaces only planned + active sprints, so in practice both are
+// enabled here. Start stays its own header button (already wired, Story 4.4).
 
 export function SprintActionsMenu({
   sprint,
+  onRenamed,
   onDeleted,
   onUpdated,
 }: {
   sprint: SprintDto;
+  /** Refetch the backlog after a rename (the sprint list is a client island seeded
+   *  once, so the new name only re-renders across the header + region aria-label
+   *  on a re-read — the page-state-after-mutation contract). */
+  onRenamed: () => void | Promise<void>;
   /** Refetch the backlog after a delete (the sprint drops out + its issues return
    *  to the backlog list). */
   onDeleted: () => void | Promise<void>;
@@ -53,8 +61,17 @@ export function SprintActionsMenu({
 }) {
   const t = useTranslations('backlog');
   const [open, setOpen] = useState(false);
+  const [confirmRename, setConfirmRename] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editDates, setEditDates] = useState(false);
+
+  // A COMPLETE sprint is frozen — `sprintsService.updateSprint` throws
+  // CannotModifyCompletedSprint (409) — so Rename is offered for a planned/active
+  // sprint and disabled-with-reason for a complete one (the AC's "complete
+  // sprint's name is not editable"). The planning view surfaces only planned +
+  // active sprints, so this gate is the safety backstop, mirroring the Delete
+  // active-disabled state-gate below.
+  const canRename = sprint.state !== 'complete';
 
   // Only an ACTIVE sprint is undeletable (complete it first); planned + complete
   // are deletable. The backlog planning view surfaces only planned + active
@@ -77,6 +94,34 @@ export function SprintActionsMenu({
         </Popover.Trigger>
         <Popover.Content width={232} align="end" className="p-0">
           <div className="p-1" role="menu" aria-label={t('sprintActions')}>
+            {canRename ? (
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={`sprint-rename-${sprint.id}`}
+                className={ITEM_CLASS}
+                onClick={() => {
+                  setOpen(false);
+                  setConfirmRename(true);
+                }}
+              >
+                <Pencil className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                {t('renameSprintFlow.menuItem')}
+              </button>
+            ) : (
+              <Tooltip content={t('renameSprintFlow.completeDisabled')}>
+                <div
+                  role="menuitem"
+                  aria-disabled="true"
+                  tabIndex={0}
+                  data-testid={`sprint-rename-${sprint.id}`}
+                  className="flex h-(--height-control) w-full cursor-default items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) opacity-50 focus-visible:outline-none"
+                >
+                  <Pencil className="h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+                  {t('renameSprintFlow.menuItem')}
+                </div>
+              </Tooltip>
+            )}
             {canEditDates ? (
               <button
                 type="button"
@@ -136,6 +181,16 @@ export function SprintActionsMenu({
           </div>
         </Popover.Content>
       </Popover>
+
+      {confirmRename ? (
+        <RenameSprintDialog
+          sprint={sprint}
+          onClose={() => setConfirmRename(false)}
+          onRenamed={async () => {
+            await onRenamed();
+          }}
+        />
+      ) : null}
 
       {confirmDelete ? (
         <DeleteSprintDialog

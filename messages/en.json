@@ -2325,6 +2325,18 @@
       "errorNotAdmin": "Only a project admin can delete a sprint.",
       "errorActive": "An active sprint can’t be deleted — complete it first."
     },
+    "renameSprintFlow": {
+      "menuItem": "Rename sprint",
+      "completeDisabled": "A completed sprint can’t be renamed.",
+      "title": "Rename sprint",
+      "label": "Sprint name",
+      "renamedToast": "Sprint renamed to “{name}”",
+      "errorTitle": "Couldn’t rename the sprint",
+      "errorDescription": "Something went wrong renaming the sprint. Please try again.",
+      "errorEmpty": "Sprint name can’t be empty.",
+      "errorNotAdmin": "Only a project admin can rename a sprint.",
+      "errorCompleted": "A completed sprint can’t be renamed."
+    },
     "editSprintDatesFlow": {
       "menuItem": "Edit dates",
       "completeDisabled": "A completed sprint’s dates can’t be changed.",
