@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { Calendar, CheckCircle2, ChevronDown, Gauge, MoreHorizontal, Play } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronDown, Gauge, Play } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { SprintPointsBadge } from '@/components/issues/SprintPointsBadge';
 import type { SprintDto } from '@/lib/dto/sprints';
@@ -10,6 +10,7 @@ import { BacklogRows, useRankedIssues } from './BacklogList';
 import { CreateIssueRow } from './CreateIssueRow';
 import { StartSprintDialog } from './StartSprintDialog';
 import { CompleteSprintDialog } from './CompleteSprintDialog';
+import { SprintActionsMenu } from './SprintActionsMenu';
 import { useSprintPoints } from './useSprintPoints';
 import { sprintRegionId } from './backlogDnd';
 import { SPRINT_STATE_TONE, type StatusByKey } from './backlogShared';
@@ -55,6 +56,7 @@ export function SprintContainer({
   plannedSprints,
   onStarted,
   onCompleted,
+  onDeleted,
   issuesRefreshKey,
   filterQuery,
   filterActive,
@@ -76,6 +78,10 @@ export function SprintContainer({
   /** Refresh the sprint list after a sprint is completed (it drops out of the
    *  planning view). Fires on the complete dialog's close (Subtask 4.4.6). */
   onCompleted: () => void | Promise<void>;
+  /** Refresh the backlog after this sprint is deleted (Subtask 4.2.5 /
+   *  MOTIR-1492) — the deleted sprint drops out of the planning view AND its
+   *  work items fall back to the backlog list, so both must re-read. */
+  onDeleted: () => void | Promise<void>;
   /** Bumped when ANY sprint completes — re-reads this card's issue list so a
    *  carry-over INTO this (planned target) sprint shows the moved rows (bug 11). */
   issuesRefreshKey: number;
@@ -194,16 +200,9 @@ export function SprintContainer({
             {t('completeSprint')}
           </button>
         ) : null}
-        {/* `⋯` sprint menu — PLACED; wired in Subtask 4.2.5. */}
-        <button
-          type="button"
-          disabled
-          aria-label={t('sprintActions')}
-          title={t('sprintActionsComingSoon')}
-          className="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) disabled:opacity-40"
-        >
-          <MoreHorizontal className="h-4 w-4" aria-hidden />
-        </button>
+        {/* `⋯` sprint actions menu — ENABLED + Delete wired (Subtask 4.2.5 /
+            MOTIR-1492); rename + edit-dates land as sibling items (1493 / 1494). */}
+        <SprintActionsMenu sprint={sprint} onDeleted={onDeleted} />
       </div>
 
       {collapsed ? null : (

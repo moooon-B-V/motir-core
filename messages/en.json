@@ -2312,7 +2312,19 @@
       "errorDescription": "Something went wrong starting the sprint. Please try again."
     },
     "sprintActions": "Sprint actions",
-    "sprintActionsComingSoon": "Sprint actions arrive with grooming.",
+    "deleteSprintFlow": {
+      "menuItem": "Delete sprint",
+      "activeDisabled": "An active sprint can’t be deleted — complete it first.",
+      "title": "Delete sprint?",
+      "body": "“{name}” will be permanently deleted.",
+      "itemsReturn": "Its work items aren’t deleted — they return to the backlog.",
+      "confirm": "Delete sprint",
+      "deletedToast": "Sprint “{name}” deleted",
+      "errorTitle": "Couldn’t delete the sprint",
+      "errorDescription": "Something went wrong deleting the sprint. Please try again.",
+      "errorNotAdmin": "Only a project admin can delete a sprint.",
+      "errorActive": "An active sprint can’t be deleted — complete it first."
+    },
     "collapseSprint": "Collapse sprint",
     "expandSprint": "Expand sprint",
     "collapseBacklog": "Collapse backlog",

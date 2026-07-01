@@ -2312,7 +2312,19 @@
       "errorDescription": "开始Sprint时出现问题。请重试。"
     },
     "sprintActions": "Sprint操作",
-    "sprintActionsComingSoon": "Sprint操作将随梳理功能推出。",
+    "deleteSprintFlow": {
+      "menuItem": "删除Sprint",
+      "activeDisabled": "进行中的Sprint无法删除——请先完成它。",
+      "title": "删除Sprint？",
+      "body": "“{name}”将被永久删除。",
+      "itemsReturn": "其中的工作项不会被删除——它们会退回待办列表。",
+      "confirm": "删除Sprint",
+      "deletedToast": "已删除Sprint“{name}”",
+      "errorTitle": "无法删除Sprint",
+      "errorDescription": "删除Sprint时出现问题。请重试。",
+      "errorNotAdmin": "只有项目管理员才能删除Sprint。",
+      "errorActive": "进行中的Sprint无法删除——请先完成它。"
+    },
     "collapseSprint": "收起Sprint",
     "expandSprint": "展开Sprint",
     "collapseBacklog": "收起待办列表",
