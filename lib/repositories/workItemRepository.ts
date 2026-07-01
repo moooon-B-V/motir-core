@@ -1183,6 +1183,27 @@ export const workItemRepository = {
   },
 
   /**
+   * The FIRST non-archived work item of a given kind carrying an EXACT title in
+   * a project, lowest `key` first (MOTIR-1466 — the planner-bug home resolution).
+   * Titles are not unique in general, so this is a marker lookup for a KNOWN,
+   * seed-created infra item (the home story) where exactly one match is expected;
+   * the `key asc` order makes the result deterministic if a stray duplicate ever
+   * exists. Read-only path → `db` singleton (optional `tx` for a guarded read).
+   */
+  async findByProjectKindAndTitle(
+    projectId: string,
+    kind: WorkItemKind,
+    title: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem | null> {
+    const client = tx ?? db;
+    return client.workItem.findFirst({
+      where: { projectId, kind, title, archivedAt: null },
+      orderBy: { key: 'asc' },
+    });
+  },
+
+  /**
    * Non-archived work items in a project, cursor-paginated. Ordered by `key`
    * asc (stable, monotonic, matches the PROD-N identifier order). `cursor` is
    * a work-item id; when present the row at the cursor is skipped so paging

@@ -85,6 +85,7 @@ import { MOTIR_PUBLIC_OVERVIEW_MD, MOTIR_PUBLIC_TAGLINE, MOTIR_PUBLIC_TAGS } fro
 import { applyPreservedStatuses, snapshotLiveStatuses } from './preserveStatus';
 import { SEED_TEST_PROJECT_NAME, seedGenerationTestProject } from './testProject';
 import { seedSystemPrincipal } from './systemPrincipal';
+import { seedPlannerBugHome, PLANNER_BUG_HOME_MARKER } from './plannerBugHome';
 import {
   SEED_STATUS_MAP,
   epicIdOf,
@@ -535,6 +536,25 @@ async function main() {
     for (const dep of item.dependsOn ?? []) dependsEdges.push({ from: item.id, to: dep });
   }
 
+  // ── The PLANNER-BUG HOME (MOTIR-1466) ─────────────────────────────────────
+  // A root Epic + child Story the AI self-learning loop files its `kind: bug`s
+  // under (MOTIR-965 inward / MOTIR-967 outward, via the MOTIR-1450 route). It
+  // was previously MCP-created (Epic MOTIR-1464 / Story MOTIR-1465) and so was
+  // wiped by every reseed and absent from fresh envs; seeding it (like the system
+  // principal above) makes it durable in every environment. The auto-bug targets
+  // it by a stable MARKER resolved via the home story's TITLE — NOT the volatile
+  // `MOTIR-<n>` key — so it never dangles across reseeds (see
+  // `lib/ai/plannerBugHome.ts` + `aiWorkItemsService.fileBug`). Created after the
+  // tree so its position continues the single global fractional-index chain.
+  const plannerBugHome = await seedPlannerBugHome({
+    workspaceId: workspace.id,
+    projectId: project.id,
+    reporterId: ownerId,
+    afterPosition: lastPosition,
+  });
+  lastPosition = plannerBugHome.lastPosition;
+  created += 2;
+
   // ── Status-preservation pass (Subtask 7.8.7) ─────────────────────────────
   // Re-apply the statuses snapshotted before the clear, so a reseed PRESERVES
   // the live workflow status of items that already existed (seed status is now
@@ -622,6 +642,9 @@ async function main() {
   console.log(`  Public:    /p/${project.identifier} — anonymous public view (Story 6.12.4)`);
   console.log(
     `  Test bed:  ${SEED_TEST_PROJECT_NAME} (${testProject.identifier}) — onboarding-ready for AI generation (MOTIR-1396); open /onboarding`,
+  );
+  console.log(
+    `  Bug home:  ${plannerBugHome.storyIdentifier} — planner-bug home story (MOTIR-1466); auto-bugs target it via the "${PLANNER_BUG_HOME_MARKER}" marker`,
   );
   console.log('  Open the project to browse the plan as an issue tree.');
   console.log('────────────────────────────────────────────────────────');
