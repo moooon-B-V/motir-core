@@ -1,5 +1,10 @@
-import type { WorkItemKindDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
-import type { PlanTreeSkeletonItem, BlockingEdge, OrgContextResponse } from '@/lib/dto/ai';
+import type { WorkItemKindDto, WorkItemListItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type {
+  PlanTreeSkeletonItem,
+  BlockingEdge,
+  OrgContextResponse,
+  SearchResultRow,
+} from '@/lib/dto/ai';
 import type { OrgFootprintDTO } from '@/lib/dto/organizations';
 
 // The structural minimum every skeleton projection needs — the fields shared by
@@ -47,6 +52,23 @@ export function toBlockingEdges(
   return edges.map((e) => ({
     blockedKey: idToKey.get(e.blockedId) ?? e.blockedId,
     blockerKey: idToKey.get(e.blockerId) ?? e.blockerId,
+  }));
+}
+
+// Map the shipped List rows (the `/items` breadth read `getProjectIssuesList`
+// returns, Subtask 7.5.2) to the flat search projection. `WorkItemListItemDto`
+// carries no `parentId`, so — unlike `toSkeletonRows` — there is no parent to
+// resolve; a filtered hit-set is a flat page, not a neighbourhood. The `type` +
+// `priority` the List row already surfaces pass through so the planner can rank
+// hits before spending a DEPTH read.
+export function toSearchResultRows(items: WorkItemListItemDto[]): SearchResultRow[] {
+  return items.map((i) => ({
+    key: i.identifier,
+    kind: i.kind,
+    type: i.type,
+    title: i.title,
+    status: i.status,
+    priority: i.priority,
   }));
 }
 
