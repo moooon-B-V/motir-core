@@ -33,13 +33,8 @@ import {
 // warning). Defaults to `false`, so the active surfaces are byte-for-byte
 // unchanged. The host surface passes `archived` from its read.
 
-const ITEM_CLASS =
+export const ITEM_CLASS =
   'flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-text) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none disabled:opacity-50';
-
-// Exported so sibling menus (e.g. the sprint `⋯` `SprintActionsMenu`'s Rename
-// row, MOTIR-1493) reuse the SAME neutral-row vocabulary as the work-item menu —
-// one source of truth, no token drift (mirrors `MENU_DANGER_ITEM_CLASS` below).
-export const MENU_ITEM_CLASS = ITEM_CLASS;
 
 // Exported so single-action surfaces (e.g. the archived-list row's Delete-only
 // `⋯` menu, Subtask 2.9.5) reuse the SAME danger-row + trigger vocabulary as the

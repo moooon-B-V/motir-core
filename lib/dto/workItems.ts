@@ -489,6 +489,15 @@ export interface RoadmapNodeDto {
    *  condition (the shipped own-blocker readiness). Drives the "ready" highlight.
    *  A done / in-progress / open-blocked node is `false`. */
   ready: boolean;
+  /** Whether the node is itself a member of the ACTIVE sprint (MOTIR-1379
+   *  follow-up). In SPRINT scope the root level shows only in-sprint members, but
+   *  drilling into a committed root reveals its WHOLE subtree — including children
+   *  the sprint did not commit to. This flag lets the canvas render such a
+   *  drilled-in NON-member differently ("not in sprint"), so a committed unit is
+   *  visually distinct from the rest of its subtree. Always `true` for a shown root
+   *  member; `false` for a non-member descendant. In PROJECT scope no sprint is
+   *  resolved, so this is always `false` (the whole-project view ignores it). */
+  inActiveSprint: boolean;
 }
 
 /**
