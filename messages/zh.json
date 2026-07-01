@@ -2325,6 +2325,21 @@
       "errorNotAdmin": "只有项目管理员才能删除Sprint。",
       "errorActive": "进行中的Sprint无法删除——请先完成它。"
     },
+    "editSprintDatesFlow": {
+      "menuItem": "编辑日期",
+      "completeDisabled": "已完成Sprint的日期无法更改。",
+      "title": "编辑Sprint日期",
+      "subtitle": "调整“{name}”的开始与结束日期。",
+      "startDateLabel": "开始日期",
+      "endDateLabel": "结束日期",
+      "windowInvalid": "结束日期必须晚于或等于开始日期。",
+      "confirm": "保存日期",
+      "savedToast": "已更新Sprint“{name}”的日期",
+      "errorTitle": "无法更新Sprint日期",
+      "errorDescription": "更新日期时出现问题。请重试。",
+      "errorNotAdmin": "只有项目管理员才能编辑Sprint日期。",
+      "errorCompleted": "已完成Sprint的日期无法更改。"
+    },
     "collapseSprint": "收起Sprint",
     "expandSprint": "展开Sprint",
     "collapseBacklog": "收起待办列表",

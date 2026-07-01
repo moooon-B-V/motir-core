@@ -58,6 +58,7 @@ export function SprintContainer({
   onStarted,
   onCompleted,
   onDeleted,
+  onUpdated,
   issuesRefreshKey,
   filterQuery,
   filterActive,
@@ -83,6 +84,10 @@ export function SprintContainer({
    *  MOTIR-1492) — the deleted sprint drops out of the planning view AND its
    *  work items fall back to the backlog list, so both must re-read. */
   onDeleted: () => void | Promise<void>;
+  /** Refresh the sprint list after an in-place edit (e.g. dates, MOTIR-1494) —
+   *  no issues move, so only the `/api/sprints` metadata re-reads (the header's
+   *  date range). */
+  onUpdated: () => void | Promise<void>;
   /** Bumped when ANY sprint completes — re-reads this card's issue list so a
    *  carry-over INTO this (planned target) sprint shows the moved rows (bug 11). */
   issuesRefreshKey: number;
@@ -206,8 +211,8 @@ export function SprintContainer({
           </button>
         ) : null}
         {/* `⋯` sprint actions menu — ENABLED + Delete wired (Subtask 4.2.5 /
-            MOTIR-1492); rename + edit-dates land as sibling items (1493 / 1494). */}
-        <SprintActionsMenu sprint={sprint} onDeleted={onDeleted} />
+            MOTIR-1492); Edit-dates wired (MOTIR-1494); rename lands next (1493). */}
+        <SprintActionsMenu sprint={sprint} onDeleted={onDeleted} onUpdated={onUpdated} />
       </div>
 
       {collapsed ? null : (
