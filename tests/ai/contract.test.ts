@@ -43,6 +43,9 @@ const CANONICAL_JOB_KINDS = [
   'expand_item',
   'augment',
   'replan',
+  // `analyze_bug` (Story 7.6 — MOTIR-967 handler / MOTIR-1481 trigger); already
+  // in motir-ai's canonical set (motir-ai/tests/contract.test.ts, contract.md §2.3).
+  'analyze_bug',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).
