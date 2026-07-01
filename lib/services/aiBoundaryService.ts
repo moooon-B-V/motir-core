@@ -5,11 +5,15 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import {
   toPlanTreeSkeleton,
   toSkeletonRows,
+  toSearchResultRows,
   toBlockingEdges,
   toOrgContextResponse,
 } from '@/lib/mappers/aiBoundaryMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
+import { DEFAULT_SORT } from '@/lib/issues/issueListView';
+import { decodeSearchCursor, encodeSearchCursor } from '@/lib/mcp/searchCursor';
+import type { FilterAst } from '@/lib/filters/ast';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type {
   PlanTreeResponse,
@@ -17,6 +21,7 @@ import type {
   GetItemResponse,
   SubtreeResponse,
   BlockingClosureResponse,
+  SearchWorkItemsResponse,
 } from '@/lib/dto/ai';
 
 // The ai→core boundary service (Subtask 7.1.6). The READ-back side of the
@@ -161,5 +166,54 @@ export const aiBoundaryService = {
       edges: toBlockingEdges(closure.edges, idToKey),
       truncated: closure.truncated,
     };
+  },
+
+  // POST /api/internal/ai/search-work-items (Subtask 7.5.2) — the on-demand
+  // SEARCH tool for unbounded augment ("find the work items related to X"). It
+  // rides the SHIPPED 6.1.1 FilterAST + the EXACT `/items` List read
+  // (`getProjectIssuesList`) — no parallel query language, no raw Prisma — so
+  // the planner and the page can never disagree on a result set, and the same
+  // registry validation (unknown field/operator/bad value → FilterValidationError
+  // → 422) and tenant gate (cross-tenant project → ProjectNotFoundError → 404)
+  // apply unbypassed. The `ast` is already decoded by the route's shared 6.1.1
+  // codec; an undefined `ast` pages the whole project.
+  //
+  // Pagination mirrors the `search_work_items` MCP tool (7.8.6): the opaque page
+  // cursor wraps the List read's 1-based LIMIT/OFFSET page, so the surface is
+  // paginated from day one (never a "return all"). A cursor that overshot the
+  // tail reads as an empty terminal page (parity with the ready cursor), NOT a
+  // re-fetch of the clamped last page that would loop. Returns the cheap
+  // skeleton projection — the planner pulls DEPTH via `get_item` only for hits
+  // it cares about.
+  async searchWorkItems(
+    projectId: string,
+    opts: { ast?: FilterAst; cursor?: string; limit?: number },
+    ctx: ServiceContext,
+  ): Promise<SearchWorkItemsResponse> {
+    // The opaque cursor carries the next 1-based page; absent → page 1. A
+    // malformed token throws InvalidSearchCursorError (→ 400 at the route).
+    const requestedPage = opts.cursor ? decodeSearchCursor(opts.cursor).page : 1;
+
+    const result = await workItemsService.getProjectIssuesList(
+      projectId,
+      {
+        sort: DEFAULT_SORT,
+        ...(opts.ast ? { filter: { ast: opts.ast } } : {}),
+        page: requestedPage,
+        ...(opts.limit !== undefined ? { pageSize: opts.limit } : {}),
+      },
+      ctx,
+    );
+
+    // The read CLAMPS an over-the-end page to the last page. A cursor that
+    // overshot the tail must read as an empty terminal page, NOT a re-fetch of
+    // the clamped last page (which would loop).
+    const overshot = result.page < requestedPage;
+    const items = overshot ? [] : result.items;
+    const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+    const nextCursor =
+      !overshot && result.page < totalPages ? encodeSearchCursor({ page: result.page + 1 }) : null;
+
+    return { items: toSearchResultRows(items), total: result.total, nextCursor };
   },
 };

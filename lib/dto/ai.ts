@@ -2,7 +2,13 @@
 // these (the cheap skeleton) and submits a delta; the rich graph-traversal
 // retrieval supersedes the read in Story 7.5.
 
-import type { WorkItemDto, WorkItemKindDto, WorkItemRevisionDto } from '@/lib/dto/workItems';
+import type {
+  WorkItemDto,
+  WorkItemKindDto,
+  WorkItemPriorityDto,
+  WorkItemRevisionDto,
+  WorkItemTypeDto,
+} from '@/lib/dto/workItems';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 
 // One node of the plan-tree breadth projection: the cheap fields the planner
@@ -72,6 +78,34 @@ export interface BlockingClosureResponse {
   nodes: PlanTreeSkeletonItem[];
   edges: BlockingEdge[];
   truncated: boolean;
+}
+
+// One matching row of the FilterAST search (Subtask 7.5.2) — the cheap
+// projection the planner triages on. Deliberately flatter than the tree
+// skeleton (`PlanTreeSkeletonItem`): a search hit-set is a flat filtered page,
+// not a neighbourhood, so there is no meaningful `parentKey` to resolve (a
+// filtered page rarely contains a hit's parent). It carries `type` + `priority`
+// — the extra signal the shipped List row already surfaces — so the planner can
+// rank hits before spending a `get_item` DEPTH read on the ones it cares about.
+export interface SearchResultRow {
+  key: string; // e.g. "MOTIR-852"
+  kind: WorkItemKindDto;
+  type: WorkItemTypeDto | null;
+  title: string;
+  status: string;
+  priority: WorkItemPriorityDto;
+}
+
+// POST /api/internal/ai/search-work-items (Subtask 7.5.2) — the on-demand SEARCH
+// the planner runs to find the work items related to X without transmitting the
+// whole tree. Rides the SHIPPED 6.1.1 versioned FilterAST + the `/items` List
+// read (`getProjectIssuesList`), so it pages IDENTICALLY to the surface humans
+// see: `nextCursor` is null on the last page (an opaque page cursor, never a
+// "return all"). `total` is the full matching count across pages.
+export interface SearchWorkItemsResponse {
+  items: SearchResultRow[];
+  total: number;
+  nextCursor: string | null;
 }
 
 // One applied operation's result — the resolved key + id core assigned.
