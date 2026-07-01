@@ -141,7 +141,7 @@ test('@smoke Epic-2 acceptance journey: create (type-parent rule) → detail →
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
   // The toast names the created identifier (`<IDENT> created`); capture it.
-  const toast = page.getByText(/ created$/);
+  const toast = page.getByText(/^\S+ created$/);
   await expect(toast).toBeVisible();
   const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
   expect(identifier, 'created identifier reads ACC-<n>').toMatch(/^ACC-\d+$/);

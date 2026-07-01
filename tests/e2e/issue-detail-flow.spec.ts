@@ -587,7 +587,7 @@ test('@smoke create with a link (2.4.10): the link is written atomically with th
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  const toast = page.getByText(/ created$/);
+  const toast = page.getByText(/^\S+ created$/);
   await expect(toast).toBeVisible();
   const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
   expect(identifier).toMatch(/^CRL-\d+$/);
@@ -623,7 +623,7 @@ test('@smoke create with a link (2.4.10): removing the pending row before create
   await expect(removePending).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  const toast = page.getByText(/ created$/);
+  const toast = page.getByText(/^\S+ created$/);
   await expect(toast).toBeVisible();
   const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
 

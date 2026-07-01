@@ -133,7 +133,7 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   );
   await page.getByRole('button', { name: 'Save changes' }).click();
   expect((await renameResponse).status()).toBe(200);
-  await expect(page.getByText('Organization updated').first()).toBeVisible();
+  await expect(page.getByText('Organization updated', { exact: true }).first()).toBeVisible();
   // The shell org control reflects the new name after the action revalidates.
   await expect(orgMenu).toContainText('Acme Org');
 
@@ -155,7 +155,9 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   );
   await inviteDialog.getByRole('button', { name: 'Add to organization' }).click();
   expect((await inviteResponse).status()).toBe(201);
-  await expect(page.getByText(`${T1_DEE} added to the organization`).first()).toBeVisible();
+  await expect(
+    page.getByText(`${T1_DEE} added to the organization`, { exact: true }).first(),
+  ).toBeVisible();
 
   // The roster now renders (2 people); Dee appears with org role Member and "No
   // workspaces" (org-only member — the asymmetric membership direction). Anchor
@@ -176,7 +178,7 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   );
   await page.getByRole('option', { name: 'Admin', exact: true }).click();
   expect((await roleChangeResponse).status()).toBe(200);
-  await expect(page.getByText('Role updated').first()).toBeVisible();
+  await expect(page.getByText('Role updated', { exact: true }).first()).toBeVisible();
 
   // Remove Dee from the org → row disappears (back to the just-you empty state).
   const removeResponse = page.waitForResponse(
@@ -186,7 +188,9 @@ test('@smoke org admin: org control, settings rename, cross-workspace members + 
   );
   await deeRow.getByRole('button', { name: 'Remove' }).click();
   expect((await removeResponse).status()).toBe(200);
-  await expect(page.getByText('Dee Member removed from the organization').first()).toBeVisible();
+  await expect(
+    page.getByText('Dee Member removed from the organization', { exact: true }).first(),
+  ).toBeVisible();
   // Dee's row is gone — anchor on the (now-absent) role combobox, which never
   // appears in a toast.
   await expect(
@@ -265,7 +269,7 @@ test('@smoke org gate: membership gates workspace access (404-not-403), admin sp
   const wsInviteDialog = page.getByRole('dialog');
   await wsInviteDialog.getByLabel('Email address').fill(T2_C);
   await wsInviteDialog.getByRole('button', { name: 'Send invite' }).click();
-  await expect(page.getByText(`Invite sent to ${T2_C}`).first()).toBeVisible();
+  await expect(page.getByText(`Invite sent to ${T2_C}`, { exact: true }).first()).toBeVisible();
 
   const inviteEmail = await waitForEmail(T2_C);
   const acceptUrl = extractInviteUrl(inviteEmail);

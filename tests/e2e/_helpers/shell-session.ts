@@ -46,7 +46,9 @@ export async function createFirstProject(page: Page, name: string): Promise<void
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill(name);
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
-  await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
+    timeout: 5_000,
+  });
 }
 
 // Create an additional named workspace via the ALWAYS-PRESENT org control's
