@@ -222,3 +222,49 @@ describe('getProjectRoadmap — service-owned sprint-scope branches', () => {
     expect(omitted.nodes.map((n) => n.title).sort()).toEqual(['Epic A', 'Epic B']);
   });
 });
+
+// The per-node sprint-membership flag (MOTIR-1379 follow-up) the sprint-scoped
+// canvas uses to render a drilled-in NON-member "not in sprint": a shown root
+// member is `true`; a child of a committed root that the sprint did not commit to
+// is `false`. Always `false` in project scope (no sprint resolved).
+describe('getProjectRoadmap — per-node inActiveSprint flag (MOTIR-1379)', () => {
+  it('ROOT members are flagged inActiveSprint=true (sprint scope)', async () => {
+    const fx = await makeFixture();
+    const sprintId = await createActiveSprint(fx);
+    const t = await seedTree(fx, sprintId);
+
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      scope: 'sprint',
+    });
+    const byId = new Map(roadmap.nodes.map((n) => [n.id, n]));
+    // a1 (a sprint-member subtask) and Story A2 (a sprint-member story) are the roots.
+    expect(byId.get(t.a1.id)!.inActiveSprint).toBe(true);
+    expect(byId.get(t.storyA2.id)!.inActiveSprint).toBe(true);
+  });
+
+  it('a drilled-in NON-member child is flagged inActiveSprint=false (sprint scope)', async () => {
+    const fx = await makeFixture();
+    const sprintId = await createActiveSprint(fx);
+    const t = await seedTree(fx, sprintId);
+
+    // Drill into the committed Story A2: its child a3 is part of the subtree but was
+    // NOT itself committed to the sprint → the "not in sprint" node treatment.
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, t.storyA2.id, fx.ctx, {
+      scope: 'sprint',
+    });
+    const a3 = roadmap.nodes.find((n) => n.id === t.a3.id)!;
+    expect(a3).toBeTruthy();
+    expect(a3.inActiveSprint).toBe(false);
+  });
+
+  it('PROJECT scope leaves every node inActiveSprint=false (the flag is inert)', async () => {
+    const fx = await makeFixture();
+    const sprintId = await createActiveSprint(fx);
+    await seedTree(fx, sprintId);
+
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      scope: 'project',
+    });
+    expect(roadmap.nodes.every((n) => n.inActiveSprint === false)).toBe(true);
+  });
+});

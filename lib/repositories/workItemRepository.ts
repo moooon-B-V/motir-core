@@ -128,6 +128,12 @@ export interface WorkItemListRow {
 export interface WorkItemTreeRow extends WorkItemListRow {
   parentId: string | null;
   hasChildren: boolean;
+  /** The item's active-sprint membership column (MOTIR-1379 follow-up). `null`
+   *  for a never-committed item. The sprint-scoped roadmap service compares it to
+   *  the resolved active sprint so a drilled-in node that is NOT a sprint member
+   *  can be shown differently ("not in sprint"); the whole-project tree read
+   *  ignores it. */
+  sprintId: string | null;
 }
 
 /**
@@ -2187,6 +2193,7 @@ export const workItemRepository = {
              w."estimateMinutes",
              w."storyPoints",
              w."updatedAt",
+             w."sprintId",
              EXISTS (
                SELECT 1 FROM "work_item" ch
                 WHERE ch."parentId" = w."id" AND ch."archivedAt" IS NULL

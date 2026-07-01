@@ -39,6 +39,11 @@ export interface BuildWorkItemLevelOptions {
    * satisfied (not drawn), and only an out-of-sprint, NOT-done blocker is flagged —
    * as "not in sprint", never "cross-story" (two items in the same story can still be
    * an out-of-sprint dependency). Defaults to `'project'`.
+   *
+   * In `'sprint'` scope it ALSO drives the per-NODE "not in sprint" signal: a
+   * drilled-in node whose `inActiveSprint` is false (a child of a committed root
+   * that the sprint did not itself commit to) is rendered differently, so the
+   * committed unit stays visually distinct from the rest of its subtree.
    */
   scope?: 'project' | 'sprint';
 }
@@ -108,39 +113,50 @@ export function buildWorkItemLevel(
     ? (wi.items.find((i) => i.status === 'in_progress')?.id ?? null)
     : null;
 
-  const itemNodes: ProjectCanvasNode[] = wi.items.map((item) => ({
-    id: item.id,
-    parentId: item.parentId,
-    searchText: `${item.identifier} ${item.title}`,
-    crumbLabel: item.identifier,
-    drillable: item.hasChildren,
-    // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
-    // anchors below are off-level blocker STUBS, not items on this level, so they
-    // stay non-viewable (no `viewable` flag) — selecting one shows no View button.
-    viewable: true,
-    // Surface the LOCATE targets (MOTIR-1421) onto the canvas node: the frontier
-    // ("you are here") and the ready-to-start flag, so the canvas can centre on the
-    // actionable node without knowing about work-item readiness itself.
-    here: item.id === activeId,
-    ready: item.ready ?? false,
-    content: (
-      <WorkItemNode
-        item={{
-          id: item.id,
-          identifier: item.identifier,
-          title: item.title,
-          kind: item.kind,
-          status: item.status,
-        }}
-        drillable={item.hasChildren}
-        crossBlocked={crossBlocked.has(item.id)}
-        crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'cross-story'}
-        progress={item.progress ?? null}
-        here={item.id === activeId}
-        ready={item.ready ?? false}
-      />
-    ),
-  }));
+  const itemNodes: ProjectCanvasNode[] = wi.items.map((item) => {
+    // NOT IN SPRINT (MOTIR-1379 follow-up): only meaningful in sprint scope. The
+    // root level shows only in-sprint members, but drilling into a committed root
+    // reveals its WHOLE subtree — so a child that the sprint did not commit to
+    // reads as a NON-member here. Flag it so the node is shown differently ("not in
+    // sprint"), keeping the committed unit visually distinct from the rest of its
+    // subtree. Project scope never flags (no sprint resolved → `inActiveSprint`
+    // false for all; the flag is gated on scope so it stays inert).
+    const notInSprint = scope === 'sprint' && item.inActiveSprint === false;
+    return {
+      id: item.id,
+      parentId: item.parentId,
+      searchText: `${item.identifier} ${item.title}`,
+      crumbLabel: item.identifier,
+      drillable: item.hasChildren,
+      // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
+      // anchors below are off-level blocker STUBS, not items on this level, so they
+      // stay non-viewable (no `viewable` flag) — selecting one shows no View button.
+      viewable: true,
+      // Surface the LOCATE targets (MOTIR-1421) onto the canvas node: the frontier
+      // ("you are here") and the ready-to-start flag, so the canvas can centre on the
+      // actionable node without knowing about work-item readiness itself.
+      here: item.id === activeId,
+      ready: item.ready ?? false,
+      content: (
+        <WorkItemNode
+          item={{
+            id: item.id,
+            identifier: item.identifier,
+            title: item.title,
+            kind: item.kind,
+            status: item.status,
+          }}
+          drillable={item.hasChildren}
+          crossBlocked={crossBlocked.has(item.id)}
+          crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'cross-story'}
+          notInSprint={notInSprint}
+          progress={item.progress ?? null}
+          here={item.id === activeId}
+          ready={item.ready ?? false}
+        />
+      ),
+    };
+  });
 
   // The planning-origin cluster (Subtask 7.20.6 / MOTIR-1013) — a FIXED-position
   // node pinned to the LEFT of the auto-laid epics so the road reads from its
