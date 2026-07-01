@@ -18,6 +18,14 @@ export const JOB_KINDS = [
   'expand_item',
   'augment',
   'replan',
+  // `analyze_bug` (Story 7.6 — MOTIR-967 handler / MOTIR-1481 trigger) — the
+  // OUTWARD self-improving loop: motir-core's `work-item/created` trigger
+  // dispatches a user-project `kind: bug` here so motir-ai classifies its root
+  // cause and, when Motir is at fault, files a SANITIZED meta-bug into MOTIR +
+  // captures the lesson (it writes NO plan delta). This is the motir-core mirror
+  // of the closed enum in motir-ai/src/envelope.ts — each side declares its own
+  // types against the shared contract (the open-core boundary).
+  'analyze_bug',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
@@ -35,11 +43,59 @@ export interface Tenant {
   projectKey: string;
 }
 
+// ── analyze_bug context (Story 7.6 — MOTIR-967 handler / MOTIR-1481 trigger) ──
+// motir-core's mirror of the `context.bugAnalysis` unit motir-ai's analyze_bug
+// handler parses (motir-ai/src/jobs/handlers/analyzeBug.ts `parseAnalyzeBugInput`
+// + llm/bugRootCause.ts `BugRootCauseContext`). Each side declares its own types
+// against the shared contract (the open-core boundary — motir-core cannot import
+// motir-ai). Assembled by the trigger over the 7.1.6 read-back and sent INLINE:
+// motir-ai does NOT re-read the bug, so every field it reasons over ships here.
+
+/** One plan-tree node around the bug, tagged with its role relative to it. */
+export interface BugAnalysisPlanNode {
+  key: string;
+  kind: string;
+  title: string;
+  role: 'owning_epic' | 'owning_story' | 'implicated_subtask' | 'sibling';
+  type?: string | null;
+  status?: string | null;
+  descriptionMd?: string | null;
+}
+
+/** The dispatch / PR signal that tells a coding-agent mistake from a planning
+ *  one. Absent for a user-filed bug (only Motir's own dispatched work carries
+ *  it, and those are skipped); kept for parity with the handler contract. */
+export interface BugAnalysisDispatchSignal {
+  subtaskKey: string;
+  dispatchPromptExcerpt?: string | null;
+  prStatus?: string | null;
+}
+
+/** The full analysis unit the trigger assembles and motir-ai classifies over. */
+export interface BugAnalysisContext {
+  /** The user bug's human key (e.g. `ACME-42`) — REQUIRED by the handler. */
+  bugKey: string;
+  /** The bug text — `title` + `descriptionMd` are REQUIRED by the handler;
+   *  `comments` are structurally empty at create time (the trigger fires on
+   *  `work-item/created`), carried for contract parity. */
+  bug: { title: string; descriptionMd: string; comments?: string[] };
+  planNeighborhood: BugAnalysisPlanNode[];
+  dispatch?: BugAnalysisDispatchSignal | null;
+  implicatedPlanningPhase?: 'onboarding_planning' | 'regular_planning' | null;
+  /** Extra terms motir-ai's sanitization backstop must never emit verbatim.
+   *  motir-ai adds `tenant.projectKey` itself, so this is usually empty. */
+  confidentialTerms?: string[];
+}
+
 export interface JobContextBag {
   prompt?: string | null;
   rootItemKey?: string | null;
   discovery?: unknown;
   code?: unknown;
+  // The bug-analysis unit an `analyze_bug` job carries — the user bug + its
+  // plan-tree neighborhood the OUTWARD classifier reasons over, assembled by the
+  // trigger (MOTIR-1481) and sent inline (see BugAnalysisContext above).
+  bugAnalysis?: BugAnalysisContext;
   // The work-item context a `generate_explanation` job (8.8.11) drafts an
   // explanation FROM — the title / description / type / parent the "Draft with
   // AI" affordance (8.8.12) sends. Loosely typed (the reserved-hole convention,
