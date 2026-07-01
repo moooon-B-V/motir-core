@@ -117,7 +117,9 @@ async function createProject(page: Page, name: string, identifier: string): Prom
   const identifierInput = page.getByLabel('Identifier');
   await identifierInput.fill(identifier);
   await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
-  await expect(page.getByText('Project created').first()).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible({
+    timeout: 5_000,
+  });
   // Top-nav switcher reflects the new active project.
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(name);
 }

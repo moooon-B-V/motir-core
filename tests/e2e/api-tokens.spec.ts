@@ -58,7 +58,7 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
 
   // Copy → success toast.
   await createDialog.getByRole('button', { name: 'Copy' }).click();
-  await expect(page.getByText('Token copied')).toBeVisible();
+  await expect(page.getByText('Token copied', { exact: true })).toBeVisible();
 
   // Done closes the modal; the row now shows only the truncated PREFIX.
   await createDialog.getByRole('button', { name: 'Done' }).click();

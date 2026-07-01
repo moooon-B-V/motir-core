@@ -235,7 +235,7 @@ test('@smoke the create-modal link control searches server-side and persists the
 
   // Create the item — the link is written atomically with it.
   await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await expect(page.getByText(/created$/).first()).toBeVisible();
+  await expect(page.getByText(/^\S+ created$/).first()).toBeVisible();
 
   // The created item is blocked_by the searched target — verified at the data layer.
   const created = (await listItems(page, projectId)).find(

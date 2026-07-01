@@ -193,7 +193,7 @@ test.describe('@a11y shell accessibility', () => {
     await page.getByLabel('Title').fill('Editable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-    const toast = page.getByText(/ created$/);
+    const toast = page.getByText(/^\S+ created$/);
     await expect(toast).toBeVisible();
     const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
@@ -229,7 +229,7 @@ test.describe('@a11y shell accessibility', () => {
     await page.getByLabel('Title').fill('Detail-view issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-    const toast = page.getByText(/ created$/);
+    const toast = page.getByText(/^\S+ created$/);
     await expect(toast).toBeVisible();
     const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
@@ -266,7 +266,7 @@ test.describe('@a11y shell accessibility', () => {
     await page.getByLabel('Title').fill('Linkable issue');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-    const toast = page.getByText(/ created$/);
+    const toast = page.getByText(/^\S+ created$/);
     await expect(toast).toBeVisible();
     const identifier = ((await toast.textContent()) ?? '').replace(/ created$/, '').trim();
     expect(identifier).toMatch(/^[A-Z]+-\d+$/);
