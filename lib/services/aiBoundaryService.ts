@@ -1,11 +1,23 @@
 import { workItemsService } from '@/lib/services/workItemsService';
+import { commentsService } from '@/lib/services/commentsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
-import { toPlanTreeSkeleton, toOrgContextResponse } from '@/lib/mappers/aiBoundaryMappers';
+import {
+  toPlanTreeSkeleton,
+  toSkeletonRows,
+  toBlockingEdges,
+  toOrgContextResponse,
+} from '@/lib/mappers/aiBoundaryMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { PlanTreeResponse, OrgContextResponse } from '@/lib/dto/ai';
+import type {
+  PlanTreeResponse,
+  OrgContextResponse,
+  GetItemResponse,
+  SubtreeResponse,
+  BlockingClosureResponse,
+} from '@/lib/dto/ai';
 
 // The ai→core boundary service (Subtask 7.1.6). The READ-back side of the
 // boundary: the project's work-item skeleton (plan-tree) + the calling org's
@@ -57,5 +69,97 @@ export const aiBoundaryService = {
       organizationId: access.organizationId,
     });
     return toOrgContextResponse(footprint);
+  },
+
+  // ── Story 7.5 — the plan-tree GRAPH-TRAVERSAL read family ────────────────
+  // The DEPTH reads a planner walks over the SAME job-scoped-token auth + tenant
+  // gate as the skeleton. Each resolves its target by KEY within the token's
+  // project (a cross-project / cross-tenant key → WorkItemNotFoundError → 404,
+  // the no-leak posture) through the permission-scoped `workItemsService`, then
+  // maps to the AI wire shape. `readPlanTree` above IS the `skeleton` tool.
+
+  // GET /api/internal/ai/get-item — one work item by key, plus (on request) the
+  // depth context 7.1.6 deferred: the cursor-paginated comment thread and the
+  // cursor-paginated change log. `getWorkItemByIdentifier` is the gate (browse +
+  // tenant, AS the token's user); comments/history are read only when asked.
+  async getItem(
+    projectId: string,
+    key: string,
+    ctx: ServiceContext,
+    opts: {
+      withComments?: boolean;
+      withHistory?: boolean;
+      commentsCursor?: string;
+      historyCursor?: string;
+    } = {},
+  ): Promise<GetItemResponse> {
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, key, ctx);
+    const response: GetItemResponse = { item };
+    if (opts.withComments) {
+      response.comments = await commentsService.listComments(
+        item.id,
+        opts.commentsCursor ? { cursor: opts.commentsCursor } : {},
+        ctx,
+      );
+    }
+    if (opts.withHistory) {
+      response.history = await workItemsService.listRevisionsPage(
+        item.id,
+        ctx,
+        opts.historyCursor ? { cursor: opts.historyCursor } : {},
+      );
+    }
+    return response;
+  },
+
+  // GET /api/internal/ai/get-subtree — a root (by key) + its descendants bounded
+  // by `depth` (depth-bounded, never a whole-tree read). Each node is the same
+  // skeleton row the planner folds into context; the response echoes the CLAMPED
+  // depth the read applied.
+  async getSubtree(
+    projectId: string,
+    rootKey: string,
+    depth: number | undefined,
+    ctx: ServiceContext,
+  ): Promise<SubtreeResponse> {
+    const root = await workItemsService.getWorkItemByIdentifier(projectId, rootKey, ctx);
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    const { nodes, depth: effectiveDepth } = await workItemsService.getBoundedSubtree(
+      root.id,
+      ctx,
+      depth,
+    );
+    return {
+      project: { projectId, projectKey: project.identifier },
+      root: root.identifier,
+      depth: effectiveDepth,
+      nodes: toSkeletonRows(nodes),
+    };
+  },
+
+  // GET /api/internal/ai/walk-blocking — the transitive is_blocked_by closure of
+  // a root (by key): "what must land before this". Cycle-safe + node/-depth
+  // capped in the service; here we map node ids + edge endpoints to identifier
+  // keys (the map spans the root + every closure node — every edge endpoint is
+  // one of these).
+  async walkBlocking(
+    projectId: string,
+    key: string,
+    ctx: ServiceContext,
+    opts: { maxDepth?: number; maxNodes?: number } = {},
+  ): Promise<BlockingClosureResponse> {
+    const root = await workItemsService.getWorkItemByIdentifier(projectId, key, ctx);
+    const closure = await workItemsService.getBlockingClosure(root.id, ctx, opts);
+    const idToKey = new Map<string, string>([[root.id, root.identifier]]);
+    for (const n of closure.nodes) idToKey.set(n.id, n.identifier);
+    return {
+      root: root.identifier,
+      nodes: toSkeletonRows(closure.nodes),
+      edges: toBlockingEdges(closure.edges, idToKey),
+      truncated: closure.truncated,
+    };
   },
 };
