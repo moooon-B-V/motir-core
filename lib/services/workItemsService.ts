@@ -230,6 +230,30 @@ function byKeyAsc(a: WorkItem, b: WorkItem): number {
   return a.key - b.key;
 }
 
+// ── Bounds for the AI plan-tree graph-traversal reads (Story 7.5) ──────────
+// The DEPTH reads a planner walks must never turn into a whole-tree / whole-graph
+// dump (finding #57 — the scale check). Each read is bounded, and the bound is
+// CLAMPED here (never trusted from the wire): a subtree read is limited to
+// `MAX_SUBTREE_DEPTH` descendant levels; the transitive is_blocked_by walk is
+// capped at `MAX_BLOCKING_NODES` distinct nodes AND `MAX_BLOCKING_DEPTH` levels;
+// the history window is capped at `HISTORY_PAGE_SIZE` per page. Defaults apply
+// when the caller omits a bound (so an unbounded request reads a safe slice, not
+// the whole graph).
+export const DEFAULT_SUBTREE_DEPTH = 2;
+export const MAX_SUBTREE_DEPTH = 10;
+export const DEFAULT_BLOCKING_NODES = 200;
+export const MAX_BLOCKING_NODES = 1000;
+export const DEFAULT_BLOCKING_DEPTH = 25;
+export const MAX_BLOCKING_DEPTH = 50;
+export const HISTORY_PAGE_SIZE = 50;
+
+/** Clamp `n` into `[lo, hi]`, falling back to `fallback` when it is not a finite
+ *  number (an absent / malformed wire bound). Integer-floored. */
+function clampBound(n: number | undefined, lo: number, hi: number, fallback: number): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? Math.floor(n) : fallback;
+  return Math.min(Math.max(v, lo), hi);
+}
+
 /**
  * Pair each resolved linked item (key-ASC) with the `work_item_link.id` of the
  * edge that points at it, so the 2.4.9 inline remove can target the exact link.
@@ -1947,6 +1971,34 @@ export const workItemsService = {
   },
 
   /**
+   * A DEPTH-BOUNDED, LIVE, browse-gated slice of the subtree rooted at `rootId`
+   * — the read backing the AI `get_subtree` tool (Subtask 7.5.1). Unlike
+   * {@link getWorkItemSubtree} (whole live+archived subtree, `ctx` reserved),
+   * this GATES as the caller (`findById` workspace check → `WorkItemNotFoundError`
+   * / 404 for a cross-tenant root, then `assertCanBrowse` per 6.4) and bounds the
+   * read to `depth` DESCENDANT levels — CLAMPED to `[0, MAX_SUBTREE_DEPTH]`, with
+   * `DEFAULT_SUBTREE_DEPTH` when omitted — so an unbounded request never becomes
+   * a whole-tree dump (finding #57). Returns the clamped `depth` alongside the
+   * nodes so the boundary can report the bound it actually applied.
+   */
+  async getBoundedSubtree(
+    rootId: string,
+    ctx: ServiceContext,
+    depth?: number,
+  ): Promise<{ nodes: WorkItemSubtreeDto[]; depth: number }> {
+    const row = await workItemRepository.findById(rootId);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(rootId);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    const effectiveDepth = clampBound(depth, 0, MAX_SUBTREE_DEPTH, DEFAULT_SUBTREE_DEPTH);
+    const rows = await workItemRepository.findBoundedSubtree(
+      rootId,
+      row.workspaceId,
+      effectiveDepth,
+    );
+    return { nodes: rows.map(toWorkItemSubtreeDto), depth: effectiveDepth };
+  },
+
+  /**
    * The project's WHOLE non-archived issue forest, nested into the tree the
    * `/items` list view renders (Subtask 2.5.1) — one recursive-CTE round-trip
    * (no N+1), then in-memory nesting. Roots and siblings come back `key`-asc.
@@ -2473,6 +2525,77 @@ export const workItemsService = {
   },
 
   /**
+   * The TRANSITIVE `is_blocked_by` closure of `rootId` — "everything that must
+   * land before this" — the read backing the AI `walk_blocking` tool (Subtask
+   * 7.5.1). A breadth-first walk of the DAG's OUT edges, returning the transitive
+   * blocker NODES (excluding the root) plus the EDGES between them (as ids, keyed
+   * to identifiers at the boundary). Three defenses make it safe on any graph:
+   *   - **cycle-safe** — a `visited` set means a node is expanded at most once, so
+   *     even a (core-forbidden but defended-against) cycle A→B→A terminates.
+   *   - **node-capped** — the closure stops growing past `maxNodes` distinct
+   *     blockers (clamped to `[1, MAX_BLOCKING_NODES]`, default
+   *     `DEFAULT_BLOCKING_NODES`); a blocker skipped by the cap is dropped WITH its
+   *     edge (its node would be unresolvable), and `truncated` is set.
+   *   - **depth-capped** — at most `maxDepth` BFS levels (clamped to
+   *     `[1, MAX_BLOCKING_DEPTH]`); levels left unwalked set `truncated`.
+   * Browse-gated as the caller (`findById` workspace check → 404, then
+   * `assertCanBrowse`). SCOPED to the root's project — a cross-project blocker
+   * (a same-workspace link the token's user may not browse) is not traversed, so
+   * the walk reads only the token's project (finding #26).
+   */
+  async getBlockingClosure(
+    rootId: string,
+    ctx: ServiceContext,
+    opts: { maxDepth?: number; maxNodes?: number } = {},
+  ): Promise<{
+    nodes: WorkItemSummaryDto[];
+    edges: Array<{ blockedId: string; blockerId: string }>;
+    truncated: boolean;
+  }> {
+    const root = await workItemRepository.findById(rootId);
+    if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(rootId);
+    await projectAccessService.assertCanBrowse(root.projectId, ctx);
+
+    const maxNodes = clampBound(opts.maxNodes, 1, MAX_BLOCKING_NODES, DEFAULT_BLOCKING_NODES);
+    const maxDepth = clampBound(opts.maxDepth, 1, MAX_BLOCKING_DEPTH, DEFAULT_BLOCKING_DEPTH);
+
+    // `visited` seeds with the root so it is never re-added as a blocker of
+    // itself (a cycle) and never re-expanded; `closureIds` is the returned
+    // blocker set (root excluded).
+    const visited = new Set<string>([rootId]);
+    const closureIds = new Set<string>();
+    const edges: Array<{ blockedId: string; blockerId: string }> = [];
+    let frontier: string[] = [rootId];
+    let truncated = false;
+    let depth = 0;
+
+    while (frontier.length > 0 && depth < maxDepth) {
+      const edgeRows = await workItemLinkRepository.findBlockerEdgesForItems(frontier);
+      const next: string[] = [];
+      for (const e of edgeRows) {
+        if (e.blockerProjectId !== root.projectId) continue; // out-of-project → out of scope
+        if (!visited.has(e.blockerId)) {
+          if (visited.size >= maxNodes) {
+            truncated = true; // node cap reached — drop this blocker AND its edge
+            continue;
+          }
+          visited.add(e.blockerId);
+          closureIds.add(e.blockerId);
+          next.push(e.blockerId);
+        }
+        edges.push({ blockedId: e.fromId, blockerId: e.blockerId });
+      }
+      frontier = next;
+      depth++;
+    }
+    // Stopped at the depth cap with a non-empty frontier → more levels remain.
+    if (frontier.length > 0) truncated = true;
+
+    const rows = await workItemRepository.findByIds([...closureIds]);
+    return { nodes: rows.sort(byKeyAsc).map(toWorkItemSummaryDto), edges, truncated };
+  },
+
+  /**
    * Whether `workItemId` is ready to start: every `is_blocked_by` blocker has
    * reached a TERMINAL status (Subtask 2.2.6, resolving finding #21). "Terminal"
    * is per-project — a status whose `category = done` in ITS OWN project's
@@ -2935,6 +3058,33 @@ export const workItemsService = {
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
     const revisions = await workItemRevisionRepository.listByWorkItem(workItemId);
     return revisions.map(toWorkItemRevisionDto);
+  },
+
+  /**
+   * One CURSOR-PAGED window of a work item's revision history (newest-first) —
+   * the read backing the AI `get_item?withHistory` depth signal (Subtask 7.5.1).
+   * Same tenant gate as {@link listRevisions} (cross-workspace → 404, never the
+   * diffs), but BOUNDED (finding #57): at most `HISTORY_PAGE_SIZE` rows per page,
+   * with a take+1 probe yielding `nextCursor` (the last row's id, or null on the
+   * final page) — the same paging shape `commentsService.listComments` uses, so
+   * the planner walks comments and history identically.
+   */
+  async listRevisionsPage(
+    workItemId: string,
+    ctx: ServiceContext,
+    options: { cursor?: string; take?: number } = {},
+  ): Promise<{ revisions: WorkItemRevisionDto[]; nextCursor: string | null }> {
+    const row = await workItemRepository.findById(workItemId);
+    if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
+    const take = clampBound(options.take, 1, HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE);
+    const window = await workItemRevisionRepository.listByWorkItem(workItemId, {
+      take: take + 1,
+      cursor: options.cursor,
+      order: 'desc',
+    });
+    const page = window.slice(0, take);
+    const nextCursor = window.length > take ? (page[page.length - 1]?.id ?? null) : null;
+    return { revisions: page.map(toWorkItemRevisionDto), nextCursor };
   },
 
   /**

@@ -1443,6 +1443,58 @@ export const workItemRepository = {
   },
 
   /**
+   * A DEPTH-BOUNDED, LIVE slice of a work item's subtree — the read the AI
+   * plan-tree `get_subtree` tool walks (Subtask 7.5.1). Like {@link findSubtree}
+   * but three things differ, all to make it a safe bounded-neighborhood push
+   * rather than a whole-tree dump: (1) the recursion STOPS at `maxDepth`
+   * DESCENDANT levels below the root (`maxDepth = 0` → the root alone; the
+   * recursive step only fires while the parent's `depth <= maxDepth`, so a node
+   * at descendant-level d — CTE depth d+1 — is included iff d ≤ maxDepth); (2) it
+   * EXCLUDES archived/triage rows on BOTH the anchor and the recursive step (a
+   * soft-removed item is not live work — the readiness-read rule); (3) it is
+   * `workspaceId`-gated throughout (finding #26), so a stray cross-workspace row
+   * can't enter even with RLS inert under the dev/CI superuser. Same
+   * {@link WorkItemSubtreeRow} projection as `findSubtree` (CTE depth: 1 = root).
+   * Read-only → `db` singleton.
+   */
+  async findBoundedSubtree(
+    rootId: string,
+    workspaceId: string,
+    maxDepth: number,
+  ): Promise<WorkItemSubtreeRow[]> {
+    return db.$queryRaw<WorkItemSubtreeRow[]>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
+               w."title", w."status", w."position", 1 AS depth
+          FROM "work_item" w
+          WHERE w."id" = ${rootId}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."triagedAt" IS NULL
+        UNION ALL
+        SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
+               w."title", w."status", w."position", s.depth + 1
+          FROM "work_item" w
+          JOIN subtree s ON w."parentId" = s."id"
+          WHERE s.depth <= ${maxDepth}
+            AND w."workspaceId" = ${workspaceId}
+            AND w."archivedAt" IS NULL
+            AND w."triagedAt" IS NULL
+      )
+      SELECT "id",
+             "parentId",
+             "kind"::text       AS "kind",
+             "key",
+             "identifier",
+             "title",
+             "status",
+             "position",
+             depth::int AS "depth"
+        FROM subtree
+        ORDER BY depth ASC, "position" ASC`;
+  },
+
+  /**
    * The NON-archived members of a work item's subtree (the root + every live
    * descendant) — the "containing set" the `validate_work_item` finishability
    * check (Subtask 7.8.23) keys its "is this blocker IN the subtree?" test on.
