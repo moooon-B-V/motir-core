@@ -2645,6 +2645,27 @@ export const workItemsService = {
   },
 
   /**
+   * Resolve a work item by an EXACT title + kind within a project — a MARKER
+   * lookup for a known, seed-created infra item (MOTIR-1466 — the planner-bug
+   * home story the auto-bug files under). Same tenant + browse gate as
+   * `getWorkItemByIdentifier` (cross-workspace → treated as absent). Returns
+   * `null` (not a throw) when nothing matches, so the caller can raise a
+   * marker-specific error; the repo returns the lowest-`key` match, so the
+   * result is deterministic even if a stray duplicate ever exists.
+   */
+  async getWorkItemByProjectKindAndTitle(
+    projectId: string,
+    kind: WorkItemKind,
+    title: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto | null> {
+    const row = await workItemRepository.findByProjectKindAndTitle(projectId, kind, title);
+    if (!row || row.workspaceId !== ctx.workspaceId) return null;
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    return toWorkItemDto(row);
+  },
+
+  /**
    * Is a work item FINISHABLE? (Subtask 7.8.23) — the single-item analogue of
    * `sprintsService.validateSprint`, with the target's SUBTREE playing the role
    * of the sprint. The target may be any non-leaf kind (epic / story / task /

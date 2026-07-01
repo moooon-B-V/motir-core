@@ -1,5 +1,11 @@
 import { resolveServiceProjectByKey } from '@/lib/ai/serviceAuth';
 import { workItemsService } from '@/lib/services/workItemsService';
+import {
+  isPlannerBugHomeMarker,
+  PLANNER_BUG_HOME_MARKER,
+  PLANNER_BUG_HOME_STORY_TITLE,
+} from '@/lib/ai/plannerBugHome';
+import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 
@@ -23,8 +29,12 @@ export interface FileServiceBugInput {
   projectKey: string;
   title: string;
   descriptionMd?: string | null;
-  /** Optional parent work-item key (e.g. `MOTIR-819`) in the SAME project. When
-   *  omitted, the bug is filed at project-root (a top-level `bug` is matrix-legal). */
+  /** Optional parent work-item key (e.g. `MOTIR-819`) in the SAME project, OR the
+   *  drift-proof `PLANNER_BUG_HOME_MARKER` sentinel (`@planner-bug-home`), which
+   *  resolves to the seeded planner-bug home story by TITLE — the reseed-durable
+   *  handle the self-learning loop targets instead of a volatile numeric key
+   *  (MOTIR-1466). When omitted, the bug is filed at project-root (a top-level
+   *  `bug` is matrix-legal). */
   parentKey?: string | null;
 }
 
@@ -33,17 +43,34 @@ export const aiWorkItemsService = {
     const project = await resolveServiceProjectByKey(input.projectKey, ctx);
 
     let parentId: string | null = null;
-    if (input.parentKey != null && input.parentKey.trim() !== '') {
-      // The parent must live in the SAME project. `getWorkItemByIdentifier`
-      // applies the tenant gate + browse check and throws `WorkItemNotFoundError`
-      // (no existence leak) for an unknown / cross-tenant key; the create service
-      // re-checks same-project + kind-legality.
-      const parent = await workItemsService.getWorkItemByIdentifier(
-        project.id,
-        input.parentKey.trim().toUpperCase(),
-        ctx,
-      );
-      parentId = parent.id;
+    const rawParentKey = input.parentKey?.trim() ?? '';
+    if (rawParentKey !== '') {
+      if (isPlannerBugHomeMarker(rawParentKey)) {
+        // MOTIR-1466 — the DRIFT-PROOF path: the config carries the marker, not a
+        // numeric key, so it survives reseeds. Resolve it to the seeded home story
+        // by its stable TITLE (the marker resolver, browse-gated). A missing home
+        // (seed never ran / fresh env before its first reseed) is a 404 — same
+        // shape the route already maps for an unknown parentKey.
+        const home = await workItemsService.getWorkItemByProjectKindAndTitle(
+          project.id,
+          'story',
+          PLANNER_BUG_HOME_STORY_TITLE,
+          ctx,
+        );
+        if (!home) throw new WorkItemNotFoundError(PLANNER_BUG_HOME_MARKER);
+        parentId = home.id;
+      } else {
+        // A literal `MOTIR-<n>` identifier. The parent must live in the SAME
+        // project. `getWorkItemByIdentifier` applies the tenant gate + browse check
+        // and throws `WorkItemNotFoundError` (no existence leak) for an unknown /
+        // cross-tenant key; the create service re-checks same-project + kind-legality.
+        const parent = await workItemsService.getWorkItemByIdentifier(
+          project.id,
+          rawParentKey.toUpperCase(),
+          ctx,
+        );
+        parentId = parent.id;
+      }
     }
 
     return workItemsService.createWorkItem(

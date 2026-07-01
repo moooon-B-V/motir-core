@@ -5,6 +5,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
+import { seedPlannerBugHome } from '@/scripts/plan-seed/plannerBugHome';
+import { PLANNER_BUG_HOME_MARKER } from '@/lib/ai/plannerBugHome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { POST } from '@/app/api/internal/ai/work-items/route';
 import { truncateAuthTables } from '../helpers/db';
@@ -219,5 +221,62 @@ describe('POST /api/internal/ai/work-items — validation + guards (typed, never
     });
     expect(res.status).toBe(422);
     expect((await res.json()).code).toBe('ILLEGAL_PARENT_TYPE');
+  });
+});
+
+describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-1466)', () => {
+  it('files under the seeded home story when parentKey is the drift-proof marker', async () => {
+    const { owner, workspace, project } = await makeMetaTenant();
+    // Seed the durable home (like `db:seed` does). Its key is whatever the
+    // sequence allocates — the marker resolves it by TITLE, not that key.
+    const { storyId } = await seedPlannerBugHome({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      reporterId: owner.id,
+      afterPosition: null,
+    });
+
+    const res = await post({
+      projectKey: 'MOTIR',
+      kind: 'bug',
+      title: 'auto-filed planner bug',
+      parentKey: PLANNER_BUG_HOME_MARKER,
+    });
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { id: string };
+    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    expect(row?.parentId).toBe(storyId); // landed under the home story, not root
+  });
+
+  it('resolves the marker case-insensitively (config value casing is not load-bearing)', async () => {
+    const { owner, workspace, project } = await makeMetaTenant();
+    const { storyId } = await seedPlannerBugHome({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      reporterId: owner.id,
+      afterPosition: null,
+    });
+    const res = await post({
+      projectKey: 'MOTIR',
+      kind: 'bug',
+      title: 'upper-cased marker',
+      parentKey: PLANNER_BUG_HOME_MARKER.toUpperCase(),
+    });
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { id: string };
+    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    expect(row?.parentId).toBe(storyId);
+  });
+
+  it('returns 404 for the marker when the home is not seeded (fresh env before first reseed)', async () => {
+    await makeMetaTenant(); // system principal present, but NO planner-bug home
+    const res = await post({
+      projectKey: 'MOTIR',
+      kind: 'bug',
+      title: 'no home yet',
+      parentKey: PLANNER_BUG_HOME_MARKER,
+    });
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('WORK_ITEM_NOT_FOUND');
   });
 });
