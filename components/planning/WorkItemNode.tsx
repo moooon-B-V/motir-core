@@ -243,7 +243,9 @@ export function WorkItemNode({
           {showNotInSprintTag ? (
             <span
               data-testid="not-in-sprint-tag"
-              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-dotted border-(--el-border-strong) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
+              // A plain neutral chip (no border) so the card's dotted edge is the
+              // ONLY border — a bordered tag here reads as a second border on the card.
+              className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
             >
               <CircleDashed className="size-3" aria-hidden="true" />
               not in sprint
