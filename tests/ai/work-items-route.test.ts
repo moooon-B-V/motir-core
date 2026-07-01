@@ -5,8 +5,11 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
-import { seedPlannerBugHome } from '@/scripts/plan-seed/plannerBugHome';
-import { PLANNER_BUG_HOME_MARKER } from '@/lib/ai/plannerBugHome';
+import {
+  PLANNER_BUG_HOME_MARKER,
+  PLANNER_BUG_HOME_EPIC_TITLE,
+  PLANNER_BUG_HOME_STORY_TITLE,
+} from '@/lib/ai/plannerBugHome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { POST } from '@/app/api/internal/ai/work-items/route';
 import { truncateAuthTables } from '../helpers/db';
@@ -225,16 +228,28 @@ describe('POST /api/internal/ai/work-items — validation + guards (typed, never
 });
 
 describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-1466)', () => {
-  it('files under the seeded home story when parentKey is the drift-proof marker', async () => {
-    const { owner, workspace, project } = await makeMetaTenant();
-    // Seed the durable home (like `db:seed` does). Its key is whatever the
-    // sequence allocates — the marker resolves it by TITLE, not that key.
-    const { storyId } = await seedPlannerBugHome({
-      workspaceId: workspace.id,
-      projectId: project.id,
-      reporterId: owner.id,
-      afterPosition: null,
-    });
+  /** The home the `ensure_planner_bug_home` migration provisions: a root epic +
+   *  a child story. `storyTitle` lets a test mimic the live home story's
+   *  title suffix (resolution keys on the EPIC, so any story child works). */
+  async function createHome(
+    projectId: string,
+    ctx: ServiceContext,
+    storyTitle: string = PLANNER_BUG_HOME_STORY_TITLE,
+  ): Promise<{ storyId: string }> {
+    const epic = await workItemsService.createWorkItem(
+      { projectId, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
+      ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId, kind: 'story', title: storyTitle, parentId: epic.id },
+      ctx,
+    );
+    return { storyId: story.id };
+  }
+
+  it('files under the home story (the epic’s child) when parentKey is the drift-proof marker', async () => {
+    const { ownerCtx, project } = await makeMetaTenant();
+    const { storyId } = await createHome(project.id, ownerCtx);
 
     const res = await post({
       projectKey: 'MOTIR',
@@ -248,14 +263,30 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     expect(row?.parentId).toBe(storyId); // landed under the home story, not root
   });
 
-  it('resolves the marker case-insensitively (config value casing is not load-bearing)', async () => {
-    const { owner, workspace, project } = await makeMetaTenant();
-    const { storyId } = await seedPlannerBugHome({
-      workspaceId: workspace.id,
-      projectId: project.id,
-      reporterId: owner.id,
-      afterPosition: null,
+  it('resolves via the EPIC even when the home story’s title has a suffix (the live 1465 case)', async () => {
+    const { ownerCtx, project } = await makeMetaTenant();
+    // The live home story is titled "...bugs (the 7.6.8 inward loop)" — resolution
+    // keys on the epic, so it still finds this child.
+    const { storyId } = await createHome(
+      project.id,
+      ownerCtx,
+      'Captured planning-mistake bugs (the 7.6.8 inward loop)',
+    );
+    const res = await post({
+      projectKey: 'MOTIR',
+      kind: 'bug',
+      title: 'bug under suffixed home story',
+      parentKey: PLANNER_BUG_HOME_MARKER,
     });
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { id: string };
+    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    expect(row?.parentId).toBe(storyId);
+  });
+
+  it('resolves the marker case-insensitively (config value casing is not load-bearing)', async () => {
+    const { ownerCtx, project } = await makeMetaTenant();
+    const { storyId } = await createHome(project.id, ownerCtx);
     const res = await post({
       projectKey: 'MOTIR',
       kind: 'bug',
@@ -268,12 +299,29 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     expect(row?.parentId).toBe(storyId);
   });
 
-  it('returns 404 for the marker when the home is not seeded (fresh env before first reseed)', async () => {
+  it('returns 404 for the marker when the home epic is absent', async () => {
     await makeMetaTenant(); // system principal present, but NO planner-bug home
     const res = await post({
       projectKey: 'MOTIR',
       kind: 'bug',
       title: 'no home yet',
+      parentKey: PLANNER_BUG_HOME_MARKER,
+    });
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('WORK_ITEM_NOT_FOUND');
+  });
+
+  it('returns 404 for the marker when the home epic has no story child yet', async () => {
+    const { ownerCtx, project } = await makeMetaTenant();
+    // Epic exists but no story child — resolution must not fall back to root.
+    await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
+      ownerCtx,
+    );
+    const res = await post({
+      projectKey: 'MOTIR',
+      kind: 'bug',
+      title: 'epic but no story',
       parentKey: PLANNER_BUG_HOME_MARKER,
     });
     expect(res.status).toBe(404);

@@ -3,7 +3,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import {
   isPlannerBugHomeMarker,
   PLANNER_BUG_HOME_MARKER,
-  PLANNER_BUG_HOME_STORY_TITLE,
+  PLANNER_BUG_HOME_EPIC_TITLE,
 } from '@/lib/ai/plannerBugHome';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -47,16 +47,23 @@ export const aiWorkItemsService = {
     if (rawParentKey !== '') {
       if (isPlannerBugHomeMarker(rawParentKey)) {
         // MOTIR-1466 — the DRIFT-PROOF path: the config carries the marker, not a
-        // numeric key, so it survives reseeds. Resolve it to the seeded home story
-        // by its stable TITLE (the marker resolver, browse-gated). A missing home
-        // (seed never ran / fresh env before its first reseed) is a 404 — same
-        // shape the route already maps for an unknown parentKey.
-        const home = await workItemsService.getWorkItemByProjectKindAndTitle(
+        // numeric key, so it never dangles across deploys. Resolve it via the home
+        // EPIC's stable title → its first story child (the actual bug parent). We
+        // key on the EPIC title, not the story's, so resolution is robust to the
+        // story's exact wording (the live home story carries a "(the 7.6.8 inward
+        // loop)" suffix the epic title does not). The home is provisioned by the
+        // `ensure_planner_bug_home` migration, browse-gated here. A missing home
+        // (meta tenant not yet backfilled) is a 404 — same shape the route already
+        // maps for an unknown parentKey.
+        const epic = await workItemsService.getWorkItemByProjectKindAndTitle(
           project.id,
-          'story',
-          PLANNER_BUG_HOME_STORY_TITLE,
+          'epic',
+          PLANNER_BUG_HOME_EPIC_TITLE,
           ctx,
         );
+        const home = epic
+          ? await workItemsService.getFirstChildOfKind(project.id, epic.id, 'story', ctx)
+          : null;
         if (!home) throw new WorkItemNotFoundError(PLANNER_BUG_HOME_MARKER);
         parentId = home.id;
       } else {

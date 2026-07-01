@@ -2666,6 +2666,25 @@ export const workItemsService = {
   },
 
   /**
+   * The first child of a given kind under a parent (lowest `key`) — MOTIR-1466's
+   * planner-bug-home resolution reads the home epic's first story child as the
+   * bug parent. Same tenant + browse gate as the reads above; returns `null`
+   * (not a throw) when the parent has no such child, so the caller can raise a
+   * marker-specific error.
+   */
+  async getFirstChildOfKind(
+    projectId: string,
+    parentId: string,
+    kind: WorkItemKind,
+    ctx: ServiceContext,
+  ): Promise<WorkItemDto | null> {
+    const row = await workItemRepository.findFirstChildOfKind(parentId, kind);
+    if (!row || row.workspaceId !== ctx.workspaceId || row.projectId !== projectId) return null;
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    return toWorkItemDto(row);
+  },
+
+  /**
    * Is a work item FINISHABLE? (Subtask 7.8.23) — the single-item analogue of
    * `sprintsService.validateSprint`, with the target's SUBTREE playing the role
    * of the sprint. The target may be any non-leaf kind (epic / story / task /

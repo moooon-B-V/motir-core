@@ -1204,6 +1204,24 @@ export const workItemRepository = {
   },
 
   /**
+   * The FIRST non-archived child of a given kind under a parent, lowest `key`
+   * first (MOTIR-1466 — the planner-bug home resolves its bug parent as the home
+   * epic's first story child, robust to the child's exact title). Read-only path
+   * → `db` singleton (optional `tx` for a guarded read).
+   */
+  async findFirstChildOfKind(
+    parentId: string,
+    kind: WorkItemKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem | null> {
+    const client = tx ?? db;
+    return client.workItem.findFirst({
+      where: { parentId, kind, archivedAt: null },
+      orderBy: { key: 'asc' },
+    });
+  },
+
+  /**
    * Non-archived work items in a project, cursor-paginated. Ordered by `key`
    * asc (stable, monotonic, matches the PROD-N identifier order). `cursor` is
    * a work-item id; when present the row at the cursor is skipped so paging
