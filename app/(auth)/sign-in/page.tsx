@@ -2,14 +2,21 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signIn } from '@/lib/auth/client';
-import { AuthShell, OrDivider, FormAlert } from '../_components/AuthShell';
+import { AuthShell, OrDivider, FormAlert, IdeaCarried } from '../_components/AuthShell';
 import { GoogleButton } from '../_components/GoogleButton';
+
+// Where a visitor who arrived from the marketing hero lands after auth: the
+// authed discovery chat, which reads the `motir_pending_idea` cookie (planted by
+// the draft claim below) to seed its first turn. Kept as a literal here because
+// the canonical constant lives in a `server-only` module (lib/onboarding/
+// pendingIdea.ts) that a client component must not import.
+const ONBOARDING_ENTRY_PATH = '/onboarding';
 
 /**
  * Two-step sign-in (Clay pattern):
@@ -53,7 +60,40 @@ function SignInForm() {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackURL = searchParams.get('next') ?? '/dashboard';
+  // A cross-origin idea draft handed off from the marketing hero (Subtask 7.22.2
+  // / MOTIR-1458). When present, we claim it (planting the preserved-idea cookie)
+  // and default the post-auth destination to onboarding so the idea seeds the
+  // first chat turn. An explicit `next=` still wins if the caller set one.
+  const draftId = searchParams.get('draft');
+  const callbackURL = searchParams.get('next') ?? (draftId ? ONBOARDING_ENTRY_PATH : '/dashboard');
+  const [carriedIdea, setCarriedIdea] = useState<string | null>(null);
+
+  // Claim the draft ONCE on mount: POST swaps the opaque id for the idea text and
+  // plants the `motir_pending_idea` cookie server-side. On any failure (missing /
+  // expired / forged id, or a network error) we simply don't show the banner and
+  // the page degrades to a normal login — no crash, no leak. The claim consumes
+  // the draft, so the ref-guard also stops a re-claim on re-render.
+  const claimedRef = useRef(false);
+  useEffect(() => {
+    if (!draftId || claimedRef.current) return;
+    claimedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/idea-draft/${encodeURIComponent(draftId)}/claim`, {
+          method: 'POST',
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { idea?: string };
+        if (!cancelled && data.idea) setCarriedIdea(data.idea);
+      } catch {
+        // Network error → normal login; the cookie simply isn't planted.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId]);
 
   const [step, setStep] = useState<'email' | 'password'>('email');
   const [email, setEmail] = useState('');
@@ -105,6 +145,7 @@ function SignInForm() {
 
   return (
     <AuthShell headline={t('welcomeBack')} subhead={t('signInSubhead')}>
+      {carriedIdea ? <IdeaCarried label={t('ideaCarriedLabel')}>{carriedIdea}</IdeaCarried> : null}
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'email' ? (
