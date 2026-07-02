@@ -32,6 +32,31 @@ export interface RecordStartInput {
 }
 
 /**
+ * A late job whose tenant workspace — or whose own `job_run` row — was removed
+ * out from under it. In production a hard tenant deletion; in the E2E harness a
+ * between-test `TRUNCATE ... CASCADE` that a still-in-flight job outlives
+ * (MOTIR-1545). Two shapes reach a ledger write:
+ *   - the parent workspace is gone → an INSERT/UPDATE trips the workspace FK
+ *     (Prisma `P2003`, wrapping the pg driver adapter's
+ *     `ForeignKeyConstraintViolation`);
+ *   - the row itself is gone → an update/delete targets a missing row
+ *     (Prisma `P2025`).
+ * Recording success / failure / start for such a run is MOOT, so the service
+ * treats it as a benign terminal no-op rather than letting the rejection escape
+ * `step.run` as an unhandled rejection that degrades the process. (`recordSuccess`
+ * catches the "row gone" case up front via `findById` too — this backstops the
+ * races where the parent vanishes DURING the write.)
+ */
+function isVanishedRunError(err: unknown): boolean {
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    return err.code === 'P2003' || err.code === 'P2025';
+  }
+  // Defensive: some adapter paths can surface the FK violation un-wrapped.
+  const message = err instanceof Error ? err.message : String(err);
+  return /ForeignKeyConstraintViolation/i.test(message);
+}
+
+/**
  * Everything the terminal-failure path needs. Unlike the old
  * `recordFailureAndDeadLetter`, this does NOT take a job_run row id: the failure
  * is reported by Inngest's `onFailure` handler, a SEPARATE invocation that has
@@ -56,24 +81,34 @@ export interface TerminalFailureInput {
 }
 
 export const jobRunsService = {
-  /** Insert the `running` row at job start; returns the persisted DTO. */
-  async recordStart(input: RecordStartInput): Promise<JobRunDTO> {
-    const run = await withSystemContext((tx) =>
-      jobRunRepository.create(
-        {
-          // Scalar FK (not a relation connect) — see jobRunRepository.create.
-          workspaceId: input.workspaceId,
-          functionId: input.functionId,
-          eventName: input.eventName,
-          eventId: input.eventId,
-          attempt: input.attempt,
-          status: 'running',
-          idempotencyKey: input.idempotencyKey ?? null,
-        },
-        tx,
-      ),
-    );
-    return toJobRunDTO(run);
+  /**
+   * Insert the `running` row at job start; returns the persisted DTO, or `null`
+   * when the run's tenant workspace has already vanished (see
+   * `isVanishedRunError`) — a job starting mid-teardown must not crash the
+   * process on the workspace FK.
+   */
+  async recordStart(input: RecordStartInput): Promise<JobRunDTO | null> {
+    try {
+      const run = await withSystemContext((tx) =>
+        jobRunRepository.create(
+          {
+            // Scalar FK (not a relation connect) — see jobRunRepository.create.
+            workspaceId: input.workspaceId,
+            functionId: input.functionId,
+            eventName: input.eventName,
+            eventId: input.eventId,
+            attempt: input.attempt,
+            status: 'running',
+            idempotencyKey: input.idempotencyKey ?? null,
+          },
+          tx,
+        ),
+      );
+      return toJobRunDTO(run);
+    } catch (err) {
+      if (isVanishedRunError(err)) return null;
+      throw err;
+    }
   },
 
   /**
@@ -86,26 +121,32 @@ export const jobRunsService = {
    * scanned/deleted/failed counts) lives on the ledger row itself. Omitted /
    * undefined stores NULL.
    */
-  async recordSuccess(id: string, output?: Prisma.InputJsonValue): Promise<JobRunDTO> {
-    const run = await withSystemContext(async (tx) => {
-      const existing = await jobRunRepository.findById(id, tx);
-      if (!existing) {
-        throw new Error(`job_run ${id} not found when recording success`);
-      }
-      const finishedAt = new Date();
-      const durationMs = finishedAt.getTime() - existing.startedAt.getTime();
-      return jobRunRepository.update(
-        id,
-        {
-          status: 'succeeded',
-          finishedAt,
-          durationMs,
-          ...(output !== undefined ? { output } : {}),
-        },
-        tx,
-      );
-    });
-    return toJobRunDTO(run);
+  async recordSuccess(id: string, output?: Prisma.InputJsonValue): Promise<JobRunDTO | null> {
+    try {
+      const run = await withSystemContext(async (tx) => {
+        const existing = await jobRunRepository.findById(id, tx);
+        // Row gone (an orphaned run from a torn-down test, or a genuinely
+        // deleted run): recording success is a benign no-op (MOTIR-1545).
+        if (!existing) return null;
+        const finishedAt = new Date();
+        const durationMs = finishedAt.getTime() - existing.startedAt.getTime();
+        return jobRunRepository.update(
+          id,
+          {
+            status: 'succeeded',
+            finishedAt,
+            durationMs,
+            ...(output !== undefined ? { output } : {}),
+          },
+          tx,
+        );
+      });
+      return run ? toJobRunDTO(run) : null;
+    } catch (err) {
+      // Backstop the race where the row/tenant vanishes mid-transaction.
+      if (isVanishedRunError(err)) return null;
+      throw err;
+    }
   },
 
   /**
@@ -132,61 +173,69 @@ export const jobRunsService = {
    * (non-final) attempts write nothing: the row stays `running` so the dashboard
    * shows a retrying run as in-flight rather than prematurely failed.
    */
-  async recordTerminalFailure(input: TerminalFailureInput): Promise<JobRunDTO> {
+  async recordTerminalFailure(input: TerminalFailureInput): Promise<JobRunDTO | null> {
     const failureJson = input.failure as unknown as Prisma.InputJsonObject;
-    const run = await withSystemContext(async (tx) => {
-      const existing = await jobRunRepository.findRunningByEventId(
-        input.eventId,
-        input.functionId,
-        tx,
-      );
-      const finishedAt = new Date();
-      // Tenancy + the run start come from the existing row when we found it;
-      // otherwise fall back to the onFailure payload (defensive, see above).
-      const workspaceId = existing ? existing.workspaceId : input.workspaceId;
-      const startedAt = existing ? existing.startedAt : finishedAt;
-      const durationMs = finishedAt.getTime() - startedAt.getTime();
+    try {
+      const run = await withSystemContext(async (tx) => {
+        const existing = await jobRunRepository.findRunningByEventId(
+          input.eventId,
+          input.functionId,
+          tx,
+        );
+        const finishedAt = new Date();
+        // Tenancy + the run start come from the existing row when we found it;
+        // otherwise fall back to the onFailure payload (defensive, see above).
+        const workspaceId = existing ? existing.workspaceId : input.workspaceId;
+        const startedAt = existing ? existing.startedAt : finishedAt;
+        const durationMs = finishedAt.getTime() - startedAt.getTime();
 
-      const failedRun = existing
-        ? await jobRunRepository.update(
-            existing.id,
-            { status: 'failed', finishedAt, durationMs, failure: failureJson },
-            tx,
-          )
-        : await jobRunRepository.create(
-            {
-              workspaceId,
-              functionId: input.functionId,
-              eventName: input.eventName,
-              eventId: input.eventId,
-              attempt: input.attempts - 1, // zero-indexed final attempt
-              status: 'failed',
-              finishedAt,
-              durationMs,
-              failure: failureJson,
-            },
-            tx,
-          );
+        const failedRun = existing
+          ? await jobRunRepository.update(
+              existing.id,
+              { status: 'failed', finishedAt, durationMs, failure: failureJson },
+              tx,
+            )
+          : await jobRunRepository.create(
+              {
+                workspaceId,
+                functionId: input.functionId,
+                eventName: input.eventName,
+                eventId: input.eventId,
+                attempt: input.attempts - 1, // zero-indexed final attempt
+                status: 'failed',
+                finishedAt,
+                durationMs,
+                failure: failureJson,
+              },
+              tx,
+            );
 
-      await jobRunDlqRepository.create(
-        {
-          // The DLQ row inherits the run's tenancy via the scalar FK (a real
-          // workspace id, or null for a system / cross-workspace job).
-          workspaceId,
-          functionId: input.functionId,
-          eventName: input.eventName,
-          eventData: input.eventData,
-          failure: failureJson,
-          attempts: input.attempts,
-          // firstFailedAt = when the failing run began; lastFailedAt = now (the
-          // exhaustion moment). A single-run DLQ entry, so they bracket the run.
-          firstFailedAt: startedAt,
-          lastFailedAt: finishedAt,
-        },
-        tx,
-      );
-      return failedRun;
-    });
-    return toJobRunDTO(run);
+        await jobRunDlqRepository.create(
+          {
+            // The DLQ row inherits the run's tenancy via the scalar FK (a real
+            // workspace id, or null for a system / cross-workspace job).
+            workspaceId,
+            functionId: input.functionId,
+            eventName: input.eventName,
+            eventData: input.eventData,
+            failure: failureJson,
+            attempts: input.attempts,
+            // firstFailedAt = when the failing run began; lastFailedAt = now (the
+            // exhaustion moment). A single-run DLQ entry, so they bracket the run.
+            firstFailedAt: startedAt,
+            lastFailedAt: finishedAt,
+          },
+          tx,
+        );
+        return failedRun;
+      });
+      return toJobRunDTO(run);
+    } catch (err) {
+      // A stranded onFailure whose tenant workspace vanished (teardown / hard
+      // delete) must not FK-crash the process — recording the failure is moot
+      // once the tenant is gone (MOTIR-1545).
+      if (isVanishedRunError(err)) return null;
+      throw err;
+    }
   },
 };

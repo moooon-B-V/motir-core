@@ -72,13 +72,14 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       eventData: emailEvent() as unknown as Prisma.InputJsonValue,
       attempts: 3,
     });
-    expect(dto.status).toBe('failed');
+    expect(dto).not.toBeNull();
+    expect(dto!.status).toBe('failed');
 
     // Exactly one run row — the running row was FLIPPED, not duplicated.
     const runs = await db.jobRun.findMany();
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
-    expect(run.id).toBe(started.id);
+    expect(run.id).toBe(started!.id);
     expect(run.status).toBe('failed');
     expect(run.workspaceId).toBeNull();
     expect(run.finishedAt).not.toBeNull();
