@@ -527,9 +527,11 @@
           first-class but SECONDARY <strong>“I have an existing project — import it”</strong> path
           sits below → the 7.15 migrate wizard / 7.17 Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane
           import. Idea-first matches how idea-first builders onboard (Lovable / Bolt / Replit /
-          Firebase Studio lead with one prompt, import is secondary). Scope is the entrance ONLY —
-          no repo-connect, source-selection, index, or generate UI is drawn here; those live
-          downstream and this screen only makes each destination legible and hands off.
+          Firebase Studio lead with one prompt, import is secondary). Each path’s preview shows the
+          FULL arc through to the hosted coding agent that builds the plan (Motir is plan → build,
+          not plan-only), so the process visibly doesn’t stop at a plan. Scope is the entrance ONLY
+          — no repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those
+          live downstream and this screen only makes each destination legible and hands off.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-1461 · 7.22.3</span>
@@ -605,8 +607,8 @@
               </span>
               <h1>How would you like to start?</h1>
               <p>
-                Describe what you want to build, and Motir turns it into a reviewed, dispatchable
-                plan.
+                Describe what you want to build. Motir plans it with you, then hosted coding agents
+                build it.
               </p>
             </div>
 
@@ -619,7 +621,7 @@
               ></textarea>
               <div class="idea-foot">
                 <div class="steps">
-                  <span class="cap">Next:</span>
+                  <span class="cap">How it works:</span>
                   <span class="step">
                     <svg
                       viewBox="0 0 24 24"
@@ -691,6 +693,36 @@
                       <path d="M12 12V8" />
                     </svg>
                     Plan
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="step">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 8V4H8" />
+                      <rect width="16" height="12" x="4" y="8" rx="2" />
+                      <path d="M2 14h2" />
+                      <path d="M20 14h2" />
+                      <path d="M15 13v2" />
+                      <path d="M9 13v2" />
+                    </svg>
+                    Build
                   </span>
                 </div>
                 <span class="spacer"></span>
@@ -815,6 +847,36 @@
                     </svg>
                     Plan
                   </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 8V4H8" />
+                      <rect width="16" height="12" x="4" y="8" rx="2" />
+                      <path d="M2 14h2" />
+                      <path d="M20 14h2" />
+                      <path d="M15 13v2" />
+                      <path d="M9 13v2" />
+                    </svg>
+                    Build
+                  </span>
                 </span>
               </span>
               <span class="go">
@@ -917,7 +979,7 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
               >
               <div class="idea-foot">
                 <div class="steps">
-                  <span class="cap">Next:</span>
+                  <span class="cap">How it works:</span>
                   <span class="step">
                     <svg
                       viewBox="0 0 24 24"
@@ -989,6 +1051,36 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                       <path d="M12 12V8" />
                     </svg>
                     Plan
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="step">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 8V4H8" />
+                      <rect width="16" height="12" x="4" y="8" rx="2" />
+                      <path d="M2 14h2" />
+                      <path d="M20 14h2" />
+                      <path d="M15 13v2" />
+                      <path d="M9 13v2" />
+                    </svg>
+                    Build
                   </span>
                 </div>
                 <span class="spacer"></span>
@@ -1112,6 +1204,36 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                     </svg>
                     Plan
                   </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 8V4H8" />
+                      <rect width="16" height="12" x="4" y="8" rx="2" />
+                      <path d="M2 14h2" />
+                      <path d="M20 14h2" />
+                      <path d="M15 13v2" />
+                      <path d="M9 13v2" />
+                    </svg>
+                    Build
+                  </span>
                 </span>
               </span>
               <span class="go">
@@ -1214,8 +1336,11 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                 <strong>Start planning</strong> → the 7.3 discovery chat, seeded with the idea
                 (MOTIR-1462 hands off). <strong>Import</strong> → the 7.15 migrate wizard (or 7.17
                 for Jira / Linear / Plane), which owns connect → source-selection → index →
-                generate. Nothing here connects a repo, picks a source, or generates — the entrance
-                draws the doors and their destinations, nothing downstream.
+                generate. Both end in a reviewed plan that Motir’s hosted coding agents then build —
+                the <strong>Build</strong> step in each preview (the agent-run flow is its own
+                downstream surface). Nothing here connects a repo, picks a source, generates, or
+                runs an agent — the entrance draws the doors and their destinations, nothing
+                downstream.
               </span>
             </div>
           </div>

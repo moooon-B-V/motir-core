@@ -72,7 +72,7 @@ real structure, it does not redraw a stylised stand-in):
 - **`app/_components/PublicFrontDoor.tsx`** (7.3.14 / MOTIR-1022, the marketing hero) — the SOURCE of the
   idea. This entrance **continues its exact vocabulary**: the `Sparkles` "Plan with AI" eyebrow chip on
   `--el-tint-lavender`, the **serif** headline (`font-serif`), the idea-capture `Card` + `textarea` +
-  `ArrowRight` primary `Button`, and the Understand · Scope · Plan step preview. The carried-over idea
+  `ArrowRight` primary `Button`, and the Understand · Scope · Plan · Build step preview. The carried-over idea
   (Panel 2) is the hero's typed idea preserved by MOTIR-1458 (`lib/onboarding/pendingIdea.ts`) and
   pre-filled here — so the post-login screen reads as "keep going," not a repeat of the hero.
 
@@ -83,10 +83,15 @@ real structure, it does not redraw a stylised stand-in):
   door — an authenticated user picks **"Plan with AI"** in the create-project modal / switcher /
   empty-project state (design MOTIR-1485, code MOTIR-1486). Both land on THIS entrance.
 - **OUTBOUND (drawn here — the point of the card):** each destination is made legible with a step-chip
-  stepper, so the reader SEES where the door leads:
-  - Start planning → **Understand · Scope · Plan** (the discovery conversation; MOTIR-804 / 7.3.5).
-  - Import → **Connect repo · Read your code · Plan** (the guided import wizard; a simplified preview of
-    MOTIR-930's step rail — NOT the wizard itself).
+  stepper that shows the **FULL arc through to the hosted coding agent** — so the reader sees the process
+  does NOT stop at a plan (Motir is plan → build, the three-layer product):
+  - Start planning → **Understand · Scope · Plan · Build** (discovery + plan review, then Motir's hosted
+    coding agents build it; MOTIR-804 / 7.3.5 own discovery, the agent-run is the downstream AI-coding
+    layer).
+  - Import → **Connect repo · Read your code · Plan · Build** (the guided import wizard, a simplified
+    preview of MOTIR-930's step rail — NOT the wizard itself — then the same hosted-agent build).
+  - The final **Build** chip carries a lucide `Bot` icon; it is a preview of the outcome, not a surface
+    this card draws (the agent-run flow is its own downstream story).
 
 ---
 
@@ -100,7 +105,8 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
   ghost link + a signed-in avatar right. _(The exit/resume affordance is formalised by MOTIR-1488; drawn
   here as realistic authenticated-shell chrome, not implemented by this card.)_
 - **Header** — the "Plan with AI" eyebrow chip; serif H1 **"How would you like to start?"**; secondary
-  subhead _"Describe what you want to build, and Motir turns it into a reviewed, dispatchable plan."_
+  subhead _"Describe what you want to build. Motir plans it with you, then hosted coding agents build
+  it."_ (states the full arc — planning is not the end state)
 - **PRIMARY — the idea box.** A full-width `Card` with an accent border + elevation: the **"Your idea"**
   label and a **tall textarea** (min-height ~172px, 7 rows — room for a long first idea; placeholder
   invites a full description and reassures _"we'll ask follow-up questions next"_). A footer row holds the
@@ -111,7 +117,7 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
 - **SECONDARY — the import row.** A slim, full-width option button: a sky icon tile (`GitBranch`), the
   title **"I have an existing project — import it"**, a one-line description (_"Connect your repository and
   Motir reads your code, then plans on top of what's already there. You can also bring over existing work
-  items from Jira, Linear or Plane."_), an inline mini-stepper (Connect repo · Read your code · Plan), and
+  items from Jira, Linear or Plane."_), an inline mini-stepper (Connect repo · Read your code · Plan · Build), and
   an **"Import →"** affordance on the right. Visibly available, clearly secondary to the idea box.
 
 ### Panel 2 — the entrance with a carried-over idea (MOTIR-1458 / 7.22.2)
@@ -151,8 +157,9 @@ importing a codebase you already have is not a matter of taste.
 | Carried-over label     | inline label + dot                                          | `--el-accent-on-surface` text + dot                                                                                 |
 | Avatar                 | circular chip                                               | `--el-tint-mint` bg, `--el-text-strong` ink, `rounded-full`                                                         |
 
-Icons are **lucide** (`Sparkles`, `Search`, `Shapes`, `Network`, `GitBranch`, `Code`, `ArrowRight`,
-`Info`) at `viewBox="0 0 24 24"`, stroke 2, round caps — matching the shipped hero.
+Icons are **lucide** (`Sparkles`, `Search`, `Shapes`, `Network`, `GitBranch`, `Code`, `Bot` (the
+hosted-agent Build step), `ArrowRight`, `Info`) at `viewBox="0 0 24 24"`, stroke 2, round caps —
+matching the shipped hero.
 
 ### Colour + shape rules (mock === component)
 
