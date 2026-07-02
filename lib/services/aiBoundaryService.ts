@@ -1,6 +1,7 @@
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import {
   toPlanTreeSkeleton,
@@ -49,9 +50,14 @@ export const aiBoundaryService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    // ONE batched latest-revision lookup for the whole read (MOTIR-1531) — the
+    // `baseRevision` anchor each row carries; never a per-row (N+1) fetch.
+    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
+      items.map((i) => i.id),
+    );
     return {
       project: { projectId, projectKey: project.identifier },
-      items: toPlanTreeSkeleton(items),
+      items: toPlanTreeSkeleton(items, revisionByItemId),
     };
   },
 
@@ -137,11 +143,14 @@ export const aiBoundaryService = {
       ctx,
       depth,
     );
+    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
+      nodes.map((n) => n.id),
+    );
     return {
       project: { projectId, projectKey: project.identifier },
       root: root.identifier,
       depth: effectiveDepth,
-      nodes: toSkeletonRows(nodes),
+      nodes: toSkeletonRows(nodes, revisionByItemId),
     };
   },
 
@@ -160,9 +169,12 @@ export const aiBoundaryService = {
     const closure = await workItemsService.getBlockingClosure(root.id, ctx, opts);
     const idToKey = new Map<string, string>([[root.id, root.identifier]]);
     for (const n of closure.nodes) idToKey.set(n.id, n.identifier);
+    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
+      closure.nodes.map((n) => n.id),
+    );
     return {
       root: root.identifier,
-      nodes: toSkeletonRows(closure.nodes),
+      nodes: toSkeletonRows(closure.nodes, revisionByItemId),
       edges: toBlockingEdges(closure.edges, idToKey),
       truncated: closure.truncated,
     };
@@ -214,6 +226,13 @@ export const aiBoundaryService = {
     const nextCursor =
       !overshot && result.page < totalPages ? encodeSearchCursor({ page: result.page + 1 }) : null;
 
-    return { items: toSearchResultRows(items), total: result.total, nextCursor };
+    const revisionByItemId = await workItemRevisionRepository.findLatestIdsByWorkItemIds(
+      items.map((i) => i.id),
+    );
+    return {
+      items: toSearchResultRows(items, revisionByItemId),
+      total: result.total,
+      nextCursor,
+    };
   },
 };

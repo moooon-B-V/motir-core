@@ -15,10 +15,20 @@ import type { CommentsPageDTO } from '@/lib/dto/comments';
 // needs to reason over the tree, keyed by work-item identifier.
 export interface PlanTreeSkeletonItem {
   key: string; // e.g. "MOTIR-481"
+  // The real work-item cuid — the resolvable `workItemId` a generator emits on a
+  // modify/remove PlanItem (materialize locks the target by cuid, not key). Folded
+  // onto the breadth read (MOTIR-1531) so the generator no longer needs a
+  // per-target `get-item` round-trip to recover it.
+  id: string;
   kind: WorkItemKindDto;
   title: string;
   status: string;
   parentKey: string | null;
+  // The id of the item's LATEST `work_item_revision` (null when it has none) — the
+  // optimistic-concurrency `baseRevision` a modify/remove PlanItem stores (7.21.3
+  // base-revision drift compares it to the target's current latest). Populated by
+  // ONE batched `findLatestIdsByWorkItemIds` on the read (MOTIR-1531), never N+1.
+  revision: string | null;
 }
 
 export interface PlanTreeResponse {
@@ -89,11 +99,17 @@ export interface BlockingClosureResponse {
 // rank hits before spending a `get_item` DEPTH read on the ones it cares about.
 export interface SearchResultRow {
   key: string; // e.g. "MOTIR-852"
+  // The real work-item cuid + its latest `work_item_revision` id (null when none)
+  // — the modify/remove anchor a generator needs, carried consistently with the
+  // tree skeleton so a hit can be reconciled without a follow-up `get-item`
+  // (MOTIR-1531; `revision` from the SAME batched lookup, never N+1).
+  id: string;
   kind: WorkItemKindDto;
   type: WorkItemTypeDto | null;
   title: string;
   status: string;
   priority: WorkItemPriorityDto;
+  revision: string | null;
 }
 
 // POST /api/internal/ai/search-work-items (Subtask 7.5.2) — the on-demand SEARCH
