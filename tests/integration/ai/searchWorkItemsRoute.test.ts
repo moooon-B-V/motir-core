@@ -86,11 +86,15 @@ describe('POST /api/internal/ai/search-work-items', () => {
     expect(body.items).toEqual([
       {
         key: task.identifier,
+        // The row carries the real cuid + latest-revision anchor (MOTIR-1531);
+        // a freshly-created item always has a `created` revision (a string).
+        id: task.id,
         kind: 'task',
         type: 'code',
         title: 'Beta',
         status: 'todo',
         priority: 'high',
+        revision: expect.any(String),
       },
     ]);
   });
