@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { aiBoundaryService } from '@/lib/services/aiBoundaryService';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -51,6 +52,43 @@ describe('aiBoundaryService.readPlanTree', () => {
       title: 'Login',
       parentKey: epic.identifier,
     });
+  });
+
+  // MOTIR-1531 — the breadth read carries the real `id` + latest `revision` anchor
+  // (from ONE batched lookup) so a generator can emit a modify/remove PlanItem with
+  // a resolvable `workItemId` + `baseRevision` without a per-target `get-item`.
+  it('carries the real id + latest revision, and revision tracks a subsequent edit', async () => {
+    const fx = await makeFixture();
+    const epic = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'Auth' },
+      fx.ctx,
+    );
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Login', parentId: epic.id },
+      fx.ctx,
+    );
+
+    const before = await aiBoundaryService.readPlanTree(fx.projectId, fx.ctx);
+    const storyRowBefore = before.items.find((i) => i.key === story.identifier)!;
+
+    // The row's `id` is the real cuid (not the key), and its `revision` equals the
+    // item's latest `work_item_revision.id` — the `created` revision at this point.
+    expect(storyRowBefore.id).toBe(story.id);
+    const latestBefore = await workItemRevisionRepository.findLatestIdsByWorkItemIds([story.id]);
+    expect(storyRowBefore.revision).toBe(latestBefore.get(story.id));
+    expect(storyRowBefore.revision).not.toBeNull();
+
+    // Editing the item records a NEW revision → the projected `revision` advances
+    // to the new latest id (the drift signal 7.21.3 compares `baseRevision` to).
+    await workItemsService.updateWorkItem(story.id, { title: 'Sign in' }, fx.ctx);
+
+    const after = await aiBoundaryService.readPlanTree(fx.projectId, fx.ctx);
+    const storyRowAfter = after.items.find((i) => i.key === story.identifier)!;
+    const latestAfter = await workItemRevisionRepository.findLatestIdsByWorkItemIds([story.id]);
+
+    expect(storyRowAfter.id).toBe(story.id);
+    expect(storyRowAfter.revision).toBe(latestAfter.get(story.id));
+    expect(storyRowAfter.revision).not.toBe(storyRowBefore.revision);
   });
 
   it('reads a foreign project as 404 (ProjectNotFoundError), not 403', async () => {
