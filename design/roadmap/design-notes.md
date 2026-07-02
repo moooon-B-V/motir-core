@@ -558,6 +558,110 @@ toggle lives **in that page's header**, right-aligned beside the title/subtitle
 
 ---
 
+## ⭐ Refresh control + URL-addressable scope (MOTIR-1540 / Story MOTIR-1539 — `roadmap-refresh.mock.html`)
+
+`roadmap-refresh.mock.html` adds two usability affordances to the SAME shipped
+roadmap header: a **refresh control** that re-fetches the canvas in place, and
+making the existing scope toggle **URL-addressable** (`/roadmap?scope=sprint`).
+Like the scope toggle (MOTIR-1380), this card's mandate is to **COMPOSE the shipped
+header + canvas, not redraw it** (`notes.html` **#82**/**#95**): the
+`ProjectRoadmapCanvas` engine (MOTIR-1194) and the `Segmented` scope toggle
+(MOTIR-1380) are reused UNCHANGED. The only NEW pixels are the refresh control and
+its loading affordance; the URL-addressable scope is a **behaviour change with NO
+new pixels** (the toggle looks identical). The refresh mechanism is grounded in the
+canvas's SHIPPED `reloadKey` prop (`ProjectRoadmapCanvas.tsx:56` — its load effect
+refetches the current focus level via `loadLevel(focusId)` on a `reloadKey` bump),
+which the frontend code subtask (MOTIR-1542) drives; this design `relates_to` the
+two code subtasks (MOTIR-1541 URL scope, MOTIR-1542 refresh) that define the
+behaviour, not invented here.
+
+### Composed components + their contracts (notes #95)
+
+| Composed thing  | Source                                                                                       | Contract this design honours                                                                                                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| refresh control | `Button` (`components/ui/Button.tsx`) — `variant="secondary"`, icon-only, lucide `RefreshCw` | a real `<button>` with an `aria-label`/`title`; idle = `--el-text-secondary` glyph on a transparent fill with an `--el-border-strong` edge, `--radius-btn`; hover = `--el-surface` fill; focus-visible = the Button base `--focus-ring-color` ring |
+| loading state   | `Spinner` (`components/ui/Spinner.tsx`) — the Button's own `loading` affordance              | the glyph is swapped for the inline `Spinner`, the button is `disabled` + `aria-busy="true"` + `opacity 0.55`; NO bespoke markup (reuses `Button loading`)                                                                                         |
+| scope toggle    | `Segmented` (`components/ui/Segmented.tsx`, MOTIR-1380)                                      | reused UNCHANGED — visually identical; the ONLY change is that selecting an option now also writes `?scope=sprint` to the URL (behaviour, not pixels)                                                                                              |
+| canvas + nodes  | `ProjectRoadmapCanvas` / `WorkItemNode` (MOTIR-1194)                                         | reused unchanged; refresh drives its SHIPPED `reloadKey` prop → an in-place refetch of the current focus level (drill / breadcrumb / zoom / pan preserved), NOT a remount                                                                          |
+| page header     | `app/(authed)/roadmap/page.tsx` `<header>` (MOTIR-1011)                                      | the refresh control joins the right-aligned control cluster after the `Segmented` toggle; the server page seeds the initial scope from `searchParams` (MOTIR-1541)                                                                                 |
+
+### The four panels (`roadmap-refresh.mock.html`)
+
+| Panel | State                    | What it draws                                                                                                                                                                                                                                                            |
+| ----- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | Refresh control — idle   | the full roadmap header with the refresh `Button` (secondary, `RefreshCw`) in the right cluster AFTER the scope toggle, matching the toggle's 40px outer height; the canvas at the root level below, unchanged                                                           |
+| **2** | Refreshing (loading)     | the control in its loading state (`Spinner`, `disabled`, `aria-busy`); a small **"Refreshing…"** toast + a faint veil over the canvas; the breadcrumb still reads **Project root / Epic 7** — proving the in-place refetch (`loadLevel(focusId)`) does NOT reset to root |
+| **3** | Refresh control — states | the four control states side by side: idle / hover / focus-visible (the ring) / loading (spinner) — one primitive, four states                                                                                                                                           |
+| **4** | URL-addressable scope    | two address bars — `/roadmap` (Whole-project selected) and `/roadmap?scope=sprint` (Active-sprint selected) — showing the toggle state mirrored in the URL; a behaviour note, the toggle itself unchanged                                                                |
+
+### Refresh = IN-PLACE refetch, not a page reload (the interaction, grounded in shipped reality)
+
+The gap this fixes: the roadmap canvas caches each level in a client `useRef` Map
+(`WorkItemRoadmap.tsx` `cacheRef`), so the only way to pick up changed work items is
+a full browser reload. The refresh control instead **clears that cache and bumps the
+canvas's SHIPPED `reloadKey`** (`ProjectRoadmapCanvas.tsx:56`), whose load effect
+re-runs `loadLevel(focusId)` for the CURRENT level — so the user's drill position,
+breadcrumb, and zoom/pan survive (panel 2). It is deliberately NOT the scope-change
+remount (`key={scope}`), which resets the view. The loading state is driven by the
+REAL fetch-completion signal (the canvas's per-level load state), never a fixed
+timer — the same authoritative-signal discipline the E2E relies on.
+
+### URL-addressable scope — the standard view-state convention (MOTIR-1541)
+
+Selecting **Active sprint** writes `?scope=sprint` to the URL
+(`router.replace`, `scroll:false`); the default **Whole project** omits the param
+(canonical `/roadmap`). The server page reads the initial scope from `searchParams`,
+so a deep-linked / reloaded / shared `?scope=sprint` opens directly in sprint scope,
+and browser Back/Forward moves scope. This matches how mature PM tools (Linear /
+Jira / GitHub Projects) make a view's state shareable — a query param on one route,
+not a distinct `/roadmap/sprint` path. No pixels change; the sprint roadmap simply
+gains its own URL.
+
+### Exact copy (the strings the frontend ships — MOTIR-1542 `messages/en.json` + `zh.json`)
+
+- **Refresh control label / tooltip:** `Refresh roadmap` (the `aria-label` + `title`).
+  Distinct enough to avoid the getByRole superstring pitfall (`notes.html`
+  aria-selector entries).
+- **Refreshing toast (optional in-canvas affordance):** `Refreshing…`.
+- **Loading `Spinner` label:** the shipped `Spinner`'s default `Loading`.
+- New `roadmap` keys land in BOTH `messages/en.json` AND `messages/zh.json` in the
+  same PR (the i18n-catalog en↔zh parity gate); the scope toggle reuses its existing
+  MOTIR-1382 strings unchanged.
+
+### Access path (DRAW THE DOOR — `run.md` design gate)
+
+The refresh control is an **in-header affordance on the EXISTING Roadmap view**,
+reached from the shipped **Roadmap** primary left-nav entry (MOTIR-1011) — there is
+**no new route or nav affordance** (a control inside a view is scoped to that view;
+the URL-addressable scope adds a query param to the same `/roadmap` route, not a new
+door). Panels 1–2 draw the control in place at the page's real width; panel 4 shows
+the URL the scope produces.
+
+### Token / a11y discipline (same rules as the canvas)
+
+- **Colour** via `--el-*` only (light palette inlined, as the sibling mocks do). The
+  refresh `Button` idle = `--el-text-secondary` glyph, `--el-border-strong` edge,
+  transparent fill; hover = `--el-surface` fill + `--el-text` glyph; loading uses the
+  Button's `disabled` opacity + the `Spinner` (`border-current`, so it inherits the
+  glyph colour). The refreshing toast is a `--el-page-bg` pill with `--el-border` +
+  `--shadow-card` and an `--el-accent-on-surface` spinner; the veil is a
+  `color-mix()` over `--el-page-bg` (palette-derived, no raw hue). The `?scope=sprint`
+  fragment in the address-bar study is `--el-accent-on-surface`. No invented hex — the
+  only raw values are the shared non-semantic canvas grid-dot + body backdrop the
+  sibling mocks already use.
+- **Shape** via element-semantic tokens: the refresh button = `--radius-btn` sized to
+  `--height-btn-md` (40px, matching the `Segmented` track's outer box so they align);
+  the toast = `--radius-badge`; canvas/cards = `--radius-card`; elevation
+  `--shadow-{subtle,card}`. No raw `rounded-*`/`p-*`/`h-*`.
+- **A11y** — the refresh control is a real `<button>` with `aria-label`/`title`
+  `Refresh roadmap`; in flight it sets `aria-busy="true"` + `disabled` and exposes the
+  `Spinner`'s `role="status"` `Loading`; decorative icons are `aria-hidden`. Refresh is
+  a client-island refetch (the canvas `reloadKey`), NOT a `router.refresh()`; the scope
+  write is a shallow `router.replace` (the page-state contract). No nested interactive
+  elements (the icon is an inline `<svg>` inside the single button).
+
+---
+
 ## ⭐ Ready-to-start highlight (MOTIR-1416 / Story MOTIR-1415 — `ready-highlight.mock.html`)
 
 `ready-highlight.mock.html` adds a quiet highlight marking a roadmap node that is
@@ -754,7 +858,7 @@ before/after) are in the mock.
 
 ## Deliverable
 
-Seven three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
+Eight three-file surfaces under `design/roadmap/`, sharing this `design-notes.md`:
 
 - **Canvas** — `roadmap.mock.html` + `roadmap.png` (MOTIR-1009).
 - **Detail surfaces** — `detail-surfaces.mock.html` + `detail-surfaces.png`
@@ -765,6 +869,8 @@ Seven three-file surfaces under `design/roadmap/`, sharing this `design-notes.md
 - **Full-screen** — `full-screen.mock.html` + `full-screen.png` (MOTIR-1423).
 - **Locate control** — `locate.mock.html` + `locate.png` (MOTIR-1427).
 - **Done & ready styles** — `done-ready.mock.html` + `done-ready.png` (MOTIR-1434).
+- **Refresh control + URL scope** — `roadmap-refresh.mock.html` +
+  `roadmap-refresh.png` (MOTIR-1540).
 
 All rendered with Playwright chromium — full-page, light theme,
 `deviceScaleFactor: 2`, ~1200px wide; `prettier --check` clean.
