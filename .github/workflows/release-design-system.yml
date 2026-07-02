@@ -28,15 +28,18 @@ on:
         type: boolean
         default: false
 
-# Least privilege: only reading the repo is required. Publish auth comes from the
-# NPM_TOKEN secret, not the workflow token.
-# To enable npm provenance later (free supply-chain attestation on a public repo):
-#   - add `id-token: write` here,
-#   - add a `repository` field to packages/design-system/package.json (npm requires
-#     it for provenance — its absence is why `--provenance` is NOT on by default),
-#   - append `--provenance` to the publish command below.
+# Auth is OIDC "Trusted Publishing" — GitHub mints a short-lived id-token that npm
+# exchanges for a one-time publish credential, so there is NO long-lived NPM_TOKEN
+# secret to leak or rotate. Requires a Trusted Publisher configured on npmjs.com for
+# this package (org `moooon-B-V` / repo `motir-core` / this workflow filename). The
+# first `0.1.0` publish was done manually (OIDC can't bootstrap a package that does
+# not exist yet); every release from here flows through here token-free.
+#   - `id-token: write` lets the job request the OIDC token.
+#   - provenance (free supply-chain attestation) is auto-generated on a Trusted
+#     Publish and needs the `repository` field now present in package.json.
 permissions:
   contents: read
+  id-token: write
 
 # Never let two releases of the same tag run concurrently; don't cancel an
 # in-flight publish (a half-cancelled publish is worse than a queued one).
@@ -57,8 +60,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          # Writes an .npmrc wiring npm auth to NODE_AUTH_TOKEN (set on the publish step).
-          registry-url: https://registry.npmjs.org
+
+      # OIDC Trusted Publishing needs npm >= 11.5.1; node 22 ships npm 10.x.
+      - name: Upgrade npm for OIDC Trusted Publishing
+        run: npm install -g npm@latest
 
       - run: pnpm install --frozen-lockfile
 
@@ -107,6 +112,4 @@ jobs:
         if: >-
           steps.published.outputs.already == 'false' &&
           !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
-        run: pnpm --filter "$PACKAGE" exec npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter "$PACKAGE" exec npm publish --access public --provenance

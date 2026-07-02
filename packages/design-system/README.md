@@ -116,11 +116,14 @@ package-scoped git tag. There is no manual `npm publish` in the normal path.
 **Dry run:** trigger the workflow from the Actions tab via **Run workflow**
 (`workflow_dispatch`) with **dry run** checked to build + pack without publishing.
 
-**Auth:** the publish step authenticates with the `NPM_TOKEN` repository secret (an
-npm automation/granular token with publish rights on the `@motir` scope). npm
-provenance is left off by default — enabling it needs a `repository` field in this
-`package.json` plus `id-token: write` in the workflow (see the workflow header).
+**Auth:** the publish step uses **OIDC Trusted Publishing** — no `NPM_TOKEN` secret.
+GitHub mints a short-lived id-token (`id-token: write`) that npm exchanges for a
+one-time publish credential, gated by a Trusted Publisher configured on npmjs.com
+for this package (org `moooon-B-V` / repo `motir-core` / this workflow filename).
+npm provenance is auto-generated on a Trusted Publish (the `repository` field in
+this `package.json` satisfies its requirement).
 
-> The **first** publish (`0.1.0`) may instead be cut manually (`npm publish`), or
-> by pushing a `design-system-v0.1.0` tag once `NPM_TOKEN` is set — the workflow
-> handles both the first and every subsequent release identically.
+> The **first** publish (`0.1.0`) was cut manually (`npm publish` with an
+> interactive OTP), because OIDC cannot bootstrap a package that does not yet exist
+> — the Trusted Publisher config lives on the package's settings page. Every release
+> from `0.1.1` on flows through the workflow token-free.
