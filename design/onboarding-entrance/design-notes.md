@@ -123,12 +123,14 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
 ### Panel 2 — the entrance with a carried-over idea (MOTIR-1458 / 7.22.2)
 
 The state after the user typed an idea on the motir.co hero and signed in. Header swaps to **"Ready when
-you are"** / _"We kept the idea you started with. Edit it here, or import an existing project instead."_ The
-idea box is **pre-filled** with the preserved (long) idea and carries a **"Carried over from your idea"**
-accent label (a `--el-accent` dot + text); its CTA becomes **"Continue with this idea →"**. The import row
-is unchanged except its copy reassures that the typed idea is kept (_"…the idea you typed above stays
-saved."_). Copy is stated as a factual situation ("I have an existing project"), never as a preference —
-importing a codebase you already have is not a matter of taste.
+you are"** / _"We kept the idea you started with. Add more if you like, then continue — or import an
+existing project instead."_ The idea box is **pre-filled** with the preserved (long) idea and carries a
+**"Carried over from your idea"** accent label (a `--el-accent` dot + text); its CTA becomes **"Continue
+with this idea →"**, and the hint reads _"Add or refine anything before you continue — the discovery chat
+takes it from here."_ (You **add to / refine** your own idea — never "edit" it; "edit" reads mechanical for
+a person's own description.) The import row is unchanged except its copy reassures that the typed idea is
+kept (_"…the idea you typed above stays saved."_). Copy is stated as a factual situation ("I have an
+existing project"), never as a preference — importing a codebase you already have is not a matter of taste.
 
 ### Panel 3 — states & behaviour (close-ups)
 
