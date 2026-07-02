@@ -1,0 +1,1254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roadmap — refresh control + URL-addressable scope (MOTIR-1540)</title>
+    <style>
+      :root {
+        /* ── colour (Tier-3 --el-*, light theme) — verbatim from scope-toggle.mock.html ── */
+        --el-canvas: #ecebe7;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-subtitle: #5d5b54;
+        --el-icon-muted: #787671;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-on-surface: #5645d4;
+        --el-success: #1aae39;
+        --el-tabnav-track: #f6f5f4;
+        --el-tabnav-active: #5645d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-peach: #ffe8d4;
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-subtask: #2a9d99;
+        --el-danger: #e03131;
+        /* ── shape (element-semantic tokens) ── */
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-input: 8px;
+        --height-control: 36px;
+        --height-btn-md: 40px;
+        --spacing-control-x: 10px;
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --focus-ring-color: #5645d4;
+        --font-serif: Georgia, 'Times New Roman', serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #efeee9;
+        color: var(--el-text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        padding: 30px 24px 64px;
+      }
+      h1.docttl {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        max-width: 1180px;
+        margin: 0 auto 4px;
+      }
+      p.docsub {
+        max-width: 1180px;
+        margin: 0 auto 26px;
+        color: var(--el-text-muted);
+        font-size: 13.5px;
+      }
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px #0000000d;
+        overflow: hidden;
+      }
+      .sheethead {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .sheethead b {
+        font-size: 14px;
+        color: var(--el-text-strong);
+      }
+      .sheethead .cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+        font:
+          11.5px ui-monospace,
+          monospace;
+      }
+      .body {
+        padding: 20px;
+      }
+
+      /* ── the PAGE HEADER (the shipped <header> in RoadmapView.tsx) ── */
+      .pagehead {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 12px 16px;
+        margin-bottom: 16px;
+      }
+      .pagehead .htext {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .pagehead h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+        line-height: 1.1;
+      }
+      .pagehead .sub {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        color: var(--el-text-muted);
+      }
+      .pagehead .sub .sname {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .scopechip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 1px 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .scopechip svg {
+        width: 11px;
+        height: 11px;
+        color: var(--el-accent-on-surface);
+      }
+      /* the right-aligned control cluster: [ Segmented ] [ refresh ] */
+      .hcluster {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* ── Segmented (components/ui/Segmented.tsx) — the scope toggle (UNCHANGED) ── */
+      .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        border: 0;
+        border-radius: calc(var(--radius-btn) - 2px);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        font-weight: 500;
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .seg-opt .ic {
+        display: inline-flex;
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .seg-opt.on {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .seg-opt.on .ic {
+        color: var(--el-tabnav-active);
+      }
+
+      /* ── the NEW refresh control — components/ui/Button, secondary + icon-only ── */
+      /* Button variant=secondary size=md, rendered square (no label) with a
+         lucide RefreshCw. Height matches the Segmented track's 40px outer box so
+         the two controls align. Colour via --el-*, shape via --radius-btn. */
+      .iconbtn {
+        display: inline-flex;
+        width: var(--height-btn-md);
+        height: var(--height-btn-md);
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-btn);
+        background: transparent;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        transition:
+          background-color 0.12s,
+          color 0.12s;
+      }
+      .iconbtn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .iconbtn.hov {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .iconbtn.focus {
+        outline: none;
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+      .iconbtn.busy {
+        cursor: default;
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      /* Spinner (components/ui/Spinner.tsx) — border ring, top transparent.
+         Static ¾-ring stand-in for the CSS animate-spin in the still export. */
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid currentColor;
+        border-top-color: transparent;
+        border-radius: var(--radius-badge);
+      }
+
+      /* ── the canvas (COMPOSED — the shipped ProjectRoadmapCanvas, unchanged) ── */
+      .canvas {
+        position: relative;
+        height: 340px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(circle at 1px 1px, #ddd9d2 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-canvas);
+        overflow: hidden;
+      }
+      .crumb {
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .crumb .pin {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        background: var(--el-accent);
+        display: grid;
+        place-items: center;
+      }
+      .crumb .pin svg {
+        width: 10px;
+        height: 10px;
+        color: var(--el-accent-text);
+      }
+      .crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .crumb .cur {
+        color: var(--el-accent-on-surface);
+      }
+      /* a light "refreshing" veil over the canvas while the refetch is in flight */
+      .refveil {
+        position: absolute;
+        inset: 0;
+        background: color-mix(in srgb, var(--el-page-bg) 30%, transparent);
+      }
+      .reftoast {
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        box-shadow: var(--shadow-card);
+      }
+      .reftoast .spinner {
+        color: var(--el-accent-on-surface);
+      }
+      .zoom {
+        position: absolute;
+        right: 16px;
+        bottom: 14px;
+        display: inline-flex;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        overflow: hidden;
+        box-shadow: var(--shadow-subtle);
+      }
+      .zoom button {
+        width: 32px;
+        height: 30px;
+        border: 0;
+        background: transparent;
+        font-size: 16px;
+        color: var(--el-text-secondary);
+      }
+      .zoom button + button {
+        border-left: 1px solid var(--el-border);
+      }
+      .edges {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .edges path {
+        fill: none;
+        stroke: var(--el-border-strong);
+        stroke-width: 1.5;
+      }
+
+      /* ── node card (components/planning/WorkItemNode.tsx) ── */
+      .node {
+        position: absolute;
+        width: 214px;
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 13px 13px 12px;
+        box-shadow: var(--shadow-card);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .node.here {
+        border-color: var(--el-accent);
+      }
+      .ntop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .spill svg {
+        width: 11px;
+        height: 11px;
+      }
+      .spill.done {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .spill.prog {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .spill.todo {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .drill {
+        margin-left: auto;
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-muted);
+      }
+      .nbody {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .tile {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .tile svg {
+        width: 16px;
+        height: 16px;
+      }
+      .tile.epic {
+        background: var(--el-tint-rose);
+      }
+      .tile.epic svg {
+        color: var(--el-type-epic);
+      }
+      .tile.story {
+        background: var(--el-tint-mint);
+      }
+      .tile.story svg {
+        color: var(--el-type-story);
+      }
+      .nid {
+        font:
+          11px ui-monospace,
+          monospace;
+        color: var(--el-text-faint);
+      }
+      .ntitle {
+        margin-top: 1px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .meter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .mtrack {
+        flex: 1;
+        height: 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .mfill {
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-success);
+      }
+      .mnum {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── state study grid ── */
+      .study {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+      }
+      .stateitem {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+      .stateitem .lbl {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .stateitem .desc {
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: center;
+        color: var(--el-text-muted);
+      }
+
+      /* ── URL-addressable-scope study: a browser address bar ── */
+      .urlrow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .urlrow:last-child {
+        margin-bottom: 0;
+      }
+      .urlbar {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        width: 360px;
+        flex: none;
+        padding: 8px 14px;
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        font:
+          12.5px ui-monospace,
+          monospace;
+        color: var(--el-text-secondary);
+      }
+      .urlbar svg {
+        width: 13px;
+        height: 13px;
+        color: var(--el-icon-muted);
+      }
+      .urlbar .qs {
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+      }
+      .urlnote {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .urlnote b {
+        color: var(--el-text-strong);
+      }
+
+      /* ── caption / notes under a panel ── */
+      .note {
+        margin-top: 14px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .note b {
+        color: var(--el-text-strong);
+      }
+      .note code {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        background: var(--el-muted);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--el-text-strong);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="docttl">Roadmap — refresh control &amp; URL-addressable scope · MOTIR-1540</h1>
+    <p class="docsub">
+      Two usability additions to the shipped roadmap header (Story MOTIR-1539): a header REFRESH
+      control that re-fetches the canvas in place (no full page reload), and making the scope toggle
+      URL-addressable (<code>/roadmap?scope=sprint</code>). This design COMPOSES the shipped
+      <code>RoadmapView</code> header + <code>ProjectRoadmapCanvas</code> (MOTIR-1194) — it does NOT
+      redraw the canvas engine. Only the header refresh control and its states are new pixels.
+    </p>
+
+    <!-- ════════════ PANEL 1 — the header with the refresh control (idle) ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>1 · Roadmap header — refresh control (idle)</b
+        ><span>— placed in the right cluster, after the scope toggle</span>
+        <span class="cap">components/planning/RoadmapView.tsx · &lt;header&gt;</span>
+      </div>
+      <div class="body">
+        <div class="pagehead">
+          <div class="htext">
+            <h2>Roadmap</h2>
+            <div class="sub"><span class="sname">Acme Mobile</span>'s roadmap</div>
+          </div>
+          <div class="hcluster">
+            <div class="seg" role="group" aria-label="Roadmap scope">
+              <button class="seg-opt on" aria-pressed="true">
+                <span class="ic"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect width="7" height="7" x="3" y="3" rx="1" />
+                    <rect width="7" height="7" x="14" y="3" rx="1" />
+                    <rect width="7" height="7" x="14" y="14" rx="1" />
+                    <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+                ></span>
+                Whole project
+              </button>
+              <button class="seg-opt" aria-pressed="false">
+                <span class="ic"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="6" />
+                    <circle cx="12" cy="12" r="2" /></svg
+                ></span>
+                Active sprint
+              </button>
+            </div>
+            <!-- NEW: refresh control (Button variant=secondary, icon-only, RefreshCw) -->
+            <button
+              class="iconbtn"
+              type="button"
+              aria-label="Refresh roadmap"
+              title="Refresh roadmap"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="canvas">
+          <div class="crumb">
+            <span class="pin"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /></svg
+            ></span>
+            Project root
+          </div>
+          <svg class="edges">
+            <path d="M 250 116 C 300 116, 300 116, 340 116" />
+            <path d="M 250 244 C 300 244, 300 182, 340 148" />
+          </svg>
+          <div class="node" style="left: 36px; top: 82px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-464</div>
+                <div class="ntitle">Epic 7: AI Planning Layer</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 30%"></div></div>
+              <span class="mnum">12 / 40</span>
+            </div>
+          </div>
+
+          <div class="node" style="left: 36px; top: 214px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-300</div>
+                <div class="ntitle">Epic 6: Collaboration</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 36%"></div></div>
+              <span class="mnum">8 / 22</span>
+            </div>
+          </div>
+
+          <div class="node" style="left: 340px; top: 82px">
+            <div class="ntop">
+              <span class="spill done"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Done</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile epic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-210</div>
+                <div class="ntitle">Epic 5: Reporting</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 100%"></div></div>
+              <span class="mnum">30 / 30</span>
+            </div>
+          </div>
+
+          <div class="zoom"><button>−</button><button>+</button></div>
+        </div>
+
+        <p class="note">
+          <b>Idle.</b> The refresh control is a <code>Button</code> (variant <code>secondary</code>,
+          icon-only) carrying a lucide <code>RefreshCw</code> glyph, sat in the right cluster AFTER
+          the scope <code>Segmented</code> toggle. It matches the toggle's 40px outer height so the
+          two align. Accessible name + tooltip: <b>"Refresh roadmap"</b>. Clicking it clears the
+          canvas level cache and bumps the canvas <code>reloadKey</code> — an IN-PLACE refetch, so
+          the current drill level, breadcrumb, and zoom/pan are preserved (see panel 2).
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL 2 — loading state (in-place refetch preserves drill) ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>2 · Refreshing (loading) — drill preserved</b
+        ><span>— refetch runs in place; the drilled level is NOT reset to root</span>
+        <span class="cap">reloadKey bump · loadLevel(focusId)</span>
+      </div>
+      <div class="body">
+        <div class="pagehead">
+          <div class="htext">
+            <h2>Roadmap</h2>
+            <div class="sub"><span class="sname">Acme Mobile</span>'s roadmap</div>
+          </div>
+          <div class="hcluster">
+            <div class="seg" role="group" aria-label="Roadmap scope">
+              <button class="seg-opt on" aria-pressed="true">
+                <span class="ic"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect width="7" height="7" x="3" y="3" rx="1" />
+                    <rect width="7" height="7" x="14" y="3" rx="1" />
+                    <rect width="7" height="7" x="14" y="14" rx="1" />
+                    <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+                ></span>
+                Whole project
+              </button>
+              <button class="seg-opt" aria-pressed="false">
+                <span class="ic"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="6" />
+                    <circle cx="12" cy="12" r="2" /></svg
+                ></span>
+                Active sprint
+              </button>
+            </div>
+            <!-- refresh control in LOADING state: Spinner replaces the icon, disabled, aria-busy -->
+            <button
+              class="iconbtn busy"
+              type="button"
+              aria-label="Refresh roadmap"
+              aria-busy="true"
+              disabled
+            >
+              <span class="spinner" role="status" aria-label="Loading"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="canvas">
+          <!-- breadcrumb is at a DRILLED level (Epic 7) — proving refresh does NOT remount to root -->
+          <div class="crumb">
+            <span class="pin"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" /></svg
+            ></span>
+            Project root <span class="sep">/</span>
+            <span class="cur">Epic 7: AI Planning Layer</span>
+          </div>
+          <div class="reftoast">
+            <span class="spinner" role="status" aria-label="Loading"></span> Refreshing…
+          </div>
+          <svg class="edges">
+            <path d="M 250 150 C 300 150, 300 150, 340 150" />
+          </svg>
+          <div class="node here" style="left: 36px; top: 116px">
+            <div class="ntop">
+              <span class="spill done"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Done</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile story"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-1301</div>
+                <div class="ntitle">7.20 Reusable AI planning workspace</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 100%"></div></div>
+              <span class="mnum">9 / 9</span>
+            </div>
+          </div>
+
+          <div class="node" style="left: 340px; top: 116px">
+            <div class="ntop">
+              <span class="spill prog"
+                ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="1" fill="currentColor" /></svg
+                >In progress</span
+              >
+              <svg
+                class="drill"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </div>
+            <div class="nbody">
+              <span class="tile story"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg
+              ></span>
+              <div>
+                <div class="nid">MOTIR-1539</div>
+                <div class="ntitle">Roadmap view usability</div>
+              </div>
+            </div>
+            <div class="meter">
+              <div class="mtrack"><div class="mfill" style="width: 0%"></div></div>
+              <span class="mnum">0 / 5</span>
+            </div>
+          </div>
+
+          <div class="refveil"></div>
+          <div class="zoom"><button>−</button><button>+</button></div>
+        </div>
+
+        <p class="note">
+          <b>Loading.</b> While the refetch is in flight the control swaps its icon for a
+          <code>Spinner</code>, sets <code>disabled</code> + <code>aria-busy="true"</code>, and a
+          small <b>"Refreshing…"</b> toast + a faint veil sit over the canvas. Crucially the
+          breadcrumb still reads <b>Epic 7</b> — the refresh re-loads the CURRENT level in place
+          (<code>reloadKey</code> bump → <code>loadLevel(focusId)</code>), it does NOT remount the
+          canvas to root. The control returns to idle (panel 1) when the fetch resolves — driven by
+          the real fetch-completion signal, never a fixed timer.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL 3 — refresh control state study ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>3 · Refresh control — states</b><span>— Button (secondary, icon-only) · RefreshCw</span>
+        <span class="cap">components/ui/Button.tsx · components/ui/Spinner.tsx</span>
+      </div>
+      <div class="body">
+        <div class="study">
+          <div class="stateitem">
+            <button class="iconbtn" type="button" aria-label="Refresh roadmap">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+            <div class="lbl">Idle</div>
+            <div class="desc">
+              <code>--el-text-secondary</code> glyph, <code>--el-border-strong</code> edge,
+              transparent fill
+            </div>
+          </div>
+          <div class="stateitem">
+            <button class="iconbtn hov" type="button" aria-label="Refresh roadmap">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+            <div class="lbl">Hover</div>
+            <div class="desc"><code>--el-surface</code> fill, <code>--el-text</code> glyph</div>
+          </div>
+          <div class="stateitem">
+            <button class="iconbtn focus" type="button" aria-label="Refresh roadmap">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+            <div class="lbl">Focus-visible</div>
+            <div class="desc">
+              2px <code>--focus-ring-color</code> ring, 2px page-bg offset (Button base)
+            </div>
+          </div>
+          <div class="stateitem">
+            <button
+              class="iconbtn busy"
+              type="button"
+              aria-label="Refresh roadmap"
+              aria-busy="true"
+              disabled
+            >
+              <span class="spinner" role="status" aria-label="Loading"></span>
+            </button>
+            <div class="lbl">Loading</div>
+            <div class="desc">
+              <code>Spinner</code> replaces glyph, <code>disabled</code> + <code>aria-busy</code>,
+              0.55 opacity
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          <b>One primitive, four states.</b> The control reuses <code>Button</code>'s own
+          <code>loading</code> affordance (inline <code>Spinner</code> + disabled) — no bespoke
+          markup. Colour flows entirely through <code>--el-*</code> tokens and shape through
+          <code>--radius-btn</code>, so it re-skins with every palette and style. No invented hues.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════ PANEL 4 — URL-addressable scope (behaviour, no new pixels) ════════════ -->
+    <section class="sheet">
+      <div class="sheethead">
+        <b>4 · URL-addressable scope</b
+        ><span>— the toggle is visually UNCHANGED; scope now lives in the URL</span>
+        <span class="cap">/roadmap · /roadmap?scope=sprint</span>
+      </div>
+      <div class="body">
+        <div class="urlrow">
+          <div class="urlbar">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            app.motir.co/roadmap
+          </div>
+          <div class="seg" role="group" aria-label="Roadmap scope">
+            <button class="seg-opt on" aria-pressed="true">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="7" height="7" x="3" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="14" rx="1" />
+                  <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+              ></span>
+              Whole project
+            </button>
+            <button class="seg-opt" aria-pressed="false">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" /></svg
+              ></span>
+              Active sprint
+            </button>
+          </div>
+          <div class="urlnote"><b>Default.</b> No param — canonical <code>/roadmap</code>.</div>
+        </div>
+
+        <div class="urlrow">
+          <div class="urlbar">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            app.motir.co/roadmap<span class="qs">?scope=sprint</span>
+          </div>
+          <div class="seg" role="group" aria-label="Roadmap scope">
+            <button class="seg-opt" aria-pressed="false">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect width="7" height="7" x="3" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="3" rx="1" />
+                  <rect width="7" height="7" x="14" y="14" rx="1" />
+                  <rect width="7" height="7" x="3" y="14" rx="1" /></svg
+              ></span>
+              Whole project
+            </button>
+            <button class="seg-opt on" aria-pressed="true">
+              <span class="ic"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" /></svg
+              ></span>
+              Active sprint
+            </button>
+          </div>
+          <div class="urlnote">
+            <b>Shareable.</b> Deep-link, reload &amp; browser Back land here.
+          </div>
+        </div>
+
+        <p class="note">
+          <b>No new pixels — a behaviour note.</b> The scope <code>Segmented</code> toggle is
+          visually unchanged. What changes: selecting <b>Active sprint</b> writes
+          <code>?scope=sprint</code> to the URL (<code>router.replace</code>,
+          <code>scroll:false</code>); the default <b>Whole project</b> omits the param (clean
+          <code>/roadmap</code>). The server page seeds the initial scope from the URL, so a
+          deep-linked / reloaded / shared <code>?scope=sprint</code> opens directly in sprint scope,
+          and browser Back/Forward moves scope. This is the standard view-state URL convention
+          (Linear / Jira / GitHub Projects).
+        </p>
+      </div>
+    </section>
+
+    <p class="docsub" style="margin-top: 6px">
+      Access path: the refresh control is an in-header affordance on the EXISTING Roadmap view,
+      reached from the shipped <b>Roadmap</b> primary left-nav entry (MOTIR-1011) — no new nav
+      entry. Both additions COMPOSE the shipped roadmap header + canvas; the canvas engine (<code
+        >ProjectRoadmapCanvas</code
+      >
+      / <code>PlanningCanvas</code>) is not redrawn.
+    </p>
+  </body>
+</html>
