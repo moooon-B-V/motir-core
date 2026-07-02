@@ -52,6 +52,25 @@ export function OrDivider() {
 }
 
 /**
+ * "Idea carried over" banner (Subtask 7.22.2 / MOTIR-1458). When a visitor
+ * arrives at /sign-in from the marketing hero (`?draft=<id>` claimed), we show
+ * the idea they typed so they SEE it was preserved across the auth boundary — it
+ * then seeds the first onboarding turn after sign-in. A quiet, neutral surface
+ * (not an alert): the idea itself carries the emphasis. Long ideas clamp so the
+ * auth card stays compact.
+ */
+export function IdeaCarried({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-input-x) py-(--spacing-sm)">
+      <span className="text-(--el-text-muted) font-sans text-xs font-medium uppercase tracking-wider">
+        {label}
+      </span>
+      <p className="line-clamp-4 font-sans text-sm text-(--el-text)">{children}</p>
+    </div>
+  );
+}
+
+/**
  * Top-of-form inline error banner — used for OAuth errors and other
  * page-scoped failures that aren't tied to a single field. Mockup 06
  * shows the styling.

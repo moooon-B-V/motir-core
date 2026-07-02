@@ -296,6 +296,30 @@ model EmailChangeRequest {
   @@map("email_change_request")
 }
 
+/// Anonymous, short-lived "idea draft" for the cross-origin pre-auth handoff
+/// (Subtask 7.22.2 / MOTIR-1458). A LOGGED-OUT visitor types a project idea on
+/// the standalone motir-marketing site (motir.co) — a DIFFERENT origin, so it
+/// cannot set motir-core's `motir_pending_idea` cookie directly. Instead the
+/// marketing site POSTs the idea to `POST /api/idea-draft` (origin-allowlisted),
+/// which stores it here and returns the row `id` as an opaque `draftId`. The
+/// browser is then navigated to `/sign-in?draft=<id>` (same origin), which claims
+/// the draft: it reads the idea, plants the `motir_pending_idea` cookie via the
+/// existing 7.3.14 → 7.3.5 seam, and the draft is consumed. Carries NO user FK
+/// and NO PII beyond the idea text — it is anonymous and read pre-auth, so (like
+/// `verification` / `email_change_request`) it has NO RLS. Single-use (deleted on
+/// claim) with a short TTL (`expires_at`); an expired row reads as absent.
+model IdeaDraft {
+  id        String   @id @default(cuid())
+  /// The trimmed + length-clamped hero idea (see `MAX_PENDING_IDEA_LENGTH`). The
+  /// only field the visitor supplies; no PII is stored alongside it.
+  idea      String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("idea_draft")
+}
+
 /// The ROOT tenancy tier (Story 6.10) — the account a customer signs up as, the
 /// parent of N workspaces, and THE BILLING ENTITY credits + usage roll up to
 /// (the orchestrator re-keys 7.12's ledger to the org separately; 6.10 ships no

@@ -14,9 +14,12 @@ import { db } from '@/lib/db';
 // collide on the globally-unique `organization.slug`, suffixing slugs that
 // should be clean. organization_membership cascades from both organization and
 // user; it is named too for clarity.
+// `idea_draft` (Subtask 7.22.2 / MOTIR-1458) is an ANONYMOUS table with no FK to
+// user/workspace, so a workspace/user CASCADE never reaches it — name it here
+// explicitly so its short-lived rows don't leak across tests.
 export async function truncateAuthTables(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "verification", "email_change_request", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "verification", "email_change_request", "idea_draft", "user" RESTART IDENTITY CASCADE',
   );
 }
 
