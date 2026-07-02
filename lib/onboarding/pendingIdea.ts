@@ -1,15 +1,19 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 
-// ── The "preserved idea" seam (Subtask 7.3.14 → 7.3.5) ───────────────────────
+// ── The "preserved idea" seam (Subtask 7.3.14 → 7.3.5; rehomed by 7.22.1) ─────
 //
-// On the public front door (`app/page.tsx`), a LOGGED-OUT visitor types their
-// idea into the hero prompt and submits. We must raise the `(auth)` flow without
-// losing what they typed — they should never have to re-type it. We round-trip
-// the idea through a short-lived cookie:
+// A LOGGED-OUT visitor types their project idea on the motir.co marketing hero
+// (relocated to the standalone motir-marketing site in the 8.3 entry rework). We
+// must raise motir-core's `(auth)` flow without losing what they typed — they
+// should never have to re-type it. We round-trip the idea through a short-lived
+// cookie:
 //
-//   1. The hero submit (server action `submitIdeaAction`) writes the trimmed idea
-//      to this cookie, then redirects into `(auth)` with `next=/onboarding`.
+//   1. The cross-origin pre-auth draft receiver (Subtask 7.22.2 / MOTIR-1458)
+//      writes the trimmed idea to this cookie via `setPendingIdea()`, then routes
+//      into `(auth)` with `next=/onboarding`. (Before the marketing hero moved
+//      out, an in-app hero submit wrote it; that hero now lives in
+//      motir-marketing — this cookie is still the same handoff contract.)
 //   2. The cookie is `SameSite=Lax`, so it survives the top-level GET navigation
 //      back from the auth flow — including the Google OAuth round-trip (Lax sends
 //      the cookie on top-level navigations, which is exactly the post-OAuth
@@ -19,16 +23,16 @@ import { cookies } from 'next/headers';
 //      to seed the conversation's FIRST turn, then `clearPendingIdea()` so a stale
 //      idea never leaks into a later session.
 //
-// This module is the CONTRACT between the two subtasks: 7.3.14 writes, 7.3.5
-// reads + clears. It holds NO AI logic and imports nothing from `motir-ai` — the
-// hero submit only ever reaches the planner through the 7.3.4 chat route, which
-// 7.3.5 drives (the open-core invariant).
+// This module is the CONTRACT between the writer (MOTIR-1458) and the reader
+// (7.3.5). It holds NO AI logic and imports nothing from `motir-ai` — the idea
+// only ever reaches the planner through the 7.3.4 chat route, which 7.3.5 drives
+// (the open-core invariant).
 
 export const PENDING_IDEA_COOKIE = 'motir_pending_idea';
 
 // Where the preserved idea lands after auth: the authed discovery chat (Subtask
-// 7.3.5 / MOTIR-833). The front door redirects here (via `next=`) and 7.3.5 reads
-// the cookie above to seed the conversation's first turn. Part of the same seam.
+// 7.3.5 / MOTIR-833). Auth redirects here (via `next=`) and 7.3.5 reads the
+// cookie above to seed the conversation's first turn. Part of the same seam.
 export const ONBOARDING_ENTRY_PATH = '/onboarding';
 
 // Keep the cookie small and the seeded first turn sane. The hero textarea clamps

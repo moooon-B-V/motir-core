@@ -332,6 +332,8 @@
   "auth": {
     "welcomeBack": "Welcome back!",
     "signInSubhead": "Use Motir to turn any product idea into reality.",
+    "planWithAiLead": "Have a project idea?",
+    "planWithAI": "Plan with AI",
     "checking": "Checking…",
     "continue": "Continue",
     "signingIn": "Signing in…",

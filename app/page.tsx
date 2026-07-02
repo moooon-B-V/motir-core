@@ -1,21 +1,19 @@
-import { ConnectAiGate } from '@/app/_components/ConnectAiGate';
-import { PublicFrontDoor } from '@/app/_components/PublicFrontDoor';
-import { isAiPlanningConfigured } from '@/lib/ai/planningConfig';
+import { redirect } from 'next/navigation';
 
-// The public front door (Subtask 7.3.14 — the root a brand-new visitor lands on,
-// the *vibe project* framing). Replaces the placeholder root page.
+// The motir-core root (Subtask 7.22.1 / MOTIR-1457 — the 8.3 entry rework).
 //
-//   - **Cloud / connected** (AI planning configured) → the marketing landing +
-//     hero prompt (`PublicFrontDoor`, design Surfaces 1 + 2).
-//   - **Self-hosted, not connected** → the "Connect Motir AI" gate
-//     (`ConnectAiGate`, design Surface 6) — the hero would be useless without a
-//     planner to talk to (the cloud-gated-AI decision).
+// The marketing landing + hero prompt relocated OUT of motir-core to the
+// standalone motir-marketing site (Story 8.3 / MOTIR-1152), so the root of the
+// PM app is no longer a marketing page. It now lands the visitor on the login
+// surface; the "Plan with AI" affordance there is the door into onboarding
+// (`/onboarding`), and an idea typed on motir.co is preserved into onboarding via
+// the cross-origin pre-auth draft receiver (MOTIR-1458, reusing the 1022 seam).
 //
-// The decision is read server-side from the deployment's env (no client flag, no
-// `motir-ai` import — the open-core boundary).
+// The self-host "Connect Motir AI" gate that used to render here (behind
+// `isAiPlanningConfigured()`) moved to the onboarding entrance
+// (`app/(onboarding)/layout.tsx`): a self-hosted deployment with no Motir Cloud
+// connection sees the deferred Connect gate when it reaches `/onboarding`, not at
+// the root. Nothing here imports `motir-ai` (the open-core invariant).
 export default function HomePage() {
-  if (!isAiPlanningConfigured()) {
-    return <ConnectAiGate />;
-  }
-  return <PublicFrontDoor />;
+  redirect('/sign-in');
 }
