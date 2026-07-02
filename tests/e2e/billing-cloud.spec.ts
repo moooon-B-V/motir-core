@@ -133,7 +133,9 @@ test('@smoke paywall: a free / out-of-credits org hitting AI sees the upgrade pr
   const accessRead = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/ai/access' && r.request().method() === 'GET',
   );
-  await page.goto('/onboarding');
+  // The discovery hub (which reads /api/ai/access) is at /onboarding/discovery
+  // now — /onboarding is the entrance fork (MOTIR-1462), which makes no AI read.
+  await page.goto('/onboarding/discovery');
   const access = await accessRead;
   expect(access.status()).toBe(200);
   expect((await access.json()).balance).toBeLessThanOrEqual(0);

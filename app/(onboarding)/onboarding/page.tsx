@@ -4,22 +4,23 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { readPendingIdea } from '@/lib/onboarding/pendingIdea';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding';
+import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 
-// The authed discovery onboarding route (Subtask 7.3.5 / MOTIR-833) — where the
-// public front door (7.3.14) lands the visitor after auth (`ONBOARDING_ENTRY_PATH
-// = /onboarding`). A Server Component that gates on session + active project (the
-// established getSession + getActiveProject pattern, mirroring /ready + /items),
-// READS the preserved idea (7.3.14 cookie) to seed the loop's first turn, and
-// hands off to the client island that drives the FORWARD gated review loop.
+// The onboarding ENTRANCE route (Subtask 7.22.4 / MOTIR-1462) — the new-vs-existing
+// fork the user lands on at `/onboarding`, designed by MOTIR-1461
+// (`design/onboarding-entrance/`). It replaces the old direct render of the
+// discovery chat here: the chat now lives at `/onboarding/discovery`, and this
+// screen ROUTES into it (Start planning → discovery, seeded with the idea) or
+// hands off to the import wizard (→ `/onboarding/import`, owned by 7.15/7.17).
 //
-// The loop reads its resumable state from the 7.3.70 `/api/ai/pre-plan` seam and
-// streams the conductor over the 7.3.4 `/api/ai/chat` SSE, so this page does no
-// AI read itself — it only resolves the actor + the seed idea. The polished
-// two-pane shell (canvas roadmap + step host) is the onboarding shell, Subtask
-// 7.3.11 / MOTIR-840, which composes the chat + review surfaces built here.
+// A Server Component that gates exactly like the discovery route (session →
+// active project → the onboarding-ran marker), then reads the preserved idea
+// (the motir.co hero cookie, MOTIR-1458) to pre-fill the box. It does NO AI read
+// and imports nothing from `motir-ai` (the open-core invariant) — the idea
+// reaches the planner only through the 7.3.4 chat route the discovery surface
+// drives, after the entrance forwards to it.
 
-export default async function OnboardingPage() {
+export default async function OnboardingEntrancePage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -33,22 +34,14 @@ export default async function OnboardingPage() {
     );
   }
 
-  // Onboarding-ran gate (Subtask 7.4 / MOTIR-1264): a project whose FIRST plan
-  // was approved + materialized has already produced its work-item tree through
-  // onboarding — never show the pre-plan canvas again. Redirect to the project's
-  // real planning surface. A NEVER-onboarded project (existing tree but no
-  // materialized plan — a db:seed tree or a migrate-existing project, MOTIR-815)
-  // has a null marker and still enters onboarding; the 7.3 restore resumes an
-  // in-progress session from there.
+  // Onboarding-ran gate (Subtask 7.4 / MOTIR-1264): a project whose first plan was
+  // approved + materialized has already produced its work-item tree — it never
+  // re-enters onboarding, so the entrance redirects it to the real planning
+  // surface, exactly as the discovery route does. A never-onboarded project (null
+  // marker) sees the entrance.
   if (ctx.project.onboardingRanAt) redirect('/roadmap');
 
-  const initialIdea = await readPendingIdea();
+  const carriedIdea = await readPendingIdea();
 
-  return (
-    <DiscoveryOnboarding
-      initialIdea={initialIdea}
-      projectKey={ctx.project.identifier}
-      projectName={ctx.project.name}
-    />
-  );
+  return <OnboardingEntrance carriedIdea={carriedIdea} />;
 }

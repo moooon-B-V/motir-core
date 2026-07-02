@@ -251,7 +251,9 @@ test('onboarding canvas: tier-doc viewer → full page, plus the empty + error p
   await signUp(page, 'canvas-tierdoc@example.com');
   await createFirstProject(page, 'Invoicer');
 
-  await page.goto('/onboarding');
+  // The hub is at /onboarding/discovery now (/onboarding is the entrance fork,
+  // MOTIR-1462); the tier-doc popup URL (/onboarding/direction/*) is unchanged.
+  await page.goto('/onboarding/discovery');
   // Resume hydrates to the HUB: the tier stations render on the canvas.
   await expect(page.locator('[data-node-id="vision"]')).toBeVisible();
 

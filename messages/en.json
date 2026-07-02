@@ -4041,6 +4041,35 @@
         "designDesc": "Pick how your product looks and feels — or skip it and use Motir's default."
       }
     },
+    "entrance": {
+      "eyebrow": "Build with AI",
+      "headingDefault": "How would you like to start?",
+      "headingCarried": "Ready when you are",
+      "subheadDefault": "Describe what you want to build. Motir plans it with you, then agents build it.",
+      "subheadCarried": "We kept the idea you started with. Add more if you like, then continue.",
+      "howItWorks": "See how Motir works",
+      "ideaLabel": "Your idea",
+      "carriedLabel": "Carried over from your idea",
+      "placeholder": "Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. Don't worry about getting it perfect — we'll ask follow-up questions next.",
+      "startCta": "Start planning",
+      "continueCta": "Continue with this idea",
+      "hintDefault": "You can start with a rough idea — the discovery chat asks follow-up questions.",
+      "hintCarried": "Add or refine anything before you continue — the discovery chat takes it from here.",
+      "or": "OR",
+      "importTitle": "I have an existing project — import it",
+      "importDesc": "Connect your repository and Motir reads your code, then plans on top of what's already there. You can also bring over existing work items from Jira, Linear or Plane.",
+      "importCta": "Import"
+    },
+    "import": {
+      "title": "Import an existing project",
+      "body": "Connecting a repository and importing your work from Jira, Linear or Plane is coming soon. For now, you can start a new project with AI.",
+      "back": "Back to start"
+    },
+    "howItWorks": {
+      "title": "How Motir works",
+      "body": "A full walkthrough — idea → plan → agents build it — is on its way. For now, start with your idea and Motir asks follow-up questions along the way.",
+      "back": "Back to start"
+    },
     "connectGate": {
       "title": "AI planning isn't configured",
       "body": "Planning runs on Motir Cloud; this self-hosted workspace has no connection yet.",

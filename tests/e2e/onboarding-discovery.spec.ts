@@ -194,7 +194,9 @@ test('chat discovery flow → the 4 tiers + the feature catalog appear in the re
   await signUp(page, email);
   await createFirstProject(page, 'Invoicer');
 
-  await page.goto('/onboarding');
+  // The onboarding hub moved to /onboarding/discovery; /onboarding is now the
+  // entrance fork (MOTIR-1462). Enter the discovery chat surface directly.
+  await page.goto('/onboarding/discovery');
 
   // Fresh session → the onboarding hub with its chat composer (no docs yet).
   const composer = page.getByRole('textbox', { name: 'Reply, or ask a question…' });

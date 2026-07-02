@@ -162,9 +162,10 @@ test('generation streams proposed PlanItems live into a planned Plan; the propos
   await stubGenerationBoundary(page, seed.planId);
 
   // Sign in + enter the immersive onboarding hub. The tiers-complete pre-plan stub
-  // lands on the hub with the "Go to plan phase" exit.
+  // lands on the hub with the "Go to plan phase" exit. The hub is at
+  // /onboarding/discovery now (/onboarding is the entrance fork, MOTIR-1462).
   await signIn(page, seed.email, seed.password);
-  await page.goto('/onboarding');
+  await page.goto('/onboarding/discovery');
 
   await page.getByRole('button', { name: 'Go to plan phase' }).click();
   // The pre-plan → generation hand-off, then the 7.4 generation trigger.

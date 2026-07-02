@@ -318,7 +318,9 @@ async function startFreshOnboarding(page: Page, label: string): Promise<void> {
   const email = `onboarding-fresh-${label}-${Date.now()}@example.com`;
   await signUp(page, email);
   await createFirstProject(page, 'Invoicer');
-  await page.goto('/onboarding');
+  // The hub moved to /onboarding/discovery; /onboarding is the entrance fork now
+  // (MOTIR-1462). Enter the discovery chat directly.
+  await page.goto('/onboarding/discovery');
   await expect(composer(page)).toBeVisible();
 }
 

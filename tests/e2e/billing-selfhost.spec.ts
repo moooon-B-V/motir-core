@@ -38,7 +38,9 @@ test('@smoke self-host: billing route 404s, the billing menu row + AI paywall ar
   const access = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/ai/access' && r.request().method() === 'GET',
   );
-  await page.goto('/onboarding');
+  // The discovery hub (which reads /api/ai/access) is at /onboarding/discovery
+  // now — /onboarding is the entrance fork (MOTIR-1462), which makes no AI read.
+  await page.goto('/onboarding/discovery');
   expect((await (await access).json()).applicable).toBe(false);
   await expect(page.getByText('AI planning is a paid feature')).toHaveCount(0);
   await expect(page.getByText('Planning is paused')).toHaveCount(0);
