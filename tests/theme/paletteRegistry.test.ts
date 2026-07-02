@@ -19,7 +19,12 @@ import { themeInitScript } from '@/lib/theme/init-script';
 // palette→doc mapping resolves to a real file, the default resolves, and the
 // palette axis is kept disjoint from the shape (style) axis in globals.css.
 
-const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS =
+  readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8') +
+  readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 
 describe('palette registry', () => {
   it('registers the palette set (Motir — the house palette — plus the cool set Cobalt/Graphite/Evergreen/Spectrum and the warm-primary brand set Amber/Sienna/Garnet/Citrine)', () => {

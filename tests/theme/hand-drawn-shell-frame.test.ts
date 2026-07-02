@@ -11,7 +11,10 @@ import { describe, expect, it } from 'vitest';
 // components emit the data-surface hooks the rules target.
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
-const GLOBALS_CSS = read('app/globals.css');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS = read('app/globals.css') + read('packages/design-system/theme.css');
 const TOPNAV = read('app/(authed)/_components/TopNav.tsx');
 const SIDEBAR = read('components/ui/Sidebar.tsx');
 

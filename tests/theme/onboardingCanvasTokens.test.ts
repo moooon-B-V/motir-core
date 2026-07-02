@@ -16,7 +16,10 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
-const GLOBALS_CSS = read('app/globals.css');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS = read('app/globals.css') + read('packages/design-system/theme.css');
 
 // The Tier-3 base block (the only place a new --el-* is defined; palettes
 // override the underlying --color-*, not the --el-*). It's a flat declaration

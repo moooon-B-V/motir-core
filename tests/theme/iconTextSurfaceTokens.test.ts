@@ -17,7 +17,10 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
-const GLOBALS_CSS = read('app/globals.css');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS = read('app/globals.css') + read('packages/design-system/theme.css');
 
 // The Tier-3 base block (the only place a new --el-* is defined; palettes
 // override the underlying --color-*, not the --el-*). Flat declaration block:
@@ -123,20 +126,20 @@ describe('icon/text-role + surface-primitive tokens map to their Tier-0 --color-
 
 describe('every cited consumer is migrated onto its dedicated token', () => {
   it('Tooltip uses --el-tooltip-bg / -text (not --el-text / --el-text-inverted)', () => {
-    const src = read('components/ui/Tooltip.tsx');
+    const src = read('packages/design-system/src/components/ui/Tooltip.tsx');
     expect(src).toContain('bg-(--el-tooltip-bg) text-(--el-tooltip-text)');
     expect(src).toContain('fill-(--el-tooltip-bg)');
     expect(src).not.toMatch(/bg-\(--el-text\)/);
   });
 
   it('Switch uses --el-switch-on (track) + --el-switch-knob (thumb)', () => {
-    const src = read('components/ui/Switch.tsx');
+    const src = read('packages/design-system/src/components/ui/Switch.tsx');
     expect(src).toContain('border-(--el-switch-on) bg-(--el-switch-on)');
     expect(src).toContain('bg-(--el-switch-knob)');
   });
 
   it('Modal uses --el-overlay-scrim, --el-text-subtitle (desc), --el-icon-muted (close)', () => {
-    const src = read('components/ui/Modal.tsx');
+    const src = read('packages/design-system/src/components/ui/Modal.tsx');
     expect(src).toContain('bg-(--el-overlay-scrim)');
     expect(src).not.toContain('bg-black/40');
     expect(src).toContain('text-(--el-text-subtitle)');
@@ -144,7 +147,9 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
   });
 
   it('Card (untinted) + the bg-card orphans use --el-card', () => {
-    expect(read('components/ui/Card.tsx')).toContain("none: 'bg-(--el-card)'");
+    expect(read('packages/design-system/src/components/ui/Card.tsx')).toContain(
+      "none: 'bg-(--el-card)'",
+    );
     const workflow = read('app/(authed)/settings/project/workflow/_components/WorkflowEditor.tsx');
     const edit = read('app/(authed)/items/[key]/edit/_components/EditIssueForm.tsx');
     expect(workflow).not.toMatch(/\bbg-card\b/);
@@ -154,14 +159,16 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
   });
 
   it('Button (secondary) + Input use --el-button-border / --el-input-border + --el-icon-field', () => {
-    expect(read('components/ui/Button.tsx')).toContain('border border-(--el-button-border)');
-    const input = read('components/ui/Input.tsx');
+    expect(read('packages/design-system/src/components/ui/Button.tsx')).toContain(
+      'border border-(--el-button-border)',
+    );
+    const input = read('packages/design-system/src/components/ui/Input.tsx');
     expect(input).toContain('border-(--el-input-border)');
     expect(input).toContain('text-(--el-icon-field)');
   });
 
   it('Combobox: eyebrow header, option-active-bg, identifier, icon-muted chevron, accent check', () => {
-    const src = read('components/ui/Combobox.tsx');
+    const src = read('packages/design-system/src/components/ui/Combobox.tsx');
     expect(src).toContain('text-(--el-text-eyebrow)');
     expect(src).toContain('bg-(--el-option-active-bg)');
     expect(src).toContain('text-(--el-text-identifier)');
@@ -177,7 +184,7 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
   });
 
   it('MultiSelectPicker: chip tokens, option-active-bg, icon-muted, text-helper hint, accent check', () => {
-    const src = read('components/ui/MultiSelectPicker.tsx');
+    const src = read('packages/design-system/src/components/ui/MultiSelectPicker.tsx');
     expect(src).toContain('bg-(--el-chip-bg)');
     expect(src).toContain('border border-(--el-chip-border)');
     expect(src).toContain('bg-(--el-option-active-bg)');
@@ -187,15 +194,19 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
   });
 
   it('Pill neutral tone uses --el-chip-bg / --el-chip-border', () => {
-    expect(read('components/ui/Pill.tsx')).toContain(
+    expect(read('packages/design-system/src/components/ui/Pill.tsx')).toContain(
       'bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border)',
     );
   });
 
   it('SectionLabel + FormField + EmptyState use the text-role tokens', () => {
-    expect(read('components/ui/SectionLabel.tsx')).toContain('text-(--el-text-eyebrow)');
-    expect(read('components/ui/FormField.tsx')).toContain('text-(--el-text-helper)');
-    const empty = read('components/ui/EmptyState.tsx');
+    expect(read('packages/design-system/src/components/ui/SectionLabel.tsx')).toContain(
+      'text-(--el-text-eyebrow)',
+    );
+    expect(read('packages/design-system/src/components/ui/FormField.tsx')).toContain(
+      'text-(--el-text-helper)',
+    );
+    const empty = read('packages/design-system/src/components/ui/EmptyState.tsx');
     expect(empty).toContain('text-(--el-text-subtitle)'); // description
     expect(empty).toContain('text-(--el-icon-muted)'); // the empty-state glyph
   });
