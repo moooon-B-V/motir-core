@@ -208,6 +208,16 @@ export default defineConfig({
         // toggle during the browser-driven shell-flows journey. next.config.ts
         // reads this flag; a normal `pnpm dev` session keeps its indicator.
         E2E_DISABLE_DEV_INDICATOR: '1',
+        // Subtask 7.22.1 (MOTIR-1457): mark the E2E deployment as an AI-connected
+        // (Motir Cloud) deployment. The onboarding entrance (app/(onboarding)/
+        // layout.tsx) shows the self-host "Connect Motir AI" deferred gate when
+        // `isAiPlanningConfigured()` is false; CI is logically a cloud deployment
+        // with its /api/ai/* routes browser-stubbed (see onboarding-*.spec.ts), so
+        // it must read as connected or those specs would hit the gate instead of
+        // discovery. The value is a placeholder host — the browser stubs every AI
+        // call, so no request ever leaves the process (mirrors the billing config).
+        MOTIR_AI_URL: 'http://motir-ai.e2e.local',
+        MOTIR_AI_SERVICE_TOKEN: 'e2e-ai-placeholder-token',
         // Subtask 3.5.1: the board load-model overrides, forwarded from the run's
         // env only when set (empty by default — see BOARD_LOAD_SEAM_ENV above).
         ...BOARD_LOAD_SEAM_ENV,

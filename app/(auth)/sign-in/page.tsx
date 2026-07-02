@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Button } from '@/components/ui/Button';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signIn } from '@/lib/auth/client';
 import { AuthShell, OrDivider, FormAlert } from '../_components/AuthShell';
@@ -197,6 +197,25 @@ function SignInForm() {
           <FooterLink prompt={t('dontHaveAccount')} linkText={t('signUp')} href="/sign-up" />
         </form>
       )}
+
+      {/* Plan with AI — the onboarding door (Subtask 7.22.1 / MOTIR-1457). The
+          entry into the start-fresh AI planning flow from the login surface,
+          the front-door role the relocated marketing hero used to hold. Routes
+          to /onboarding: the onboarding layout gates auth (preserving
+          `next=/onboarding`), then a cloud deployment begins discovery while a
+          self-hosted one shows the deferred Connect-Motir-AI gate. */}
+      <div className="flex flex-col gap-3 border-t border-(--el-border) pt-6">
+        <p className="text-center font-sans text-sm text-(--el-text-muted)">
+          {t('planWithAiLead')}
+        </p>
+        <Link
+          href="/onboarding"
+          className={`${buttonVariants({ variant: 'secondary', size: 'lg' })} w-full`}
+        >
+          <Sparkles className="h-4 w-4" aria-hidden />
+          {t('planWithAI')}
+        </Link>
+      </div>
     </AuthShell>
   );
 }
