@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Onboarding entrance — the new-vs-existing fork · MOTIR-1461 / 7.22.3</title>
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
+         light theme / warm-editorial / motir palette). This standalone mock
+         re-states the same VALUES so a plain browser paints the real palette
+         without the Tailwind build — exactly as the sibling assets do
+         (design/ai-planning/*.mock.html, design/ai-chat/*.mock.html). Nothing
+         here re-defines colour/shape semantics; it re-states them.
+      ---------------------------------------------------------------------- */
+      :root {
+        /* text */
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        /* surfaces */
+        --page: #f4f3f1;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        /* borders */
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --border-strong: #d3cfc8;
+        /* accent */
+        --accent: #5645d4;
+        --accent-pressed: #4534b3;
+        --accent-soft: #f4f2fd;
+        --highlight: #ff64c8;
+        /* status / intent */
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --info: #0075de;
+        /* feature tints */
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --yellow: #fef7d6;
+        /* shape */
+        --r-card: 12px;
+        --r-btn: 8px;
+        --r-input: 8px;
+        --r-control: 6px;
+        --r-pill: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 8px 26px -10px #0000001f;
+        --focus: #5645d4;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ---- doc scaffold (annotations only — NOT part of the product UI) ---- */
+      .sheet {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 36px 28px 72px;
+      }
+      .doc-head h1 {
+        font: 700 26px/1.2 var(--serif);
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 80ch;
+      }
+      .doc-head .refs {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid #e3def8;
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--secondary);
+        background: var(--hub);
+        border-color: var(--border);
+      }
+      .panel {
+        margin-top: 34px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--mono);
+        color: #fff;
+        background: var(--accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap .note {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      /* ================================================================
+         PRODUCT SURFACE — the /onboarding entrance (full-bleed, idea-first).
+         The onboarding route group renders OUTSIDE the app shell
+         (app/(onboarding)/layout.tsx): authenticated, but no top nav /
+         project sidebar. So the entrance owns the whole viewport. It leads
+         with ONE idea box (continuing the marketing hero); "import an
+         existing project" is a first-class but SECONDARY path below. The
+         plan → build lifecycle is stated in prose + a "How Motir works" link
+         (no on-screen workflow chart).
+      ================================================================ */
+      .ob {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--page);
+        box-shadow: var(--sh-card);
+        overflow: hidden;
+      }
+      .ob-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 22px;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 55%, transparent);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .brand .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--r-control);
+        background: var(--lavender);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+      }
+      .ob-bar .acct {
+        margin-left: auto;
+      }
+      .avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--r-pill);
+        background: var(--mint);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .ob-body {
+        max-width: 660px;
+        margin: 0 auto;
+        padding: 52px 28px 56px;
+      }
+      .ob-head {
+        text-align: center;
+        margin-bottom: 26px;
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--lavender);
+        color: var(--strong);
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: var(--r-pill);
+        padding: 4px 11px;
+        margin-bottom: 14px;
+      }
+      .ob-head h1 {
+        font: 700 34px/1.15 var(--serif);
+        letter-spacing: -0.015em;
+        margin: 0 0 8px;
+      }
+      .ob-head p {
+        margin: 0 auto;
+        max-width: 52ch;
+        color: var(--secondary);
+        font-size: 15px;
+        line-height: 1.55;
+      }
+      /* the detailed "how it works" entry point (replaces the on-screen chart) */
+      .howlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 14px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .howlink svg {
+        width: 14px;
+        height: 14px;
+      }
+      .howlink:hover {
+        text-decoration: underline;
+      }
+
+      /* --- PRIMARY: the idea box (continues the marketing hero) --- */
+      .idea-card {
+        background: var(--surface);
+        border: 1px solid var(--accent);
+        border-radius: var(--r-card);
+        box-shadow: var(--sh-elev);
+        padding: 18px 18px 16px;
+      }
+      .idea-card .lbl {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font: 600 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-bottom: 8px;
+      }
+      .idea-card .lbl.carried {
+        color: var(--accent);
+      }
+      .idea-card .lbl.carried .dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .idea-card textarea {
+        width: 100%;
+        min-height: 172px;
+        border: 0;
+        background: transparent;
+        resize: none;
+        font-family: inherit;
+        font-size: 15px;
+        line-height: 1.55;
+        color: var(--text);
+        outline: none;
+      }
+      .idea-card textarea::placeholder {
+        color: var(--faint);
+      }
+      .idea-foot {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+        padding-top: 13px;
+        border-top: 1px solid var(--hair);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font: 600 14px/1 inherit;
+        border-radius: var(--r-btn);
+        padding: 0 16px;
+        height: 40px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .hint {
+        margin: 10px 2px 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* --- divider between the primary path and the secondary one --- */
+      .or {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 26px 2px 18px;
+        color: var(--faint);
+        font: 600 11px var(--mono);
+        letter-spacing: 0.06em;
+      }
+      .or::before,
+      .or::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* --- SECONDARY: import an existing project (a slim option row) --- */
+      .import {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        padding: 16px 18px;
+        box-shadow: var(--sh-subtle);
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+      }
+      .import:hover {
+        border-color: var(--border-strong);
+      }
+      .import .icn {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: var(--sky);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .import .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .import .body .t {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .import .body .d {
+        margin-top: 4px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--secondary);
+      }
+      .import .go {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .import .go svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* --- states (Panel 3) --- */
+      .mini-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .state {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        padding: 16px 18px;
+      }
+      .state .st-cap {
+        font: 600 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-bottom: 10px;
+      }
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border: 1px solid var(--border);
+        border-radius: var(--r-input);
+        background: var(--soft);
+        padding: 11px 13px;
+        font-size: 13px;
+        color: var(--secondary);
+        line-height: 1.5;
+      }
+      .callout + .callout {
+        margin-top: 12px;
+      }
+      .callout .ic {
+        color: var(--info);
+        flex: none;
+        margin-top: 1px;
+      }
+      .callout .ic svg {
+        width: 16px;
+        height: 16px;
+      }
+      .kbd {
+        font: 600 11px var(--mono);
+        background: var(--mutedfill);
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 1px 6px;
+        color: var(--strong);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>Onboarding entrance — idea-first, with a secondary import path</h1>
+        <p>
+          The `/onboarding` entrance. It LEADS with the idea box (continuing the marketing hero,
+          7.3.14) and a primary <strong>Start planning</strong> → the 7.3 discovery flow; a
+          first-class but SECONDARY <strong>“I have an existing project — import it”</strong> path
+          sits below → the 7.15 migrate wizard / 7.17 Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane
+          import (the carried-over-idea panel omits this — an idea in hand means the user is
+          starting fresh). The plan → build lifecycle (Motir plans, then agents build it — the
+          user's own agent or a Motir-hosted one; Motir is not plan-only) is conveyed in the subhead
+          PROSE plus a <strong>“How Motir works” link</strong> that opens the detailed explainer —
+          there is NO on-screen workflow chart (it under-explained). The eyebrow reads
+          <strong>“Build with AI”</strong>, not “Plan with AI” — the latter was misleading (it
+          implies plan-only, but Motir plans AND builds). This label must propagate to the entry
+          button (MOTIR-1457), the in-app entry (MOTIR-1485), and the shipped hero badge (7.3.14
+          `en.json` `landing.badge`) so the whole path reads one word. Scope is the entrance ONLY —
+          no repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those
+          live downstream and this screen only makes each destination legible and hands off.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-1461 · 7.22.3</span>
+          <span class="ref muted">Story MOTIR-1459</span>
+          <span class="ref muted">router → MOTIR-1462</span>
+          <span class="ref muted">idea carry-over → MOTIR-1458</span>
+          <span class="ref muted">existing → MOTIR-930 / 815 / 817</span>
+          <span class="ref muted">reuses hero 7.3.14</span>
+        </div>
+      </div>
+
+      <!-- ============================================================
+           PANEL 1 — the entrance, default (arrived without a carried idea)
+      ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>The entrance — default (arrived without a carried-over idea)</h2>
+          <span class="note"
+            >e.g. via the in-app “Build with AI” door, or a direct visit to /onboarding</span
+          >
+        </div>
+
+        <div class="ob">
+          <div class="ob-bar">
+            <span class="brand">
+              <span class="logo" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                  />
+                  <path d="M20 3v4" />
+                  <path d="M22 5h-4" />
+                  <path d="M4 17v2" />
+                  <path d="M5 18H3" />
+                </svg>
+              </span>
+              Motir
+            </span>
+            <span class="acct">
+              <span class="avatar" title="Signed in">YZ</span>
+            </span>
+          </div>
+
+          <div class="ob-body">
+            <div class="ob-head">
+              <span class="eyebrow">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                  />
+                </svg>
+                Build with AI
+              </span>
+              <h1>How would you like to start?</h1>
+              <p>Describe what you want to build. Motir plans it with you, then agents build it.</p>
+              <a class="howlink" href="#">
+                See how Motir works
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </a>
+            </div>
+
+            <!-- PRIMARY — the idea box -->
+            <div class="idea-card">
+              <div class="lbl">Your idea</div>
+              <textarea
+                rows="7"
+                placeholder="Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. For example: a booking app for a hair salon where clients pick a stylist and time, get SMS reminders, and the owner sees a daily schedule with no-show rates. Don't worry about getting it perfect — we'll ask follow-up questions next."
+              ></textarea>
+              <div class="idea-foot">
+                <button class="btn primary" type="button">
+                  Start planning
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="hint">
+              You can start with a rough idea — the discovery chat asks follow-up questions.
+            </p>
+
+            <div class="or">OR</div>
+
+            <!-- SECONDARY — import an existing project -->
+            <button class="import" type="button">
+              <span class="icn" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="19"
+                  height="19"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="6" x2="6" y1="3" y2="15" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+              </span>
+              <span class="body">
+                <span class="t">I have an existing project — import it</span>
+                <span class="d">
+                  Connect your repository and Motir reads your code, then plans on top of what’s
+                  already there. You can also bring over existing work items from Jira, Linear or
+                  Plane.
+                </span>
+              </span>
+              <span class="go">
+                Import
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           PANEL 2 — the entrance with a carried-over idea (7.22.2 / MOTIR-1458)
+      ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>The entrance — with a carried-over idea (from the motir.co hero)</h2>
+          <span class="note">
+            arrived via “Build with AI” after typing an idea on the marketing hero; the idea is
+            preserved (MOTIR-1458) and pre-fills the box
+          </span>
+        </div>
+
+        <div class="ob">
+          <div class="ob-bar">
+            <span class="brand">
+              <span class="logo" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                  />
+                  <path d="M20 3v4" />
+                  <path d="M22 5h-4" />
+                  <path d="M4 17v2" />
+                  <path d="M5 18H3" />
+                </svg>
+              </span>
+              Motir
+            </span>
+            <span class="acct">
+              <span class="avatar" title="Signed in">YZ</span>
+            </span>
+          </div>
+
+          <div class="ob-body">
+            <div class="ob-head">
+              <span class="eyebrow">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                  />
+                </svg>
+                Build with AI
+              </span>
+              <h1>Ready when you are</h1>
+              <p>We kept the idea you started with. Add more if you like, then continue.</p>
+              <a class="howlink" href="#">
+                See how Motir works
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </a>
+            </div>
+
+            <!-- PRIMARY — the idea box, pre-filled -->
+            <div class="idea-card">
+              <div class="lbl carried">
+                <span class="dot"></span>
+                Carried over from your idea
+              </div>
+              <textarea rows="7">
+A time-off and leave app for a 20-person startup. Employees request days off (vacation, sick, unpaid), a manager approves or declines with a note, and everyone sees a shared team calendar plus their remaining balance per leave type. Balances accrue monthly and carry over up to a cap. Managers get an email when a request comes in; the whole team gets a heads-up when someone's approved leave starts. Admins can set the per-country holiday calendar and the accrual rules. Later I'd like Slack notifications and an export for payroll.</textarea
+              >
+              <div class="idea-foot">
+                <button class="btn primary" type="button">
+                  Continue with this idea
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="hint">
+              Add or refine anything before you continue — the discovery chat takes it from here.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           PANEL 3 — states & behaviour (annotated close-ups)
+      ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>States &amp; behaviour (close-ups)</h2>
+          <span class="note">empty idea, keyboard, and the routing-only reachability contract</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="state">
+            <div class="st-cap">Empty idea + keyboard</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
+              </span>
+              <span>
+                <strong>Start planning</strong> works with an empty idea too — the discovery chat
+                opens and asks the first question. The idea box is a head-start, not a gate. The
+                textarea holds focus on load; <span class="kbd">⌘/Ctrl + Enter</span> submits.
+              </span>
+            </div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M9 18c-4.51 2-5-2-7-2" />
+                  <path
+                    d="M15 22v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 19 5.5"
+                  />
+                  <path d="M14.5 3.5A5.4 5.4 0 0 0 12 3a5.4 5.4 0 0 0-2.5.5" />
+                  <path
+                    d="M6.5 5.5A5.44 5.44 0 0 0 5 9.5c0 5.46 3.3 6.65 6.44 7A3.37 3.37 0 0 0 9 22"
+                  />
+                </svg>
+              </span>
+              <span>
+                No <strong>Save &amp; exit</strong> here — nothing is saved yet (the idea box is
+                just an input; no project or session exists until you continue). Save / resume
+                belongs INSIDE an in-progress onboarding session (MOTIR-1488), not on this entrance.
+              </span>
+            </div>
+          </div>
+
+          <div class="state">
+            <div class="st-cap">Reachability — this screen only ROUTES</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m16 18 6-6-6-6" />
+                  <path d="m8 6-6 6 6 6" />
+                </svg>
+              </span>
+              <span>
+                <strong>Start planning</strong> → the 7.3 discovery chat, seeded with the idea
+                (MOTIR-1462 hands off). <strong>Import</strong> → the 7.15 migrate wizard (or 7.17
+                for Jira / Linear / Plane). Both end in a reviewed plan that agents then build (the
+                user’s own agent or a Motir-hosted one) — the full lifecycle is explained via the
+                <strong>“How Motir works”</strong> link, not an on-screen chart. Nothing here
+                connects a repo, picks a source, generates, or runs an agent — the entrance draws
+                the doors and their destinations, nothing downstream.
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
