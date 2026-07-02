@@ -31,6 +31,10 @@ export interface DiscoveryChatRailProps {
   error: { code: string; message: string | null } | null;
   /** The member-safe AI entitlement (Subtask 8.1.8) — drives the boundary paywall. */
   aiAccess?: AiAccessDTO | null;
+  /** The composer draft — LIFTED to the shell (MOTIR-1488) so "Save & exit" can
+   *  detect unsent text and confirm before discarding it. */
+  draft: string;
+  onDraftChange: (value: string) => void;
   /** Forward a chat turn (free-form, a decision chip, or a skip) to the loop. */
   onSend: (text: string) => void;
   onDismissError: () => void;
@@ -44,11 +48,12 @@ export function DiscoveryChatRail({
   canSkip,
   error,
   aiAccess,
+  draft,
+  onDraftChange,
   onSend,
   onDismissError,
 }: DiscoveryChatRailProps) {
   const t = useTranslations('onboarding.chat');
-  const [draft, setDraft] = useState('');
   const [paywallDismissed, setPaywallDismissed] = useState(false);
 
   // The AI-boundary paywall (8.1.8): a reactive out-of-credits refusal (the stream
@@ -64,7 +69,7 @@ export function DiscoveryChatRail({
     const text = draft.trim();
     if (!text || isStreaming || showPaywall) return;
     onSend(text);
-    setDraft('');
+    onDraftChange('');
   }
 
   const showAsk = pendingAsk !== null && !isStreaming && !showPaywall;
@@ -163,7 +168,7 @@ export function DiscoveryChatRail({
         <input
           type="text"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => onDraftChange(e.target.value)}
           disabled={isStreaming || showPaywall}
           placeholder={t('composerPlaceholder')}
           aria-label={t('composerPlaceholder')}
