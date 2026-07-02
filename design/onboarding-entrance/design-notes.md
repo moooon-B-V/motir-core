@@ -110,8 +110,8 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
 - **PRIMARY — the idea box.** A full-width `Card` with an accent border + elevation: the **"Your idea"**
   label and a **tall textarea** (min-height ~172px, 7 rows — room for a long first idea; placeholder
   invites a full description and reassures _"we'll ask follow-up questions next"_). A footer row holds the
-  destination stepper (`Next: Understand › Scope › Plan`) on the left and the primary CTA **"Start
-  planning →"** on the right. Below it, a hint: _"You can start with a rough idea — the discovery chat
+  destination stepper (`Understand › Scope › Plan › Build`, no caption — the chips read on their own) on
+  the left and the primary CTA **"Start planning →"** on the right. Below it, a hint: _"You can start with a rough idea — the discovery chat
   asks follow-up questions. No repo needed."_
 - **"OR" divider** — a hairline separator, so the secondary path is clearly an alternative, not a step.
 - **SECONDARY — the import row.** A slim, full-width option button: a sky icon tile (`GitBranch`), the
