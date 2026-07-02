@@ -476,6 +476,33 @@ describe('reduceDiscovery — hydrate (resume across visits)', () => {
     expect(s.activeKind).toBeNull();
   });
 
+  // MOTIR-1487: the loop starts `hydrating` (the resume read is in flight — the
+  // real current step is not yet known), and both settle actions clear it so the
+  // shell can stop showing "Resuming…" and paint the correct step.
+  it('starts hydrating and clears it on hydrate / hydrateSettled', () => {
+    expect(initialDiscoveryState().hydrating).toBe(true);
+    expect(run([{ type: 'hydrate', session: null, docs: [], catalog: null }]).hydrating).toBe(
+      false,
+    );
+    expect(
+      run([
+        {
+          type: 'hydrate',
+          session: {
+            classification: 'startup',
+            platform: 'web',
+            validationTiming: null,
+            currentGate: 'feasibility',
+            status: 'active',
+          },
+          docs: [doc('discovery'), doc('vision'), doc('feasibility')],
+          catalog: null,
+        },
+      ]).hydrating,
+    ).toBe(false);
+    expect(run([{ type: 'hydrateSettled' }]).hydrating).toBe(false);
+  });
+
   it('resumes INTO the review gate the session parks at', () => {
     const s = run([
       {

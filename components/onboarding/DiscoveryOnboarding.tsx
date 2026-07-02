@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowRight, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Spinner } from '@/components/ui/Spinner';
 import { DiscoveryChatRail } from './DiscoveryChatRail';
 import { TierReviewGate } from './TierReviewGate';
 import { DesignStep } from './DesignStep';
@@ -82,6 +84,30 @@ export function DiscoveryOnboarding({ initialIdea, projectKey }: DiscoveryOnboar
       void clearPendingIdeaAction();
     }
   }, [initialIdea]);
+
+  // RESUME hydration gate (MOTIR-1487). On a resume the persisted current step is
+  // read async from motir-ai (`GET /api/ai/pre-plan`) AFTER mount, so before it
+  // lands the loop holds its fresh-state default — which paints the FIRST station
+  // ("Understanding your project") as "you are here". Rendering the hub then would
+  // flash that wrong step before hydration swaps in the real step N. So while the
+  // resume read is still in flight, show the shipped "Resuming…" loading state
+  // (EmptyState + Spinner, per MOTIR-13) instead of the canvas. A FRESH visit
+  // arrives WITH the preserved idea (`initialIdea`), where discovery genuinely IS
+  // the current step — paint it immediately (no placeholder, no flash).
+  if (state.hydrating && !initialIdea) {
+    return (
+      <div
+        aria-busy="true"
+        className="flex h-dvh w-full items-center justify-center bg-(--el-surface-soft)"
+      >
+        <EmptyState
+          icon={<Spinner size="lg" aria-label={t('resuming')} />}
+          title={t('resuming')}
+          description={t('resumingBody')}
+        />
+      </div>
+    );
+  }
 
   const reviewing = state.view === 'review' ? activeDoc(state) : null;
   const complete = isTiersComplete(state);

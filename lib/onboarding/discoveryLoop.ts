@@ -245,6 +245,13 @@ export interface DiscoveryState {
   error: { code: string; message: string | null } | null;
   /** Monotonic id source for chat turns (keeps the reducer deterministic). */
   seq: number;
+  /** True until the initial `/api/ai/pre-plan` resume read settles (success OR
+   *  failure). Before it settles the persisted current step is unknown, so the
+   *  shell shows a "Resuming…" placeholder instead of painting the fresh-state
+   *  default (discovery = "you are here"), which on a resume at step N > 1 would
+   *  flash the WRONG step before hydration lands (MOTIR-1487). Cleared by
+   *  `hydrate` (a session was read) or `hydrateSettled` (no session / read failed). */
+  hydrating: boolean;
 }
 
 const EMPTY_SESSION: DiscoverySession = {
@@ -273,6 +280,7 @@ export function initialDiscoveryState(): DiscoveryState {
     staleKinds: [],
     error: null,
     seq: 0,
+    hydrating: true,
   };
 }
 
@@ -297,6 +305,7 @@ export type DiscoveryAction =
       revisions?: RevisionsByKind;
       catalog?: FeatureCatalogView | null;
     }
+  | { type: 'hydrateSettled' }
   | { type: 'userTurn'; text: string }
   | { type: 'frame'; frame: DiscoveryFrame }
   | {
@@ -373,8 +382,17 @@ export function reduceDiscovery(state: DiscoveryState, action: DiscoveryAction):
         // the hub (a fresh or completed session).
         view: active ? 'review' : 'hub',
         pendingAsk: atValidateEarly ? { recommendation: '' } : null,
+        // The resume read has landed — the real current step is now in state, so
+        // the shell can stop showing "Resuming…" and paint the correct step.
+        hydrating: false,
       };
     }
+
+    case 'hydrateSettled':
+      // The resume read completed with NO persisted session (a fresh start) or
+      // failed — either way the current step is now known (there isn't one to
+      // restore), so drop the "Resuming…" placeholder and render the fresh state.
+      return { ...state, hydrating: false };
 
     case 'userTurn':
       return {

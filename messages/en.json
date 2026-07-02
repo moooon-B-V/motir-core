@@ -4081,6 +4081,8 @@
       },
       "noProjectTitle": "No active project",
       "noProjectBody": "Pick or create a project first, then Motir can plan it with you.",
+      "resuming": "Resuming…",
+      "resumingBody": "Picking up where you left off.",
       "canvas": {
         "title": "Your project",
         "caption": "idea → checks → design → plan",
