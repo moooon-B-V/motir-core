@@ -459,10 +459,11 @@
           7.3.14) and a primary <strong>Start planning</strong> → the 7.3 discovery flow; a
           first-class but SECONDARY <strong>“I have an existing project — import it”</strong> path
           sits below → the 7.15 migrate wizard / 7.17 Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane
-          import. The plan → build lifecycle (Motir plans, then hosted coding agents build — Motir
-          is not plan-only) is conveyed in the subhead PROSE plus a
-          <strong>“How Motir works” link</strong> that opens the detailed explainer — there is NO
-          on-screen workflow chart (it under-explained). Scope is the entrance ONLY — no
+          import (the carried-over-idea panel omits this — an idea in hand means the user is
+          starting fresh). The plan → build lifecycle (Motir plans, then agents build it — the
+          user's own agent or a Motir-hosted one; Motir is not plan-only) is conveyed in the subhead
+          PROSE plus a <strong>“How Motir works” link</strong> that opens the detailed explainer —
+          there is NO on-screen workflow chart (it under-explained). Scope is the entrance ONLY — no
           repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those live
           downstream and this screen only makes each destination legible and hands off.
         </p>
@@ -538,10 +539,7 @@
                 Plan with AI
               </span>
               <h1>How would you like to start?</h1>
-              <p>
-                Describe what you want to build. Motir plans it with you, then hosted coding agents
-                build it.
-              </p>
+              <p>Describe what you want to build. Motir plans it with you, then agents build it.</p>
               <a class="howlink" href="#">
                 See how Motir works
                 <svg
@@ -583,8 +581,7 @@
               </div>
             </div>
             <p class="hint">
-              You can start with a rough idea — the discovery chat asks follow-up questions. No repo
-              needed.
+              You can start with a rough idea — the discovery chat asks follow-up questions.
             </p>
 
             <div class="or">OR</div>
@@ -698,10 +695,7 @@
                 Plan with AI
               </span>
               <h1>Ready when you are</h1>
-              <p>
-                We kept the idea you started with. Add more if you like, then continue — or import
-                an existing project instead.
-              </p>
+              <p>We kept the idea you started with. Add more if you like, then continue.</p>
               <a class="howlink" href="#">
                 See how Motir works
                 <svg
@@ -747,51 +741,6 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
             <p class="hint">
               Add or refine anything before you continue — the discovery chat takes it from here.
             </p>
-
-            <div class="or">OR</div>
-
-            <!-- SECONDARY — import an existing project -->
-            <button class="import" type="button">
-              <span class="icn" aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="19"
-                  height="19"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <line x1="6" x2="6" y1="3" y2="15" />
-                  <circle cx="18" cy="6" r="3" />
-                  <circle cx="6" cy="18" r="3" />
-                  <path d="M18 9a9 9 0 0 1-9 9" />
-                </svg>
-              </span>
-              <span class="body">
-                <span class="t">I have an existing project — import it</span>
-                <span class="d">
-                  Connect your repository and Motir reads your code, then plans on top of what’s
-                  already there — the idea you typed above stays saved. You can also bring over
-                  existing work items from Jira, Linear or Plane.
-                </span>
-              </span>
-              <span class="go">
-                Import
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
-              </span>
-            </button>
           </div>
         </div>
       </section>
@@ -877,8 +826,8 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
               <span>
                 <strong>Start planning</strong> → the 7.3 discovery chat, seeded with the idea
                 (MOTIR-1462 hands off). <strong>Import</strong> → the 7.15 migrate wizard (or 7.17
-                for Jira / Linear / Plane). Both end in a reviewed plan that Motir’s hosted coding
-                agents then build — the full lifecycle is explained via the
+                for Jira / Linear / Plane). Both end in a reviewed plan that agents then build (the
+                user’s own agent or a Motir-hosted one) — the full lifecycle is explained via the
                 <strong>“How Motir works”</strong> link, not an on-screen chart. Nothing here
                 connects a repo, picks a source, generates, or runs an agent — the entrance draws
                 the doors and their destinations, nothing downstream.

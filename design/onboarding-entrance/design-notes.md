@@ -85,12 +85,16 @@ real structure, it does not redraw a stylised stand-in):
   empty-project state (design MOTIR-1485, code MOTIR-1486). Both land on THIS entrance.
 - **OUTBOUND (drawn here — the point of the card):** each path names its destination in the copy (Start
   planning → the discovery chat; Import → connect a repo, read your code, plan on top). The **full plan →
-  build lifecycle** (Motir plans, then hosted coding agents build — the three-layer product) is conveyed
-  in the header PROSE ("…then hosted coding agents build it") plus a **"See how Motir works" link** that
-  opens the detailed explainer. **No on-screen workflow chart** — an earlier draft drew step-chip
-  steppers (Understand · Scope · Plan · Build), but cryptic chips under-explained; Yue's call is to state
-  it plainly + link to the full explanation, and remove the chart. (The explainer target is its own
-  page/surface, not drawn by this card.)
+  build lifecycle** (Motir plans, then **agents** build it — the three-layer product) is conveyed in the
+  header PROSE ("…then agents build it") plus a **"See how Motir works" link** that opens the detailed
+  explainer. **No on-screen workflow chart** — an earlier draft drew step-chip steppers (Understand ·
+  Scope · Plan · Build), but cryptic chips under-explained; Yue's call is to state it plainly + link to the
+  full explanation, and remove the chart. (The explainer target is its own page/surface, not drawn here.)
+- **Terminology (Yue):** say **"agents"**, not "hosted coding agents" — the user can run their **own**
+  agent (Claude Code / Cursor / …) as well as a Motir-hosted one, so the copy stays agent-agnostic. And
+  the START-FRESH path avoids developer jargon — **no "repo"/"No repo needed"** language (Motir is not a
+  developers-only tool; a non-technical founder shouldn't hit the word "repo"). Repo / code / GitHub /
+  GitLab language is fine ONLY in the import row, whose audience self-selects as having a codebase.
 
 ---
 
@@ -105,14 +109,14 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
   no project or session exists until the user continues). A save / resume affordance belongs INSIDE an
   in-progress onboarding session (MOTIR-1488), not here.
 - **Header** — the "Plan with AI" eyebrow chip; serif H1 **"How would you like to start?"**; secondary
-  subhead _"Describe what you want to build. Motir plans it with you, then hosted coding agents build
-  it."_ (states the full arc — planning is not the end state); then a **"See how Motir works →"** link (an
-  `--el-accent` text link) — the detailed explainer, replacing the on-screen workflow chart.
+  subhead _"Describe what you want to build. Motir plans it with you, then agents build it."_ (states the
+  full arc — planning is not the end state); then a **"See how Motir works →"** link (an `--el-accent` text
+  link) — the detailed explainer, replacing the on-screen workflow chart.
 - **PRIMARY — the idea box.** A full-width `Card` with an accent border + elevation: the **"Your idea"**
   label and a **tall textarea** (min-height ~172px, 7 rows — room for a long first idea; placeholder
   invites a full description and reassures _"we'll ask follow-up questions next"_). A footer row holds only
   the primary CTA **"Start planning →"** (bottom-right). Below the card, a hint: _"You can start with a
-  rough idea — the discovery chat asks follow-up questions. No repo needed."_
+  rough idea — the discovery chat asks follow-up questions."_ (no "No repo needed" — repo is dev jargon).
 - **"OR" divider** — a hairline separator, so the secondary path is clearly an alternative, not a step.
 - **SECONDARY — the import row.** A slim, full-width option button: a sky icon tile (`GitBranch`), the
   title **"I have an existing project — import it"**, a one-line description (_"Connect your repository and
@@ -123,14 +127,17 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
 ### Panel 2 — the entrance with a carried-over idea (MOTIR-1458 / 7.22.2)
 
 The state after the user typed an idea on the motir.co hero and signed in. Header swaps to **"Ready when
-you are"** / _"We kept the idea you started with. Add more if you like, then continue — or import an
-existing project instead."_ The idea box is **pre-filled** with the preserved (long) idea and carries a
-**"Carried over from your idea"** accent label (a `--el-accent` dot + text); its CTA becomes **"Continue
-with this idea →"**, and the hint reads _"Add or refine anything before you continue — the discovery chat
-takes it from here."_ (You **add to / refine** your own idea — never "edit" it; "edit" reads mechanical for
-a person's own description.) The import row is unchanged except its copy reassures that the typed idea is
-kept (_"…the idea you typed above stays saved."_). Copy is stated as a factual situation ("I have an
-existing project"), never as a preference — importing a codebase you already have is not a matter of taste.
+you are"** / _"We kept the idea you started with. Add more if you like, then continue."_ The idea box is
+**pre-filled** with the preserved (long) idea and carries a **"Carried over from your idea"** accent label
+(a `--el-accent` dot + text); its CTA becomes **"Continue with this idea →"**, and the hint reads _"Add or
+refine anything before you continue — the discovery chat takes it from here."_ (You **add to / refine** your
+own idea — never "edit" it; "edit" reads mechanical for a person's own description.)
+
+**No import option in this panel (Yue).** Arriving with an idea in hand means the user is starting fresh —
+so the carried-over panel drops the "OR / import an existing project" affordance entirely and is a single,
+focused path (idea box → Continue). Import belongs only on the default entrance (Panel 1), where the
+starting point is genuinely open. (Copy elsewhere is stated as a factual situation — "I have an existing
+project" — never a preference; importing a codebase you already have is not a matter of taste.)
 
 ### Panel 3 — states & behaviour (close-ups)
 
@@ -142,8 +149,8 @@ existing project"), never as a preference — importing a codebase you already h
   continues); save/resume belongs inside an in-progress onboarding session (MOTIR-1488).
 - **Reachability — this screen only ROUTES** — Start planning → the 7.3 discovery chat (seeded);
   Import → the 7.15 migrate wizard (or 7.17 for Jira / Linear / Plane), which owns connect →
-  source-selection → index → generate. Both end in a reviewed plan the hosted coding agents then build
-  (explained via the "See how Motir works" link). Nothing here connects a repo, picks a source,
+  source-selection → index → generate. Both end in a reviewed plan that agents then build — the user's own
+  agent or a Motir-hosted one (explained via the "See how Motir works" link). Nothing here connects a repo, picks a source,
   generates, or runs an agent.
 
 ---
