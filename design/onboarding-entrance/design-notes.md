@@ -120,7 +120,9 @@ The state after the user typed an idea on the motir.co hero and signed in. Heade
 you are"** / _"We kept the idea you started with. Edit it here, or import an existing project instead."_ The
 idea box is **pre-filled** with the preserved (long) idea and carries a **"Carried over from your idea"**
 accent label (a `--el-accent` dot + text); its CTA becomes **"Continue with this idea →"**. The import row
-is unchanged except its copy acknowledges the saved idea (_"…your idea stays saved if you switch back."_).
+is unchanged except its copy reassures that the typed idea is kept (_"…the idea you typed above stays
+saved."_). Copy is stated as a factual situation ("I have an existing project"), never as a preference —
+importing a codebase you already have is not a matter of taste.
 
 ### Panel 3 — states & behaviour (close-ups)
 
