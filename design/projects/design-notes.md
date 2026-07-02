@@ -14,9 +14,10 @@ direct analogue of the workspace surfaces.
 
 ## Files
 
-| `.pen` source  | PNG exports                                                                  |
-| -------------- | ---------------------------------------------------------------------------- |
-| `projects.pen` | `create-modal.png`, `empty-state.png`, `switcher.png`, `archive-confirm.png` |
+| `.pen` source                  | PNG exports                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `projects.pen`                 | `create-modal.png`, `empty-state.png`, `switcher.png`, `archive-confirm.png` |
+| `inapp-plan-with-ai.mock.html` | `inapp-plan-with-ai.png` (MOTIR-1485 — the in-app AI-onboarding entry)       |
 
 `switcher.png` is a single export holding BOTH the closed and open states
 (stacked, each annotated) — matching how `/design/workspaces` documents the
@@ -1415,3 +1416,134 @@ so the mockup stays the reference (and keep the change-key error strings in
 lock-step with `lib/projects/errors.ts`). `details.mock.html` is the
 layout-confirmation artifact; it may drift from pixel-exact production once the
 React lands.
+
+---
+
+# In-app new-project entry — keep "Create project", add "Plan a new project with AI" (MOTIR-1485)
+
+**Subtask:** MOTIR-1485 · 7.22 (`type: design`) · **Story:** MOTIR-1459 (Onboarding entrance — the
+new-vs-existing front door & routing) · **Epic 7 · AI Planning Layer.**
+**Asset:** `inapp-plan-with-ai.mock.html` (source of truth, standalone — re-states the real
+`globals.css` `--el-*` VALUES so it paints without the Tailwind build, exactly as
+`design/onboarding-entrance/*.mock.html` does) · `inapp-plan-with-ai.png` (full-page export, light
+theme, `deviceScaleFactor: 2`).
+
+The **IN-APP door** to Journey 1 (create a project → plan it with AI). The first-login / marketing
+door already exists (MOTIR-1457: root → `/login` → "Plan with AI" → `/onboarding`). This card draws
+the OTHER door: an **already-authenticated** user starting a new project from inside the app.
+
+## The shape (per Yue): keep "Create project", ADD "Plan a new project with AI" as a peer door
+
+There is **no mode-chooser modal and no restructure of the shipped modal.** Every host surface carries
+**two independent, peer affordances**:
+
+- **"Create project"** — the shipped manual flow, **kept verbatim**: it opens
+  `app/(authed)/_components/CreateProjectModal.tsx` (`Modal`; Name + live-keyed Identifier; the
+  `isPending` spinner; the `IDENTIFIER_COLLISION` inline error) — 1.3.4 / MOTIR-40, design 1.3.3 /
+  MOTIR-39. This card adds NOTHING to that modal.
+- **"Plan a new project with AI"** — the new affordance. On click it **navigates to `/onboarding`** —
+  the shipped fork screen (MOTIR-1461, `design/onboarding-entrance/`) via the router (MOTIR-1462).
+  No modal of its own; no project pre-created.
+
+The two are siblings — neither is nested inside the other. (This replaces an earlier draft that folded
+both into a single choice modal; Yue's direction is to keep the shipped "Create project" untouched and
+add the AI door alongside it.)
+
+## One fork UI, not two (the AC decision)
+
+**"Plan a new project with AI" ROUTES to `/onboarding`** — it does NOT redraw a second inline fork.
+The fresh-vs-import choice lives ONLY on that route (owned by MOTIR-1461). So **MOTIR-1486 wires the
+door; it does not build a fork.** No project row is created for the AI path — it is created downstream
+(start-fresh: at discovery/materialize, done 7.3; import: inside the 7.15 / MOTIR-815 · 7.17 /
+MOTIR-817 wizard). Nothing on this surface connects a repo or picks a Jira/Linear tracker.
+
+## Access path — both doors drawn IN SITU on every host surface (notes.html #83)
+
+The access-path rule applies **once per host surface**; a "start a project" affordance lives in these
+places, so BOTH doors are drawn (label + placement + which mode each opens) in each:
+
+| Host surface (shipped)                 | The two doors, placed                                                                                                        | What each opens                                              |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Project switcher popover** (Panel 1) | Footer, below the _Projects_ list + hairline: **✨ Plan a new project with AI** (accent) directly above **+ Create project** | AI → `/onboarding` fork · Create project → the shipped modal |
+| **Empty-project state** (Panel 2)      | Primary `Button` **Plan a new project with AI** + secondary `Button` **Create project**                                      | AI → `/onboarding` fork · Create project → the shipped modal |
+
+"Plan a new project with AI" leads (accent row / primary button — Motir is chat-first, Principle #1);
+"Create project" is the kept, always-present manual path. Exact labels: **"Plan a new project with
+AI"** and **"Create project"** (verbatim).
+
+## Panels (inspect every one)
+
+1. **Project switcher popover.** The shipped switcher, open: PROJECTS heading, project rows (active
+   carries the `Check`), hairline, then the two footer rows — **Plan a new project with AI**
+   (`Sparkles`, `--el-accent-on-surface`) above **Create project** (`Plus`). Replaces the shipped
+   single "Create project" row's slot with the two-row stack; the "Create project" row keeps its
+   label + shipped behaviour.
+2. **Empty-project state — two variants.**
+   - **(a) No projects yet** — the shipped `EmptyState` with a lavender `Sparkles` icon tile,
+     headline _"Create your first project"_, description, primary **Plan a new project with AI** +
+     secondary **Create project**. Switcher trigger reads _"No project"_ (muted).
+   - **(b) "Already has AI plan"** — when the active project already carries a planning session (an
+     `AiPreplanSession` / generated tree), the empty state swaps to a neutral `RotateCw` tile,
+     headline _"Your plan is waiting"_, and the CTA **"Continue your plan"** (routes to the resume
+     surface, not fresh onboarding) + secondary **Add a work item**. We never re-onboard a project
+     that is already planned.
+3. **"Create project" modal — shipped, kept verbatim.** The shipped `CreateProjectModal` (title
+   _"Create project"_, Name + mono live-keyed Identifier, Cancel + Create project), plus its two
+   existing states as close-ups: **Submitting** (button spinner, both disabled) and **Identifier
+   taken** (the `IDENTIFIER_COLLISION` inline error). Drawn to prove the manual door is unchanged.
+4. **"Plan a new project with AI" → the onboarding fork (routed, not redrawn).** The AI door →
+   `router.push('/onboarding')`, landing on the shipped fork. A **reference-only** schematic of the
+   fork's two branches (Start fresh · Import an existing project) is shown, banner-labelled _"owned by
+   MOTIR-1461 — this card routes here, it does not build this"_ — so the mock cites the fork without
+   redrawing it (notes.html #82/#95).
+5. **Behaviour, routing & states.** Callouts: two-doors-one-fork; the composed Create-project
+   loading/error; the empty (no-projects) door; the "already has AI plan" swap; placement + keyboard
+   (the AI door is the accent switcher row above "Create project" / the accent primary button; each a
+   focusable `button` in normal tab order).
+
+## Primitives composed (no hand-rolling)
+
+| Element                         | Shipped primitive / pattern                                  | Token role                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Create-project modal            | `Modal` (`components/ui/Modal.tsx`) — KEPT verbatim          | `--el-surface`, `--el-border`, `--radius-modal`, `--shadow-modal`; serif title                                            |
+| Name / Identifier field         | `Input` (`components/ui/Input.tsx`) — Identifier `font-mono` | `--el-border-strong`, `--radius-input`, `--height-input`; error `--el-danger` + `--el-danger-text`                        |
+| Primary / secondary / ghost CTA | `Button` (`variant="primary"`/`"secondary"`/`"ghost"`)       | primary `--el-accent`/`--el-accent-text`; secondary `--el-button-border` + `--el-text`; `--radius-btn`, `--height-btn-md` |
+| Switcher popover                | `Popover` (`components/ui/Popover.tsx`) 320px                | `--el-surface`, `--el-border`, `--radius-card`, `--shadow-elevated`; rows `--radius-control`, `--spacing-control-x/y`     |
+| Switcher AI / manual rows       | menu rows + `Sparkles` / `Plus` lucide                       | AI row `--el-accent-on-surface`; Create-project row `--el-text` + `--el-text-muted` icon                                  |
+| Empty state                     | `EmptyState` (`components/ui/EmptyState.tsx`)                | icon tile `--el-tint-lavender` (a) / `--el-muted` (b); serif headline; `--el-accent` primary                              |
+| AI-door eyebrow / step chips    | badge + pills (reused from `onboarding-entrance`)            | `--el-tint-lavender` eyebrow; step chips `--el-surface-soft`/`--el-muted` + `--el-border`                                 |
+| Fork reference (Panel 4)        | dashed `--el-border-strong` frame + two mini `Card`s         | annotation scaffold — clearly marked reference-only, owned by MOTIR-1461                                                  |
+| Info callout                    | callout box + `Info` / `GitBranch` / `RotateCw` lucide       | `--el-surface-soft`, `--el-border`, `--radius-input`; icon `--el-info`                                                    |
+
+Icons are **lucide** (`Sparkles`, `Plus`, `ChevronDown`, `ArrowRight`, `Check`, `X`, `Info`,
+`GitBranch`, `RotateCw`, `SquareArrowOutUpRight`) at `viewBox="0 0 24 24"`, stroke 2, round caps —
+matching the shipped surfaces + the `onboarding-entrance` fork.
+
+### Colour + shape rules (mock === component)
+
+- Every colour resolves to an `--el-*` / `--el-tint-*` palette token (the mock re-states the light /
+  warm-editorial / motir VALUES). **No invented hues** on any card / pill / state / text; the only
+  raw value is the non-semantic modal SCRIM dim (`#1a1a1a26`) and the doc-annotation scaffold, which
+  are not product UI.
+- Shape flows through element-semantic tokens (`--radius-modal`/`-card`/`-input`/`-btn`/`-badge`/
+  `-control`, `--spacing-*`, `--height-*`, `--shadow-*`) — never a raw `rounded-md`/`p-2`/`h-9`, so a
+  `data-style` swap re-shapes it. `rounded-full` only on the avatar chips / the spinner.
+
+## Which card owns each destination (connect, don't duplicate)
+
+| Destination                                       | Owner (design → build)                                                      |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| The manual "Create project" modal                 | 1.3.3 / MOTIR-39 (design) → 1.3.4 / MOTIR-40 (code) — KEPT, unchanged       |
+| The new-vs-existing fork screen (fresh vs import) | MOTIR-1461 (design, `design/onboarding-entrance/`) — routed to, not redrawn |
+| The `/onboarding` fork route + hand-off           | MOTIR-1462 (router)                                                         |
+| The in-app entry affordances (this design)        | MOTIR-1485 (design) → MOTIR-1486 (code)                                     |
+| Start-fresh discovery                             | 7.3 / MOTIR-804 (done)                                                      |
+| Import existing (repo + optional Jira/Linear)     | 7.15 / MOTIR-815 · 7.17 / MOTIR-817                                         |
+
+## Source of truth
+
+When a string / structure here disagrees with the shipped `CreateProjectModal` / `ProjectSwitcher` /
+`ProjectsEmptyState` or the `onboarding-entrance` fork, **the shipped code / that asset wins** — this
+mock composes them and must track them. The "already has AI plan" resume target and the exact routing
+(`/onboarding` seeded state) are the fork-router (MOTIR-1462) + resume (MOTIR-1488) contracts; 1486
+wires to those, it does not invent them.
