@@ -187,3 +187,70 @@ describe('RoadmapView — URL-addressable scope (MOTIR-1541)', () => {
     expect(replace).toHaveBeenCalledWith('/roadmap', { scroll: false });
   });
 });
+
+describe('RoadmapView — manual refresh (MOTIR-1542)', () => {
+  it('re-fetches the current level on refresh (a fresh API hit)', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+    const before = fetchUrls.length;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh roadmap' }));
+
+    // The level cache is dropped → the canvas re-runs its load for the current level,
+    // issuing a fresh root fetch (still whole-project scope, no scope=sprint).
+    await waitFor(() => expect(fetchUrls.length).toBeGreaterThan(before));
+    expect(fetchUrls.at(-1)).toContain('/roadmap');
+    expect(fetchUrls.at(-1)).not.toContain('scope=sprint');
+  });
+
+  it('shows the loading state while refreshing and returns to idle on the real fetch signal', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+
+    // Gate the NEXT fetch (the refresh) so the in-flight loading state is observable —
+    // asserting on the real completion signal, never a timer.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        await gate;
+        fetchUrls.push(String(url));
+        return { ok: true, json: async () => projectRoot };
+      }),
+    );
+
+    const refresh = screen.getByRole('button', { name: 'Refresh roadmap' }) as HTMLButtonElement;
+    expect(refresh.getAttribute('aria-busy')).not.toBe('true');
+
+    fireEvent.click(refresh);
+
+    // In flight: the control is busy + disabled (the Button `loading` affordance).
+    await waitFor(() => expect(refresh.getAttribute('aria-busy')).toBe('true'));
+    expect(refresh.disabled).toBe(true);
+
+    release();
+
+    // Settles back to idle once the refetch resolves.
+    await waitFor(() => expect(refresh.getAttribute('aria-busy')).not.toBe('true'));
+    expect(refresh.disabled).toBe(false);
+  });
+
+  it('disables refresh when there is no active sprint to show (no canvas to refetch)', async () => {
+    render(
+      <RoadmapView
+        {...baseProps({ hasActiveSprint: false, sprintName: null, sprintGoal: null })}
+      />,
+    );
+    await screen.findByText('Whole-project epic');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
+    await screen.findByText('No active sprint');
+
+    expect(
+      (screen.getByRole('button', { name: 'Refresh roadmap' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});

@@ -4254,6 +4254,7 @@
     "scopeWholeProject": "Whole project",
     "scopeActiveSprint": "Active sprint",
     "scopeChip": "Sprint scope",
+    "refresh": "Refresh roadmap",
     "noActiveSprintTitle": "No active sprint",
     "noActiveSprintDescription": "This project has no sprint running right now. Start a sprint from the board to see its slice of the roadmap, or switch back to Whole project."
   },
