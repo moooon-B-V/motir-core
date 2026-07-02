@@ -90,3 +90,37 @@ pnpm --filter @motir/design-system test        # vitest (registries, apply API, 
 
 `TokensSpecimen` is a live `/tokens`-style render of the whole system for
 in-isolation verification; drop it into any route or render it headless.
+
+## Releasing
+
+Releases publish to the **public npm registry** (ADR §3) via CI — the
+`.github/workflows/release-design-system.yml` workflow, triggered by a
+package-scoped git tag. There is no manual `npm publish` in the normal path.
+
+1. **Bump the version** in `packages/design-system/package.json` (semver: the
+   token contract — `--el-*` names, the `data-*` attribute set, the apply API — is
+   the public surface, so renaming a token or attribute is a **major** bump).
+2. **Open + merge** the PR with the bump.
+3. **Tag and push** — the tag version MUST equal the `package.json` version (the
+   workflow guards this and fails fast otherwise):
+
+   ```bash
+   git tag design-system-v<x.y.z>          # e.g. design-system-v0.1.1
+   git push origin design-system-v<x.y.z>
+   ```
+
+4. The workflow builds, verifies the tarball (`dist/**` + `theme.css`), and
+   publishes `@motir/design-system@<x.y.z>` with public access. Re-running an
+   already-published version is a no-op (idempotent), not a failure.
+
+**Dry run:** trigger the workflow from the Actions tab via **Run workflow**
+(`workflow_dispatch`) with **dry run** checked to build + pack without publishing.
+
+**Auth:** the publish step authenticates with the `NPM_TOKEN` repository secret (an
+npm automation/granular token with publish rights on the `@motir` scope). npm
+provenance is left off by default — enabling it needs a `repository` field in this
+`package.json` plus `id-token: write` in the workflow (see the workflow header).
+
+> The **first** publish (`0.1.0`) may instead be cut manually (`npm publish`), or
+> by pushing a `design-system-v0.1.0` tag once `NPM_TOKEN` is set — the workflow
+> handles both the first and every subsequent release identically.
