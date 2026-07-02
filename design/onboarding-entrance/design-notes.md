@@ -17,7 +17,8 @@ the entrance now leads with one full-width idea box and demotes import to a seco
 fixes the practical problem that a half-width column can't hold a long first idea.
 
 **Scope (deliberately SLIMMED, per the card):** the ENTRANCE ONLY. It draws the idea box, the carried-over
-idea state, and a legible preview of each destination — then hands off. **It draws NO repo-connect,
+idea state, and names each destination (with a "How Motir works" link for the full lifecycle) — then hands
+off. **It draws NO repo-connect,
 source-selection, index, or generate UI**; all of that lives downstream in 7.15 / 7.17 and is owned by
 their own designs (MOTIR-930). Re-drawing it here would duplicate 7.15.
 
@@ -72,7 +73,7 @@ real structure, it does not redraw a stylised stand-in):
 - **`app/_components/PublicFrontDoor.tsx`** (7.3.14 / MOTIR-1022, the marketing hero) — the SOURCE of the
   idea. This entrance **continues its exact vocabulary**: the `Sparkles` "Plan with AI" eyebrow chip on
   `--el-tint-lavender`, the **serif** headline (`font-serif`), the idea-capture `Card` + `textarea` +
-  `ArrowRight` primary `Button`, and the Understand · Scope · Plan · Build step preview. The carried-over idea
+  `ArrowRight` primary `Button`, and a "See how Motir works" link (the detailed explainer). The carried-over idea
   (Panel 2) is the hero's typed idea preserved by MOTIR-1458 (`lib/onboarding/pendingIdea.ts`) and
   pre-filled here — so the post-login screen reads as "keep going," not a repeat of the hero.
 
@@ -82,16 +83,14 @@ real structure, it does not redraw a stylised stand-in):
   door — motir-core root → `/login` → **"Plan with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
   door — an authenticated user picks **"Plan with AI"** in the create-project modal / switcher /
   empty-project state (design MOTIR-1485, code MOTIR-1486). Both land on THIS entrance.
-- **OUTBOUND (drawn here — the point of the card):** each destination is made legible with a step-chip
-  stepper that shows the **FULL arc through to the hosted coding agent** — so the reader sees the process
-  does NOT stop at a plan (Motir is plan → build, the three-layer product):
-  - Start planning → **Understand · Scope · Plan · Build** (discovery + plan review, then Motir's hosted
-    coding agents build it; MOTIR-804 / 7.3.5 own discovery, the agent-run is the downstream AI-coding
-    layer).
-  - Import → **Connect repo · Read your code · Plan · Build** (the guided import wizard, a simplified
-    preview of MOTIR-930's step rail — NOT the wizard itself — then the same hosted-agent build).
-  - The final **Build** chip carries a lucide `Bot` icon; it is a preview of the outcome, not a surface
-    this card draws (the agent-run flow is its own downstream story).
+- **OUTBOUND (drawn here — the point of the card):** each path names its destination in the copy (Start
+  planning → the discovery chat; Import → connect a repo, read your code, plan on top). The **full plan →
+  build lifecycle** (Motir plans, then hosted coding agents build — the three-layer product) is conveyed
+  in the header PROSE ("…then hosted coding agents build it") plus a **"See how Motir works" link** that
+  opens the detailed explainer. **No on-screen workflow chart** — an earlier draft drew step-chip
+  steppers (Understand · Scope · Plan · Build), but cryptic chips under-explained; Yue's call is to state
+  it plainly + link to the full explanation, and remove the chart. (The explainer target is its own
+  page/surface, not drawn by this card.)
 
 ---
 
@@ -101,24 +100,25 @@ real structure, it does not redraw a stylised stand-in):
 
 Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no hero idea in the cookie).
 
-- **Brand bar** — `Motir` wordmark (`Sparkles` logo tile on `--el-tint-lavender`) left; a **"Save & exit"**
-  ghost link + a signed-in avatar right. _(The exit/resume affordance is formalised by MOTIR-1488; drawn
-  here as realistic authenticated-shell chrome, not implemented by this card.)_
+- **Brand bar** — `Motir` wordmark (`Sparkles` logo tile on `--el-tint-lavender`) left; a signed-in
+  avatar right. **No "Save & exit"** — nothing is saved on this entrance (the idea box is just an input;
+  no project or session exists until the user continues). A save / resume affordance belongs INSIDE an
+  in-progress onboarding session (MOTIR-1488), not here.
 - **Header** — the "Plan with AI" eyebrow chip; serif H1 **"How would you like to start?"**; secondary
   subhead _"Describe what you want to build. Motir plans it with you, then hosted coding agents build
-  it."_ (states the full arc — planning is not the end state)
+  it."_ (states the full arc — planning is not the end state); then a **"See how Motir works →"** link (an
+  `--el-accent` text link) — the detailed explainer, replacing the on-screen workflow chart.
 - **PRIMARY — the idea box.** A full-width `Card` with an accent border + elevation: the **"Your idea"**
   label and a **tall textarea** (min-height ~172px, 7 rows — room for a long first idea; placeholder
-  invites a full description and reassures _"we'll ask follow-up questions next"_). A footer row holds the
-  destination stepper (`Understand › Scope › Plan › Build`, no caption — the chips read on their own) on
-  the left and the primary CTA **"Start planning →"** on the right. Below it, a hint: _"You can start with a rough idea — the discovery chat
-  asks follow-up questions. No repo needed."_
+  invites a full description and reassures _"we'll ask follow-up questions next"_). A footer row holds only
+  the primary CTA **"Start planning →"** (bottom-right). Below the card, a hint: _"You can start with a
+  rough idea — the discovery chat asks follow-up questions. No repo needed."_
 - **"OR" divider** — a hairline separator, so the secondary path is clearly an alternative, not a step.
 - **SECONDARY — the import row.** A slim, full-width option button: a sky icon tile (`GitBranch`), the
   title **"I have an existing project — import it"**, a one-line description (_"Connect your repository and
   Motir reads your code, then plans on top of what's already there. You can also bring over existing work
-  items from Jira, Linear or Plane."_), an inline mini-stepper (Connect repo · Read your code · Plan · Build), and
-  an **"Import →"** affordance on the right. Visibly available, clearly secondary to the idea box.
+  items from Jira, Linear or Plane."_), and an **"Import →"** affordance on the right. Visibly available,
+  clearly secondary to the idea box.
 
 ### Panel 2 — the entrance with a carried-over idea (MOTIR-1458 / 7.22.2)
 
@@ -136,30 +136,33 @@ importing a codebase you already have is not a matter of taste.
   question; the box is a head-start, not a gate); the textarea holds focus on load, `⌘/Ctrl + Enter`
   submits. The import row is a focusable secondary control with its own hover/focus ring — not hidden
   behind a menu.
+- **No "Save & exit"** — nothing is saved on this entrance (no project/session exists until the user
+  continues); save/resume belongs inside an in-progress onboarding session (MOTIR-1488).
 - **Reachability — this screen only ROUTES** — Start planning → the 7.3 discovery chat (seeded);
   Import → the 7.15 migrate wizard (or 7.17 for Jira / Linear / Plane), which owns connect →
-  source-selection → index → generate. Nothing here connects a repo, picks a source, or generates.
+  source-selection → index → generate. Both end in a reviewed plan the hosted coding agents then build
+  (explained via the "See how Motir works" link). Nothing here connects a repo, picks a source,
+  generates, or runs an agent.
 
 ---
 
 ## Primitives composed (no hand-rolling)
 
-| Element                | Shipped primitive / pattern                                 | Token role                                                                                                          |
-| ---------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Idea box               | `Card` + `textarea`, continuing the 7.3.14 hero             | `--el-card` bg on an `--el-accent` border + `--shadow-elevated`; input fill transparent, `--radius-card`            |
-| Primary CTA            | `Button` (`variant="primary"`, `rightIcon={<ArrowRight/>}`) | `--el-accent` / `--el-accent-text`; `--radius-btn`, `--height-btn-md`                                               |
-| Import row             | `Card` as a clickable option button (`clickable`)           | `--el-card` bg, `--el-border` (→ `--el-border-strong` on hover), `--radius-card`; accent "Import →" affordance      |
-| "Plan with AI" eyebrow | badge chip (as on the hero)                                 | `--el-tint-lavender` bg, `--el-text-strong` text, `--radius-badge`, `--spacing-chip-x/y`                            |
-| Destination step chip  | inline pill                                                 | `--el-surface-soft`/`--el-muted` bg, `--el-border`, `--el-text-secondary`; icon `--el-text-muted`; `--radius-badge` |
-| Icon tile (import)     | tinted square (as on the hero preview)                      | `--el-tint-sky`; ink `--el-text-strong`; `--radius-control`                                                         |
-| "OR" divider           | hairline rule + mono label                                  | `--el-border` rule, `--el-text-faint` label                                                                         |
-| Info callout (Panel 3) | callout box + `Info`/`Code`/`GitBranch` lucide              | `--el-surface-soft`, `--el-border`, `--radius-input`; icon `--el-info`                                              |
-| Carried-over label     | inline label + dot                                          | `--el-accent-on-surface` text + dot                                                                                 |
-| Avatar                 | circular chip                                               | `--el-tint-mint` bg, `--el-text-strong` ink, `rounded-full`                                                         |
+| Element                    | Shipped primitive / pattern                                 | Token role                                                                                                     |
+| -------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Idea box                   | `Card` + `textarea`, continuing the 7.3.14 hero             | `--el-card` bg on an `--el-accent` border + `--shadow-elevated`; input fill transparent, `--radius-card`       |
+| Primary CTA                | `Button` (`variant="primary"`, `rightIcon={<ArrowRight/>}`) | `--el-accent` / `--el-accent-text`; `--radius-btn`, `--height-btn-md`                                          |
+| Import row                 | `Card` as a clickable option button (`clickable`)           | `--el-card` bg, `--el-border` (→ `--el-border-strong` on hover), `--radius-card`; accent "Import →" affordance |
+| "Plan with AI" eyebrow     | badge chip (as on the hero)                                 | `--el-tint-lavender` bg, `--el-text-strong` text, `--radius-badge`, `--spacing-chip-x/y`                       |
+| "See how Motir works" link | inline text link                                            | `--el-link` / `--el-accent-on-surface`; underline on hover                                                     |
+| Icon tile (import)         | tinted square (as on the hero preview)                      | `--el-tint-sky`; ink `--el-text-strong`; `--radius-control`                                                    |
+| "OR" divider               | hairline rule + mono label                                  | `--el-border` rule, `--el-text-faint` label                                                                    |
+| Info callout (Panel 3)     | callout box + `Info`/`Code`/`GitBranch` lucide              | `--el-surface-soft`, `--el-border`, `--radius-input`; icon `--el-info`                                         |
+| Carried-over label         | inline label + dot                                          | `--el-accent-on-surface` text + dot                                                                            |
+| Avatar                     | circular chip                                               | `--el-tint-mint` bg, `--el-text-strong` ink, `rounded-full`                                                    |
 
-Icons are **lucide** (`Sparkles`, `Search`, `Shapes`, `Network`, `GitBranch`, `Code`, `Bot` (the
-hosted-agent Build step), `ArrowRight`, `Info`) at `viewBox="0 0 24 24"`, stroke 2, round caps —
-matching the shipped hero.
+Icons are **lucide** (`Sparkles`, `GitBranch`, `Code`, `ArrowRight`, `Info`) at `viewBox="0 0 24 24"`,
+stroke 2, round caps — matching the shipped hero.
 
 ### Colour + shape rules (mock === component)
 

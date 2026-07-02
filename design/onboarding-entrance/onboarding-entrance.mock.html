@@ -142,7 +142,9 @@
          (app/(onboarding)/layout.tsx): authenticated, but no top nav /
          project sidebar. So the entrance owns the whole viewport. It leads
          with ONE idea box (continuing the marketing hero); "import an
-         existing project" is a first-class but SECONDARY path below.
+         existing project" is a first-class but SECONDARY path below. The
+         plan → build lifecycle is stated in prose + a "How Motir works" link
+         (no on-screen workflow chart).
       ================================================================ */
       .ob {
         border: 1px solid var(--border);
@@ -178,19 +180,6 @@
       }
       .ob-bar .acct {
         margin-left: auto;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .ob-bar .exit {
-        font-size: 13px;
-        color: var(--secondary);
-        text-decoration: none;
-        padding: 6px 10px;
-        border-radius: var(--r-btn);
-      }
-      .ob-bar .exit:hover {
-        background: var(--surface);
       }
       .avatar {
         width: 28px;
@@ -236,6 +225,24 @@
         color: var(--secondary);
         font-size: 15px;
         line-height: 1.55;
+      }
+      /* the detailed "how it works" entry point (replaces the on-screen chart) */
+      .howlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 14px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .howlink svg {
+        width: 14px;
+        height: 14px;
+      }
+      .howlink:hover {
+        text-decoration: underline;
       }
 
       /* --- PRIMARY: the idea box (continues the marketing hero) --- */
@@ -283,53 +290,10 @@
       }
       .idea-foot {
         display: flex;
-        align-items: center;
-        gap: 12px;
+        justify-content: flex-end;
         margin-top: 12px;
         padding-top: 13px;
         border-top: 1px solid var(--hair);
-        flex-wrap: wrap;
-      }
-      .steps {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-      .steps .cap {
-        font: 600 10.5px var(--mono);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--faint);
-        margin-right: 2px;
-      }
-      .step {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--secondary);
-        background: var(--hub);
-        border: 1px solid var(--border);
-        border-radius: var(--r-pill);
-        padding: 4px 10px;
-      }
-      .step svg {
-        width: 13px;
-        height: 13px;
-        color: var(--muted);
-      }
-      .sep {
-        color: var(--faint);
-        display: inline-flex;
-      }
-      .sep svg {
-        width: 13px;
-        height: 13px;
-      }
-      .spacer {
-        flex: 1;
       }
       .btn {
         display: inline-flex;
@@ -351,14 +315,6 @@
       .btn.primary {
         background: var(--accent);
         color: #fff;
-      }
-      .btn.secondary {
-        background: transparent;
-        color: var(--text);
-        border-color: var(--border-strong);
-      }
-      .btn.secondary:hover {
-        background: var(--soft);
       }
       .hint {
         margin: 10px 2px 0;
@@ -421,33 +377,10 @@
         color: var(--text);
       }
       .import .body .d {
-        margin-top: 3px;
+        margin-top: 4px;
         font-size: 12.5px;
         line-height: 1.5;
         color: var(--secondary);
-      }
-      .import .body .mini {
-        margin-top: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-      .import .body .mini .m {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 11px;
-        color: var(--muted);
-      }
-      .import .body .mini .m svg {
-        width: 12px;
-        height: 12px;
-        color: var(--faint);
-      }
-      .import .body .mini .sep svg {
-        width: 11px;
-        height: 11px;
       }
       .import .go {
         flex: none;
@@ -526,12 +459,12 @@
           7.3.14) and a primary <strong>Start planning</strong> → the 7.3 discovery flow; a
           first-class but SECONDARY <strong>“I have an existing project — import it”</strong> path
           sits below → the 7.15 migrate wizard / 7.17 Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane
-          import. Idea-first matches how idea-first builders onboard (Lovable / Bolt / Replit /
-          Firebase Studio lead with one prompt, import is secondary). Each path’s preview shows the
-          FULL arc through to the hosted coding agent that builds the plan (Motir is plan → build,
-          not plan-only), so the process visibly doesn’t stop at a plan. Scope is the entrance ONLY
-          — no repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those
-          live downstream and this screen only makes each destination legible and hands off.
+          import. The plan → build lifecycle (Motir plans, then hosted coding agents build — Motir
+          is not plan-only) is conveyed in the subhead PROSE plus a
+          <strong>“How Motir works” link</strong> that opens the detailed explainer — there is NO
+          on-screen workflow chart (it under-explained). Scope is the entrance ONLY — no
+          repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those live
+          downstream and this screen only makes each destination legible and hands off.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-1461 · 7.22.3</span>
@@ -581,7 +514,6 @@
               Motir
             </span>
             <span class="acct">
-              <a class="exit" href="#">Save &amp; exit</a>
               <span class="avatar" title="Signed in">YZ</span>
             </span>
           </div>
@@ -610,6 +542,20 @@
                 Describe what you want to build. Motir plans it with you, then hosted coding agents
                 build it.
               </p>
+              <a class="howlink" href="#">
+                See how Motir works
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </a>
             </div>
 
             <!-- PRIMARY — the idea box -->
@@ -620,111 +566,6 @@
                 placeholder="Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. For example: a booking app for a hair salon where clients pick a stylist and time, get SMS reminders, and the owner sees a daily schedule with no-show rates. Don't worry about getting it perfect — we'll ask follow-up questions next."
               ></textarea>
               <div class="idea-foot">
-                <div class="steps">
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <path d="m21 21-4.3-4.3" />
-                    </svg>
-                    Understand
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path
-                        d="M8.3 10a.7.7 0 0 1-.6-1.1L11.4 3a.7.7 0 0 1 1.2 0L16.3 8.9a.7.7 0 0 1-.6 1.1Z"
-                      />
-                      <rect x="3" y="14" width="7" height="7" rx="1" />
-                      <circle cx="17.5" cy="17.5" r="3.5" />
-                    </svg>
-                    Scope
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <rect x="16" y="16" width="6" height="6" rx="1" />
-                      <rect x="2" y="16" width="6" height="6" rx="1" />
-                      <rect x="9" y="2" width="6" height="6" rx="1" />
-                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                      <path d="M12 12V8" />
-                    </svg>
-                    Plan
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 8V4H8" />
-                      <rect width="16" height="12" x="4" y="8" rx="2" />
-                      <path d="M2 14h2" />
-                      <path d="M20 14h2" />
-                      <path d="M15 13v2" />
-                      <path d="M9 13v2" />
-                    </svg>
-                    Build
-                  </span>
-                </div>
-                <span class="spacer"></span>
                 <button class="btn primary" type="button">
                   Start planning
                   <svg
@@ -773,109 +614,6 @@
                   Connect your repository and Motir reads your code, then plans on top of what’s
                   already there. You can also bring over existing work items from Jira, Linear or
                   Plane.
-                </span>
-                <span class="mini">
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <line x1="6" x2="6" y1="3" y2="15" />
-                      <circle cx="18" cy="6" r="3" />
-                      <circle cx="6" cy="18" r="3" />
-                      <path d="M18 9a9 9 0 0 1-9 9" />
-                    </svg>
-                    Connect repo
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m16 18 6-6-6-6" />
-                      <path d="m8 6-6 6 6 6" />
-                    </svg>
-                    Read your code
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <rect x="16" y="16" width="6" height="6" rx="1" />
-                      <rect x="2" y="16" width="6" height="6" rx="1" />
-                      <rect x="9" y="2" width="6" height="6" rx="1" />
-                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                      <path d="M12 12V8" />
-                    </svg>
-                    Plan
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 8V4H8" />
-                      <rect width="16" height="12" x="4" y="8" rx="2" />
-                      <path d="M2 14h2" />
-                      <path d="M20 14h2" />
-                      <path d="M15 13v2" />
-                      <path d="M9 13v2" />
-                    </svg>
-                    Build
-                  </span>
                 </span>
               </span>
               <span class="go">
@@ -936,7 +674,6 @@
               Motir
             </span>
             <span class="acct">
-              <a class="exit" href="#">Save &amp; exit</a>
               <span class="avatar" title="Signed in">YZ</span>
             </span>
           </div>
@@ -965,6 +702,20 @@
                 We kept the idea you started with. Edit it here, or import an existing project
                 instead.
               </p>
+              <a class="howlink" href="#">
+                See how Motir works
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </a>
             </div>
 
             <!-- PRIMARY — the idea box, pre-filled -->
@@ -977,111 +728,6 @@
 A time-off and leave app for a 20-person startup. Employees request days off (vacation, sick, unpaid), a manager approves or declines with a note, and everyone sees a shared team calendar plus their remaining balance per leave type. Balances accrue monthly and carry over up to a cap. Managers get an email when a request comes in; the whole team gets a heads-up when someone's approved leave starts. Admins can set the per-country holiday calendar and the accrual rules. Later I'd like Slack notifications and an export for payroll.</textarea
               >
               <div class="idea-foot">
-                <div class="steps">
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <circle cx="11" cy="11" r="8" />
-                      <path d="m21 21-4.3-4.3" />
-                    </svg>
-                    Understand
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path
-                        d="M8.3 10a.7.7 0 0 1-.6-1.1L11.4 3a.7.7 0 0 1 1.2 0L16.3 8.9a.7.7 0 0 1-.6 1.1Z"
-                      />
-                      <rect x="3" y="14" width="7" height="7" rx="1" />
-                      <circle cx="17.5" cy="17.5" r="3.5" />
-                    </svg>
-                    Scope
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <rect x="16" y="16" width="6" height="6" rx="1" />
-                      <rect x="2" y="16" width="6" height="6" rx="1" />
-                      <rect x="9" y="2" width="6" height="6" rx="1" />
-                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                      <path d="M12 12V8" />
-                    </svg>
-                    Plan
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="step">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 8V4H8" />
-                      <rect width="16" height="12" x="4" y="8" rx="2" />
-                      <path d="M2 14h2" />
-                      <path d="M20 14h2" />
-                      <path d="M15 13v2" />
-                      <path d="M9 13v2" />
-                    </svg>
-                    Build
-                  </span>
-                </div>
-                <span class="spacer"></span>
                 <button class="btn primary" type="button">
                   Continue with this idea
                   <svg
@@ -1129,109 +775,6 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                   Connect your repository and Motir reads your code, then plans on top of what’s
                   already there — the idea you typed above stays saved. You can also bring over
                   existing work items from Jira, Linear or Plane.
-                </span>
-                <span class="mini">
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <line x1="6" x2="6" y1="3" y2="15" />
-                      <circle cx="18" cy="6" r="3" />
-                      <circle cx="6" cy="18" r="3" />
-                      <path d="M18 9a9 9 0 0 1-9 9" />
-                    </svg>
-                    Connect repo
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="m16 18 6-6-6-6" />
-                      <path d="m8 6-6 6 6 6" />
-                    </svg>
-                    Read your code
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <rect x="16" y="16" width="6" height="6" rx="1" />
-                      <rect x="2" y="16" width="6" height="6" rx="1" />
-                      <rect x="9" y="2" width="6" height="6" rx="1" />
-                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                      <path d="M12 12V8" />
-                    </svg>
-                    Plan
-                  </span>
-                  <span class="sep"
-                    ><svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" /></svg
-                  ></span>
-                  <span class="m">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M12 8V4H8" />
-                      <rect width="16" height="12" x="4" y="8" rx="2" />
-                      <path d="M2 14h2" />
-                      <path d="M20 14h2" />
-                      <path d="M15 13v2" />
-                      <path d="M9 13v2" />
-                    </svg>
-                    Build
-                  </span>
                 </span>
               </span>
               <span class="go">
@@ -1308,8 +851,9 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                 </svg>
               </span>
               <span>
-                The <strong>Import</strong> row is a secondary but first-class control — a focusable
-                button with its own hover / focus ring; not hidden behind a menu.
+                No <strong>Save &amp; exit</strong> here — nothing is saved yet (the idea box is
+                just an input; no project or session exists until you continue). Save / resume
+                belongs INSIDE an in-progress onboarding session (MOTIR-1488), not on this entrance.
               </span>
             </div>
           </div>
@@ -1333,12 +877,11 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
               <span>
                 <strong>Start planning</strong> → the 7.3 discovery chat, seeded with the idea
                 (MOTIR-1462 hands off). <strong>Import</strong> → the 7.15 migrate wizard (or 7.17
-                for Jira / Linear / Plane), which owns connect → source-selection → index →
-                generate. Both end in a reviewed plan that Motir’s hosted coding agents then build —
-                the <strong>Build</strong> step in each preview (the agent-run flow is its own
-                downstream surface). Nothing here connects a repo, picks a source, generates, or
-                runs an agent — the entrance draws the doors and their destinations, nothing
-                downstream.
+                for Jira / Linear / Plane). Both end in a reviewed plan that Motir’s hosted coding
+                agents then build — the full lifecycle is explained via the
+                <strong>“How Motir works”</strong> link, not an on-screen chart. Nothing here
+                connects a repo, picks a source, generates, or runs an agent — the entrance draws
+                the doors and their destinations, nothing downstream.
               </span>
             </div>
           </div>
