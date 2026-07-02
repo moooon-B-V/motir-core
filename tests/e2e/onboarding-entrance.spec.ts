@@ -63,3 +63,15 @@ test('Import routes the entrance to the downstream import hand-off', async ({ pa
   await expect(page.getByRole('heading', { name: 'Import an existing project' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Back to start' })).toBeVisible();
 });
+
+test('the "See how Motir works" link routes to the explainer hand-off', async ({ page }) => {
+  await signUp(page, `entrance-howitworks-${Date.now()}@example.com`);
+  await createFirstProject(page, 'Invoicer');
+
+  await page.goto('/onboarding');
+  await page.getByRole('link', { name: /see how motir works/i }).click();
+
+  await page.waitForURL('**/onboarding/how-it-works');
+  await expect(page.getByRole('heading', { name: 'How Motir works' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to start' })).toBeVisible();
+});

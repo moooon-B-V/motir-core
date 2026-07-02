@@ -30,6 +30,11 @@ describe('OnboardingEntrance', () => {
     screen.getByRole('heading', { name: 'How would you like to start?' });
     screen.getByText('Build with AI');
 
+    // The "See how Motir works" explainer link is part of the header.
+    expect(screen.getByRole('link', { name: /see how motir works/i }).getAttribute('href')).toBe(
+      '/onboarding/how-it-works',
+    );
+
     // The idea box is empty and labelled "Your idea".
     const idea = screen.getByRole('textbox', { name: 'Your idea' }) as HTMLTextAreaElement;
     expect(idea.value).toBe('');
@@ -52,6 +57,9 @@ describe('OnboardingEntrance', () => {
 
     screen.getByRole('heading', { name: 'Ready when you are' });
     screen.getByText('Carried over from your idea');
+
+    // The explainer link shows in the carried-over panel too.
+    screen.getByRole('link', { name: /see how motir works/i });
 
     // The preserved idea pre-fills the box.
     expect((screen.getByRole('textbox', { name: 'Your idea' }) as HTMLTextAreaElement).value).toBe(

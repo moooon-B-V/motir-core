@@ -89,6 +89,16 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
           <p className="mx-auto mt-2 max-w-[52ch] text-(--el-text-secondary)">
             {carried ? t('subheadCarried') : t('subheadDefault')}
           </p>
+          {/* The detailed "how it works" explainer — its own surface, deferred by
+              the design (a future card owns it), so this links to a placeholder
+              hand-off for now (like the import row). Shown in both panels. */}
+          <Link
+            href="/onboarding/how-it-works"
+            className="mt-3.5 inline-flex items-center gap-1.5 text-[0.8rem] font-medium text-(--el-accent-on-surface) hover:underline"
+          >
+            {t('howItWorks')}
+            <ArrowRight className="size-3.5" />
+          </Link>
         </div>
 
         {/* PRIMARY — the idea box. A form posting to the server action, so it

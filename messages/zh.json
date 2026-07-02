@@ -4042,6 +4042,7 @@
       "headingCarried": "随时可以开始",
       "subheadDefault": "描述你想构建的东西。Motir 会与你一起规划，然后由智能体来构建。",
       "subheadCarried": "我们保留了你最初的想法。如果愿意，可以补充更多，然后继续。",
+      "howItWorks": "了解 Motir 的工作方式",
       "ideaLabel": "你的想法",
       "carriedLabel": "沿用你的想法",
       "placeholder": "描述你想构建的东西——面向谁、人们应该能做的核心事情，以及任何必备功能。不必追求完美——接下来我们会追问细节。",
@@ -4057,6 +4058,11 @@
     "import": {
       "title": "导入现有项目",
       "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以用 AI 开始一个新项目。",
+      "back": "返回开始"
+    },
+    "howItWorks": {
+      "title": "Motir 的工作方式",
+      "body": "完整的流程介绍——想法 → 规划 → 由智能体构建——即将推出。目前，你可以先从你的想法开始，Motir 会在过程中追问后续问题。",
       "back": "返回开始"
     },
     "connectGate": {
