@@ -1,0 +1,1528 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      In-app new-project entry — keep "Create project", add "Plan a new project with AI" ·
+      MOTIR-1485
+    </title>
+    <style>
+      /* ----------------------------------------------------------------------
+         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
+         light theme / warm-editorial / motir palette). This standalone mock
+         re-states the same VALUES so a plain browser paints the real palette
+         without the Tailwind build — exactly as the sibling assets do
+         (design/onboarding-entrance/*.mock.html, design/ai-planning/*.mock.html).
+         Nothing here re-defines colour/shape semantics; it re-states them.
+      ---------------------------------------------------------------------- */
+      :root {
+        /* text */
+        --text: #1a1a1a;
+        --strong: #37352f;
+        --secondary: #5d5b54;
+        --muted: #787671;
+        --faint: #a4a097;
+        --inverted: #ffffff;
+        /* surfaces */
+        --page: #f4f3f1;
+        --surface: #ffffff;
+        --soft: #fafaf9;
+        --hub: #f6f5f4;
+        --mutedfill: #f3f4f6;
+        /* borders */
+        --border: #e5e3df;
+        --hair: #ede9e4;
+        --border-strong: #d3cfc8;
+        /* accent */
+        --accent: #5645d4;
+        --accent-pressed: #4534b3;
+        --accent-soft: #f4f2fd;
+        --highlight: #ff64c8;
+        /* status / intent */
+        --success: #1aae39;
+        --warning: #dd5b00;
+        --danger: #e03131;
+        --danger-soft: #fdecec;
+        --info: #0075de;
+        /* feature tints */
+        --peach: #ffe8d4;
+        --rose: #fde0ec;
+        --mint: #d9f3e1;
+        --lavender: #e6e0f5;
+        --sky: #dcecfa;
+        --yellow: #fef7d6;
+        /* shape */
+        --r-card: 12px;
+        --r-modal: 14px;
+        --r-btn: 8px;
+        --r-input: 8px;
+        --r-control: 6px;
+        --r-badge: 999px;
+        --r-pill: 999px;
+        --sh-subtle: 0 1px 2px #0000000d;
+        --sh-card: 0 2px 6px #0000000f;
+        --sh-elev: 0 8px 26px -10px #0000001f;
+        --sh-modal: 0 24px 60px -18px #00000033;
+        --focus: #5645d4;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ---- doc scaffold (annotations only — NOT part of the product UI) ---- */
+      .sheet {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 36px 28px 72px;
+      }
+      .doc-head h1 {
+        font: 700 26px/1.2 var(--serif);
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 82ch;
+      }
+      .doc-head .refs {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--mono);
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid #e3def8;
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--secondary);
+        background: var(--hub);
+        border-color: var(--border);
+      }
+      .panel {
+        margin-top: 34px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--mono);
+        color: #fff;
+        background: var(--accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap .note {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      /* ================================================================
+         PRODUCT SURFACE — the in-app new-project entry lives INSIDE the
+         (authed) app shell: a popover on the sidebar project switcher, the
+         zero-projects empty state, and (for the manual door) the shipped
+         "Create project" modal. Each panel renders a slice of the real shell.
+      ================================================================ */
+
+      .stage {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--page);
+        box-shadow: var(--sh-card);
+        min-height: 460px;
+        display: flex;
+      }
+      .rail {
+        width: 240px;
+        flex: none;
+        background: var(--hub);
+        border-right: 1px solid var(--border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .rail .ws {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text);
+        padding: 6px 8px;
+      }
+      .rail .ws .logo {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--r-control);
+        background: var(--lavender);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+      }
+      .psw {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: var(--r-btn);
+        border: 1px solid transparent;
+        background: transparent;
+        font: inherit;
+        color: var(--text);
+        cursor: pointer;
+        text-align: left;
+      }
+      .psw.open {
+        background: var(--surface);
+        border-color: var(--accent);
+      }
+      .psw .pav {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: var(--r-control);
+        background: var(--mint);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+        font: 700 10px var(--mono);
+      }
+      .psw .pn {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: var(--serif);
+        font-size: 14px;
+      }
+      .psw .chev {
+        color: var(--muted);
+      }
+      .rail .navitem {
+        padding: 7px 10px;
+        border-radius: var(--r-control);
+        font-size: 13.5px;
+        color: var(--secondary);
+      }
+      .rail .navitem.dim {
+        color: var(--faint);
+      }
+      .canvas {
+        flex: 1;
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .canvas.dim::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: #1a1a1a26;
+      }
+
+      /* ---------- MODAL (shipped Create project — unchanged) ---------- */
+      .modal-wrap {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 460px;
+      }
+      .modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-modal);
+        box-shadow: var(--sh-modal);
+        overflow: hidden;
+      }
+      .modal-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 20px 4px;
+      }
+      .modal-head h3 {
+        font: 700 18px/1.2 var(--serif);
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .modal-head .x {
+        margin-left: auto;
+        color: var(--muted);
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--r-control);
+        cursor: pointer;
+      }
+      .modal-body {
+        padding: 12px 20px 4px;
+      }
+      .modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 16px 20px 18px;
+        border-top: 1px solid var(--hair);
+        margin-top: 14px;
+      }
+
+      /* ---------- form fields (shipped) ---------- */
+      .field {
+        margin-bottom: 14px;
+      }
+      .field label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+      .inp {
+        width: 100%;
+        height: 40px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-input);
+        padding: 0 12px;
+        font: inherit;
+        font-size: 14px;
+        color: var(--text);
+        background: var(--surface);
+      }
+      .inp.mono {
+        font-family: var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .inp.err {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent);
+      }
+      .inp::placeholder {
+        color: var(--faint);
+      }
+      .helper {
+        margin: 6px 0 0;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .helper .key {
+        font-family: var(--mono);
+        color: var(--secondary);
+      }
+      .helper.err {
+        color: var(--danger);
+        font-weight: 500;
+      }
+
+      /* ---------- buttons ---------- */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font: 600 14px/1 inherit;
+        border-radius: var(--r-btn);
+        padding: 0 16px;
+        height: 40px;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--secondary);
+      }
+      .btn.ghost:hover {
+        background: var(--soft);
+      }
+      .btn.secondary {
+        background: transparent;
+        color: var(--text);
+        border-color: var(--border-strong);
+      }
+      .btn.block {
+        width: 100%;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+      .spin {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        border: 2px solid #ffffff66;
+        border-top-color: #fff;
+      }
+
+      /* ---------- switcher popover ---------- */
+      .pop {
+        width: 320px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        box-shadow: var(--sh-elev);
+        padding: 4px 0;
+        overflow: hidden;
+      }
+      .pop .ph {
+        padding: 8px 12px 4px;
+        font: 600 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .pop .prow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 10px;
+        margin: 0 4px;
+        border-radius: var(--r-control);
+        font-size: 14px;
+        color: var(--text);
+        cursor: pointer;
+      }
+      .pop .prow:hover {
+        background: var(--soft);
+      }
+      .pop .prow.active {
+        background: var(--soft);
+      }
+      .pop .prow.active .lbl {
+        font-weight: 600;
+      }
+      .pop .prow .pav {
+        width: 24px;
+        height: 24px;
+        flex: none;
+        border-radius: var(--r-control);
+        display: grid;
+        place-items: center;
+        font: 700 10px var(--mono);
+        color: var(--strong);
+      }
+      .pop .prow .lbl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pop .prow .ck {
+        color: var(--accent);
+        flex: none;
+      }
+      .pop .div {
+        height: 1px;
+        background: var(--border);
+        margin: 5px 0;
+      }
+      .pop .crow {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 10px;
+        margin: 0 4px;
+        border-radius: var(--r-control);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .pop .crow:hover {
+        background: var(--soft);
+      }
+      .pop .crow .cic {
+        width: 24px;
+        height: 24px;
+        flex: none;
+        display: grid;
+        place-items: center;
+      }
+      .pop .crow.ai {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .pop .crow.ai .cic {
+        color: var(--accent);
+      }
+      .pop .crow.manual {
+        color: var(--text);
+      }
+      .pop .crow.manual .cic {
+        color: var(--muted);
+      }
+
+      /* ---------- empty state ---------- */
+      .empty {
+        text-align: center;
+        max-width: 460px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .empty .eicn {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+        background: var(--lavender);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+        margin-bottom: 18px;
+      }
+      .empty .eicn.neutral {
+        background: var(--mutedfill);
+        color: var(--secondary);
+      }
+      .empty h3 {
+        font: 700 22px/1.2 var(--serif);
+        margin: 0 0 8px;
+        letter-spacing: -0.01em;
+      }
+      .empty p {
+        margin: 0 0 20px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--secondary);
+      }
+      .empty .ebtns {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      /* ---------- steps / dest legend (reused from onboarding-entrance) ---------- */
+      .steps {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .step {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--secondary);
+        background: var(--hub);
+        border: 1px solid var(--border);
+        border-radius: var(--r-pill);
+        padding: 3px 9px;
+      }
+      .step svg {
+        width: 12px;
+        height: 12px;
+        color: var(--muted);
+      }
+      .sep {
+        color: var(--faint);
+        display: inline-flex;
+      }
+      .sep svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ---------- routing panel (the AI door → the shipped fork) ---------- */
+      .route {
+        display: grid;
+        grid-template-columns: 300px 44px 1fr;
+        gap: 0;
+        align-items: center;
+      }
+      .door {
+        border: 1px solid var(--accent);
+        border-radius: var(--r-card);
+        background: var(--surface);
+        box-shadow: 0 0 0 1px var(--accent);
+        padding: 16px;
+      }
+      .door .d-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--lavender);
+        color: var(--strong);
+        font: 600 11px var(--mono);
+        border-radius: var(--r-badge);
+        padding: 3px 9px;
+        margin-bottom: 10px;
+      }
+      .door .d-title {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 4px;
+      }
+      .door .d-sub {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--secondary);
+        line-height: 1.45;
+      }
+      .route .arrow {
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+      }
+      .route .arrow svg {
+        width: 22px;
+        height: 22px;
+      }
+      /* reference-only schematic of the shipped fork (NOT a redraw) */
+      .forkref {
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--r-card);
+        background: var(--soft);
+        padding: 14px 16px;
+      }
+      .forkref .fr-cap {
+        font: 600 10.5px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .forkref .fr-cards {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 10px;
+      }
+      .fr-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-input);
+        padding: 11px 12px;
+      }
+      .fr-card .fc-icn {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--r-control);
+        display: grid;
+        place-items: center;
+        color: var(--strong);
+        margin-bottom: 8px;
+      }
+      .fr-card.a .fc-icn {
+        background: var(--lavender);
+      }
+      .fr-card.b .fc-icn {
+        background: var(--sky);
+      }
+      .fr-card .fc-t {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin: 0 0 3px;
+      }
+      .fr-card .fc-s {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+        margin: 0;
+      }
+
+      /* ---------- states row (Panel 5) ---------- */
+      .mini-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .state {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        padding: 16px 18px;
+      }
+      .state .st-cap {
+        font: 600 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-bottom: 10px;
+      }
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border: 1px solid var(--border);
+        border-radius: var(--r-input);
+        background: var(--soft);
+        padding: 11px 13px;
+        font-size: 13px;
+        color: var(--secondary);
+        line-height: 1.5;
+      }
+      .callout + .callout {
+        margin-top: 10px;
+      }
+      .callout .ic {
+        color: var(--info);
+        flex: none;
+        margin-top: 1px;
+      }
+      .callout .ic svg {
+        width: 16px;
+        height: 16px;
+      }
+      .callout code {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+      .col-cap {
+        font: 600 11px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin: 0 0 10px;
+      }
+      .closeup {
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--r-card);
+        padding: 14px;
+        background: var(--soft);
+      }
+      .closeup + .closeup {
+        margin-top: 14px;
+      }
+      .closeup .cu-cap {
+        font: 600 10.5px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-bottom: 9px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>In-app new-project entry — keep “Create project”, add “Plan a new project with AI”</h1>
+        <p>
+          MOTIR-1485 · <b>type: design</b> · Story MOTIR-1459 (Onboarding entrance) · Epic 7 · AI
+          Planning Layer. The <b>in-app door</b>: an already-authenticated user starts a new project
+          from inside the app. Two <b>peer</b> affordances on every host surface — the shipped
+          <b>“Create project”</b> (manual, unchanged) and a new
+          <b>“Plan a new project with AI”</b> that <b>routes to <code>/onboarding</code></b> (the
+          shipped fork MOTIR-1461, via router MOTIR-1462). The “Create project” modal is
+          <b>NOT</b> restructured into a chooser and the AI door does <b>NOT</b> redraw a second
+          fork — so MOTIR-1486 keeps one modal and builds one fork UI.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-1485 · design</span>
+          <span class="ref muted">keeps: CreateProjectModal.tsx (1.3.4 / MOTIR-40) verbatim</span>
+          <span class="ref muted">composes: ProjectSwitcher.tsx · ProjectsEmptyState.tsx</span>
+          <span class="ref muted">routes to: MOTIR-1461 fork @ /onboarding (via MOTIR-1462)</span>
+          <span class="ref muted">builds: MOTIR-1486 (code)</span>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- PANEL 1 — Project switcher: two peer doors                    -->
+      <!-- ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>Project switcher — two peer doors in the footer</h2>
+          <span class="note"
+            >Composes the shipped <code>ProjectSwitcher</code> popover. The footer keeps
+            <b>Create project</b> (opens the shipped modal) and adds
+            <b>Plan a new project with AI</b> (routes to <code>/onboarding</code>) above it.</span
+          >
+        </div>
+
+        <div class="stage" style="min-height: 420px">
+          <div class="rail">
+            <div class="ws">
+              <span class="logo" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="15"
+                  height="15"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                  />
+                </svg>
+              </span>
+              moooon
+            </div>
+            <button class="psw open" type="button">
+              <span class="pav">MO</span>
+              <span class="pn">Motir</span>
+              <span class="chev" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m6 9 6 6 6-6" /></svg
+              ></span>
+            </button>
+
+            <div class="pop" style="margin-top: 2px">
+              <div class="ph">Projects</div>
+              <div class="prow active">
+                <span class="pav" style="background: var(--mint)">MO</span>
+                <span class="lbl">Motir</span>
+                <span class="ck" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" /></svg
+                ></span>
+              </div>
+              <div class="prow">
+                <span class="pav" style="background: var(--sky)">MB</span>
+                <span class="lbl">Mobile App</span>
+                <span style="width: 16px"></span>
+              </div>
+              <div class="prow">
+                <span class="pav" style="background: var(--peach)">WS</span>
+                <span class="lbl">Website</span>
+                <span style="width: 16px"></span>
+              </div>
+              <div class="div"></div>
+              <div class="crow ai">
+                <span class="cic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="17"
+                    height="17"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                    /></svg
+                ></span>
+                Plan a new project with AI
+              </div>
+              <div class="crow manual">
+                <span class="cic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="17"
+                    height="17"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="M12 5v14" /></svg
+                ></span>
+                Create project
+              </div>
+            </div>
+          </div>
+
+          <div class="canvas">
+            <div style="max-width: 360px">
+              <div class="callout">
+                <span class="ic" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" /></svg
+                ></span>
+                <span
+                  >Both doors sit below the <em>Projects</em> list + hairline (where the shipped
+                  single “Create project” row is today). <b>Plan a new project with AI</b> (accent,
+                  <code>Sparkles</code>) → <code>/onboarding</code>.
+                  <b>Create project</b> (<code>Plus</code>) → the shipped modal, unchanged (Panel
+                  3).</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- PANEL 2 — Empty-project state (two variants)                  -->
+      <!-- ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>Empty-project state — both doors, AI leading</h2>
+          <span class="note"
+            >Composes the shipped <code>EmptyState</code>. Primary
+            <b>Plan a new project with AI</b> + secondary <b>Create project</b>. Variant (b) covers
+            “already has AI plan”.</span
+          >
+        </div>
+
+        <div class="two">
+          <div>
+            <p class="col-cap">(a) No projects yet — the first-project door</p>
+            <div class="stage" style="min-height: 400px">
+              <div class="rail" style="opacity: 0.5">
+                <div class="ws">
+                  <span class="logo" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                      /></svg
+                  ></span>
+                  moooon
+                </div>
+                <button class="psw" type="button">
+                  <span class="pav" style="background: var(--mutedfill); color: var(--faint)"
+                    >—</span
+                  >
+                  <span class="pn" style="color: var(--faint)">No project</span>
+                  <span class="chev" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </button>
+              </div>
+              <div class="canvas">
+                <div class="empty">
+                  <span class="eicn" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="28"
+                      height="28"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                      />
+                      <path d="M20 3v4" />
+                      <path d="M22 5h-4" />
+                      <path d="M4 17v2" />
+                      <path d="M5 18H3" /></svg
+                  ></span>
+                  <h3>Create your first project</h3>
+                  <p>
+                    A project groups your work items and gives them a key like
+                    <span style="font-family: var(--mono)">MOB-1</span>. Let Motir plan one with
+                    you, or create an empty project and add work items yourself.
+                  </p>
+                  <div class="ebtns">
+                    <button class="btn primary" type="button">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path
+                          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                        />
+                      </svg>
+                      Plan a new project with AI
+                    </button>
+                    <button class="btn secondary" type="button">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="M12 5v14" />
+                      </svg>
+                      Create project
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p class="col-cap">(b) Project already has an AI plan — resume, don’t re-onboard</p>
+            <div class="stage" style="min-height: 400px">
+              <div class="rail" style="opacity: 0.5">
+                <div class="ws">
+                  <span class="logo" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="15"
+                      height="15"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                      /></svg
+                  ></span>
+                  moooon
+                </div>
+                <button class="psw" type="button">
+                  <span class="pav" style="background: var(--sky)">MB</span>
+                  <span class="pn">Mobile App</span>
+                  <span class="chev" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </button>
+              </div>
+              <div class="canvas">
+                <div class="empty">
+                  <span class="eicn neutral" aria-hidden="true"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="28"
+                      height="28"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                      <path d="M21 3v5h-5" /></svg
+                  ></span>
+                  <h3>Your plan is waiting</h3>
+                  <p>
+                    This project already has an AI planning session in progress. Pick up where you
+                    left off — or add work items by hand.
+                  </p>
+                  <div class="ebtns">
+                    <button class="btn primary" type="button">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="m12 5 7 7-7 7" />
+                      </svg>
+                      Continue your plan
+                    </button>
+                    <button class="btn secondary" type="button">Add a work item</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- PANEL 3 — "Create project" modal (shipped, UNCHANGED)         -->
+      <!-- ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>“Create project” — the shipped modal, kept verbatim</h2>
+          <span class="note"
+            >The manual door is unchanged: <code>CreateProjectModal</code> (1.3.4 / MOTIR-40) —
+            title, Name + live-keyed Identifier, footer. Not restructured into a chooser.</span
+          >
+        </div>
+
+        <div class="two">
+          <div>
+            <p class="col-cap">Default — ready to create</p>
+            <div class="stage" style="min-height: 360px">
+              <div class="canvas dim">
+                <div class="modal-wrap">
+                  <div class="modal">
+                    <div class="modal-head">
+                      <h3>Create project</h3>
+                      <span class="x" aria-hidden="true"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          width="17"
+                          height="17"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M18 6 6 18" />
+                          <path d="m6 6 12 12" /></svg
+                      ></span>
+                    </div>
+                    <div class="modal-body">
+                      <div class="field">
+                        <label>Project name</label>
+                        <input class="inp" value="Mobile App" />
+                      </div>
+                      <div class="field">
+                        <label>Identifier</label>
+                        <input class="inp mono" value="MOB" />
+                        <p class="helper">
+                          3–5 uppercase characters. Work items will be keyed
+                          <span class="key">MOB-1</span>, <span class="key">MOB-2</span>, …
+                        </p>
+                      </div>
+                    </div>
+                    <div class="modal-foot">
+                      <button class="btn ghost" type="button">Cancel</button>
+                      <button class="btn primary" type="button">Create project</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p class="col-cap">Submitting · identifier taken (close-ups)</p>
+            <div class="closeup">
+              <div class="cu-cap">Submitting — button loading</div>
+              <div
+                class="modal-foot"
+                style="border: 0; margin: 0; padding: 0; justify-content: flex-end"
+              >
+                <button class="btn ghost" type="button" disabled>Cancel</button>
+                <button class="btn primary" type="button" disabled>
+                  <span class="spin" aria-hidden="true"></span> Create project
+                </button>
+              </div>
+            </div>
+            <div class="closeup">
+              <div class="cu-cap">Identifier already taken — inline error</div>
+              <div class="field" style="margin: 0">
+                <label>Identifier</label>
+                <input class="inp mono err" value="MOB" />
+                <p class="helper err">That identifier is already in use. Try another.</p>
+              </div>
+            </div>
+            <div class="callout" style="margin-top: 14px">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" /></svg
+              ></span>
+              <span
+                >The loading spinner and the <code>IDENTIFIER_COLLISION</code> inline error already
+                exist (1.3.4). This card adds NOTHING to this modal — it only adds the separate AI
+                door beside it.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- PANEL 4 — "Plan a new project with AI" → the shipped fork     -->
+      <!-- ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>“Plan a new project with AI” → the onboarding fork (routed, not redrawn)</h2>
+          <span class="note"
+            >The AI door navigates to <code>/onboarding</code> — the shipped fork (MOTIR-1461) via
+            the router (MOTIR-1462). Both branches live there; this card does not build them.</span
+          >
+        </div>
+
+        <div class="route">
+          <div class="door">
+            <span class="d-eyebrow" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                />
+              </svg>
+              Plan with AI
+            </span>
+            <p class="d-title">Plan a new project with AI</p>
+            <p class="d-sub">
+              The switcher row / empty-state primary button. On click →
+              <code style="font-family: var(--mono); font-size: 11.5px"
+                >router.push('/onboarding')</code
+              >.
+            </p>
+          </div>
+          <div class="arrow" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </div>
+          <div class="forkref">
+            <div class="fr-cap">
+              <svg
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="color: var(--faint)"
+              >
+                <path d="M15 3h6v6" />
+                <path d="M10 14 21 3" />
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              </svg>
+              Reference only — the shipped fork, owned by MOTIR-1461 @ design/onboarding-entrance/
+            </div>
+            <div class="fr-cards">
+              <div class="fr-card a">
+                <span class="fc-icn" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
+                    /></svg
+                ></span>
+                <p class="fc-t">Start fresh — describe your idea</p>
+                <p class="fc-s">Idea → discovery chat → reviewed backlog (done 7.3). No repo.</p>
+              </div>
+              <div class="fr-card b">
+                <span class="fc-icn" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="6" x2="6" y1="3" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" /></svg
+                ></span>
+                <p class="fc-t">Import an existing project</p>
+                <p class="fc-s">Connect a repo + optionally import Jira / Linear (7.15 / 7.17).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout" style="margin-top: 16px">
+          <span class="ic" aria-hidden="true"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" /></svg
+          ></span>
+          <span
+            >The fresh-vs-import choice lives ONLY on <code>/onboarding</code> — <b>one fork UI</b>.
+            MOTIR-1486 wires this door; it does not rebuild the fork. No project is pre-created for
+            the AI path (created downstream — start-fresh at discovery/materialize, done 7.3; import
+            inside the 7.15 / 7.17 wizard). Nothing here connects a repo or picks a tracker.</span
+          >
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- PANEL 5 — behaviour & states                                  -->
+      <!-- ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <h2>Behaviour, routing &amp; states</h2>
+          <span class="note">What each door does, and the states 1486 must handle.</span>
+        </div>
+
+        <div class="mini-grid">
+          <div class="state">
+            <div class="st-cap">Two doors, one fork</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" /></svg
+              ></span>
+              <span
+                ><b>Create project</b> (kept) → the shipped modal, manual name/identifier,
+                unchanged. <b>Plan a new project with AI</b> (new) → <code>/onboarding</code> (the
+                fork). The two are independent affordances; neither is nested in the other.</span
+              >
+            </div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="6" x2="6" y1="3" y2="15" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M18 9a9 9 0 0 1-9 9" /></svg
+              ></span>
+              <span
+                >The fresh-vs-import fork is on <code>/onboarding</code> only (MOTIR-1461). 1486
+                does not build a second fork; nothing here connects a repo or picks a tracker.</span
+              >
+            </div>
+          </div>
+
+          <div class="state">
+            <div class="st-cap">Create-project states (composed, unchanged)</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" /></svg
+              ></span>
+              <span
+                ><b>Loading</b> — the “Create project” button spins + disables both buttons while
+                the Server Action runs (shipped <code>isPending</code>). <b>Error</b> — an
+                identifier collision surfaces inline (<code>IDENTIFIER_COLLISION</code>); any other
+                failure is a toast. Both exist today (Panel 3).</span
+              >
+            </div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" /></svg
+              ></span>
+              <span
+                ><b>Empty (no projects)</b> → Panel 2a: both doors, primary “Plan a new project with
+                AI” + secondary “Create project”. The switcher trigger reads “No project”.</span
+              >
+            </div>
+          </div>
+
+          <div class="state">
+            <div class="st-cap">“Already has AI plan”</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                  <path d="M21 3v5h-5" /></svg
+              ></span>
+              <span
+                >If the active project already has a planning session (an
+                <code>AiPreplanSession</code> / generated tree), the empty state (Panel 2b) swaps
+                <b>“Plan a new project with AI” → “Continue your plan”</b>, routing to the resume
+                surface rather than restarting onboarding. We never re-onboard a project that is
+                already planned.</span
+              >
+            </div>
+          </div>
+
+          <div class="state">
+            <div class="st-cap">Placement &amp; keyboard</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" /></svg
+              ></span>
+              <span
+                >Switcher: “Plan a new project with AI” is the accent row directly above “Create
+                project”, both below the hairline. Empty state: the AI button is the accent primary,
+                “Create project” the secondary. Each is a focusable <code>button</code> in normal
+                tab order; Enter / Space activates.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
