@@ -42,6 +42,31 @@ jobs:
       - run: pnpm prisma generate
       - run: pnpm typecheck
 
+  design-system:
+    name: Design-system package
+    runs-on: ubuntu-latest
+    # The @motir/design-system package ships its own vitest suite (registries,
+    # apply API, render, and the RSC-safe-barrel guard) that the root Vitest lane
+    # does NOT run — its `include` globs only `tests/**`. Run it here so the
+    # package's tests (incl. the MOTIR-1538 barrel guard) actually gate merges;
+    # otherwise a regression to the RSC boundary would ship silently. No DB /
+    # services needed — the suite is pure (no server, no Postgres).
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      # `pnpm install`'s postinstall builds the package; build again explicitly so
+      # the barrel guard reads a dist built from THIS commit's source, not a cached
+      # one. Skip the husky prepare hook — CI has no git hooks to wire.
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+      - run: pnpm --filter @motir/design-system build
+      - run: pnpm --filter @motir/design-system test
+
   build:
     name: Next.js build
     runs-on: ubuntu-latest
