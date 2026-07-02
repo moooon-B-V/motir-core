@@ -4036,6 +4036,29 @@
         "designDesc": "选择你产品的外观与质感 —— 或者跳过，使用 Motir 的默认风格。"
       }
     },
+    "entrance": {
+      "eyebrow": "用 AI 构建",
+      "headingDefault": "你想如何开始？",
+      "headingCarried": "随时可以开始",
+      "subheadDefault": "描述你想构建的东西。Motir 会与你一起规划，然后由智能体来构建。",
+      "subheadCarried": "我们保留了你最初的想法。如果愿意，可以补充更多，然后继续。",
+      "ideaLabel": "你的想法",
+      "carriedLabel": "沿用你的想法",
+      "placeholder": "描述你想构建的东西——面向谁、人们应该能做的核心事情，以及任何必备功能。不必追求完美——接下来我们会追问细节。",
+      "startCta": "开始规划",
+      "continueCta": "沿用这个想法继续",
+      "hintDefault": "可以从一个粗略的想法开始——发现对话会追问后续问题。",
+      "hintCarried": "继续之前可以补充或完善任何内容——接下来交给发现对话。",
+      "or": "或",
+      "importTitle": "我已有一个项目——导入它",
+      "importDesc": "连接你的代码仓库，Motir 会读取你的代码，然后在现有基础上进行规划。你也可以从 Jira、Linear 或 Plane 导入现有的工作项。",
+      "importCta": "导入"
+    },
+    "import": {
+      "title": "导入现有项目",
+      "body": "连接代码仓库并从 Jira、Linear 或 Plane 导入你的工作项即将推出。目前，你可以用 AI 开始一个新项目。",
+      "back": "返回开始"
+    },
     "connectGate": {
       "title": "尚未配置 AI 规划",
       "body": "规划运行在 Motir Cloud 上；此自托管工作区尚未建立连接。",
