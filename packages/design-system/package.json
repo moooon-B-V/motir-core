@@ -23,7 +23,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsup && node scripts/preserve-use-client.mjs && node scripts/build-index-barrel.mjs",
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

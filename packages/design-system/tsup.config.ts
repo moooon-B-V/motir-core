@@ -31,9 +31,21 @@ export default defineConfig({
   sourcemap: true,
   treeshake: true,
   external: ['react', 'react-dom', 'react/jsx-runtime', 'next'],
-  // NOTE: esbuild strips directive prologues (`'use client'`), and tsup has no
-  // reliable built-in preservation. The `build` script runs
-  // `scripts/preserve-use-client.mjs` immediately after tsup to re-add the
-  // directive to each emitted file whose SOURCE declared one — so the client
-  // components stay client-module boundaries for a Next (RSC) consumer (ADR §5).
+  // Post-build steps run HERE (not chained after `tsup` in the npm script) so
+  // they are intrinsic to the build — a bare `tsup`, a `--watch` rebuild, or any
+  // future caller ALL get the RSC-safe output by construction, never a raw bundle
+  // that a dropped script step would leave behind (MOTIR-1538). Two fixups, in
+  // order:
+  //   1. `preserve-use-client.mjs` — esbuild strips directive prologues
+  //      (`'use client'`) and tsup has no reliable built-in to keep them; this
+  //      re-adds the directive to each emitted file whose SOURCE declared one, so
+  //      the client components stay client-module boundaries for a Next (RSC)
+  //      consumer (ADR §5).
+  //   2. `build-index-barrel.mjs` — tsup bundles the `src/index.ts` entry into a
+  //      monolithic `dist/index.js` with NO directive; this rewrites it as a THIN
+  //      re-export barrel of the sibling per-file chunks, so a server import of a
+  //      server-safe export doesn't eagerly pull a client-only API (ADR §5). The
+  //      `test/barrel-rsc-safe.test.ts` guard asserts this held.
+  // A non-zero exit from either script fails the (non-watch) build.
+  onSuccess: 'node scripts/preserve-use-client.mjs && node scripts/build-index-barrel.mjs',
 });
