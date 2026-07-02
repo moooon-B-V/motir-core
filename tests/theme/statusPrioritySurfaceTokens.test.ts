@@ -9,7 +9,12 @@ import { describe, expect, it } from 'vitest';
 // Tier-0 --color-* (so every palette re-skins them via its --color-* override),
 // and the one true Tier-0 swap-layer violation (StatusPicker) is gone.
 
-const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS =
+  readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8') +
+  readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 const STATUS_PICKER = readFileSync(
   join(process.cwd(), 'components/issues/StatusPicker.tsx'),
   'utf8',

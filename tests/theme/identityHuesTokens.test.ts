@@ -12,7 +12,10 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
-const GLOBALS_CSS = read('app/globals.css');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS = read('app/globals.css') + read('packages/design-system/theme.css');
 
 // The Tier-3 base block (the only place a new --el-* is defined; palettes
 // override the underlying --color-*, not the --el-*). It's a flat declaration
@@ -128,11 +131,11 @@ describe('the --el-type-* misuse is decoupled in every consumer', () => {
   });
 
   it('label + role chips route through the dedicated families', () => {
-    const picker = read('components/ui/MultiSelectPicker.tsx');
+    const picker = read('packages/design-system/src/components/ui/MultiSelectPicker.tsx');
     for (const n of [1, 2, 3, 4, 5, 6]) expect(picker).toContain(`bg-(--el-label-${n})`);
     expect(picker).not.toMatch(/bg-\(--el-tint-/);
 
-    const pill = read('components/ui/Pill.tsx');
+    const pill = read('packages/design-system/src/components/ui/Pill.tsx');
     for (const r of ['admin', 'member', 'viewer']) expect(pill).toContain(`bg-(--el-role-${r})`);
     for (const r of ['owner', 'admin', 'member']) expect(pill).toContain(`bg-(--el-org-role-${r})`);
     expect(pill).toContain('bg-(--el-privacy-private)');

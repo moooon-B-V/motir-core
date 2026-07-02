@@ -29,7 +29,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:billing": "playwright test --config playwright.billing.config.ts",
     "prepare": "husky",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate && pnpm --filter @motir/design-system build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -46,6 +46,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "1.26.0",
+    "@motir/design-system": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@radix-ui/react-collapsible": "^1.1.12",

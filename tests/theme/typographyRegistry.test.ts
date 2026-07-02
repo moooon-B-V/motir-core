@@ -20,7 +20,12 @@ import { themeInitScript } from '@/lib/theme/init-script';
 // a real file, the default resolves, and the type axis is kept disjoint from the
 // colour + shape axes in globals.css.
 
-const GLOBALS_CSS = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS =
+  readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8') +
+  readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 const LAYOUT_TSX = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf8');
 
 describe('typography registry', () => {

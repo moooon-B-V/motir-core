@@ -14,7 +14,10 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
-const GLOBALS_CSS = read('app/globals.css');
+// The design-system token layer moved into `@motir/design-system/theme.css`
+// (MOTIR-1527); app/globals.css now only `@import`s it + keeps app base styles.
+// Read the UNION so these runtime-contract assertions see the full token layer.
+const GLOBALS_CSS = read('app/globals.css') + read('packages/design-system/theme.css');
 
 // The Tier-3 base block (the only place a new --el-* is defined; palettes
 // override the underlying --color-*, not the --el-*). It's a flat declaration
@@ -120,14 +123,17 @@ describe('agile accents + tabnav + card-icon + vote are wired to their tokens', 
   });
 
   it('the Archived pill has a dedicated tone routed to --el-archived-pill-*', () => {
-    const pill = read('components/ui/Pill.tsx');
+    const pill = read('packages/design-system/src/components/ui/Pill.tsx');
     expect(pill).toContain('bg-(--el-archived-pill-bg)');
     expect(pill).toContain('text-(--el-archived-pill-text)');
     expect(read('app/(authed)/_components/ProjectSwitcher.tsx')).toContain('tone="archived"');
   });
 
   it('the tab primitives (Segmented + PublicTabNav) route track + active through --el-tabnav-*', () => {
-    for (const f of ['components/ui/Segmented.tsx', 'app/(public)/_components/PublicTabNav.tsx']) {
+    for (const f of [
+      'packages/design-system/src/components/ui/Segmented.tsx',
+      'app/(public)/_components/PublicTabNav.tsx',
+    ]) {
       const src = read(f);
       expect(src, f).toContain('bg-(--el-tabnav-track)');
       expect(src, f).toContain('--el-tabnav-active');
