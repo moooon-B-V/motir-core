@@ -74,7 +74,7 @@
 
       /* ---- doc scaffold (annotations only — NOT part of the product UI) ---- */
       .sheet {
-        max-width: 1240px;
+        max-width: 1120px;
         margin: 0 auto;
         padding: 36px 28px 72px;
       }
@@ -88,7 +88,7 @@
         color: var(--secondary);
         font-size: 14px;
         line-height: 1.55;
-        max-width: 78ch;
+        max-width: 80ch;
       }
       .doc-head .refs {
         margin-top: 12px;
@@ -137,10 +137,12 @@
       }
 
       /* ================================================================
-         PRODUCT SURFACE — the /onboarding entrance fork (full-bleed).
+         PRODUCT SURFACE — the /onboarding entrance (full-bleed, idea-first).
          The onboarding route group renders OUTSIDE the app shell
          (app/(onboarding)/layout.tsx): authenticated, but no top nav /
-         project sidebar. So the fork owns the whole viewport.
+         project sidebar. So the entrance owns the whole viewport. It leads
+         with ONE idea box (continuing the marketing hero); "import an
+         existing project" is a first-class but SECONDARY path below.
       ================================================================ */
       .ob {
         border: 1px solid var(--border);
@@ -203,13 +205,13 @@
       }
 
       .ob-body {
-        max-width: 860px;
+        max-width: 660px;
         margin: 0 auto;
-        padding: 48px 28px 56px;
+        padding: 52px 28px 56px;
       }
       .ob-head {
         text-align: center;
-        margin-bottom: 30px;
+        margin-bottom: 26px;
       }
       .eyebrow {
         display: inline-flex;
@@ -230,70 +232,21 @@
       }
       .ob-head p {
         margin: 0 auto;
-        max-width: 54ch;
+        max-width: 52ch;
         color: var(--secondary);
         font-size: 15px;
         line-height: 1.55;
       }
 
-      /* --- the two-option fork --- */
-      .fork {
-        display: grid;
-        grid-template-columns: 1.55fr 1fr;
-        gap: 18px;
-        align-items: stretch;
-      }
-      .opt {
-        display: flex;
-        flex-direction: column;
+      /* --- PRIMARY: the idea box (continues the marketing hero) --- */
+      .idea-card {
         background: var(--surface);
-        border: 1px solid var(--border);
+        border: 1px solid var(--accent);
         border-radius: var(--r-card);
-        padding: 22px 22px 20px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--sh-elev);
+        padding: 18px 18px 16px;
       }
-      .opt.sel {
-        border-color: var(--accent);
-        box-shadow:
-          0 0 0 1px var(--accent),
-          var(--sh-elev);
-      }
-      .opt-icn {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        display: grid;
-        place-items: center;
-        color: var(--strong);
-        margin-bottom: 14px;
-      }
-      .opt-icn.a {
-        background: var(--lavender);
-      }
-      .opt-icn.b {
-        background: var(--sky);
-      }
-      .opt h3 {
-        font-size: 16px;
-        font-weight: 700;
-        margin: 0 0 5px;
-        color: var(--text);
-      }
-      .opt .lede {
-        margin: 0 0 14px;
-        font-size: 13.5px;
-        line-height: 1.5;
-        color: var(--secondary);
-      }
-
-      /* idea box (reused from the 7.3.14 hero — the "start fresh" input) */
-      .idea {
-        border: 1px solid var(--border);
-        border-radius: var(--r-input);
-        background: var(--soft);
-        padding: 10px 12px;
-      }
-      .idea .lbl {
+      .idea-card .lbl {
         display: flex;
         align-items: center;
         gap: 6px;
@@ -301,56 +254,54 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
         color: var(--faint);
-        margin-bottom: 6px;
+        margin-bottom: 8px;
       }
-      .idea .carried {
+      .idea-card .lbl.carried {
         color: var(--accent);
       }
-      .idea .carried .dot {
+      .idea-card .lbl.carried .dot {
         display: inline-block;
         width: 6px;
         height: 6px;
         border-radius: 50%;
         background: var(--accent);
       }
-      .idea textarea {
+      .idea-card textarea {
         width: 100%;
-        min-height: 156px;
+        min-height: 172px;
         border: 0;
         background: transparent;
         resize: none;
         font-family: inherit;
-        font-size: 14px;
-        line-height: 1.5;
+        font-size: 15px;
+        line-height: 1.55;
         color: var(--text);
         outline: none;
       }
-      .idea textarea::placeholder {
+      .idea-card textarea::placeholder {
         color: var(--faint);
       }
-      .idea.focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
-      }
-
-      /* destination legend — makes each option's downstream flow legible */
-      .dest {
-        margin-top: 14px;
+      .idea-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
         padding-top: 13px;
-        border-top: 1px dashed var(--hair);
-      }
-      .dest .cap {
-        font: 600 10.5px var(--mono);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--faint);
-        margin-bottom: 8px;
+        border-top: 1px solid var(--hair);
+        flex-wrap: wrap;
       }
       .steps {
         display: flex;
         align-items: center;
         gap: 6px;
         flex-wrap: wrap;
+      }
+      .steps .cap {
+        font: 600 10.5px var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-right: 2px;
       }
       .step {
         display: inline-flex;
@@ -377,15 +328,8 @@
         width: 13px;
         height: 13px;
       }
-      .subnote {
-        margin-top: 9px;
-        font-size: 11.5px;
-        color: var(--muted);
-      }
-
-      .opt .cta-row {
-        margin-top: 18px;
-        display: flex;
+      .spacer {
+        flex: 1;
       }
       .btn {
         display: inline-flex;
@@ -398,7 +342,7 @@
         height: 40px;
         cursor: pointer;
         border: 1px solid transparent;
-        width: 100%;
+        white-space: nowrap;
       }
       .btn svg {
         width: 16px;
@@ -416,19 +360,110 @@
       .btn.secondary:hover {
         background: var(--soft);
       }
-
-      .ob-foot {
-        margin-top: 26px;
-        text-align: center;
-        font-size: 12.5px;
+      .hint {
+        margin: 10px 2px 0;
+        font-size: 12px;
         color: var(--muted);
       }
-      .ob-foot a {
-        color: var(--link, #0070d2);
-        text-decoration: none;
+
+      /* --- divider between the primary path and the secondary one --- */
+      .or {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 26px 2px 18px;
+        color: var(--faint);
+        font: 600 11px var(--mono);
+        letter-spacing: 0.06em;
+      }
+      .or::before,
+      .or::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border);
       }
 
-      /* small-state row (Panel 3) */
+      /* --- SECONDARY: import an existing project (a slim option row) --- */
+      .import {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card);
+        padding: 16px 18px;
+        box-shadow: var(--sh-subtle);
+        cursor: pointer;
+        text-align: left;
+        width: 100%;
+      }
+      .import:hover {
+        border-color: var(--border-strong);
+      }
+      .import .icn {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: var(--sky);
+        color: var(--strong);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .import .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .import .body .t {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .import .body .d {
+        margin-top: 3px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--secondary);
+      }
+      .import .body .mini {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .import .body .mini .m {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .import .body .mini .m svg {
+        width: 12px;
+        height: 12px;
+        color: var(--faint);
+      }
+      .import .body .mini .sep svg {
+        width: 11px;
+        height: 11px;
+      }
+      .import .go {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .import .go svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* --- states (Panel 3) --- */
       .mini-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -459,6 +494,9 @@
         color: var(--secondary);
         line-height: 1.5;
       }
+      .callout + .callout {
+        margin-top: 12px;
+      }
       .callout .ic {
         color: var(--info);
         flex: none;
@@ -482,14 +520,16 @@
   <body>
     <div class="sheet">
       <div class="doc-head">
-        <h1>Onboarding entrance — the new-vs-existing fork</h1>
+        <h1>Onboarding entrance — idea-first, with a secondary import path</h1>
         <p>
-          The single top-level choice at <code>/onboarding</code>:
-          <strong>Start fresh</strong> (describe an idea → the 7.3 discovery flow) vs
-          <strong>I have an existing project</strong> (→ the 7.15 migrate wizard / 7.17
-          Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane import). Scope is the fork ONLY — no
-          repo-connect, source-selection, index, or generate UI is drawn here; those live downstream
-          and this screen only makes each destination legible and hands off to it.
+          The `/onboarding` entrance. It LEADS with the idea box (continuing the marketing hero,
+          7.3.14) and a primary <strong>Start planning</strong> → the 7.3 discovery flow; a
+          first-class but SECONDARY <strong>“I have an existing project — import it”</strong> path
+          sits below → the 7.15 migrate wizard / 7.17 Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane
+          import. Idea-first matches how idea-first builders onboard (Lovable / Bolt / Replit /
+          Firebase Studio lead with one prompt, import is secondary). Scope is the entrance ONLY —
+          no repo-connect, source-selection, index, or generate UI is drawn here; those live
+          downstream and this screen only makes each destination legible and hands off.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-1461 · 7.22.3</span>
@@ -502,12 +542,12 @@
       </div>
 
       <!-- ============================================================
-           PANEL 1 — the fork, default (arrived with no carried idea)
+           PANEL 1 — the entrance, default (arrived without a carried idea)
       ============================================================ -->
       <section class="panel">
         <div class="panel-cap">
           <span class="n">1</span>
-          <h2>The fork — default (arrived without a carried-over idea)</h2>
+          <h2>The entrance — default (arrived without a carried-over idea)</h2>
           <span class="note"
             >e.g. via the in-app “Plan with AI” door, or a direct visit to /onboarding</span
           >
@@ -565,130 +605,22 @@
               </span>
               <h1>How would you like to start?</h1>
               <p>
-                Motir can plan a brand-new idea from scratch, or read an existing codebase and plan
-                on top of what you already have. Pick a starting point — you can switch later.
+                Describe what you want to build, and Motir turns it into a reviewed, dispatchable
+                plan.
               </p>
             </div>
 
-            <div class="fork">
-              <!-- Option A — Start fresh -->
-              <div class="opt sel">
-                <span class="opt-icn a" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                    />
-                    <path d="M20 3v4" />
-                    <path d="M22 5h-4" />
-                    <path d="M4 17v2" />
-                    <path d="M5 18H3" />
-                  </svg>
-                </span>
-                <h3>Start fresh — describe your idea</h3>
-                <p class="lede">
-                  Tell Motir what you want to build in a sentence or two. We’ll turn it into a
-                  reviewed, dispatchable backlog.
-                </p>
-
-                <div class="idea focus">
-                  <div class="lbl">Your idea</div>
-                  <textarea
-                    rows="6"
-                    placeholder="Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. For example: a booking app for a hair salon where clients pick a stylist and time, get SMS reminders, and the owner sees a daily schedule with no-show rates. Don't worry about getting it perfect — we'll ask follow-up questions next."
-                  ></textarea>
-                </div>
-
-                <div class="dest">
-                  <div class="cap">Next: a short chat to</div>
-                  <div class="steps">
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" />
-                      </svg>
-                      Understand
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path
-                          d="M8.3 10a.7.7 0 0 1-.6-1.1L11.4 3a.7.7 0 0 1 1.2 0L16.3 8.9a.7.7 0 0 1-.6 1.1Z"
-                        />
-                        <rect x="3" y="14" width="7" height="7" rx="1" />
-                        <circle cx="17.5" cy="17.5" r="3.5" />
-                      </svg>
-                      Scope
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="16" y="16" width="6" height="6" rx="1" />
-                        <rect x="2" y="16" width="6" height="6" rx="1" />
-                        <rect x="9" y="2" width="6" height="6" rx="1" />
-                        <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                        <path d="M12 12V8" />
-                      </svg>
-                      Plan
-                    </span>
-                  </div>
-                  <p class="subnote">Opens the discovery conversation. No repo needed.</p>
-                </div>
-
-                <div class="cta-row">
-                  <button class="btn primary" type="button">
-                    Start planning
+            <!-- PRIMARY — the idea box -->
+            <div class="idea-card">
+              <div class="lbl">Your idea</div>
+              <textarea
+                rows="7"
+                placeholder="Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. For example: a booking app for a hair salon where clients pick a stylist and time, get SMS reminders, and the owner sees a daily schedule with no-show rates. Don't worry about getting it perfect — we'll ask follow-up questions next."
+              ></textarea>
+              <div class="idea-foot">
+                <div class="steps">
+                  <span class="cap">Next:</span>
+                  <span class="step">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -697,125 +629,122 @@
                       stroke-linecap="round"
                       stroke-linejoin="round"
                     >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" />
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.3-4.3" />
                     </svg>
-                  </button>
+                    Understand
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="step">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M8.3 10a.7.7 0 0 1-.6-1.1L11.4 3a.7.7 0 0 1 1.2 0L16.3 8.9a.7.7 0 0 1-.6 1.1Z"
+                      />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                      <circle cx="17.5" cy="17.5" r="3.5" />
+                    </svg>
+                    Scope
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="step">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="16" y="16" width="6" height="6" rx="1" />
+                      <rect x="2" y="16" width="6" height="6" rx="1" />
+                      <rect x="9" y="2" width="6" height="6" rx="1" />
+                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+                      <path d="M12 12V8" />
+                    </svg>
+                    Plan
+                  </span>
                 </div>
-              </div>
-
-              <!-- Option B — Existing project -->
-              <div class="opt">
-                <span class="opt-icn b" aria-hidden="true">
+                <span class="spacer"></span>
+                <button class="btn primary" type="button">
+                  Start planning
                   <svg
                     viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <line x1="6" x2="6" y1="3" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
                   </svg>
-                </span>
-                <h3>I have an existing project — import it</h3>
-                <p class="lede">
+                </button>
+              </div>
+            </div>
+            <p class="hint">
+              You can start with a rough idea — the discovery chat asks follow-up questions. No repo
+              needed.
+            </p>
+
+            <div class="or">OR</div>
+
+            <!-- SECONDARY — import an existing project -->
+            <button class="import" type="button">
+              <span class="icn" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="19"
+                  height="19"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="6" x2="6" y1="3" y2="15" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+              </span>
+              <span class="body">
+                <span class="t">I have an existing project — import it</span>
+                <span class="d">
                   Connect your repository and Motir reads your code, then plans on top of what’s
                   already there. You can also bring over existing work items from Jira, Linear or
                   Plane.
-                </p>
-
-                <div class="dest" style="margin-top: 4px; border-top: 0; padding-top: 0">
-                  <div class="cap">Next: the guided import wizard</div>
-                  <div class="steps">
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <line x1="6" x2="6" y1="3" y2="15" />
-                        <circle cx="18" cy="6" r="3" />
-                        <circle cx="6" cy="18" r="3" />
-                        <path d="M18 9a9 9 0 0 1-9 9" />
-                      </svg>
-                      Connect repo
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="m16 18 6-6-6-6" />
-                        <path d="m8 6-6 6 6 6" />
-                      </svg>
-                      Read your code
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="16" y="16" width="6" height="6" rx="1" />
-                        <rect x="2" y="16" width="6" height="6" rx="1" />
-                        <rect x="9" y="2" width="6" height="6" rx="1" />
-                        <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                        <path d="M12 12V8" />
-                      </svg>
-                      Plan
-                    </span>
-                  </div>
-                  <p class="subnote">
-                    GitHub or GitLab · optionally import existing work items from Jira, Linear or
-                    Plane.
-                  </p>
-                </div>
-
-                <div style="flex: 1"></div>
-
-                <div class="cta-row">
-                  <button class="btn secondary" type="button">
-                    Import a project
+                </span>
+                <span class="mini">
+                  <span class="m">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -824,32 +753,99 @@
                       stroke-linecap="round"
                       stroke-linejoin="round"
                     >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" />
+                      <line x1="6" x2="6" y1="3" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
                     </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <p class="ob-foot">
-              Not sure? <a href="#">Start fresh</a> is the quickest way in — you can connect a repo
-              to any project later.
-            </p>
+                    Connect repo
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m16 18 6-6-6-6" />
+                      <path d="m8 6-6 6 6 6" />
+                    </svg>
+                    Read your code
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="16" y="16" width="6" height="6" rx="1" />
+                      <rect x="2" y="16" width="6" height="6" rx="1" />
+                      <rect x="9" y="2" width="6" height="6" rx="1" />
+                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+                      <path d="M12 12V8" />
+                    </svg>
+                    Plan
+                  </span>
+                </span>
+              </span>
+              <span class="go">
+                Import
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
+            </button>
           </div>
         </div>
       </section>
 
       <!-- ============================================================
-           PANEL 2 — the fork with a carried-over idea (7.22.2 / MOTIR-1458)
+           PANEL 2 — the entrance with a carried-over idea (7.22.2 / MOTIR-1458)
       ============================================================ -->
       <section class="panel">
         <div class="panel-cap">
           <span class="n">2</span>
-          <h2>The fork — with a carried-over idea (from the motir.co hero)</h2>
+          <h2>The entrance — with a carried-over idea (from the motir.co hero)</h2>
           <span class="note">
             arrived via “Plan with AI” after typing an idea on the marketing hero; the idea is
-            preserved (MOTIR-1458) and pre-fills the Start-fresh box
+            preserved (MOTIR-1458) and pre-fills the box
           </span>
         </div>
 
@@ -910,252 +906,19 @@
               </p>
             </div>
 
-            <div class="fork">
-              <!-- Option A — Start fresh, pre-filled -->
-              <div class="opt sel">
-                <span class="opt-icn a" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                    />
-                    <path d="M20 3v4" />
-                    <path d="M22 5h-4" />
-                    <path d="M4 17v2" />
-                    <path d="M5 18H3" />
-                  </svg>
-                </span>
-                <h3>Start fresh — describe your idea</h3>
-                <p class="lede">
-                  This is what you told us on the way in. Tweak it, then start planning.
-                </p>
-
-                <div class="idea">
-                  <div class="lbl carried">
-                    <span class="dot"></span>
-                    Carried over from your idea
-                  </div>
-                  <textarea rows="6">
-A time-off and leave app for a 20-person startup. Employees request days off (vacation, sick, unpaid), a manager approves or declines with a note, and everyone sees a shared team calendar plus their remaining balance per leave type. Balances accrue monthly and carry over up to a cap. Managers get an email when a request comes in; the whole team gets a heads-up when someone's approved leave starts. Admins can set the per-country holiday calendar and the accrual rules. Later I'd like Slack notifications and an export for payroll.</textarea
-                  >
-                </div>
-
-                <div class="dest">
-                  <div class="cap">Next: a short chat to</div>
-                  <div class="steps">
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" />
-                      </svg>
-                      Understand
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path
-                          d="M8.3 10a.7.7 0 0 1-.6-1.1L11.4 3a.7.7 0 0 1 1.2 0L16.3 8.9a.7.7 0 0 1-.6 1.1Z"
-                        />
-                        <rect x="3" y="14" width="7" height="7" rx="1" />
-                        <circle cx="17.5" cy="17.5" r="3.5" />
-                      </svg>
-                      Scope
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="16" y="16" width="6" height="6" rx="1" />
-                        <rect x="2" y="16" width="6" height="6" rx="1" />
-                        <rect x="9" y="2" width="6" height="6" rx="1" />
-                        <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                        <path d="M12 12V8" />
-                      </svg>
-                      Plan
-                    </span>
-                  </div>
-                  <p class="subnote">Opens the discovery conversation, seeded with your idea.</p>
-                </div>
-
-                <div class="cta-row">
-                  <button class="btn primary" type="button">
-                    Continue with this idea
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
+            <!-- PRIMARY — the idea box, pre-filled -->
+            <div class="idea-card">
+              <div class="lbl carried">
+                <span class="dot"></span>
+                Carried over from your idea
               </div>
-
-              <!-- Option B — Existing project (unchanged) -->
-              <div class="opt">
-                <span class="opt-icn b" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <line x1="6" x2="6" y1="3" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
-                </span>
-                <h3>I have an existing project — import it</h3>
-                <p class="lede">
-                  Prefer to start from code you already have? Connect a repo instead — your idea
-                  stays saved if you switch back.
-                </p>
-
-                <div class="dest" style="margin-top: 4px; border-top: 0; padding-top: 0">
-                  <div class="cap">Next: the guided import wizard</div>
-                  <div class="steps">
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <line x1="6" x2="6" y1="3" y2="15" />
-                        <circle cx="18" cy="6" r="3" />
-                        <circle cx="6" cy="18" r="3" />
-                        <path d="M18 9a9 9 0 0 1-9 9" />
-                      </svg>
-                      Connect repo
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="m16 18 6-6-6-6" />
-                        <path d="m8 6-6 6 6 6" />
-                      </svg>
-                      Read your code
-                    </span>
-                    <span class="sep"
-                      ><svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" /></svg
-                    ></span>
-                    <span class="step">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <rect x="16" y="16" width="6" height="6" rx="1" />
-                        <rect x="2" y="16" width="6" height="6" rx="1" />
-                        <rect x="9" y="2" width="6" height="6" rx="1" />
-                        <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-                        <path d="M12 12V8" />
-                      </svg>
-                      Plan
-                    </span>
-                  </div>
-                  <p class="subnote">
-                    GitHub or GitLab · optionally import existing work items from Jira, Linear or
-                    Plane.
-                  </p>
-                </div>
-
-                <div style="flex: 1"></div>
-
-                <div class="cta-row">
-                  <button class="btn secondary" type="button">
-                    Import a project
+              <textarea rows="7">
+A time-off and leave app for a 20-person startup. Employees request days off (vacation, sick, unpaid), a manager approves or declines with a note, and everyone sees a shared team calendar plus their remaining balance per leave type. Balances accrue monthly and carry over up to a cap. Managers get an email when a request comes in; the whole team gets a heads-up when someone's approved leave starts. Admins can set the per-country holiday calendar and the accrual rules. Later I'd like Slack notifications and an export for payroll.</textarea
+              >
+              <div class="idea-foot">
+                <div class="steps">
+                  <span class="cap">Next:</span>
+                  <span class="step">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1164,62 +927,226 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                       stroke-linecap="round"
                       stroke-linejoin="round"
                     >
-                      <path d="M5 12h14" />
-                      <path d="m12 5 7 7-7 7" />
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.3-4.3" />
                     </svg>
-                  </button>
+                    Understand
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="step">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M8.3 10a.7.7 0 0 1-.6-1.1L11.4 3a.7.7 0 0 1 1.2 0L16.3 8.9a.7.7 0 0 1-.6 1.1Z"
+                      />
+                      <rect x="3" y="14" width="7" height="7" rx="1" />
+                      <circle cx="17.5" cy="17.5" r="3.5" />
+                    </svg>
+                    Scope
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="step">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="16" y="16" width="6" height="6" rx="1" />
+                      <rect x="2" y="16" width="6" height="6" rx="1" />
+                      <rect x="9" y="2" width="6" height="6" rx="1" />
+                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+                      <path d="M12 12V8" />
+                    </svg>
+                    Plan
+                  </span>
                 </div>
+                <span class="spacer"></span>
+                <button class="btn primary" type="button">
+                  Continue with this idea
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+            <p class="hint">
+              Edit anything before you continue — the chat picks up from what’s here.
+            </p>
 
-      <!-- ============================================================
-           PANEL 3 — interaction + edge states (annotated close-ups)
-      ============================================================ -->
-      <section class="panel">
-        <div class="panel-cap">
-          <span class="n">3</span>
-          <h2>States &amp; behaviour (close-ups)</h2>
-          <span class="note">selection / keyboard, empty idea, and the reachability contract</span>
-        </div>
+            <div class="or">OR</div>
 
-        <div class="mini-grid">
-          <div class="state">
-            <div class="st-cap">Selection &amp; keyboard</div>
-            <div class="opt sel" style="box-shadow: 0 0 0 1px var(--accent)">
-              <span class="opt-icn a" aria-hidden="true">
+            <!-- SECONDARY — import an existing project -->
+            <button class="import" type="button">
+              <span class="icn" aria-hidden="true">
                 <svg
                   viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
+                  width="19"
+                  height="19"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path
-                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
-                  />
+                  <line x1="6" x2="6" y1="3" y2="15" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M18 9a9 9 0 0 1-9 9" />
                 </svg>
               </span>
-              <h3>Start fresh</h3>
-              <p class="lede" style="margin-bottom: 8px">
-                Each option is a focusable control. The chosen one carries the accent ring; the idea
-                box shows its own <span class="kbd">focus</span> ring.
-              </p>
-              <p class="subnote" style="margin: 0">
-                Tab moves between the two options and the idea box · Enter / Space activates the
-                CTA.
-              </p>
-            </div>
+              <span class="body">
+                <span class="t">I have an existing project — import it</span>
+                <span class="d">
+                  Prefer to start from code you already have? Connect a repo instead — your idea
+                  stays saved if you switch back. Optionally bring over work items from Jira, Linear
+                  or Plane.
+                </span>
+                <span class="mini">
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="6" x2="6" y1="3" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
+                    </svg>
+                    Connect repo
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m16 18 6-6-6-6" />
+                      <path d="m8 6-6 6 6 6" />
+                    </svg>
+                    Read your code
+                  </span>
+                  <span class="sep"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m12 5 7 7-7 7" /></svg
+                  ></span>
+                  <span class="m">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="16" y="16" width="6" height="6" rx="1" />
+                      <rect x="2" y="16" width="6" height="6" rx="1" />
+                      <rect x="9" y="2" width="6" height="6" rx="1" />
+                      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+                      <path d="M12 12V8" />
+                    </svg>
+                    Plan
+                  </span>
+                </span>
+              </span>
+              <span class="go">
+                Import
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </span>
+            </button>
           </div>
+        </div>
+      </section>
 
+      <!-- ============================================================
+           PANEL 3 — states & behaviour (annotated close-ups)
+      ============================================================ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>States &amp; behaviour (close-ups)</h2>
+          <span class="note">empty idea, keyboard, and the routing-only reachability contract</span>
+        </div>
+
+        <div class="mini-grid">
           <div class="state">
-            <div class="st-cap">Empty idea + reachability</div>
-            <div class="callout" style="margin-bottom: 12px">
+            <div class="st-cap">Empty idea + keyboard</div>
+            <div class="callout">
               <span class="ic" aria-hidden="true">
                 <svg
                   viewBox="0 0 24 24"
@@ -1236,7 +1163,8 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
               </span>
               <span>
                 <strong>Start planning</strong> works with an empty idea too — the discovery chat
-                opens and asks the first question. The idea box is a head-start, not a gate.
+                opens and asks the first question. The idea box is a head-start, not a gate. The
+                textarea holds focus on load; <span class="kbd">⌘/Ctrl + Enter</span> submits.
               </span>
             </div>
             <div class="callout">
@@ -1260,10 +1188,34 @@ A time-off and leave app for a 20-person startup. Employees request days off (va
                 </svg>
               </span>
               <span>
-                This screen only <strong>routes</strong>. Start-fresh → the 7.3 discovery chat
-                (seeded); existing → the 7.15 migrate wizard (or 7.17 for Jira / Linear / Plane),
-                which owns connect → source-selection → index → generate. Nothing here connects a
-                repo.
+                The <strong>Import</strong> row is a secondary but first-class control — a focusable
+                button with its own hover / focus ring; not hidden behind a menu.
+              </span>
+            </div>
+          </div>
+
+          <div class="state">
+            <div class="st-cap">Reachability — this screen only ROUTES</div>
+            <div class="callout">
+              <span class="ic" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m16 18 6-6-6-6" />
+                  <path d="m8 6-6 6 6 6" />
+                </svg>
+              </span>
+              <span>
+                <strong>Start planning</strong> → the 7.3 discovery chat, seeded with the idea
+                (MOTIR-1462 hands off). <strong>Import</strong> → the 7.15 migrate wizard (or 7.17
+                for Jira / Linear / Plane), which owns connect → source-selection → index →
+                generate. Nothing here connects a repo, picks a source, or generates — the entrance
+                draws the doors and their destinations, nothing downstream.
               </span>
             </div>
           </div>
