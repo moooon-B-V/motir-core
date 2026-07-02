@@ -8,9 +8,9 @@
 //      to /onboarding, and following it while logged out lands on
 //      /sign-in?next=/onboarding (the onboarding auth gate preserves intent).
 //
-// The E2E deployment is configured as AI-connected (playwright.config.ts sets
-// MOTIR_AI_URL), so /onboarding does NOT show the self-host Connect gate — it
-// reaches the auth gate, which is what this spec exercises.
+// The self-host Connect gate is opt-in (MOTIR_SELFHOST_CONNECT_GATE, off by
+// default), so /onboarding does NOT show it here — it reaches the auth gate,
+// which is what this spec exercises.
 
 import { expect, test } from '@playwright/test';
 
