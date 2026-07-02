@@ -463,9 +463,13 @@
           starting fresh). The plan → build lifecycle (Motir plans, then agents build it — the
           user's own agent or a Motir-hosted one; Motir is not plan-only) is conveyed in the subhead
           PROSE plus a <strong>“How Motir works” link</strong> that opens the detailed explainer —
-          there is NO on-screen workflow chart (it under-explained). Scope is the entrance ONLY — no
-          repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those live
-          downstream and this screen only makes each destination legible and hands off.
+          there is NO on-screen workflow chart (it under-explained). The eyebrow reads
+          <strong>“Build with AI”</strong>, not “Plan with AI” — the latter was misleading (it
+          implies plan-only, but Motir plans AND builds). This label must propagate to the entry
+          button (MOTIR-1457), the in-app entry (MOTIR-1485), and the shipped hero badge (7.3.14
+          `en.json` `landing.badge`) so the whole path reads one word. Scope is the entrance ONLY —
+          no repo-connect, source-selection, index, generate, or agent-run UI is drawn here; those
+          live downstream and this screen only makes each destination legible and hands off.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-1461 · 7.22.3</span>
@@ -485,7 +489,7 @@
           <span class="n">1</span>
           <h2>The entrance — default (arrived without a carried-over idea)</h2>
           <span class="note"
-            >e.g. via the in-app “Plan with AI” door, or a direct visit to /onboarding</span
+            >e.g. via the in-app “Build with AI” door, or a direct visit to /onboarding</span
           >
         </div>
 
@@ -536,7 +540,7 @@
                     d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
                   />
                 </svg>
-                Plan with AI
+                Build with AI
               </span>
               <h1>How would you like to start?</h1>
               <p>Describe what you want to build. Motir plans it with you, then agents build it.</p>
@@ -640,7 +644,7 @@
           <span class="n">2</span>
           <h2>The entrance — with a carried-over idea (from the motir.co hero)</h2>
           <span class="note">
-            arrived via “Plan with AI” after typing an idea on the marketing hero; the idea is
+            arrived via “Build with AI” after typing an idea on the marketing hero; the idea is
             preserved (MOTIR-1458) and pre-fills the box
           </span>
         </div>
@@ -692,7 +696,7 @@
                     d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"
                   />
                 </svg>
-                Plan with AI
+                Build with AI
               </span>
               <h1>Ready when you are</h1>
               <p>We kept the idea you started with. Add more if you like, then continue.</p>

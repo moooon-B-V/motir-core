@@ -3,7 +3,7 @@
 **Subtask:** MOTIR-1461 · 7.22.3 (`type: design`) · **Story:** MOTIR-1459 (Onboarding entrance — the
 new-vs-existing front door & routing) · **Epic 7 · AI Planning Layer.**
 
-The `/onboarding` entrance the user lands on after "Plan with AI". It **leads with the idea box** (the
+The `/onboarding` entrance the user lands on after "Build with AI". It **leads with the idea box** (the
 primary path) and offers **importing an existing project** as a first-class but secondary path:
 
 - **Start planning** (primary) — describe an idea → the done 7.3 discovery flow (MOTIR-804).
@@ -71,7 +71,7 @@ real structure, it does not redraw a stylised stand-in):
   this entrance and route start-planning → `DiscoveryOnboarding` (seeded with the preserved idea) / import
   → the 7.15 wizard.
 - **`app/_components/PublicFrontDoor.tsx`** (7.3.14 / MOTIR-1022, the marketing hero) — the SOURCE of the
-  idea. This entrance **continues its exact vocabulary**: the `Sparkles` "Plan with AI" eyebrow chip on
+  idea. This entrance **continues its exact vocabulary**: the `Sparkles` eyebrow chip on
   `--el-tint-lavender`, the **serif** headline (`font-serif`), the idea-capture `Card` + `textarea` +
   `ArrowRight` primary `Button`, and a "See how Motir works" link (the detailed explainer). The carried-over idea
   (Panel 2) is the hero's typed idea preserved by MOTIR-1458 (`lib/onboarding/pendingIdea.ts`) and
@@ -80,8 +80,8 @@ real structure, it does not redraw a stylised stand-in):
 ## Access path (entry + the two exits)
 
 - **INBOUND (owned by sibling cards — drawn there, not redrawn here):** (a) the first-login / marketing
-  door — motir-core root → `/login` → **"Plan with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
-  door — an authenticated user picks **"Plan with AI"** in the create-project modal / switcher /
+  door — motir-core root → `/login` → **"Build with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
+  door — an authenticated user picks **"Build with AI"** in the create-project modal / switcher /
   empty-project state (design MOTIR-1485, code MOTIR-1486). Both land on THIS entrance.
 - **OUTBOUND (drawn here — the point of the card):** each path names its destination in the copy (Start
   planning → the discovery chat; Import → connect a repo, read your code, plan on top). The **full plan →
@@ -95,6 +95,13 @@ real structure, it does not redraw a stylised stand-in):
   the START-FRESH path avoids developer jargon — **no "repo"/"No repo needed"** language (Motir is not a
   developers-only tool; a non-technical founder shouldn't hit the word "repo"). Repo / code / GitHub /
   GitLab language is fine ONLY in the import row, whose audience self-selects as having a codebase.
+- **Eyebrow label — "Build with AI", not "Plan with AI" (Yue, misleading).** "Plan with AI" frames Motir
+  as plan-only, but the product plans AND builds (idea → plan → agents build it). Idea-first builders
+  brand on the outcome — Lovable / Bolt / Replit all say **build**, not "plan". So the badge is **"Build
+  with AI"**. **This rename must propagate** for a coherent path: the entry button (MOTIR-1457), the
+  in-app entry (MOTIR-1485/1486), and the **shipped marketing-hero badge** (7.3.14 / `en.json`
+  `landing.badge`, currently "Plan with AI") should all adopt "Build with AI" — a copy-consistency
+  follow-up on those cards (flagged, not redrawn here).
 
 ---
 
@@ -102,13 +109,13 @@ real structure, it does not redraw a stylised stand-in):
 
 ### Panel 1 — the entrance, default (arrived without a carried-over idea)
 
-Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no hero idea in the cookie).
+Reached via the in-app "Build with AI" door or a direct `/onboarding` visit (no hero idea in the cookie).
 
 - **Brand bar** — `Motir` wordmark (`Sparkles` logo tile on `--el-tint-lavender`) left; a signed-in
   avatar right. **No "Save & exit"** — nothing is saved on this entrance (the idea box is just an input;
   no project or session exists until the user continues). A save / resume affordance belongs INSIDE an
   in-progress onboarding session (MOTIR-1488), not here.
-- **Header** — the "Plan with AI" eyebrow chip; serif H1 **"How would you like to start?"**; secondary
+- **Header** — the **"Build with AI"** eyebrow chip; serif H1 **"How would you like to start?"**; secondary
   subhead _"Describe what you want to build. Motir plans it with you, then agents build it."_ (states the
   full arc — planning is not the end state); then a **"See how Motir works →"** link (an `--el-accent` text
   link) — the detailed explainer, replacing the on-screen workflow chart.
@@ -162,7 +169,7 @@ project" — never a preference; importing a codebase you already have is not a 
 | Idea box                   | `Card` + `textarea`, continuing the 7.3.14 hero             | `--el-card` bg on an `--el-accent` border + `--shadow-elevated`; input fill transparent, `--radius-card`       |
 | Primary CTA                | `Button` (`variant="primary"`, `rightIcon={<ArrowRight/>}`) | `--el-accent` / `--el-accent-text`; `--radius-btn`, `--height-btn-md`                                          |
 | Import row                 | `Card` as a clickable option button (`clickable`)           | `--el-card` bg, `--el-border` (→ `--el-border-strong` on hover), `--radius-card`; accent "Import →" affordance |
-| "Plan with AI" eyebrow     | badge chip (as on the hero)                                 | `--el-tint-lavender` bg, `--el-text-strong` text, `--radius-badge`, `--spacing-chip-x/y`                       |
+| "Build with AI" eyebrow    | badge chip (as on the hero)                                 | `--el-tint-lavender` bg, `--el-text-strong` text, `--radius-badge`, `--spacing-chip-x/y`                       |
 | "See how Motir works" link | inline text link                                            | `--el-link` / `--el-accent-on-surface`; underline on hover                                                     |
 | Icon tile (import)         | tinted square (as on the hero preview)                      | `--el-tint-sky`; ink `--el-text-strong`; `--radius-control`                                                    |
 | "OR" divider               | hairline rule + mono label                                  | `--el-border` rule, `--el-text-faint` label                                                                    |
@@ -185,10 +192,10 @@ stroke 2, round caps — matching the shipped hero.
 
 ## Which story owns each destination (connect, don't duplicate)
 
-| Destination shown                                     | Owner (design → build)                                                      |
-| ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| Start-fresh discovery (Understand · Scope · Plan)     | 7.3 / MOTIR-804 (done); entered by MOTIR-1462 seeding `DiscoveryOnboarding` |
-| Import wizard (Connect · Read your code · Plan)       | 7.15 / MOTIR-815, wizard design MOTIR-930, orchestration MOTIR-931          |
-| External Jira / Linear / Plane import                 | 7.17 / MOTIR-817                                                            |
-| The `/onboarding` entrance route + hand-off           | MOTIR-1462 (`blocked_by` this design)                                       |
-| The IN-APP "Plan with AI" entry that reuses this fork | MOTIR-1485 (design) / MOTIR-1486 (code)                                     |
+| Destination shown                                      | Owner (design → build)                                                      |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Start-fresh discovery (Understand · Scope · Plan)      | 7.3 / MOTIR-804 (done); entered by MOTIR-1462 seeding `DiscoveryOnboarding` |
+| Import wizard (Connect · Read your code · Plan)        | 7.15 / MOTIR-815, wizard design MOTIR-930, orchestration MOTIR-931          |
+| External Jira / Linear / Plane import                  | 7.17 / MOTIR-817                                                            |
+| The `/onboarding` entrance route + hand-off            | MOTIR-1462 (`blocked_by` this design)                                       |
+| The IN-APP "Build with AI" entry that reuses this fork | MOTIR-1485 (design) / MOTIR-1486 (code)                                     |
