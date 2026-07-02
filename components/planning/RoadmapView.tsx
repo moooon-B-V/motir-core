@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Goal, LayoutGrid, Target } from 'lucide-react';
+import { Goal, LayoutGrid, RefreshCw, Target } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
@@ -68,12 +69,30 @@ export function RoadmapView({
   // `?scope=sprint` for the sprint scope, a clean `/roadmap` (no param) for the
   // default project scope. A shallow `router.replace` (`scroll:false`) — the canvas
   // refetch is driven by the `key={scope}` remount below, not by this navigation.
+  // A MANUAL REFRESH (MOTIR-1542): the header refresh control bumps `refreshSignal`,
+  // which `WorkItemRoadmap` watches to drop its level cache and re-run the canvas's
+  // per-level load IN PLACE (drill / breadcrumb / zoom preserved) — never the
+  // `key={scope}` remount. `refreshing` drives the control's loading state and clears
+  // on the real fetch-completion signal (`onRefreshSettled`), not a timer.
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
   const changeScope = (next: RoadmapScope) => {
     setScope(next);
+    // A scope switch remounts the canvas and supersedes any in-flight refresh, so
+    // clear the loading state (the remounted canvas won't fire onRefreshSettled).
+    setRefreshing(false);
     router.replace(next === 'sprint' ? `${pathname}?scope=sprint` : pathname, {
       scroll: false,
     });
   };
+
+  const handleRefresh = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshSignal((n) => n + 1);
+  };
+  const handleRefreshSettled = useCallback(() => setRefreshing(false), []);
 
   const sprintScopeActive = scope === 'sprint' && hasActiveSprint;
   const noActiveSprint = scope === 'sprint' && !hasActiveSprint;
@@ -111,12 +130,27 @@ export function RoadmapView({
             ) : null}
           </p>
         </div>
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Segmented<RoadmapScope>
             options={options}
             value={scope}
             onChange={changeScope}
             label={t('scopeAriaLabel')}
+          />
+          {/* Manual refresh (MOTIR-1542): re-fetches the roadmap in place, no full
+              page reload. Icon-only Button (secondary) — its own `loading` shows the
+              Spinner + disables + aria-busy. Disabled when no canvas is mounted (the
+              no-active-sprint empty state), so a click can't hang the spinner. */}
+          <Button
+            variant="secondary"
+            size="md"
+            className="w-(--height-btn-md) gap-0 px-0"
+            aria-label={t('refresh')}
+            title={t('refresh')}
+            loading={refreshing}
+            disabled={noActiveSprint}
+            leftIcon={<RefreshCw className="h-4 w-4" aria-hidden />}
+            onClick={handleRefresh}
           />
         </div>
       </header>
@@ -139,6 +173,8 @@ export function RoadmapView({
             scope={scope}
             showPlanningOrigin={showPlanningOrigin}
             ariaLabel={ariaLabel}
+            refreshSignal={refreshSignal}
+            onRefreshSettled={handleRefreshSettled}
           />
         )}
       </div>

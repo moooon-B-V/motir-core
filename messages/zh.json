@@ -4221,6 +4221,7 @@
     "scopeWholeProject": "整个项目",
     "scopeActiveSprint": "当前冲刺",
     "scopeChip": "冲刺范围",
+    "refresh": "刷新路线图",
     "noActiveSprintTitle": "暂无进行中的冲刺",
     "noActiveSprintDescription": "该项目当前没有进行中的冲刺。从看板启动一个冲刺即可查看其在路线图中的部分，或切换回“整个项目”。"
   },
