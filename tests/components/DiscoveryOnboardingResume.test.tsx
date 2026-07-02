@@ -22,6 +22,12 @@ vi.mock('@/app/(onboarding)/onboarding/actions', () => ({
   clearPendingIdeaAction: vi.fn(),
 }));
 
+// The shell's "Save & exit" (MOTIR-1488) reads useRouter; a unit render has no
+// app-router context, so stub it (navigation is exercised in OnboardingExit.test).
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
 const HERE = 'You are here'; // onboarding.chat.canvas.pills.here
 const RESUMING = 'Resuming…'; // onboarding.chat.resuming
 const DISCOVERY_LABEL = 'Understanding your project'; // the FIRST step's station label

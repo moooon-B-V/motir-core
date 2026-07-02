@@ -20,6 +20,8 @@ const baseProps = {
   pendingAsk: null,
   canSkip: false,
   error: null,
+  draft: '',
+  onDraftChange: vi.fn(),
   onSend: vi.fn(),
   onDismissError: vi.fn(),
 };
@@ -42,13 +44,28 @@ describe('DiscoveryChatRail', () => {
     expect(screen.getByText('Drafting now…')).toBeTruthy();
   });
 
-  it('submits a free-form turn through onSend', () => {
-    const onSend = vi.fn();
-    renderWithIntl(<DiscoveryChatRail {...baseProps} onSend={onSend} />);
+  it('reports composer typing through onDraftChange (the draft is lifted to the shell)', () => {
+    const onDraftChange = vi.fn();
+    renderWithIntl(<DiscoveryChatRail {...baseProps} onDraftChange={onDraftChange} />);
     const input = screen.getByLabelText('Reply, or ask a question…') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'It chases late payers' } });
+    expect(onDraftChange).toHaveBeenCalledWith('It chases late payers');
+  });
+
+  it('submits the controlled draft through onSend and clears it', () => {
+    const onSend = vi.fn();
+    const onDraftChange = vi.fn();
+    renderWithIntl(
+      <DiscoveryChatRail
+        {...baseProps}
+        draft="It chases late payers"
+        onDraftChange={onDraftChange}
+        onSend={onSend}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(onSend).toHaveBeenCalledWith('It chases late payers');
+    expect(onDraftChange).toHaveBeenCalledWith('');
   });
 
   it('renders the blocking validate-early decision and sends the canned reply', () => {
