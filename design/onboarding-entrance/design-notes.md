@@ -7,7 +7,7 @@ The single top-level CHOICE the user makes at `/onboarding`, drawn as one surfac
 
 - **Start fresh — describe your idea** → the done 7.3 discovery flow (MOTIR-804).
 - **I have an existing project — import it** → the 7.15 migrate wizard (MOTIR-815 / MOTIR-930) or 7.17
-  Jira · Linear import (MOTIR-817).
+  Jira / Linear / Plane import (MOTIR-817).
 
 **Scope (deliberately SLIMMED, per the card):** the FORK ONLY. This screen draws the choice, the
 carried-over idea box, and a legible preview of each destination — then hands off. **It draws NO
@@ -67,16 +67,20 @@ Reached via the in-app "Plan with AI" door or a direct `/onboarding` visit (no h
 - **Header** — the "Plan with AI" eyebrow chip; serif H1 **"How would you like to start?"**; secondary
   subhead _"Motir can plan a brand-new idea from scratch, or read an existing codebase and plan on top of
   what you already have. Pick a starting point — you can switch later."_
-- **Two peer choice cards** (equal weight; Start-fresh carries the default selection ring):
+- **Two choice cards** — an ASYMMETRIC grid (`1.55fr 1fr`): **Start-fresh is the wider, primary column**
+  because it carries the idea box, which is **generously sized (min-height ~156px, 6 rows) for a long
+  first message** — a first idea is often several sentences, so the input must give it real room.
+  Existing is the narrower secondary card (no input). Start-fresh carries the default selection ring.
   - **A — Start fresh — describe your idea.** Lavender icon square (`Sparkles`); lede _"Tell Motir what
     you want to build in a sentence or two. We'll turn it into a reviewed, dispatchable backlog."_; the
-    **idea box** (empty, focused — placeholder _"A task tracker for small teams… a booking app for a
-    salon… an internal tool to approve expenses…"_); the destination stepper; primary CTA **"Start
-    planning →"**.
+    tall **idea box** (empty, focused — placeholder invites a full description, e.g. a hair-salon booking
+    app, and reassures _"we'll ask follow-up questions next"_); the destination stepper; primary CTA
+    **"Start planning →"**.
   - **B — I have an existing project — import it.** Sky icon square (`GitBranch`); lede _"Connect your
     repository and Motir reads your code, then plans on top of what's already there. You can also bring
-    over an existing tracker."_; the destination stepper; subnote _"GitHub or GitLab · optionally import
-    existing work items (Motir, Jira or Linear)."_; secondary CTA **"Import a project →"**.
+    over existing work items from Jira, Linear or Plane."_; the destination stepper; subnote _"GitHub or
+    GitLab · optionally import existing work items from Jira, Linear or Plane."_; secondary CTA
+    **"Import a project →"**.
 - **Footer microcopy** — _"Not sure? Start fresh is the quickest way in — you can connect a repo to any
   project later."_
 
@@ -134,7 +138,7 @@ Icons are **lucide** (`Sparkles`, `Search`, `Shapes`, `Network`, `GitBranch`, `C
 | ----------------------------------------------------- | --------------------------------------------------------------------------- |
 | Start-fresh discovery (Understand · Scope · Plan)     | 7.3 / MOTIR-804 (done); entered by MOTIR-1462 seeding `DiscoveryOnboarding` |
 | Import wizard (Connect · Read your code · Plan)       | 7.15 / MOTIR-815, wizard design MOTIR-930, orchestration MOTIR-931          |
-| External Jira / Linear import                         | 7.17 / MOTIR-817                                                            |
+| External Jira / Linear / Plane import                 | 7.17 / MOTIR-817                                                            |
 | The `/onboarding` fork route + hand-off               | MOTIR-1462 (`blocked_by` this design)                                       |
 | The IN-APP "Plan with AI" entry that reuses this fork | MOTIR-1485 (design) / MOTIR-1486 (code)                                     |
 

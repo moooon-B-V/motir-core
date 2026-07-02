@@ -239,7 +239,7 @@
       /* --- the two-option fork --- */
       .fork {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1.55fr 1fr;
         gap: 18px;
         align-items: stretch;
       }
@@ -315,6 +315,7 @@
       }
       .idea textarea {
         width: 100%;
+        min-height: 156px;
         border: 0;
         background: transparent;
         resize: none;
@@ -486,9 +487,9 @@
           The single top-level choice at <code>/onboarding</code>:
           <strong>Start fresh</strong> (describe an idea → the 7.3 discovery flow) vs
           <strong>I have an existing project</strong> (→ the 7.15 migrate wizard / 7.17
-          Jira&nbsp;·&nbsp;Linear import). Scope is the fork ONLY — no repo-connect,
-          source-selection, index, or generate UI is drawn here; those live downstream and this
-          screen only makes each destination legible and hands off to it.
+          Jira&nbsp;·&nbsp;Linear&nbsp;·&nbsp;Plane import). Scope is the fork ONLY — no
+          repo-connect, source-selection, index, or generate UI is drawn here; those live downstream
+          and this screen only makes each destination legible and hands off to it.
         </p>
         <div class="refs">
           <span class="ref">MOTIR-1461 · 7.22.3</span>
@@ -601,8 +602,8 @@
                 <div class="idea focus">
                   <div class="lbl">Your idea</div>
                   <textarea
-                    rows="3"
-                    placeholder="A task tracker for small teams… a booking app for a salon… an internal tool to approve expenses…"
+                    rows="6"
+                    placeholder="Describe what you want to build — who it's for, the core things people should be able to do, and any must-haves. For example: a booking app for a hair salon where clients pick a stylist and time, get SMS reminders, and the owner sees a daily schedule with no-show rates. Don't worry about getting it perfect — we'll ask follow-up questions next."
                   ></textarea>
                 </div>
 
@@ -725,7 +726,8 @@
                 <h3>I have an existing project — import it</h3>
                 <p class="lede">
                   Connect your repository and Motir reads your code, then plans on top of what’s
-                  already there. You can also bring over an existing tracker.
+                  already there. You can also bring over existing work items from Jira, Linear or
+                  Plane.
                 </p>
 
                 <div class="dest" style="margin-top: 4px; border-top: 0; padding-top: 0">
@@ -804,8 +806,8 @@
                     </span>
                   </div>
                   <p class="subnote">
-                    GitHub or GitLab · optionally import existing work items (Motir, Jira or
-                    Linear).
+                    GitHub or GitLab · optionally import existing work items from Jira, Linear or
+                    Plane.
                   </p>
                 </div>
 
@@ -941,8 +943,8 @@
                     <span class="dot"></span>
                     Carried over from your idea
                   </div>
-                  <textarea rows="3">
-A lightweight time-off tracker for a 20-person startup — employees request days off, managers approve, and everyone sees a shared team calendar with remaining balances.</textarea
+                  <textarea rows="6">
+A time-off and leave app for a 20-person startup. Employees request days off (vacation, sick, unpaid), a manager approves or declines with a note, and everyone sees a shared team calendar plus their remaining balance per leave type. Balances accrue monthly and carry over up to a cap. Managers get an email when a request comes in; the whole team gets a heads-up when someone's approved leave starts. Admins can set the per-country holiday calendar and the accrual rules. Later I'd like Slack notifications and an export for payroll.</textarea
                   >
                 </div>
 
@@ -1144,8 +1146,8 @@ A lightweight time-off tracker for a 20-person startup — employees request day
                     </span>
                   </div>
                   <p class="subnote">
-                    GitHub or GitLab · optionally import existing work items (Motir, Jira or
-                    Linear).
+                    GitHub or GitLab · optionally import existing work items from Jira, Linear or
+                    Plane.
                   </p>
                 </div>
 
@@ -1259,8 +1261,9 @@ A lightweight time-off tracker for a 20-person startup — employees request day
               </span>
               <span>
                 This screen only <strong>routes</strong>. Start-fresh → the 7.3 discovery chat
-                (seeded); existing → the 7.15 migrate wizard (or 7.17 for Jira / Linear), which owns
-                connect → source-selection → index → generate. Nothing here connects a repo.
+                (seeded); existing → the 7.15 migrate wizard (or 7.17 for Jira / Linear / Plane),
+                which owns connect → source-selection → index → generate. Nothing here connects a
+                repo.
               </span>
             </div>
           </div>
