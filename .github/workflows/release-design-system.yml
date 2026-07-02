@@ -1,0 +1,112 @@
+# Publishes `@motir/design-system` to the public npm registry.
+#
+# Trigger: push a PACKAGE-SCOPED tag `design-system-v<x.y.z>` (a monorepo must
+# scope its release tags per package — a bare `v*` would also fire for the app or
+# `@motir/cli`), or run manually via `workflow_dispatch` (with an optional dry run
+# that builds + packs but skips publish).
+#
+# Release procedure (see packages/design-system/README.md → "Releasing"):
+#   1. bump packages/design-system/package.json `version`
+#   2. open + merge the PR
+#   3. git tag design-system-v<x.y.z> && git push origin design-system-v<x.y.z>
+#   4. this workflow builds, guards the tag==version, and publishes.
+#
+# Extending to another package (e.g. @motir/cli) later: copy this file and change
+# the two `PACKAGE`/`PKG_DIR` env values, the `on.push.tags` prefix, and the
+# tag-strip prefix in the guard step. Kept as one workflow per package (not a
+# matrix) so each package's tag namespace + release cadence stay independent.
+name: Release @motir/design-system
+
+on:
+  push:
+    tags:
+      - 'design-system-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build + pack only; skip the npm publish step'
+        type: boolean
+        default: false
+
+# Least privilege: only reading the repo is required. Publish auth comes from the
+# NPM_TOKEN secret, not the workflow token.
+# To enable npm provenance later (free supply-chain attestation on a public repo):
+#   - add `id-token: write` here,
+#   - add a `repository` field to packages/design-system/package.json (npm requires
+#     it for provenance — its absence is why `--provenance` is NOT on by default),
+#   - append `--provenance` to the publish command below.
+permissions:
+  contents: read
+
+# Never let two releases of the same tag run concurrently; don't cancel an
+# in-flight publish (a half-cancelled publish is worse than a queued one).
+concurrency:
+  group: release-design-system-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE: '@motir/design-system'
+      PKG_DIR: packages/design-system
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          # Writes an .npmrc wiring npm auth to NODE_AUTH_TOKEN (set on the publish step).
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build the package
+        run: pnpm --filter "$PACKAGE" build
+
+      - name: Resolve the package version
+        id: ver
+        run: |
+          PKG_VERSION="$(node -p "require('./${PKG_DIR}/package.json').version")"
+          echo "pkg_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Package version: $PKG_VERSION"
+
+      # Fail fast if the tag and the package.json version disagree — the tag is the
+      # human intent, the package.json is what actually publishes; a mismatch means
+      # someone forgot to bump (or retagged wrong). Only meaningful on a tag push.
+      - name: Guard — tag version must equal package version
+        if: github.event_name == 'push'
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#design-system-v}"
+          echo "Tag version: $TAG_VERSION  ·  package.json version: ${{ steps.ver.outputs.pkg_version }}"
+          if [ "$TAG_VERSION" != "${{ steps.ver.outputs.pkg_version }}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version '$TAG_VERSION' but ${PKG_DIR}/package.json is '${{ steps.ver.outputs.pkg_version }}'. Bump the package version to match the tag, or retag."
+            exit 1
+          fi
+
+      # Prove the tarball ships what a consumer needs (dist/** + theme.css) before
+      # we publish anything.
+      - name: Verify tarball contents (npm pack --dry-run)
+        run: npm pack --dry-run
+        working-directory: ${{ env.PKG_DIR }}
+
+      # Idempotency: a re-run of an already-published version is a success, not a
+      # hard failure (npm itself would 403 on a duplicate publish).
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          if npm view "${PACKAGE}@${{ steps.ver.outputs.pkg_version }}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${PACKAGE}@${{ steps.ver.outputs.pkg_version }} is already published — skipping publish."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: >-
+          steps.published.outputs.already == 'false' &&
+          !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        run: pnpm --filter "$PACKAGE" exec npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
