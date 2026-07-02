@@ -57,7 +57,7 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-(--el-page)">
+    <div className="flex h-dvh flex-col bg-(--el-page)">
       {/* Brand bar — the entrance owns the whole viewport (the (onboarding) route
           group renders outside the app shell). No "Save & exit": nothing is saved
           here (no project/session exists until the user continues). */}
@@ -73,113 +73,122 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
         </span>
       </header>
 
-      <main className="mx-auto w-full max-w-[41.25rem] px-7 pb-14 pt-13">
-        {/* Header — eyebrow + serif headline + subhead. The full plan → build
-            lifecycle is stated in the subhead prose (Motir plans, then agents
-            build it); the detailed "how it works" explainer is its own surface,
-            not yet built, so no on-screen link is drawn until it ships. */}
-        <div className="mb-6 text-center">
-          <span className="mb-3.5 inline-flex items-center gap-1.5 rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-text-strong)">
-            <Sparkles className="size-3.5" strokeWidth={2} aria-hidden />
-            {t('eyebrow')}
-          </span>
-          <h1 className="font-serif text-4xl font-bold leading-tight tracking-tight text-(--el-text)">
-            {carried ? t('headingCarried') : t('headingDefault')}
-          </h1>
-          <p className="mx-auto mt-2 max-w-[52ch] text-(--el-text-secondary)">
-            {carried ? t('subheadCarried') : t('subheadDefault')}
-          </p>
-          {/* The detailed "how it works" explainer — its own surface, deferred by
+      {/* The content fills the space below the brand bar and is vertically
+          centered (`my-auto`), so the entrance always occupies exactly the
+          viewport height with no page scroll; if a short viewport can't fit it,
+          this region — not the page — scrolls (`flex-1` + `overflow-y-auto`). */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-[41.25rem] flex-col justify-center px-7 py-8">
+          {/* Header — eyebrow + serif headline + subhead + the "how it works"
+              explainer link. The full plan → build lifecycle is stated in the
+              subhead prose (Motir plans, then agents build it). */}
+          <div className="mb-6 text-center">
+            <span className="mb-3.5 inline-flex items-center gap-1.5 rounded-(--radius-badge) bg-(--el-tint-lavender) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-text-strong)">
+              <Sparkles className="size-3.5" strokeWidth={2} aria-hidden />
+              {t('eyebrow')}
+            </span>
+            <h1 className="font-serif text-4xl font-bold leading-tight tracking-tight text-(--el-text)">
+              {carried ? t('headingCarried') : t('headingDefault')}
+            </h1>
+            <p className="mx-auto mt-2 max-w-[52ch] text-(--el-text-secondary)">
+              {carried ? t('subheadCarried') : t('subheadDefault')}
+            </p>
+            {/* The detailed "how it works" explainer — its own surface, deferred by
               the design (a future card owns it), so this links to a placeholder
               hand-off for now (like the import row). Shown in both panels. */}
-          <Link
-            href="/onboarding/how-it-works"
-            className="mt-3.5 inline-flex items-center gap-1.5 text-[0.8rem] font-medium text-(--el-accent-on-surface) hover:underline"
-          >
-            {t('howItWorks')}
-            <ArrowRight className="size-3.5" />
-          </Link>
-        </div>
+            <Link
+              href="/onboarding/how-it-works"
+              className="mt-3.5 inline-flex items-center gap-1.5 text-[0.8rem] font-medium text-(--el-accent-on-surface) hover:underline"
+            >
+              {t('howItWorks')}
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
 
-        {/* PRIMARY — the idea box. A form posting to the server action, so it
+          {/* PRIMARY — the idea box. A form posting to the server action, so it
             works without JS (progressive enhancement); the action seeds the idea
             and redirects to the discovery chat. */}
-        <form action={startPlanningAction} ref={formRef}>
-          <div className="rounded-(--radius-card) border border-(--el-accent) bg-(--el-card) p-(--spacing-card-padding) shadow-(--shadow-elevated)">
-            <div
-              className={
-                'mb-2 flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider ' +
-                (carried ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-faint)')
-              }
-            >
-              {carried ? (
-                <>
-                  <span
-                    className="inline-block size-1.5 rounded-full bg-(--el-accent)"
-                    aria-hidden
-                  />
-                  {t('carriedLabel')}
-                </>
-              ) : (
-                t('ideaLabel')
-              )}
+          <form action={startPlanningAction} ref={formRef}>
+            <div className="rounded-(--radius-card) border border-(--el-accent) bg-(--el-card) p-(--spacing-card-padding) shadow-(--shadow-elevated)">
+              <div
+                className={
+                  'mb-2 flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider ' +
+                  (carried ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-faint)')
+                }
+              >
+                {carried ? (
+                  <>
+                    <span
+                      className="inline-block size-1.5 rounded-full bg-(--el-accent)"
+                      aria-hidden
+                    />
+                    {t('carriedLabel')}
+                  </>
+                ) : (
+                  t('ideaLabel')
+                )}
+              </div>
+              <textarea
+                name="idea"
+                rows={7}
+                defaultValue={carriedIdea ?? ''}
+                onKeyDown={onKeyDown}
+                // The idea box is the entrance's primary control; focusing it on
+                // load is the intended affordance (design Panel 3).
+                autoFocus
+                aria-label={t('ideaLabel')}
+                placeholder={t('placeholder')}
+                className="min-h-[10.75rem] w-full resize-none border-0 bg-transparent text-(--el-text) outline-none placeholder:text-(--el-text-faint)"
+              />
+              <div className="border-(--el-border-soft) mt-3 flex justify-end border-t pt-3">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  rightIcon={<ArrowRight className="size-4" />}
+                >
+                  {carried ? t('continueCta') : t('startCta')}
+                </Button>
+              </div>
             </div>
-            <textarea
-              name="idea"
-              rows={7}
-              defaultValue={carriedIdea ?? ''}
-              onKeyDown={onKeyDown}
-              // The idea box is the entrance's primary control; focusing it on
-              // load is the intended affordance (design Panel 3).
-              autoFocus
-              aria-label={t('ideaLabel')}
-              placeholder={t('placeholder')}
-              className="min-h-[10.75rem] w-full resize-none border-0 bg-transparent text-(--el-text) outline-none placeholder:text-(--el-text-faint)"
-            />
-            <div className="border-(--el-border-soft) mt-3 flex justify-end border-t pt-3">
-              <Button type="submit" variant="primary" rightIcon={<ArrowRight className="size-4" />}>
-                {carried ? t('continueCta') : t('startCta')}
-              </Button>
-            </div>
-          </div>
-        </form>
-        <p className="mx-0.5 mt-2.5 text-xs text-(--el-text-muted)">
-          {carried ? t('hintCarried') : t('hintDefault')}
-        </p>
+          </form>
+          <p className="mx-0.5 mt-2.5 text-xs text-(--el-text-muted)">
+            {carried ? t('hintCarried') : t('hintDefault')}
+          </p>
 
-        {/* SECONDARY — import an existing project. Dropped in the carried-idea
+          {/* SECONDARY — import an existing project. Dropped in the carried-idea
             panel: arriving with an idea means the user is starting fresh. It is a
             real link to the import hand-off (owned downstream by 7.15/7.17). */}
-        {!carried && (
-          <>
-            <div className="mx-0.5 my-5 flex items-center gap-3 font-mono text-[11px] font-semibold tracking-wide text-(--el-text-faint) before:h-px before:flex-1 before:bg-(--el-border) before:content-[''] after:h-px after:flex-1 after:bg-(--el-border) after:content-['']">
-              {t('or')}
-            </div>
-            <Link
-              href="/onboarding/import"
-              className="flex w-full items-center gap-3.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding) text-left shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong)"
-            >
-              <span
-                className="grid size-9.5 flex-none place-items-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)"
-                aria-hidden
+          {!carried && (
+            <>
+              <div className="mx-0.5 my-5 flex items-center gap-3 font-mono text-[11px] font-semibold tracking-wide text-(--el-text-faint) before:h-px before:flex-1 before:bg-(--el-border) before:content-[''] after:h-px after:flex-1 after:bg-(--el-border) after:content-['']">
+                {t('or')}
+              </div>
+              <Link
+                href="/onboarding/import"
+                className="flex w-full items-center gap-3.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-card) p-(--spacing-card-padding) text-left shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong)"
               >
-                <GitBranch className="size-5" strokeWidth={2} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-(--el-text)">
-                  {t('importTitle')}
+                <span
+                  className="grid size-9.5 flex-none place-items-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)"
+                  aria-hidden
+                >
+                  <GitBranch className="size-5" strokeWidth={2} />
                 </span>
-                <span className="mt-1 block text-[0.8rem] leading-snug text-(--el-text-secondary)">
-                  {t('importDesc')}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-(--el-text)">
+                    {t('importTitle')}
+                  </span>
+                  <span className="mt-1 block text-[0.8rem] leading-snug text-(--el-text-secondary)">
+                    {t('importDesc')}
+                  </span>
                 </span>
-              </span>
-              <span className="flex flex-none items-center gap-1.5 text-[0.8rem] font-semibold text-(--el-accent-on-surface)">
-                {t('importCta')}
-                <ArrowRight className="size-4" />
-              </span>
-            </Link>
-          </>
-        )}
+                <span className="flex flex-none items-center gap-1.5 text-[0.8rem] font-semibold text-(--el-accent-on-surface)">
+                  {t('importCta')}
+                  <ArrowRight className="size-4" />
+                </span>
+              </Link>
+            </>
+          )}
+        </div>
       </main>
     </div>
   );
