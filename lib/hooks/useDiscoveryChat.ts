@@ -210,6 +210,10 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
           revisions: mapRevisions(dto),
           catalog: dto.catalog,
         });
+      } else {
+        // No pre-plan read (fetch failed / non-ok) — settle hydration so the
+        // "Resuming…" placeholder clears and the fresh state renders (MOTIR-1487).
+        dispatch({ type: 'hydrateSettled' });
       }
       const fresh = !dto || dto.session === null;
       if (fresh && initialIdea && initialIdea.trim()) {

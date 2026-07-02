@@ -4077,6 +4077,8 @@
       },
       "noProjectTitle": "没有进行中的项目",
       "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。",
+      "resuming": "正在恢复…",
+      "resumingBody": "正在回到你上次离开的地方。",
       "canvas": {
         "title": "你的项目",
         "caption": "想法 → 核查 → 设计 → 计划",
