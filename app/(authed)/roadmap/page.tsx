@@ -10,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { RoadmapView } from '@/components/planning/RoadmapView';
+import type { RoadmapScope } from '@/lib/planning/roadmapClient';
 import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 
 // The project Roadmap VIEW (Story 7.20 · Subtask 7.20.5 / MOTIR-1011) — the route
@@ -31,11 +32,20 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 // header pill. Unauthenticated → /sign-in; no active project → a hint; no browse
 // access → the no-access state.
 
-export default async function RoadmapPage() {
+export default async function RoadmapPage({
+  searchParams,
+}: {
+  // The scope is URL-addressable (MOTIR-1541): `?scope=sprint` opens the roadmap in
+  // active-sprint scope, any other/absent value is the default whole-project scope.
+  searchParams: Promise<{ scope?: string | string[] }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('roadmap');
+
+  const sp = await searchParams;
+  const initialScope: RoadmapScope = sp.scope === 'sprint' ? 'sprint' : 'project';
 
   const ctx = await getActiveProject();
   if (!ctx) {
@@ -115,6 +125,7 @@ export default async function RoadmapPage() {
       hasActiveSprint={activeSprint !== null}
       sprintName={activeSprint?.name ?? null}
       sprintGoal={activeSprint?.goal ?? null}
+      initialScope={initialScope}
       // Gate the planning-origin cluster (MOTIR-1013) on the SAME immutable
       // onboarding-ran marker the /onboarding redirect reads (Subtask 7.4 /
       // MOTIR-1264): the collapsed "Idea → Discover · Shape · Validate → Plan"

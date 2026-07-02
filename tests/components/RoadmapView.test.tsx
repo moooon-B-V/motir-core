@@ -5,6 +5,15 @@ import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RoadmapView } from '@/components/planning/RoadmapView';
 
+// RoadmapView writes the chosen scope into the URL (MOTIR-1541) via next/navigation's
+// useRouter().replace + usePathname. Mock both: `replace` is a spy we assert on, and
+// the pathname is the roadmap route. (Hoisted so the spy exists when the factory runs.)
+const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => '/roadmap',
+}));
+
 // RoadmapView (MOTIR-1382) owns the roadmap SCOPE toggle and feeds the chosen scope
 // to WorkItemRoadmap, which threads it into every per-level fetch (`&scope=sprint`).
 // These unit tests drive the wrapper: default scope, the toggle re-keying the fetch,
@@ -48,6 +57,7 @@ let fetchUrls: string[] = [];
 
 beforeEach(() => {
   fetchUrls = [];
+  replace.mockClear();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -134,5 +144,46 @@ describe('RoadmapView — scope toggle', () => {
     // The toggle stays available; switching back restores the whole-project tree.
     fireEvent.click(screen.getByRole('button', { name: 'Whole project' }));
     expect(await screen.findByText('Whole-project epic')).toBeTruthy();
+  });
+});
+
+describe('RoadmapView — URL-addressable scope (MOTIR-1541)', () => {
+  it('seeds the scope from initialScope: initialScope="sprint" opens in Active-sprint scope', async () => {
+    render(<RoadmapView {...baseProps({ initialScope: 'sprint' })} />);
+
+    // The toggle reflects the URL-seeded scope and the canvas loads the sprint root…
+    expect(screen.getByRole('button', { name: 'Active sprint' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(await screen.findByText('In-sprint epic')).toBeTruthy();
+    await waitFor(() => expect(fetchUrls.some((u) => u.includes('scope=sprint'))).toBe(true));
+    // …and seeding from the URL does NOT itself re-write the URL (no toggle click yet).
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('defaults to project scope when initialScope is omitted', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    expect(screen.getByRole('button', { name: 'Whole project' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(await screen.findByText('Whole-project epic')).toBeTruthy();
+  });
+
+  it('toggling to Active sprint writes ?scope=sprint via router.replace (scroll:false)', async () => {
+    render(<RoadmapView {...baseProps()} />);
+    await screen.findByText('Whole-project epic');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
+
+    expect(replace).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
+  });
+
+  it('toggling back to Whole project clears the param (a clean /roadmap)', async () => {
+    render(<RoadmapView {...baseProps({ initialScope: 'sprint' })} />);
+    await screen.findByText('In-sprint epic');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Whole project' }));
+
+    expect(replace).toHaveBeenCalledWith('/roadmap', { scroll: false });
   });
 });
