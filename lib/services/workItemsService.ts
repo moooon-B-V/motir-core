@@ -2132,13 +2132,19 @@ export const workItemsService = {
     );
 
     // READY-to-start (MOTIR-1417): a node is ready iff it is in a startable
-    // (`todo`-category) status AND every item it is `blocked_by` is done — the
-    // shipped own-blocker readiness (`computeOwnBlockerReadiness`, reused so the
-    // highlight never drifts from `list_ready`: it handles archived blockers,
-    // cross-project terminals, and integrated-awaiting-review). One extra blocker
-    // query for the whole level (no N+1). Done / in-progress nodes are never ready.
+    // (`todo`-category) status AND it is dispatch-ready — the SHIPPED readiness,
+    // reused so the highlight never drifts from `list_ready`. That readiness is
+    // CASCADED: a node is ready ⟺ its own blockers are done AND every ANCESTOR is
+    // ready (`getReadiness` / `collectReadyLeaves`). This read loads one level at a
+    // time, so the drilled node's ancestors are OFF-level; `getReadinessForItems`
+    // resolves each row's ancestor chain and ANDs it in (one batched blocker read +
+    // terminal read + ancestor read, no N+1). Using the own-blocker leg ALONE
+    // (`computeOwnBlockerReadiness`) lit a child of a blocked parent as ready —
+    // diverging from `list_ready` (MOTIR-1563). Per-item ancestor resolution keeps
+    // it correct for sprint-scope root members whose story/epic ancestors are elided.
+    // Done / in-progress nodes are never ready (the startable-status gate).
     const startableKeys = new Set(statuses.filter((s) => s.category === 'todo').map((s) => s.key));
-    const ownReady = await computeOwnBlockerReadiness(
+    const readyById = await workItemsService.getReadinessForItems(
       rows.map((r) => r.id),
       ctx,
     );
@@ -2154,7 +2160,7 @@ export const workItemsService = {
         r,
         doneKeys.has(r.status),
         r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0 }) : null,
-        startableKeys.has(r.status) && (ownReady.get(r.id) ?? true),
+        startableKeys.has(r.status) && (readyById.get(r.id) ?? true),
         sprintId != null && r.sprintId === sprintId,
       ),
     );

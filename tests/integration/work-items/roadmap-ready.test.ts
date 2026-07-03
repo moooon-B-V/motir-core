@@ -95,6 +95,33 @@ describe('getProjectRoadmap — ready-to-start flag (MOTIR-1417)', () => {
     expect(readyById.get(fInProgress.id)).toBe(false); // started → not startable
   });
 
+  it('a child under a BLOCKED ancestor is NOT ready, even with no own blockers (cascade, MOTIR-1563)', async () => {
+    const fx = await makeFixture();
+    // A parent STORY held out of the ready set by its OWN open blocker.
+    const parent = await createWorkItem(fx, { kind: 'story', title: 'Parent' });
+    const parentBlocker = await createWorkItem(fx, { kind: 'story', title: 'Parent blocker' });
+    await setStatus(parentBlocker.id, 'todo'); // open (not done) → parent not ready
+    await link(fx, parent.id, parentBlocker.id);
+    // A childless todo child with NO own blockers — own-ready, but its ancestor is blocked.
+    const child = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 'child',
+      parentId: parent.id,
+    });
+    await setStatus(child.id, 'todo');
+
+    // Drill INTO the blocked parent: the child must NOT be ready (the ancestor
+    // cascade holds it out, matching list_ready / getReadiness). The pre-fix
+    // own-blocker-only path returned ready:true here.
+    const drilled = await workItemsService.getProjectRoadmap(fx.projectId, parent.id, fx.ctx);
+    expect(drilled.nodes.find((n) => n.id === child.id)!.ready).toBe(false);
+
+    // Once the parent's blocker is done, the parent is ready → the child is too.
+    await setStatus(parentBlocker.id, 'done');
+    const after = await workItemsService.getProjectRoadmap(fx.projectId, parent.id, fx.ctx);
+    expect(after.nodes.find((n) => n.id === child.id)!.ready).toBe(true);
+  });
+
   it('a node becomes ready once its last open blocker is marked done', async () => {
     const fx = await makeFixture();
     const story = await createWorkItem(fx, { kind: 'story', title: 'Story' });
