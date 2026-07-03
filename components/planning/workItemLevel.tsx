@@ -94,6 +94,13 @@ export function buildWorkItemLevel(
         drillable: false,
         searchText: stub ? `${stub.identifier} ${stub.title}` : e.blockerId,
         crumbLabel: stub?.identifier,
+        // The off-level blocker is a REAL work item with a valid identifier
+        // (MOTIR-1586) — make its ghost anchor VIEWABLE so "blocked by something
+        // elsewhere" is peekable, exactly like any other work-item node: selecting
+        // it shows the View button, and View opens the shared `WorkItemQuickView`
+        // (which resolves the anchor id → its identifier via `registerItems`). A
+        // bare click only SELECTS — no click-to-open, consistent with every card.
+        viewable: true,
         content: (
           <GhostAnchor
             identifier={stub?.identifier ?? '—'}
@@ -129,8 +136,9 @@ export function buildWorkItemLevel(
       crumbLabel: item.identifier,
       drillable: item.hasChildren,
       // Every real work item offers the quick-view peek (MOTIR-1352). The ghost
-      // anchors below are off-level blocker STUBS, not items on this level, so they
-      // stay non-viewable (no `viewable` flag) — selecting one shows no View button.
+      // anchors below are off-level blocker STUBS — they are ALSO viewable now
+      // (MOTIR-1586), since each names a real, peekable work item; see the anchor
+      // node above.
       viewable: true,
       // Surface the LOCATE targets (MOTIR-1421) onto the canvas node: the frontier
       // ("you are here") and the ready-to-start flag, so the canvas can centre on the

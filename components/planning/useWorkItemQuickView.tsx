@@ -25,14 +25,17 @@ export function useWorkItemQuickView() {
   const [peekKey, setPeekKey] = useState<string | null>(null);
 
   // Record a loaded level's id → identifier pairs so the View handler can resolve
-  // the peek key from the node id the canvas reports.
+  // the peek key from the node id the canvas reports. Off-level BLOCKERS are mapped
+  // too (MOTIR-1586): their ghost anchors are now viewable and peekable, and each
+  // stub carries a real work-item identifier, so `onView(ghostId)` can resolve it.
   const registerItems = useCallback((wi: RoadmapLevelData) => {
     for (const item of wi.items) identifierByIdRef.current.set(item.id, item.identifier);
+    for (const b of wi.offLevelBlockers) identifierByIdRef.current.set(b.id, b.identifier);
   }, []);
 
   // Open the quick-view peek for a node's work item (the canvas "View" button). A
-  // node with no mapped identifier (only real work items are `viewable`, so this is
-  // defensive — stations / ghost anchors never reach here) opens nothing.
+  // node with no mapped identifier (a station / an unregistered id — the defensive
+  // path) opens nothing.
   const onView = useCallback((id: string) => {
     const identifier = identifierByIdRef.current.get(id);
     if (identifier) setPeekKey(identifier);
