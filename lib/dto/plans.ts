@@ -4,6 +4,8 @@
 // string unions, the `proposed_fields` / `patch` JSON columns become typed
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
+import type { SprintBlockerDto } from '@/lib/dto/sprints';
+
 /** Wire form of the Prisma `PlanStatus` enum. */
 export type PlanStatusDto = 'generating' | 'planned' | 'approved' | 'declined';
 
@@ -236,4 +238,26 @@ export interface PlanStalenessDto {
   planId: string;
   stale: boolean;
   items: PlanItemStalenessDto[];
+}
+
+/**
+ * Whether a WHOLE plan is finishable once it materializes (Subtask MOTIR-1550) —
+ * the FOREST analogue of {@link import('./workItems').WorkItemValidityDto} (the
+ * single-subtree rule) and {@link import('./sprints').SprintValidityDto} (the
+ * sprint rule). The containing set is the ENTIRE projection (every projected node
+ * under any projected root — real roots + `add`s with a null parentRef), so a
+ * `blocked_by` edge that crosses two sibling roots (a story under epic B gated by
+ * a story under epic A, both materializing together) is SATISFIED — the single-
+ * subtree rule iterated per-root would false-positive it. VALID ⟺ for every
+ * not-done node in the projected forest, every `blocked_by` dependency is IN the
+ * forest, or (under `loose`) `done`; `blockers` names each residual gate — in
+ * practice an out-of-projection (e.g. cross-project) not-done blocker, or a
+ * `done`-but-out-of-forest one under `tight`. The `generate_tree` /replan worker
+ * (MOTIR-1398) runs this as its pre-commit post-condition over the multi-root
+ * epic forest it proposes.
+ */
+export interface PlanValidityDto {
+  planId: string;
+  valid: boolean;
+  blockers: SprintBlockerDto[];
 }

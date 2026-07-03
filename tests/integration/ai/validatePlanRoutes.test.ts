@@ -6,7 +6,8 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { POST as validatePlanPOST } from '@/app/api/internal/ai/validate-plan/route';
 import { POST as validatePlanSprintPOST } from '@/app/api/internal/ai/validate-plan-sprint/route';
-import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { POST as validatePlanForestPOST } from '@/app/api/internal/ai/validate-plan-forest/route';
+import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST — the two pre-commit plan-validation endpoints (Subtask 7.28.2)
@@ -233,6 +234,112 @@ describe('POST /api/internal/ai/validate-plan-sprint', () => {
         {
           item: inSprint.identifier,
           blockedBy: backlog.identifier,
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+        },
+      ],
+    });
+  });
+});
+
+describe('POST /api/internal/ai/validate-plan-forest', () => {
+  it('401s a missing service bearer', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await validatePlanForestPOST(
+      req('/api/internal/ai/validate-plan-forest', { token: tokenFor(fx), body: { planId: 'x' } }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('400s a missing planId and an unknown condition (NO targetKey is required)', async () => {
+    const fx = await makeWorkItemFixture();
+    const noPlan = await validatePlanForestPOST(
+      req('/api/internal/ai/validate-plan-forest', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: {},
+      }),
+    );
+    expect(noPlan.status).toBe(400);
+
+    const badCondition = await validatePlanForestPOST(
+      req('/api/internal/ai/validate-plan-forest', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { planId: 'p', condition: 'whenever' },
+      }),
+    );
+    expect(badCondition.status).toBe(400);
+  });
+
+  it('404s an unknown planId', async () => {
+    const fx = await makeWorkItemFixture();
+    const res = await validatePlanForestPOST(
+      req('/api/internal/ai/validate-plan-forest', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { planId: 'plan_missing' },
+      }),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('returns the plan validity DTO verbatim — valid (empty plan) and invalid (cross-project gate) bodies', async () => {
+    const fx = await makeWorkItemFixture();
+
+    // Valid: an empty plan over an empty project.
+    const emptyPlan = await plansService.createPlan(fx.projectId, { title: 'Empty' }, fx.ctx);
+    await plansService.markPlanned(emptyPlan.id, fx.ctx);
+    const valid = await validatePlanForestPOST(
+      req('/api/internal/ai/validate-plan-forest', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { planId: emptyPlan.id },
+      }),
+    );
+    expect(valid.status).toBe(200);
+    expect(await valid.json()).toEqual({ planId: emptyPlan.id, valid: true, blockers: [] });
+
+    // Invalid: a new root add gated by a not-done cross-project item.
+    const projectQ = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'BETA',
+    });
+    const qBlocker = await workItemsService.createWorkItem(
+      { projectId: projectQ.id, kind: 'task', title: 'Cross-project blocker' },
+      fx.ctx,
+    );
+    const plan = await plansService.createPlan(fx.projectId, { title: 'P' }, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Gated', kind: 'task' },
+          blockedByRefs: [qBlocker.id],
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    const gatedId = withItems.items.find((i) => i.proposedFields?.title === 'Gated')!.id;
+
+    const invalid = await validatePlanForestPOST(
+      req('/api/internal/ai/validate-plan-forest', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { planId: plan.id },
+      }),
+    );
+    expect(invalid.status).toBe(200);
+    expect(await invalid.json()).toEqual({
+      planId: plan.id,
+      valid: false,
+      blockers: [
+        {
+          item: `planItem:${gatedId}`,
+          blockedBy: qBlocker.identifier,
           blockerStatus: 'todo',
           blockerSprintId: null,
         },

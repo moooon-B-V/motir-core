@@ -9,6 +9,7 @@ import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
+import type { PlanValidityDto } from '@/lib/dto/plans';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 
@@ -335,6 +336,88 @@ export const planValidityService = {
     }
     sortBlockers(blockers);
     return { key: root.identifier, valid: blockers.length === 0, blockers };
+  },
+
+  /**
+   * Is the WHOLE plan finishable once it materializes (MOTIR-1550)? The FOREST
+   * analogue of `validateProjectedWorkItem` — the containing set S is the ENTIRE
+   * projection, not one subtree, so a `blocked_by` edge that crosses two sibling
+   * roots (a story under epic B gated by a story under epic A) is SATISFIED: both
+   * materialize together, so the gating node IS in S. Iterating the single-subtree
+   * rule per root would FALSE-POSITIVE every cross-root edge (the gate sits in a
+   * sibling subtree, so it reads as out-of-set) — the exact defect that made a
+   * per-root walk "worse than no validation" for the multi-root epic forest
+   * `generate_tree` emits (blocks MOTIR-1398; refs MOTIR-844).
+   *
+   * S = every projected node reachable from a projected forest ROOT — a node in
+   * the PLAN's own project whose projected parent is null or itself absent from
+   * the projection (real epics + `add`s with a null parentRef, plus any node
+   * orphaned by a `remove`). Carried-in cross-project blocker nodes (finding #21)
+   * are NOT roots and NOT in S, so a not-done cross-project dependency is
+   * correctly surfaced as a residual blocker; under `tight` a `done`-but-out-of-S
+   * blocker is too. VALID ⟺ for every not-done member, every projected
+   * `blocked_by` is IN S or (under `loose`) `done`. An empty / all-`remove`d plan
+   * projects to an empty forest → vacuously valid. Throws the plan-read errors
+   * (`PlanNotFoundError` / `ProjectAccessDeniedError`) from the projection build.
+   */
+  async validateProjectedPlan(
+    planId: string,
+    ctx: ServiceContext,
+    condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
+  ): Promise<PlanValidityDto> {
+    const proj = await buildProjection(planId, ctx);
+
+    // The containing set S = the whole projected forest of the plan's project:
+    // every node reachable DOWN from a forest root. A root is a plan-project node
+    // whose projected parent is null or absent (a real epic, an `add` with no
+    // parentRef, or a node orphaned by a `remove`). Restricting roots to the
+    // plan's OWN project keeps carried-in cross-project blocker nodes out of S, so
+    // each is judged by its own done-ness, never treated as satisfied-because-
+    // in-set.
+    const memberIds = new Set<string>();
+    const stack: string[] = [];
+    for (const node of proj.nodes.values()) {
+      if (node.projectId !== proj.projectId) continue; // cross-project blockers are not roots
+      if (node.parentId != null && proj.nodes.has(node.parentId)) continue; // has a projected parent
+      if (!memberIds.has(node.id)) {
+        memberIds.add(node.id);
+        stack.push(node.id);
+      }
+    }
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      for (const childId of proj.childrenByParent.get(id) ?? []) {
+        if (!memberIds.has(childId)) {
+          memberIds.add(childId);
+          stack.push(childId);
+        }
+      }
+    }
+
+    // The SAME per-member rule as the subtree walk, applied over the whole-forest S.
+    const blockers: SprintBlockerDto[] = [];
+    const seen = new Set<string>();
+    for (const memberId of memberIds) {
+      const member = proj.nodes.get(memberId)!;
+      if (isDone(proj, member)) continue; // only not-done members need a check
+      for (const blockerId of proj.blockedBy.get(memberId) ?? []) {
+        const blocker = proj.nodes.get(blockerId);
+        if (!blocker) continue;
+        if (gatingItemSatisfied(memberIds.has(blockerId), isDone(proj, blocker), condition))
+          continue;
+        const key = `${member.identifier} ${blocker.identifier}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        blockers.push({
+          item: member.identifier,
+          blockedBy: blocker.identifier,
+          blockerStatus: blocker.status,
+          blockerSprintId: blocker.sprintId,
+        });
+      }
+    }
+    sortBlockers(blockers);
+    return { planId, valid: blockers.length === 0, blockers };
   },
 
   /**
