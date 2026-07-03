@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PREPLAN_STATUS_COMPLETE,
+  ONBOARDING_RESUME_PATH,
   isPreplanInProgress,
   resumeGateEnabled,
 } from '@/lib/onboarding/resumeVisibility';
@@ -47,12 +47,20 @@ describe('isPreplanInProgress — the client signal', () => {
     expect(isPreplanInProgress(preplanState(null))).toBe(false);
   });
 
-  it('is true for a live, un-finished session', () => {
+  it('is true for any live session — the plan has not materialised yet', () => {
     expect(isPreplanInProgress(preplanState({ status: 'active' }))).toBe(true);
     expect(isPreplanInProgress(preplanState({ status: 'scoping' }))).toBe(true);
   });
 
-  it('is false for a session that has completed the tiers', () => {
-    expect(isPreplanInProgress(preplanState({ status: PREPLAN_STATUS_COMPLETE }))).toBe(false);
+  it('is true even after the tiers are complete (MOTIR-1556 — still resumable)', () => {
+    // The tiers are done but the plan is not materialised (onboardingRanAt still
+    // null, enforced by resumeGateEnabled), so onboarding is not finished.
+    expect(isPreplanInProgress(preplanState({ status: 'tiers_complete' }))).toBe(true);
+  });
+});
+
+describe('ONBOARDING_RESUME_PATH', () => {
+  it('targets the discovery surface (resumes the session), not the entrance fork', () => {
+    expect(ONBOARDING_RESUME_PATH).toBe('/onboarding/discovery');
   });
 });

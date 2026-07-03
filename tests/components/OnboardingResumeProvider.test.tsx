@@ -69,15 +69,14 @@ describe('OnboardingResumeProvider', () => {
     expect(screen.getByTestId('signal').textContent).toBe('hide');
   });
 
-  it('stays hidden for a finished (tiers_complete) session', async () => {
+  it('still shows after the tiers are complete (MOTIR-1556 — plan not materialised yet)', async () => {
     mockFetch(preplanState({ status: 'tiers_complete' }));
     render(
       <OnboardingResumeProvider enabled>
         <Probe />
       </OnboardingResumeProvider>,
     );
-    await Promise.resolve();
-    expect(screen.getByTestId('signal').textContent).toBe('hide');
+    expect(await screen.findByText('show')).toBeTruthy();
   });
 
   it('stays hidden when the pre-plan read fails', async () => {

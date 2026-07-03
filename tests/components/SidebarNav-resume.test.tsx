@@ -49,11 +49,12 @@ describe('SidebarNav — Resume onboarding row', () => {
     expect(screen.queryByRole('link', { name: /Resume onboarding/ })).toBeNull();
   });
 
-  it('renders a labeled row to /onboarding when onboarding is in progress', () => {
+  it('renders a labeled row to the resume surface when onboarding is in progress', () => {
     resumeRef.value = true;
     renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
     const row = screen.getByRole('link', { name: /Resume onboarding/ });
-    expect(row.getAttribute('href')).toBe('/onboarding');
+    // Routes to the discovery surface (which resumes), NOT the entrance fork (MOTIR-1556).
+    expect(row.getAttribute('href')).toBe('/onboarding/discovery');
   });
 
   it('leads the primary nav (sits above Dashboard)', () => {
@@ -82,6 +83,8 @@ describe('SidebarNav — Resume onboarding row', () => {
       messages: zhMessages,
     });
     // zh: Resume onboarding = 继续引导
-    expect(screen.getByRole('link', { name: /继续引导/ }).getAttribute('href')).toBe('/onboarding');
+    expect(screen.getByRole('link', { name: /继续引导/ }).getAttribute('href')).toBe(
+      '/onboarding/discovery',
+    );
   });
 });

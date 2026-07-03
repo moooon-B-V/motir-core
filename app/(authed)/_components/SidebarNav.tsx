@@ -18,7 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
-import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
+import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
 import { useOnboardingResume } from './OnboardingResumeProvider';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
@@ -290,7 +290,7 @@ export function SidebarNav({
       primaryItems.unshift({
         icon: <History />,
         label: t('nav.resumeOnboarding'),
-        href: PLANNING_WORKSPACE_PATH,
+        href: ONBOARDING_RESUME_PATH,
         emphasis: true,
         badge: <ResumeInProgressBadge label={t('nav.resumeOnboardingInProgress')} />,
       });

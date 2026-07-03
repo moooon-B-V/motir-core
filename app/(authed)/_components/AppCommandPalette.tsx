@@ -19,7 +19,8 @@ import {
   SunMoon,
   Users,
 } from 'lucide-react';
-import { PLANNING_WORKSPACE_PATH, planningWorkspaceHref } from '@/lib/planning/launcher';
+import { planningWorkspaceHref } from '@/lib/planning/launcher';
+import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { signOut } from '@/lib/auth/client';
@@ -154,7 +155,7 @@ export function AppCommandPalette({
         id: 'resume-onboarding',
         label: t('nav.resumeOnboarding'),
         icon: <History />,
-        onSelect: () => go(PLANNING_WORKSPACE_PATH),
+        onSelect: () => go(ONBOARDING_RESUME_PATH),
       });
     }
     aiActions.push({
