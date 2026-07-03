@@ -25,6 +25,20 @@ export const githubRepoRepository = {
     });
   },
 
+  /** One selected repo by its `(installation_id, repo_id)` pair — the webhook's
+   *  lookup from a normalized change request's `providerRepoId` (GitHub's numeric
+   *  repo id) to the internal `GithubRepo.id` the PR row FKs against. Null when
+   *  the repo isn't selected on this installation. */
+  async findByInstallationAndRepoId(
+    installationId: string,
+    repoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubRepo | null> {
+    return tx.githubRepo.findUnique({
+      where: { installationId_repoId: { installationId, repoId } },
+    });
+  },
+
   /** Create-or-refresh one selected repo, keyed on the unique
    *  `(installation_id, repo_id)` pair. */
   async upsert(input: UpsertGithubRepoInput, tx: Prisma.TransactionClient): Promise<GithubRepo> {

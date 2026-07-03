@@ -67,6 +67,20 @@ export const githubInstallationService = {
   },
 
   /**
+   * Remove an installation on uninstall (the `installation` webhook with
+   * `action: deleted`, MOTIR-892). System context — the webhook has no active
+   * workspace. Cascades to the installation's repos + PR rows. Idempotent: a
+   * redelivered uninstall (row already gone) is a no-op returning `false`.
+   * Returns whether a row was actually removed.
+   */
+  async removeInstallation(installationId: string): Promise<boolean> {
+    return withSystemContext(async (tx) => {
+      const removed = await githubInstallationRepository.deleteByInstallationId(installationId, tx);
+      return removed > 0;
+    });
+  },
+
+  /**
    * The workspace's installation + its selected repos, or null when the
    * workspace has no installation (a valid "not connected" state the UI shows —
    * it does NOT require a bound member identity). READ path, workspace context.
