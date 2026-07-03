@@ -7,21 +7,27 @@ import zhMessages from '@/messages/zh.json';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Component tests for the in-app "Plan a new project with AI" entry
-// (MOTIR-1485 design → MOTIR-1486 code). The design decision this locks in:
-// the AI door ROUTES to /onboarding (the shipped fork, MOTIR-1461/1462) — it
-// does NOT pre-create a project and does NOT draw a second new-vs-existing
-// chooser — while the manual "Create project" door stays exactly as shipped.
+// (MOTIR-1485 design → MOTIR-1486 code). The behaviour these lock in: the AI
+// door is a form that SUBMITS startNewAiProjectAction — which mints a fresh
+// DRAFT project and hands off to the /onboarding fork scoped to THAT new
+// project (it does NOT plan into the currently-active project). The manual
+// "Create project" door stays exactly as shipped (opens the modal).
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh }),
 }));
 // The switcher + modal import project Server Actions; stub them so these
-// DB-free unit renders don't reach the server.
+// DB-free unit renders don't reach the server. startNewAiProjectAction is the
+// AI door's form action — mocked so we can assert it is the wired handler.
+const { startNewAiProjectAction } = vi.hoisted(() => ({
+  startNewAiProjectAction: vi.fn(async () => undefined),
+}));
 vi.mock('@/app/(authed)/_project-actions', () => ({
   createProjectAction: vi.fn(async () => undefined),
   setActiveProjectAction: vi.fn(async () => undefined),
   archiveProjectAction: vi.fn(async () => undefined),
+  startNewAiProjectAction,
 }));
 
 import { ProjectSwitcher } from '@/app/(authed)/_components/ProjectSwitcher';
@@ -54,42 +60,61 @@ function renderEmpty(messages?: Record<string, unknown>) {
   );
 }
 
+/** The nearest ancestor <form> whose action is the AI server action. */
+function aiDoorForm(button: HTMLElement): HTMLFormElement {
+  const form = button.closest('form');
+  expect(form).not.toBeNull();
+  return form as HTMLFormElement;
+}
+
 afterEach(() => {
   cleanup();
   push.mockClear();
   refresh.mockClear();
+  startNewAiProjectAction.mockClear();
 });
 
 describe('ProjectSwitcher — "Plan a new project with AI" door', () => {
-  it('renders an accent AI row that links to /onboarding, above the kept "Create project" row', () => {
+  it('renders an accent AI submit-door (wired to startNewAiProjectAction) above the kept "Create project" row', () => {
     renderSwitcher();
     // Open the popover so its footer rows mount.
     fireEvent.click(screen.getByRole('button', { name: 'Switch project' }));
 
-    const aiDoor = screen.getByRole('link', { name: /plan a new project with ai/i });
-    expect(aiDoor.getAttribute('href')).toBe('/onboarding');
+    const aiDoor = screen.getByRole('button', { name: /plan a new project with ai/i });
+    // It is a form-submit door — NOT a plain link to the active project.
+    expect(aiDoor.getAttribute('type')).toBe('submit');
+    expect(aiDoorForm(aiDoor)).toBeTruthy();
 
     // The manual door is kept, unchanged (opens the modal, not a route).
     const createRow = screen.getByRole('button', { name: 'Create project' });
-    expect(createRow.getAttribute('href')).toBeNull();
+    expect(createRow.getAttribute('type')).toBe('button');
 
     // The AI door LEADS — it renders before the manual door in the DOM.
     expect(
       aiDoor.compareDocumentPosition(createRow) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('submitting the AI door invokes startNewAiProjectAction (mints a new project → /onboarding)', () => {
+    renderSwitcher();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch project' }));
+    const aiDoor = screen.getByRole('button', { name: /plan a new project with ai/i });
+    fireEvent.submit(aiDoorForm(aiDoor));
+    expect(startNewAiProjectAction).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ProjectsEmptyState — the two peer doors', () => {
-  it('shows a primary AI door linking to /onboarding and a secondary "Create project" door', () => {
+  it('shows a primary AI submit-door and a secondary "Create project" door', () => {
     renderEmpty();
 
-    const aiDoor = screen.getByRole('link', { name: /plan a new project with ai/i });
-    expect(aiDoor.getAttribute('href')).toBe('/onboarding');
+    const aiDoor = screen.getByRole('button', { name: /plan a new project with ai/i });
+    expect(aiDoor.getAttribute('type')).toBe('submit');
+    expect(aiDoorForm(aiDoor)).toBeTruthy();
 
-    // Manual door stays a button (opens the shipped modal); it must NOT route.
+    // Manual door stays a button that opens the shipped modal; it must NOT submit.
     const createBtn = screen.getByRole('button', { name: 'Create project' });
-    expect(createBtn.getAttribute('href')).toBeNull();
+    expect(createBtn.getAttribute('type')).toBe('button');
   });
 
   it('opens the shipped create-project modal from the manual door (unchanged behaviour)', () => {
@@ -101,7 +126,6 @@ describe('ProjectsEmptyState — the two peer doors', () => {
 
   it('localizes the AI door label (zh catalog parity)', () => {
     renderEmpty(zhMessages as unknown as Record<string, unknown>);
-    const aiDoor = screen.getByRole('link', { name: '用 AI 规划新项目' });
-    expect(aiDoor.getAttribute('href')).toBe('/onboarding');
+    expect(screen.getByRole('button', { name: '用 AI 规划新项目' })).toBeTruthy();
   });
 });

@@ -1,5 +1,7 @@
 'use server';
 
+import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
@@ -75,6 +77,39 @@ export async function createProjectAction(input: CreateProjectActionInput): Prom
   });
 
   return project;
+}
+
+/**
+ * "Plan a new project with AI" — the in-app onboarding door (MOTIR-1486).
+ *
+ * AI-native onboarding is idea-first (Principle #1) and always plans a NEW
+ * project, so this mints a fresh DRAFT project, pins it active, and hands off
+ * to the shipped `/onboarding` fork (MOTIR-1461/1462), which scopes discovery
+ * to the active project. It deliberately does NOT reuse whatever project is
+ * currently active — routing straight to `/onboarding` would plan INTO the
+ * existing project (or bounce to /roadmap if that project already onboarded),
+ * which is the wrong journey for a "new project" affordance.
+ *
+ * The name is provisional ("Untitled project"): the user hasn't described the
+ * idea yet at click time (the idea textarea lives on the onboarding entrance),
+ * and a fresh project has `onboardingRanAt == null`, so the entrance shows and
+ * discovery/materialize plans into THIS project. Renaming the draft from the
+ * generated AI plan is a separate follow-up (the plan output carries no
+ * suggested project name today); until then the user can rename in settings.
+ */
+export async function startNewAiProjectAction(): Promise<void> {
+  const { userId, workspaceId } = await requireContext();
+  const t = await getTranslations('shell');
+
+  const project = await projectsService.createProject({
+    workspaceId,
+    actorUserId: userId,
+    name: t('project.untitled'),
+  });
+  await projectsService.setActiveProject({ userId, workspaceId, projectId: project.id });
+
+  // redirect() throws NEXT_REDIRECT — keep it outside any try/catch.
+  redirect('/onboarding');
 }
 
 /**

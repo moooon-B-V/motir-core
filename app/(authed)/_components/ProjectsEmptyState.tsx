@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Plus, Sparkles } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { startNewAiProjectAction } from '../_project-actions';
 import { CreateProjectModal } from './CreateProjectModal';
 
 // Empty-state surface shown when the active workspace has zero projects.
@@ -13,10 +13,9 @@ import { CreateProjectModal } from './CreateProjectModal';
 // project yet, so there's no real identifier to interpolate.
 //
 // Two peer "start a project" doors (MOTIR-1485 / 1486): the accent AI door
-// LEADS (Motir is chat-first, Principle #1) and routes into the shipped
-// /onboarding fork (MOTIR-1462) — it does NOT pre-create a project or draw a
-// second chooser; the kept "Create project" door opens the shipped modal,
-// unchanged.
+// LEADS (Motir is chat-first, Principle #1). It mints a fresh DRAFT project and
+// hands off to the shipped /onboarding fork (MOTIR-1462) scoped to that new
+// project; the kept "Create project" door opens the shipped modal, unchanged.
 
 export function ProjectsEmptyState() {
   const t = useTranslations('shell');
@@ -34,10 +33,11 @@ export function ProjectsEmptyState() {
         description={t('project.emptyDescription')}
         action={
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Link href="/onboarding" className={buttonVariants({ variant: 'primary' })}>
-              <Sparkles className="h-4 w-4" aria-hidden />
-              {t('project.planWithAi')}
-            </Link>
+            <form action={startNewAiProjectAction}>
+              <Button variant="primary" type="submit" leftIcon={<Sparkles className="h-4 w-4" />}>
+                {t('project.planWithAi')}
+              </Button>
+            </form>
             <Button
               variant="secondary"
               leftIcon={<Plus className="h-4 w-4" />}
