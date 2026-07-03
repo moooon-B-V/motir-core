@@ -429,6 +429,7 @@
       "createFirst": "Create your first project",
       "emptyDescription": "Projects group your work items and give them a key like PROD-1. Create one to start planning.",
       "create": "Create project",
+      "planWithAi": "Plan a new project with AI",
       "created": "Project created",
       "createError": "Could not create project",
       "identifierTaken": "That identifier is already taken. Try a different one.",

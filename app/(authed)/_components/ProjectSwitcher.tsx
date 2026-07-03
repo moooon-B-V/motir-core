@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Check, ChevronDown, Plus } from 'lucide-react';
+import { Check, ChevronDown, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Popover } from '@/components/ui/Popover';
@@ -155,7 +156,20 @@ export function ProjectSwitcher({
             })}
           </ul>
           <div className="my-1 h-px bg-(--el-border)" />
-          <div className="px-1 pb-1">
+          {/* Two peer "start a project" doors (MOTIR-1485 / 1486): the accent
+              AI door LEADS (Motir is chat-first, Principle #1) and routes into
+              the shipped /onboarding fork (MOTIR-1462) — it does NOT pre-create
+              a project or draw a second chooser; the kept "Create project" row
+              opens the shipped modal, unchanged. */}
+          <div className="flex flex-col px-1 pb-1">
+            <Link
+              href="/onboarding"
+              onClick={() => setOpen(false)}
+              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm font-medium text-(--el-accent-on-surface) focus-visible:outline-none"
+            >
+              <Sparkles className="text-(--el-accent-on-surface) h-4 w-4" aria-hidden />
+              {t('project.planWithAi')}
+            </Link>
             <button
               type="button"
               onClick={openCreate}
