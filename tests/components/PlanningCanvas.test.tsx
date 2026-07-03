@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { fireEvent } from '@testing-library/dom';
 import {
   PlanningCanvas,
@@ -100,7 +101,7 @@ describe('PlanningCanvas', () => {
     expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2);
     const flags = screen.getAllByTestId('cross-flag');
     expect(flags).toHaveLength(1);
-    expect(flags[0]!.textContent).toContain('cross-story');
+    expect(flags[0]!.textContent).toContain('blocked elsewhere');
   });
 
   it('gives every edge a directional arrowhead (marker-end), markers in their own defs', () => {

@@ -97,7 +97,7 @@ export function buildWorkItemLevel(
         content: (
           <GhostAnchor
             identifier={stub?.identifier ?? '—'}
-            title={stub?.title ?? 'Blocked across stories'}
+            title={stub?.title}
             parentTitle={stub?.parentTitle ?? null}
             outOfSprint={scope === 'sprint'}
           />
@@ -148,7 +148,7 @@ export function buildWorkItemLevel(
           }}
           drillable={item.hasChildren}
           crossBlocked={crossBlocked.has(item.id)}
-          crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'cross-story'}
+          crossBlockedSprint={scope === 'sprint'}
           notInSprint={notInSprint}
           progress={item.progress ?? null}
           here={item.id === activeId}

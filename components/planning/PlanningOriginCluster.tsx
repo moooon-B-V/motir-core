@@ -10,6 +10,7 @@ import {
   Search,
   Shapes,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 // The PLANNING-ORIGIN cluster (Subtask 7.20.6 / MOTIR-1013) — a COLLAPSED summary
 // of the completed pre-plan journey, pinned at the ROAD'S START on the persistent
@@ -29,23 +30,25 @@ export const ORIGIN_W = 360;
 export const ORIGIN_H = 124;
 
 interface Stage {
+  /** Also the `roadmap.canvas.origin.<key>` i18n key for the stage label. */
   key: string;
-  label: string;
   Icon: LucideIcon;
 }
 
 // The 7.3 planning stages, in journey order. Idea seeds the four direction tiers
 // (collapsed here to Discover · Shape · Validate), which feed Plan — the same
-// order the onboarding canvas model (`STATION_ORDER`) walks.
+// order the onboarding canvas model (`STATION_ORDER`) walks. The `key` doubles as
+// the i18n key for the label (`roadmap.canvas.origin.<key>`).
 const STAGES: readonly Stage[] = [
-  { key: 'idea', label: 'Idea', Icon: Lightbulb },
-  { key: 'discover', label: 'Discover', Icon: Search },
-  { key: 'shape', label: 'Shape', Icon: Shapes },
-  { key: 'validate', label: 'Validate', Icon: ListChecks },
-  { key: 'plan', label: 'Plan', Icon: Network },
+  { key: 'idea', Icon: Lightbulb },
+  { key: 'discover', Icon: Search },
+  { key: 'shape', Icon: Shapes },
+  { key: 'validate', Icon: ListChecks },
+  { key: 'plan', Icon: Network },
 ];
 
 export function PlanningOriginCluster() {
+  const t = useTranslations('roadmap.canvas.origin');
   return (
     <div
       style={{ width: ORIGIN_W, height: ORIGIN_H }}
@@ -58,11 +61,11 @@ export function PlanningOriginCluster() {
       {/* HEADER — labels the cluster + states the journey is complete. */}
       <div className="flex shrink-0 items-center gap-2">
         <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-faint) uppercase">
-          Planning
+          {t('planning')}
         </span>
         <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-tint-mint) px-(--spacing-chip-x) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-text-strong)">
           <Check className="size-3" aria-hidden="true" />
-          Complete
+          {t('complete')}
         </span>
       </div>
 
@@ -71,7 +74,7 @@ export function PlanningOriginCluster() {
       <div className="mt-1.5 flex min-h-0 flex-1 items-center justify-between gap-1">
         {STAGES.map((stage, i) => (
           <div key={stage.key} className="flex min-w-0 items-center gap-1">
-            <Milestone label={stage.label} Icon={stage.Icon} />
+            <Milestone label={t(stage.key)} Icon={stage.Icon} />
             {i < STAGES.length - 1 ? (
               <ArrowRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
             ) : null}

@@ -106,7 +106,7 @@ swatch** + a plain-language meaning:
 
 - **solid arrow → "blocks"** — _blocker is done (the dependency is settled / ready)_
 - **dashed arrow ⟶ "pending"** — _blocker is not done yet_
-- **red arrow → "cross-story"** — _blocker is in another story (a bad plan)_
+- **red arrow → "blocked elsewhere"** — _blocker sits elsewhere in the plan (a bad plan)_
 
 (Header "Dependencies", `--el-text-faint` uppercase caption; rows
 `--el-text-strong`, the meanings `--el-text-muted`.) It is the SAME three styles
@@ -127,10 +127,21 @@ TANGLE** the dependency-arrow audit forbids (a correct plan is a tree). Design:
   with an **↗ "leaves this level"** glyph), its title, and **where it lives**
   ("in Story · Auth hardening ↗", `--el-danger` text). The red edge runs from this
   anchor INTO the blocked node, so the tangle is legible without leaving the level.
-- **A node BADGE** on the blocked item — a `cross-story` flag pill
+- **A node BADGE** on the blocked item — a `blocked elsewhere` flag pill
   (`--el-danger-surface` tint + strong text + a flag glyph) + a red node ring — so
   even off-screen of the edge, the node reads as entangled (not colour-alone:
   icon + label + tint, AA).
+
+> **Label copy — "blocked elsewhere", not "cross-story" (MOTIR-1568).** The pill,
+> the edge-midpoint flag, and the legend's warning row all read **"blocked
+> elsewhere"** (project scope). The bad-plan signal here is still conceptually the
+> _cross-story / off-level tangle_, but the user-facing COPY is deliberately
+> level-agnostic: the blocked item's blocker can live in another story, another
+> epic, or under a bug/task, and one pill cannot name a mix — so it states the fact
+> ("blocked by something elsewhere in the plan") and the ghost anchor names the
+> specific blocker. Plain-English state phrase, matching its sprint-scope sibling
+> "not in sprint".
+
 - **States:** one vs several off-level blockers (the anchor stacks "+N more");
   **hover/tooltip** on the flag names the blocker + its level; **click** → drill to
   the blocker's level (the canvas already navigates per level). The normal
@@ -499,7 +510,7 @@ invented here).
 The roadmap's off-level dependency signal (MOTIR-1331) MEANS something different in
 sprint scope, so it is RE-LABELLED. In **project** scope a `blocked_by` edge to an
 item on another level is the **cross-story tangle** (a bad plan — the red edge, the
-ghost anchor "in {story} ↗", and the node's red **cross-story** flag). In **sprint**
+ghost anchor "in {story} ↗", and the node's red **"blocked elsewhere"** flag). In **sprint**
 scope the same edges become a **sprint-validity** signal (mirroring the MCP
 `validate_sprint` rule): a blocker is a problem ONLY when it is **not done AND not in
 the active sprint**. So:
@@ -509,7 +520,7 @@ the active sprint**. So:
 - an **out-of-sprint, open** dependency is the problem → the red edge + a ghost
   anchor reading **"not in this sprint ↗"** + the node's red flag **"not in sprint"**;
 - the edge **legend**'s warning row reads **"not in sprint" — "not done & outside the
-  sprint"** (vs. project scope's "cross-story" — "in another story").
+  sprint"** (vs. project scope's "blocked elsewhere" — "the blocker sits elsewhere in the plan").
 
 This fixes the mis-label where two items in the SAME story showed as "cross-story"
 in sprint scope (they are siblings, not cross-story — the real issue is only whether
@@ -689,12 +700,12 @@ scope-independent).
 The ready highlight fires on **exactly one** node state — a startable, unblocked item —
 and is deliberately distinct from each existing signal by **hue + shape**:
 
-| Signal          | Treatment                                  | Hue             |
-| --------------- | ------------------------------------------ | --------------- |
-| **Ready** (new) | "Ready" pill + 3px left accent bar         | `--el-success`  |
-| "You are here"  | accent BORDER + accent map-pin pill        | `--el-accent`   |
-| dependency flag | red chip ("cross-story" / "not in sprint") | `--el-danger`   |
-| status pill     | tinted chip (To do / In progress / Done)   | per-status tint |
+| Signal          | Treatment                                        | Hue             |
+| --------------- | ------------------------------------------------ | --------------- |
+| **Ready** (new) | "Ready" pill + 3px left accent bar               | `--el-success`  |
+| "You are here"  | accent BORDER + accent map-pin pill              | `--el-accent`   |
+| dependency flag | red chip ("blocked elsewhere" / "not in sprint") | `--el-danger`   |
+| status pill     | tinted chip (To do / In progress / Done)         | per-status tint |
 
 An in-progress or done node is NOT ready (already started/finished); a to-do with an
 open blocker is NOT ready (the dim "To do" pill stays). The mock's panel 1 shows the

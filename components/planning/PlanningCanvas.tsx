@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Flag, Maximize2, Minus, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import {
   type Rect,
   type View,
@@ -125,6 +126,7 @@ export function PlanningCanvas({
   ariaLabel,
   className,
 }: PlanningCanvasProps) {
+  const t = useTranslations('roadmap.canvas');
   const [view, setView] = useState<View>({ scale: 1, tx: 0, ty: 0 });
   const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({});
   const [dragPos, setDragPos] = useState<Record<string, { x: number; y: number }>>({});
@@ -438,7 +440,7 @@ export function PlanningCanvas({
           })}
         </svg>
 
-        {/* cross-story flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
+        {/* "blocked elsewhere" flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
             the edge <svg>, whose <path> count is asserted): a warning chip + flag
             glyph + label at each cross edge's midpoint, so the tangle never rests
             on edge colour alone. Decorative — the dependency facts live in the
@@ -462,7 +464,7 @@ export function PlanningCanvas({
                 data-testid="cross-flag"
               >
                 <Flag className="size-3.5" />
-                cross-story
+                {t('node.blockedElsewhere')}
               </span>
             );
           })}
@@ -507,15 +509,15 @@ export function PlanningCanvas({
       <div
         className="absolute bottom-4 left-4 flex overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)"
         role="group"
-        aria-label="Zoom"
+        aria-label={t('zoom')}
       >
-        <ZoomButton label="Zoom out" onClick={() => zoomCentred(1 / ZOOM_STEP)}>
+        <ZoomButton label={t('zoomOut')} onClick={() => zoomCentred(1 / ZOOM_STEP)}>
           <Minus className="size-4" aria-hidden="true" />
         </ZoomButton>
-        <ZoomButton label="Zoom in" onClick={() => zoomCentred(ZOOM_STEP)} bordered>
+        <ZoomButton label={t('zoomIn')} onClick={() => zoomCentred(ZOOM_STEP)} bordered>
           <Plus className="size-4" aria-hidden="true" />
         </ZoomButton>
-        <ZoomButton label="Fit to view" onClick={doFit} bordered>
+        <ZoomButton label={t('fitToView')} onClick={doFit} bordered>
           <Maximize2 className="size-4" aria-hidden="true" />
         </ZoomButton>
       </div>

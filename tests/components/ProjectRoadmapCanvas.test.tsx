@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { fireEvent } from '@testing-library/dom';
 import {
   ProjectRoadmapCanvas,
@@ -161,7 +162,7 @@ describe('ProjectRoadmapCanvas', () => {
     expect(within(legend).getByText('Dependencies')).toBeTruthy();
     expect(within(legend).getByText('blocks')).toBeTruthy();
     expect(within(legend).getByText('pending')).toBeTruthy();
-    expect(within(legend).getByText('cross-story')).toBeTruthy();
+    expect(within(legend).getByText('blocked elsewhere')).toBeTruthy();
   });
 
   it('hides the legend when there are no edges', async () => {

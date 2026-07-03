@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
   type RoadmapLevel,
@@ -67,10 +68,11 @@ export function WorkItemRoadmap({
   onNodeMove,
   onResetPositions,
   onSelect,
-  ariaLabel = 'Work-item roadmap',
+  ariaLabel,
   refreshSignal = 0,
   onRefreshSettled,
 }: WorkItemRoadmapProps) {
+  const t = useTranslations('roadmap.canvas');
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
   // project+parent (a ref — mutable — so a new key just misses; no reset needed).
   const cacheRef = useRef(new Map<string, RoadmapLevelData>());
@@ -149,11 +151,11 @@ export function WorkItemRoadmap({
         searchable
         fullScreenable
         locatable
-        rootLabel="Roadmap"
-        ariaLabel={ariaLabel}
+        rootLabel={t('breadcrumbRoot')}
+        ariaLabel={ariaLabel ?? t('ariaWorkItem')}
         warningLegend={
           scope === 'sprint'
-            ? { label: 'not in sprint', meaning: 'not done & outside the sprint' }
+            ? { label: t('legend.notInSprint'), meaning: t('legend.notInSprintMeaning') }
             : undefined
         }
       />
