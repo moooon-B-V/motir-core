@@ -24,12 +24,21 @@ export interface ProjectSwitcherProps {
    * normal case — the active project is then found in `projects`.
    */
   activeProject?: ProjectDTO | null;
+  /**
+   * Whether the AI planning backend is configured (server-resolved via
+   * `isMotirAiConfigured()` in the authed layout — the same cloud/self-host
+   * gate the "Plan with AI" launcher uses). Gates the "Plan a new project
+   * with AI" door: with no AI backend the door would dead-end, so we hide it
+   * and show only the manual "Create project" row.
+   */
+  aiConfigured?: boolean;
 }
 
 export function ProjectSwitcher({
   projects,
   activeProjectId,
   activeProject,
+  aiConfigured = false,
 }: ProjectSwitcherProps) {
   const t = useTranslations('shell');
   const router = useRouter();
@@ -160,17 +169,21 @@ export function ProjectSwitcher({
               DRAFT project and hands off to the shipped /onboarding fork
               (MOTIR-1462) scoped to that new project — it does NOT plan into the
               currently-active project; the kept "Create project" row opens the
-              shipped modal, unchanged. */}
+              shipped modal, unchanged. The AI door only shows when the AI
+              backend is configured (same gate as the "Plan with AI" launcher);
+              otherwise just the manual door renders. */}
           <div className="flex flex-col px-1 pb-1">
-            <form action={startNewAiProjectAction}>
-              <button
-                type="submit"
-                className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm font-medium text-(--el-accent-on-surface) focus-visible:outline-none"
-              >
-                <Sparkles className="text-(--el-accent-on-surface) h-4 w-4" aria-hidden />
-                {t('project.planWithAi')}
-              </button>
-            </form>
+            {aiConfigured ? (
+              <form action={startNewAiProjectAction}>
+                <button
+                  type="submit"
+                  className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm font-medium text-(--el-accent-on-surface) focus-visible:outline-none"
+                >
+                  <Sparkles className="text-(--el-accent-on-surface) h-4 w-4" aria-hidden />
+                  {t('project.planWithAi')}
+                </button>
+              </form>
+            ) : null}
             <button
               type="button"
               onClick={openCreate}

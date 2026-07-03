@@ -72,6 +72,9 @@ export interface SidebarNavProps {
   activeProject: ProjectDTO | null;
   projects: ProjectDTO[];
   variant?: 'rail' | 'drawer';
+  /** Whether the AI planning backend is configured — forwarded to the
+   * ProjectSwitcher's "Plan a new project with AI" door gate. */
+  aiConfigured?: boolean;
   /**
    * The actor's settings-area capabilities (Subtask 6.5.2), resolved once in the
    * (authed) layout via `projectAccessService.getSettingsCapabilities`. Drives
@@ -110,6 +113,7 @@ export function SidebarNav({
   variant = 'rail',
   settingsAccess,
   user,
+  aiConfigured = false,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -300,7 +304,12 @@ export function SidebarNav({
   return (
     <Sidebar
       header={
-        <SidebarHeader activeProject={activeProject} projects={projects} collapsed={collapsed} />
+        <SidebarHeader
+          activeProject={activeProject}
+          projects={projects}
+          collapsed={collapsed}
+          aiConfigured={aiConfigured}
+        />
       }
       sections={sections}
       footer={isDrawer ? undefined : <SidebarToggle variant="footer" />}

@@ -34,9 +34,17 @@ export interface SidebarHeaderProps {
   projects: ProjectDTO[];
   /** When true, render the icon-only (40px) affordance. Default false. */
   collapsed?: boolean;
+  /** Whether the AI planning backend is configured — forwarded to the
+   * ProjectSwitcher's "Plan a new project with AI" door gate. */
+  aiConfigured?: boolean;
 }
 
-export function SidebarHeader({ activeProject, projects, collapsed = false }: SidebarHeaderProps) {
+export function SidebarHeader({
+  activeProject,
+  projects,
+  collapsed = false,
+  aiConfigured = false,
+}: SidebarHeaderProps) {
   const t = useTranslations('shell');
   const [createOpen, setCreateOpen] = useState(false);
   const hasProject = Boolean(activeProject);
@@ -111,6 +119,7 @@ export function SidebarHeader({ activeProject, projects, collapsed = false }: Si
       projects={projects}
       activeProjectId={activeProject?.id ?? null}
       activeProject={activeProject}
+      aiConfigured={aiConfigured}
     />
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Plus, Sparkles } from 'lucide-react';
+import { FolderOpen, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { startNewAiProjectAction } from '../_project-actions';
@@ -16,8 +16,19 @@ import { CreateProjectModal } from './CreateProjectModal';
 // LEADS (Motir is chat-first, Principle #1). It mints a fresh DRAFT project and
 // hands off to the shipped /onboarding fork (MOTIR-1462) scoped to that new
 // project; the kept "Create project" door opens the shipped modal, unchanged.
+// The AI door + its AI-forward treatment only show when the AI backend is
+// configured (same gate as the "Plan with AI" launcher); otherwise this is the
+// original manual-only empty state.
 
-export function ProjectsEmptyState() {
+export interface ProjectsEmptyStateProps {
+  /**
+   * Whether the AI planning backend is configured (server-resolved via
+   * `isMotirAiConfigured()`). Off → the manual "Create project" empty state.
+   */
+  aiConfigured?: boolean;
+}
+
+export function ProjectsEmptyState({ aiConfigured = false }: ProjectsEmptyStateProps) {
   const t = useTranslations('shell');
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -25,27 +36,41 @@ export function ProjectsEmptyState() {
     <>
       <EmptyState
         icon={
-          <span className="bg-(--el-tint-lavender) text-(--el-accent-on-surface) inline-flex h-12 w-12 items-center justify-center rounded-(--radius-card)">
-            <Sparkles className="h-6 w-6" aria-hidden />
-          </span>
+          aiConfigured ? (
+            <span className="bg-(--el-tint-lavender) text-(--el-accent-on-surface) inline-flex h-12 w-12 items-center justify-center rounded-(--radius-card)">
+              <Sparkles className="h-6 w-6" aria-hidden />
+            </span>
+          ) : (
+            <FolderOpen className="h-12 w-12" aria-hidden />
+          )
         }
         title={t('project.createFirst')}
         description={t('project.emptyDescription')}
         action={
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <form action={startNewAiProjectAction}>
-              <Button variant="primary" type="submit" leftIcon={<Sparkles className="h-4 w-4" />}>
-                {t('project.planWithAi')}
+          aiConfigured ? (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <form action={startNewAiProjectAction}>
+                <Button variant="primary" type="submit" leftIcon={<Sparkles className="h-4 w-4" />}>
+                  {t('project.planWithAi')}
+                </Button>
+              </form>
+              <Button
+                variant="secondary"
+                leftIcon={<Plus className="h-4 w-4" />}
+                onClick={() => setCreateOpen(true)}
+              >
+                {t('project.create')}
               </Button>
-            </form>
+            </div>
+          ) : (
             <Button
-              variant="secondary"
+              variant="primary"
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={() => setCreateOpen(true)}
             >
               {t('project.create')}
             </Button>
-          </div>
+          )
         }
       />
       <CreateProjectModal open={createOpen} onOpenChange={setCreateOpen} />

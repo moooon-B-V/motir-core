@@ -43,18 +43,21 @@ const ACME: ProjectDTO = {
   archivedAt: null,
 } as unknown as ProjectDTO;
 
-function renderSwitcher() {
+function renderSwitcher(aiConfigured = true) {
   return renderWithIntl(
     <ToastProvider>
-      <ProjectSwitcher projects={[ACME]} activeProjectId={ACME.id} />
+      <ProjectSwitcher projects={[ACME]} activeProjectId={ACME.id} aiConfigured={aiConfigured} />
     </ToastProvider>,
   );
 }
 
-function renderEmpty(messages?: Record<string, unknown>) {
+function renderEmpty({
+  aiConfigured = true,
+  messages,
+}: { aiConfigured?: boolean; messages?: Record<string, unknown> } = {}) {
   return renderWithIntl(
     <ToastProvider>
-      <ProjectsEmptyState />
+      <ProjectsEmptyState aiConfigured={aiConfigured} />
     </ToastProvider>,
     messages ? { messages } : undefined,
   );
@@ -125,7 +128,26 @@ describe('ProjectsEmptyState — the two peer doors', () => {
   });
 
   it('localizes the AI door label (zh catalog parity)', () => {
-    renderEmpty(zhMessages as unknown as Record<string, unknown>);
+    renderEmpty({ messages: zhMessages as unknown as Record<string, unknown> });
     expect(screen.getByRole('button', { name: '用 AI 规划新项目' })).toBeTruthy();
+  });
+});
+
+describe('AI-configured gate (same gate as the "Plan with AI" launcher)', () => {
+  it('switcher hides the AI door when AI is not configured — only "Create project" remains', () => {
+    renderSwitcher(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Switch project' }));
+    expect(screen.queryByRole('button', { name: /plan a new project with ai/i })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Create project' })).toBeTruthy();
+  });
+
+  it('empty state falls back to the manual "Create project" primary when AI is not configured', () => {
+    renderEmpty({ aiConfigured: false });
+    expect(screen.queryByRole('button', { name: /plan a new project with ai/i })).toBeNull();
+    const createBtn = screen.getByRole('button', { name: 'Create project' });
+    // Opens the shipped modal (unchanged), not a submit door.
+    expect(createBtn.getAttribute('type')).toBe('button');
+    fireEvent.click(createBtn);
+    expect(screen.getByLabelText('Project name')).toBeTruthy();
   });
 });

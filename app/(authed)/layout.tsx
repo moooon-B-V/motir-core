@@ -205,6 +205,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     variant="rail"
                     settingsAccess={settingsAccess}
                     user={{ name: session.user.name, email: session.user.email }}
+                    aiConfigured={aiPlanningConfigured}
                   />
                 }
               >
@@ -233,6 +234,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   variant="drawer"
                   settingsAccess={settingsAccess}
                   user={{ name: session.user.name, email: session.user.email }}
+                  aiConfigured={aiPlanningConfigured}
                 />
               </SidebarDrawer>
 
