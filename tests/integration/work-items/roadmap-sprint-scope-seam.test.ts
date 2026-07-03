@@ -195,6 +195,31 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     expect(byId.get(inSprintDeep.id)).toMatchObject({ isDone: false, inActiveSprint: true });
   });
 
+  it('a CANCELLED off-level blocker is TERMINAL → isDone:true (not flagged "not in sprint"), matching validate_sprint (MOTIR-1561)', async () => {
+    const fx = await makeFixture();
+    const sprintId = await createActiveSprint(fx);
+    // A member story blocked by an off-level dep that is CANCELLED and outside the
+    // sprint. Cancelled is a `done`-CATEGORY (terminal) status, so the dependency
+    // can never gate — the roadmap must treat it as satisfied (isDone:true) exactly
+    // as validate_sprint does, NOT as the progress-meter "completed" set (which
+    // drops cancelled) once did, which wrongly flagged it a sprint-validity problem.
+    const member = await createWorkItem(fx, { kind: 'story', title: 'Billing' });
+    await setSprint(member.id, sprintId);
+    const cancelledExternal = await createWorkItem(fx, {
+      kind: 'story',
+      title: 'Cancelled external',
+    });
+    await setStatus(cancelledExternal.id, 'cancelled');
+    await link(fx, member.id, cancelledExternal.id);
+
+    const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      scope: 'sprint',
+    });
+    const stub = roadmap.offLevelBlockers.find((b) => b.id === cancelledExternal.id);
+    // Satisfied like a `done` dep — the client won't draw the cross edge / tag.
+    expect(stub).toMatchObject({ isDone: true, inActiveSprint: false });
+  });
+
   it('case 4 — whole-project parity: scope:project equals the pre-existing read (full tree)', async () => {
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
