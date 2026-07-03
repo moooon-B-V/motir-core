@@ -184,6 +184,12 @@ model User {
   // notificationPreferences / apiTokens pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
   appearancePreference      UserAppearancePreference? @relation("UserAppearancePreference")
+  // The user's GitHub OAuth identity binding (Story 7.10 · MOTIR-1498) — the
+  // identity-only grant (0 or 1 per user). Cascade: it's personal auth
+  // substrate carrying only an encrypted user token, it dies with the user
+  // (the apiTokens pattern). Modelled on both sides per the FK-`@relation`
+  // rule so `migrate dev` reports no drift.
+  githubIdentity            GithubIdentity?
   // Per-user canvas node arrangements (Story 7.3 · Subtask 7.3.77) — where the
   // user dragged each node on a project's planning canvas, persisted so a drag
   // survives reload. Cascade: personal layout substrate, it dies with the user
@@ -1202,7 +1208,7 @@ model PublicRequestVote {
 /// The repository translates these markers into the typed errors in
 /// lib/workItems/linkErrors.ts at its edge (the 4-layer rule).
 model WorkItemLink {
-  id          String           @id @default(cuid())
+  id          String             @id @default(cuid())
   workspaceId String
   fromId      String
   toId        String
@@ -1216,7 +1222,7 @@ model WorkItemLink {
   // `manual` default so every pre-5.8.3 row reads as a manual link.
   source      WorkItemLinkSource @default(manual)
   createdById String
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime           @default(now())
 
   fromItem  WorkItem  @relation("LinksFrom", fields: [fromId], references: [id], onDelete: Cascade)
   toItem    WorkItem  @relation("LinksTo", fields: [toId], references: [id], onDelete: Cascade)
@@ -3049,4 +3055,35 @@ model PlanItem {
   @@index([planId])
   @@index([workspaceId])
   @@map("plan_item")
+}
+
+/// A Motir member's GitHub OAuth user-identity binding (Story 7.10 ·
+/// MOTIR-1498) — "Grant 1" of the verified GitHub-App model. This grant is
+/// IDENTITY ONLY: it proves which GitHub user the member is and grants NO repo
+/// access (that's the separate installation grant, GithubInstallation /
+/// MOTIR-891). An identity with no installation is a valid state the UI shows.
+///
+/// One identity per Motir user (`userId @unique`) and one Motir user per GitHub
+/// account (`githubUserId @unique`) — a GitHub account can't be bound to two
+/// members. The user access token is stored ENCRYPTED at rest (AES-256-GCM via
+/// lib/github/tokenCrypto.ts), never plaintext, and never leaves the service
+/// layer (the DTO omits it). RLS keys on `app.user_id` (the api_token
+/// precedent): the OAuth callback persists under `withUserContext`, so a member
+/// only ever reads/writes their own identity.
+model GithubIdentity {
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
+  githubUserId         String   @unique @map("github_user_id")
+  githubLogin          String   @map("github_login")
+  avatarUrl            String?  @map("avatar_url")
+  /// The GitHub user access token, encrypted at rest (never plaintext). Only
+  /// lib/github/tokenCrypto.ts + githubIdentityService ever read/write it.
+  accessTokenEncrypted String   @map("access_token_encrypted")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("github_identity")
 }

@@ -19,7 +19,7 @@ import { db } from '@/lib/db';
 // explicitly so its short-lived rows don't leak across tests.
 export async function truncateAuthTables(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "verification", "email_change_request", "idea_draft", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "verification", "email_change_request", "idea_draft", "user" RESTART IDENTITY CASCADE',
   );
 }
 
