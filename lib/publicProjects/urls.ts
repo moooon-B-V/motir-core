@@ -15,9 +15,14 @@ export function publicSiteOrigin(): string {
   return raw.replace(/\/+$/, '');
 }
 
+/** The site-relative path for a public project (e.g. `/p/PROD`). */
+export function publicProjectPath(identifier: string): string {
+  return `/p/${encodeURIComponent(identifier)}`;
+}
+
 /** The absolute public URL for a project by its key (e.g. `/p/PROD`). */
 export function publicProjectUrl(identifier: string): string {
-  return `${publicSiteOrigin()}/p/${encodeURIComponent(identifier)}`;
+  return `${publicSiteOrigin()}${publicProjectPath(identifier)}`;
 }
 
 const DESCRIPTION_MAX = 160;

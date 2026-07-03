@@ -85,6 +85,7 @@ export default async function PublicProjectLayout({
           name={overview.name}
           identifier={overview.identifier}
           workspaceName={overview.workspaceName}
+          user={session ? { name: session.user.name, email: session.user.email } : null}
         />
         <PublicBanner />
         {children}
