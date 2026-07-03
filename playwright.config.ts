@@ -95,6 +95,16 @@ process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
  */
 export default defineConfig({
   testDir: 'tests/e2e',
+  // MOTIR-1565 — the harness readiness gate. Runs AFTER the two webServers
+  // below report their `url` ready, but BEFORE the first spec. Playwright's
+  // built-in `url` check treats any status < 404 as ready, so a redirecting
+  // root URL is "up" the instant the socket binds while `/sign-up` still 404s
+  // and inngest's `PUT /api/inngest` sync 404-cascades — which used to red the
+  // whole shell-flows suite from one bad shard start. This gate polls the
+  // authoritative app + inngest routes with bounded retry/backoff and throws
+  // (failing THIS step, not 8 specs) if the server never comes up. See
+  // tests/e2e/global-setup.ts + tests/e2e/_helpers/readiness.ts.
+  globalSetup: './tests/e2e/global-setup.ts',
   // The cloud-on billing journeys (Subtask 8.1.10) run in their own MOTIR_CLOUD
   // lane (playwright.billing.config.ts) — excluded here so this off-cloud suite
   // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
