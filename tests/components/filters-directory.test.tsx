@@ -156,6 +156,32 @@ describe('FiltersDirectory — rendering + gating', () => {
     expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
   });
 
+  // Regression for MOTIR-1553: the owner's Delete menuitem paints its danger
+  // LABEL + icon with `--el-danger` (the red hue that sits ON a surface), NOT
+  // `--el-danger-text` (the ink meant to sit on a bright danger FILL — #fff in
+  // the default palette, which resolved white-on-white and made Delete
+  // invisible). A presence-only assertion passed the whole time it was
+  // invisible, so this asserts the colour TOKEN on both the button and its svg.
+  it('styles the Delete menuitem with the on-surface danger token, not the on-fill ink (MOTIR-1553)', async () => {
+    mockList({
+      items: [row({ id: 'mine', name: 'Mine', owner: { id: ME, name: 'Me' } })],
+      total: 1,
+    });
+    renderDirectory(<FiltersDirectory projectKey="PROD" viewer={viewer()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Actions for Mine/ }));
+    const del = await screen.findByRole('menuitem', { name: 'Delete' });
+    // The visible red hue on the popover surface, never the white-on-fill ink.
+    expect(del.className).toContain('text-(--el-danger)');
+    expect(del.className).not.toContain('text-(--el-danger-text)');
+    // The trash icon carries the danger hue EXPLICITLY (not left uncoloured to
+    // inherit), so it can never regress to invisible independently of the label.
+    const icon = del.querySelector('svg');
+    expect(icon).toBeTruthy();
+    expect(icon!.getAttribute('class') ?? '').toContain('text-(--el-danger)');
+    expect(icon!.getAttribute('class') ?? '').not.toContain('text-(--el-danger-text)');
+  });
+
   it('lists built-in defaults read-only — no actions menu', async () => {
     mockList({
       items: [],

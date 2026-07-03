@@ -190,6 +190,23 @@ describe('AutomationSettings — list mutations call the 6.6.1 routes', () => {
     expect(call).toBeTruthy();
     expect(String(call![0])).toContain('/automation-rules/r1');
   });
+
+  // Regression for MOTIR-1553 (same defect as the saved-filter row menu): the
+  // rule's Delete menuitem must colour its LABEL + icon with `--el-danger` (the
+  // on-surface red hue), NOT `--el-danger-text` (the on-fill ink — #fff in the
+  // default palette, which painted white-on-white and hid Delete). A
+  // presence-only assertion could not catch the invisibility.
+  it('styles the Delete menuitem with the on-surface danger token, not the on-fill ink (MOTIR-1553)', () => {
+    renderSettings([rule()]);
+    fireEvent.click(screen.getByRole('button', { name: /Actions for Bug verification handoff/ }));
+    const del = screen.getByRole('menuitem', { name: 'Delete' });
+    expect(del.className).toContain('text-(--el-danger)');
+    expect(del.className).not.toContain('text-(--el-danger-text)');
+    const icon = del.querySelector('svg');
+    expect(icon).toBeTruthy();
+    expect(icon!.getAttribute('class') ?? '').toContain('text-(--el-danger)');
+    expect(icon!.getAttribute('class') ?? '').not.toContain('text-(--el-danger-text)');
+  });
 });
 
 describe('AutomationRuleEditor — registry-driven when/if/then', () => {

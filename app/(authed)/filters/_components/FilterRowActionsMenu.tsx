@@ -93,10 +93,10 @@ export function FilterRowActionsMenu({
               <button
                 type="button"
                 role="menuitem"
-                className="flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-danger-text) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none"
+                className="flex h-(--height-control) w-full items-center gap-2 rounded-(--radius-control) px-(--spacing-control-x) text-left text-sm text-(--el-danger) hover:bg-(--el-muted) focus-visible:bg-(--el-muted) focus-visible:outline-none"
                 onClick={() => run(onDelete)}
               >
-                <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+                <Trash2 className="h-4 w-4 shrink-0 text-(--el-danger)" aria-hidden />
                 <span className="flex-1 truncate">{t('delete')}</span>
               </button>
             </>
