@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   ChevronLeft,
   ChevronRight,
@@ -112,10 +113,20 @@ export function ProjectRoadmapCanvas({
   searchable = false,
   fullScreenable = false,
   locatable = false,
-  rootLabel = 'Roadmap',
-  ariaLabel = 'Project roadmap',
-  warningLegend = { label: 'blocked elsewhere', meaning: 'the blocker sits elsewhere in the plan' },
+  rootLabel,
+  ariaLabel,
+  warningLegend,
 }: ProjectRoadmapCanvasProps) {
+  const t = useTranslations('roadmap.canvas');
+  // The breadcrumb root, the canvas aria label, and the WARNING legend row default
+  // to the localized project-scope copy; a caller (e.g. the sprint-scoped roadmap)
+  // overrides the warning row with its own "not in sprint" copy (MOTIR-1379).
+  const resolvedRootLabel = rootLabel ?? t('breadcrumbRoot');
+  const resolvedAriaLabel = ariaLabel ?? t('ariaDefault');
+  const resolvedWarningLegend = warningLegend ?? {
+    label: t('legend.blockedElsewhere'),
+    meaning: t('legend.blockedElsewhereMeaning'),
+  };
   const [focusId, setFocusId] = useState<string | null>(null);
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
   const [level, setLevel] = useState<RoadmapLevel | null>(null);
@@ -433,10 +444,10 @@ export function ProjectRoadmapCanvas({
       : null;
   const locateLabel =
     hereId !== null
-      ? 'Locate the current item'
+      ? t('locateCurrent')
       : readyIds.length > 1
-        ? 'Locate the next ready item'
-        : 'Locate the ready item';
+        ? t('locateNextReady')
+        : t('locateReady');
 
   function renderNode(cn: CanvasNode) {
     const node = byId.get(cn.id);
@@ -486,7 +497,7 @@ export function ProjectRoadmapCanvas({
               <button
                 type="button"
                 data-testid="drill-button"
-                aria-label="Open this item's children"
+                aria-label={t('openChildren')}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -516,20 +527,20 @@ export function ProjectRoadmapCanvas({
       {/* breadcrumb + Back overlay — only while drilled */}
       {drilled && (
         <nav
-          aria-label="Breadcrumb"
+          aria-label={t('breadcrumb')}
           className="absolute top-3 left-3 z-10 flex max-w-[min(36rem,calc(100%-1.5rem))] items-center gap-1 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-2 py-1 shadow-(--shadow-card)"
         >
           <button
             type="button"
             onClick={goBack}
-            aria-label="Back"
+            aria-label={t('back')}
             className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
           >
             <ChevronLeft className="size-4" aria-hidden="true" />
           </button>
           <ol className="flex min-w-0 items-center gap-1 text-sm">
             <li className="shrink-0">
-              <Crumb label={rootLabel} active={false} onClick={() => navigate(null)} />
+              <Crumb label={resolvedRootLabel} active={false} onClick={() => navigate(null)} />
             </li>
             {crumbs.map((c, i) => (
               <li key={c.id} className="flex min-w-0 items-center gap-1">
@@ -564,8 +575,8 @@ export function ProjectRoadmapCanvas({
               <Input
                 ref={searchRef}
                 type="search"
-                aria-label="Search the roadmap"
-                placeholder="Search the roadmap"
+                aria-label={t('search')}
+                placeholder={t('search')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 addonStart={<Search className="size-4 text-(--el-text-muted)" aria-hidden="true" />}
@@ -576,7 +587,7 @@ export function ProjectRoadmapCanvas({
             <button
               type="button"
               data-testid="fullscreen-toggle"
-              aria-label={expanded ? 'Exit full screen' : 'Enter full screen'}
+              aria-label={expanded ? t('exitFullScreen') : t('enterFullScreen')}
               aria-pressed={expanded}
               onClick={expanded ? exitFullScreen : enterFullScreen}
               className="inline-flex size-(--height-control) shrink-0 items-center justify-center rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
@@ -617,7 +628,7 @@ export function ProjectRoadmapCanvas({
             data-testid="locate-button"
             aria-label={locateLabel}
             disabled={!canLocate}
-            title={canLocate ? locateLabel : 'Nothing to locate — no in-progress or ready item'}
+            title={canLocate ? locateLabel : t('locateNothing')}
             onClick={locateActionable}
             // size-9 to match the engine's bottom-left zoom +/- buttons (also size-9)
             // exactly, so the locate control reads as part of that cluster.
@@ -646,7 +657,7 @@ export function ProjectRoadmapCanvas({
           className="absolute right-3 bottom-4 z-10 inline-flex items-center gap-1.5 rounded-(--radius-btn) border border-(--el-border) bg-(--el-surface) px-(--spacing-btn-x) py-(--spacing-btn-y) text-xs font-medium text-(--el-text-secondary) shadow-(--shadow-card) hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" />
-          Reset layout
+          {t('resetLayout')}
         </button>
       )}
 
@@ -660,13 +671,13 @@ export function ProjectRoadmapCanvas({
           className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
         >
           <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-faint) uppercase">
-            Dependencies
+            {t('legend.heading')}
           </span>
           {(
             [
-              ['committed', 'blocks', 'blocker done'],
-              ['pending', 'pending', 'not done yet'],
-              ['warning', warningLegend.label, warningLegend.meaning],
+              ['committed', t('legend.blocks'), t('legend.blocksMeaning')],
+              ['pending', t('legend.pending'), t('legend.pendingMeaning')],
+              ['warning', resolvedWarningLegend.label, resolvedWarningLegend.meaning],
             ] as const
           ).map(([kind, label, meaning]) => (
             <span key={kind} className="flex items-center gap-2 text-xs text-(--el-text-strong)">
@@ -708,18 +719,16 @@ export function ProjectRoadmapCanvas({
           aria-busy="true"
           className="flex h-full w-full items-center justify-center bg-(--el-canvas)"
         >
-          <Spinner aria-label="Loading the roadmap" />
+          <Spinner aria-label={t('loading')} />
         </div>
       ) : nodes.length === 0 ? (
         <div className="flex h-full w-full items-center justify-center bg-(--el-canvas) p-6">
           <div className="max-w-[24rem] text-center">
             <p className="text-sm font-semibold text-(--el-text)">
-              {drilled ? 'No items at this level' : 'Nothing on the roadmap yet'}
+              {drilled ? t('emptyDrilled') : t('emptyRootTitle')}
             </p>
             <p className="mt-1 text-sm text-(--el-text-muted)">
-              {drilled
-                ? 'This node has no children to show.'
-                : 'Work items will appear here as the plan takes shape.'}
+              {drilled ? t('emptyDrilledDescription') : t('emptyRootDescription')}
             </p>
           </div>
         </div>
@@ -737,7 +746,7 @@ export function ProjectRoadmapCanvas({
           focusNodeId={highlightId ?? undefined}
           focusNonce={focusNonce}
           focusScale={focusScale}
-          ariaLabel={ariaLabel}
+          ariaLabel={resolvedAriaLabel}
         />
       )}
     </div>

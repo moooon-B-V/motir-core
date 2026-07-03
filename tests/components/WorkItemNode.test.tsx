@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import {
   GhostAnchor,
   WorkItemNode,
@@ -23,7 +24,7 @@ describe('WorkItemNode', () => {
     render(<WorkItemNode item={item} />);
     expect(screen.getByText('MOTIR-1194')).toBeTruthy();
     expect(screen.getByText('Standalone work-item canvas component')).toBeTruthy();
-    expect(screen.getByText('In progress')).toBeTruthy();
+    expect(screen.getByText('In Progress')).toBeTruthy();
     expect(screen.getByText('Yue')).toBeTruthy();
   });
 
@@ -89,7 +90,7 @@ describe('WorkItemNode', () => {
     const { container } = render(<WorkItemNode item={item} here />);
     expect(screen.getByText('You are here')).toBeTruthy();
     // The status pill is REPLACED (not shown alongside) on the active node.
-    expect(screen.queryByText('In progress')).toBeNull();
+    expect(screen.queryByText('In Progress')).toBeNull();
     const card = container.firstChild as HTMLElement;
     expect(card.getAttribute('aria-current')).toBe('step');
     expect(card.className).toContain('border-(--el-accent)');
@@ -97,7 +98,7 @@ describe('WorkItemNode', () => {
 
   it('shows the status pill (no marker, no aria-current) when not active', () => {
     const { container } = render(<WorkItemNode item={item} />);
-    expect(screen.getByText('In progress')).toBeTruthy();
+    expect(screen.getByText('In Progress')).toBeTruthy();
     expect(screen.queryByText('You are here')).toBeNull();
     expect((container.firstChild as HTMLElement).getAttribute('aria-current')).toBeNull();
   });

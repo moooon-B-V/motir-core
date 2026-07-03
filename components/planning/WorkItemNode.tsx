@@ -15,6 +15,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
@@ -65,15 +66,6 @@ export interface WorkItemNodeData {
   assigneeName?: string | null;
 }
 
-export const STATUS_LABELS: Record<WorkItemStatus, string> = {
-  todo: 'To do',
-  in_progress: 'In progress',
-  in_review: 'In review',
-  blocked: 'Blocked',
-  done: 'Done',
-  cancelled: 'Cancelled',
-};
-
 interface StatusMeta {
   icon: LucideIcon;
   tint: string;
@@ -100,12 +92,13 @@ const KIND_TINT: Record<IssueType, string> = {
 export function WorkItemStatusPill({ status }: { status: WorkItemStatus }) {
   const meta = STATUS_META[status];
   const Icon = meta.icon;
+  const tStatus = useTranslations('labels.defaultStatus');
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-1.5 py-0.5 text-[11px] font-medium ${meta.tint} ${meta.text}`}
     >
       <Icon className="size-3" aria-hidden="true" />
-      {STATUS_LABELS[status]}
+      {tStatus(status)}
     </span>
   );
 }
@@ -114,7 +107,7 @@ export function WorkItemNode({
   item,
   drillable = false,
   crossBlocked = false,
-  crossBlockedLabel = 'blocked elsewhere',
+  crossBlockedSprint = false,
   notInSprint = false,
   progress = null,
   here = false,
@@ -126,9 +119,10 @@ export function WorkItemNode({
   /** Blocked by an off-level dependency — flag it (MOTIR-1331). In project scope a
    *  bad-plan tangle; in sprint scope an out-of-sprint, not-done dependency. */
   crossBlocked?: boolean;
-  /** The flag's copy — `'blocked elsewhere'` (project scope, MOTIR-1568) or
-   *  `'not in sprint'` (sprint scope, MOTIR-1379). */
-  crossBlockedLabel?: string;
+  /** Sprint scope (MOTIR-1379): the cross-blocked flag reads "not in sprint"
+   *  instead of the project-scope "blocked elsewhere" (MOTIR-1568). The copy itself
+   *  is resolved from the `roadmap.canvas.node` i18n catalog, not passed in. */
+  crossBlockedSprint?: boolean;
   /** NOT a member of the active sprint (MOTIR-1379 follow-up) — sprint scope only.
    *  A drilled-in node under a committed root that the sprint did not itself
    *  commit to. An INFORMATIONAL, non-error signal (unlike `crossBlocked`, which is
@@ -153,6 +147,7 @@ export function WorkItemNode({
    *  accent treatment wins). */
   ready?: boolean;
 }) {
+  const t = useTranslations('roadmap.canvas');
   const showMeter = progress !== null && progress.total > 0;
   const pct = showMeter ? Math.round((progress.done / progress.total) * 100) : 0;
   // The ready treatment is suppressed on the "you are here" frontier (its accent
@@ -261,7 +256,7 @@ export function WorkItemNode({
               className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
             >
               <CircleDashed className="size-3" aria-hidden="true" />
-              not in sprint
+              {t('node.notInSprint')}
             </span>
           ) : null}
           {crossBlocked ? (
@@ -270,7 +265,7 @@ export function WorkItemNode({
               className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
             >
               <Flag className="size-3" aria-hidden="true" />
-              {crossBlockedLabel}
+              {t(crossBlockedSprint ? 'node.notInSprint' : 'node.blockedElsewhere')}
             </span>
           ) : drillable ? (
             <ChevronRight
@@ -309,7 +304,7 @@ export function WorkItemNode({
         <div className="mt-2 flex shrink-0 items-center gap-2" data-testid="progress-meter">
           <div
             role="progressbar"
-            aria-label="Subtree progress"
+            aria-label={t('subtreeProgress')}
             aria-valuenow={progress.done}
             aria-valuemin={0}
             aria-valuemax={progress.total}
@@ -337,10 +332,11 @@ export function WorkItemNode({
  *  accent map-pin chip in the StationCard's active-state language; it takes the
  *  status pill's slot on the active node. */
 function HerePill() {
+  const t = useTranslations('roadmap.canvas.node');
   return (
     <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-accent) px-1.5 py-0.5 text-[11px] font-medium text-(--el-accent-text)">
       <MapPin className="size-3" aria-hidden="true" />
-      You are here
+      {t('here')}
     </span>
   );
 }
@@ -349,6 +345,7 @@ function HerePill() {
  *  ready-to-start node (a to-do whose blockers are all done). Replaces the dim
  *  "To do" pill; the card also gets a `--el-success` left accent bar. */
 function ReadyPill() {
+  const t = useTranslations('roadmap.canvas.node');
   return (
     <span
       data-testid="ready-pill"
@@ -357,7 +354,7 @@ function ReadyPill() {
       className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-strong)"
     >
       <CirclePlay className="size-3 text-(--el-success)" aria-hidden="true" />
-      Ready
+      {t('ready')}
     </span>
   );
 }
@@ -368,13 +365,14 @@ function ReadyPill() {
  *  card itself takes a distinct `--el-tint-sky` fill + a struck title, so done
  *  reads as the opposite of ready's mint-forward wash. */
 function DonePill() {
+  const tStatus = useTranslations('labels.defaultStatus');
   return (
     <span
       data-testid="done-pill"
       className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-text-secondary) px-1.5 py-0.5 text-[11px] font-medium text-(--el-text-inverted)"
     >
       <CheckCircle2 className="size-3 text-(--el-text-inverted)" aria-hidden="true" />
-      Done
+      {tStatus('done')}
     </span>
   );
 }
@@ -391,12 +389,14 @@ export function GhostAnchor({
   outOfSprint = false,
 }: {
   identifier: string;
-  title: string;
-  parentTitle: string | null;
+  /** The blocker's title; falls back to the localized default when absent. */
+  title?: string | null;
+  parentTitle?: string | null;
   /** Sprint scope (MOTIR-1379): the anchor reads "not in this sprint" — the
    *  blocker is an out-of-sprint, not-done dependency, not a cross-story tangle. */
   outOfSprint?: boolean;
 }) {
+  const t = useTranslations('roadmap.canvas.anchor');
   return (
     <div
       style={{
@@ -410,13 +410,17 @@ export function GhostAnchor({
         <ArrowUpRight className="size-3.5" aria-hidden="true" />
         {identifier}
       </span>
-      <span className="mt-1 line-clamp-1 block text-xs text-(--el-text-secondary)">{title}</span>
+      <span className="mt-1 line-clamp-1 block text-xs text-(--el-text-secondary)">
+        {title ?? t('defaultTitle')}
+      </span>
       {outOfSprint ? (
-        <span className="mt-0.5 block text-xs text-(--el-danger)">not in this sprint ↗</span>
+        <span className="mt-0.5 block text-xs text-(--el-danger)">{t('notInThisSprint')}</span>
       ) : parentTitle ? (
-        <span className="mt-0.5 block text-xs text-(--el-danger)">in {parentTitle} ↗</span>
+        <span className="mt-0.5 block text-xs text-(--el-danger)">
+          {t('inParent', { parent: parentTitle })}
+        </span>
       ) : (
-        <span className="mt-0.5 block text-xs text-(--el-danger)">elsewhere in the plan ↗</span>
+        <span className="mt-0.5 block text-xs text-(--el-danger)">{t('elsewhere')}</span>
       )}
     </div>
   );

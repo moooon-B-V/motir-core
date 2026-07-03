@@ -4256,7 +4256,65 @@
     "scopeChip": "冲刺范围",
     "refresh": "刷新路线图",
     "noActiveSprintTitle": "暂无进行中的冲刺",
-    "noActiveSprintDescription": "该项目当前没有进行中的冲刺。从看板启动一个冲刺即可查看其在路线图中的部分，或切换回“整个项目”。"
+    "noActiveSprintDescription": "该项目当前没有进行中的冲刺。从看板启动一个冲刺即可查看其在路线图中的部分，或切换回“整个项目”。",
+    "canvas": {
+      "breadcrumbRoot": "路线图",
+      "ariaDefault": "项目路线图",
+      "ariaWorkItem": "工作项路线图",
+      "openChildren": "展开该工作项的子项",
+      "breadcrumb": "面包屑导航",
+      "back": "返回",
+      "search": "搜索路线图",
+      "enterFullScreen": "进入全屏",
+      "exitFullScreen": "退出全屏",
+      "loading": "正在加载路线图",
+      "resetLayout": "重置布局",
+      "zoom": "缩放",
+      "zoomOut": "缩小",
+      "zoomIn": "放大",
+      "fitToView": "适应视图",
+      "locateCurrent": "定位到当前工作项",
+      "locateNextReady": "定位到下一个就绪工作项",
+      "locateReady": "定位到就绪工作项",
+      "locateNothing": "没有可定位的项 —— 没有进行中或就绪的工作项",
+      "emptyDrilled": "该层级暂无工作项",
+      "emptyDrilledDescription": "该节点没有可显示的子项。",
+      "emptyRootTitle": "路线图还是空的",
+      "emptyRootDescription": "随着计划成形，工作项会显示在这里。",
+      "subtreeProgress": "子树进度",
+      "node": {
+        "here": "当前位置",
+        "ready": "就绪",
+        "notInSprint": "不在冲刺中",
+        "blockedElsewhere": "受阻于别处"
+      },
+      "anchor": {
+        "defaultTitle": "被其他故事阻塞",
+        "inParent": "位于 {parent} ↗",
+        "notInThisSprint": "不在本冲刺中 ↗",
+        "elsewhere": "位于计划中的别处 ↗"
+      },
+      "legend": {
+        "heading": "依赖关系",
+        "blocks": "阻塞",
+        "blocksMeaning": "阻塞项已完成",
+        "pending": "待定",
+        "pendingMeaning": "阻塞项尚未完成",
+        "blockedElsewhere": "受阻于别处",
+        "blockedElsewhereMeaning": "阻塞项位于计划中的别处",
+        "notInSprint": "不在冲刺中",
+        "notInSprintMeaning": "未完成且在冲刺之外"
+      },
+      "origin": {
+        "planning": "规划",
+        "complete": "已完成",
+        "idea": "构想",
+        "discover": "探索",
+        "shape": "塑形",
+        "validate": "验证",
+        "plan": "计划"
+      }
+    }
   },
   "aiPlanning": {
     "heading": "计划",

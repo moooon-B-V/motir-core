@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import type { RoadmapLevelData, RoadmapLevelItem } from '@/lib/planning/roadmapClient';
 

@@ -4260,7 +4260,65 @@
     "scopeChip": "Sprint scope",
     "refresh": "Refresh roadmap",
     "noActiveSprintTitle": "No active sprint",
-    "noActiveSprintDescription": "This project has no sprint running right now. Start a sprint from the board to see its slice of the roadmap, or switch back to Whole project."
+    "noActiveSprintDescription": "This project has no sprint running right now. Start a sprint from the board to see its slice of the roadmap, or switch back to Whole project.",
+    "canvas": {
+      "breadcrumbRoot": "Roadmap",
+      "ariaDefault": "Project roadmap",
+      "ariaWorkItem": "Work-item roadmap",
+      "openChildren": "Open this item's children",
+      "breadcrumb": "Breadcrumb",
+      "back": "Back",
+      "search": "Search the roadmap",
+      "enterFullScreen": "Enter full screen",
+      "exitFullScreen": "Exit full screen",
+      "loading": "Loading the roadmap",
+      "resetLayout": "Reset layout",
+      "zoom": "Zoom",
+      "zoomOut": "Zoom out",
+      "zoomIn": "Zoom in",
+      "fitToView": "Fit to view",
+      "locateCurrent": "Locate the current item",
+      "locateNextReady": "Locate the next ready item",
+      "locateReady": "Locate the ready item",
+      "locateNothing": "Nothing to locate — no in-progress or ready item",
+      "emptyDrilled": "No items at this level",
+      "emptyDrilledDescription": "This node has no children to show.",
+      "emptyRootTitle": "Nothing on the roadmap yet",
+      "emptyRootDescription": "Work items will appear here as the plan takes shape.",
+      "subtreeProgress": "Subtree progress",
+      "node": {
+        "here": "You are here",
+        "ready": "Ready",
+        "notInSprint": "not in sprint",
+        "blockedElsewhere": "blocked elsewhere"
+      },
+      "anchor": {
+        "defaultTitle": "Blocked across stories",
+        "inParent": "in {parent} ↗",
+        "notInThisSprint": "not in this sprint ↗",
+        "elsewhere": "elsewhere in the plan ↗"
+      },
+      "legend": {
+        "heading": "Dependencies",
+        "blocks": "blocks",
+        "blocksMeaning": "blocker done",
+        "pending": "pending",
+        "pendingMeaning": "not done yet",
+        "blockedElsewhere": "blocked elsewhere",
+        "blockedElsewhereMeaning": "the blocker sits elsewhere in the plan",
+        "notInSprint": "not in sprint",
+        "notInSprintMeaning": "not done & outside the sprint"
+      },
+      "origin": {
+        "planning": "Planning",
+        "complete": "Complete",
+        "idea": "Idea",
+        "discover": "Discover",
+        "shape": "Shape",
+        "validate": "Validate",
+        "plan": "Plan"
+      }
+    }
   },
   "aiPlanning": {
     "heading": "Plans",
