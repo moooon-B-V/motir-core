@@ -1,0 +1,226 @@
+# Design notes — GitHub integration surfaces
+
+**Story 7.10 · MOTIR-889 (design gate, Principle #13).** The design reference for
+every UI-touching subtask in the GitHub-integration Story — the connect/settings
+UI + repo selection (**MOTIR-895**) and the work-item PR/CI status surface. The
+GitLab sibling (**MOTIR-1472**) mirrors this layout against the `GitProvider`
+seam.
+
+- **Asset of record:** [`github.mock.html`](./github.mock.html) — the source of
+  truth (built from the real design system; the `--el-*` + shape tokens are
+  copied verbatim from `packages/design-system/theme.css`). Its `.png` export
+  ([`github.png`](./github.png)) is the board/PR-visible face.
+- **Definition of done (three files):** `design-notes.md` + `github.mock.html` +
+  `github.png`. All three are committed.
+
+---
+
+## Placement — resolved from shipped reality, not assumed
+
+The GitHub integration lives under **Settings → Workspace → GitHub**
+(`app/(authed)/settings/workspace/github`, the shipped settings-area shell that
+already hosts **Jobs**). This is **derived, not a free choice** — so guard #4 of
+the design-against-shipped-reality rule ("surface an undecided architecture
+choice") does **not** fire:
+
+- The installation entity is `GithubInstallation { workspaceId, … }` (MOTIR-891)
+  and repo selection is workspace-wide → the surface is **workspace-scoped**.
+- The per-user identity binding (`GithubIdentity { userId }`, MOTIR-1498) is
+  **surfaced on this same workspace page**: the admin who connects binds their
+  own GitHub identity as step 1. It is not a separate personal-account surface —
+  connecting the workspace and binding the connecting user's identity are one
+  flow.
+
+A new `settings/workspace/github` route + a workspace-settings nav entry is what
+MOTIR-895 adds (mirroring the typed nav-registry pattern in
+`lib/settings/projectSettingsNav.ts` — a totality-guarded registry entry per
+settings page).
+
+### Access path (the door — drawn, not just named)
+
+- **Settings surfaces (Panels 1–2):** the settings rail shows a **GitHub** row
+  (github mark icon) **active** under the **Workspace** group, with the
+  breadcrumb `Settings › Workspace › GitHub`. The reader SEES the entry
+  affordance, not just a route named in prose.
+- **PR/CI surface (Panels 3–4a):** the **Development** section appears on the
+  work-item detail (peek) automatically once a branch/PR references the item's
+  `MOTIR-<n>` id — the door is the section itself materialising on the issue.
+
+---
+
+## The two grants — the verified GitHub-App model (the copy must get this right)
+
+Grounded in **MOTIR-1498** (Grant 1) + **MOTIR-891** (Grant 2) and GitHub's
+"Differences between GitHub Apps and OAuth apps". The two grants are
+**independent** — an identity with no installation is a valid state the UI shows
+(Panel 4's revoked case). Panel 1 makes identity-vs-repo-access legible as two
+distinct, eyebrow-labelled `grant-row`s:
+
+**Step 1 · Identity — "Verify your GitHub identity"**
+
+> Authorize Motir to confirm who you are on GitHub — your username and avatar.
+> This reads your public profile only. **It grants no access to any code.**
+
+**Step 2 · Repository access — "Install the Motir GitHub App"**
+
+> Choose which repositories Motir may read — you pick the exact repos on GitHub's
+> install screen. Motir never sees the rest, and you can change the selection any
+> time.
+
+Repo selection is **ultimately changed on GitHub** (the App install screen). The
+UI mirrors that honestly with a **"Manage on GitHub"** link-out (external-link
+icon) rather than faking in-app repo granting.
+
+---
+
+## Panels & primitives (every panel — the multi-panel rule, mistake #31)
+
+### Panel 1 — Settings → Workspace → GitHub, NOT connected
+
+- **Settings-area shell** (sidebar rail + content) — the shipped area layout.
+  Rail groups Account / Workspace / **GitHub (active)** / Project.
+- **`Card`** ("Connect GitHub") with `card-head` + `card-body` + `card-foot`.
+- Two **`grant-row`**s, each a `grant-ic` badge + `grant-eyebrow` + `<h4>` + copy.
+  Step-1 icon = badge-check (identity); Step-2 icon = repo (repository access).
+- **`Button` variant=primary** — "Connect GitHub" (github-mark left icon).
+- Helper line (card-foot): "You'll be sent to GitHub to authorize, then to pick
+  repositories."
+
+### Panel 2 — connected, the repo-selection list
+
+- **Identity `Card`:** GitHub-identity **avatar (real `avatar_url` image)** +
+  `@zhuyue` login + a **`Pill` (severity=success / mint)** "Verified" (badge-check
+  icon) + caption "GitHub identity · connected as Zhu Yue". A **`Button`
+  variant=danger-ghost size=sm** "Disconnect". Card-foot: "Motir App installed on
+  **moooon** · organization" + **`Button` secondary** "Manage on GitHub".
+- **Repositories `Card`:** `SectionLabel` "Repositories" + caption "Only the
+  repositories you selected on GitHub. Motir reads these — it can't see any
+  others." Each **`repo-row`**: repo icon + `owner/name` (owner muted) +
+  **`branch-chip`** (`main`, code-token styling) + a **sync-state `Pill`** + a
+  **`Switch`** (`role="switch"`) toggling active sync for that repo.
+  - Sync states shown: **Synced** (`Pill` mint, check icon), **Syncing…** (`Pill`
+    peach, dots icon), **Not synced** (`Pill` neutral). Switches: on / on / on /
+    off respectively.
+  - Card-foot: "To add or remove repositories, update the Motir App's access on
+    GitHub." + "Manage on GitHub".
+
+### Panel 3 — a work item's PR/CI status surface (issue-detail Development section)
+
+- Issue-detail **peek header** (`type-pill` Subtask + `peek-id` MOTIR-891) +
+  title.
+- **`SectionLabel`** "Development", then linked-PR **`pr-row`**s. Each row: a PR
+  glyph (open/merge/closed) + PR title + `pr-meta` (`owner/repo · #<number>`) +
+  a **PR-state `Pill`** + a **CI-state `Pill`** + an external-link affordance.
+  Three rows demonstrate every state pair:
+  - **#128** Open + Checks running → `pill-sky` + `pill-peach`
+  - **#131** Merged + Checks passing → `pill-mint` + `pill-mint`
+  - **#119** Closed + Checks failing → `pill-rose` + `pill-rose`
+- Caption: "Linked automatically when a branch or PR mentions `MOTIR-891`."
+
+### Panel 4 — empty + error states
+
+- **4a — no linked PR:** the Development section renders the shipped
+  **`EmptyState`** (`Card` root, centered) — git-pr icon, title **"No linked pull
+  request"**, description "Open a PR from a branch that mentions `MOTIR-892` and
+  it'll show up here with live PR and CI status." (quiet copy).
+- **4b — settings revoked error** (App uninstalled on GitHub out-of-band): a
+  **danger `callout`** (`callout-danger`, alert icon) —
+
+  > **The Motir GitHub App was uninstalled on GitHub.** Motir can no longer read
+  > your repositories or receive PR and CI updates. Your synced work items keep
+  > their last-known status. Reconnect to restore sync.
+
+  The card header carries a **`Pill` rose** "Disconnected". Because the grants are
+  independent, the **identity stays bound** — the still-verified `@zhuyue` row
+  shows with caption "Identity still connected · repository access revoked" — and
+  a **`Button` primary** "Reconnect GitHub" restores the installation.
+
+---
+
+## Pill PR/CI tone mapping (why — the no-new-primitive constraint)
+
+The shipped `Pill` has **no built-in open/merged/closed or passing/failing/running
+tone** (its axes are `status` / `severity` / `priority` / `memberRole` / `orgRole`
+/ `tone`). The AC forbids inventing a new design-system entry inside this Story,
+so PR/CI states **map onto existing semantic axes** — no new `--el-*` token, no
+new Pill variant:
+
+| Surface  | State       | Pill prop the code uses | Tint token        | Rationale                                                                                                                            |
+| -------- | ----------- | ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| PR state | **Open**    | `status="in-progress"`  | `--el-tint-sky`   | in-flight, matches Motir's own "In Progress" hue                                                                                     |
+| PR state | **Merged**  | `status="done"`         | `--el-tint-mint`  | terminal success, matches "Done" (GitHub's merged-purple has no palette token — using it would need an invented `--el-*`, forbidden) |
+| PR state | **Closed**  | `severity="danger"`     | `--el-tint-rose`  | closed unmerged = abandoned                                                                                                          |
+| CI state | **passing** | `severity="success"`    | `--el-tint-mint`  |                                                                                                                                      |
+| CI state | **failing** | `severity="danger"`     | `--el-tint-rose`  |                                                                                                                                      |
+| CI state | **running** | `severity="warning"`    | `--el-tint-peach` |                                                                                                                                      |
+
+A merged PR (mint) next to passing CI (mint) is intentionally both-green ("all
+good"); the two pills stay distinguishable by their leading glyph (git-merge vs
+check) and label. Every tint carries the hue in the **background** with
+`--el-text-strong` text (finding #35 / AA).
+
+> **Note for MOTIR-895:** render these with the shipped `<Pill>` primitive using
+> the props above — do **not** add a PR/CI-specific tone. If a genuinely distinct
+> PR-merged colour is later wanted, that is a NEW `design/` subtask that adds an
+> `--el-*` token + Pill variant, never an inline hue.
+
+---
+
+## Per-element `--el-*` colour roles
+
+| Element                                     | Token(s)                                                                                                                               |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Page / body                                 | `--el-page-bg` · `--el-page-text`                                                                                                      |
+| Settings sidebar                            | `--el-sidebar-bg` · `--el-sidebar-border` · active row `--el-sidebar-item-bg-active`                                                   |
+| Nav icons                                   | `--el-icon-muted` (idle) · `--el-icon-active` (active row)                                                                             |
+| Card surface / border                       | `--el-card` · `--el-border` · `--el-border-soft` (dividers)                                                                            |
+| Primary text / secondary / muted / subtitle | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-subtitle`                                                         |
+| Eyebrow / section labels                    | `--el-text-eyebrow`                                                                                                                    |
+| Identifier (MOTIR-891)                      | `--el-text-identifier`                                                                                                                 |
+| Primary button ("Connect / Reconnect")      | fill `--el-accent` · ink `--el-accent-text`                                                                                            |
+| Secondary button ("Manage on GitHub")       | text `--el-text` · border `--el-button-border`                                                                                         |
+| Disconnect (danger-ghost)                   | text `--el-danger` · border `--el-border`                                                                                              |
+| Grant-row icon badge                        | `--el-card-icon-bg` / `--el-card-icon-fg`                                                                                              |
+| PR-state / CI-state / sync-state pills      | tints `--el-tint-{sky,mint,rose,peach}` + `--el-text-strong`; neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` |
+| Switch (repo sync)                          | track on `--el-switch-on` · off `--el-muted` + `--el-border-strong` · knob `--el-switch-knob`                                          |
+| Branch chip (`main`)                        | `--el-code-bg` / `--el-code-text`                                                                                                      |
+| PR row surface                              | `--el-surface` + `--el-border`                                                                                                         |
+| Danger callout (revoked)                    | bg `--el-danger-surface` · text `--el-danger-surface-text` · left rule + icon `--el-danger`                                            |
+| "Verified" pill                             | `--el-tint-mint` + `--el-text-strong`                                                                                                  |
+| Type pill (Subtask)                         | `color-mix(--el-type-subtask 16%, --el-surface)` + dot `--el-type-subtask` + `--el-text-strong`                                        |
+| GitHub avatar fallback                      | `--el-avatar-fallback`                                                                                                                 |
+
+Shape flows only through element-semantic tokens: `--radius-card` (cards/panels),
+`--radius-control` (repo/PR rows, nav rows, icon badges), `--radius-badge`
+(pills), `--radius-btn` (buttons); padding via `--spacing-card-padding` /
+`--spacing-control-*` / `--spacing-chip-*`; heights via `--height-btn-*`. No
+Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*`, no invented hex — verified
+(the only `#…` values in the asset are the two non-semantic avatar-placeholder
+data-URIs and PR numbers). Dark-mode parity confirmed by toggling
+`data-theme="dark"`.
+
+---
+
+## Primitives composed — no hand-rolling (the 1.3.3 / 1.5.1 checklist)
+
+Every element below is a **shipped** design-system primitive; MOTIR-895 composes
+these, it does not build new ones:
+
+- ✅ **`Card`** (`@motir/design-system`) — connect card, identity card, repo card,
+  EmptyState root, PR-row containers.
+- ✅ **`Pill`** — PR state, CI state, repo sync state, "Verified", "Disconnected".
+  Mapped onto existing `status` / `severity` / `tone` axes (see table above).
+- ✅ **`Button`** — variants `primary` (Connect / Reconnect), `secondary` (Manage
+  on GitHub), `danger`/danger-ghost (Disconnect); sizes `md` / `sm`.
+- ✅ **`EmptyState`** — Panel 4a "No linked pull request".
+- ✅ **`Switch`** (`role="switch"`) — per-repo sync toggle.
+- ✅ **`SectionLabel`** — "Repositories", "Development".
+- ✅ **Avatar** — the GitHub identity uses the shipped **`<img object-cover>`**
+  pattern (`AvatarField`) bound to `GithubIdentity.avatarUrl`; the initials-disc
+  pattern (`MemberAvatar`) is the fallback. No new avatar component.
+- ✅ **Settings-area shell** — the shipped rail + content layout
+  (`settings/*/layout.tsx` + `SidebarNav`).
+
+**No new design-system entry is required.** If MOTIR-895 finds it needs one
+(e.g. a distinct merged-PR colour), that is a NEW `design/` subtask — not a code
+workaround.
