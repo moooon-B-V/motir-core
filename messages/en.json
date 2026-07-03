@@ -4291,7 +4291,8 @@
         "here": "You are here",
         "ready": "Ready",
         "notInSprint": "not in sprint",
-        "blockedElsewhere": "blocked elsewhere"
+        "blockedElsewhere": "blocked elsewhere",
+        "blockerNotInSprint": "blocker not in sprint"
       },
       "anchor": {
         "defaultTitle": "Blocked across stories",
@@ -4307,8 +4308,8 @@
         "pendingMeaning": "not done yet",
         "blockedElsewhere": "blocked elsewhere",
         "blockedElsewhereMeaning": "the blocker sits elsewhere in the plan",
-        "notInSprint": "not in sprint",
-        "notInSprintMeaning": "not done & outside the sprint"
+        "blockerNotInSprint": "blocker not in sprint",
+        "blockerNotInSprintMeaning": "not done & outside the sprint"
       },
       "origin": {
         "planning": "Planning",

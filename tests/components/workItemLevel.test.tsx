@@ -98,8 +98,10 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
 // tangle, flagged "blocked elsewhere" (MOTIR-1568 — the label is level-agnostic,
 // since one pill can't name a mix of story/epic/bug parents). In SPRINT scope it
 // becomes a sprint-validity signal: a DONE or IN-sprint blocker is satisfied (not
-// drawn), and only an out-of-sprint, NOT-done blocker is flagged — as "not in
-// sprint", not "blocked elsewhere".
+// drawn), and only an out-of-sprint, NOT-done blocker is flagged — as "blocker not
+// in sprint" (MOTIR-1582: the flag names the out-of-sprint BLOCKER, not the card,
+// which IS an in-sprint member — distinct from the neutral "not in sprint"
+// membership tag), not "blocked elsewhere".
 function levelWithOffBlocker(stub: {
   isDone?: boolean;
   inActiveSprint?: boolean;
@@ -123,7 +125,7 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
   });
 
-  it('SPRINT scope: an out-of-sprint, NOT-done blocker is flagged "not in sprint"', () => {
+  it('SPRINT scope: an out-of-sprint, NOT-done blocker is flagged "blocker not in sprint"', () => {
     const { nodes, deps } = buildWorkItemLevel(
       levelWithOffBlocker({ isDone: false, inActiveSprint: false }),
       { scope: 'sprint' },
@@ -135,7 +137,10 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(screen.getByText(/not in this sprint/)).toBeTruthy();
     cleanup();
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('not in sprint');
+    // MOTIR-1582: the red flag names the BLOCKER, not the card. The distinguishing
+    // "blocker" token must be present — the bare "not in sprint" membership string
+    // (the buggy reuse) would fail this.
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocker not in sprint');
   });
 
   it('SPRINT scope: a DONE off-level blocker is satisfied — no edge, no anchor, no flag', () => {
@@ -209,8 +214,39 @@ describe('buildWorkItemLevel — not-in-sprint node signal (MOTIR-1379)', () => 
       { scope: 'sprint' },
     );
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('not in sprint');
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocker not in sprint');
     expect(screen.queryByTestId(NOT_IN_SPRINT_TAG)).toBeNull();
+  });
+
+  // MOTIR-1582 (regression): the sprint-scope cross-blocked flag must name the
+  // BLOCKER, never restate the node's own membership. An in-sprint card blocked by
+  // an out-of-sprint dependency wears the red flag; its copy must be DISTINCT from
+  // the neutral "not in sprint" membership tag, so a reader can't misread the flag
+  // as "this card isn't in the sprint" (it is). Before the fix both resolved to the
+  // same `node.notInSprint` string ("not in sprint"); now the flag adds "blocker".
+  it('SPRINT scope: the cross-blocked flag copy names the blocker, distinct from the membership tag', () => {
+    const { nodes } = buildWorkItemLevel(
+      levelWithOffBlocker({ isDone: false, inActiveSprint: false }),
+      { scope: 'sprint' },
+    );
+
+    // The flag on the (in-sprint) blocked card: blocker-oriented copy.
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    const flagText = screen.getByTestId(A1_FLAG).textContent ?? '';
+    expect(flagText).toContain('blocker not in sprint');
+    cleanup();
+
+    // The neutral membership tag on a genuine non-member: still the bare node copy.
+    const { nodes: tagNodes } = buildWorkItemLevel(
+      level([item({ id: 'S1', kind: 'subtask', parentId: 'P1', inActiveSprint: false })]),
+      { scope: 'sprint' },
+    );
+    render(<>{tagNodes.find((n) => n.id === 'S1')!.content}</>);
+    const tagText = screen.getByTestId(NOT_IN_SPRINT_TAG).textContent ?? '';
+    expect(tagText).toBe('not in sprint');
+
+    // The two must NOT be the same string — that identity was the MOTIR-1582 bug.
+    expect(flagText.trim()).not.toBe(tagText.trim());
   });
 });
 

@@ -4287,7 +4287,8 @@
         "here": "当前位置",
         "ready": "就绪",
         "notInSprint": "不在冲刺中",
-        "blockedElsewhere": "受阻于别处"
+        "blockedElsewhere": "受阻于别处",
+        "blockerNotInSprint": "阻塞项不在冲刺中"
       },
       "anchor": {
         "defaultTitle": "被其他故事阻塞",
@@ -4303,8 +4304,8 @@
         "pendingMeaning": "阻塞项尚未完成",
         "blockedElsewhere": "受阻于别处",
         "blockedElsewhereMeaning": "阻塞项位于计划中的别处",
-        "notInSprint": "不在冲刺中",
-        "notInSprintMeaning": "未完成且在冲刺之外"
+        "blockerNotInSprint": "阻塞项不在冲刺中",
+        "blockerNotInSprintMeaning": "未完成且在冲刺之外"
       },
       "origin": {
         "planning": "规划",
