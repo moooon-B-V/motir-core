@@ -59,6 +59,18 @@ export interface PlanItemPatch {
   descriptionMd?: string | null;
   priority?: string | null;
   type?: string | null;
+  /**
+   * Leaf sizing re-scope (MOTIR-1532) — the agile point + time estimate a
+   * `modify` may change on the target, mirroring the `add` path's
+   * `PlanItemProposedFields` sizing. Validated at the proposal boundary the SAME
+   * way (`validateStoryPoints` / `validateEstimateMinutes`); applied by
+   * `applyModify` with a `work_item_revision` diff cell. Both optional (a modify
+   * that doesn't touch sizing carries neither); an explicit `null` CLEARS the
+   * estimate. The `modify_node` generation tool offers both, so without them a
+   * proposed re-scope would never apply on approve.
+   */
+  storyPoints?: number | null;
+  estimateMinutes?: number | null;
   blockedByAdd?: string[];
   blockedByRemove?: string[];
 }

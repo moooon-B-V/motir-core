@@ -104,6 +104,36 @@ describe('planReviewService.getPlanReview', () => {
     expect(review.decidedByName).toBeNull();
   });
 
+  it('surfaces a leaf-sizing re-scope in the change preview so the approver SEES it (MOTIR-1532)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Resized card');
+    await db.workItem.update({
+      where: { id: target.id },
+      data: { storyPoints: 3, estimateMinutes: 45 },
+    });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-scope plan' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { storyPoints: 8, estimateMinutes: 90 } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.changes.find((c) => c.field === 'storyPoints')).toEqual({
+      field: 'storyPoints',
+      from: '3',
+      to: '8',
+    });
+    expect(modify.changes.find((c) => c.field === 'estimateMinutes')).toEqual({
+      field: 'estimateMinutes',
+      from: '45',
+      to: '90',
+    });
+  });
+
   it('resolves the decider name + an approved history event after approve', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Tiny plan' }, fx.ctx);

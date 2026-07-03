@@ -34,7 +34,8 @@ import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sp
 //                = `resolve(blockedByRefs)`. It lands in the BACKLOG (no sprint),
 //                so it is NOT a sprint member unless a future field says so.
 //   • `modify` → only `patch.blockedByAdd` / `blockedByRemove` affect finishability
-//                (title/priority/type don't); applied to the target's edge set.
+//                (title/priority/type/storyPoints/estimateMinutes don't); applied
+//                to the target's edge set.
 //   • `remove` → the target node AND every edge touching it are dropped (a removed
 //                item neither gates nor is gated — single-node, like archive).
 //   • a temp-ref `planItem:<id>` resolves to that same-plan `add`; a real id to
