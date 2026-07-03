@@ -142,6 +142,93 @@ describe('consumed registries match the app-facing contract (no divergence after
     }
   });
 
+  // MOTIR-1564 — the canvas dependency edges ride the RECESSED --el-canvas, so
+  // their colour must clear WCAG 1.4.11 (≥3:1) against it in EVERY palette + theme.
+  // The original mapping (`--color-border` / `--color-hairline-strong` — hairline
+  // ON A CARD) sat at ~1.0-2.5:1 on the canvas and was near-invisible; this guard
+  // fails if an edge token regresses to such a low-contrast source colour.
+  describe('canvas dependency edges are legible on the canvas (MOTIR-1564)', () => {
+    const noComments = CONSUMED_THEME_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Flat token blocks: selector { --a: v; --b: v; }. Merge repeated selectors.
+    const blocks = new Map<string, Record<string, string>>();
+    for (const m of noComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const sel = (m[1] ?? '').trim().split('\n').pop()?.trim() ?? '';
+      const rec = blocks.get(sel) ?? {};
+      for (const decl of (m[2] ?? '').split(';')) {
+        const d = decl.match(/\s*(--[a-z0-9-]+)\s*:\s*([^;]+?)\s*$/i);
+        if (d && d[1] && d[2]) rec[d[1]] = d[2].trim();
+      }
+      blocks.set(sel, rec);
+    }
+    const BASE_LIGHT = '@theme';
+    const BASE_DARK = "[data-theme='dark']";
+    // Resolve a --color-* for a palette+theme: most-specific palette block first,
+    // then the theme base. (`--color-canvas` lives only in the base blocks.)
+    function resolveColor(colorVar: string, palette: string, theme: 'light' | 'dark'): string {
+      const chain =
+        palette === DEFAULT_PALETTE_ID
+          ? [theme === 'dark' ? BASE_DARK : BASE_LIGHT]
+          : [
+              theme === 'dark'
+                ? `[data-palette='${palette}'][data-theme='dark']`
+                : `[data-palette='${palette}']`,
+              theme === 'dark' ? BASE_DARK : BASE_LIGHT,
+            ];
+      for (const sel of chain) {
+        const v = blocks.get(sel)?.[colorVar];
+        if (v && v.startsWith('#')) return v;
+      }
+      throw new Error(`unresolved ${colorVar} for ${palette}/${theme}`);
+    }
+    function channel(h: string, i: number): number {
+      let s = h.replace('#', '');
+      if (s.length === 3)
+        s = s
+          .split('')
+          .map((c) => c + c)
+          .join('');
+      return parseInt(s.slice(i, i + 2), 16);
+    }
+    function lum(h: string): number {
+      const [r, g, b] = [0, 2, 4].map((i) => {
+        const x = channel(h, i) / 255;
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      }) as [number, number, number];
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    function contrast(a: string, b: string): number {
+      const L1 = lum(a);
+      const L2 = lum(b);
+      return (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+    }
+    // Each edge token → the --color-* it references (from the base --el-* layer).
+    function edgeSource(edgeToken: string): string {
+      const m = noComments.match(
+        new RegExp(`\\${edgeToken}\\s*:\\s*var\\((--color-[a-z0-9-]+)\\)`, 'i'),
+      );
+      if (!m || !m[1]) throw new Error(`no var() source for ${edgeToken}`);
+      return m[1];
+    }
+
+    it.each(['--el-canvas-edge-pending', '--el-canvas-edge-committed'])(
+      '%s clears 3:1 vs the canvas in every palette + theme',
+      (edgeToken) => {
+        const colorVar = edgeSource(edgeToken);
+        for (const palette of PALETTE_IDS) {
+          for (const theme of ['light', 'dark'] as const) {
+            const edge = resolveColor(colorVar, palette, theme);
+            const canvas = resolveColor('--color-canvas', DEFAULT_PALETTE_ID, theme);
+            const cr = contrast(edge, canvas);
+            expect(
+              cr,
+              `${edgeToken} (${colorVar}=${edge}) vs canvas ${canvas} in ${palette}/${theme} = ${cr.toFixed(2)}:1`,
+            ).toBeGreaterThanOrEqual(3);
+          }
+        }
+      },
+    );
+  });
+
   it('every non-default palette ships a `[data-palette]` override block in the consumed CSS', () => {
     // The registry id set and the CSS override blocks must agree — a palette in
     // the registry with no CSS block would render as the base palette (drift the

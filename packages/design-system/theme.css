@@ -2537,8 +2537,14 @@
   --el-diff-moved: var(--color-tint-sky);
   --el-chat-bubble-user: var(--color-primary-fill); /* text stays --el-accent-text */
   --el-chat-bubble-ai: var(--color-surface-soft); /* text stays --el-text */
-  --el-canvas-edge-pending: var(--color-border); /* dashed, not-yet-committed edge */
-  --el-canvas-edge-committed: var(--color-hairline-strong); /* solid, settled edge */
+  /* Canvas dependency edges ride the RECESSED --el-canvas, not a raised surface, so
+     they use INK tokens (--color-slate / -charcoal), NOT the hairline-on-a-card
+     --color-border / -hairline-strong which are near-invisible there (~1.0-1.9:1 vs
+     the canvas in every palette — MOTIR-1564). Ink clears WCAG 1.4.11 (≥3:1) on the
+     canvas across all palettes/themes while still re-tinting per palette; solid vs
+     dashed + the arrowhead marker carry the committed/pending distinction. */
+  --el-canvas-edge-pending: var(--color-slate); /* dashed, not-yet-committed edge (quiet ink) */
+  --el-canvas-edge-committed: var(--color-charcoal); /* solid, settled edge (emphasis ink) */
   --el-station-tier-discovery: var(--color-tint-sky);
   --el-station-tier-vision: var(--color-tint-lavender);
   --el-station-tier-feasibility: var(--color-tint-mint);
