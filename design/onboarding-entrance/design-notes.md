@@ -222,9 +222,10 @@ when the active project has an **in-progress (un-finished)** onboarding session.
 (the shipped `components/ui/Sidebar.tsx` primitive) pushed to the **top of the `hasProject` primary
 section** in `app/(authed)/_components/SidebarNav.tsx` — above Dashboard — because an interrupted
 onboarding is the project's highest-priority next action. A **⌘K twin** action mirrors it in
-`AppCommandPalette`. Activating either navigates to **`/onboarding`**, which already resumes to the real
-persisted step (MOTIR-1487's "Resuming…" machinery) — the door only supplies the route; it adds NO resume
-logic.
+`AppCommandPalette`. Activating either navigates to **`/onboarding/discovery`** (the resume surface),
+which already resumes to the real persisted step (MOTIR-1487's "Resuming…" machinery) — the door only
+supplies the route; it adds NO resume logic. It does NOT target `/onboarding` — that is the entrance FORK
+(idea box + import) and does no AI read, so it can't resume an in-progress session (bug MOTIR-1556).
 
 - **Label:** `Resume onboarding` (a new `shell.nav.resumeOnboarding` `en.json` key).
 - **Glyph:** lucide **`History`** — the SAME glyph the wz-bar's "Save & exit" uses (MOTIR-1488), so the
@@ -249,9 +250,14 @@ The row renders IFF the active project's onboarding is in progress:
 ```
 onboardingRanAt == null            (server, cheap — lib/dto/projects.ts; a set value = already materialised)
   AND
-GET /api/ai/pre-plan → session != null AND session.status !== 'tiers_complete'
+GET /api/ai/pre-plan → session != null
                                    (the live PreplanSession, read via aiPreplanService.getPreplanState)
 ```
+
+> **MOTIR-1556 correction:** the client signal is simply "a session exists" — do NOT also exclude
+> `status === 'tiers_complete'`. A tiers-complete session whose plan hasn't materialised
+> (`onboardingRanAt` still null) is still un-finished, resumable onboarding, and the door must show. The
+> server gate already excludes genuinely-finished onboarding, so no status check is needed.
 
 A never-started project (`session: null`) and a finished one (`onboardingRanAt` set → both onboarding
 pages already redirect to `/roadmap`) BOTH hide the row. There is **no combined server helper today**.
