@@ -229,6 +229,27 @@ export interface BillingSeatSyncData {
 }
 
 /**
+ * The `system.code-graph-index` event payload (Story 7.5 · MOTIR-1500) — one per
+ * NEWLY-ADDED GitHub repo, enqueued best-effort AFTER the installation's repos
+ * persist (`enqueueCodeGraphIndex`, from the webhook reconcile + the fresh-install
+ * bind paths). The consumer (codeGraphIndexService) fetches the repo's tarball
+ * with the installation token and hands the BYTES to motir-ai per project (the
+ * open-core producer half). `installationId` is GitHub's numeric installation id
+ * (the token-minting key); `workspaceId` is the installation's bound workspace —
+ * carried so the run is scoped on the job_run ledger (a real, valid FK), even
+ * though the job is `system.*`-namespaced and enqueued via `inngest.send`
+ * (NOT `sendEvent`), like every system job. The repo identity rides in the
+ * payload so the handler indexes exactly the added repo without re-diffing.
+ */
+export interface CodeGraphIndexData {
+  installationId: string;
+  workspaceId: string;
+  repoOwner: string;
+  repoName: string;
+  defaultBranch: string;
+}
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -246,6 +267,7 @@ export interface JobEventDataMap {
   'system.filter-subscription-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
+  'system.code-graph-index': CodeGraphIndexData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;

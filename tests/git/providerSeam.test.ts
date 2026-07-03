@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { generateKeyPairSync } from 'node:crypto';
 import {
   getGitProvider,
   registeredGitProviderIds,
   UnknownGitProviderError,
   type GitProviderId,
 } from '@/lib/git';
+import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 
 // The GitProvider seam (Story 7.10 · MOTIR-891) — the registry + the GitHub
 // implementation's pure normalizers. No DB; importing `@/lib/git` registers the
@@ -130,5 +132,78 @@ describe('github.parseCiStatusEvent', () => {
   it('returns null for an unrelated payload', () => {
     expect(github.parseCiStatusEvent({ repository: { id: 9 }, foo: 1 })).toBeNull();
     expect(github.parseCiStatusEvent({ sha: 'x', state: 'success' })).toBeNull(); // no repo id
+  });
+});
+
+describe('github.fetchRepoTarball (MOTIR-1500)', () => {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  });
+
+  beforeEach(() => {
+    _resetInstallationTokenCache();
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('mints the token, GETs /repos/{owner}/{name}/tarball/{ref} with the Bearer, and returns the bytes', async () => {
+    const tarballBytes = new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x42, 0x99]); // gzip magic + noise
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit): Promise<Response> => {
+      const u = String(url);
+      if (u.includes('/access_tokens')) {
+        return new Response(
+          JSON.stringify({
+            token: 'ghs_tarball',
+            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (u.includes('/tarball/')) {
+        return new Response(tarballBytes, { status: 200 });
+      }
+      throw new Error(`unexpected fetch to ${u}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const buf = await github.fetchRepoTarball('inst-1', 'moooon', 'acme', 'main');
+    expect(new Uint8Array(buf)).toEqual(tarballBytes);
+
+    // The tarball call hit the right URL with the minted installation token.
+    const tarballCall = fetchMock.mock.calls.find(([u]) => String(u).includes('/tarball/'));
+    expect(tarballCall).toBeTruthy();
+    const [tarballUrl, init] = tarballCall!;
+    expect(tarballUrl).toBe('https://api.github.com/repos/moooon/acme/tarball/main');
+    expect((init as RequestInit | undefined)?.headers).toMatchObject({
+      authorization: 'Bearer ghs_tarball',
+    });
+  });
+
+  it('throws on a non-OK tarball response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string): Promise<Response> => {
+        if (String(url).includes('/access_tokens')) {
+          return new Response(
+            JSON.stringify({
+              token: 'ghs_x',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response('nope', { status: 404 });
+      }),
+    );
+    await expect(github.fetchRepoTarball('inst-1', 'moooon', 'acme', 'main')).rejects.toThrow(
+      /tarball endpoint returned 404/,
+    );
   });
 });

@@ -24,6 +24,7 @@ import {
   automationRetentionSweep,
 } from './definitions/automationEngine';
 import { billingSeatSync } from './definitions/billingSeatSync';
+import { codeGraphIndex } from './definitions/codeGraphIndex';
 import { outwardBugTelemetryOnCreated } from './definitions/outwardBugTelemetry';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
@@ -49,5 +50,6 @@ export const jobFunctions = [
   automationEngineOnCommented,
   automationRetentionSweep,
   billingSeatSync,
+  codeGraphIndex,
   outwardBugTelemetryOnCreated,
 ];
