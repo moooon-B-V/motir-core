@@ -440,36 +440,6 @@ export function PlanningCanvas({
           })}
         </svg>
 
-        {/* "blocked elsewhere" flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
-            the edge <svg>, whose <path> count is asserted): a warning chip + flag
-            glyph + label at each cross edge's midpoint, so the tangle never rests
-            on edge colour alone. Decorative — the dependency facts live in the
-            node list. */}
-        <div
-          className="pointer-events-none absolute top-0 left-0"
-          style={worldTransform}
-          aria-hidden="true"
-          data-testid="canvas-cross-flags"
-        >
-          {edges.map((edge, i) => {
-            if (edge.variant !== 'cross') return null;
-            const route = routes[i];
-            if (!route) return null;
-            const m = route.mid;
-            return (
-              <span
-                key={`flag~${edge.from}~${edge.to}~${i}`}
-                className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)"
-                style={{ left: m.x, top: m.y }}
-                data-testid="cross-flag"
-              >
-                <Flag className="size-3.5" />
-                {t('node.blockedElsewhere')}
-              </span>
-            );
-          })}
-        </div>
-
         {/* nodes — caller content; the canvas owns the box + drag */}
         <div className="absolute top-0 left-0" style={worldTransform} data-testid="canvas-world">
           {nodes.map((n) => {
@@ -500,6 +470,39 @@ export function PlanningCanvas({
               >
                 {renderNode(n)}
               </div>
+            );
+          })}
+        </div>
+
+        {/* "blocked elsewhere" flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
+            the edge <svg>, whose <path> count is asserted): a warning chip + flag
+            glyph + label at each cross edge's midpoint, so the tangle never rests
+            on edge colour alone. Decorative — the dependency facts live in the
+            node list. Rendered AFTER the node layer (MOTIR-1583) so the chip paints
+            ABOVE the cards: both layers are position:absolute with no z-index, so a
+            chip sitting at an edge's midpoint over a card would otherwise be occluded.
+            The layer is pointer-events-none, so stacking it on top intercepts nothing. */}
+        <div
+          className="pointer-events-none absolute top-0 left-0"
+          style={worldTransform}
+          aria-hidden="true"
+          data-testid="canvas-cross-flags"
+        >
+          {edges.map((edge, i) => {
+            if (edge.variant !== 'cross') return null;
+            const route = routes[i];
+            if (!route) return null;
+            const m = route.mid;
+            return (
+              <span
+                key={`flag~${edge.from}~${edge.to}~${i}`}
+                className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-(--radius-badge) bg-(--el-warning-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap text-(--el-warning-text) shadow-(--shadow-subtle)"
+                style={{ left: m.x, top: m.y }}
+                data-testid="cross-flag"
+              >
+                <Flag className="size-3.5" />
+                {t('node.blockedElsewhere')}
+              </span>
             );
           })}
         </div>
