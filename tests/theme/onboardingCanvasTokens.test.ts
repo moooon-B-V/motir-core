@@ -51,9 +51,11 @@ describe('onboarding / canvas element tokens map to their Tier-0 --color-* base'
     // Discovery chat bubbles (DiscoveryChatRail)
     '--el-chat-bubble-user': '--color-primary-fill',
     '--el-chat-bubble-ai': '--color-surface-soft',
-    // Planning canvas edges (PlanningCanvas)
-    '--el-canvas-edge-pending': '--color-border',
-    '--el-canvas-edge-committed': '--color-hairline-strong',
+    // Planning canvas edges (PlanningCanvas) — INK, not the hairline-on-a-card
+    // border/-strong they first borrowed: those were near-invisible on the
+    // recessed --el-canvas (MOTIR-1564). Still --color-* so palettes re-skin them.
+    '--el-canvas-edge-pending': '--color-slate',
+    '--el-canvas-edge-committed': '--color-charcoal',
     // Station tier tile (StationNode) — its OWN family, not --el-roadmap-*
     '--el-station-tier-discovery': '--color-tint-sky',
     '--el-station-tier-vision': '--color-tint-lavender',
@@ -67,13 +69,16 @@ describe('onboarding / canvas element tokens map to their Tier-0 --color-* base'
     }
   });
 
-  it('preserves the exact shipped hues (zero visual change vs the borrowed tokens)', () => {
+  it('preserves the borrowed hues, EXCEPT the canvas edges which moved to ink for legibility (MOTIR-1564)', () => {
     // The chat bubbles kept --el-accent / --el-surface-soft's bases…
     expect(mappingOf('--el-chat-bubble-user')).toBe(mappingOf('--el-accent'));
     expect(mappingOf('--el-chat-bubble-ai')).toBe(mappingOf('--el-surface-soft'));
-    // …the edges kept --el-border / --el-border-strong's bases…
-    expect(mappingOf('--el-canvas-edge-pending')).toBe(mappingOf('--el-border'));
-    expect(mappingOf('--el-canvas-edge-committed')).toBe(mappingOf('--el-border-strong'));
+    // …but the canvas edges NO LONGER borrow --el-border / --el-border-strong:
+    // those hairline hues were near-invisible on the recessed --el-canvas, so the
+    // edges moved to ink (secondary / emphasis) to clear WCAG 3:1 (MOTIR-1564).
+    expect(mappingOf('--el-canvas-edge-pending')).not.toBe(mappingOf('--el-border'));
+    expect(mappingOf('--el-canvas-edge-pending')).toBe(mappingOf('--el-text-secondary'));
+    expect(mappingOf('--el-canvas-edge-committed')).toBe(mappingOf('--el-text-strong'));
     // …and every token maps through a --color-* (no Tier-0 leak / hex literal).
     for (const token of Object.keys(EXPECTED)) {
       expect(mappingOf(token), token).toMatch(/^--color-/);
