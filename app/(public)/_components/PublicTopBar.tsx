@@ -1,8 +1,7 @@
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { UserMenu } from '@/app/(authed)/_components/UserMenu';
+import { PublicAuthDialog } from '@/app/(public)/_components/PublicAuthDialog';
 import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBadge';
-import { buttonVariants } from '@/components/ui/Button';
 import { publicProjectPath } from '@/lib/publicProjects/urls';
 
 // The public top bar (Story 6.12 · Subtask 6.12.4 · design Panel 2 `.pub-topbar`).
@@ -11,10 +10,12 @@ import { publicProjectPath } from '@/lib/publicProjects/urls';
 // sees their account menu (design Panel 1b), a logged-out visitor sees the
 // Sign in / Start free CTAs. Server component; colour via --el-* tokens.
 //
-// The logged-out CTAs carry `?next=<this public page>` so authenticating returns
-// the visitor to the SAME public project page (Better-Auth honours `?next=` over
-// its /dashboard default) instead of dropping them on their own dashboard
-// (MOTIR-990 #3/#4).
+// The logged-out CTAs now open the in-place sign-in / sign-up MODAL
+// (`PublicAuthDialog`, MOTIR-1558) instead of navigating to /sign-in · /sign-up —
+// the visitor authenticates without leaving this public page. The modal's
+// email/Google callbackURL is THIS public path, so OAuth returns the visitor to
+// the same page (MOTIR-990 #2/#3/#4). A client child rendered by this server
+// component — fine (the CTAs + Radix dialog are the only client bit).
 //
 // Story 6.17.4 reframes the old "Public" globe Pill to the build-in-public
 // status badge (megaphone + "Building in public", design Panels 1–2) — the same
@@ -34,7 +35,6 @@ export async function PublicTopBar({
 }) {
   const t = await getTranslations('publicProjects');
   const initial = name.trim().charAt(0).toUpperCase() || 'P';
-  const next = encodeURIComponent(publicProjectPath(identifier));
   return (
     <div className="flex items-center justify-between gap-4 border-b border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-3">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -58,20 +58,7 @@ export async function PublicTopBar({
         {user ? (
           <UserMenu name={user.name} email={user.email} />
         ) : (
-          <>
-            <Link
-              href={`/sign-in?next=${next}`}
-              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-            >
-              {t('signIn')}
-            </Link>
-            <Link
-              href={`/sign-up?next=${next}`}
-              className={buttonVariants({ variant: 'primary', size: 'sm' })}
-            >
-              {t('startFree')}
-            </Link>
-          </>
+          <PublicAuthDialog callbackPath={publicProjectPath(identifier)} />
         )}
       </div>
     </div>
