@@ -1,0 +1,2363 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Coding convention + code-health audit (Story 7.14 · 7.14.1, gating 7.14.5)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the CODING-CONVENTION surface (Story 7.14 —
+      the coding-convention + code-health audit engine). No `design/coding-convention/`
+      asset existed; the 7.14.1 design gate produces this. It is the layout source
+      of truth for the UI code subtask 7.14.5 (MOTIR-926 — the review/approve UI +
+      API), which is `blocked_by` this card.
+
+      Built FROM the real design system: the token block below is copied from
+      packages/design-system/theme.css (the @theme Tier-0 --color-*/shape scale,
+      the Tier-3 --el-* element layer, the [data-theme='dark'] overrides), and the
+      markup mirrors the SHIPPED primitives — Card (--radius-card + --el-border +
+      --el-card + data-surface="card"), Pill (severity info|success|warning|danger
+      + status planned|done tones — hue in the TINT, --el-text-strong ink, AA-safe
+      per finding #35), Button (primary/secondary/ghost), EmptyState (Card + lucide
+      icon + serif title + --el-text-subtitle desc + action), Modal (Radix dialog:
+      --shadow-modal + --el-overlay-scrim scrim, alertdialog role for the confirm),
+      Textarea (--radius-input + --el-input-border, FormField label). Every panel is
+      a NEW ARRANGEMENT of these primitives — no new vocabulary invented.
+
+      Model (per the 7.14.2 decision / 7.14.3 store): the CodingConvention is the
+      standard for the NEW code Motir generates (injected into every prompt — the
+      productized CLAUDE.md); it is versioned + always EDITABLE (edit the standard →
+      new proposed version → approve). The CodeAudit measures EXISTING code against
+      that approved convention (+ a clean-code baseline where the convention is
+      silent) and reports what is not up to standard. The two are LINKED: approving /
+      updating the convention TRIGGERS a re-audit against the new standard. See
+      design-notes.md for the full spec, the per-element --el-* role map, the copy
+      strings, and the verified mirror (CodeScene CodeHealth™, CodeRabbit
+      code-guidelines, the ETH-Zurich auto-gen caveat that justifies the approve gate).
+
+      Covers (multi-panel board — review EACH panel, mistake #31):
+        (1) the code-health audit report — health SUMMARY (score/grade + category
+            breakdown, NOT a raw lint dump) + grouped findings list, virtualized.
+            MIGRATE-only (there is code to audit).
+        (2) the proposed-convention review — the contentMd as a sectioned document,
+            each rule badged Adopted vs Proposed, with BOTH status banners drawn
+            (PROPOSED — review & approve / STANDARD — injected into every prompt).
+        (3) edit + approve — the editable Markdown (Textarea) + "Approve as standard"
+            primary action + its confirmation dialog (the deliberate human gate).
+        (4) the FRESH (establish-only) + version states — the no-codebase EmptyState,
+            the stack-derived (all-Proposed) proposal, the version-history affordance,
+            and the "Re-run audit" action.
+        (5) the ACCESS PATH (the door) — the project sidebar rail with the "Code health"
+            entry drawn active + the fresh-project onboarding wizard step, so the reader
+            SEES the door, not just a named route.
+      Toggle dark mode (top-right) to confirm token parity in both themes.
+    -->
+    <style>
+      /* ══════════════════════════════════════════════════════════════════════
+         TOKENS — copied from packages/design-system/theme.css.
+         Tier-0 @theme (the --color-* + shape scale) + Tier-3 --el-* element layer
+         + the [data-theme='dark'] overrides. A mock.html can't @import the package CSS,
+         so the used subset is inlined 1:1 (the same convention as design/ready).
+         ══════════════════════════════════════════════════════════════════════ */
+      :root {
+        /* Tier 0 — colour (light base) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* Tier 0 — shape (warm-editorial base) */
+        --radius-sm: 6px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-btn-x: 18px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --transition-duration: 150ms;
+        --active-scale: 0.98;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-success-surface: var(--color-tint-mint);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-overlay-scrim: #00000066;
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-canvas: var(--color-canvas);
+      }
+
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-overlay-scrim: #000000a6;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         Mock chrome (NOT part of the design — just the review page scaffold,
+         mirroring design/ready/ready.mock.html).
+         ══════════════════════════════════════════════════════════════════════ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 720px;
+        line-height: 1.5;
+      }
+      .toggle {
+        flex: none;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1080px;
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         SHIPPED-PRIMITIVE mirrors — each class reproduces a components/ui/*
+         primitive's shipped classes/tokens (annotated). No new vocabulary.
+         ══════════════════════════════════════════════════════════════════════ */
+
+      /* Card — packages/design-system/src/components/ui/Card.tsx
+         (rounded --radius-card, border --el-border, p --spacing-card-padding,
+          untinted bg --el-card + data-surface="card"). */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card + .card {
+        margin-top: 12px;
+      }
+
+      /* Button — packages/design-system/src/components/ui/Button.tsx */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      /* Pill — packages/design-system/src/components/ui/Pill.tsx
+         All tones: hue in the TINT background, --el-text-strong ink (AA-safe,
+         finding #35). severity: info|success|warning|danger; status: planned|done. */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-danger {
+        background: var(--el-tint-rose);
+      } /* severity=danger  → Critical */
+      .pill-warning {
+        background: var(--el-tint-peach);
+      } /* severity=warning → High */
+      .pill-info {
+        background: var(--el-tint-sky);
+      } /* severity=info    → Medium */
+      .pill-neutral {
+        /* tone=neutral → Low */
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-adopted {
+        background: var(--el-tint-mint);
+      } /* severity=success → provenance: Adopted */
+      .pill-proposed {
+        background: var(--el-tint-lavender);
+      } /* status=planned  → provenance: Proposed */
+
+      /* neutral count chip (the Pill tone="neutral" count badge) */
+      .count-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-chip-border);
+        white-space: nowrap;
+      }
+
+      /* mono file / symbol reference (--el-text-identifier + --el-code-bg) */
+      .coderef {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-identifier);
+        background: var(--el-code-bg);
+        border-radius: var(--radius-control);
+        padding: 1px 6px;
+      }
+      /* convention-rule reference — the audit finding cites the convention section
+         it violates (lavender = the convention identity, matching the Proposed tone) */
+      .conv-ref {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-callout-text);
+        background: var(--el-callout-bg);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+      /* general clean-code finding (convention silent here) — a quiet neutral tag */
+      .base-ref {
+        display: inline-flex;
+        align-items: center;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        background: var(--el-chip-bg);
+        border: 1px solid var(--el-chip-border);
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+      }
+
+      /* section header inside a Card */
+      .card-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .card-head h2,
+      .card-head h3 {
+        font-family: var(--font-serif);
+        margin: 0;
+      }
+      .card-head h2 {
+        font-size: 20px;
+      }
+      .card-head h3 {
+        font-size: 16px;
+      }
+      .card-head .spacer {
+        flex: 1;
+      }
+      .subtle {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+      }
+
+      /* ── Panel 1 — health summary ──────────────────────────────────────── */
+      .health {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+      }
+      .grade {
+        flex: none;
+        width: 96px;
+        height: 96px;
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-success-surface);
+        color: var(--el-text-strong);
+      }
+      .grade .g-letter {
+        font-family: var(--font-serif);
+        font-size: 40px;
+        line-height: 1;
+      }
+      .grade .g-score {
+        font-size: 12px;
+        margin-top: 2px;
+        color: var(--el-text-secondary);
+      }
+      .health-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .cat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .cat {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-badge);
+        flex: none;
+      }
+      .dot-ok {
+        background: var(--el-success);
+      }
+      .dot-warn {
+        background: var(--el-warning);
+      }
+      .dot-bad {
+        background: var(--el-danger);
+      }
+
+      /* ── Panel 1 — findings list (virtualized) ─────────────────────────── */
+      .group-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 18px 0 8px;
+      }
+      .group-label .eyebrow {
+        color: var(--el-text-secondary);
+      }
+      .findings {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        /* the list VIRTUALIZES — this is the windowed slice (see the count note). */
+        max-height: 360px;
+        overflow: hidden;
+        position: relative;
+        padding-bottom: 6px;
+      }
+      .finding {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+      .finding .sev {
+        flex: none;
+        width: 78px;
+      }
+      .finding .f-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .finding .f-rule {
+        font-size: 14px;
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .finding .f-why {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 3px;
+        line-height: 1.45;
+      }
+      .finding .f-refs {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      /* the fade + count note that annotate the virtualized window */
+      .vfade {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 48px;
+        background: linear-gradient(to bottom, transparent, var(--el-card));
+        pointer-events: none;
+      }
+      .list-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-family: var(--font-mono);
+      }
+      /* review-only annotation (not shipped) — mirrors design/ready's .virt-note */
+      .virt-note {
+        margin-top: 10px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 8px 12px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        background: transparent;
+      }
+      .virt-note strong {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      .virt-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+
+      /* ── Panel 2/3 — the convention document ───────────────────────────── */
+      .banner {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+        margin-bottom: 14px;
+      }
+      .banner svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+      .banner .b-text {
+        flex: 1;
+      }
+      .banner .b-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .banner .b-sub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      .banner-proposed {
+        background: var(--el-warning-surface);
+      }
+      .banner-proposed svg {
+        color: var(--el-warning);
+      }
+      .banner-standard {
+        background: var(--el-success-surface);
+      }
+      .banner-standard svg {
+        color: var(--el-success);
+      }
+
+      .doc-section {
+        padding: 14px 0;
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .doc-section:first-of-type {
+        border-top: 0;
+      }
+      .doc-section h4 {
+        font-family: var(--font-serif);
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+      .rule {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 5px 0;
+      }
+      .rule .r-badge {
+        flex: none;
+        width: 84px;
+      }
+      .rule .r-text {
+        flex: 1;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .rule code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* ── Panel 3 — edit + approve ──────────────────────────────────────── */
+      .field-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .textarea {
+        /* Textarea — packages/design-system/src/components/ui/Textarea.tsx
+           (w-full, rounded --radius-input, border --el-input-border, bg --el-page-bg,
+            px/py --spacing-input-*). */
+        width: 100%;
+        min-height: 200px;
+        resize: vertical;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text);
+        white-space: pre-wrap;
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+      .approve-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .approve-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+        max-width: 460px;
+      }
+
+      /* Modal — packages/design-system/src/components/ui/Modal.tsx (Radix dialog).
+         Drawn OPEN over its scrim so the confirm gate is reviewable in the static
+         mock. role="alertdialog" (a destructive-style deliberate confirm). */
+      .modal-stage {
+        position: relative;
+        margin-top: 14px;
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        min-height: 260px;
+        border: 1px dashed var(--el-border-strong);
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+      }
+      .modal {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(28rem, 90%);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal h3 {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        margin: 0 0 8px;
+      }
+      .modal p {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-subtitle);
+        margin: 0 0 8px;
+      }
+      .modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      /* ── Panel 4 — EmptyState + version history ────────────────────────── */
+      /* EmptyState — packages/design-system/src/components/ui/EmptyState.tsx
+         (Card + lucide icon in --el-icon-muted + serif title + --el-text-subtitle
+          description + action). */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .empty .es-icon {
+        color: var(--el-icon-muted);
+        margin-bottom: 16px;
+      }
+      .empty .es-icon svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h2 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .empty p {
+        color: var(--el-text-subtitle);
+        font-size: 14px;
+        margin: 12px 0 0;
+        max-width: 44ch;
+        line-height: 1.5;
+      }
+      .empty .es-action {
+        margin-top: 16px;
+      }
+      .versions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .version {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        font-size: 13px;
+      }
+      .version.current {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+      }
+      .version .v-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        flex: none;
+        width: 44px;
+      }
+      .version .v-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .version .v-date {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      @media (max-width: 720px) {
+        .cols {
+          grid-template-columns: 1fr;
+        }
+      }
+      .access-note {
+        max-width: 1080px;
+        margin: 8px auto 0;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        font-style: italic;
+      }
+
+      /* ── Panel 5 — access path: the sidebar rail (mirrors components/ui/Sidebar.tsx
+         + app/(authed)/_components/SidebarNav.tsx) so the reader SEES the door ──── */
+      .access-row {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .rail {
+        width: 240px;
+        flex: none;
+        background: var(--el-sidebar-bg);
+        border: 1px solid var(--el-sidebar-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .rail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+      }
+      .rail-head .pj {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: var(--font-serif);
+      }
+      .rail-head .pj-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .rail-head .pj-sub {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .rail-sec {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail hr {
+        border: 0;
+        border-top: 1px solid var(--el-sidebar-border);
+        margin: 0;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+      .nav-item .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .nav-item .lbl {
+        flex: 1;
+        white-space: nowrap;
+      }
+      /* active row = canvas inset into the rail (--el-sidebar-item-bg-active) */
+      .nav-item.active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .nav-item.active .ic {
+        color: var(--el-accent-on-surface);
+      }
+      .nav-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 18px;
+        padding: 0 6px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font-sans);
+      }
+      .between-note {
+        flex: 1;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .between-note .pin {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: 1px 8px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .between-note code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      /* the fresh-project door — the onboarding wizard step strip */
+      .wizard {
+        margin-top: 14px;
+      }
+      .steps {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 12px;
+      }
+      .step {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 12px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+      }
+      .step.done {
+        color: var(--el-text-secondary);
+      }
+      .step.done .s-dot {
+        background: var(--el-success);
+      }
+      .step.current {
+        border-color: var(--el-accent-on-surface);
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        font-weight: 500;
+        box-shadow: var(--shadow-subtle);
+      }
+      .step.current .s-dot {
+        background: var(--el-accent-on-surface);
+      }
+      .s-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-border-strong);
+        flex: none;
+      }
+      .step-sep {
+        color: var(--el-text-faint);
+        font-size: 12px;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         APP SHELL — the real AppLayout: full-width TopNav (56px) above a
+         [240px rail | scrolling main] grid. So the mock shows the ACTUAL screen
+         (persistent nav + top bar + content), not floating cards.
+         ══════════════════════════════════════════════════════════════════════ */
+      .screen {
+        max-width: 1180px;
+        margin: 0 auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+      }
+      /* TopNav — mirrors app/(authed)/_components/TopNav.tsx */
+      .topbar {
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .tb-left,
+      .tb-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* ShellTierNav — Org › Workspace crumb */
+      .tb-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .tb-crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .tb-crumb .muted {
+        color: var(--el-text-secondary);
+      }
+      .tb-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: var(--height-control);
+        min-width: var(--height-control);
+        padding: 0 8px;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+        border: 1px solid transparent;
+      }
+      .tb-btn svg {
+        width: 17px;
+        height: 17px;
+      }
+      .tb-plan {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .tb-plan svg {
+        width: 15px;
+        height: 15px;
+      }
+      .tb-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      /* the [rail | main] grid */
+      .shell-body {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        min-height: 620px;
+      }
+      .shell-body .rail {
+        border: 0;
+        border-right: 1px solid var(--el-sidebar-border);
+        border-radius: 0;
+        height: auto;
+      }
+      .main {
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .content {
+        padding: 24px 28px 28px;
+      }
+      /* page header — mirrors the shipped serif h1 + subtitle header */
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .page-head .ph-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .page-head h1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .page-head h1 svg {
+        width: 22px;
+        height: 22px;
+        color: var(--el-text-secondary);
+      }
+      .page-head .ph-sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin: 3px 0 0;
+      }
+      /* Segmented tabs — mirrors components/ui/Segmented.tsx */
+      .tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+        margin-bottom: 18px;
+      }
+      .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-control);
+        padding: 0 14px;
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        border: 0;
+        background: transparent;
+      }
+      .tab svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-faint);
+      }
+      .tab.active {
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .tab.active svg {
+        color: var(--el-tabnav-active);
+      }
+      /* a compact "which screen / which tab" context strip for content-only panels */
+      .ctx {
+        max-width: 1080px;
+        margin: 0 auto 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .ctx .crumb {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+      }
+      .ctx .crumb .sep {
+        color: var(--el-text-faint);
+      }
+      .ctx .crumb .here {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Coding convention &amp; code health — review / approve surface</h1>
+        <p>
+          Story 7.14 · design 7.14.1 (gates the 7.14.5 UI). A project-scoped page reached from the
+          project sidebar entry <strong>“Code health”</strong> (existing project), or surfaced in
+          the onboarding wizard’s <em>Establish convention</em> step (fresh project). Two artifacts:
+          a <code>CodeAudit</code> (health + findings) and a <code>CodingConvention</code>
+          (proposed → standard). Toggle the theme to check token parity. →
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle light / dark
+      </button>
+    </div>
+    <p class="access-note">
+      Access path — <strong>DRAWN in Panel 5</strong> (the door, not just the route): the project
+      sidebar’s “Code health” entry → this page; and, for a fresh project, the onboarding wizard’s
+      <em>Establish convention</em> step. The review lives one click from the board, alongside the
+      connected-repo / code-graph surfaces (Journey A).
+    </p>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 1 — CODE-HEALTH AUDIT REPORT (migrate-only)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 1 · The Code health SCREEN — the real app shell (persistent left nav + top bar), Audit
+      tab active. This is what you see when you're on the page.
+    </div>
+    <div class="screen">
+      <!-- TopNav (full-width, 56px) — app/(authed)/_components/TopNav.tsx -->
+      <div class="topbar">
+        <div class="tb-left">
+          <!-- ShellTierNav — Org › Workspace -->
+          <span class="tb-crumb"
+            ><strong>Acme</strong> <span class="sep">›</span>
+            <span class="muted">Engineering</span></span
+          >
+        </div>
+        <div class="tb-right">
+          <span class="tb-plan">
+            <!-- lucide: sparkles -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+              />
+            </svg>
+            Plan with AI
+          </span>
+          <span class="tb-btn" title="Create">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14" />
+              <path d="M12 5v14" />
+            </svg>
+          </span>
+          <span class="tb-btn" title="Search (⌘K)">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </span>
+          <span class="tb-btn" title="Theme">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path
+                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+              />
+            </svg>
+          </span>
+          <span class="tb-btn" title="Notifications">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+              <path
+                d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+              />
+            </svg>
+          </span>
+          <span class="tb-avatar">YZ</span>
+        </div>
+      </div>
+
+      <div class="shell-body">
+        <!-- persistent project rail — SidebarNav (Code health active) -->
+        <nav class="rail" aria-label="Primary">
+          <div class="rail-head">
+            <span class="pj">A</span>
+            <div>
+              <div class="pj-name">acme/web</div>
+              <div class="pj-sub">Engineering workspace</div>
+            </div>
+          </div>
+          <div class="rail-sec">
+            <a class="nav-item" href="#">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="7" height="9" x="3" y="3" rx="1" />
+                <rect width="7" height="5" x="14" y="3" rx="1" />
+                <rect width="7" height="9" x="14" y="12" rx="1" />
+                <rect width="7" height="5" x="3" y="16" rx="1" />
+              </svg>
+              <span class="lbl">Dashboard</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="1" />
+              </svg>
+              <span class="lbl">Issues</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M9 3v18" />
+                <path d="M15 3v18" />
+              </svg>
+              <span class="lbl">Boards</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M3 3v18h18" />
+                <path d="M18 17V9" />
+                <path d="M13 17V5" />
+                <path d="M8 17v-3" />
+              </svg>
+              <span class="lbl">Reports</span>
+            </a>
+            <a class="nav-item active" href="#" aria-current="page">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+                />
+              </svg>
+              <span class="lbl">Code health</span>
+              <span class="nav-badge">B</span>
+            </a>
+          </div>
+          <hr />
+          <div class="rail-sec">
+            <a class="nav-item" href="#">
+              <svg
+                class="ic"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+                />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span class="lbl">Settings</span>
+            </a>
+          </div>
+        </nav>
+
+        <!-- the scrolling main content region -->
+        <div class="main">
+          <div class="content">
+            <div class="page-head">
+              <div class="ph-main">
+                <h1>
+                  <!-- lucide: activity -->
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+                    />
+                  </svg>
+                  Code health
+                </h1>
+                <p class="ph-sub">
+                  Your project's convention — the standard for new code — and how far existing code
+                  is from it.
+                </p>
+              </div>
+              <button class="btn btn-secondary btn-sm">
+                <!-- lucide: refresh-cw -->
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                  <path d="M3 21v-5h5" />
+                </svg>
+                Re-run audit
+              </button>
+            </div>
+
+            <!-- the two views of this page: Audit | Convention (Segmented) -->
+            <div class="tabs" role="group" aria-label="Code health view">
+              <button class="tab active" aria-pressed="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+                  />
+                </svg>
+                Audit
+              </button>
+              <button class="tab" aria-pressed="false">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                Convention
+              </button>
+            </div>
+
+            <div class="card">
+              <div class="card-head" style="margin-bottom: 10px">
+                <h3>Audit</h3>
+                <span class="count-pill">143 findings</span>
+              </div>
+              <p class="subtle" style="margin: 0 0 14px">
+                Audited <code class="coderef">acme/web@a1b9f30</code> against
+                <span class="conv-ref">§ Convention v2 · your standard</span> · code graph index v7
+                · 2 hours ago.
+              </p>
+              <div class="banner banner-standard" style="margin-bottom: 16px">
+                <!-- lucide: git-compare -->
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="5" cy="6" r="3" />
+                  <path d="M12 6h5a2 2 0 0 1 2 2v7" />
+                  <path d="m15 9-3-3 3-3" />
+                  <circle cx="19" cy="18" r="3" />
+                  <path d="M12 18H7a2 2 0 0 1-2-2V9" />
+                  <path d="m9 15 3 3-3 3" />
+                </svg>
+                <div class="b-text">
+                  <div class="b-title">
+                    Measured against your convention — the standard for NEW code
+                  </div>
+                  <div class="b-sub">
+                    Code health scores how far your EXISTING code is from the convention Motir
+                    injects into every prompt. Update the convention (Panel 3) and this re-audits
+                    automatically against the new standard.
+                  </div>
+                </div>
+              </div>
+              <div class="health">
+                <div class="grade" aria-label="Convention conformance grade B, 78 percent">
+                  <span class="g-letter">B</span>
+                  <span class="g-score">78% conform</span>
+                </div>
+                <div class="health-body">
+                  <div style="font-size: 15px; color: var(--el-text); font-weight: 500">
+                    78% of your code already meets your convention — 12 files fall below the
+                    standard.
+                  </div>
+                  <p class="subtle" style="margin: 6px 0 0">
+                    A CodeScene-CodeHealth-style conformance score across six categories — not a raw
+                    lint dump. Each category is graded against the matching convention section;
+                    where the convention is silent, it falls back to clean-code defaults (tagged
+                    <span class="base-ref">Clean-code baseline</span> below).
+                  </p>
+                  <div class="cat-grid">
+                    <span class="cat"><span class="dot dot-ok"></span> Layering · conforms</span>
+                    <span class="cat"><span class="dot dot-ok"></span> Naming · conforms</span>
+                    <span class="cat"
+                      ><span class="dot dot-warn"></span> Complexity · 12 off-standard</span
+                    >
+                    <span class="cat"
+                      ><span class="dot dot-warn"></span> Duplication · 6 clusters</span
+                    >
+                    <span class="cat"
+                      ><span class="dot dot-bad"></span> Testing · below standard</span
+                    >
+                    <span class="cat"
+                      ><span class="dot dot-ok"></span> Error handling · conforms</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="group-label">
+                <span class="eyebrow"
+                  >Not up to your convention · grouped by category, worst first · each finding cites
+                  the convention rule it breaks, or the clean-code baseline where the convention is
+                  silent</span
+                >
+              </div>
+              <div class="findings">
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-danger">Critical</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">God module — 41 responsibilities in one file</div>
+                    <div class="f-why">
+                      A single module this central makes every change risky and blocks parallel
+                      work. Split by responsibility.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/services/orderService.ts</span>
+                      <span class="coderef">OrderService</span>
+                      <span class="base-ref">Clean-code baseline</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-danger">Critical</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">
+                      Layering violation — repository imports a route handler
+                    </div>
+                    <div class="f-why">
+                      The data layer reaching up into HTTP inverts the dependency and defeats
+                      testability.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/repositories/userRepo.ts</span>
+                      <span class="coderef">→ app/api/auth/route.ts</span>
+                      <span class="conv-ref"
+                        >§ Convention · Layering — “a repository must never import a route”</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-warning">High</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">High cyclomatic complexity (24) in one function</div>
+                    <div class="f-why">
+                      Deeply branching logic is where bugs hide and reviewers stall. Extract the
+                      branches.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/lib/pricing.ts</span>
+                      <span class="coderef">computeDiscount()</span>
+                      <span class="base-ref">Clean-code baseline</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-warning">High</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">Duplicated block across 6 files</div>
+                    <div class="f-why">
+                      The same validation copy-pasted six times drifts out of sync silently.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/lib/validate/*.ts</span>
+                      <span class="base-ref">Clean-code baseline</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-info">Medium</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">Public function with no test reference in the graph</div>
+                    <div class="f-why">
+                      No test edge points at this exported symbol — a coverage gap on a public API.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/lib/invoice.ts</span>
+                      <span class="coderef">renderInvoice()</span>
+                      <span class="conv-ref"
+                        >§ Convention · Testing — “every exported method ships a test”</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-info">Medium</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">
+                      Inconsistent naming — mixed camelCase / snake_case in one module
+                    </div>
+                    <div class="f-why">
+                      Mixed casing in a single file adds friction with no benefit; pick one.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/lib/report_builder.ts</span>
+                      <span class="conv-ref"
+                        >§ Convention · Naming — “camelCase for functions &amp; variables”</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-neutral">Low</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">TODO comment older than 180 days</div>
+                    <div class="f-why">
+                      Stale TODOs read as noise; convert to a tracked item or delete.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/lib/legacy/import.ts:88</span>
+                      <span class="base-ref">Clean-code baseline</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="finding">
+                  <div class="sev"><span class="pill pill-neutral">Low</span></div>
+                  <div class="f-body">
+                    <div class="f-rule">Barrel re-export with no consumers in the graph</div>
+                    <div class="f-why">
+                      A dead index adds an import hop the graph shows nobody uses.
+                    </div>
+                    <div class="f-refs">
+                      <span class="coderef">src/lib/index.ts</span>
+                      <span class="base-ref">Clean-code baseline</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="vfade"></div>
+              </div>
+              <div class="list-foot">
+                <span>Showing 8 of 143 · scroll ↓ · filter by category / severity</span>
+              </div>
+              <div class="virt-note">
+                <strong>Review-only annotation (not shipped):</strong> the findings list virtualizes
+                via the 2.5.15 <code>useRowWindow</code> primitive — only viewport rows render, the
+                DOM stays bounded — and pages more findings in by cursor as it scrolls (the
+                <code>codeAuditRepository</code>
+                findings read is cursor-paginated, 7.14.3). Grouped worst-first by category, the
+                CodeScene- CodeHealth mechanism — never an unbounded flat lint dump (scale rule,
+                notes.html #58).
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="access-note">
+      <strong>Reading this screen:</strong> the LEFT NAV is the app shell — it is ALWAYS there;
+      click any entry (Boards, Issues, Reports…) to leave Code health. You know you're here from
+      three cues: the active <strong>Code health</strong> row, the page <strong>title</strong>, and
+      the <strong>Acme › Engineering</strong> crumb up top. The
+      <strong>Audit / Convention</strong> tabs switch the two views of this page. There is no
+      separate “Back” button — Code health is a top-level project page, so the persistent nav IS how
+      you move. (Panels 2–4 below zoom into the main content region in each state.)
+    </p>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 2 — CONVENTION TAB (content region of the screen above)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 2 · Content region · the CONVENTION tab — the standard document + Edit / Approve (both
+      PROPOSED and STANDARD states)
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </svg>
+        Code health <span class="sep">›</span> <span class="here">Convention tab</span>
+      </span>
+      <span>— the main content region of the screen above, Convention tab selected.</span>
+    </div>
+    <div class="panel">
+      <!-- State A: PROPOSED -->
+      <div class="card">
+        <div class="card-head">
+          <h3>Coding convention</h3>
+          <span class="count-pill">v3 · proposed</span>
+          <div class="spacer"></div>
+          <!-- the DOOR into editing — starts edit mode (Panel 3) on the current document -->
+          <button class="btn btn-secondary btn-sm">
+            <!-- lucide: pencil -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+              />
+              <path d="m15 5 4 4" />
+            </svg>
+            Edit
+          </button>
+          <button class="btn btn-primary btn-sm">
+            <!-- lucide: check -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            Approve as standard
+          </button>
+        </div>
+        <div class="banner banner-proposed">
+          <!-- lucide: alert-triangle -->
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+          </svg>
+          <div class="b-text">
+            <div class="b-title">PROPOSED — review &amp; approve</div>
+            <div class="b-sub">
+              This draft is NOT yet used. Nothing is injected into prompts until you approve it as
+              the standard. Tweak it first with <strong>Edit</strong> ↑.
+            </div>
+          </div>
+        </div>
+
+        <div class="doc-section">
+          <h4>Layering</h4>
+          <div class="rule">
+            <span class="r-badge"><span class="pill pill-adopted">Adopted</span></span>
+            <span class="r-text"
+              >Keep the <code>Route → Service → Repository → ORM</code> flow one-directional. Your
+              graph already follows this in 94% of modules — we documented it.</span
+            >
+          </div>
+          <div class="rule">
+            <span class="r-badge"><span class="pill pill-proposed">Proposed</span></span>
+            <span class="r-text"
+              >A repository must never import from <code>app/</code> or a route. (Your code was
+              inconsistent here — 2 violations in the audit; this is the clean-code default.)</span
+            >
+          </div>
+        </div>
+
+        <div class="doc-section">
+          <h4>Naming</h4>
+          <div class="rule">
+            <span class="r-badge"><span class="pill pill-adopted">Adopted</span></span>
+            <span class="r-text"
+              >Services end in <code>Service</code>, repositories in <code>Repo</code>, React
+              components in <code>PascalCase</code> — the dominant pattern in your graph.</span
+            >
+          </div>
+          <div class="rule">
+            <span class="r-badge"><span class="pill pill-proposed">Proposed</span></span>
+            <span class="r-text"
+              >Use <code>camelCase</code> for functions and variables throughout (your code mixes
+              casing in a few modules).</span
+            >
+          </div>
+        </div>
+
+        <div class="doc-section">
+          <h4>Testing</h4>
+          <div class="rule">
+            <span class="r-badge"><span class="pill pill-proposed">Proposed</span></span>
+            <span class="r-text"
+              >Every exported service method ships with a Vitest unit test against a real Postgres —
+              no mocks. (No consistent test posture was detectable in the graph.)</span
+            >
+          </div>
+        </div>
+
+        <div class="doc-section">
+          <h4>Error handling</h4>
+          <div class="rule">
+            <span class="r-badge"><span class="pill pill-adopted">Adopted</span></span>
+            <span class="r-text"
+              >Throw typed domain errors from the service layer; map to HTTP at the route boundary —
+              your dominant pattern.</span
+            >
+          </div>
+        </div>
+
+        <div class="legend">
+          <span
+            ><span class="pill pill-adopted">Adopted</span> your code already does this — we
+            documented it</span
+          >
+          <span
+            ><span class="pill pill-proposed">Proposed</span> your code was silent / inconsistent —
+            a clean-code default to review</span
+          >
+        </div>
+      </div>
+
+      <!-- State B: STANDARD (post-approval) -->
+      <div class="card">
+        <div class="banner banner-standard">
+          <!-- lucide: shield-check -->
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1 1 0 0 1 1.3 0C15.5 3.8 18 5 20 5a1 1 0 0 1 1 1Z"
+            />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+          <div class="b-text">
+            <div class="b-title">STANDARD — injected into every prompt for NEW code</div>
+            <div class="b-sub">
+              The active standard governs the code Motir GENERATES: it’s folded into every
+              dispatched coding-agent prompt (the productized CLAUDE.md). It is not a linter for
+              existing code — the audit above measures how far existing code is FROM this standard.
+            </div>
+          </div>
+          <span class="count-pill">v2 · standard · approved by Yue</span>
+        </div>
+        <div class="approve-row" style="margin: 4px 0 0">
+          <button class="btn btn-secondary btn-sm">
+            <!-- lucide: pencil -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+              />
+              <path d="m15 5 4 4" />
+            </svg>
+            Edit standard
+          </button>
+          <div class="approve-note">
+            The standard stays editable — <strong>edit it anytime</strong> (Panel 3) to produce the
+            next version. Approving the new version supersedes this one (kept in history) AND
+            re-audits your existing code against it.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 3 — EDIT + APPROVE (the deliberate human gate)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 3 · Content region · EDIT MODE — reached by clicking “Edit” on the Convention tab; the
+      document body becomes editable Markdown + the “Approve as standard” gate
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </svg>
+        Code health <span class="sep">›</span> Convention tab <span class="sep">›</span>
+        <span class="here">Edit</span>
+      </span>
+      <span>— still the same screen; Cancel returns to the Convention tab.</span>
+    </div>
+    <div class="panel">
+      <div class="card">
+        <div class="card-head">
+          <h3>Edit convention</h3>
+          <span class="count-pill">editing v2 (standard) → v3 · proposed</span>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost btn-sm">Cancel</button>
+        </div>
+        <p class="subtle" style="margin: 2px 0 14px">
+          You reached this by clicking <strong>Edit</strong> on the convention — the read-only
+          document (Panel 2) swaps to this editable Markdown in place. The convention is
+          <strong>always editable</strong>: editing the current standard (or an AI-proposed draft)
+          produces the next version to approve; trim, reword, or delete any rule. (The ETH-Zurich
+          finding: blindly auto-generated house-rules files <em>reduce</em> agent success — so Motir
+          drafts, but a human curates and approves.)
+        </p>
+        <label class="field-label" for="conv-md">Convention (Markdown)</label>
+        <textarea id="conv-md" class="textarea" spellcheck="false" aria-label="Convention Markdown">
+## Layering
+- Keep Route → Service → Repository → ORM one-directional.  [adopted]
+- A repository must never import from app/ or a route.       [proposed]
+
+## Naming
+- Services end in `Service`, repositories in `Repo`, components PascalCase.  [adopted]
+- Use camelCase for functions and variables.                                [proposed]
+
+## Testing
+- Every exported service method ships a Vitest unit test on real Postgres — no mocks.  [proposed]
+
+## Error handling
+- Throw typed domain errors from the service; map to HTTP at the route boundary.  [adopted]</textarea
+        >
+        <div class="helper">
+          Markdown · rendered as the review document in Panel 2. Provenance tags
+          <code class="coderef">[adopted]</code> / <code class="coderef">[proposed]</code> drive the
+          badges.
+        </div>
+
+        <div class="approve-row">
+          <button class="btn btn-primary">
+            <!-- lucide: check -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            Approve as standard
+          </button>
+          <button class="btn btn-ghost">Save draft</button>
+          <div class="approve-note">
+            Approving makes this the standard <strong>injected into every prompt</strong> for NEW
+            code, supersedes v2 (kept in history), <strong>and re-audits</strong> your existing code
+            against it.
+          </div>
+        </div>
+      </div>
+
+      <div class="eyebrow" style="margin: 18px 0 0">
+        Confirmation (Modal · role=alertdialog) — the deliberate human gate
+      </div>
+      <div class="modal-stage" aria-hidden="false">
+        <div class="scrim"></div>
+        <div class="modal" role="alertdialog" aria-labelledby="cf-title" aria-describedby="cf-desc">
+          <h3 id="cf-title">Approve as the coding standard?</h3>
+          <p id="cf-desc">
+            <strong>v3</strong> becomes the active standard, injected into every coding-agent prompt
+            for the NEW code Motir generates.
+          </p>
+          <p>
+            Motir will also <strong>re-audit your existing code</strong> against v3 and refresh the
+            health report. The current standard <strong>v2</strong> is retained in history — you can
+            restore it anytime.
+          </p>
+          <div class="modal-foot">
+            <button class="btn btn-ghost btn-sm">Cancel</button>
+            <button class="btn btn-primary btn-sm">Approve &amp; re-audit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 4 — FRESH (establish-only) + version / empty states
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4 · Content region · FRESH project (establish-only) empty audit + stack-derived proposal
+      + version history
+    </div>
+    <div class="ctx">
+      <span class="crumb">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </svg>
+        Code health <span class="sep">›</span> <span class="here">Audit / Convention (fresh)</span>
+      </span>
+      <span
+        >— same screen for a start-fresh project; also reachable in the onboarding wizard
+        (below).</span
+      >
+    </div>
+    <div class="panel">
+      <div class="cols">
+        <!-- Fresh: no audit (EmptyState) -->
+        <div class="card empty">
+          <div class="es-icon">
+            <!-- lucide: file-search (no codebase to analyze) -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6" />
+              <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+              <circle cx="11.5" cy="14.5" r="2.5" />
+              <path d="M13.3 16.3 15 18" />
+            </svg>
+          </div>
+          <h2>No codebase to analyze yet</h2>
+          <p>
+            Your convention is established from your chosen stack — the code-health audit runs
+            later, once there’s code to read.
+          </p>
+          <div class="es-action">
+            <button class="btn btn-secondary btn-sm">View chosen stack</button>
+          </div>
+        </div>
+
+        <!-- Fresh: the stack-derived proposal (all Proposed, no Adopted) -->
+        <div class="card">
+          <div class="banner banner-proposed" style="margin-bottom: 12px">
+            <!-- lucide: sparkles -->
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"
+              />
+            </svg>
+            <div class="b-text">
+              <div class="b-title">PROPOSED — established from your stack</div>
+              <div class="b-sub">
+                Next.js + Prisma + Postgres defaults. No audit — nothing to adopt yet, so every rule
+                is a clean-code default.
+              </div>
+            </div>
+          </div>
+          <div class="doc-section" style="padding-top: 4px">
+            <h4>Layering</h4>
+            <div class="rule">
+              <span class="r-badge"><span class="pill pill-proposed">Proposed</span></span>
+              <span class="r-text"
+                >Route → Service → Repository → Prisma, one-directional (the starter’s
+                convention).</span
+              >
+            </div>
+          </div>
+          <div class="doc-section">
+            <h4>Testing</h4>
+            <div class="rule">
+              <span class="r-badge"><span class="pill pill-proposed">Proposed</span></span>
+              <span class="r-text">Vitest against a real Postgres; no mocks.</span>
+            </div>
+          </div>
+          <p class="subtle" style="margin: 6px 0 0">
+            Same proposed → approve → standard gate (Panel 3). Only the audit differs (there is
+            none).
+          </p>
+        </div>
+      </div>
+
+      <!-- Version history + re-run affordance -->
+      <div class="card">
+        <div class="card-head">
+          <h3>Version history</h3>
+          <div class="spacer"></div>
+          <button class="btn btn-secondary btn-sm">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              <path d="M3 21v-5h5" />
+            </svg>
+            Re-run audit
+          </button>
+        </div>
+        <p class="subtle" style="margin: 2px 0 4px">
+          An audit runs on three triggers: <strong>code changes</strong> (on demand or a repo
+          webhook — proposes a new convention version if the code drifts), and
+          <strong>convention changes</strong> (approving an edited convention re-audits existing
+          code against the new standard). The approved standard is retained and never silently
+          overwritten — a new version must be re-approved to supersede.
+        </p>
+        <div class="versions">
+          <div class="version">
+            <span class="v-id">v3</span>
+            <div class="v-main">
+              Latest re-audit · <span class="pill pill-proposed">Proposed</span>
+            </div>
+            <span class="v-date">just now</span>
+            <button class="btn btn-ghost btn-sm">Review</button>
+          </div>
+          <div class="version current">
+            <span class="v-id">v2</span>
+            <div class="v-main">
+              Active standard · <span class="pill pill-adopted">Standard</span> · approved by Yue
+            </div>
+            <span class="v-date">4 days ago</span>
+            <button class="btn btn-ghost btn-sm">View</button>
+          </div>
+          <div class="version">
+            <span class="v-id">v1</span>
+            <div class="v-main">First standard <span class="count-pill">superseded</span></div>
+            <span class="v-date">3 weeks ago</span>
+            <button class="btn btn-ghost btn-sm">Restore</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 5 — THE FRESH-PROJECT DOOR (onboarding); the steady-state door is
+         the persistent sidebar shown in Panel 1's shell
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 5 · The FRESH-project door — the onboarding wizard step (the steady-state door is the
+      persistent “Code health” sidebar entry, drawn in Panel 1's shell)
+    </div>
+    <div class="panel">
+      <p class="subtle" style="margin: 0 0 12px">
+        Two ways in. <strong>Steady-state / migrate:</strong> the persistent
+        <strong>Code health</strong> sidebar entry (see Panel 1 — inserted after Reports in
+        <code class="coderef">SidebarNav.tsx</code>, glyph lucide
+        <code class="coderef">activity</code>, href <code class="coderef">/code-health</code>, badge
+        = the grade; also in the mobile <code class="coderef">SidebarDrawer</code>).
+        <strong>Fresh project:</strong> the surface opens IN the onboarding wizard as the
+        <strong>Establish convention</strong> step, before the project has its own board:
+      </p>
+      <div class="card wizard">
+        <div class="eyebrow" style="margin-bottom: 8px">Fresh project · onboarding wizard</div>
+        <div class="steps">
+          <span class="step done"><span class="s-dot"></span> Discovery</span>
+          <span class="step-sep">→</span>
+          <span class="step done"><span class="s-dot"></span> Design system</span>
+          <span class="step-sep">→</span>
+          <span class="step current"><span class="s-dot"></span> Establish convention</span>
+          <span class="step-sep">→</span>
+          <span class="step"><span class="s-dot"></span> Review plan</span>
+        </div>
+        <p class="subtle" style="margin: 0">
+          For a start-fresh project the surface opens IN the wizard as the
+          <strong>Establish convention</strong> step — the same proposed → approve → standard gate
+          (Panels 2–3), fed by the stack-derived proposal (Panel 4), with no audit. After onboarding
+          it stays reachable at the “Code health” sidebar entry above.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
