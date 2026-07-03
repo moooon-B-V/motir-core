@@ -14,6 +14,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { githubInstallationService } from './githubInstallationService';
+import { enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -320,6 +321,14 @@ async function reconcileInstallation(
   );
   if (!existing) return false;
 
+  // The repos already persisted BEFORE this reconcile — the baseline we diff the
+  // authoritative set against, so we index only NEWLY-added repos (a re-selection
+  // that drops/keeps repos never re-indexes an unchanged one).
+  const existingRepoIds = await withSystemContext(async (tx) => {
+    const rows = await githubRepoRepository.listByInstallation(existing.id, tx);
+    return rows.map((r) => r.repoId);
+  });
+
   const account = asRecord(asRecord(body['installation'])?.['account']);
   const repos = await getGitProvider(existing.provider as GitProviderId).fetchInstallationRepos(
     installationId,
@@ -333,6 +342,15 @@ async function reconcileInstallation(
       accountType: typeof account?.['type'] === 'string' ? account['type'] : existing.accountType,
     },
     repos,
+  });
+
+  // POST-COMMIT, best-effort: kick off a code-graph index for each newly-added
+  // repo (MOTIR-1500). Never blocks or fails the grant mirror.
+  await enqueueNewlyAddedRepos({
+    installationId,
+    workspaceId: existing.workspaceId,
+    repos,
+    existingRepoIds,
   });
   return true;
 }

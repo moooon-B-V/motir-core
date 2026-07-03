@@ -38,6 +38,21 @@ export interface GitProvider {
   fetchInstallationRepos(installationId: string): Promise<NormalizedRepo[]>;
 
   /**
+   * Fetch a repository's source as the host's raw gzipped-tarball bytes, at the
+   * given `ref` (a branch / tag / commit — the repo's default branch for the
+   * MOTIR-1500 code-graph index). Uses a freshly-minted (or cached) installation
+   * token; the credential + fetch stay in motir-core (the open-core invariant —
+   * the raw BYTES cross the motir-ai boundary, never a host token). GitHub returns
+   * exactly what its `/tarball` endpoint yields.
+   */
+  fetchRepoTarball(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<ArrayBuffer>;
+
+  /**
    * Fetch an installation's account (login + type) from the host, given only the
    * installation id — used to bind a fresh install to a workspace (MOTIR-1588),
    * where the post-install redirect carries only the id (no webhook payload).
