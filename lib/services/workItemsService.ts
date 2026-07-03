@@ -2109,6 +2109,15 @@ export const workItemsService = {
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
     ]);
     const doneKeys = roadmapDoneStatusKeys(statuses);
+    // TERMINAL keys = the whole `done` CATEGORY, INCLUDING `cancelled` — the
+    // dependency-satisfaction rule (distinct from `doneKeys`, which is the
+    // progress-meter "completed" set that deliberately drops `cancelled`). A
+    // `blocked_by` blocker in ANY terminal status can never gate, so the roadmap's
+    // off-level blocker signal must treat `cancelled` as satisfied — matching
+    // `validate_sprint` (`sprintsService` uses the done-category `terminalByProject`).
+    // Using `doneKeys` here wrongly flagged a `cancelled` blocker "not in sprint"
+    // (MOTIR-1561). Progress meters + per-node done styling keep `doneKeys`.
+    const terminalKeys = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
 
     // Per-container PROGRESS meters (Subtask 7.20.6 / MOTIR-1013): one recursive
     // count over THIS level's CONTAINER nodes (leaves have no subtree, so they're
@@ -2178,7 +2187,9 @@ export const workItemsService = {
       identifier: s.identifier,
       title: s.title,
       parentTitle: s.parentTitle,
-      isDone: doneKeys.has(s.status),
+      // Terminal (incl. `cancelled`), NOT `doneKeys` — a cancelled blocker is
+      // satisfied and must not be flagged "not in sprint" (MOTIR-1561).
+      isDone: terminalKeys.has(s.status),
       inActiveSprint: sprintId != null && s.sprintId === sprintId,
     }));
 
