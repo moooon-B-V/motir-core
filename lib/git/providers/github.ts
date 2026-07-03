@@ -1,11 +1,12 @@
 import { registerGitProvider } from '../registry';
-import { mintInstallationToken } from '@/lib/github/appAuth';
+import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import type { GitProvider } from '../provider';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
   InstallationToken,
   NormalizedChangeRequest,
+  NormalizedInstallation,
   NormalizedRepo,
   NormalizedStatusEvent,
 } from '../types';
@@ -94,6 +95,33 @@ export const githubProvider: GitProvider = {
     const body = asRecord(await res.json());
     const list = Array.isArray(body?.['repositories']) ? (body!['repositories'] as unknown[]) : [];
     return list.map(normalizeRepo).filter((repo): repo is NormalizedRepo => repo !== null);
+  },
+
+  async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {
+    // GET /app/installations/{id} is an APP-level read (the App JWT), not an
+    // installation token — it returns the account the App is installed on.
+    const jwt = createAppJwt();
+    let res: Response;
+    try {
+      res = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
+        headers: {
+          authorization: `Bearer ${jwt}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+      });
+    } catch (err) {
+      throw new Error(
+        `GitHub installation endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
+      );
+    }
+    if (!res.ok) throw new Error(`GitHub installation endpoint returned ${res.status}`);
+    const body = asRecord(await res.json());
+    const account = asRecord(body?.['account']);
+    const accountLogin = typeof account?.['login'] === 'string' ? account['login'] : '';
+    const accountType = typeof account?.['type'] === 'string' ? account['type'] : 'Organization';
+    if (!accountLogin) throw new Error('GitHub installation endpoint returned no account login');
+    return { installationId, accountLogin, accountType };
   },
 
   parseChangeRequestEvent(rawPayload: unknown): NormalizedChangeRequest | null {

@@ -18,6 +18,16 @@ export interface NormalizedRepo {
   defaultBranch: string;
 }
 
+/** An App installation's account, normalized across providers — the identity the
+ *  installation belongs to (a GitHub org/user, a GitLab group). Fetched by
+ *  `GitProvider.fetchInstallation` when binding a fresh install to a workspace
+ *  (MOTIR-1588), where only the host installation id is known. */
+export interface NormalizedInstallation {
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+}
+
 /** A branch, normalized across providers. */
 export interface NormalizedBranch {
   name: string;

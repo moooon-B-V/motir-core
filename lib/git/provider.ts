@@ -3,6 +3,7 @@ import type {
   GitProviderId,
   InstallationToken,
   NormalizedChangeRequest,
+  NormalizedInstallation,
   NormalizedRepo,
   NormalizedStatusEvent,
 } from './types';
@@ -35,6 +36,15 @@ export interface GitProvider {
    * freshly-minted (or cached) installation token.
    */
   fetchInstallationRepos(installationId: string): Promise<NormalizedRepo[]>;
+
+  /**
+   * Fetch an installation's account (login + type) from the host, given only the
+   * installation id — used to bind a fresh install to a workspace (MOTIR-1588),
+   * where the post-install redirect carries only the id (no webhook payload).
+   * Uses the App-level credential (GitHub: the App JWT), not an installation
+   * token.
+   */
+  fetchInstallation(installationId: string): Promise<NormalizedInstallation>;
 
   /**
    * Normalize a raw change-request webhook payload into the provider-agnostic

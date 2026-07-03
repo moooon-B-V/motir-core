@@ -4333,7 +4333,9 @@
       "denied": "GitHub authorization was cancelled. Nothing was connected.",
       "state_error": "The GitHub sign-in couldn't be verified. Please try connecting again.",
       "error": "Something went wrong connecting to GitHub. Please try again.",
-      "not_configured": "GitHub isn't configured on this deployment yet."
+      "not_configured": "GitHub isn't configured on this deployment yet.",
+      "installed": "GitHub App installed — Motir can now read your selected repositories.",
+      "install_error": "We couldn't finish setting up the GitHub App. Please try installing again."
     },
     "connect": {
       "title": "Connect GitHub",

@@ -19,6 +19,12 @@ describe('githubAppInstallUrl', () => {
     vi.stubEnv('GITHUB_APP_SLUG', '');
     expect(githubAppInstallUrl()).toBeNull();
   });
+
+  it('carries a signed state as a url-encoded ?state param (MOTIR-1588)', () => {
+    vi.stubEnv('GITHUB_APP_SLUG', 'motir-app');
+    const url = githubAppInstallUrl('abc.def+/=');
+    expect(url).toBe('https://github.com/apps/motir-app/installations/new?state=abc.def%2B%2F%3D');
+  });
 });
 
 describe('githubInstallationManageUrl', () => {
