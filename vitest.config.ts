@@ -19,6 +19,14 @@ loadEnv();
 process.env['GOOGLE_CLIENT_ID'] ??= 'test-google-client-id';
 process.env['GOOGLE_CLIENT_SECRET'] ??= 'test-google-client-secret';
 process.env['BETTER_AUTH_SECRET'] ??= 'test-better-auth-secret-32-bytes-long-please';
+// GitHub integration (Story 7.10 · MOTIR-1498). The encryption key is a fixed
+// 64-hex test value (decodes to 32 bytes) so tokenCrypto round-trips in tests;
+// the OAuth client id/secret let the identity service resolve config without a
+// real GitHub app (the fetch calls are stubbed per-test). Never reach GitHub.
+process.env['GITHUB_APP_CLIENT_ID'] ??= 'test-github-client-id';
+process.env['GITHUB_APP_CLIENT_SECRET'] ??= 'test-github-client-secret';
+process.env['GITHUB_TOKEN_ENCRYPTION_KEY'] ??=
+  '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
 
 // Vitest defaults to the Node environment for integration tests against a
 // real Postgres. The first browser-style component test arrived in Story 1.4
