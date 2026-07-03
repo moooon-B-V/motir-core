@@ -16,6 +16,9 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh }),
+  // ProjectSwitcher reads usePathname() for the post-switch landing target
+  // (MOTIR-1559); these AI-door tests never switch, so a stable stub suffices.
+  usePathname: () => '/dashboard',
 }));
 // The switcher + modal import project Server Actions; stub them so these
 // DB-free unit renders don't reach the server. startNewAiProjectAction is the
