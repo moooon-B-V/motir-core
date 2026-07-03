@@ -1,0 +1,1272 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Resume onboarding — the app-shell re-entry door · MOTIR-1548 (for MOTIR-1533)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the labeled "Resume onboarding" re-entry
+      door — MOTIR-1548, produced by the `motir run MOTIR-1533` design gate
+      (run.md guard #3). It is the layout source of truth for the UI code
+      subtask MOTIR-1533 (the door + its shown-when-in-progress logic), which
+      is `blocked_by` this card.
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*),
+      and the markup MIRRORS the shipped primitives — the SidebarNav rail +
+      Sidebar item grammar (components/ui/Sidebar.tsx), the PlanWithAILauncher
+      hero pill (components/planning/PlanWithAILauncher.tsx), the ⌘K
+      AppCommandPalette group, and the wz-bar History glyph
+      (components/onboarding/OnboardingTopBar.tsx). The "Resume onboarding" row
+      is a NEW ARRANGEMENT of the existing SidebarItem primitive (an accented,
+      badge-carrying row) — no new vocabulary.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        (1) the authed app shell, IN-PROGRESS state — the rail carries the
+            "Resume onboarding" row at the TOP of the primary section, beside
+            the generic "Plan with AI" hero pill in the top nav (co-existing,
+            differentiated).
+        (2) close-ups — the row (default / hover), the collapsed-rail icon-only
+            variant with its tooltip, and the ⌘K twin.
+        (3) the HIDDEN state — a project with no in-progress onboarding: the row
+            is absent; only the generic launcher remains.
+        (4) resume-vocabulary reconciliation — the four resume affordances and
+            when each shows (honouring MOTIR-1461 / 1488 / 1485).
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-btn-x: 16px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-steel);
+        --el-icon-active: var(--color-primary);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1120px;
+        margin: 0 auto 8px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 23px;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13.5px;
+        line-height: 1.55;
+        max-width: 92ch;
+      }
+      .refs {
+        max-width: 1120px;
+        margin: 12px auto 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--color-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
+        padding: 3px 9px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 12px;
+        padding-left: 2px;
+        max-width: 1120px;
+      }
+      .panel {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+      .note {
+        max-width: 1120px;
+        margin: 12px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .note code,
+      .between-note code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .note .pin {
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+      }
+
+      /* ── The app shell (panel 1) — mirrors app/(authed)/layout.tsx ───────── */
+      .shell {
+        display: flex;
+        gap: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        min-height: 620px;
+      }
+
+      /* ── Sidebar rail — mirrors components/ui/Sidebar.tsx ────────────────── */
+      .rail {
+        width: 240px;
+        flex: none;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .rail.collapsed {
+        width: 56px;
+        padding: 12px 8px;
+        align-items: stretch;
+      }
+      .rail-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 8px;
+        border-radius: var(--radius-control);
+      }
+      .rail-head .pj {
+        width: 26px;
+        height: 26px;
+        flex: none;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: var(--font-serif);
+      }
+      .rail-head .pj-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .rail-head .pj-sub {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .rail-head .chev {
+        margin-left: auto;
+        width: 15px;
+        height: 15px;
+        color: var(--el-icon-muted);
+      }
+      .rail-sec {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .rail hr {
+        border: 0;
+        border-top: 1px solid var(--el-sidebar-border);
+        margin: 0;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+      .nav-item:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-item .ic {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .nav-item .lbl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-item.active {
+        background: var(--el-sidebar-item-bg-active);
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .nav-item.active .ic {
+        color: var(--el-icon-active);
+      }
+
+      /* ── THE "Resume onboarding" ROW — the NEW element ──────────────────────
+         A SidebarItem in a distinct accent treatment: a lavender-tint fill +
+         accent icon + an "In progress" chip. Elevated above the plain rows (it
+         is a stateful call-to-action) but NOT the hero gradient — that stays
+         reserved for the generic PlanWithAILauncher pill. Icon is lucide
+         `History`, tying the loop to the wz-bar "Save & exit". */
+      .nav-item.resume {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+        border-color: color-mix(in srgb, var(--el-accent) 22%, transparent);
+      }
+      .nav-item.resume:hover {
+        background: color-mix(in srgb, var(--el-tint-lavender) 78%, var(--el-accent));
+        color: var(--el-text-strong);
+      }
+      .nav-item.resume .ic {
+        color: var(--el-accent-on-surface);
+      }
+      /* the "In progress" chip — hue in the tint background, --el-text-strong
+         ink (AA), state carried by text not colour (finding #35). Used where
+         there is horizontal room (the ⌘K palette, 460px). */
+      .chip-progress {
+        display: inline-flex;
+        align-items: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        white-space: nowrap;
+      }
+      /* the rail's compact in-progress indicator — a trailing accent status
+         dot. A text chip truncates the 17-char "Resume onboarding" label at the
+         shipped 240px rail width, so the rail uses this dot; the authoritative
+         non-visual signal is the row's conditional presence + the aria-label
+         "Resume onboarding (in progress)". */
+      .dot-progress {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+      }
+
+      /* collapsed rail: icon-only rows */
+      .nav-ic {
+        margin: 0 auto;
+        width: var(--height-control);
+        height: var(--height-control);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+        border: 1px solid transparent;
+        position: relative;
+      }
+      .nav-ic .ic {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-ic.resume {
+        background: var(--el-tint-lavender);
+        color: var(--el-accent-on-surface);
+        border-color: color-mix(in srgb, var(--el-accent) 22%, transparent);
+      }
+      /* a dot marker on the collapsed resume glyph (the chip has no room) */
+      .nav-ic.resume::after {
+        content: '';
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 7px;
+        height: 7px;
+        border-radius: 9999px;
+        background: var(--el-accent);
+        border: 1.5px solid var(--el-sidebar-bg);
+      }
+      .rail-foot {
+        display: flex;
+        justify-content: flex-end;
+        padding-top: 4px;
+      }
+      .rail-foot .toggle-ic {
+        width: var(--height-control);
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--el-icon-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+      .rail-foot .toggle-ic .ic {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── The content region — top nav + a faint dashboard stand-in ───────── */
+      .main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--el-page-bg);
+      }
+      .topnav {
+        height: 56px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .crumb {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .topnav .spacer {
+        flex: 1;
+      }
+      /* the shipped PlanWithAILauncher hero pill — palette-derived gradient */
+      .ai-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-badge);
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-accent-text);
+        text-decoration: none;
+        white-space: nowrap;
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+        );
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+          0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+      }
+      .ai-pill .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .topnav .avatar {
+        width: 30px;
+        height: 30px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .canvas {
+        flex: 1;
+        padding: 26px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .canvas h2 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .ghosts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .ghost {
+        height: 92px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .ghost.wide {
+        grid-column: 1 / -1;
+        height: 200px;
+      }
+
+      /* ── Close-up cards (panel 2 & 3) ────────────────────────────────────── */
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      .specimen {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-sidebar-bg);
+        padding: 12px;
+        width: 248px;
+      }
+      .specimen.mini {
+        width: 88px;
+      }
+      .specimen-cap {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin: 0 0 10px 2px;
+      }
+      .tooltip {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) 8px;
+        border-radius: var(--radius-control);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        font-weight: 500;
+        margin-top: 8px;
+      }
+
+      /* ── ⌘K command palette (panel 2c) — mirrors AppCommandPalette ───────── */
+      .cmdk {
+        width: 460px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        overflow: hidden;
+      }
+      .cmdk-input {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .cmdk-input .ic {
+        width: 17px;
+        height: 17px;
+        color: var(--el-icon-muted);
+      }
+      .cmdk-input span {
+        font-size: 14px;
+        color: var(--el-text-faint);
+      }
+      .cmdk-group {
+        padding: 8px 8px 10px;
+      }
+      .cmdk-heading {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        padding: 6px 8px 4px;
+      }
+      .cmdk-action {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 10px;
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .cmdk-action.sel {
+        background: var(--el-tint-lavender);
+      }
+      .cmdk-action .ic {
+        width: 17px;
+        height: 17px;
+        color: var(--el-accent-on-surface);
+      }
+      .cmdk-action .lbl {
+        flex: 1;
+      }
+      .cmdk-action .chip-progress {
+        background: var(--el-surface);
+      }
+      .cmdk-action .kbd {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: 1px 6px;
+      }
+
+      /* ── The vocabulary-reconciliation table (panel 4) ───────────────────── */
+      .vtable {
+        max-width: 1120px;
+        margin: 0 auto;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .vrow {
+        display: grid;
+        grid-template-columns: 210px 1fr 150px;
+        gap: 16px;
+        padding: 14px 18px;
+        border-top: 1px solid var(--el-border);
+        align-items: center;
+      }
+      .vrow.head {
+        border-top: 0;
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-muted);
+      }
+      .vrow .aff {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--el-text);
+      }
+      .vrow .aff .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent-on-surface);
+      }
+      .vrow .when {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .vrow .when code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .vrow .owner {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .vrow.self {
+        background: var(--el-tint-lavender);
+      }
+      .vrow.self .owner {
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- shared lucide symbol defs (viewBox 0 0 24 24, stroke 2, round caps) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-history"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+          <path d="M3 3v5h5" />
+          <path d="M12 7v5l4 2" />
+        </g>
+        <g
+          id="i-sparkles"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+          <path d="M20 3v4" />
+          <path d="M22 5h-4" />
+          <path d="M4 17v2" />
+          <path d="M5 18H3" />
+        </g>
+        <g
+          id="i-rotate-cw"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <path d="M21 3v6h-6" />
+        </g>
+        <g
+          id="i-dashboard"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="9" x="3" y="3" rx="1" />
+          <rect width="7" height="5" x="14" y="3" rx="1" />
+          <rect width="7" height="9" x="14" y="12" rx="1" />
+          <rect width="7" height="5" x="3" y="16" rx="1" />
+        </g>
+        <g
+          id="i-circle-dot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="1" />
+        </g>
+        <g
+          id="i-circle-play"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+          />
+          <circle cx="12" cy="12" r="10" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-map"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"
+          />
+          <path d="M15 5.764v15" />
+          <path d="M9 3.236v15" />
+        </g>
+        <g
+          id="i-layout-list"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="7" height="7" x="3" y="3" rx="1" />
+          <rect width="7" height="7" x="3" y="14" rx="1" />
+          <path d="M14 4h7" />
+          <path d="M14 9h7" />
+          <path d="M14 15h7" />
+          <path d="M14 20h7" />
+        </g>
+        <g
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </g>
+        <g
+          id="i-chart"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+          <path d="M18 17V9" />
+          <path d="M13 17V5" />
+          <path d="M8 17v-3" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-book"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </g>
+        <g
+          id="i-chevrons-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m11 17-5-5 5-5" />
+          <path d="m18 17-5-5 5-5" />
+        </g>
+        <g
+          id="i-chevrons-up-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-command"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="review-head">
+      <h1>Resume onboarding — the labeled app-shell re-entry door</h1>
+      <p>
+        A dedicated, clearly-labeled <strong>“Resume onboarding”</strong> entry point in the
+        signed-in app shell, shown ONLY when the active project has an
+        <strong>in-progress (un-finished)</strong> onboarding session. Activating it re-enters
+        <code>/onboarding</code>, which already resumes to the real persisted step (MOTIR-1487’s
+        “Resuming…” machinery). It is distinct from — and co-exists with — the generic “Plan with
+        AI” launcher, and honours MOTIR-1461’s decision that the entrance front door itself carries
+        no resume affordance.
+      </p>
+    </div>
+    <div class="refs">
+      <span class="ref">MOTIR-1548 · design</span>
+      <span class="ref">for MOTIR-1533 (code)</span>
+      <span class="ref">Story MOTIR-1459</span>
+      <span class="ref">Epic 7 · AI Planning</span>
+      <span class="ref">reconciles 1461 · 1488 · 1485</span>
+    </div>
+
+    <!-- ════════════ PANEL 1 — the app shell, IN-PROGRESS state ════════════ -->
+    <div class="panel-label">
+      1 · The signed-in app shell — a project whose onboarding is IN PROGRESS. The rail carries the
+      “Resume onboarding” row at the TOP of the primary section; the generic “Plan with AI” hero
+      pill sits in the top nav (they co-exist, clearly differentiated).
+    </div>
+    <div class="panel">
+      <div class="shell">
+        <nav class="rail" aria-label="Primary">
+          <div class="rail-head">
+            <span class="pj">M</span>
+            <div>
+              <div class="pj-name">Motir</div>
+              <div class="pj-sub">moooon workspace</div>
+            </div>
+            <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevrons-up-down" /></svg>
+          </div>
+
+          <div class="rail-sec">
+            <!-- THE NEW ROW — shown only while onboarding is in progress -->
+            <a
+              class="nav-item resume"
+              href="/onboarding"
+              aria-label="Resume onboarding (in progress)"
+            >
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>
+              <span class="lbl">Resume onboarding</span>
+              <span class="dot-progress" aria-hidden="true"></span>
+            </a>
+            <a class="nav-item active" href="#" aria-current="page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-dashboard" /></svg>
+              <span class="lbl">Dashboard</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+              <span class="lbl">Items</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg>
+              <span class="lbl">Ready</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-columns" /></svg>
+              <span class="lbl">Boards</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-map" /></svg>
+              <span class="lbl">Roadmap</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              <span class="lbl">Plans</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-layout-list" /></svg>
+              <span class="lbl">Backlog</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-inbox" /></svg>
+              <span class="lbl">Triage</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chart" /></svg>
+              <span class="lbl">Reports</span>
+            </a>
+          </div>
+
+          <hr />
+
+          <div class="rail-sec">
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-settings" /></svg>
+              <span class="lbl">Settings</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-book" /></svg>
+              <span class="lbl">Docs</span>
+            </a>
+          </div>
+
+          <div class="rail-foot">
+            <button class="toggle-ic" aria-label="Collapse sidebar">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-chevrons-left" /></svg>
+            </button>
+          </div>
+        </nav>
+
+        <div class="main">
+          <div class="topnav">
+            <span class="crumb">Dashboard</span>
+            <span class="spacer"></span>
+            <a class="ai-pill" href="/onboarding" aria-label="Plan with AI">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+              Plan with AI
+            </a>
+            <span class="avatar">YZ</span>
+          </div>
+          <div class="canvas">
+            <h2>Dashboard</h2>
+            <div class="ghosts">
+              <div class="ghost"></div>
+              <div class="ghost"></div>
+              <div class="ghost"></div>
+              <div class="ghost wide"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      The <span class="pin">Resume onboarding</span> row is a shipped
+      <code>SidebarItem</code> pushed to the <em>front</em> of the <code>hasProject</code> primary
+      section in <code>SidebarNav.tsx</code>, in an accent treatment (a
+      <code>--el-tint-lavender</code> fill, <code>--el-accent-on-surface</code> icon, a trailing
+      accent status dot). Glyph is lucide <code>History</code> — the same glyph the wz-bar’s
+      “Save&nbsp;&amp; exit” uses (MOTIR-1488), so the two ends of the save→resume loop read as one
+      gesture. Href <code>/onboarding</code>. It is <strong>distinct from</strong> the generic
+      <code>PlanWithAILauncher</code> pill (top nav / FAB / ⌘K, <code>Sparkles</code>): the pill is
+      the always-on generative entrance (start / re-plan); this row is the conditional, stateful
+      “continue what you started” door. The row does not take the pill’s hero gradient — that stays
+      reserved for the launcher. In-progress is shown by the trailing accent dot (a text
+      “In&nbsp;progress” chip truncates the 17-char label at the 240px rail width); the
+      authoritative non-visual signal is the row’s conditional presence +
+      <code>aria-label="Resume onboarding (in progress)"</code>. The explicit chip appears only
+      where there is room — the ⌘K palette below.
+    </p>
+
+    <!-- ════════════ PANEL 2 — close-ups & the ⌘K twin ════════════ -->
+    <div class="panel-label">
+      2 · Close-ups — the row (default &amp; hover), the collapsed-rail icon-only variant with its
+      tooltip, and the ⌘K command-palette twin.
+    </div>
+    <div class="panel">
+      <div class="row-of">
+        <div class="specimen">
+          <p class="specimen-cap">Expanded — default</p>
+          <a
+            class="nav-item resume"
+            href="/onboarding"
+            aria-label="Resume onboarding (in progress)"
+          >
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>
+            <span class="lbl">Resume onboarding</span>
+            <span class="dot-progress" aria-hidden="true"></span>
+          </a>
+        </div>
+
+        <div class="specimen">
+          <p class="specimen-cap">Expanded — hover</p>
+          <a
+            class="nav-item resume"
+            href="/onboarding"
+            aria-label="Resume onboarding (in progress)"
+            style="background: color-mix(in srgb, var(--el-tint-lavender) 78%, var(--el-accent))"
+          >
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>
+            <span class="lbl">Resume onboarding</span>
+            <span class="dot-progress" aria-hidden="true"></span>
+          </a>
+        </div>
+
+        <div class="specimen mini">
+          <p class="specimen-cap">Collapsed</p>
+          <div class="nav-ic resume" aria-label="Resume onboarding">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>
+          </div>
+          <div class="tooltip">Resume onboarding</div>
+        </div>
+
+        <div class="specimen" style="width: 460px; padding: 0; background: transparent; border: 0">
+          <p class="specimen-cap">⌘K — the command-palette twin</p>
+          <div class="cmdk">
+            <div class="cmdk-input">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-command" /></svg>
+              <span>Search or run a command…</span>
+            </div>
+            <div class="cmdk-group">
+              <div class="cmdk-heading">AI planning</div>
+              <div class="cmdk-action sel">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>
+                <span class="lbl">Resume onboarding</span>
+                <span class="chip-progress">In progress</span>
+              </div>
+              <div class="cmdk-action">
+                <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>
+                <span class="lbl">Plan with AI</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      Collapsed rail: the row becomes the icon-only <code>History</code> glyph in its lavender tile,
+      an accent dot standing in for the chip, and the label surfaces in the shipped
+      <code>Tooltip</code> (<code>side="right"</code>). ⌘K: a <code>Resume onboarding</code> action
+      is added to the existing <span class="pin">AI planning</span> group of
+      <code>AppCommandPalette</code>, ABOVE the shipped <code>plan-with-ai</code> action, under the
+      same in-progress condition — so keyboard users reach it too.
+    </p>
+
+    <!-- ════════════ PANEL 3 — the HIDDEN state ════════════ -->
+    <div class="panel-label">
+      3 · The hidden state — a project with NO in-progress onboarding (never started, or already
+      finished). The row is absent; only the generic “Plan with AI” launcher remains.
+    </div>
+    <div class="panel">
+      <div class="row-of">
+        <div class="specimen">
+          <p class="specimen-cap">Rail — no in-progress onboarding</p>
+          <div class="rail-sec">
+            <a class="nav-item active" href="#" aria-current="page">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-dashboard" /></svg>
+              <span class="lbl">Dashboard</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-dot" /></svg>
+              <span class="lbl">Items</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-circle-play" /></svg>
+              <span class="lbl">Ready</span>
+            </a>
+            <a class="nav-item" href="#">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-columns" /></svg>
+              <span class="lbl">Boards</span>
+            </a>
+          </div>
+        </div>
+        <p
+          class="between-note"
+          style="
+            max-width: 360px;
+            font-size: 13px;
+            color: var(--el-text-secondary);
+            line-height: 1.6;
+          "
+        >
+          The row is a conditional island: it renders only when the active project’s onboarding is
+          in&nbsp;progress —
+          <code>project.onboardingRanAt == null</code> (server, cheap) <strong>AND</strong>
+          <code>GET /api/ai/pre-plan</code> returns <code>session != null</code> with
+          <code>status !== 'tiers_complete'</code>. A never-started project (<code
+            >session: null</code
+          >) and a finished one (<code>onboardingRanAt</code> set) both hide it. When hidden,
+          nothing is added — the always-on “Plan with AI” launcher is the only planning door.
+        </p>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 — resume-vocabulary reconciliation ════════════ -->
+    <div class="panel-label">
+      4 · Reconciled with the sibling resume affordances — four doors, mutually exclusive by state,
+      so the vocabulary stays coherent (AC: honour MOTIR-1461 / 1488 / 1485).
+    </div>
+    <div class="vtable">
+      <div class="vrow head">
+        <div>Affordance</div>
+        <div>When it shows</div>
+        <div>Owner</div>
+      </div>
+      <div class="vrow">
+        <div class="aff">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkles" /></svg>Plan with AI
+        </div>
+        <div class="when">
+          Always (AI configured + a project). The generic generative entrance — start a plan or
+          re-plan. Pill / FAB / ⌘K. Routes to <code>/onboarding</code>.
+        </div>
+        <div class="owner">MOTIR-1299</div>
+      </div>
+      <div class="vrow">
+        <div class="aff">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>Save &amp; exit
+        </div>
+        <div class="when">
+          INSIDE an onboarding session (the wz-bar). Leaves the full-screen flow to the app;
+          progress is persisted server-side. The exit half of the loop.
+        </div>
+        <div class="owner">MOTIR-1488 ✓</div>
+      </div>
+      <div class="vrow self">
+        <div class="aff">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-history" /></svg>Resume onboarding
+        </div>
+        <div class="when">
+          In the app shell, when onboarding is
+          <strong>in&nbsp;progress but un-finished</strong> (<code>onboardingRanAt == null</code>
+          &amp; live session). The re-entry half of the loop.
+        </div>
+        <div class="owner">MOTIR-1548 → 1533</div>
+      </div>
+      <div class="vrow">
+        <div class="aff">
+          <svg class="ic" viewBox="0 0 24 24"><use href="#i-rotate-cw" /></svg>Continue your plan
+        </div>
+        <div class="when">
+          The empty-project state / switcher, when a project
+          <strong>already has a FINISHED plan</strong>
+          (a materialised tree). “Your plan is waiting.” A different state — never re-onboards.
+        </div>
+        <div class="owner">MOTIR-1485 / 1486</div>
+      </div>
+    </div>
+    <p class="note">
+      The four never appear together: <em>Save&nbsp;&amp; exit</em> is in-session only;
+      <em>Resume onboarding</em> and <em>Continue your plan</em> are split by
+      <code>onboardingRanAt</code> (un-finished vs finished); <em>Plan with AI</em> is the always-on
+      generic launcher they all sit beside. MOTIR-1461 deliberately places NO resume affordance on
+      the <code>/onboarding</code> entrance itself — resume lives in the app shell (here) and
+      in-session (1488), never on the front door.
+    </p>
+  </body>
+</html>

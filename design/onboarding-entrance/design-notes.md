@@ -199,3 +199,123 @@ stroke 2, round caps — matching the shipped hero.
 | External Jira / Linear / Plane import                  | 7.17 / MOTIR-817                                                            |
 | The `/onboarding` entrance route + hand-off            | MOTIR-1462 (`blocked_by` this design)                                       |
 | The IN-APP "Build with AI" entry that reuses this fork | MOTIR-1485 (design) / MOTIR-1486 (code)                                     |
+
+---
+
+# Resume onboarding — the labeled app-shell re-entry door (MOTIR-1548, for MOTIR-1533)
+
+**Subtask:** MOTIR-1548 · (`type: design`) · **Story:** MOTIR-1459 · **Epic 7 · AI Planning Layer.**
+Produced by the `motir run MOTIR-1533` **design gate** (`run.md` guard #3): MOTIR-1533 (the code half)
+requires a "clearly-labeled 'Resume onboarding' entry point … placement per the entrance design, NOT
+improvised," but no shipped design depicted it — the entrance design above deliberately places NO resume
+affordance on the front door, deferring it to the app shell. This section is that placement.
+
+**Asset files (three, shared basename):** this `design-notes.md` (§) · `resume-onboarding-door.mock.html`
+(source of truth, standalone — copies the real `app/globals.css` Tier-0 `--color-*` + shape tokens + Tier-3
+`--el-*` so it paints without the Tailwind build, exactly as `design/ready/ready.mock.html` does) ·
+`resume-onboarding-door.png` (full-page export, light theme, `deviceScaleFactor: 2`).
+
+## The decision (what MOTIR-1533 builds)
+
+A dedicated, clearly-labeled **"Resume onboarding"** entry point in the SIGNED-IN app shell, shown ONLY
+when the active project has an **in-progress (un-finished)** onboarding session. It is a `SidebarItem`
+(the shipped `components/ui/Sidebar.tsx` primitive) pushed to the **top of the `hasProject` primary
+section** in `app/(authed)/_components/SidebarNav.tsx` — above Dashboard — because an interrupted
+onboarding is the project's highest-priority next action. A **⌘K twin** action mirrors it in
+`AppCommandPalette`. Activating either navigates to **`/onboarding`**, which already resumes to the real
+persisted step (MOTIR-1487's "Resuming…" machinery) — the door only supplies the route; it adds NO resume
+logic.
+
+- **Label:** `Resume onboarding` (a new `shell.nav.resumeOnboarding` `en.json` key).
+- **Glyph:** lucide **`History`** — the SAME glyph the wz-bar's "Save & exit" uses (MOTIR-1488), so the
+  save→resume loop reads as one gesture. Deliberately NOT `Sparkles` (the generic planning mark) or
+  `RotateCw` (1485's "Continue your plan"), so the three doors stay visually distinct.
+- **Treatment:** an accent row — `--el-tint-lavender` fill, `--el-accent-on-surface` icon, `--el-text-strong`
+  label, a hairline `color-mix(--el-accent 22%, transparent)` border. Elevated above the plain rows (it is a
+  stateful call-to-action) but it does **NOT** take the `PlanWithAILauncher` hero gradient — that stays
+  reserved for the generic launcher.
+- **In-progress indicator:** a compact **trailing accent status dot** in the rail. A text "In progress"
+  chip was rejected: at the shipped **240px** rail width it truncates the 17-char label to "Resu…" (the
+  render caught this). The authoritative non-visual signal is the row's **conditional presence** plus
+  `aria-label="Resume onboarding (in progress)"` (state not by colour alone — finding #35). The explicit
+  "In progress" chip appears only where there is room — the ⌘K palette (460px).
+- **Collapsed rail:** the icon-only `History` tile (lavender), an accent dot in the corner (the chip has no
+  room), and the label in the shipped `Tooltip` (`side="right"`), exactly as the primitive already does.
+
+## Shown / hidden — the detection seam (so 1533 can implement it)
+
+The row renders IFF the active project's onboarding is in progress:
+
+```
+onboardingRanAt == null            (server, cheap — lib/dto/projects.ts; a set value = already materialised)
+  AND
+GET /api/ai/pre-plan → session != null AND session.status !== 'tiers_complete'
+                                   (the live PreplanSession, read via aiPreplanService.getPreplanState)
+```
+
+A never-started project (`session: null`) and a finished one (`onboardingRanAt` set → both onboarding
+pages already redirect to `/roadmap`) BOTH hide the row. There is **no combined server helper today**.
+**Recommended implementation (1533): a small client island** — the row fetches `/api/ai/pre-plan` on mount
+(the same seam `useDiscoveryChat` / `preplanClient.fetchPreplanState` already use) and reveals itself only
+when in-progress; it degrades gracefully (hidden until known) and avoids a motir-ai round-trip on every
+authed server render. (Alternative: a layout-level `aiPreplanService.getPreplanState(ctx)` read in
+`app/(authed)/layout.tsx` threaded to `SidebarNav` — simpler data flow, but adds a motir-ai call to every
+authed page's server render.) Gate the whole thing behind `isMotirAiConfigured()` (the same mount gate the
+launcher uses) — a self-host install with no AI never shows it. `tests` cover the shown/hidden logic.
+
+## Differentiation from "Plan with AI" (they co-exist)
+
+The generic `PlanWithAILauncher` (pill / FAB / ⌘K, `Sparkles`, MOTIR-1299) is the **always-on generative**
+entrance — start a plan or re-plan — and also routes to `/onboarding`. "Resume onboarding" is the
+**conditional, stateful** "continue what you started" door. They co-exist; the labeled row + `History`
+glyph + accent dot + conditional visibility make the resume door unmistakable next to the generic pill.
+(The launcher is NOT suppressed while onboarding is in progress — it keeps its own generic purpose.)
+
+## Reconciled with the sibling resume affordances (AC — honour 1461 / 1488 / 1485)
+
+Four resume-adjacent affordances, **mutually exclusive by state**, so the vocabulary stays coherent:
+
+| Affordance             | Glyph      | When it shows                                                                    | Owner                 |
+| ---------------------- | ---------- | -------------------------------------------------------------------------------- | --------------------- |
+| **Plan with AI**       | `Sparkles` | Always (AI configured + a project). Generic generative entrance. Pill/FAB/⌘K.    | MOTIR-1299            |
+| **Save & exit**        | `History`  | INSIDE an onboarding session (the wz-bar). The EXIT half of the loop.            | MOTIR-1488 ✓          |
+| **Resume onboarding**  | `History`  | App shell, onboarding **in-progress & un-finished** (`onboardingRanAt == null`). | **MOTIR-1548 → 1533** |
+| **Continue your plan** | `RotateCw` | Empty-project state / switcher, project **already has a FINISHED plan**.         | MOTIR-1485 / 1486     |
+
+- **MOTIR-1461** (the entrance) is honoured: NO resume affordance on the `/onboarding` front door itself —
+  resume lives in the app shell (here) and in-session (1488), never on the entrance.
+- **Resume onboarding** vs **Continue your plan** are split by `onboardingRanAt` (un-finished vs finished),
+  so they never collide; they use different glyphs (`History` vs `RotateCw`) and different host surfaces.
+
+## Primitives composed (no hand-rolling)
+
+| Element                                  | Shipped primitive / pattern                                        | Token role                                                                                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The rail row                             | `SidebarItem` (`components/ui/Sidebar.tsx`) — accent variant       | `--el-tint-lavender` fill, `--el-accent-on-surface` icon, `--el-text-strong`, `--radius-control`, `--height-control`, `--spacing-control-x` |
+| In-progress dot / ⌘K chip                | accent status dot · badge chip (as the `SoonChip` pattern)         | dot `--el-accent`; chip `--el-surface` bg + `--el-text-strong`, `--radius-badge`, `--spacing-chip-x/y`                                      |
+| Collapsed row + tooltip                  | icon tile + `Tooltip` (`side="right"`)                             | `--el-tint-lavender` tile; tooltip `--el-text` bubble + `--el-text-inverted`                                                                |
+| ⌘K action                                | `AppCommandPalette` `CommandGroup` action (mirrors `plan-with-ai`) | `--el-tint-lavender` selected row, `--el-accent-on-surface` icon, `--radius-control`                                                        |
+| "Plan with AI" pill (shown for contrast) | `PlanWithAILauncher` — palette-derived gradient                    | `color-mix()` over `--el-accent`/`--el-accent-text`/`--el-highlight`; `--radius-badge`, `--height-btn-md`                                   |
+
+Icons are **lucide** (`History`, `Sparkles`, `RotateCw`, `Command`, + the existing nav glyphs) at
+`viewBox="0 0 24 24"`, stroke 2, round caps — matching the shipped rail + wz-bar.
+
+### Colour + shape rules (mock === component)
+
+- Every colour resolves to an `--el-*` / `--el-tint-*` token, or a `color-mix()` whose inputs are ALL
+  tokens (the hover fill, the row border, the pill gradient). **No invented hues.** The only raw values are
+  the non-semantic elevation shadows and the doc-scaffold chrome (panel captions / ref chips), which are not
+  product UI.
+- Shape flows through element-semantic tokens (`--radius-control`/`-badge`/`-card`/`-modal`, `--height-control`/
+  `-btn-md`, `--spacing-control-x`/`-chip-x/y`, `--shadow-*`) — never a raw `rounded-md`/`p-2`/`h-9`, so a
+  `data-style` swap re-shapes it. `rounded-full` only on the status dot / avatar.
+
+## Which card owns each destination (connect, don't duplicate)
+
+| Destination                                               | Owner (design → build)                           |
+| --------------------------------------------------------- | ------------------------------------------------ |
+| The "Resume onboarding" rail row + ⌘K twin + shown/hidden | **MOTIR-1548 (this design) → MOTIR-1533 (code)** |
+| The `/onboarding` resume route + "Resuming…" real step    | MOTIR-1462 (router) + MOTIR-1487 (done)          |
+| The in-session "Save & exit" (wz-bar)                     | MOTIR-1488 (done)                                |
+| "Continue your plan" (finished-plan empty state)          | MOTIR-1485 / 1486                                |
+| The generic "Plan with AI" launcher                       | MOTIR-1299 (done)                                |
