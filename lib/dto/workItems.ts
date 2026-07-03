@@ -431,12 +431,20 @@ export interface WorkItemTreeNodeDto {
  * so a container whose only remnants are cancelled is not held permanently
  * below 100%. `done` counts the leaves whose status is a `done`-category
  * workflow status OTHER than `cancelled`. A container with no countable leaves
- * (empty, or all-cancelled) is `{ done: 0, total: 0 }` — the view renders an
- * empty meter.
+ * (empty, or all-cancelled) is `{ done: 0, total: 0, verified: 0 }` — the view
+ * renders an empty meter.
+ *
+ * `verified` (Subtask 7.10.6 / MOTIR-894) is the Story-level "N of M verified"
+ * roll-up: the subset of countable descendants whose CI signal is `passing` (a
+ * merged-AND-checks-passed leaf). It rides the SAME recursive count as done/total
+ * — a Story is truly done when its children merged AND their checks passed, not
+ * merely when they merged. `verified ≤ total`, and is 0 until CI feeds a signal
+ * back.
  */
 export interface RoadmapProgressDto {
   done: number;
   total: number;
+  verified: number;
 }
 
 /**
@@ -447,10 +455,13 @@ export interface RoadmapProgressDto {
  * excluding `cancelled`) — so a container whose only remnants are cancelled is
  * not held permanently incomplete (mirrors the public roadmap meter). Computed
  * over the WHOLE subtree in one recursive-CTE round-trip, NOT a per-level read.
+ * `verified` is the CI-passed subset (Subtask 7.10.6 / MOTIR-894), on the same
+ * round-trip.
  */
 export interface RoadmapProgressDto {
   done: number;
   total: number;
+  verified: number;
 }
 
 /**

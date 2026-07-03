@@ -4283,6 +4283,7 @@
       "emptyRootTitle": "路线图还是空的",
       "emptyRootDescription": "随着计划成形，工作项会显示在这里。",
       "subtreeProgress": "子树进度",
+      "verifiedCount": "{count} 项通过 CI 验证",
       "node": {
         "here": "当前位置",
         "ready": "就绪",

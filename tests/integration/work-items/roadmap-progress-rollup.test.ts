@@ -81,15 +81,15 @@ describe('workItemsService.getProjectRoadmap — progress roll-up correctness (M
     // = t1, u1, u3 = 3 (in_progress / in_review / todo are not done; stories todo).
     const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
     const e = roots.nodes.find((n) => n.id === E.id)!;
-    expect(e.progress).toEqual({ done: 3, total: 8 });
+    expect(e.progress).toEqual({ done: 3, total: 8, verified: 0 });
 
     // Story level under E: each story rolls up only its OWN subtasks.
     const stories = await workItemsService.getProjectRoadmap(fx.projectId, E.id, fx.ctx);
     const byId = new Map(stories.nodes.map((n) => [n.id, n]));
     // S1: live t1,t2,t3 (t4 cancelled excluded) → total 3; done = t1 → 1.
-    expect(byId.get(S1.id)!.progress).toEqual({ done: 1, total: 3 });
+    expect(byId.get(S1.id)!.progress).toEqual({ done: 1, total: 3, verified: 0 });
     // S2: u1,u2,u3 → total 3; done = u1,u3 → 2 (u2 in_review is not done).
-    expect(byId.get(S2.id)!.progress).toEqual({ done: 2, total: 3 });
+    expect(byId.get(S2.id)!.progress).toEqual({ done: 2, total: 3, verified: 0 });
   });
 
   it('an all-done container rolls up to 100% (done === total)', async () => {
@@ -104,7 +104,7 @@ describe('workItemsService.getProjectRoadmap — progress roll-up correctness (M
 
     const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
     const s = roots.nodes.find((n) => n.id === S.id)!;
-    expect(s.progress).toEqual({ done: 3, total: 3 });
+    expect(s.progress).toEqual({ done: 3, total: 3, verified: 0 });
     expect(s.progress!.done).toBe(s.progress!.total); // 100%
   });
 
@@ -138,6 +138,6 @@ describe('workItemsService.getProjectRoadmap — progress roll-up correctness (M
     const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
     const s = roots.nodes.find((n) => n.id === S.id)!;
     // total excludes cancelled c → a, b, d = 3. done = a (done) + b (shipped) = 2.
-    expect(s.progress).toEqual({ done: 2, total: 3 });
+    expect(s.progress).toEqual({ done: 2, total: 3, verified: 0 });
   });
 });

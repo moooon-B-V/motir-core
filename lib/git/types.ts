@@ -61,12 +61,20 @@ export type ChangeRequestLifecycle = 'in_review' | 'done' | 'todo';
 export type CiConclusion = 'success' | 'failure' | 'pending' | 'neutral';
 
 /** A CI / pipeline status event, normalized across providers — consumed by the
- *  CI feedback loop (MOTIR-894). */
+ *  CI feedback loop (MOTIR-894). `prNumbers` are the host PR/MR numbers the event
+ *  is associated with (the check payload's `pull_requests[].number`) — the
+ *  STRONGEST link back to the stored change request; `headBranch` is the branch
+ *  the checks ran on, the fallback resolver when the payload carries no PR list
+ *  (both are stable across a re-push, unlike a head SHA). `commitSha` is the head
+ *  commit the checks ran on, part of the idempotency key. `context` names the
+ *  check (a `check_run.name`, a `check_suite` app slug, a commit-status context). */
 export interface NormalizedStatusEvent {
   providerRepoId: string;
   commitSha: string;
   conclusion: CiConclusion;
   context: string;
+  prNumbers: number[];
+  headBranch: string | null;
 }
 
 /** A short-lived installation access token, minted on demand and cached

@@ -1045,6 +1045,20 @@ model WorkItem {
   // (every item recorded on a branch) — a plain `String?` matching this table's
   // camelCase, no-`@map` columns.
   sessionBranch        String?
+  // CI / verification signal (Story 7.10 · Subtask 7.10.6 / MOTIR-894) — the
+  // result of a linked PR's CI, flowed back from the `check_suite` / `check_run`
+  // webhook so "did the dispatched work actually pass?" lives in Motir, not only
+  // on GitHub. `"passing"` ⇔ the latest checks succeeded (the item is VERIFIED —
+  // the Story-level "N of M verified" roll-up counts these); `"failing"` ⇔ a
+  // terminal check failed (the item is visibly NOT-ready — the dispatched agent
+  // sees it needs another pass WITHOUT leaving Motir). `null` ⇔ no CI signal yet
+  // (never dispatched, or checks still pending). Set ONLY by the CI feedback loop
+  // (`githubWebhookService` → `workItemsService.setCiState`), never by a user
+  // edit — DISTINCT from `status` (the workflow lifecycle): a merged item can
+  // still be `failing`. A plain `String?` matching this table's camelCase,
+  // no-`@map` columns; not an enum (a third provider-neutral value would be a
+  // contained change, and the roll-up filters on the literal).
+  ciState              String?
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
@@ -1950,6 +1964,9 @@ model Comment {
   parent    Comment?         @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
   replies   Comment[]        @relation("CommentReplies")
   mentions  CommentMention[]
+  // CI feedback (Subtask 7.10.6 / MOTIR-894): the check-run rows whose feedback
+  // comment THIS is — so a re-run updates it in place. SetNull on delete.
+  githubCheckRuns GithubCheckRun[]
 
   // The paged list read (newest-first cursor walk, 5.1.2) + the thread read.
   @@index([workItemId, createdAt])
@@ -3181,11 +3198,52 @@ model GithubPullRequest {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  repo     GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  workItem WorkItem?  @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  repo      GithubRepo       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  workItem  WorkItem?        @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+  checkRuns GithubCheckRun[]
 
   @@unique([repoId, number])
   @@index([repoId])
   @@index([workItemId])
   @@map("github_pull_request")
+}
+
+/// One terminal CI check result for a linked PR (Story 7.10 · Subtask 7.10.6 /
+/// MOTIR-894) — the verification half of the closed loop: a `check_suite` /
+/// `check_run` webhook delivery, resolved to its PR and persisted so the CI
+/// feedback is IDEMPOTENT. The unique `(pull_request_id, commit_sha, check_name)`
+/// is the card's idempotency key: a redelivery or a re-run of the SAME check at
+/// the SAME head commit converges on this one row and UPDATES its feedback
+/// comment in place (via `feedback_comment_id`) rather than piling duplicate
+/// comments on the subtask. `conclusion` is the normalized `CiConclusion`
+/// (`success` | `failure` | `pending` | `neutral`) the `GitProvider` seam emits;
+/// `feedback_comment_id` links the posted feedback `Comment` (SetNull so the row
+/// survives a comment deletion). Provider-neutral: a GitLab pipeline (7.23)
+/// normalizes into the same shape. The work item's own `ciState` signal is
+/// derived from these rows and denormalized onto `WorkItem.ciState`.
+model GithubCheckRun {
+  id                String   @id @default(cuid())
+  /// FK → GithubPullRequest.id (internal cuid) — the PR this check ran against.
+  pullRequestId     String   @map("pull_request_id")
+  /// The head commit SHA the check ran on (the payload's `head_sha`). Part of the
+  /// idempotency key: a re-run against a NEW commit is a distinct row.
+  commitSha         String   @map("commit_sha")
+  /// The check's name / context (a `check_run.name`, a `check_suite` app slug, or
+  /// a legacy commit-status `context`) — distinguishes concurrent checks on one
+  /// commit so each keeps its own feedback.
+  checkName         String   @map("check_name")
+  /// Normalized `CiConclusion`: "success" | "failure" | "pending" | "neutral".
+  conclusion        String
+  /// The feedback `Comment` posted for this check, updated in place on a re-run.
+  /// Null until the first terminal (success/failure) delivery posts one.
+  feedbackCommentId String?  @map("feedback_comment_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  pullRequest     GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  feedbackComment Comment?          @relation(fields: [feedbackCommentId], references: [id], onDelete: SetNull)
+
+  @@unique([pullRequestId, commitSha, checkName])
+  @@index([pullRequestId])
+  @@map("github_check_run")
 }

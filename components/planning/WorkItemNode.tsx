@@ -47,6 +47,10 @@ import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 export interface WorkItemProgress {
   done: number;
   total: number;
+  /** The CI-verified subset of `total` (Subtask 7.10.6 / MOTIR-894) — the
+   *  Story-level "N of M verified" count. Optional + `0` until CI feeds signals
+   *  back; a positive value renders a small verified badge beside the meter. */
+  verified?: number;
 }
 
 export type WorkItemStatus =
@@ -321,6 +325,18 @@ export function WorkItemNode({
           <span className="shrink-0 text-xs font-medium text-(--el-text-muted) tabular-nums">
             {progress.done} / {progress.total}
           </span>
+          {/* CI-verified count (Subtask 7.10.6 / MOTIR-894) — the "N of M verified"
+              roll-up beside the done/total meter; shown only once CI has verified
+              at least one descendant. */}
+          {progress.verified && progress.verified > 0 ? (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium text-(--el-success) tabular-nums"
+              title={t('verifiedCount', { count: progress.verified })}
+            >
+              <Check className="size-3" aria-hidden="true" />
+              {progress.verified}
+            </span>
+          ) : null}
         </div>
       ) : item.assigneeName ? (
         <span className="shrink-0 truncate pt-1.5 text-right text-xs text-(--el-text-muted)">

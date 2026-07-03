@@ -1591,22 +1591,32 @@ export const workItemRepository = {
     doneStatusKeys: string[],
     excludedStatusKey: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<Array<{ rootId: string; total: number; done: number }>> {
+  ): Promise<Array<{ rootId: string; total: number; done: number; verified: number }>> {
     if (rootIds.length === 0) return [];
     const client = tx ?? db;
-    return client.$queryRaw<Array<{ rootId: string; total: number; done: number }>>`
+    // `verified` (Subtask 7.10.6 / MOTIR-894) rides the SAME recursive CTE as
+    // done/total — the Story-level "N of M verified" roll-up is NOT a parallel
+    // aggregation, it is one extra `COUNT(... FILTER)` over the subtree that
+    // already computed the progress meter. A descendant counts as verified when
+    // its CI signal is `'passing'` (a merged-AND-checks-passed leaf), the same
+    // `depth > 1`, non-archived, non-cancelled frame as `total`.
+    return client.$queryRaw<
+      Array<{ rootId: string; total: number; done: number; verified: number }>
+    >`
       WITH RECURSIVE subtree AS (
-        SELECT w."id", w."parentId", w."status", w."archivedAt", w."id" AS root_id, 1 AS depth
+        SELECT w."id", w."parentId", w."status", w."ciState", w."archivedAt", w."id" AS root_id, 1 AS depth
           FROM "work_item" w
           WHERE w."id" = ANY(${rootIds})
         UNION ALL
-        SELECT w."id", w."parentId", w."status", w."archivedAt", s.root_id, s.depth + 1
+        SELECT w."id", w."parentId", w."status", w."ciState", w."archivedAt", s.root_id, s.depth + 1
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
       )
       SELECT root_id AS "rootId",
              COUNT(*) FILTER (WHERE "status" <> ${excludedStatusKey})::int AS "total",
-             COUNT(*) FILTER (WHERE "status" = ANY(${doneStatusKeys}))::int  AS "done"
+             COUNT(*) FILTER (WHERE "status" = ANY(${doneStatusKeys}))::int  AS "done",
+             COUNT(*) FILTER (WHERE "status" <> ${excludedStatusKey}
+                                AND "ciState" = 'passing')::int             AS "verified"
         FROM subtree
         WHERE depth > 1
           AND "archivedAt" IS NULL
