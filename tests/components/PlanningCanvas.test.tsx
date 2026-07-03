@@ -104,6 +104,27 @@ describe('PlanningCanvas', () => {
     expect(flags[0]!.textContent).toContain('blocked elsewhere');
   });
 
+  it('paints the cross-flag layer ABOVE the node layer, so the bad-plan signal is never occluded', () => {
+    // MOTIR-1583: both the cross-flag layer and the node layer are position:absolute
+    // with no z-index, so DOM paint order decides which wins. The flag chip sits at a
+    // cross edge's midpoint, which frequently lands over a card — so the cross-flag
+    // layer MUST come AFTER the node layer in the DOM to stay legible.
+    const crossEdges: CanvasEdge[] = [
+      { from: 'a', to: 'b' },
+      { from: 'b', to: 'c', variant: 'cross' },
+    ];
+    render(<PlanningCanvas nodes={nodes} edges={crossEdges} renderNode={renderNode} />);
+    const world = screen.getByTestId('canvas-world');
+    const crossFlags = screen.getByTestId('canvas-cross-flags');
+    // siblings in the same pan/zoom container…
+    expect(crossFlags.parentElement).toBe(world.parentElement);
+    // …with the cross-flag layer following the node layer, so it paints on top.
+    const rel = world.compareDocumentPosition(crossFlags);
+    expect(rel & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // and the overlay must not intercept pointer events (drags/clicks pass through to cards).
+    expect(crossFlags.className).toContain('pointer-events-none');
+  });
+
   it('gives every edge a directional arrowhead (marker-end), markers in their own defs', () => {
     render(<PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} />);
     // the markers live OUTSIDE canvas-edges, so its path count is unchanged…
