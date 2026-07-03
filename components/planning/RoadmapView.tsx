@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Goal, LayoutGrid, RefreshCw, Target } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -17,17 +17,22 @@ import type { RoadmapScope } from '@/lib/planning/roadmapClient';
 // header and feeds the chosen scope to `WorkItemRoadmap`, which threads it to every
 // per-level fetch (`&scope=sprint`, the scoped read MOTIR-1381).
 //
-// Scope is URL-addressable (MOTIR-1541) AND a client-island interaction: switching
-// scope BOTH writes `?scope=sprint` to the URL — a shallow `router.replace`
-// (`scroll:false`), omitted for the default project scope — so the sprint roadmap is
-// shareable / bookmarkable / back-navigable, AND drives the refetch by REMOUNTING the
-// canvas (its React `key={scope}`) so the root re-loads in the new scope. The server
-// page seeds `initialScope` from the same `?scope=` param, so a deep-link / reload
-// lands directly in the right scope. It is NEVER a `router.refresh()` (the page-state
-// contract: the canvas is a client island seeded from its own fetch; `router.replace`
-// only moves the URL, the `key` drives the refetch). With no active sprint, the
-// Active-sprint option renders the design's "No active sprint" empty state in place;
-// the toggle stays available and the default scope is unaffected.
+// Scope is URL-addressable (MOTIR-1541) AND a client-island interaction, with the URL
+// as the SINGLE SOURCE OF TRUTH (MOTIR-1549): `scope` is DERIVED from
+// `useSearchParams()` (`?scope=sprint` → sprint, anything else → the default project
+// scope) — never a one-shot `useState`. Switching scope writes the URL with
+// `router.push` (`scroll:false`, a clean `/roadmap` for the default scope), which
+// stacks a genuine browser-history entry AND re-renders this island with the new
+// `?scope=` — so a deep-link, a reload, AND browser Back/forward all resolve the right
+// scope (Back after a toggle returns to the previous scope's URL and view). The scope
+// change drives the refetch by REMOUNTING the canvas (its React `key={scope}`) so the
+// root re-loads in the new scope. It is NEVER a `router.refresh()` (the page-state
+// contract: the canvas is a client island seeded from its own fetch; the navigation
+// only moves the URL, the `key` drives the refetch). `router.push` is chosen over
+// `router.replace` deliberately: each toggle is a distinct history entry so Back works
+// — the standard behaviour for URL-addressable view state (the MOTIR-1549 fix). With
+// no active sprint, the Active-sprint option renders the design's "No active sprint"
+// empty state in place; the toggle stays available and the default scope is unaffected.
 
 export interface RoadmapViewProps {
   /** The project's `PROD`/`MOTIR` key — the per-level roadmap read source. */
@@ -44,10 +49,6 @@ export interface RoadmapViewProps {
   /** Pin the planning-origin cluster at the root (MOTIR-1013) — gated on the
    *  project's onboarding-ran marker (MOTIR-1264); forwarded to the canvas. */
   showPlanningOrigin: boolean;
-  /** The scope to render on first paint (MOTIR-1541) — read from the `?scope=` URL
-   *  param by the server page so a deep-link / reload opens in the right scope.
-   *  Defaults to whole-project. */
-  initialScope?: RoadmapScope;
 }
 
 export function RoadmapView({
@@ -58,17 +59,24 @@ export function RoadmapView({
   sprintName,
   sprintGoal,
   showPlanningOrigin,
-  initialScope = 'project',
 }: RoadmapViewProps) {
   const t = useTranslations('roadmap');
   const router = useRouter();
   const pathname = usePathname();
-  const [scope, setScope] = useState<RoadmapScope>(initialScope);
+  const searchParams = useSearchParams();
+  // The URL is the single source of truth for scope (MOTIR-1549): derive it from
+  // `?scope=` on every render, so a deep-link, reload, AND browser Back/forward all
+  // resolve the right scope. `?scope=sprint` → sprint; anything else (absent /
+  // `scope=project` / garbage) → the default whole-project scope — the same rule the
+  // server page applies, so first-paint SSR and client hydration agree.
+  const scope: RoadmapScope = searchParams.get('scope') === 'sprint' ? 'sprint' : 'project';
 
   // Mirror the chosen scope into the URL so the sprint roadmap is addressable:
   // `?scope=sprint` for the sprint scope, a clean `/roadmap` (no param) for the
-  // default project scope. A shallow `router.replace` (`scroll:false`) — the canvas
-  // refetch is driven by the `key={scope}` remount below, not by this navigation.
+  // default project scope. A shallow `router.push` (`scroll:false`) — pushing a
+  // distinct history entry is what makes Back/forward restore the prior scope
+  // (MOTIR-1549); the resulting `?scope=` re-render both re-derives `scope` and (via
+  // the `key={scope}` remount below) drives the canvas refetch, not this navigation.
   // A MANUAL REFRESH (MOTIR-1542): the header refresh control bumps `refreshSignal`,
   // which `WorkItemRoadmap` watches to drop its level cache and re-run the canvas's
   // per-level load IN PLACE (drill / breadcrumb / zoom preserved) — never the
@@ -78,11 +86,13 @@ export function RoadmapView({
   const [refreshing, setRefreshing] = useState(false);
 
   const changeScope = (next: RoadmapScope) => {
-    setScope(next);
     // A scope switch remounts the canvas and supersedes any in-flight refresh, so
     // clear the loading state (the remounted canvas won't fire onRefreshSettled).
     setRefreshing(false);
-    router.replace(next === 'sprint' ? `${pathname}?scope=sprint` : pathname, {
+    // Push (not replace) so the toggle is a distinct history entry — Back/forward then
+    // restores the prior scope (MOTIR-1549). The new `?scope=` re-derives `scope`; no
+    // local state to set (the URL is the source of truth).
+    router.push(next === 'sprint' ? `${pathname}?scope=sprint` : pathname, {
       scroll: false,
     });
   };
