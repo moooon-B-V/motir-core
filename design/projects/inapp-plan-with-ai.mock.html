@@ -1366,9 +1366,13 @@
           ></span>
           <span
             >The fresh-vs-import choice lives ONLY on <code>/onboarding</code> — <b>one fork UI</b>.
-            MOTIR-1486 wires this door; it does not rebuild the fork. No project is pre-created for
-            the AI path (created downstream — start-fresh at discovery/materialize, done 7.3; import
-            inside the 7.15 / 7.17 wizard). Nothing here connects a repo or picks a tracker.</span
+            MOTIR-1486 wires this door; it does not rebuild the fork. For the AI path the door mints
+            a fresh <b>draft</b> project up front (<code>startNewAiProjectAction</code>:
+            <code>createProject</code> → <code>setActiveProject</code> → <code>/onboarding</code>),
+            so it always plans a NEW project — not "created downstream" (that premise was false;
+            onboarding writes into the already-active project). Naming the draft from the plan is a
+            follow-up (MOTIR-1551). The import path hands off to the 7.15 / 7.17 wizard. Nothing
+            here connects a repo or picks a tracker.</span
           >
         </div>
       </section>
