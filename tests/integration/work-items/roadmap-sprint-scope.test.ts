@@ -193,7 +193,7 @@ describe('countRoadmapProgress — full subtree rollup (unchanged by scope)', ()
       ['done'],
       'cancelled',
     );
-    expect(rows).toEqual([{ rootId: t.storyA2.id, total: 1, done: 1 }]);
+    expect(rows).toEqual([{ rootId: t.storyA2.id, total: 1, done: 1, verified: 0 }]);
   });
 });
 
