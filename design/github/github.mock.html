@@ -1,0 +1,1687 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · GitHub connect / settings · repo selection · PR&amp;CI status (Story 7.10 ·
+      MOTIR-889)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — GITHUB INTEGRATION SURFACES. Story 7.10's
+      MOTIR-889 design gate (Principle #13). Every UI-touching subtask in the
+      GitHub-integration Story (MOTIR-895 connect/settings UI + repo selection)
+      depends on this asset; without it those surfaces would be improvised,
+      which is forbidden (notes.html #31). GitLab's sibling (MOTIR-1472) mirrors
+      this layout against the GitProvider seam.
+
+      PLACEMENT (resolved from shipped reality, not assumed): the GitHub
+      integration is WORKSPACE-scoped — the installation entity is
+      GithubInstallation { workspaceId } (MOTIR-891) and repo selection is
+      workspace-wide — so it lives under Settings → Workspace → GitHub, the
+      shipped settings-area shell (app/(authed)/settings/workspace/*, which
+      already hosts Jobs). The per-user identity binding (GithubIdentity, per
+      MOTIR-1498) is surfaced ON this same workspace page: the admin who
+      connects binds their own GitHub identity as step 1.
+
+      THE TWO GRANTS (verified GitHub-App model — grounded in MOTIR-1498 +
+      MOTIR-891 and GitHub's "Differences between GitHub Apps and OAuth apps"):
+        · Grant 1 — OAuth USER IDENTITY. Authorizes Motir to know WHO you are on
+          GitHub (login + avatar). Grants NO repo access. (GithubIdentity)
+        · Grant 2 — GitHub APP INSTALLATION. You pick WHICH repositories Motir
+          may read, on GitHub's own install screen. (GithubInstallation +
+          selected GithubRepo rows.) Repo selection is ultimately changed on
+          GitHub — the UI mirrors that honestly (a "Manage on GitHub" link out),
+          it does NOT fake in-app repo granting.
+      The two grants are INDEPENDENT: an identity with no installation is a
+      valid state the UI shows (Panel 1's post-identity / Panel 4's revoked).
+
+      Built FROM the real design system: the token block below (Tier-0 --color-*
+      + shape tokens + Tier-3 --el-*) is copied verbatim from
+      packages/design-system/theme.css, so a data-palette / data-style swap and
+      dark mode re-skin this mock exactly as they re-skin the app. The markup
+      mirrors the SHIPPED primitives — Card, Pill, Button, EmptyState, Switch
+      (role="switch"), SectionLabel, and the initials/img avatar patterns — and
+      the helper CSS references ONLY --el-* colour tokens (finding #54; tints
+      carry the hue in the BACKGROUND with --el-text-strong text, finding #35 /
+      AA) and element-semantic shape tokens (--radius-*/--spacing-*/--height-*),
+      never Tier-0 --color-* or a raw rounded-*/p-*/h-*. No new design-system
+      entry is invented — Pill has no built-in PR/CI tone, so PR/CI states map
+      onto the shipped semantic axes (see design-notes.md § Pill mapping).
+
+      PANELS (multi-panel board — review EACH, mistake #31):
+        (1) Settings → Workspace → GitHub, NOT connected — the two-grants
+            explainer + primary "Connect GitHub" CTA (the access path: the
+            settings rail shows the GitHub row active — the door is drawn).
+        (2) Connected — the repo-selection list: bound identity (avatar+login),
+            the installation, the selected repos each with a sync-state Pill +
+            a per-repo sync Switch, and "Manage on GitHub" link-outs.
+        (3) A work item's PR/CI status surface — the issue-detail Development
+            section listing linked PR(s): PR-state Pill (Open/Merged/Closed) +
+            CI-state Pill (passing/failing/running).
+        (4) Empty + error states — the issue with NO linked PR (EmptyState,
+            quiet copy) and the settings REVOKED state (App uninstalled on
+            GitHub out-of-band → danger callout via --el-danger + Reconnect).
+      Toggle data-theme="dark" on <html> to confirm token parity. Full spec,
+      copy strings, and per-element --el-* roles in design-notes.md.
+    -->
+    <style>
+            /* ─── Tier-0 base (@theme → :root) — from packages/design-system/theme.css ─── */
+      :root {
+        /* ── Color: brand & primary ─────────────────────────────────────── */
+        /* Notion's signature purple — reserved for the dominant CTA only. */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        /* Accent FILL behind white text (filled buttons/badges). In light theme it
+           equals --color-primary; the dark theme darkens it so white label text
+           clears WCAG AA (the brighter --color-primary stays the accent used AS text
+           on the page). See [data-theme='dark']. (MOTIR-757) */
+        --color-primary-fill: #5645d4;
+
+        /* Surfaces */
+        --color-background: #ffffff; /* canvas */
+        --color-foreground: #1a1a1a; /* ink (primary text) */
+        --color-surface: #f6f5f4; /* subtle section backgrounds */
+        --color-surface-soft: #fafaf9; /* quieter section divisions */
+        --color-canvas: #ecebe7; /* recessed board behind raised cards (planning canvas) */
+
+        /* Text scale (Notion's warm-charcoal hierarchy) */
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f; /* body emphasis */
+        --color-slate: #5d5b54; /* secondary text */
+        --color-steel: #787671; /* tertiary / footer */
+        --color-stone: #a4a097; /* muted labels */
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        /* Borders / hairlines */
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        /* Accent secondary (used sparingly — pastel tints for feature cards) */
+        --color-accent: #ff64c8; /* brand pink */
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        /* Card tints (pale, for tinted surface variants) */
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        /* Semantic */
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        /* Link blue (NOT primary purple — distinct role). Tuned to clear WCAG AA
+           (4.5:1) on BOTH the white page (#ffffff → 4.94:1) AND the slightly darker
+           --color-surface-soft (#fafaf9 → 4.73:1) that hovered rows paint behind it,
+           so a link on a hovered soft-surface row stays accessible
+           (bug-filters-directory-name-link-hover-aa-contrast — #0075de was 4.37:1
+           on the soft surface). */
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        /* ── Typography ─────────────────────────────────────────────────── */
+        /* CSS variables set by next/font in app/layout.tsx. */
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        /* Type scale — Notion-ish hierarchy.
+           Headings (xl and up) default to serif; body defaults to sans. */
+        --font-size-xs: 0.75rem; /* 12px — micro labels */
+        --font-size-sm: 0.875rem; /* 14px — small body, buttons */
+        --font-size-base: 1rem; /* 16px — primary body */
+        --font-size-lg: 1.25rem; /* 20px — h4 / subtitle */
+        --font-size-xl: 1.5rem; /* 24px — h3 / card titles */
+        --font-size-2xl: 2rem; /* 32px — h2 */
+        --font-size-3xl: 3rem; /* 48px — h1 */
+        --font-size-display: 5rem; /* 80px — hero display */
+
+        /* ── Shape (the warm-editorial base style) ─────────────────────── */
+        /* Notion uses sober rectangles (8px buttons); Figma uses pills (50px).
+           The base scale IS the `warm-editorial` style (sober rectangles); the
+           `soft-playful` style adopts Figma's pills in its [data-style] block. */
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        /* Semantic shape tokens — components reference these, not --radius-md
+           directly. Lets a [data-style] block override these without renaming. */
+        --radius-btn: 8px; /* Notion-style sober button */
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px; /* small interactive affordances — menu/list rows, icon & close buttons, tooltips, code chips */
+        --radius-kbd: 4px; /* keyboard-hint chips */
+
+        /* ── Elevation ──────────────────────────────────────────────────── */
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        /* ── Spacing ────────────────────────────────────────────────────── */
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        /* Component-specific spacing */
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        /* Control-level spacing — small affordances. Flip with the active style so a
+           getdesign swap can redefine control DENSITY, not just radius. */
+        --spacing-control-x: 10px; /* menu/list rows, combobox trigger & search, sidebar rows */
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px; /* square icon / close buttons */
+        --spacing-chip-x: 10px; /* badge / pill chips */
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px; /* <kbd> keyboard-hint chips */
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px; /* tooltip & inline code blocks */
+        --spacing-tooltip-y: 4px;
+
+        /* Heights */
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px; /* single-line / square small control */
+
+        /* ── Interaction ────────────────────────────────────────────────── */
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+
+            /* ─── Tier-0 dark overrides ─── */
+      [data-theme='dark'] {
+        color-scheme: dark;
+
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e; /* recessed board behind raised cards (planning canvas) */
+
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        /* Primary stays close to brand; brightened from the light theme so the accent
+           reads as TEXT/icon on the near-black canvas (#7b6ce5 on #0f0f0f ≈ 4.67:1, AA
+           text). But white text ON this as a FILL is only 4.1:1 — so filled accent
+           buttons use the darker --color-primary-fill below instead (MOTIR-757). */
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        /* Darker accent fill for dark theme: white label text on #6c5cdd is 4.99:1
+           (AA), while #6c5cdd still clears 3:1 as a fill against the dark canvas. */
+        --color-primary-fill: #6c5cdd;
+
+        /* Pastel tints dimmed for dark backgrounds */
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+
+            /* ─── Tier-0 light explicit ─── */
+      [data-theme='light'] {
+        color-scheme: light;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+      }
+
+            /* ─── Tier-3 --el-* element tokens (light) ─── */
+      :root,
+      [data-appearance-scope] {
+        /* ── Page ──────────────────────────────────────────────────────── */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        /* ── Text scale (the warm-charcoal hierarchy, named by ROLE) ────── */
+        --el-text: var(--color-foreground); /* primary ink */
+        --el-text-strong: var(--color-charcoal); /* emphasis / AA-safe text on tints */
+        --el-text-secondary: var(--color-slate); /* secondary copy */
+        --el-text-muted: var(--color-muted-foreground); /* muted / captions */
+        --el-text-tertiary: var(--color-steel); /* tertiary / footers */
+        --el-text-faint: var(--color-stone); /* faint labels */
+        --el-text-inverted: var(--color-background); /* text on an ink / accent fill */
+
+        /* ── Accent (active CTA identity) + brand highlight ─────────────── */
+        /* --el-accent is the FILL behind --el-accent-text (white): filled buttons,
+           badges, toggles. --el-accent-on-surface is the accent used AS text/icon on
+           a page surface. They diverge in dark theme (fill darkens for white-text AA;
+           text stays brand-bright for AA on the near-black canvas) — MOTIR-757. */
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent); /* brand pink — decorative accents */
+
+        /* ── Surfaces ──────────────────────────────────────────────────── */
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas); /* recessed board behind raised cards (planning canvas) */
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted); /* faint fill — chips, code, inverted text */
+
+        /* ── Borders ───────────────────────────────────────────────────── */
+        --el-border: var(--color-border); /* default hairline */
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        /* ── Links ─────────────────────────────────────────────────────── */
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        /* ── Semantic status ───────────────────────────────────────────── */
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        /* ── Pastel tints (Pill tones, feature surfaces) ───────────────── */
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        /* ── Status hues (MOTIR-1273 · 1266.2 — un-collapse the workflow statuses) ──
+           Each workflow status renders its dot/icon in its OWN hue, so in_review /
+           blocked / cancelled differentiate from the three lifecycle CATEGORIES the
+           filter dots used to collapse them onto. Maps to a Tier-0 --color-* (the
+           gold-standard --el-chart-* / --el-type-* pattern), so every palette re-skins
+           them automatically through its --color-* overrides — no per-palette block
+           needed (the card's "+ 10 palette blocks" is satisfied by that indirection;
+           verified slate ≠ stone and info/warning/destructive/success/primary are all
+           palette-defined across all 10). The status DOT uses the hue at full strength;
+           a status CHIP bg = color-mix(var(--el-status-X) 14%, var(--el-surface)) with
+           --el-text-strong (design/design-system/design-notes.md §A). Keys grounded in
+           lib/workflows/defaultWorkflow.ts. */
+        --el-status-todo: var(--color-stone); /* neutral grey — not started */
+        --el-status-in-progress: var(--color-info); /* blue — active */
+        --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
+        --el-status-done: var(--color-success); /* green — resolved */
+        --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
+        --el-status-cancelled: var(--color-steel); /* terminal grey — not red (cancel ≠ error) */
+
+        /* ── Priority hues (MOTIR-1273 · 1266.2 — a 5-step diverging ramp) ──
+           Un-collapses lib/issues/priorityMeta.ts, where `medium` AND `lowest` were
+           both neutral grey (the exact "can't differentiate" complaint). red → orange
+           → mid-slate → blue → faint-stone: two DISTINCT greys for medium / lowest,
+           kept legible by the redundant ArrowUp / Minus / ArrowDown icon (AA, finding
+           #35). The Pill `priority` tone tints these over --el-surface
+           (design/design-system/design-notes.md §B). */
+        --el-priority-highest: var(--color-destructive); /* red */
+        --el-priority-high: var(--color-warning); /* orange */
+        --el-priority-medium: var(--color-slate); /* mid slate (un-collapsed) */
+        --el-priority-low: var(--color-info); /* blue */
+        --el-priority-lowest: var(--color-stone); /* faint stone (un-collapsed) */
+
+        /* ── Semantic SURFACES (MOTIR-1273 · 1266.2 — banner / callout fills) ──
+           Names the banner/callout fills components reached for as raw --el-tint-*
+           (the FormField error box, the public danger / warning banners). Each = a
+           tint base + a strong-ink text token, AA-safe (charcoal-on-tint clears
+           ~10:1 both themes, finding #35). notice-info / callout / success are
+           defined AHEAD of their dedicated surfaces (the spec's "NEW (no impl)"
+           pattern; design/design-system/design-notes.md §C). */
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal); /* ink on the warning surface */
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        /* ── Identity hues (MOTIR-1274 · 1266.3 — un-collapse the shared --el-tint-* pool) ──
+           Roles / org-roles / privacy / labels / avatars each got a DEDICATED token so a
+           palette can tune them apart (today they all pulled from the same six --el-tint-*,
+           so a label, a role and an avatar could not diverge). Every token DEFAULTS to
+           today's exact tint → zero visual change in the motir base; each maps to a Tier-0
+           --color-* so palettes + the dark block re-skin them for free (no per-palette
+           block — the gold-standard --el-chart-* / --el-type-* indirection). This block
+           also DECOUPLES the --el-type-* MISUSE: NotificationRow event badges, the
+           ProjectAvatar mono tile and the OrgUsageClient model dots were borrowing
+           work-item-KIND hues for non-type meaning; they get their own --el-notif-* /
+           --el-avatar-fallback / --el-model-* tokens at the SAME hues (still zero change).
+           design/design-system/design-notes.md §D. */
+        /* Roles / org-roles / privacy — Pill memberRole/orgRole/tone (today hardcoded in
+           Pill.tsx CVA). admin→lavender, member→sky, viewer→mint; owner→lavender; private→
+           lavender, public→sky (public defined AHEAD — no rendered "public" badge yet). */
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        /* Label ramp — lib/labels/labelTint.ts hashes the name → 1..6 in the fixed order
+           peach,rose,mint,lavender,sky,yellow (the seed-loader family; matches shipped). */
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists
+           project.avatarColor ∈ these strings, so numbering them would break stored rows
+           (spec §7.1, rung-2 migration safety). The fallback fixes --el-type-* misuse #2 —
+           the mono initials tile keeps its blue but stops borrowing --el-type-task. */
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info); /* mono tile — was --el-type-task (= --color-info) */
+        /* Notification event badges (decouple --el-type-* misuse #2; same hues → zero change).
+           mentioned keeps the accent fill it already used — --el-accent resolves to
+           --color-primary-fill (purple), NOT --color-accent (pink); the spec's base column
+           read --color-accent but its note said "alias for consistency", so per §2
+           zero-visual-change this maps to the SHIPPED value. */
+        --el-notif-mentioned: var(--color-primary-fill); /* the accent fill (matches prior --el-accent) */
+        --el-notif-commented: var(--color-info); /* was --el-type-task */
+        --el-notif-assigned: var(--color-accent-green); /* was --el-type-story */
+        --el-notif-transitioned: var(--color-accent-teal); /* was --el-type-subtask */
+        /* AI model dots (promote to a named family; deepseek was borrowing --el-type-subtask).
+           opus keeps the accent fill, same --color-primary-fill reasoning as mentioned. */
+        --el-model-opus: var(--color-primary-fill); /* the accent fill (matches prior --el-accent) */
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal); /* was --el-type-subtask */
+
+        /* ── Icon + text roles (MOTIR-1275 · 1266.4 — split the --el-text-muted /
+           --el-text triple-duty) ──
+           Icons and overlines/subtitles were borrowing the body-copy text tokens
+           (--el-text-muted for every icon + caption, --el-text for the tooltip fill),
+           so a palette could not tune an icon apart from prose. These give each role
+           its own token mapped to the SAME Tier-0 neutral it resolves to today, so
+           every palette + the dark block re-skin them for free (the gold-standard
+           --el-chart-* / --el-type-* indirection — no per-palette block). icon-btn /
+           icon-heading are defined AHEAD of an explicit consumer (the spec's
+           "NEW (no impl)" pattern; buttons inherit currentColor today).
+           design/design-system/design-notes.md §E. */
+        --el-icon-muted: var(--color-muted-foreground); /* inactive nav / chevron / close */
+        --el-icon-active: var(--color-primary); /* active nav icon (was --el-accent-on-surface) */
+        --el-icon-btn: var(--color-foreground); /* explicit button-icon ink (usually currentColor) */
+        --el-icon-heading: var(--color-charcoal); /* an icon beside a heading */
+        --el-icon-field: var(--color-muted-foreground); /* search / chevron / calendar in inputs */
+        --el-text-eyebrow: var(--color-muted-foreground); /* uppercase-mono overline */
+        --el-text-subtitle: var(--color-slate); /* lead paragraph (Modal / EmptyState desc) */
+        --el-text-helper: var(--color-muted-foreground); /* form hint (was --el-text-muted) */
+        --el-text-identifier: var(--color-slate); /* monospace MOTIR-123 keys (was --el-text-secondary) */
+
+        /* ── Component-surface primitives (MOTIR-1275 · 1266.4) ──
+           Names the control surfaces that were overloading --el-surface (option
+           highlight / chip fill / switch knob), --el-border(-strong) (control vs
+           panel edge) and --el-text (tooltip fill). Each defaults to the exact
+           Tier-0 --color-* the component renders today → zero visual change in the
+           motir base; a palette can now tune each apart. Two deliberate
+           spec-vs-shipped reconciliations (rung-2), documented in §F of the notes:
+           (1) --el-count-bg maps to --color-muted, NOT the spec's tentative
+           --color-surface — board count badges render ON an --el-surface column, so
+           surface would erase them; muted is the shipped fill (and identical to
+           surface in dark). (2) --el-overlay-scrim is the lone concrete-value token
+           (no --color-* base), so it carries an explicit dark companion below; light
+           == today's bg-black/40, dark DEEPENS to ~65% for a legible scrim.
+           design/design-system/design-notes.md §F. */
+        --el-tooltip-bg: var(--color-foreground); /* inverted tooltip fill (was --el-text) */
+        --el-tooltip-text: var(--color-background); /* text on the tooltip (was --el-text-inverted) */
+        --el-switch-on: var(--color-primary-fill); /* checked track (was --el-accent) */
+        --el-switch-knob: var(--color-surface); /* the thumb (was --el-surface) */
+        --el-option-active-bg: var(--color-muted); /* highlighted listbox option (was --el-surface) */
+        --el-overlay-scrim: #00000066; /* modal/dialog scrim — concrete (light); dark companion below */
+        --el-chip-bg: var(--color-surface); /* neutral chip fill (tinted chips keep their tint) */
+        --el-chip-border: var(--color-border); /* neutral chip edge */
+        --el-card: var(--color-background); /* untinted card surface — fixes the bg-card orphan */
+        --el-input-border: var(--color-hairline-strong); /* input outline (was --el-border-strong) */
+        --el-button-border: var(--color-hairline-strong); /* secondary-button outline */
+        --el-count-bg: var(--color-muted); /* count-badge fill (shipped value; see note above) */
+        --el-count-text: var(--color-slate); /* count-badge ink (was --el-text-secondary) */
+
+        /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
+        /* The colour the UI was missing: each issue type renders its icon in its
+           own hue, matching ISSUE_TYPE_META.colorToken. */
+        --el-type-epic: var(--color-accent); /* pink */
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* ── Work-item TYPE hues (the work-NATURE palette, Story 2.7 · 2.7.4) ────
+           Parallel to the per-KIND hues above: the ten fixed `WorkItemType` members
+           each render their icon/chip in their own hue (matches
+           lib/issues/workItemTypeMeta.ts). NO new Tier-0 colour needed — the seven
+           "produces an artifact" types take the seven saturated hues; the three
+           "meta / admin" types (decision, manual, chore) take the three greys
+           (desaturation is semantically apt). Each maps to a Tier-0 var, so the
+           [data-theme="dark"] block re-skins them automatically. The chip puts the
+           hue in a color-mix tint BACKGROUND with --el-text-strong text (AA,
+           finding #35); never a page-level tint. */
+        --el-type-code: var(--color-info); /* blue   — implementation */
+        --el-type-design: var(--color-accent); /* pink   — UI/UX design */
+        --el-type-test: var(--color-success); /* green  — automated tests */
+        --el-type-content: var(--color-accent-teal); /* teal   — copy / docs / translate */
+        --el-type-research: var(--color-primary); /* purple — spike / investigation */
+        --el-type-review: var(--color-accent-orange); /* orange — QA / review */
+        --el-type-deploy: var(--color-destructive); /* red    — infra / ops / release */
+        --el-type-decision: var(--color-charcoal); /* ink    — decision record */
+        --el-type-manual: var(--color-stone); /* stone  — human provisioning */
+        --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+
+        /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
+           Every chart colour routes through one of these, NEVER a raw --color-*
+           in chart code (the per-component growth pattern). They map to Tier-0
+           vars, so the Tier-1 dark block re-skins them automatically. The pair
+           committed/completed is distinguished by TEXT label too, never colour
+           alone (finding #35). */
+        --el-chart-guideline: var(--color-stone); /* burndown ideal line (dashed) */
+        --el-chart-actual: var(--color-primary); /* burndown actual remaining */
+        --el-chart-scope: var(--color-warning); /* scope-change marker */
+        --el-chart-committed: var(--color-info); /* velocity committed bar */
+        --el-chart-completed: var(--color-success); /* velocity completed bar */
+        --el-chart-average: var(--color-charcoal); /* velocity average (dashed ref) */
+        --el-chart-plot: var(--color-surface-soft); /* plot background fill */
+        --el-chart-grid: var(--color-border); /* gridlines */
+        --el-chart-axis: var(--color-steel); /* axis line + tick labels */
+        /* Story 6.3 dashboards (6.3.4) — the categorical donut ramp + the
+           created/resolved series + the deficit/surplus difference fills. Same
+           growth pattern: map to existing Tier-0 vars, so the dark block re-skins
+           them automatically. The donut cycles cat-1..7; "None"/unset is always
+           cat-none (neutral grey); created/resolved read by line + legend label,
+           never colour alone (finding #35). */
+        --el-chart-cat-1: var(--color-primary); /* distribution donut segment 1 */
+        --el-chart-cat-2: var(--color-info); /* segment 2 */
+        --el-chart-cat-3: var(--color-success); /* segment 3 */
+        --el-chart-cat-4: var(--color-warning); /* segment 4 */
+        --el-chart-cat-5: var(--color-accent-teal); /* segment 5 */
+        --el-chart-cat-6: var(--color-accent); /* segment 6 */
+        --el-chart-cat-7: var(--color-charcoal); /* segment 7 (ramp length) */
+        --el-chart-cat-none: var(--color-stone); /* the "None" / unset group */
+        --el-chart-created: var(--color-info); /* created-vs-resolved: created line */
+        --el-chart-resolved: var(--color-success); /* created-vs-resolved: resolved line */
+        --el-chart-deficit: var(--color-destructive); /* fill where created > resolved */
+        --el-chart-surplus: var(--color-success); /* fill where resolved > created */
+        --el-chart-age: var(--color-warning); /* average-age bar (8.8.13 — aging backlog) */
+        --el-chart-resolution: var(--color-info); /* resolution-time bar (8.8.13 — throughput) */
+        /* Sprint CYCLE GRAPH series (Story 8.14 — Linear scope-vs-completed). A
+           collision-free --el-chart-cycle-* family: the bare --el-chart-completed /
+           -started / -target names are taken (velocity / old burndown), so reusing
+           them would silently re-skin those charts. The --el-chart-plot/grid/axis
+           scaffold is reused unchanged. */
+        --el-chart-cycle-scope: var(--color-stone); /* live total scope (gray) */
+        --el-chart-cycle-started: var(--color-warning); /* started / in progress (amber) */
+        --el-chart-cycle-completed: var(--color-info); /* completed (solid blue) */
+        --el-chart-cycle-target: var(--color-info); /* ideal remaining (blue, dotted) */
+
+        /* ── Public projects (Story 6.12 · public read-only view) ──────────
+           New --el-* roles 6.12.4/6.12.6/6.12.7 add here, each mapped to an
+           existing Tier-0 value (the per-component token-growth pattern). The
+           [data-theme="dark"] block re-skins them automatically because every
+           mapping is a --color-* var the Tier-1 block already flips (no concrete
+           hex). Per design/public-projects/design-notes.md "Colour roles". */
+        --el-public-banner-bg: var(--color-tint-sky); /* "you're viewing a public project" framing */
+        --el-public-banner-text: var(--color-charcoal); /* AA ~10:1 on the sky tint */
+        --el-vote-bg: var(--color-tint-lavender); /* upvote control resting fill (6.12.7) */
+        --el-vote-active-bg: var(--color-primary); /* voted: accent fill */
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        /* ── Onboarding / canvas (Story 1266.6 · MOTIR-1277) ───────────────
+           Per-element hues for the onboarding canvas: revision-diff kind chips
+           (RevisionDiff), the discovery chat bubbles (DiscoveryChatRail), the
+           planning-canvas edges (PlanningCanvas), and the station tier tile
+           (StationNode). Each maps to the exact Tier-0 --color-* it renders
+           today (zero visual change vs the borrowed --el-tint-* / --el-accent /
+           --el-border), so a palette re-skins them via its --color-* override
+           and [data-theme="dark"] flips them — no per-palette / dark entry.
+           Per design/design-system/design-notes.md §H. NB: the card's "wire
+           --el-roadmap-* into StationNode" is corrected there — roadmap stays
+           scoped to the PUBLIC roadmap; the canvas gets its own
+           --el-station-tier-* family (a different semantic concept). */
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill); /* text stays --el-accent-text */
+        --el-chat-bubble-ai: var(--color-surface-soft); /* text stays --el-text */
+        --el-canvas-edge-pending: var(--color-border); /* dashed, not-yet-committed edge */
+        --el-canvas-edge-committed: var(--color-hairline-strong); /* solid, settled edge */
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        /* the Overview hero's soft corner washes (decorative tints only; all text
+           sits on --el-page-bg, never on the wash, so AA holds — finding #35) */
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        /* "Building in public" (Story 6.17.2/6.17.4) — the reframed `public` access
+           option glyph + the "Live"/status badge. Tier-0 flips (--color-tint-lavender
+           and --color-charcoal both re-skin under [data-theme="dark"]) re-skin these
+           automatically, so they live in Tier 3 once with no dark-block entry. */
+        --el-build-bg: var(--color-tint-lavender); /* badge / reframed-option tint */
+        --el-build-text: var(--color-charcoal); /* AA ~10:1 on the lavender tint, both themes */
+        --el-build-glyph: var(--color-primary); /* the megaphone accent glyph */
+
+        /* ── Interaction / agile surfaces (MOTIR-1276 · 1266.5) ──────────────
+           Un-collapses the dnd / selection / overdue / accent meanings that all
+           rode --el-tint-lavender / --el-accent / --el-text, so a palette can tune a
+           drop target apart from a selected row apart from an overdue date. Each
+           maps to a --color-* → zero base-palette change AND every palette + dark
+           re-skins for free (§1; the chart/type ramp pattern). The previously
+           undifferentiated meanings (selection vs drop; overdue vs a future date)
+           now read distinctly; the rest default to today's exact value.
+           design/design-system/design-notes.md §G. */
+        --el-selection-bg: var(--color-tint-sky); /* selected row/card — sky, NOT the drop lavender */
+        --el-droptarget-bg: var(--color-tint-lavender); /* dnd drop-zone fill (shipped) */
+        --el-board-column-accent: var(--color-primary); /* drop ring / column border */
+        --el-overdue: var(--color-destructive); /* past-due date */
+        --el-due-soon: var(--color-warning); /* due today / within 3 days */
+        --el-sprint-accent: var(--color-tint-lavender); /* sprint-header emphasis (shipped) */
+        --el-epic-accent: var(--color-accent); /* pink epic identity (aliases --el-type-epic) */
+        --el-archived-pill-bg: var(--color-muted); /* inactive "Archived" badge fill */
+        --el-archived-pill-text: var(--color-slate); /* AA-safe ink on the muted fill */
+        --el-auth-wash: var(--color-tint-sky); /* sign-in background wash (text on the card) */
+        --el-tabnav-track: var(--color-surface); /* tab-bar track (Segmented / PublicTabNav) */
+        --el-tabnav-active: var(--color-primary); /* active-tab glyph (== --el-accent-on-surface) */
+        --el-card-icon-bg: var(--color-muted); /* hub/settings card icon tile */
+        --el-card-icon-fg: var(--color-primary); /* the icon inside that tile */
+
+        /* ── Code/mono (used by /tokens reference route) ───────────────── */
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        /* ── App shell — sidebar (Subtask 1.5.2). The shell mockup paints the
+           sidebar rail on $--surface and the content area on $--background; the
+           active nav row inverts that (a $--background row against the $--surface
+           rail) so the current page reads as inset into the page canvas. ──── */
+        --el-sidebar-bg: var(--color-surface); /* the rail — surface, distinct from the page canvas */
+        --el-sidebar-border: var(--color-hairline); /* the 1px seam between rail and content */
+        --el-sidebar-item-bg-hover: #eeede9; /* subtle hover lift — one shade darker than surface (light) */
+        --el-sidebar-item-bg-active: var(
+          --color-background
+        ); /* active row = canvas inset into the rail */
+      }
+
+            /* ─── Tier-3 --el-* element tokens (dark) ─── */
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        /* The modal scrim deepens in dark (MOTIR-1275 · 1266.4): on a near-black
+           canvas a 40% scrim barely separates the dialog, so dark uses ~65% — the
+           other concrete-hex --el-* alongside the sidebar hover. Light value (40%,
+           == the prior bg-black/40) lives in the :root block above. */
+        --el-overlay-scrim: #000000a6;
+      }
+
+
+            /* ══════════════════════════════════════════════════════════════════
+               Mock chrome + helper classes — reference ONLY --el-*/shape tokens.
+               Each helper reproduces a SHIPPED primitive's token mapping (the class
+               strings the primitives emit are Tailwind arbitrary-value utilities that
+               only exist through the compiler; a static mock hand-writes the same
+               var(--…) references — this is how every design/*/*.mock.html works).
+               ══════════════════════════════════════════════════════════════════ */
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              background: var(--el-page-bg);
+              color: var(--el-page-text);
+              font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+              -webkit-font-smoothing: antialiased;
+            }
+            h1, h2, h3 { margin: 0; font-weight: 600; }
+            p { margin: 0; }
+
+            /* review scaffold (matches design/settings/*.mock.html) */
+            .review-head { padding: 32px 40px 8px; max-width: 1100px; }
+            .review-head h1 { font-size: 22px; letter-spacing: -0.01em; }
+            .review-head p {
+              margin-top: 10px; font-size: 14px; line-height: 1.6;
+              color: var(--el-text-secondary); max-width: 900px;
+            }
+            .panel-board {
+              display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start;
+              padding: 24px 40px 72px;
+            }
+            .panel-label {
+              font-family: var(--font-mono, ui-monospace, monospace);
+              font-size: 11px; font-weight: 600; text-transform: uppercase;
+              letter-spacing: 0.06em; color: var(--el-text-eyebrow);
+              margin: 0 0 10px 2px;
+            }
+            .panel-label b { color: var(--el-text); font-weight: 700; }
+            .panel {
+              background: var(--el-canvas, var(--el-page-bg));
+              border: 1px solid var(--el-border-soft);
+              border-radius: var(--radius-card);
+              box-shadow: var(--shadow-card);
+              overflow: hidden;
+            }
+
+            /* ── settings-area shell (the access-path chrome) ── */
+            .settings-shell { display: flex; width: 720px; min-height: 560px; }
+            .sidebar {
+              width: 232px; flex: none; padding: 16px 12px;
+              background: var(--el-sidebar-bg); border-right: 1px solid var(--el-sidebar-border);
+            }
+            .side-back {
+              display: flex; align-items: center; gap: 8px; font-size: 13px;
+              color: var(--el-text-secondary); padding: 6px 8px; margin-bottom: 6px;
+            }
+            .side-back svg { width: 15px; height: 15px; }
+            .breadcrumb {
+              font-size: 11px; color: var(--el-text-muted); padding: 0 8px 12px;
+              letter-spacing: 0.01em;
+            }
+            .nav-grp { margin-bottom: 14px; }
+            .grp-label {
+              font-family: var(--font-mono, monospace); font-size: 10px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.06em;
+              color: var(--el-text-eyebrow); padding: 0 8px; margin-bottom: 4px;
+            }
+            .nav-row {
+              display: flex; align-items: center; gap: 10px;
+              padding: var(--spacing-control-y) var(--spacing-control-x);
+              border-radius: var(--radius-control); font-size: 13.5px;
+              color: var(--el-text-secondary); cursor: default;
+            }
+            .nav-row svg { width: 16px; height: 16px; color: var(--el-icon-muted); flex: none; }
+            .nav-row.active {
+              background: var(--el-sidebar-item-bg-active);
+              color: var(--el-text); font-weight: 500;
+              box-shadow: inset 0 0 0 1px var(--el-sidebar-border);
+            }
+            .nav-row.active svg { color: var(--el-icon-active); }
+            .content { flex: 1; padding: 28px 28px 34px; min-width: 0; }
+            .page-head { margin-bottom: 20px; }
+            .page-head h2 { font-family: var(--font-serif, Georgia, serif); font-size: 20px; }
+            .page-head .sub {
+              margin-top: 6px; font-size: 13px; line-height: 1.55;
+              color: var(--el-text-subtitle); max-width: 46ch;
+            }
+            .stack { display: flex; flex-direction: column; gap: 18px; }
+
+            /* ── Card primitive ── */
+            .card {
+              background: var(--el-card);
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              box-shadow: var(--shadow-subtle);
+            }
+            .card.pad { padding: var(--spacing-card-padding); }
+            .card-head {
+              display: flex; align-items: flex-start; justify-content: space-between;
+              gap: 12px; padding: 16px var(--spacing-card-padding);
+              border-bottom: 1px solid var(--el-border-soft);
+            }
+            .card-head h3 { font-size: 14.5px; }
+            .card-head .hsub { margin-top: 3px; font-size: 12.5px; color: var(--el-text-muted); }
+            .card-body { padding: var(--spacing-card-padding); }
+            .card-foot {
+              padding: 12px var(--spacing-card-padding);
+              border-top: 1px solid var(--el-border-soft);
+              display: flex; align-items: center; justify-content: space-between; gap: 12px;
+              font-size: 12.5px; color: var(--el-text-muted);
+            }
+
+            /* ── Button primitive (variants → --el- mapping from the shipped Button) ── */
+            .btn {
+              display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+              font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1;
+              height: var(--height-btn-md); padding: 0 var(--spacing-btn-x);
+              border-radius: var(--radius-btn); border: 1px solid transparent;
+              cursor: pointer; white-space: nowrap;
+            }
+            .btn svg { width: 16px; height: 16px; }
+            .btn-sm { height: var(--height-btn-sm); padding: 0 12px; font-size: 12.5px; }
+            .btn-primary { background: var(--el-accent); color: var(--el-accent-text); }
+            .btn-secondary { background: transparent; color: var(--el-text); border-color: var(--el-button-border); }
+            .btn-ghost { background: transparent; color: var(--el-text); }
+            .btn-danger { background: var(--el-danger); color: var(--el-danger-text); }
+            .btn-danger-ghost { background: transparent; color: var(--el-danger); border-color: var(--el-border); }
+
+            /* ── Pill primitive (base + tone modifiers; tint bg + --el-text-strong, AA) ── */
+            .pill {
+              display: inline-flex; align-items: center; gap: 4px;
+              border-radius: var(--radius-badge);
+              padding: var(--spacing-chip-y) var(--spacing-chip-x);
+              font-size: 12px; font-weight: 500; line-height: 1.3;
+              border: 1px solid transparent; white-space: nowrap;
+            }
+            .pill svg { width: 12px; height: 12px; }
+            .pill-sky { background: var(--el-tint-sky); color: var(--el-text-strong); }        /* severity=info / status=in-progress */
+            .pill-mint { background: var(--el-tint-mint); color: var(--el-text-strong); }      /* severity=success / status=done */
+            .pill-rose { background: var(--el-tint-rose); color: var(--el-text-strong); }      /* severity=danger */
+            .pill-peach { background: var(--el-tint-peach); color: var(--el-text-strong); }    /* severity=warning */
+            .pill-neutral { background: var(--el-chip-bg); color: var(--el-text-secondary); border-color: var(--el-chip-border); } /* tone=neutral */
+
+            /* ── Switch primitive (role="switch") ── */
+            .sw {
+              position: relative; width: 36px; height: 20px; flex: none;
+              border-radius: 9999px; border: 1px solid var(--el-border-strong);
+              background: var(--el-muted); cursor: pointer; transition: background 120ms;
+            }
+            .sw .kn {
+              position: absolute; top: 1px; left: 1px; width: 16px; height: 16px;
+              border-radius: 9999px; background: var(--el-switch-knob);
+              box-shadow: var(--shadow-subtle); transition: transform 120ms;
+            }
+            .sw.on { background: var(--el-switch-on); border-color: var(--el-switch-on); }
+            .sw.on .kn { transform: translateX(16px); }
+
+            /* ── Callout (info=peach, danger=--el-danger-surface) ── */
+            .callout {
+              display: flex; gap: 10px; align-items: flex-start;
+              background: var(--el-callout-bg); color: var(--el-callout-text);
+              border-radius: var(--radius-card); padding: 12px 14px; font-size: 13px; line-height: 1.5;
+            }
+            .callout svg { width: 17px; height: 17px; flex: none; margin-top: 1px; }
+            .callout-danger {
+              background: var(--el-danger-surface); color: var(--el-danger-surface-text);
+              box-shadow: inset 3px 0 0 var(--el-danger);
+            }
+            .callout-danger svg { color: var(--el-danger); }
+            .callout b { font-weight: 600; }
+
+            /* ── Avatars: GitHub identity = real avatar image (mirrors AvatarField's
+                 plain <img object-cover>); the initials disc mirrors MemberAvatar. ── */
+            .gh-avatar {
+              width: 40px; height: 40px; border-radius: 9999px; object-fit: cover;
+              flex: none; background: var(--el-avatar-fallback);
+            }
+            .gh-avatar.sm { width: 26px; height: 26px; }
+            .av-initials {
+              display: inline-flex; align-items: center; justify-content: center;
+              width: 24px; height: 24px; border-radius: 9999px; flex: none;
+              background: var(--el-text); color: var(--el-text-inverted);
+              font-size: 10px; font-weight: 600;
+            }
+
+            /* ── SectionLabel ── */
+            .section-label {
+              font-family: var(--font-mono, monospace); font-size: 11px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.06em;
+              color: var(--el-text-eyebrow); margin-bottom: 10px;
+            }
+            .muted { color: var(--el-text-muted); }
+            .mono { font-family: var(--font-mono, monospace); }
+
+            /* ── GitHub-specific composites ── */
+            .grant-row {
+              display: flex; gap: 14px; align-items: flex-start;
+              padding: 16px 0; border-top: 1px solid var(--el-border-soft);
+            }
+            .grant-row:first-of-type { border-top: 0; }
+            .grant-ic {
+              width: 38px; height: 38px; flex: none; border-radius: var(--radius-control);
+              display: inline-flex; align-items: center; justify-content: center;
+              background: var(--el-card-icon-bg); color: var(--el-card-icon-fg);
+            }
+            .grant-ic svg { width: 19px; height: 19px; }
+            .grant-eyebrow {
+              font-family: var(--font-mono, monospace); font-size: 10px; font-weight: 600;
+              text-transform: uppercase; letter-spacing: 0.05em; color: var(--el-text-eyebrow);
+            }
+            .grant-row h4 { margin: 3px 0 4px; font-size: 14px; font-weight: 600; }
+            .grant-row p { font-size: 12.5px; line-height: 1.55; color: var(--el-text-secondary); }
+
+            .identity-row { display: flex; align-items: center; gap: 12px; }
+            .identity-row .who { display: flex; flex-direction: column; gap: 1px; }
+            .identity-row .login { font-size: 14px; font-weight: 600; }
+            .identity-row .cap { font-size: 11.5px; color: var(--el-text-muted); }
+
+            .repo-list { display: flex; flex-direction: column; }
+            .repo-row {
+              display: flex; align-items: center; gap: 12px;
+              padding: 12px var(--spacing-card-padding);
+              border-top: 1px solid var(--el-border-soft);
+            }
+            .repo-row .r-ic { width: 17px; height: 17px; color: var(--el-icon-muted); flex: none; }
+            .repo-row .r-name { font-size: 13.5px; font-weight: 500; }
+            .repo-row .r-name .r-owner { color: var(--el-text-muted); font-weight: 400; }
+            .branch-chip {
+              display: inline-flex; align-items: center; gap: 4px;
+              font-family: var(--font-mono, monospace); font-size: 11px;
+              color: var(--el-code-text); background: var(--el-code-bg);
+              border-radius: var(--radius-control); padding: 1px 7px;
+            }
+            .spacer { flex: 1; }
+
+            .dev-section { padding: 4px 2px; }
+            .pr-row {
+              display: flex; align-items: center; gap: 10px;
+              padding: 11px 12px; border: 1px solid var(--el-border);
+              border-radius: var(--radius-control); background: var(--el-surface);
+              margin-top: 8px;
+            }
+            .pr-row .pr-ic { width: 17px; height: 17px; flex: none; color: var(--el-icon-muted); }
+            .pr-title { font-size: 13.5px; font-weight: 500; }
+            .pr-meta { font-size: 12px; color: var(--el-text-muted); }
+            .pr-states { display: inline-flex; gap: 6px; align-items: center; }
+            .ext { color: var(--el-icon-muted); }
+            .ext svg { width: 15px; height: 15px; }
+
+            /* peek header for the issue-detail context in Panels 3/4 */
+            .peek-head {
+              display: flex; align-items: center; gap: 10px;
+              padding: 14px var(--spacing-card-padding);
+              border-bottom: 1px solid var(--el-border-soft);
+            }
+            .type-pill {
+              display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+              color: var(--el-text-strong); background: color-mix(in srgb, var(--el-type-subtask) 16%, var(--el-surface));
+              border-radius: var(--radius-badge); padding: 2px 9px; font-weight: 500;
+            }
+            .type-pill .dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--el-type-subtask); }
+            .peek-id { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--el-text-identifier); }
+            .peek-title { font-size: 15px; font-weight: 600; }
+
+            /* EmptyState (Card root, centered — mirrors the shipped EmptyState) */
+            .empty {
+              display: flex; flex-direction: column; align-items: center; text-align: center;
+              padding: 34px 24px;
+            }
+            .empty .e-ic {
+              width: 46px; height: 46px; color: var(--el-icon-muted);
+              display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px;
+            }
+            .empty .e-ic svg { width: 40px; height: 40px; }
+            .empty h2 { font-family: var(--font-serif, Georgia, serif); font-size: 18px; color: var(--el-text); }
+            .empty p { margin-top: 8px; max-width: 42ch; font-size: 13px; color: var(--el-text-subtitle); }
+
+            .sub-grid { display: flex; gap: 18px; flex-wrap: wrap; }
+            .w360 { width: 360px; }
+            .w440 { width: 440px; }
+    </style>
+  </head>
+  <body>
+    <!-- ═══ shared SVG symbol defs (stroke=currentColor — inherits the element's --el-* colour) ═══ -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </symbol>
+        <symbol viewBox="0 0 24 24" id="i-github" fill="currentColor" stroke="none">
+          <path
+            d="M12 1.5A10.5 10.5 0 0 0 8.68 22c.53.1.72-.23.72-.5v-1.9c-2.92.64-3.54-1.25-3.54-1.25-.48-1.22-1.17-1.54-1.17-1.54-.95-.65.07-.64.07-.64 1.06.07 1.61 1.09 1.61 1.09.94 1.6 2.46 1.14 3.06.87.1-.68.37-1.14.67-1.4-2.33-.27-4.78-1.16-4.78-5.18 0-1.15.41-2.08 1.08-2.82-.11-.27-.47-1.34.1-2.79 0 0 .88-.28 2.88 1.07a10 10 0 0 1 5.24 0c2-1.35 2.88-1.07 2.88-1.07.57 1.45.21 2.52.1 2.79.68.74 1.08 1.67 1.08 2.82 0 4.03-2.45 4.91-4.79 5.17.38.33.71.97.71 1.96v2.9c0 .28.19.61.72.5A10.5 10.5 0 0 0 12 1.5Z"
+          />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-pr"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6" />
+          <circle cx="18" cy="18" r="3" />
+          <path d="M18 15V9a3 3 0 0 0-3-3h-3" />
+          <path d="m12 9 3-3-3-3" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-merge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6" />
+          <circle cx="18" cy="7" r="3" />
+          <path d="M18 10a9 9 0 0 1-9 9" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-git-closed"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6" />
+          <path d="M15 4.5 20 9.5M20 4.5 15 9.5" />
+          <path d="M17.5 12v3a3 3 0 0 1-3 3H9" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="m8.5 12 2.3 2.3 4.7-4.7" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="m15 9-6 6M9 9l6 6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-dots"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 12h.01M12 12h.01M16 12h.01" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" />
+          <path d="M10 14 21 3" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-repo"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-badge-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.78 4.78 4 4 0 0 1-6.74 0 4 4 0 0 1-4.78-4.78 4 4 0 0 1 0-6.75Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-user"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
+          <path d="M12 9v4M12 17h.01" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-briefcase"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="7" rx="2" />
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="4" x2="4" y1="21" y2="14" />
+          <line x1="4" x2="4" y1="10" y2="3" />
+          <line x1="12" x2="12" y1="21" y2="12" />
+          <line x1="12" x2="12" y1="8" y2="3" />
+          <line x1="20" x2="20" y1="21" y2="16" />
+          <line x1="20" x2="20" y1="12" y2="3" />
+          <line x1="2" x2="6" y1="14" y2="14" />
+          <line x1="10" x2="14" y1="8" y2="8" />
+          <line x1="18" x2="22" y1="16" y2="16" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-cog"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="review-head">
+      <h1>GitHub integration — connect / settings · repo selection · PR &amp; CI status</h1>
+      <p>
+        Story 7.10 · MOTIR-889 (design gate). The GitHub surfaces for the status-sync + review loop:
+        a workspace connects to GitHub through the
+        <b>verified GitHub-App model</b> — two independent grants (know my identity · pick my repos)
+        — after which linked pull requests surface their PR state and CI result directly on the work
+        item. Placement is <b>Settings → Workspace → GitHub</b> (the installation is
+        workspace-scoped). Composed only from shipped primitives — Card, Pill, Button, EmptyState,
+        Switch, the settings-area shell — with colour via <span class="mono">--el-*</span> tokens
+        and shape via element-semantic tokens. Four panels: (1) not connected · (2) connected +
+        repos · (3) PR/CI on the issue · (4) empty + revoked-error states.
+      </p>
+    </div>
+
+    <div class="panel-board">
+      <!-- ══════════════════════ PANEL 1 — NOT CONNECTED ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 1 · <b>Settings → Workspace → GitHub</b> — not connected (the two grants + CTA; rail
+          shows the door)
+        </div>
+        <div class="panel">
+          <div class="settings-shell">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="breadcrumb">Settings › Workspace › GitHub</div>
+              <div class="nav-grp">
+                <div class="grp-label">Account</div>
+                <div class="nav-row">
+                  <svg><use href="#i-user" /></svg>Profile
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Appearance
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Workspace</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-briefcase" /></svg>Jobs
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <svg><use href="#i-github" /></svg>GitHub
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Project</div>
+                <div class="nav-row">
+                  <svg><use href="#i-cog" /></svg>Details
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Workflow
+                </div>
+              </div>
+            </aside>
+
+            <div class="content">
+              <div class="page-head">
+                <h2>GitHub</h2>
+                <p class="sub">
+                  Connect this workspace to GitHub to sync pull-request and CI status onto your work
+                  items, feed the code graph, and drive the review loop.
+                </p>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Connect GitHub</h3>
+                    <p class="hsub">Two quick grants — both happen on GitHub.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="grant-row">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-badge-check" /></svg
+                    ></span>
+                    <div>
+                      <span class="grant-eyebrow">Step 1 · Identity</span>
+                      <h4>Verify your GitHub identity</h4>
+                      <p>
+                        Authorize Motir to confirm who you are on GitHub — your username and avatar.
+                        This reads your public profile only.
+                        <b>It grants no access to any code.</b>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="grant-row">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-repo" /></svg
+                    ></span>
+                    <div>
+                      <span class="grant-eyebrow">Step 2 · Repository access</span>
+                      <h4>Install the Motir GitHub App</h4>
+                      <p>
+                        Choose which repositories Motir may read — you pick the exact repos on
+                        GitHub’s install screen. Motir never sees the rest, and you can change the
+                        selection any time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-foot">
+                  <span>You’ll be sent to GitHub to authorize, then to pick repositories.</span>
+                  <button class="btn btn-primary">
+                    <svg><use href="#i-github" /></svg>Connect GitHub
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 2 — CONNECTED + REPOS ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 2 · connected — bound identity, installation & the selected-repo list
+        </div>
+        <div class="panel">
+          <div class="settings-shell">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="breadcrumb">Settings › Workspace › GitHub</div>
+              <div class="nav-grp">
+                <div class="grp-label">Account</div>
+                <div class="nav-row">
+                  <svg><use href="#i-user" /></svg>Profile
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Appearance
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Workspace</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-briefcase" /></svg>Jobs
+                </div>
+                <div class="nav-row active" aria-current="page">
+                  <svg><use href="#i-github" /></svg>GitHub
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Project</div>
+                <div class="nav-row">
+                  <svg><use href="#i-cog" /></svg>Details
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>Workflow
+                </div>
+              </div>
+            </aside>
+
+            <div class="content">
+              <div class="page-head">
+                <h2>GitHub</h2>
+                <p class="sub">
+                  Connected. Motir reads the repositories you selected and syncs their PR &amp; CI
+                  status.
+                </p>
+              </div>
+
+              <div class="stack">
+                <!-- identity + installation card -->
+                <div class="card">
+                  <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                    <div class="identity-row" style="flex: 1">
+                      <!-- GitHub identity avatar: real avatar_url image (GithubIdentity.avatarUrl) -->
+                      <img
+                        class="gh-avatar"
+                        alt="zhuyue on GitHub"
+                        src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
+                      />
+                      <div class="who">
+                        <span class="login"
+                          >@zhuyue
+                          <span class="pill pill-mint" style="margin-left: 4px"
+                            ><svg><use href="#i-badge-check" /></svg>Verified</span
+                          ></span
+                        >
+                        <span class="cap">GitHub identity · connected as Zhu Yue</span>
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
+                  </div>
+                  <div class="card-foot">
+                    <span>Motir App installed on <b>moooon</b> · organization</span>
+                    <button class="btn btn-sm btn-secondary">
+                      <svg><use href="#i-external" /></svg>Manage on GitHub
+                    </button>
+                  </div>
+                </div>
+
+                <!-- repository list -->
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Repositories</h3>
+                      <p class="hsub">
+                        Only the repositories you selected on GitHub. Motir reads these — it can’t
+                        see any others.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="repo-list">
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"><span class="r-owner">moooon/</span>motir-core</span>
+                      <span class="branch-chip">main</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-mint"
+                        ><svg><use href="#i-check" /></svg>Synced</span
+                      >
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Sync motir-core"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"><span class="r-owner">moooon/</span>motir-ai</span>
+                      <span class="branch-chip">main</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-mint"
+                        ><svg><use href="#i-check" /></svg>Synced</span
+                      >
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Sync motir-ai"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"><span class="r-owner">moooon/</span>motir-gateway</span>
+                      <span class="branch-chip">main</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-peach"
+                        ><svg><use href="#i-dots" /></svg>Syncing…</span
+                      >
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Sync motir-gateway"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="repo-row">
+                      <svg class="r-ic"><use href="#i-repo" /></svg>
+                      <span class="r-name"><span class="r-owner">moooon/</span>design-system</span>
+                      <span class="branch-chip">main</span>
+                      <span class="spacer"></span>
+                      <span class="pill pill-neutral">Not synced</span>
+                      <span
+                        class="sw"
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Sync design-system"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="card-foot">
+                    <span
+                      >To add or remove repositories, update the Motir App’s access on GitHub.</span
+                    >
+                    <button class="btn btn-sm btn-secondary">
+                      <svg><use href="#i-external" /></svg>Manage on GitHub
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 3 — PR/CI ON THE WORK ITEM ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 3 · a work item’s <b>Development</b> section — linked PR(s) with PR-state + CI-state
+          pills
+        </div>
+        <div class="panel" style="width: 440px">
+          <div class="peek-head">
+            <span class="type-pill"><span class="dot"></span>Subtask</span>
+            <span class="peek-id">MOTIR-891</span>
+          </div>
+          <div class="card-body">
+            <div class="peek-title" style="margin-bottom: 16px">
+              GitHub App installation model + repo/PR link entities
+            </div>
+            <div class="dev-section">
+              <div class="section-label">Development</div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-pr" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add GitHub App installation model</div>
+                  <div class="pr-meta">moooon/motir-core · #128</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-sky"
+                    ><svg><use href="#i-git-pr" /></svg>Open</span
+                  >
+                  <span class="pill pill-peach"
+                    ><svg><use href="#i-dots" /></svg>Checks running</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">OAuth user-identity grant</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Checks passing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-closed" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Spike: webhook signature verification</div>
+                  <div class="pr-meta">moooon/motir-core · #119</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-rose"
+                    ><svg><use href="#i-git-closed" /></svg>Closed</span
+                  >
+                  <span class="pill pill-rose"
+                    ><svg><use href="#i-x" /></svg>Checks failing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+
+              <p class="muted" style="font-size: 12px; margin-top: 12px">
+                Linked automatically when a branch or PR mentions
+                <span class="mono">MOTIR-891</span>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════ PANEL 4 — EMPTY + REVOKED ERROR ══════════════════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 4 · empty (no linked PR) &amp; error (App uninstalled on GitHub out-of-band)
+        </div>
+        <div class="sub-grid">
+          <!-- 4a: no linked PR — EmptyState -->
+          <div class="panel w360">
+            <div class="peek-head">
+              <span class="type-pill"><span class="dot"></span>Subtask</span>
+              <span class="peek-id">MOTIR-892</span>
+            </div>
+            <div class="card-body">
+              <div class="peek-title" style="margin-bottom: 16px">Webhooks → issue status sync</div>
+              <div class="dev-section">
+                <div class="section-label">Development</div>
+                <div class="card">
+                  <div class="empty">
+                    <span class="e-ic"
+                      ><svg><use href="#i-git-pr" /></svg
+                    ></span>
+                    <h2>No linked pull request</h2>
+                    <p>
+                      Open a PR from a branch that mentions <span class="mono">MOTIR-892</span> and
+                      it’ll show up here with live PR and CI status.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4b: settings revoked-error state -->
+          <div class="panel w440">
+            <div class="card-head">
+              <div>
+                <h3>GitHub</h3>
+                <p class="hsub">Settings → Workspace → GitHub · connection needs attention</p>
+              </div>
+              <span class="pill pill-rose"
+                ><svg><use href="#i-alert" /></svg>Disconnected</span
+              >
+            </div>
+            <div class="card-body">
+              <div class="callout callout-danger" style="margin-bottom: 16px">
+                <svg><use href="#i-alert" /></svg>
+                <div>
+                  <b>The Motir GitHub App was uninstalled on GitHub.</b><br />
+                  Motir can no longer read your repositories or receive PR and CI updates. Your
+                  synced work items keep their last-known status. Reconnect to restore sync.
+                </div>
+              </div>
+              <!-- identity may still be bound even though the installation is gone (grants are independent) -->
+              <div class="identity-row" style="margin-bottom: 16px">
+                <img
+                  class="gh-avatar sm"
+                  alt="zhuyue on GitHub"
+                  src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Crect width='26' height='26' fill='%235645d4'/%3E%3Ctext x='13' y='18' font-family='sans-serif' font-size='12' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
+                />
+                <div class="who">
+                  <span class="login" style="font-size: 13px"
+                    >@zhuyue
+                    <span class="pill pill-mint" style="margin-left: 2px"
+                      ><svg><use href="#i-badge-check" /></svg>Verified</span
+                    ></span
+                  >
+                  <span class="cap">Identity still connected · repository access revoked</span>
+                </div>
+              </div>
+              <button class="btn btn-primary">
+                <svg><use href="#i-github" /></svg>Reconnect GitHub
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
