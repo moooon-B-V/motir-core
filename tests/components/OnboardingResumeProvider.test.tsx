@@ -38,7 +38,7 @@ describe('OnboardingResumeProvider', () => {
   it('does not fetch and stays hidden when the gate is closed', () => {
     mockFetch(preplanState({ status: 'active' }));
     render(
-      <OnboardingResumeProvider enabled={false}>
+      <OnboardingResumeProvider enabled={false} activeProjectId="project-a">
         <Probe />
       </OnboardingResumeProvider>,
     );
@@ -49,7 +49,7 @@ describe('OnboardingResumeProvider', () => {
   it('shows the door for a live, un-finished session', async () => {
     mockFetch(preplanState({ status: 'active' }));
     render(
-      <OnboardingResumeProvider enabled>
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
         <Probe />
       </OnboardingResumeProvider>,
     );
@@ -60,7 +60,7 @@ describe('OnboardingResumeProvider', () => {
   it('stays hidden when the project never started onboarding (session null)', async () => {
     mockFetch(preplanState(null));
     render(
-      <OnboardingResumeProvider enabled>
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
         <Probe />
       </OnboardingResumeProvider>,
     );
@@ -72,7 +72,7 @@ describe('OnboardingResumeProvider', () => {
   it('still shows after the tiers are complete (MOTIR-1556 — plan not materialised yet)', async () => {
     mockFetch(preplanState({ status: 'tiers_complete' }));
     render(
-      <OnboardingResumeProvider enabled>
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
         <Probe />
       </OnboardingResumeProvider>,
     );
@@ -82,11 +82,62 @@ describe('OnboardingResumeProvider', () => {
   it('stays hidden when the pre-plan read fails', async () => {
     mockFetch(null, false);
     render(
-      <OnboardingResumeProvider enabled>
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
         <Probe />
       </OnboardingResumeProvider>,
     );
     await Promise.resolve();
     expect(screen.getByTestId('signal').textContent).toBe('hide');
+  });
+
+  // MOTIR-1560: the door must re-evaluate on an IN-PLACE active-project switch
+  // (a `router.refresh()` that leaves the server `enabled` gate open), not only
+  // when the gate flips. Before the fix the effect keyed on `[enabled]` alone, so
+  // switching between two in-shell projects that both have `onboardingRanAt == null`
+  // never re-fetched and the door showed the STALE project's session.
+  it('re-reads the live session when the active project changes (no longer stale on an in-place switch)', async () => {
+    // Project A has a live, un-finished session → the door shows.
+    mockFetch(preplanState({ status: 'active' }));
+    const { rerender } = render(
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
+        <Probe />
+      </OnboardingResumeProvider>,
+    );
+    expect(await screen.findByText('show')).toBeTruthy();
+
+    // Switch to project B (only the active-project id changes; the gate stays
+    // open). A fresh fetch spy returns a null session → the door must HIDE, and
+    // the new spy must have fired (the effect re-ran for the switch).
+    mockFetch(preplanState(null));
+    rerender(
+      <OnboardingResumeProvider enabled activeProjectId="project-b">
+        <Probe />
+      </OnboardingResumeProvider>,
+    );
+    await screen.findByText('hide');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith('/api/ai/pre-plan', expect.anything());
+  });
+
+  // The flip side of the key: an unrelated re-render that changes NEITHER the
+  // gate nor the active project must NOT re-fetch (the read stays keyed, so it
+  // doesn't add a motir-ai round-trip on every authed re-render).
+  it('does not re-read when neither the gate nor the active project changed', async () => {
+    mockFetch(preplanState({ status: 'active' }));
+    const { rerender } = render(
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
+        <Probe />
+      </OnboardingResumeProvider>,
+    );
+    expect(await screen.findByText('show')).toBeTruthy();
+    const callsAfterMount = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    rerender(
+      <OnboardingResumeProvider enabled activeProjectId="project-a">
+        <Probe />
+      </OnboardingResumeProvider>,
+    );
+    await Promise.resolve();
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsAfterMount);
   });
 });

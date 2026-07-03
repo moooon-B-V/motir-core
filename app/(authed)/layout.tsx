@@ -200,7 +200,10 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
               {/* OnboardingResumeProvider (MOTIR-1533) resolves the in-progress
                   onboarding signal ONCE and shares it with the SidebarNav rail
                   row + the ⌘K twin below, so neither fetches on its own. */}
-              <OnboardingResumeProvider enabled={resumeOnboardingEnabled}>
+              <OnboardingResumeProvider
+                enabled={resumeOnboardingEnabled}
+                activeProjectId={activeProject?.id ?? null}
+              >
                 <AppLayout
                   topNav={
                     <TopNav
