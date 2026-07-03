@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { getActiveProject } from '@/lib/projects';
+import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { DashboardsHome } from './_components/DashboardsHome';
@@ -25,7 +26,7 @@ export default async function DashboardPage() {
   // preserved empty-state cue (1.3.4).
   const project = await getActiveProject();
   if (!project) {
-    return <ProjectsEmptyState />;
+    return <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />;
   }
 
   const dashboards = await dashboardsService.listDashboards(ctx);

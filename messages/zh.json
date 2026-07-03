@@ -431,6 +431,8 @@
       "createFirst": "创建你的第一个项目",
       "emptyDescription": "项目用于归类你的工作项，并赋予它们类似PROD-1的标识。创建一个即可开始规划。",
       "create": "创建项目",
+      "planWithAi": "用 AI 规划新项目",
+      "untitled": "未命名项目",
       "created": "项目已创建",
       "createError": "无法创建项目",
       "identifierTaken": "该标识已被占用，请换一个。",
