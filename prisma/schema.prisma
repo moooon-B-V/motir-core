@@ -476,6 +476,9 @@ model Workspace {
   // Workspace-scoped tenant data — cascade with the workspace.
   plans                    Plan[]
   planItems                PlanItem[]
+  // GitHub App installations on this workspace (Story 7.10 · MOTIR-891) — "Grant
+  // 2" of the GitHub integration (repo access). Cascade with the workspace.
+  githubInstallations      GithubInstallation[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -1110,6 +1113,11 @@ model WorkItem {
   // points at the live row; SetNull on the FK so archiving the target leaves the
   // PlanItem (history) intact. Modelled both sides per the FK-`@relation` rule.
   planItems            PlanItem[]                @relation("PlanItemWorkItem")
+  // GitHub pull requests linked to this work item (Story 7.10 · MOTIR-891) — the
+  // PR→work-item link the status sync (MOTIR-892) + CI loop (MOTIR-894) drive.
+  // SetNull on delete (PR history survives). Modelled both sides per the
+  // FK-`@relation` rule.
+  githubPullRequests   GithubPullRequest[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -3086,4 +3094,98 @@ model GithubIdentity {
 
   @@index([userId])
   @@map("github_identity")
+}
+
+/// A GitHub App installation on a workspace (Story 7.10 · MOTIR-891) — "Grant 2"
+/// of the verified GitHub-App model: the owner installs the Motir App on their
+/// GitHub org/user and selects repos, granting repo access. DISTINCT from the
+/// per-user identity grant (GithubIdentity) — an installation with no bound
+/// identity, or an identity with no installation, are both valid states the UI
+/// shows. Created by the `installation` webhook (MOTIR-892, system context).
+/// Workspace-scoped tenant data: RLS gates on `app.workspace_id`, with the
+/// system-admin escape the webhook writer uses.
+///
+/// `provider` is the PROVIDER DISCRIMINATOR — every downstream read goes through
+/// the GitProvider seam (`lib/git`), so GitLab/Bitbucket is purely additive
+/// (7.23 implements the same seam under `provider: 'gitlab'`). The installation
+/// access token is NEVER stored here: it is minted on demand from the App
+/// private key (`lib/github/appAuth.ts`) and cached in-memory only.
+model GithubInstallation {
+  id             String   @id @default(cuid())
+  /// Provider discriminator — always "github" for these rows; the seam keys on it.
+  provider       String   @default("github")
+  /// GitHub's numeric installation id (as a string — never do math on it), used
+  /// by the webhook + the token-mint endpoint. UNIQUE (one row per GitHub
+  /// installation). DISTINCT from `id`, the internal cuid PK.
+  installationId String   @unique @map("installation_id")
+  workspaceId    String   @map("workspace_id")
+  accountLogin   String   @map("account_login")
+  accountType    String   @map("account_type")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repos     GithubRepo[]
+
+  @@index([workspaceId])
+  @@map("github_installation")
+}
+
+/// A repository selected on a GitHub App installation (Story 7.10 · MOTIR-891).
+/// The installation grant's repo access is scoped to these rows. FK to the
+/// internal installation modelled on BOTH sides (the FK-`@relation` rule). Read
+/// through the GitProvider seam as a NormalizedRepo (owner/name/defaultBranch).
+model GithubRepo {
+  id             String   @id @default(cuid())
+  /// Provider discriminator — always "github" for these rows.
+  provider       String   @default("github")
+  /// FK → GithubInstallation.id (the internal cuid, NOT GitHub's numeric
+  /// installation id). The parent installation this repo was selected on.
+  installationId String   @map("installation_id")
+  /// GitHub's numeric repository id (as a string) — stable across renames.
+  repoId         String   @map("repo_id")
+  owner          String
+  name           String
+  defaultBranch  String   @map("default_branch")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  installation GithubInstallation  @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  pullRequests GithubPullRequest[]
+
+  @@unique([installationId, repoId])
+  @@index([installationId])
+  @@map("github_repo")
+}
+
+/// A pull request linked to a work item (Story 7.10 · MOTIR-891) — the
+/// PR→work-item link the status sync (MOTIR-892) + CI loop (MOTIR-894) drive.
+/// `workItemId` is NULLABLE: a PR can exist before it resolves to a work item
+/// (the head ref carries the MOTIR-<n> hint the consumer resolves). FK to the
+/// repo AND the work item modelled on both sides (the FK-`@relation` rule). Read
+/// through the GitProvider seam as a NormalizedChangeRequest.
+model GithubPullRequest {
+  id         String   @id @default(cuid())
+  /// Provider discriminator — always "github" for these rows.
+  provider   String   @default("github")
+  /// FK → GithubRepo.id (internal cuid).
+  repoId     String   @map("repo_id")
+  number     Int
+  /// Normalized change-request state: "open" | "closed" (merged is the boolean).
+  state      String
+  merged     Boolean  @default(false)
+  headRef    String   @map("head_ref")
+  /// Nullable link to the work item this PR resolves. SetNull on delete so the
+  /// PR row (history) survives a work-item deletion with a null link.
+  workItemId String?  @map("work_item_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  repo     GithubRepo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  workItem WorkItem?  @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  @@unique([repoId, number])
+  @@index([repoId])
+  @@index([workItemId])
+  @@map("github_pull_request")
 }
