@@ -113,6 +113,17 @@ export const githubIdentityService = {
     );
     return row ? toGithubIdentityDTO(row) : null;
   },
+
+  /**
+   * Unbind the acting member's GitHub identity (Disconnect — MOTIR-895).
+   * Independent of the workspace installation — the two grants are independent,
+   * so this never touches GithubInstallation (the App is uninstalled on GitHub).
+   * Idempotent: disconnecting an already-unbound member is a no-op. Runs under
+   * `withUserContext` so RLS narrows the delete to the owner's row.
+   */
+  async disconnect(userId: string): Promise<void> {
+    await withUserContext(userId, (tx) => githubIdentityRepository.deleteByUserId(userId, tx));
+  },
 };
 
 /** POST the code→token exchange. GitHub returns `application/json` only when

@@ -412,6 +412,7 @@
       "reports": "报表",
       "settings": "设置",
       "jobRuns": "任务运行",
+      "github": "GitHub",
       "docs": "文档",
       "backlog": "待办列表",
       "triage": "分流",
@@ -4314,6 +4315,61 @@
         "validate": "验证",
         "plan": "计划"
       }
+    }
+  },
+  "github": {
+    "title": "GitHub",
+    "subtitle": "将此工作区连接到 GitHub，把拉取请求和 CI 状态同步到工作项、为代码图提供数据，并驱动评审闭环。",
+    "noWorkspace": {
+      "title": "尚无工作区",
+      "description": "从左上角的切换器创建一个工作区，即可连接 GitHub。"
+    },
+    "banner": {
+      "connected": "已连接 GitHub 身份。安装 Motir GitHub App 以授予仓库访问权限。",
+      "denied": "已取消 GitHub 授权，未连接任何内容。",
+      "state_error": "无法验证此次 GitHub 登录，请重新尝试连接。",
+      "error": "连接 GitHub 时出错，请重试。",
+      "not_configured": "此部署尚未配置 GitHub。"
+    },
+    "connect": {
+      "title": "连接 GitHub",
+      "subtitle": "两项快速授权，均在 GitHub 上完成。",
+      "step1": {
+        "eyebrow": "第 1 步 · 身份",
+        "title": "验证你的 GitHub 身份",
+        "body": "授权 Motir 确认你在 GitHub 上的身份——你的用户名和头像。这只会读取你的公开资料，不会获得任何代码访问权限。"
+      },
+      "step2": {
+        "eyebrow": "第 2 步 · 仓库访问",
+        "title": "安装 Motir GitHub App",
+        "body": "选择 Motir 可读取的仓库——你在 GitHub 的安装页面上挑选具体仓库。Motir 不会看到其余仓库，你可以随时更改所选范围。"
+      },
+      "installLink": "安装 Motir GitHub App",
+      "cta": "连接 GitHub",
+      "foot": "你将被带到 GitHub 进行授权，然后选择仓库。"
+    },
+    "identity": {
+      "connectedAs": "GitHub 身份 · 已连接为 {name}",
+      "verified": "已验证",
+      "disconnect": "断开连接"
+    },
+    "installation": {
+      "installedOn": "Motir App 已安装于 {account} · {type}"
+    },
+    "manageOnGitHub": "在 GitHub 上管理",
+    "repos": {
+      "title": "仓库",
+      "caption": "仅包含你在 GitHub 上选择的仓库。Motir 只能读取这些仓库，看不到其他任何仓库。",
+      "empty": "尚未选择任何仓库。在 GitHub 上选择仓库即可开始。",
+      "foot": "如需添加或移除仓库，请在 GitHub 上更新 Motir App 的访问权限。"
+    },
+    "needsAccess": {
+      "pill": "需要操作",
+      "calloutTitle": "Motir 尚无法读取任何仓库。",
+      "calloutBody": "安装 Motir GitHub App 并选择仓库以授予访问权限。如果该 App 已在 GitHub 上被卸载，你已同步的工作项会保留其最后已知状态，直到你重新连接。",
+      "reconnect": "重新连接 GitHub",
+      "install": "安装 Motir GitHub App",
+      "stillConnected": "身份已连接 · 尚未授予仓库访问权限"
     }
   },
   "aiPlanning": {

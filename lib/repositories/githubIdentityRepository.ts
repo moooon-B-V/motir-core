@@ -40,4 +40,12 @@ export const githubIdentityRepository = {
       update: rest,
     });
   },
+
+  /** Remove the acting user's identity binding (Disconnect — MOTIR-895).
+   *  Runs inside the disconnect `withUserContext` transaction, so RLS narrows to
+   *  the owner. Returns the delete count (0 when already unbound — idempotent). */
+  async deleteByUserId(userId: string, tx: Prisma.TransactionClient): Promise<number> {
+    const r = await tx.githubIdentity.deleteMany({ where: { userId } });
+    return r.count;
+  },
 };
