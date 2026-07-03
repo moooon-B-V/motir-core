@@ -92,11 +92,13 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
   });
 });
 
-// The off-level dependency signal (MOTIR-1331 cross-story; MOTIR-1379 sprint
-// validity). In PROJECT scope an off-level blocker is always the cross-story
-// tangle. In SPRINT scope it becomes a sprint-validity signal: a DONE or IN-sprint
-// blocker is satisfied (not drawn), and only an out-of-sprint, NOT-done blocker is
-// flagged — as "not in sprint", not "cross-story".
+// The off-level dependency signal (MOTIR-1331 cross-story tangle; MOTIR-1379
+// sprint validity). In PROJECT scope an off-level blocker is always the bad-plan
+// tangle, flagged "blocked elsewhere" (MOTIR-1568 — the label is level-agnostic,
+// since one pill can't name a mix of story/epic/bug parents). In SPRINT scope it
+// becomes a sprint-validity signal: a DONE or IN-sprint blocker is satisfied (not
+// drawn), and only an out-of-sprint, NOT-done blocker is flagged — as "not in
+// sprint", not "blocked elsewhere".
 function levelWithOffBlocker(stub: {
   isDone?: boolean;
   inActiveSprint?: boolean;
@@ -112,12 +114,12 @@ function levelWithOffBlocker(stub: {
 const A1_FLAG = 'cross-blocked-flag';
 
 describe('buildWorkItemLevel — off-level dependency signal', () => {
-  it('PROJECT scope: an off-level blocker is the cross-story tangle (red edge + anchor + flag)', () => {
+  it('PROJECT scope: an off-level blocker is the bad-plan tangle (red edge + anchor + "blocked elsewhere" flag)', () => {
     const { nodes, deps } = buildWorkItemLevel(levelWithOffBlocker({ isDone: false }));
     expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
     expect(nodes.some((n) => n.id === 'X')).toBe(true); // ghost anchor
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('cross-story');
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
   });
 
   it('SPRINT scope: an out-of-sprint, NOT-done blocker is flagged "not in sprint"', () => {

@@ -114,7 +114,7 @@ export function WorkItemNode({
   item,
   drillable = false,
   crossBlocked = false,
-  crossBlockedLabel = 'cross-story',
+  crossBlockedLabel = 'blocked elsewhere',
   notInSprint = false,
   progress = null,
   here = false,
@@ -126,8 +126,8 @@ export function WorkItemNode({
   /** Blocked by an off-level dependency — flag it (MOTIR-1331). In project scope a
    *  bad-plan tangle; in sprint scope an out-of-sprint, not-done dependency. */
   crossBlocked?: boolean;
-  /** The flag's copy — `'cross-story'` (project scope) or `'not in sprint'`
-   *  (sprint scope, MOTIR-1379). */
+  /** The flag's copy — `'blocked elsewhere'` (project scope, MOTIR-1568) or
+   *  `'not in sprint'` (sprint scope, MOTIR-1379). */
   crossBlockedLabel?: string;
   /** NOT a member of the active sprint (MOTIR-1379 follow-up) — sprint scope only.
    *  A drilled-in node under a committed root that the sprint did not itself

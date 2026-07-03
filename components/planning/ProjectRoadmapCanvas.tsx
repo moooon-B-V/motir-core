@@ -85,9 +85,9 @@ export interface ProjectRoadmapCanvasProps {
   /** The breadcrumb root label. */
   rootLabel?: string;
   ariaLabel?: string;
-  /** Override the WARNING (red) edge legend row. Defaults to the cross-story
-   *  meaning; the sprint-scoped roadmap passes the "not in sprint" meaning so the
-   *  legend matches the node flag + anchor (MOTIR-1379). */
+  /** Override the WARNING (red) edge legend row. Defaults to the "blocked
+   *  elsewhere" meaning (MOTIR-1568); the sprint-scoped roadmap passes the "not in
+   *  sprint" meaning so the legend matches the node flag + anchor (MOTIR-1379). */
   warningLegend?: { label: string; meaning: string };
 }
 
@@ -114,7 +114,7 @@ export function ProjectRoadmapCanvas({
   locatable = false,
   rootLabel = 'Roadmap',
   ariaLabel = 'Project roadmap',
-  warningLegend = { label: 'cross-story', meaning: 'in another story' },
+  warningLegend = { label: 'blocked elsewhere', meaning: 'the blocker sits elsewhere in the plan' },
 }: ProjectRoadmapCanvasProps) {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);

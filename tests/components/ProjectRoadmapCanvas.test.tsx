@@ -161,7 +161,7 @@ describe('ProjectRoadmapCanvas', () => {
     expect(within(legend).getByText('Dependencies')).toBeTruthy();
     expect(within(legend).getByText('blocks')).toBeTruthy();
     expect(within(legend).getByText('pending')).toBeTruthy();
-    expect(within(legend).getByText('cross-story')).toBeTruthy();
+    expect(within(legend).getByText('blocked elsewhere')).toBeTruthy();
   });
 
   it('hides the legend when there are no edges', async () => {

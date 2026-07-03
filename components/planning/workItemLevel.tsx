@@ -148,7 +148,7 @@ export function buildWorkItemLevel(
           }}
           drillable={item.hasChildren}
           crossBlocked={crossBlocked.has(item.id)}
-          crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'cross-story'}
+          crossBlockedLabel={scope === 'sprint' ? 'not in sprint' : 'blocked elsewhere'}
           notInSprint={notInSprint}
           progress={item.progress ?? null}
           here={item.id === activeId}

@@ -438,7 +438,7 @@ export function PlanningCanvas({
           })}
         </svg>
 
-        {/* cross-story flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
+        {/* "blocked elsewhere" flag badges — the bad-plan SIGNAL, in their OWN layer (NOT
             the edge <svg>, whose <path> count is asserted): a warning chip + flag
             glyph + label at each cross edge's midpoint, so the tangle never rests
             on edge colour alone. Decorative — the dependency facts live in the
@@ -462,7 +462,7 @@ export function PlanningCanvas({
                 data-testid="cross-flag"
               >
                 <Flag className="size-3.5" />
-                cross-story
+                blocked elsewhere
               </span>
             );
           })}

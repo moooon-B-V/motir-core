@@ -43,10 +43,10 @@ describe('WorkItemNode', () => {
     expect(screen.queryByTestId('drill-affordance')).toBeNull();
   });
 
-  it('flags a cross-story (off-level blocked) node', () => {
+  it('flags an off-level blocked node "blocked elsewhere"', () => {
     render(<WorkItemNode item={item} crossBlocked />);
     const flag = screen.getByTestId('cross-blocked-flag');
-    expect(flag.textContent).toContain('cross-story');
+    expect(flag.textContent).toContain('blocked elsewhere');
   });
 
   // MOTIR-1362 — the card sits on the canvas's near-identical `--el-surface-soft`
