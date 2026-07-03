@@ -124,11 +124,19 @@ export function AppCommandPalette({
       await setActiveProjectAction(projectId);
       // Land on the work-items surface after a project switch so a stale,
       // old-project-scoped URL / client island doesn't linger (MOTIR-1312 /
-      // MOTIR-1559); refresh in place only when already there — same as the
-      // switchWorkspace handler above.
+      // MOTIR-1559); refresh in place only when already there.
       const target = afterContextSwitchTarget(pathname);
-      if (target) router.push(target);
-      else router.refresh();
+      if (target) {
+        router.push(target);
+        // setActiveProjectAction is a DB-only write (no cookie), so — unlike the
+        // switchWorkspace handler above, whose cookie write makes Next
+        // auto-refresh — the pushed route would otherwise keep the stale layout
+        // (switcher/nav) from the Router Cache. refresh() invalidates it so the
+        // new active project shows (the push+refresh idiom in afterContextSwitch).
+        router.refresh();
+      } else {
+        router.refresh();
+      }
     });
   }
 

@@ -81,13 +81,16 @@ afterEach(() => {
 });
 
 describe('AppCommandPalette — switchProject landing (MOTIR-1559)', () => {
-  it('navigates to /items after ⌘K-switching to a different project (not a bare refresh)', async () => {
+  it('navigates to /items after ⌘K-switching to a different project (push, not a bare refresh)', async () => {
     renderPalette();
     fireEvent.click(screen.getByRole('option', { name: /Switch to Beta Labs/ }));
 
     await waitFor(() => expect(setActiveProjectAction).toHaveBeenCalledWith('proj_beta'));
+    // Push to /items (abandon the stale old-project URL) then refresh to
+    // invalidate the Router Cache so the layout re-seeds (a DB-only switch gets
+    // no cookie auto-refresh). The regression guard is the push to /items.
     await waitFor(() => expect(push).toHaveBeenCalledWith('/items'));
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes in place (no push) when switching while already on /items', async () => {

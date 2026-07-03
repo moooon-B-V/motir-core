@@ -73,14 +73,17 @@ afterEach(() => {
 });
 
 describe('ProjectSwitcher — post-switch landing (MOTIR-1559)', () => {
-  it('navigates to /items after switching to a different project (not a bare refresh)', async () => {
+  it('navigates to /items after switching to a different project (push, not a bare refresh)', async () => {
     renderSwitcher();
     switchTo('Beta Labs');
 
     await waitFor(() => expect(setActiveProjectAction).toHaveBeenCalledWith('proj_beta'));
+    // The bug was a bare refresh() with NO navigation. The fix pushes to /items
+    // (abandoning the stale old-project URL) then refreshes to invalidate the
+    // Router Cache so the layout re-seeds — a DB-only switch gets no cookie
+    // auto-refresh. The regression guard is that a push to /items happens.
     await waitFor(() => expect(push).toHaveBeenCalledWith('/items'));
-    // The bug was a bare refresh() with no navigation — assert it did NOT fire.
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes in place (no push) when the switch happens while already on /items', async () => {

@@ -65,8 +65,17 @@ export function ProjectSwitcher({
       // old-project-scoped URL / client island doesn't linger (MOTIR-1312 /
       // MOTIR-1559); refresh in place only when already there.
       const target = afterContextSwitchTarget(pathname);
-      if (target) router.push(target);
-      else router.refresh();
+      if (target) {
+        router.push(target);
+        // setActiveProjectAction is a DB-only write (no cookie), so — unlike the
+        // workspace/org switch, whose cookie write makes Next auto-refresh — the
+        // pushed route would otherwise render the stale layout (switcher/nav)
+        // from the Router Cache. refresh() invalidates it so the new active
+        // project shows (the push+refresh idiom afterContextSwitch.ts documents).
+        router.refresh();
+      } else {
+        router.refresh();
+      }
     });
   }
 
