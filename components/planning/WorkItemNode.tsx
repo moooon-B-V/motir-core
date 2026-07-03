@@ -399,12 +399,18 @@ export function GhostAnchor({
   const t = useTranslations('roadmap.canvas.anchor');
   return (
     <div
+      // Fixed height (= the layout's NODE_H) + `overflow-hidden`, the SAME fixed-box
+      // contract WorkItemNode honours: the deterministic layout spaces every row by
+      // NODE_H, and the anchor is the only variable-height node — so a long parent
+      // (a Motir story title of 80–120 chars) must not be able to grow the box past
+      // its row and overlap the card beneath it in the same column (MOTIR-1581).
       style={{
         width: 200,
+        height: NODE_H,
         backgroundImage:
           'repeating-linear-gradient(135deg, var(--el-surface), var(--el-surface) 7px, var(--el-danger-surface) 7px, var(--el-danger-surface) 9px)',
       }}
-      className="rounded-(--radius-card) border border-dashed border-(--el-danger) p-(--spacing-card-padding)"
+      className="overflow-hidden rounded-(--radius-card) border border-dashed border-(--el-danger) p-(--spacing-card-padding)"
     >
       <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-(--el-danger-text)">
         <ArrowUpRight className="size-3.5" aria-hidden="true" />
@@ -414,13 +420,17 @@ export function GhostAnchor({
         {title ?? t('defaultTitle')}
       </span>
       {outOfSprint ? (
-        <span className="mt-0.5 block text-xs text-(--el-danger)">{t('notInThisSprint')}</span>
+        <span className="mt-0.5 line-clamp-1 block text-xs text-(--el-danger)">
+          {t('notInThisSprint')}
+        </span>
       ) : parentTitle ? (
-        <span className="mt-0.5 block text-xs text-(--el-danger)">
+        <span className="mt-0.5 line-clamp-1 block text-xs text-(--el-danger)">
           {t('inParent', { parent: parentTitle })}
         </span>
       ) : (
-        <span className="mt-0.5 block text-xs text-(--el-danger)">{t('elsewhere')}</span>
+        <span className="mt-0.5 line-clamp-1 block text-xs text-(--el-danger)">
+          {t('elsewhere')}
+        </span>
       )}
     </div>
   );

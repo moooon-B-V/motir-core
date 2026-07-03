@@ -175,4 +175,25 @@ describe('GhostAnchor', () => {
     expect(screen.getByText('Migrate tokens')).toBeTruthy();
     expect(screen.getByText('in Auth hardening ↗')).toBeTruthy();
   });
+
+  // MOTIR-1581 — the anchor is the only variable-height node on the roadmap. The
+  // deterministic layout spaces every row by NODE_H, so the anchor MUST honour the
+  // same fixed-box contract WorkItemNode does: a long parent-story title cannot be
+  // allowed to grow the box past NODE_H and overlap the card in the row below it.
+  it('has a fixed height + clipped box so a long parent title cannot overlap the row below it', () => {
+    const { container } = render(
+      <GhostAnchor
+        identifier="PROD-42"
+        title="Migrate design tokens to the new element-semantic swap layer"
+        parentTitle={'A very long parent story title that would wrap to many lines '.repeat(3)}
+      />,
+    );
+    const box = container.firstChild as HTMLElement;
+    expect(box.style.height).toBe('124px');
+    expect(box.className).toContain('overflow-hidden');
+    // the un-clamped parent-title line was the unbounded-growth source — it must clamp
+    expect(screen.getByText(/in A very long parent story title/).className).toContain(
+      'line-clamp-1',
+    );
+  });
 });
