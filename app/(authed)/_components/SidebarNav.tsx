@@ -8,6 +8,7 @@ import {
   CircleDot,
   CirclePlay,
   Columns3,
+  History,
   Inbox,
   LayoutDashboard,
   LayoutList,
@@ -16,7 +17,9 @@ import {
   Settings,
   Sparkles,
 } from 'lucide-react';
-import { Sidebar, type SidebarSection } from '@/components/ui/Sidebar';
+import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
+import { PLANNING_WORKSPACE_PATH } from '@/lib/planning/launcher';
+import { useOnboardingResume } from './OnboardingResumeProvider';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
 import type { ProjectDTO } from '@/lib/dto/projects';
@@ -104,6 +107,19 @@ function SoonChip({ label }: { label: string }) {
   );
 }
 
+/** The "Resume onboarding" row's in-progress indicator (MOTIR-1533). A compact
+ *  accent dot — a text chip would truncate the 17-char label at the 240px rail
+ *  width — with a visually-hidden label so the state reaches assistive tech by
+ *  text, not colour alone (finding #35). */
+function ResumeInProgressBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center">
+      <span className="sr-only">{label}</span>
+      <span aria-hidden className="h-2 w-2 rounded-full bg-(--el-accent)" />
+    </span>
+  );
+}
+
 export function SidebarNav({
   activeProject,
   projects,
@@ -115,6 +131,9 @@ export function SidebarNav({
   const ts = useTranslations('settings');
   const pathname = usePathname();
   const [storeCollapsed] = useSidebarCollapsed();
+  // The "Resume onboarding" signal (MOTIR-1533) — read unconditionally (before
+  // the settings/account early returns) to respect the rules of hooks.
+  const canResume = useOnboardingResume();
   const isDrawer = variant === 'drawer';
   // The drawer always renders expanded; the rail follows the shared store.
   const collapsed = isDrawer ? false : storeCollapsed;
@@ -185,87 +204,98 @@ export function SidebarNav({
   const sections: SidebarSection[] = [];
 
   if (hasProject) {
-    sections.push({
-      id: 'primary',
-      items: [
-        {
-          icon: <LayoutDashboard />,
-          label: t('nav.dashboard'),
-          href: '/dashboard',
-          active: isActive(pathname, '/dashboard'),
-        },
-        {
-          icon: <CircleDot />,
-          label: t('nav.issues'),
-          href: '/items',
-          active: isActive(pathname, '/items'),
-        },
-        {
-          // The AI dispatch surface (Subtask 7.0.6) — sits BETWEEN Issues and
-          // Boards. `CirclePlay` (run/dispatch) is the 7.0.1-locked glyph (Zap
-          // is taken by the epic issue type). No count badge: the readiness set
-          // is a computed predicate that scanned on EVERY authed route, so the
-          // count is resolved only when you land on /ready (MOTIR-1284).
-          icon: <CirclePlay />,
-          label: t('nav.ready'),
-          href: '/ready',
-          active: isActive(pathname, '/ready'),
-        },
-        {
-          icon: <Columns3 />,
-          label: t('nav.boards'),
-          href: '/boards',
-          active: isActive(pathname, '/boards'),
-        },
-        {
-          // The persistent project Roadmap view (Subtask 7.20.5 / MOTIR-1011) —
-          // its own primary nav entry (the access path, per the ai-planning
-          // design §5 "drawn beside the other project nav surfaces"; NOT a
-          // Board↔Roadmap toggle). The folded-map glyph matches the roadmap
-          // design's view icon. Sits after Boards, as a sibling work view.
-          icon: <Map />,
-          label: t('nav.roadmap'),
-          href: '/roadmap',
-          active: isActive(pathname, '/roadmap'),
-        },
-        {
-          // The AI Plans index (Story 7.21 · Subtask 7.21.1 / MOTIR-1338) — the
-          // list of every AI-generated plan (proposal bundle) for the project,
-          // from which the user reviews + approves/declines one. The access path
-          // per the ai-planning design §5 (a planning surface reached from a
-          // left-nav entry beside the other project nav surfaces). `Sparkles` is
-          // the Motir-AI mark the shipped `PlanWithAILauncher` already uses. Sits
-          // beside Roadmap, the adjacent planning surface.
-          icon: <Sparkles />,
-          label: t('nav.plans'),
-          href: '/plans',
-          active: isActive(pathname, '/plans'),
-        },
-        {
-          // The backlog / sprint-planning surface (Subtask 4.2.3) — between
-          // Boards and Reports, with the layout-list glyph (4.2.1 design notes).
-          icon: <LayoutList />,
-          label: t('nav.backlog'),
-          href: '/backlog',
-          active: isActive(pathname, '/backlog'),
-        },
-        {
-          // The incoming-work front door (Story 6.11 · Subtask 6.11.6) — the
-          // triage inbox of un-acted-on bug reports & feature requests. `Inbox`
-          // is the 6.11 design-notes glyph; sits after Backlog.
-          icon: <Inbox />,
-          label: t('nav.triage'),
-          href: '/triage',
-          active: isActive(pathname, '/triage'),
-        },
-        {
-          icon: <BarChart3 />,
-          label: t('nav.reports'),
-          href: '/reports',
-          active: isActive(pathname, '/reports'),
-        },
-      ],
-    });
+    const primaryItems: SidebarItem[] = [
+      {
+        icon: <LayoutDashboard />,
+        label: t('nav.dashboard'),
+        href: '/dashboard',
+        active: isActive(pathname, '/dashboard'),
+      },
+      {
+        icon: <CircleDot />,
+        label: t('nav.issues'),
+        href: '/items',
+        active: isActive(pathname, '/items'),
+      },
+      {
+        // The AI dispatch surface (Subtask 7.0.6) — sits BETWEEN Issues and
+        // Boards. `CirclePlay` (run/dispatch) is the 7.0.1-locked glyph (Zap
+        // is taken by the epic issue type). No count badge: the readiness set
+        // is a computed predicate that scanned on EVERY authed route, so the
+        // count is resolved only when you land on /ready (MOTIR-1284).
+        icon: <CirclePlay />,
+        label: t('nav.ready'),
+        href: '/ready',
+        active: isActive(pathname, '/ready'),
+      },
+      {
+        icon: <Columns3 />,
+        label: t('nav.boards'),
+        href: '/boards',
+        active: isActive(pathname, '/boards'),
+      },
+      {
+        // The persistent project Roadmap view (Subtask 7.20.5 / MOTIR-1011) —
+        // its own primary nav entry (the access path, per the ai-planning
+        // design §5 "drawn beside the other project nav surfaces"; NOT a
+        // Board↔Roadmap toggle). The folded-map glyph matches the roadmap
+        // design's view icon. Sits after Boards, as a sibling work view.
+        icon: <Map />,
+        label: t('nav.roadmap'),
+        href: '/roadmap',
+        active: isActive(pathname, '/roadmap'),
+      },
+      {
+        // The AI Plans index (Story 7.21 · Subtask 7.21.1 / MOTIR-1338) — the
+        // list of every AI-generated plan (proposal bundle) for the project,
+        // from which the user reviews + approves/declines one. The access path
+        // per the ai-planning design §5 (a planning surface reached from a
+        // left-nav entry beside the other project nav surfaces). `Sparkles` is
+        // the Motir-AI mark the shipped `PlanWithAILauncher` already uses. Sits
+        // beside Roadmap, the adjacent planning surface.
+        icon: <Sparkles />,
+        label: t('nav.plans'),
+        href: '/plans',
+        active: isActive(pathname, '/plans'),
+      },
+      {
+        // The backlog / sprint-planning surface (Subtask 4.2.3) — between
+        // Boards and Reports, with the layout-list glyph (4.2.1 design notes).
+        icon: <LayoutList />,
+        label: t('nav.backlog'),
+        href: '/backlog',
+        active: isActive(pathname, '/backlog'),
+      },
+      {
+        // The incoming-work front door (Story 6.11 · Subtask 6.11.6) — the
+        // triage inbox of un-acted-on bug reports & feature requests. `Inbox`
+        // is the 6.11 design-notes glyph; sits after Backlog.
+        icon: <Inbox />,
+        label: t('nav.triage'),
+        href: '/triage',
+        active: isActive(pathname, '/triage'),
+      },
+      {
+        icon: <BarChart3 />,
+        label: t('nav.reports'),
+        href: '/reports',
+        active: isActive(pathname, '/reports'),
+      },
+    ];
+    // The labeled "Resume onboarding" re-entry door (MOTIR-1533; design
+    // MOTIR-1548) leads the primary nav when the active project has an
+    // in-progress onboarding — the highest-priority next action. It routes to
+    // /onboarding, which resumes at the real persisted step (MOTIR-1487).
+    if (canResume) {
+      primaryItems.unshift({
+        icon: <History />,
+        label: t('nav.resumeOnboarding'),
+        href: PLANNING_WORKSPACE_PATH,
+        emphasis: true,
+        badge: <ResumeInProgressBadge label={t('nav.resumeOnboardingInProgress')} />,
+      });
+    }
+    sections.push({ id: 'primary', items: primaryItems });
   }
 
   sections.push({
