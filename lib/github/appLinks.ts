@@ -12,11 +12,16 @@ const APP_SLUG_ENV = 'GITHUB_APP_SLUG';
 
 /**
  * The public URL that opens GitHub's "install this App / choose repositories"
- * screen, or `null` when no App slug is configured.
+ * screen, or `null` when no App slug is configured. When a signed `state` is
+ * given (MOTIR-1588), it is carried on the URL so GitHub echoes it back to the
+ * Setup URL after install, letting the setup handler bind the installation to
+ * the acting workspace (`lib/github/installState.ts`).
  */
-export function githubAppInstallUrl(): string | null {
+export function githubAppInstallUrl(state?: string): string | null {
   const slug = process.env[APP_SLUG_ENV];
-  return slug ? `https://github.com/apps/${slug}/installations/new` : null;
+  if (!slug) return null;
+  const base = `https://github.com/apps/${slug}/installations/new`;
+  return state ? `${base}?state=${encodeURIComponent(state)}` : base;
 }
 
 /**

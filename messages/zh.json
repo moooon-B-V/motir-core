@@ -4329,7 +4329,9 @@
       "denied": "已取消 GitHub 授权，未连接任何内容。",
       "state_error": "无法验证此次 GitHub 登录，请重新尝试连接。",
       "error": "连接 GitHub 时出错，请重试。",
-      "not_configured": "此部署尚未配置 GitHub。"
+      "not_configured": "此部署尚未配置 GitHub。",
+      "installed": "已安装 Motir GitHub App——Motir 现在可以读取你选择的仓库。",
+      "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。"
     },
     "connect": {
       "title": "连接 GitHub",

@@ -7,6 +7,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubAppInstallUrl, githubInstallationManageUrl } from '@/lib/github/appLinks';
+import { encodeInstallState } from '@/lib/github/installState';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
@@ -35,9 +36,11 @@ const OAUTH_START_PATH = '/api/github/oauth/start';
 // terminal outcome to a banner tone + a `github.banner.*` message key.
 const BANNER_TONE: Record<string, 'success' | 'danger' | 'info'> = {
   connected: 'success',
+  installed: 'success',
   denied: 'danger',
   state_error: 'danger',
   error: 'danger',
+  install_error: 'danger',
   not_configured: 'info',
 };
 
@@ -72,7 +75,12 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
   const sp = await searchParams;
   const bannerStatus = sp.github;
   const bannerTone = bannerStatus ? BANNER_TONE[bannerStatus] : undefined;
-  const installUrl = githubAppInstallUrl();
+  // Carry a signed state through the install round-trip so GitHub echoes it back
+  // to the setup handler (MOTIR-1588), which binds the installation to this
+  // workspace. Encoded per-request from the acting user + workspace.
+  const installUrl = githubAppInstallUrl(
+    encodeInstallState({ workspaceId: ctx.workspaceId, userId: ctx.userId }),
+  );
 
   return (
     <div className="mx-auto flex max-w-[46rem] flex-col gap-6">

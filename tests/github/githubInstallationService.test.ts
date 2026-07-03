@@ -194,6 +194,72 @@ describe('githubInstallationService.mintAccessTokenForWorkspace', () => {
   });
 });
 
+describe('githubInstallationService.bindInstallationForWorkspace', () => {
+  function stubGithubFetch(): void {
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+    const json = (o: unknown): Response =>
+      new Response(JSON.stringify(o), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/access_tokens')) {
+        return json({
+          token: 'ghs_bind',
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+        });
+      }
+      if (url.includes('/installation/repositories')) {
+        return json({
+          repositories: [
+            { id: 111, name: 'motir-core', owner: { login: 'moooon' }, default_branch: 'main' },
+            { id: 222, name: 'motir-ai', owner: { login: 'moooon' }, default_branch: 'main' },
+          ],
+        });
+      }
+      if (url.includes('/app/installations/')) {
+        return json({ id: 42, account: { login: 'moooon', type: 'Organization' } });
+      }
+      throw new Error(`unexpected fetch in test: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  it('binds a fresh install: fetches account + repos through the seam and persists them', async () => {
+    stubGithubFetch();
+    const { user, workspace } = await makeWorkspace('bind@example.com');
+
+    const dto = await githubInstallationService.bindInstallationForWorkspace({
+      workspaceId: workspace.id,
+      installationId: 'inst-bind',
+    });
+
+    expect(dto).toMatchObject({
+      installationId: 'inst-bind',
+      accountLogin: 'moooon',
+      accountType: 'Organization',
+    });
+    expect(dto.repos.map((r) => r.name).sort()).toEqual(['motir-ai', 'motir-core']);
+    // The token never crosses the DTO boundary.
+    expect(JSON.stringify(dto)).not.toContain('ghs_bind');
+
+    // Now bound → the webhook-style reconcile / the settings read find it.
+    const read = await githubInstallationService.getWorkspaceInstallation({
+      userId: user.id,
+      workspaceId: workspace.id,
+    });
+    expect(read?.installationId).toBe('inst-bind');
+    expect(read?.repos).toHaveLength(2);
+  });
+});
+
 describe('github_installation RLS', () => {
   it("hides another workspace's installation under the app role", async () => {
     const a = await makeWorkspace('rls-a@example.com');

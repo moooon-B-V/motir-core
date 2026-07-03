@@ -67,6 +67,38 @@ export const githubInstallationService = {
   },
 
   /**
+   * BIND a fresh App installation to a workspace (MOTIR-1588) — the post-install
+   * setup flow's landing. The webhook (MOTIR-892) only RECONCILES an
+   * already-bound installation; this creates the first binding. Given only the
+   * host `installationId` (from GitHub's post-install redirect), it fetches the
+   * installation's account + selected repos through the provider seam (App JWT →
+   * installation token) and upserts them for `workspaceId` via
+   * `persistInstallation`. The CALLER (the setup route) is responsible for
+   * authorizing that the acting user may bind to `workspaceId`. Idempotent — a
+   * re-install / repo-selection change refreshes the same rows in place.
+   */
+  async bindInstallationForWorkspace(ctx: {
+    workspaceId: string;
+    installationId: string;
+    provider?: GitProviderId;
+  }): Promise<GithubInstallationDTO> {
+    const gitProvider = getGitProvider(ctx.provider ?? 'github');
+    const [account, repos] = await Promise.all([
+      gitProvider.fetchInstallation(ctx.installationId),
+      gitProvider.fetchInstallationRepos(ctx.installationId),
+    ]);
+    return this.persistInstallation({
+      workspaceId: ctx.workspaceId,
+      installation: {
+        installationId: ctx.installationId,
+        accountLogin: account.accountLogin,
+        accountType: account.accountType,
+      },
+      repos,
+    });
+  },
+
+  /**
    * Remove an installation on uninstall (the `installation` webhook with
    * `action: deleted`, MOTIR-892). System context — the webhook has no active
    * workspace. Cascades to the installation's repos + PR rows. Idempotent: a
