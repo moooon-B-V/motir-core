@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Check, ChevronDown, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
+import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { setActiveProjectAction, startNewAiProjectAction } from '../_project-actions';
 import { CreateProjectModal } from './CreateProjectModal';
@@ -42,6 +43,7 @@ export function ProjectSwitcher({
 }: ProjectSwitcherProps) {
   const t = useTranslations('shell');
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -59,8 +61,15 @@ export function ProjectSwitcher({
     startTransition(async () => {
       await setActiveProjectAction(projectId);
       setOpen(false);
-      // Re-render server components against the new active project.
-      router.refresh();
+      // Land on the work-items surface after a project switch so a stale,
+      // old-project-scoped URL / client island doesn't linger (MOTIR-1312 /
+      // MOTIR-1559); refresh in place only when already there. The action
+      // revalidates the layout (it's a DB write, not a cookie), so the pushed
+      // route re-renders with the new active project — same two-liner as the
+      // workspace/org switchers.
+      const target = afterContextSwitchTarget(pathname);
+      if (target) router.push(target);
+      else router.refresh();
     });
   }
 

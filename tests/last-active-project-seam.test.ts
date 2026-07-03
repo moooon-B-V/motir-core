@@ -22,9 +22,10 @@ import { truncateAuthTables } from './helpers/db';
 // (e.g. an org switch recording the wrong workspace), then reads back through
 // the resolver. Reads use the real resolver against real Postgres; only the
 // request-scoped edges are stubbed: `getSession` (no auth in the vitest env),
-// `getWorkspaceContext` (no cookie/request scope for the project switcher), and
+// `getWorkspaceContext` (no cookie/request scope for the project switcher),
 // `next/headers` `cookies()` (an in-memory jar that captures what each switch
-// action writes). Every DB call goes through the real services. 8.8.30 covers
+// action writes), and `next/cache` `revalidatePath` (no static-generation store
+// in vitest). Every DB call goes through the real services. 8.8.30 covers
 // the same path end-to-end through the browser.
 
 const sessionUser = { id: '', email: '' };
@@ -50,6 +51,9 @@ vi.mock('next/headers', () => ({
     delete: (name: string) => void cookieJar.delete(name),
   }),
 }));
+// setActiveProjectAction now calls revalidatePath (MOTIR-1559) — another
+// request-scoped edge with no static-generation store under vitest; stub it.
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const { setActiveProjectAction } = await import('@/app/(authed)/_project-actions');
 const { switchWorkspaceAction, switchOrganizationAction, createWorkspaceAction } =
