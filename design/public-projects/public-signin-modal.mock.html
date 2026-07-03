@@ -1,0 +1,1631 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · In-place (modal) sign-in / sign-up on the public project page (MOTIR-1557 ·
+      design gate for MOTIR-1558; MOTIR-990 problem #2)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the IN-PLACE (MODAL) SIGN-IN / SIGN-UP on the
+      PUBLIC PROJECT PAGE (MOTIR-1557 — design gate for MOTIR-1558; carved out of
+      MOTIR-990 "Better UX for sign-in in public project page", problem #2).
+
+      ── THE MODEL CHANGE THIS ASSET DESIGNS ───────────────────────────────────
+      Today the public project page authenticates by FULL-PAGE NAVIGATION to
+      /sign-in (the shipped "sign-in-to-act" model — see design/public-projects/
+      design-notes.md + the full-page auth screens in design/auth/). MOTIR-1558
+      wants to authenticate WITHOUT LEAVING the public page — an IN-PLACE MODAL.
+      An in-place modal is a MODEL change from the designed full-page flow, and
+      no design depicted a public-page sign-in modal, so this design pass runs
+      BEFORE the code (design gate; notes.html #31; design-against-shipped-reality
+      §"surface undecided placement as a decision").
+
+      ── DESIGNED AGAINST SHIPPED REALITY (notes.html #31 / MOTIR-1196) ─────────
+      The modal does NOT redraw a stand-in auth form. It wraps the REAL shipped
+      auth content — the two-step email→password flow, GoogleButton, OrDivider,
+      FormAlert — mirrored 1:1 from:
+        - app/(auth)/sign-in/page.tsx    (two-step: email → password; "Forgot
+                                          password?" ABOVE the field; wrong-pw
+                                          inline error; cross-link to sign-up)
+        - app/(auth)/sign-up/page.tsx    (two-step: identity → create password;
+                                          8-char helper; email-exists inline)
+        - app/(auth)/_components/AuthShell.tsx  (serif headline + subhead; the
+                                          OrDivider + FormAlert primitives)
+        - app/(auth)/_components/GoogleButton.tsx  ("Continue with Google", the
+                                          official multi-colour G brand glyph)
+      wrapped in the shipped components/ui/Modal.tsx (@motir/design-system —
+      Radix-portaled, so the dialog escapes the shell card's overflow-hidden;
+      contentVariants size `md` = max-w-[28rem], rounded-(--radius-modal),
+      bg-(--el-page-bg), shadow-(--shadow-modal), border, p-(--spacing-card-padding),
+      corner × close). The launch door is the existing app/(public)/_components/
+      PublicTopBar.tsx  "Sign in" (ghost) / "Start free" (primary) — now OPENING
+      the modal instead of navigating (Panel 1 draws the door).
+
+      The token block below is copied 1:1 from @motir/design-system/theme.css
+      (via app/globals.css): Tier-0 --color-*, the shape tokens, and Tier-3
+      --el-*. Every colour flows through --el-* (no Tier-0 --color-* in surface
+      markup); every shaped surface via the shape tokens; AA-safe. The single raw
+      hexes are the Google brand G (a trademark mark the shipped button inlines
+      verbatim — a third-party logo, not a UI element colour) and the mock's own
+      review chrome (panel labels / body backdrop — non-semantic).
+
+      ── COPY IS THE REAL i18n (messages/en.json → auth.*) ─────────────────────
+      "Welcome back!" / "Use Motir to turn any product idea into reality." /
+      "Continue with Google" / "OR" / "Email address" / "Continue" / "Don't have
+      an account? Sign up" / "Signing in as {email}" / "Use a different email" /
+      "Forgot password?" / "Password" / "That password isn't right. Try again, or
+      reset it." / "Welcome to Motir!" / "Sign up to turn any product idea into
+      reality." / "We'll use this to sign you in." / "Create a password" / "At
+      least 8 characters." / "Create account" / "Already have an account? Log in".
+
+      ── BEHAVIOUR SPECIFIED (see design-notes.md §"In-place sign-in / sign-up") ─
+        - Email+password authenticates IN PLACE, then closes the modal + refreshes
+          the page in place (router.refresh) — the visitor STAYS on the public
+          project page, now able to upvote / comment / submit.
+        - Google OAuth INHERENTLY REDIRECTS (Better-Auth → Google consent → back).
+          It cannot be fully in-place; callbackURL is set to the CURRENT public
+          path so the visitor lands back on the same public page. Documented as a
+          caveat, not hidden.
+        - Sign in ↔ Start free swap the modal CONTENT in place (no navigation).
+        - Mobile: the same centered Radix dialog, near-full-width (w-[90vw]) — a
+          centered dialog, NOT a new bottom-sheet variant (Panel 7).
+        - Loading / error / already-signed-in states (Panel 6).
+        - The full-page /sign-in + /sign-up routes REMAIN (deep links, the
+          onboarding front door, the OAuth ?error= bounce-back land there). The
+          modal is an ADDITIVE in-place path for the public page's sign-in-to-act.
+
+      Multi-panel — review EACH (mistake #31):
+        (1) the ACCESS PATH — the PublicTopBar "Sign in" / "Start free" door.
+        (2) SIGN-IN modal · step 1 (email) over the dimmed public page.
+        (3) SIGN-IN modal · step 2 (password) — email recap + Forgot + show/hide.
+        (4) SIGN-UP modal · step 1 (identity) — launched from "Start free".
+        (5) SIGN-UP modal · step 2 (create password) — 8-char helper.
+        (6) STATES — wrong-password error · Google connecting / submitting · the
+            already-signed-in edge.
+        (7) MOBILE — the centered dialog at a phone width.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from @motir/design-system/theme.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 14px;
+        --spacing-btn-y: 8px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-primary-pressed);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-overlay-scrim: #00000066;
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-lavender: #2a253a;
+        --color-link: #58a6ff;
+        --color-destructive: #f06565;
+        --el-overlay-scrim: #00000099;
+        --el-public-banner-text: var(--color-charcoal);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 8px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 900px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label b {
+        color: var(--el-text-secondary);
+      }
+      .panel-label code {
+        font-family: var(--font-mono);
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel.narrow {
+        max-width: 860px;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      .ic svg,
+      svg.ic {
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ── Buttons (mirror @motir/design-system Button.tsx variants) ─────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        line-height: 1;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-button-border);
+      }
+      .btn-secondary:hover {
+        background: var(--el-surface);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+      }
+      .btn-block {
+        width: 100%;
+      }
+      /* size lg (the auth CTAs + Google button use size="lg") */
+      .btn-lg {
+        height: var(--height-btn-lg);
+        padding: 0 24px;
+        font-size: 16px;
+      }
+      .btn[disabled],
+      .btn.is-loading {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      /* inline spinner (mirror Spinner) */
+      .spin {
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-top-color: transparent;
+        opacity: 0.9;
+        flex: none;
+      }
+
+      /* ── The public page BACKDROP (the shipped chrome the modal opens over) ── */
+      .stage {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      /* modal panels: the stage must be tall enough to contain the centered
+         dialog (else overflow-hidden clips the headline off the top). The extra
+         height below the hero is just more of the (dimmed) public page. */
+      .stage.has-modal {
+        min-height: 600px;
+      }
+      .backdrop {
+        /* the public page, DIMMED under the scrim (Radix Dialog.Overlay) */
+      }
+      .pub-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .pub-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .pub-logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 14px;
+        flex: none;
+      }
+      .pub-proj {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 700;
+        font-size: 14.5px;
+        color: var(--el-text);
+      }
+      .pub-key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      .pub-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .pill-build {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--el-build-bg);
+        color: var(--el-build-text);
+      }
+      .pill-build .ic {
+        width: 13px;
+        height: 13px;
+        color: var(--el-build-glyph);
+      }
+      .pub-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 18px;
+        background: var(--el-public-banner-bg);
+        color: var(--el-public-banner-text);
+        font-size: 12.5px;
+      }
+      .pub-banner .ic {
+        color: var(--el-info);
+        width: 15px;
+        height: 15px;
+      }
+      .pub-hero {
+        padding: 26px 22px 30px;
+      }
+      .pub-hero h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .pub-hero p {
+        margin: 0;
+        max-width: 560px;
+        color: var(--el-text-muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .hero-skel {
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+      }
+      .hero-skel div {
+        height: 58px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+
+      /* ── The Radix Dialog.Overlay scrim + the centered modal ─────────────── */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 28px;
+      }
+      /* mirror Modal.tsx contentVariants: centered, w-[90vw] max-w-[28rem] (md),
+         rounded-(--radius-modal), bg-(--el-page-bg), shadow-(--shadow-modal),
+         border, p-(--spacing-card-padding), overflow-hidden column, corner ×. */
+      .modal {
+        position: relative;
+        width: 100%;
+        max-width: 28rem; /* size md — the auth modal */
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .modal-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-icon-muted);
+        cursor: pointer;
+      }
+      .modal-close:hover {
+        color: var(--el-text);
+        background: var(--el-surface);
+      }
+      .modal-close .ic {
+        width: 16px;
+        height: 16px;
+      }
+
+      /* ── The auth content (mirror AuthShell + sign-in/up pages 1:1) ───────── */
+      .auth {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .auth-head {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-right: 26px; /* clear the corner × */
+      }
+      /* AuthShell headline is text-4xl/5xl on the full page; in a compact dialog
+         it renders at a modal-appropriate serif size (see design-notes §scale). */
+      .auth-h1 {
+        font-family: var(--font-serif);
+        font-size: 27px;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .auth-sub {
+        margin: 0;
+        font-size: 14.5px;
+        color: var(--el-text-muted);
+      }
+      .auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      /* FormAlert (mirror AuthShell.FormAlert — rose tint, danger text + glyph) */
+      .form-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border-radius: var(--radius-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        font-size: 14px;
+        background: color-mix(in srgb, var(--el-danger) 12%, transparent);
+        color: var(--el-danger);
+      }
+      .form-alert .ic {
+        width: 19px;
+        height: 19px;
+        margin-top: 1px;
+      }
+
+      /* Google button (mirror GoogleButton.tsx — secondary lg, full width) */
+      .gbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .gbtn svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      /* OrDivider (mirror AuthShell.OrDivider) */
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .divider span.line {
+        height: 1px;
+        flex: 1;
+        background: var(--el-border);
+      }
+      .divider span.lbl {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-muted);
+      }
+
+      /* Input (mirror @motir/design-system Input.tsx — h-input, border, addon) */
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+      }
+      .input.focus {
+        border-color: var(--el-accent);
+        box-shadow:
+          0 0 0 2px var(--el-page-bg),
+          0 0 0 4px var(--focus-ring-color);
+      }
+      .input.err {
+        border-color: var(--el-danger);
+      }
+      .input .ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-icon-field);
+      }
+      .input .val {
+        flex: 1;
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .input .val.ph {
+        color: var(--el-text-muted);
+      }
+      .input .peek {
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .input .peek .ic {
+        width: 16px;
+        height: 16px;
+        color: currentColor;
+      }
+      .caret {
+        display: inline-block;
+        width: 1.5px;
+        height: 17px;
+        background: var(--el-accent);
+        vertical-align: text-bottom;
+        margin-left: 1px;
+      }
+      .helper {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        padding-left: 2px;
+      }
+      .helper.err {
+        color: var(--el-danger);
+      }
+
+      /* the read-only email recap on step 2 (mirror the shipped recap row) */
+      .recap {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .recap .box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        background: var(--el-surface);
+      }
+      .recap .box .ic {
+        width: 18px;
+        height: 18px;
+        color: var(--el-text-muted);
+      }
+      .recap .box .val {
+        flex: 1;
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .link-xs {
+        align-self: flex-start;
+        font-size: 12px;
+        color: var(--el-link);
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+      }
+      .link-sm {
+        align-self: flex-start;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-link);
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .foot {
+        font-size: 14px;
+        color: var(--el-text);
+      }
+      .foot a {
+        color: var(--el-link);
+        font-weight: 500;
+        text-decoration: none;
+      }
+
+      /* the already-signed-in edge state */
+      .signed-in {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      .signed-in .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 13px;
+        flex: none;
+      }
+
+      /* mock-only annotation: a dashed callout / arrow marking the door */
+      .door-note {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .door-note .kbd {
+        border: 1px dashed var(--el-accent);
+        border-radius: var(--radius-badge);
+        padding: 2px 10px;
+        font-weight: 600;
+        color: var(--el-accent-pressed);
+      }
+      .ring {
+        outline: 2px dashed var(--el-accent);
+        outline-offset: 3px;
+        border-radius: var(--radius-btn);
+      }
+
+      /* Panel-6 three-up + Panel-7 phone */
+      .three {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+      .mini-stage {
+        position: relative;
+        min-height: 360px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-surface-soft);
+      }
+      .mini-scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      .mini-stage .modal {
+        max-width: 320px;
+        padding: 18px;
+      }
+      .mini-stage .auth {
+        gap: 16px;
+      }
+      .mini-stage .auth-h1 {
+        font-size: 21px;
+      }
+      .mini-cap {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 8px 2px 0;
+      }
+      .phone {
+        width: 390px;
+        margin: 0 auto;
+        border: 1px solid var(--el-border-strong);
+        border-radius: 28px;
+        overflow: hidden;
+        box-shadow: var(--shadow-elevated);
+        background: var(--el-page-bg);
+      }
+      .phone .stage {
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        min-height: 660px;
+      }
+      .phone .scrim {
+        padding: 14px;
+        align-items: flex-end; /* the centered dialog sits low on a tall phone */
+      }
+      .phone .modal {
+        max-width: 100%;
+        margin-bottom: 8px;
+      }
+      .phone .pub-hero {
+        padding: 20px 16px 26px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>In-place (modal) sign-in / sign-up — the public project page</h1>
+      <p>
+        MOTIR-1557 · design gate for MOTIR-1558 (carved out of MOTIR-990 problem #2). The public
+        project page authenticates <b>in place</b> — a Radix-portaled <code>Modal</code> wrapping
+        the <b>real shipped auth content</b> (the two-step email→password flow,
+        <code>GoogleButton</code>, <code>OrDivider</code>, <code>FormAlert</code>), launched from
+        the existing <code>PublicTopBar</code> <b>Sign in</b> / <b>Start free</b> buttons — instead
+        of a full-page navigation to <code>/sign-in</code>. Model change: full-page → in-place
+        modal. Built from the real design system (<code>@motir/design-system</code> tokens + the
+        shipped <code>Modal</code> / <code>Input</code> / <code>Button</code> markup); every colour
+        via <code>--el-*</code>. Toggle to dark with the button top-right.
+      </p>
+      <button
+        class="btn btn-secondary"
+        style="position: fixed; top: 20px; right: 20px; z-index: 99"
+        onclick="
+          document.documentElement.setAttribute(
+            'data-theme',
+            document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark',
+          )
+        "
+      >
+        Toggle light / dark
+      </button>
+    </div>
+
+    <!-- ══════════════════ PANEL 1 — the ACCESS PATH (the door) ══════════════════ -->
+    <div class="panel-label">
+      (1) The access path — the shipped <code>PublicTopBar</code> <b>Sign in</b> (ghost) /
+      <b>Start free</b> (primary) buttons. They now OPEN the modal in place instead of navigating to
+      <code>/sign-in</code> · <code>/sign-up</code>. Draw the door, not just the room.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="backdrop">
+          <div class="pub-topbar">
+            <div class="pub-brand">
+              <span class="pub-logo">M</span>
+              <div>
+                <div class="pub-proj">
+                  Motir
+                  <span class="pill-build"
+                    ><svg class="ic"><use href="#i-megaphone" /></svg> Building in public</span
+                  >
+                </div>
+                <span class="pub-key">PROD · moooon</span>
+              </div>
+            </div>
+            <!-- the logged-out CTAs — the launch affordance (the door) -->
+            <div class="pub-cta">
+              <button class="btn btn-ghost ring">Sign in</button>
+              <button class="btn btn-primary ring">Start free</button>
+            </div>
+          </div>
+          <div class="pub-banner">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              ><b>You're viewing a public project.</b> Anyone can view it — no account needed. Sign
+              in to submit, upvote, or comment on requests.</span
+            >
+          </div>
+          <div class="pub-hero">
+            <h2>Motir</h2>
+            <p>
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it, end to end. You're looking at Motir, built in Motir.
+            </p>
+            <div class="hero-skel">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="door-note">
+        <span class="kbd">Sign in</span> opens the sign-in modal ·
+        <span class="kbd">Start free</span> opens the sign-up modal — both <b>in place</b>, the
+        visitor stays on this page. (The dashed rings are mock-only labelling.)
+      </div>
+    </div>
+
+    <!-- ══════════════════ PANEL 2 — SIGN-IN modal · step 1 (email) ══════════════════ -->
+    <div class="panel-label">
+      (2) <b>Sign in · step 1 (email)</b> — the modal over the DIMMED public page (Radix
+      <code>Dialog.Overlay</code> scrim = <code>--el-overlay-scrim</code>). Google first, then the
+      email step (tab order Google → email → Continue), then the cross-link to sign-up.
+    </div>
+    <div class="panel">
+      <div class="stage has-modal">
+        <!-- the same public backdrop, now behind the scrim -->
+        <div class="backdrop" aria-hidden="true">
+          <div class="pub-topbar">
+            <div class="pub-brand">
+              <span class="pub-logo">M</span>
+              <div>
+                <div class="pub-proj">Motir</div>
+                <span class="pub-key">PROD · moooon</span>
+              </div>
+            </div>
+            <div class="pub-cta">
+              <button class="btn btn-ghost">Sign in</button>
+              <button class="btn btn-primary">Start free</button>
+            </div>
+          </div>
+          <div class="pub-banner">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              ><b>You're viewing a public project.</b> Anyone can view it — no account needed.</span
+            >
+          </div>
+          <div class="pub-hero">
+            <h2>Motir</h2>
+            <p>
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it.
+            </p>
+            <div class="hero-skel">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+        </div>
+        <div class="scrim">
+          <div class="modal" role="dialog" aria-label="Sign in">
+            <button class="modal-close" aria-label="Close">
+              <svg class="ic"><use href="#i-x" /></svg>
+            </button>
+            <div class="auth">
+              <div class="auth-head">
+                <h1 class="auth-h1">Welcome back!</h1>
+                <p class="auth-sub">Use Motir to turn any product idea into reality.</p>
+              </div>
+              <div class="auth-form">
+                <button class="btn btn-secondary btn-lg btn-block">
+                  <span class="gbtn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    <span>Continue with Google</span>
+                  </span>
+                </button>
+                <div class="divider" role="separator" aria-label="Or continue with email">
+                  <span class="line"></span><span class="lbl">OR</span><span class="line"></span>
+                </div>
+                <div class="field">
+                  <div class="input focus">
+                    <span class="ic"
+                      ><svg><use href="#i-mail" /></svg
+                    ></span>
+                    <span class="val">jordan@acme.co<span class="caret"></span></span>
+                  </div>
+                </div>
+                <button class="btn btn-primary btn-lg btn-block">Continue</button>
+                <p class="foot">Don't have an account? <a href="#">Sign up</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ PANEL 3 — SIGN-IN modal · step 2 (password) ══════════════════ -->
+    <div class="panel-label">
+      (3) <b>Sign in · step 2 (password)</b> — the email recaps read-only (with
+      <b>Use a different email</b>), <b>Forgot password?</b> sits ABOVE the field (the Clay pattern
+      the shipped page uses), a show/hide eye is the input's trailing addon. On submit:
+      authenticates, closes the modal, and refreshes the page in place — the visitor stays here, now
+      able to act.
+    </div>
+    <div class="panel">
+      <div class="stage has-modal">
+        <div class="backdrop" aria-hidden="true">
+          <div class="pub-topbar">
+            <div class="pub-brand">
+              <span class="pub-logo">M</span>
+              <div>
+                <div class="pub-proj">Motir</div>
+                <span class="pub-key">PROD · moooon</span>
+              </div>
+            </div>
+            <div class="pub-cta">
+              <button class="btn btn-ghost">Sign in</button>
+              <button class="btn btn-primary">Start free</button>
+            </div>
+          </div>
+          <div class="pub-banner">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              ><b>You're viewing a public project.</b> Anyone can view it — no account needed.</span
+            >
+          </div>
+          <div class="pub-hero">
+            <h2>Motir</h2>
+            <p>
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it.
+            </p>
+            <div class="hero-skel">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+        </div>
+        <div class="scrim">
+          <div class="modal" role="dialog" aria-label="Sign in">
+            <button class="modal-close" aria-label="Close">
+              <svg class="ic"><use href="#i-x" /></svg>
+            </button>
+            <div class="auth">
+              <div class="auth-head">
+                <h1 class="auth-h1">Welcome back!</h1>
+                <p class="auth-sub">Use Motir to turn any product idea into reality.</p>
+              </div>
+              <div class="auth-form">
+                <div class="recap" aria-label="Signing in as jordan@acme.co">
+                  <div class="box">
+                    <span class="ic"
+                      ><svg><use href="#i-mail" /></svg
+                    ></span>
+                    <span class="val">jordan@acme.co</span>
+                  </div>
+                  <button class="link-xs">Use a different email</button>
+                </div>
+                <a class="link-sm" href="#">Forgot password?</a>
+                <div class="field">
+                  <div class="input focus">
+                    <span class="ic"
+                      ><svg><use href="#i-lock" /></svg
+                    ></span>
+                    <span class="val">••••••••••<span class="caret"></span></span>
+                    <button class="peek" aria-label="Show password">
+                      <span class="ic"
+                        ><svg><use href="#i-eye" /></svg
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <button class="btn btn-primary btn-lg btn-block">Continue</button>
+                <p class="foot">Don't have an account? <a href="#">Sign up</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ PANEL 4 — SIGN-UP modal · step 1 (identity) ══════════════════ -->
+    <div class="panel-label">
+      (4) <b>Sign up · step 1 (identity)</b> — launched from <b>Start free</b>. Same shell, sign-up
+      copy ("Welcome to Motir!"), the email helper "We'll use this to sign you in.", and the
+      cross-link back to <b>Log in</b> (swaps the modal content in place — no navigation).
+    </div>
+    <div class="panel">
+      <div class="stage has-modal">
+        <div class="backdrop" aria-hidden="true">
+          <div class="pub-topbar">
+            <div class="pub-brand">
+              <span class="pub-logo">M</span>
+              <div>
+                <div class="pub-proj">Motir</div>
+                <span class="pub-key">PROD · moooon</span>
+              </div>
+            </div>
+            <div class="pub-cta">
+              <button class="btn btn-ghost">Sign in</button>
+              <button class="btn btn-primary">Start free</button>
+            </div>
+          </div>
+          <div class="pub-banner">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              ><b>You're viewing a public project.</b> Anyone can view it — no account needed.</span
+            >
+          </div>
+          <div class="pub-hero">
+            <h2>Motir</h2>
+            <p>
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it.
+            </p>
+            <div class="hero-skel">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+        </div>
+        <div class="scrim">
+          <div class="modal" role="dialog" aria-label="Sign up">
+            <button class="modal-close" aria-label="Close">
+              <svg class="ic"><use href="#i-x" /></svg>
+            </button>
+            <div class="auth">
+              <div class="auth-head">
+                <h1 class="auth-h1">Welcome to Motir!</h1>
+                <p class="auth-sub">Sign up to turn any product idea into reality.</p>
+              </div>
+              <div class="auth-form">
+                <button class="btn btn-secondary btn-lg btn-block">
+                  <span class="gbtn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    <span>Continue with Google</span>
+                  </span>
+                </button>
+                <div class="divider" role="separator" aria-label="Or continue with email">
+                  <span class="line"></span><span class="lbl">OR</span><span class="line"></span>
+                </div>
+                <div class="field">
+                  <div class="input">
+                    <span class="ic"
+                      ><svg><use href="#i-mail" /></svg
+                    ></span>
+                    <span class="val ph">Email address</span>
+                  </div>
+                  <span class="helper">We'll use this to sign you in.</span>
+                </div>
+                <button class="btn btn-primary btn-lg btn-block">Continue</button>
+                <p class="foot">Already have an account? <a href="#">Log in</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ PANEL 5 — SIGN-UP modal · step 2 (create password) ══════════════════ -->
+    <div class="panel-label">
+      (5) <b>Sign up · step 2 (create password)</b> — the identity recaps (with <b>Edit</b>), the
+      create-password field carries the "At least 8 characters." helper, and the CTA is
+      <b>Create account</b>. On success: closes + refreshes in place.
+    </div>
+    <div class="panel">
+      <div class="stage has-modal">
+        <div class="backdrop" aria-hidden="true">
+          <div class="pub-topbar">
+            <div class="pub-brand">
+              <span class="pub-logo">M</span>
+              <div>
+                <div class="pub-proj">Motir</div>
+                <span class="pub-key">PROD · moooon</span>
+              </div>
+            </div>
+            <div class="pub-cta">
+              <button class="btn btn-ghost">Sign in</button>
+              <button class="btn btn-primary">Start free</button>
+            </div>
+          </div>
+          <div class="pub-banner">
+            <svg class="ic"><use href="#i-globe" /></svg>
+            <span
+              ><b>You're viewing a public project.</b> Anyone can view it — no account needed.</span
+            >
+          </div>
+          <div class="pub-hero">
+            <h2>Motir</h2>
+            <p>
+              Vibe your whole project. Bring an idea — Motir's three AI layers plan it, track it,
+              and ship it.
+            </p>
+            <div class="hero-skel">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+        </div>
+        <div class="scrim">
+          <div class="modal" role="dialog" aria-label="Sign up">
+            <button class="modal-close" aria-label="Close">
+              <svg class="ic"><use href="#i-x" /></svg>
+            </button>
+            <div class="auth">
+              <div class="auth-head">
+                <h1 class="auth-h1">Welcome to Motir!</h1>
+                <p class="auth-sub">Sign up to turn any product idea into reality.</p>
+              </div>
+              <div class="auth-form">
+                <div class="recap">
+                  <div class="box">
+                    <span class="ic"
+                      ><svg><use href="#i-mail" /></svg
+                    ></span>
+                    <span class="val">jordan@acme.co</span>
+                  </div>
+                  <button class="link-xs">Edit</button>
+                </div>
+                <div class="field">
+                  <div class="input focus">
+                    <span class="ic"
+                      ><svg><use href="#i-lock" /></svg
+                    ></span>
+                    <span class="val">••••••••<span class="caret"></span></span>
+                    <button class="peek" aria-label="Show password">
+                      <span class="ic"
+                        ><svg><use href="#i-eye" /></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <span class="helper">At least 8 characters.</span>
+                </div>
+                <button class="btn btn-primary btn-lg btn-block">Create account</button>
+                <p class="foot">Already have an account? <a href="#">Log in</a></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ PANEL 6 — STATES ══════════════════ -->
+    <div class="panel-label">
+      (6) <b>States</b> — (a) wrong password: the field goes danger + the inline helper "That
+      password isn't right…"; (b) Google connecting / Continue submitting: the button shows a
+      spinner + "Connecting…" / "Signing in…"; (c) already signed in (edge): the modal shows the
+      identity + a single Continue. A Google/OAuth failure surfaces as the top-of-form
+      <code>FormAlert</code>.
+    </div>
+    <div class="panel">
+      <div class="three">
+        <!-- (a) wrong password -->
+        <div>
+          <div class="mini-stage">
+            <div class="mini-scrim">
+              <div class="modal" role="dialog" aria-label="Sign in">
+                <button class="modal-close" aria-label="Close">
+                  <svg class="ic"><use href="#i-x" /></svg>
+                </button>
+                <div class="auth">
+                  <div class="auth-head"><h1 class="auth-h1">Welcome back!</h1></div>
+                  <div class="auth-form">
+                    <div class="recap">
+                      <div class="box">
+                        <span class="ic"
+                          ><svg><use href="#i-mail" /></svg
+                        ></span>
+                        <span class="val">jordan@acme.co</span>
+                      </div>
+                      <button class="link-xs">Use a different email</button>
+                    </div>
+                    <a class="link-sm" href="#">Forgot password?</a>
+                    <div class="field">
+                      <div class="input err">
+                        <span class="ic"
+                          ><svg><use href="#i-lock" /></svg
+                        ></span>
+                        <span class="val">••••••</span>
+                        <button class="peek" aria-label="Show password">
+                          <span class="ic"
+                            ><svg><use href="#i-eye" /></svg
+                          ></span>
+                        </button>
+                      </div>
+                      <span class="helper err"
+                        >That password isn't right. Try again, or reset it.</span
+                      >
+                    </div>
+                    <button class="btn btn-primary btn-lg btn-block">Continue</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="mini-cap">
+            <b>(a)</b> Wrong password — inline on the field (no account enumeration).
+          </p>
+        </div>
+
+        <!-- (b) submitting / connecting -->
+        <div>
+          <div class="mini-stage">
+            <div class="mini-scrim">
+              <div class="modal" role="dialog" aria-label="Sign in">
+                <button class="modal-close" aria-label="Close">
+                  <svg class="ic"><use href="#i-x" /></svg>
+                </button>
+                <div class="auth">
+                  <div class="auth-head"><h1 class="auth-h1">Welcome back!</h1></div>
+                  <div class="auth-form">
+                    <button class="btn btn-secondary btn-lg btn-block is-loading">
+                      <span class="gbtn"><span class="spin"></span><span>Connecting…</span></span>
+                    </button>
+                    <div class="divider">
+                      <span class="line"></span><span class="lbl">OR</span
+                      ><span class="line"></span>
+                    </div>
+                    <div class="field">
+                      <div class="input">
+                        <span class="ic"
+                          ><svg><use href="#i-mail" /></svg
+                        ></span>
+                        <span class="val">jordan@acme.co</span>
+                      </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg btn-block is-loading">
+                      <span class="gbtn"><span class="spin"></span><span>Checking…</span></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="mini-cap">
+            <b>(b)</b> Google redirecting ("Connecting…") · email step submitting ("Checking…").
+          </p>
+        </div>
+
+        <!-- (c) already signed in -->
+        <div>
+          <div class="mini-stage">
+            <div class="mini-scrim">
+              <div class="modal" role="dialog" aria-label="You're signed in">
+                <button class="modal-close" aria-label="Close">
+                  <svg class="ic"><use href="#i-x" /></svg>
+                </button>
+                <div class="auth signed-in">
+                  <div class="auth-head"><h1 class="auth-h1">You're signed in</h1></div>
+                  <div class="who">
+                    <span class="avatar">J</span>
+                    <div>
+                      <div style="font-size: 14px; font-weight: 600">Jordan Lee</div>
+                      <div style="font-size: 12.5px; color: var(--el-text-muted)">
+                        jordan@acme.co
+                      </div>
+                    </div>
+                  </div>
+                  <p class="auth-sub" style="font-size: 13.5px">
+                    You can upvote, comment, and submit requests on this project.
+                  </p>
+                  <button class="btn btn-primary btn-lg btn-block">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="mini-cap">
+            <b>(c)</b> Already-signed-in edge — no auth form; just confirm + Continue.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ PANEL 7 — MOBILE ══════════════════ -->
+    <div class="panel-label">
+      (7) <b>Mobile</b> — the SAME centered Radix dialog at a phone width (near-full-width via
+      <code>w-[90vw]</code>), sitting low on the tall viewport. A centered dialog, <b>not</b> a new
+      bottom-sheet variant — the shipped <code>Modal</code> already caps at
+      <code>max-h-[90vh]</code>
+      and scrolls, so no new primitive is needed (decision recorded in design-notes).
+    </div>
+    <div class="panel narrow" style="max-width: 440px">
+      <div class="phone">
+        <div class="stage">
+          <div class="backdrop" aria-hidden="true">
+            <div class="pub-topbar">
+              <div class="pub-brand">
+                <span class="pub-logo">M</span>
+                <div>
+                  <div class="pub-proj">Motir</div>
+                  <span class="pub-key">PROD</span>
+                </div>
+              </div>
+              <div class="pub-cta">
+                <button class="btn btn-primary" style="height: 30px; padding: 0 12px">
+                  Start free
+                </button>
+              </div>
+            </div>
+            <div class="pub-banner" style="font-size: 11.5px">
+              <svg class="ic"><use href="#i-globe" /></svg>
+              <span><b>Public project.</b> No account needed to view.</span>
+            </div>
+            <div class="pub-hero">
+              <h2 style="font-size: 21px">Motir</h2>
+              <p style="font-size: 13px">Vibe your whole project — plan it, track it, ship it.</p>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-label="Sign in">
+              <button class="modal-close" aria-label="Close">
+                <svg class="ic"><use href="#i-x" /></svg>
+              </button>
+              <div class="auth" style="gap: 18px">
+                <div class="auth-head">
+                  <h1 class="auth-h1" style="font-size: 23px">Welcome back!</h1>
+                  <p class="auth-sub" style="font-size: 13.5px">
+                    Use Motir to turn any product idea into reality.
+                  </p>
+                </div>
+                <div class="auth-form">
+                  <button class="btn btn-secondary btn-lg btn-block">
+                    <span class="gbtn">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          fill="#4285F4"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        />
+                      </svg>
+                      <span>Continue with Google</span>
+                    </span>
+                  </button>
+                  <div class="divider">
+                    <span class="line"></span><span class="lbl">OR</span><span class="line"></span>
+                  </div>
+                  <div class="field">
+                    <div class="input">
+                      <span class="ic"
+                        ><svg><use href="#i-mail" /></svg
+                      ></span>
+                      <span class="val ph">Email address</span>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-lg btn-block">Continue</button>
+                  <p class="foot" style="font-size: 13.5px">
+                    Don't have an account? <a href="#">Sign up</a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────── lucide symbol sprite (paths copied 1:1 from lucide) ──────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-eye-off"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"
+          />
+          <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+          <path
+            d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"
+          />
+          <path d="m2 2 20 20" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-x"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-globe"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-megaphone"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m3 11 18-5v12L3 14v-3z" />
+          <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </symbol>
+      </defs>
+    </svg>
+  </body>
+</html>
