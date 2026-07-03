@@ -103,6 +103,14 @@ function validateProposal(p: ProposalInput): void {
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
     if (!p.patch) throw new InvalidProposalError('A `modify` proposal requires a patch.');
+    // A `modify` may RE-SCOPE the target's sizing (MOTIR-1532) — validate the
+    // patched-in points/estimate at the boundary, the SAME rules the `add` path
+    // applies (`validateProposedSizing`), so a malformed re-scope is rejected here
+    // (422) rather than reaching the `storyPoints`/`estimateMinutes` columns at
+    // materialize. Absent (`undefined`/`null`) passes — a modify that leaves
+    // sizing alone, or an explicit `null` that clears it.
+    validateStoryPoints(p.patch.storyPoints ?? null);
+    validateEstimateMinutes(p.patch.estimateMinutes ?? null);
   } else {
     // remove
     if (!p.workItemId) throw new InvalidProposalError('A `remove` proposal requires workItemId.');
@@ -460,6 +468,24 @@ async function applyModify(
   if (patch.type !== undefined && patch.type !== current.type) {
     update.type = patch.type as Prisma.WorkItemUncheckedUpdateInput['type'];
     diff.type = { from: current.type, to: patch.type };
+  }
+  // Leaf sizing re-scope (MOTIR-1532) — the SAME point/estimate columns the `add`
+  // path materializes, applied here as an in-place modify. `storyPoints` is a
+  // Prisma Decimal, so compare + record the diff NUMERICALLY (the `Number(...)`
+  // shape estimationService.setEstimate logs); `estimateMinutes` is a plain
+  // nullable int. Both diff keys already have a `lib/activity/renderers.ts`
+  // disposition (buildAddDiff / estimationService emit them), so the modify
+  // revision renders with no new registry entry.
+  if (patch.storyPoints !== undefined) {
+    const from = current.storyPoints === null ? null : Number(current.storyPoints);
+    if (patch.storyPoints !== from) {
+      update.storyPoints = patch.storyPoints;
+      diff.storyPoints = { from, to: patch.storyPoints };
+    }
+  }
+  if (patch.estimateMinutes !== undefined && patch.estimateMinutes !== current.estimateMinutes) {
+    update.estimateMinutes = patch.estimateMinutes;
+    diff.estimateMinutes = { from: current.estimateMinutes, to: patch.estimateMinutes };
   }
   if (Object.keys(update).length > 0) {
     await workItemRepository.update(item.workItemId, update, tx);

@@ -344,6 +344,75 @@ describe('plansService.approvePlan — materialize per op', () => {
     const removed = await db.workItem.findUniqueOrThrow({ where: { id: doomedId } });
     expect(removed.archivedAt).not.toBeNull();
   });
+
+  it('materializes a modify that RE-SCOPES leaf sizing: storyPoints + estimateMinutes applied, ONE revision with both diff cells (MOTIR-1532)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Sized target');
+    // Give the target a baseline estimate so the re-scope has a real `from`.
+    await db.workItem.update({
+      where: { id: targetId },
+      data: { storyPoints: 3, estimateMinutes: 60 },
+    });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { storyPoints: 8, estimateMinutes: 120 } },
+    ]);
+
+    // While planned, the target's sizing is untouched.
+    const beforeApprove = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(Number(beforeApprove.storyPoints)).toBe(3);
+    expect(beforeApprove.estimateMinutes).toBe(60);
+
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.id).toBe(targetId); // identity never re-minted
+    expect(Number(modified.storyPoints)).toBe(8);
+    expect(modified.estimateMinutes).toBe(120);
+
+    // Exactly ONE `updated` revision for the whole modify, carrying BOTH sizing
+    // diff cells (the seed `created` revision aside).
+    const revisions = await db.workItemRevision.findMany({
+      where: { workItemId: targetId, changeKind: 'updated' },
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]!.diff).toMatchObject({
+      storyPoints: { from: 3, to: 8 },
+      estimateMinutes: { from: 60, to: 120 },
+    });
+  });
+
+  it('materializes a modify that CLEARS an estimate: storyPoints → null with a diff cell (MOTIR-1532)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'To unestimate');
+    await db.workItem.update({ where: { id: targetId }, data: { storyPoints: 5 } });
+
+    const planId = await plannedPlan(fx, [
+      { op: 'modify', workItemId: targetId, patch: { storyPoints: null } },
+    ]);
+    await plansService.approvePlan(planId, fx.ctx);
+
+    const modified = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    expect(modified.storyPoints).toBeNull();
+    const revision = await db.workItemRevision.findFirstOrThrow({
+      where: { workItemId: targetId, changeKind: 'updated' },
+    });
+    expect(revision.diff).toMatchObject({ storyPoints: { from: 5, to: null } });
+  });
+
+  it('rejects a modify patch with a malformed re-scope estimate (InvalidEstimateError, MOTIR-1532)', async () => {
+    const fx = await makeWorkItemFixture();
+    const targetId = await seedItem(fx, 'Reject bad re-scope');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Bad re-scope' }, fx.ctx);
+
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [{ op: 'modify', workItemId: targetId, patch: { estimateMinutes: -5 } }],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidEstimateError); // minutes must be a non-negative integer
+  });
 });
 
 describe('plansService.approvePlan — AI-drafted explanations (MOTIR-850)', () => {
