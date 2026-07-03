@@ -130,9 +130,14 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
     'Marketing Site',
   );
 
-  // 5) Switch back to Mobile App via the switcher
+  // 5) Switch back to Mobile App via the switcher. Switching the active project
+  // now LANDS on the work-items list (MOTIR-1559 — the MOTIR-1312 context-switch
+  // landing contract) instead of refreshing in place, so a stale, old-project
+  // URL / client island can't linger. Wait for /items, where the sidebar
+  // switcher reflects the newly-active project.
   await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: /^Mobile App/ }).click();
+  await page.waitForURL('**/items');
   await expect(page.getByRole('button', { name: 'Switch project' })).toContainText('Mobile App');
 
   // 6) Archive — navigate to project settings, open archive modal. The area now
