@@ -97,6 +97,36 @@ export const githubProvider: GitProvider = {
     return list.map(normalizeRepo).filter((repo): repo is NormalizedRepo => repo !== null);
   },
 
+  async fetchRepoTarball(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<ArrayBuffer> {
+    const { token } = await mintInstallationToken(installationId);
+    let res: Response;
+    try {
+      // GitHub 302-redirects `/tarball` to a PRE-SIGNED codeload.github.com URL.
+      // `fetch` follows the redirect and (per the fetch spec) STRIPS the
+      // `Authorization` header on the cross-origin hop — which is fine: the
+      // codeload URL is already authorized by its signed query string, so the
+      // token is only needed on the first (api.github.com) hop.
+      res = await fetch(`${GITHUB_API}/repos/${owner}/${name}/tarball/${ref}`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+      });
+    } catch (err) {
+      throw new Error(
+        `GitHub tarball endpoint unreachable (${err instanceof Error ? err.message : 'unknown'})`,
+      );
+    }
+    if (!res.ok) throw new Error(`GitHub tarball endpoint returned ${res.status}`);
+    return res.arrayBuffer();
+  },
+
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {
     // GET /app/installations/{id} is an APP-level read (the App JWT), not an
     // installation token — it returns the account the App is installed on.

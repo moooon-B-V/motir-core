@@ -11,6 +11,7 @@ import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepos
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { inngest } from '@/lib/jobs/client';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-892 — the inbound webhook status-sync state machine, against
@@ -411,6 +412,89 @@ describe('githubWebhookService — installation grant mirror', () => {
       tx.githubRepo.findMany({ where: { installation: { installationId: 'inst-recon' } } }),
     );
     expect(repos.map((r) => r.repoId)).toEqual(['555']); // reconciled to the authoritative set
+  });
+});
+
+describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () => {
+  /** Stub the token + repositories endpoints; the authoritative set is `repos`. */
+  function stubGithub(repos: Array<{ id: number; name: string }>): void {
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string): Promise<Response> => {
+        const u = String(url);
+        if (u.includes('/access_tokens')) {
+          return new Response(
+            JSON.stringify({
+              token: 'ghs_x',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        if (u.includes('/installation/repositories')) {
+          return new Response(
+            JSON.stringify({
+              repositories: repos.map((r) => ({
+                id: r.id,
+                name: r.name,
+                default_branch: 'main',
+                owner: { login: 'moooon' },
+              })),
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      }),
+    );
+  }
+
+  it('enqueues one code-graph-index job per NEWLY-added repo and skips repos already present', async () => {
+    // Authoritative set = the already-present `keep` (id 111) + a freshly-added
+    // `fresh` (id 222). Only `fresh` should enqueue.
+    stubGithub([
+      { id: 111, name: 'keep' },
+      { id: 222, name: 'fresh' },
+    ]);
+    const sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+
+    const { workspace } = await makeWorkspace('cg-enqueue@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: 'inst-cg',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: [{ providerRepoId: '111', owner: 'moooon', name: 'keep', defaultBranch: 'main' }],
+    });
+    // The bind above (persistInstallation directly) doesn't enqueue; clear anything.
+    sendSpy.mockClear();
+
+    const res = await githubWebhookService.handleEvent('installation_repositories', {
+      action: 'added',
+      installation: { id: 'inst-cg', account: { login: 'moooon', type: 'Organization' } },
+    });
+    expect(res).toMatchObject({ event: 'installation_repositories', outcome: 'synced' });
+
+    const indexCalls = sendSpy.mock.calls.filter(
+      ([e]) => (e as { name?: string }).name === 'system.code-graph-index',
+    );
+    expect(indexCalls).toHaveLength(1);
+    expect((indexCalls[0]![0] as { data: Record<string, unknown> }).data).toMatchObject({
+      installationId: 'inst-cg',
+      workspaceId: workspace.id,
+      repoOwner: 'moooon',
+      repoName: 'fresh',
+      defaultBranch: 'main',
+    });
   });
 });
 

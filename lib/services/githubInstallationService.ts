@@ -3,6 +3,7 @@ import { githubInstallationRepository } from '@/lib/repositories/githubInstallat
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { getGitProvider } from '@/lib/git';
+import { enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git/types';
 
@@ -87,7 +88,22 @@ export const githubInstallationService = {
       gitProvider.fetchInstallation(ctx.installationId),
       gitProvider.fetchInstallationRepos(ctx.installationId),
     ]);
-    return this.persistInstallation({
+    // The repos already persisted for this installation BEFORE the bind — empty on
+    // a first install (all repos are new), the current set on a re-bind (only a
+    // freshly-selected repo indexes). The webhook `reconcile` path only fires for
+    // an ALREADY-bound installation, so a fresh install's repos would otherwise
+    // never be indexed — this bind path covers them.
+    const existingRepoIds = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        ctx.installationId,
+        tx,
+      );
+      if (!installation) return [] as string[];
+      const rows = await githubRepoRepository.listByInstallation(installation.id, tx);
+      return rows.map((r) => r.repoId);
+    });
+
+    const dto = await this.persistInstallation({
       workspaceId: ctx.workspaceId,
       installation: {
         installationId: ctx.installationId,
@@ -96,6 +112,16 @@ export const githubInstallationService = {
       },
       repos,
     });
+
+    // POST-COMMIT, best-effort code-graph index for each newly-added repo
+    // (MOTIR-1500). Never fails the bind — a dropped enqueue self-heals.
+    await enqueueNewlyAddedRepos({
+      installationId: ctx.installationId,
+      workspaceId: ctx.workspaceId,
+      repos,
+      existingRepoIds,
+    });
+    return dto;
   },
 
   /**

@@ -6,6 +6,7 @@ import {
   parseSseFrame,
   createCheckoutSession,
   createPortalSession,
+  indexCodeGraph,
   type RequestActor,
 } from '@/lib/ai/motirAiClient';
 import { verifyJobToken } from '@/lib/ai/jobToken';
@@ -314,6 +315,64 @@ describe('createPortalSession', () => {
         ),
     );
     await expect(createPortalSession(input)).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
+  });
+});
+
+describe('indexCodeGraph (MOTIR-1500)', () => {
+  const input = {
+    coreOrganizationId: 'org_1',
+    coreWorkspaceId: 'ws_1',
+    coreProjectId: 'pj_1',
+    repoRef: 'moooon/acme',
+    bytes: new Uint8Array([0x1f, 0x8b, 0x08, 0x00, 0x11, 0x22]),
+  };
+
+  it('POSTs the raw gzip bytes to /v1/code-graph/index with the Bearer + x-core headers', async () => {
+    const result = {
+      status: 'ok',
+      repoRef: 'moooon/acme',
+      filesIndexed: 42,
+      nodesChanged: 100,
+      edgesChanged: 250,
+      commitSha: 'deadbeef',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(result));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const got = await indexCodeGraph(input);
+    expect(got).toEqual(result);
+
+    const [reqUrl, init] = fetchMock.mock.calls[0]!;
+    expect(reqUrl).toBe('https://ai.example.test/v1/code-graph/index');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer svc-token',
+      'content-type': 'application/gzip',
+      'x-core-organization-id': 'org_1',
+      'x-core-workspace-id': 'ws_1',
+      'x-core-project-id': 'pj_1',
+      'x-repo-ref': 'moooon/acme',
+    });
+    // The body is the raw bytes, NOT a JSON string.
+    expect(typeof init.body).not.toBe('string');
+    expect(new Uint8Array(init.body)).toEqual(input.bytes);
+  });
+
+  it('maps a problem+json error to a typed error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ code: 'validation_error', title: 'bad tarball', status: 400 }, 400),
+        ),
+    );
+    await expect(indexCodeGraph(input)).rejects.toBeInstanceOf(MotirAiBadRequestError);
+  });
+
+  it('maps a transport failure to MotirAiUnavailableError', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    await expect(indexCodeGraph(input)).rejects.toBeInstanceOf(MotirAiUnavailableError);
   });
 });
 

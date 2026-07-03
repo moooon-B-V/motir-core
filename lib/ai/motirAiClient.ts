@@ -364,6 +364,63 @@ export async function saveDesignChoice(input: SaveDesignChoiceInput): Promise<Ra
   return (await res.json()) as RawPreplanSession;
 }
 
+// The motir-ai code-graph index response (MOTIR-1500) — a summary of what the
+// index run produced for one project's code-graph store. Read only for the
+// job-run ledger / logging; the durable effect is on the motir-ai side.
+export interface CodeGraphIndexResult {
+  status: string;
+  repoRef: string;
+  filesIndexed: number;
+  nodesChanged: number;
+  edgesChanged: number;
+  commitSha: string;
+}
+
+// POST /v1/code-graph/index — hand a repo's raw gzipped-tarball BYTES to motir-ai
+// to build/refresh a project's code graph (MOTIR-1500, the producer half). This
+// is the ONE binary method on the boundary: unlike every JSON method above, the
+// body is the tarball itself (`content-type: application/gzip`, NOT a JSON
+// envelope), and the tenant tuple + repo ref ride as `x-core-*` / `x-repo-ref`
+// headers. The GitHub installation token + the tarball fetch stay in motir-core;
+// motir-ai receives BYTES, never a host credential (the open-core invariant). The
+// caller (the `system.code-graph-index` job) has already resolved the tenant and
+// minted the token. A transport failure / non-2xx (problem+json) maps to a typed
+// error the job's retry budget absorbs.
+export async function indexCodeGraph(input: {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  repoRef: string;
+  bytes: ArrayBuffer | Uint8Array;
+}): Promise<CodeGraphIndexResult> {
+  const { url, serviceToken } = config();
+  // Normalize to a Buffer so `fetch` sends the raw bytes verbatim (never a JSON
+  // stringify). Buffer.from(Uint8Array) copies; Buffer.from(ArrayBuffer) via a
+  // Uint8Array view — either way the exact tarball bytes cross the wire.
+  const body = Buffer.from(
+    input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes),
+  );
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/code-graph/index`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${serviceToken}`,
+        'content-type': 'application/gzip',
+        'x-core-organization-id': input.coreOrganizationId,
+        'x-core-workspace-id': input.coreWorkspaceId,
+        'x-core-project-id': input.coreProjectId,
+        'x-repo-ref': input.repoRef,
+      },
+      body,
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as CodeGraphIndexResult;
+}
+
 // GET /v1/jobs/:id/stream — yield SSE frames (status / done / error) as they
 // arrive; the generator ends when the stream closes (motir-ai closes it on a
 // terminal state). A transport failure throws a typed error before the first
