@@ -106,7 +106,7 @@ export const aiGenerationService = {
     jobId: string,
     proposals: ProposalInput[],
     ctx: ServiceContext,
-    opts: { final?: boolean } = {},
+    opts: { final?: boolean; productName?: string | null } = {},
   ): Promise<{ planId: string; planItemIds: string[]; planned: boolean }> {
     const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
     if (!plan) throw new NoPlanForJobError(jobId);
@@ -123,7 +123,9 @@ export const aiGenerationService = {
 
     let planned = false;
     if (opts.final) {
-      await plansService.markPlanned(plan.id, ctx);
+      // `productName` (MOTIR-1554/1551) is persisted onto the Plan here, on the
+      // final append — it is later consumed at approve to name the draft project.
+      await plansService.markPlanned(plan.id, ctx, { productName: opts.productName ?? null });
       planned = true;
     }
 

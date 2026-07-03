@@ -2982,6 +2982,10 @@ model Plan {
   title       String?
   /// Longer human summary of what the plan proposes (Markdown), when distinct from the title.
   summary     String?    @db.Text
+  /// AI-suggested product/project name (MOTIR-1554/1551) — set on the FINAL
+  /// plan-proposals append, and ONLY by the onboarding generation. Consumed at
+  /// approve to rename a still-provisional draft project. Null otherwise.
+  productName String?    @map("product_name")
   /// The motir-ai generation job that produced this plan, for provenance.
   sourceJobId String?    @map("source_job_id")
   createdAt   DateTime   @default(now()) @map("created_at")

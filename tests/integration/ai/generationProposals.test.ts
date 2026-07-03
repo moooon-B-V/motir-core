@@ -165,6 +165,49 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(plan!.status).toBe('planned');
   });
 
+  it('persists a productName from the FINAL append onto the Plan (MOTIR-1551 seam)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gen_named';
+    const planId = await openPlan(fx, jobId);
+
+    const res = await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: { jobId, final: true, productName: 'Recipe Keeper' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    // The response shape is unchanged — productName is a Plan column, not echoed.
+    const body = await res.json();
+    expect(body.planned).toBe(true);
+    expect(body.planItemIds).toEqual([]);
+
+    const plan = await db.plan.findFirstOrThrow({ where: { id: planId } });
+    expect(plan.productName).toBe('Recipe Keeper');
+  });
+
+  it('ignores a productName on a NON-final append (rides only the final one)', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gen_named_nonfinal';
+    const planId = await openPlan(fx, jobId);
+
+    await proposalsPOST(
+      proposalsReq({
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        body: {
+          jobId,
+          proposals: [{ op: 'add', proposedFields: { title: 'Epic', kind: 'epic' } }],
+          productName: 'Too Early',
+        },
+      }),
+    );
+
+    const plan = await db.plan.findFirstOrThrow({ where: { id: planId } });
+    expect(plan.productName).toBeNull();
+  });
+
   it('401s a missing service bearer (before any DB work)', async () => {
     const fx = await makeFixture();
     const res = await proposalsPOST(

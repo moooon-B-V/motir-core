@@ -909,6 +909,109 @@ describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () =
   });
 });
 
+// MOTIR-1551 — name the onboarded project from the AI plan. The onboarding
+// generation (producer MOTIR-1554) stamps a suggested `productName` on the Plan
+// via the FINAL append; approve applies it with `renameProject`'s effect, but
+// ONLY on the first onboarding approve of a draft the user hasn't already named.
+// Real Postgres. The provisional placeholder string is passed in (the route
+// resolves it from i18n); here the tests supply it directly.
+const PROVISIONAL = 'Untitled project';
+
+/** Create a plan, append proposals, and mark it planned WITH a productName —
+ *  the onboarding-generation final append. */
+async function plannedPlanNamed(
+  fx: WorkItemFixture,
+  productName: string | null,
+  proposals: Parameters<typeof plansService.addProposals>[1] = [
+    { op: 'add', proposedFields: { title: 'Tree', kind: 'task' } },
+  ],
+): Promise<string> {
+  const plan = await plansService.createPlan(fx.projectId, { title: 'Build it' }, fx.ctx);
+  await plansService.addProposals(plan.id, proposals, fx.ctx);
+  await plansService.markPlanned(plan.id, fx.ctx, { productName });
+  return plan.id;
+}
+
+describe('plansService.markPlanned — productName persistence (MOTIR-1551)', () => {
+  it('persists a trimmed productName onto the Plan on the final append', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlanNamed(fx, '  Recipe Keeper  ');
+    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.productName).toBe('Recipe Keeper');
+  });
+
+  it('leaves productName null when the final append carries none (reconciliation run)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlanNamed(fx, null);
+    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.productName).toBeNull();
+  });
+
+  it('treats a blank/whitespace productName as none', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await plannedPlanNamed(fx, '   ');
+    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.productName).toBeNull();
+  });
+});
+
+describe('plansService.approvePlan — name the onboarded project (MOTIR-1551)', () => {
+  it('renames a still-provisional draft to the plan productName on the first onboarding approve', async () => {
+    const fx = await makeWorkItemFixture();
+    await db.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
+
+    const planId = await plannedPlanNamed(fx, 'Recipe Keeper');
+    await plansService.approvePlan(planId, fx.ctx, { provisionalProjectName: PROVISIONAL });
+
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(project.name).toBe('Recipe Keeper');
+    expect(project.onboardingRanAt).toBeInstanceOf(Date); // still stamped
+  });
+
+  it('never clobbers a project the user already renamed during review', async () => {
+    const fx = await makeWorkItemFixture();
+    await db.project.update({ where: { id: fx.projectId }, data: { name: 'My Cool Project' } });
+
+    const planId = await plannedPlanNamed(fx, 'Recipe Keeper');
+    await plansService.approvePlan(planId, fx.ctx, { provisionalProjectName: PROVISIONAL });
+
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(project.name).toBe('My Cool Project');
+  });
+
+  it('is a no-op when the plan carries no productName (a null → keeps the placeholder)', async () => {
+    const fx = await makeWorkItemFixture();
+    await db.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
+
+    const planId = await plannedPlanNamed(fx, null);
+    await plansService.approvePlan(planId, fx.ctx, { provisionalProjectName: PROVISIONAL });
+
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(project.name).toBe(PROVISIONAL);
+  });
+
+  it('does not rename on a LATER approve (onboardingRanAt already set), even if that plan carries a name', async () => {
+    const fx = await makeWorkItemFixture();
+    await db.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
+
+    // First onboarding approve carries NO name → the placeholder survives, and
+    // onboardingRanAt is stamped.
+    const planA = await plannedPlanNamed(fx, null);
+    await plansService.approvePlan(planA, fx.ctx, { provisionalProjectName: PROVISIONAL });
+    expect((await db.project.findUniqueOrThrow({ where: { id: fx.projectId } })).name).toBe(
+      PROVISIONAL,
+    );
+
+    // A later plan carrying a productName must NOT rename — the project has
+    // already onboarded (a reconciliation run wouldn't send a name anyway).
+    const planB = await plannedPlanNamed(fx, 'Late Name');
+    await plansService.approvePlan(planB, fx.ctx, { provisionalProjectName: PROVISIONAL });
+
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    expect(project.name).toBe(PROVISIONAL);
+  });
+});
+
 // Bug MOTIR-1433 — the Plan substrate must CARRY leaf sizing (storyPoints +
 // estimateMinutes, the estimation gate) on a proposed `add`, round-trip it
 // through getPlan, MAP it onto the materialized WorkItem, and let updateProposal

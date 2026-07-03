@@ -69,13 +69,18 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
   const final = (body as { final?: unknown })?.final === true;
+  // The AI-suggested project name (MOTIR-1554/1551) rides ONLY the final append,
+  // and only from the onboarding generation. Accept a string; anything else
+  // (absent/null/non-string) is "no name" — the consumer keeps the placeholder.
+  const rawProductName = (body as { productName?: unknown })?.productName;
+  const productName = typeof rawProductName === 'string' ? rawProductName : null;
 
   try {
     const result = await aiGenerationService.appendProposals(
       jobId,
       rawProposals as ProposalInput[],
       auth.ctx,
-      { final },
+      { final, productName },
     );
     return NextResponse.json(result);
   } catch (err) {
