@@ -62,21 +62,22 @@ no Pencil→code gap.
 > (badge + Edit-page button for an admin viewing a public project), and the 6.16
 > in-place editor replaces 6.12.8's settings split editor in BOTH framings.
 
-| Surface                          | Asset                          | Gates                                                                                                      |
-| -------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| **Public Overview / README**     | `public-projects.mock.html`    | **6.12.4** (render) + **6.16.4** (authorable tagline + tags)                                               |
-| **Admin "Edit page" affordance** | `public-projects.mock.html`    | **6.16.5** (`viewerCanManage` only)                                                                        |
-| **In-place edit mode**           | `public-projects.mock.html`    | **6.16.5** (tagline + tags + README via `MarkdownEditor` + sticky Save bar)                                |
-| **Public read-only view**        | `public-projects.mock.html`    | **6.12.4** (board / work items, internal fields hidden)                                                    |
-| **Public roadmap**               | `public-projects.mock.html`    | **6.12.7** (status-grouped, vote-counted, paginated)                                                       |
-| **Submit + duplicate detect**    | `public-projects.mock.html`    | **6.12.5** (the form) + **6.12.6** (the upvote target)                                                     |
-| **Request detail**               | `public-projects.mock.html`    | **6.12.6** (upvote + comments on public requests)                                                          |
-| **Make-public + share link**     | `public-projects.mock.html`    | **6.12.8** (Access control + link) + **6.16.6** (drop editor → on-page link)                               |
-| **Public work-item DETAIL**      | `public-item-detail.mock.html` | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)                             |
-| **Build-in-public reframe**      | `public-projects.mock.html`    | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                                     |
-| **Build-in-public entry pt**     | `public-projects.mock.html`    | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10               |
-| **Build-in-public badge**        | `public-projects.mock.html`    | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                                             |
-| **Public-state header slot**     | `public-projects.mock.html`    | **6.17.6** (active "Building in public" indicator, linked to settings — design gate for 6.17.7) — Panel 12 |
+| Surface                          | Asset                           | Gates                                                                                                      |
+| -------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Public Overview / README**     | `public-projects.mock.html`     | **6.12.4** (render) + **6.16.4** (authorable tagline + tags)                                               |
+| **Admin "Edit page" affordance** | `public-projects.mock.html`     | **6.16.5** (`viewerCanManage` only)                                                                        |
+| **In-place edit mode**           | `public-projects.mock.html`     | **6.16.5** (tagline + tags + README via `MarkdownEditor` + sticky Save bar)                                |
+| **Public read-only view**        | `public-projects.mock.html`     | **6.12.4** (board / work items, internal fields hidden)                                                    |
+| **Public roadmap**               | `public-projects.mock.html`     | **6.12.7** (status-grouped, vote-counted, paginated)                                                       |
+| **Submit + duplicate detect**    | `public-projects.mock.html`     | **6.12.5** (the form) + **6.12.6** (the upvote target)                                                     |
+| **Request detail**               | `public-projects.mock.html`     | **6.12.6** (upvote + comments on public requests)                                                          |
+| **Make-public + share link**     | `public-projects.mock.html`     | **6.12.8** (Access control + link) + **6.16.6** (drop editor → on-page link)                               |
+| **Public work-item DETAIL**      | `public-item-detail.mock.html`  | **6.14.11** (the page) + **6.14.6** (the private-epic child-panel placeholder)                             |
+| **Build-in-public reframe**      | `public-projects.mock.html`     | **6.17.2** (reframed access control + copy + explainer) — Panels 6, 11                                     |
+| **Build-in-public entry pt**     | `public-projects.mock.html`     | **6.17.3** (PRIMARY: persistent header button; + nudge + Settings card → confirm) — Panel 10               |
+| **Build-in-public badge**        | `public-projects.mock.html`     | **6.17.4** (status badge + stop/manage path) — Panels 1, 2, 12                                             |
+| **Public-state header slot**     | `public-projects.mock.html`     | **6.17.6** (active "Building in public" indicator, linked to settings — design gate for 6.17.7) — Panel 12 |
+| **In-place sign-in / sign-up**   | `public-signin-modal.mock.html` | **MOTIR-1557** (this asset — design gate) → **MOTIR-1558** (build the modal). Panels 1–7                   |
 
 Every UI code subtask in Story 6.12 (6.12.4 / 6.12.6 / 6.12.7 / 6.12.8) carries
 `6.12.1` in `dependsOn` and is `blocked` until this asset lands. The
@@ -202,9 +203,13 @@ duplicate-detection portal set.
 
 ```
 design/public-projects/
-  design-notes.md            ← this spec
-  public-projects.mock.html  ← the asset SOURCE (9 panels, one self-contained file)
-  public-projects.png        ← the full-page PNG export (board-visible face)
+  design-notes.md              ← this spec (indexes every surface in the area)
+  public-projects.mock.html    ← the public read/roadmap/submit/settings + build-in-public asset
+  public-projects.png          ← its full-page PNG export
+  public-item-detail.mock.html ← the public work-item DETAIL page asset (Story 6.14)
+  public-item-detail.png       ← its PNG export
+  public-signin-modal.mock.html← the in-place (modal) sign-in / sign-up asset (MOTIR-1557)
+  public-signin-modal.png      ← its PNG export (7 panels, one full-page image)
 ```
 
 ---
@@ -748,6 +753,129 @@ It is the host surface for two code subtasks: **6.14.11** (build the page) and
 
 ---
 
+## In-place (modal) sign-in / sign-up (MOTIR-1557 · gate for MOTIR-1558) — `public-signin-modal.mock.html`
+
+**The model change this asset designs.** Today the public project page authenticates by a
+**full-page navigation to `/sign-in`** (the shipped "sign-in-to-act" model — the sign-in-to-act
+copy above + the full-page auth screens in `design/auth/`). **MOTIR-1558** wants to authenticate
+**without leaving the public page** — an **in-place modal** launched from the existing `PublicTopBar`
+CTAs. An in-place modal is a **MODEL change** from the designed full-page flow, and **no design
+depicted a public-page sign-in modal**, so this design pass runs BEFORE the code (design gate;
+`notes.html` #31; design-against-shipped-reality). It is carved out of **MOTIR-990** ("Better UX for
+sign-in in public project page", problem #2). Its own asset (`public-signin-modal.mock.html`) rather
+than a panel bolted onto `public-projects.mock.html`, because it composes the **auth** area, not the
+public-project chrome — the same separate-asset pattern as `public-item-detail.mock.html`.
+
+**Designed against shipped reality (`notes.html` #31 / MOTIR-1196 — reuse the real component, never a
+stand-in).** The modal does NOT redraw a stylized auth form. It wraps the **REAL shipped auth
+content**, mirrored 1:1 (markup, primitives, tokens, copy) from the already-shipped screens — I read
+each before drawing, and grounded the panels in the shipped `design/auth/` renders:
+
+- `app/(auth)/sign-in/page.tsx` — the **two-step** email→password flow (step `email`: Google + email
+  - Continue; step `password`: read-only email recap with **"Use a different email"**, **"Forgot
+    password?"** ABOVE the field per the Clay pattern, password `Input` with a show/hide eye addon,
+    Continue). The wrong-password inline error is `Input`'s `error` state (Panel 6a).
+- `app/(auth)/sign-up/page.tsx` — the two-step identity→create-password flow (email helper **"We'll
+  use this to sign you in."**; the create-password field's **"At least 8 characters."** helper; the
+  email-exists inline path; recap **"Edit"** on step 2).
+- `app/(auth)/_components/AuthShell.tsx` — the serif headline + subhead header, and the `OrDivider`
+  - `FormAlert` primitives (reused verbatim; `FormAlert` is the top-of-form alert for an OAuth/Google
+    failure).
+- `app/(auth)/_components/GoogleButton.tsx` — **"Continue with Google"** (a `Button` `secondary`
+  `lg`, full-width) with the **official multi-colour Google G** brand glyph inlined (the shipped
+  component inlines the same trademark paths — the one raw-hex exception, a third-party logo, not a
+  UI element colour).
+- `components/ui/Modal.tsx` (`@motir/design-system`) — the shell. **Radix-portaled**, so the dialog
+  escapes the public shell card's `overflow-hidden`; `contentVariants` **size `md`**
+  (`max-w-[28rem]`), `rounded-(--radius-modal)`, `bg-(--el-page-bg)`, `shadow-(--shadow-modal)`,
+  border, `p-(--spacing-card-padding)`, the corner `×` close, `max-h-[90vh]` + scroll. The auth
+  headline renders INSIDE the dialog body (not via the `title` prop) with `srTitle` for the
+  accessible name — the same pattern the 2.5.19 quick-view peek uses.
+
+**Access path (draw the door).** The entry affordance is the **existing `PublicTopBar` "Sign in"
+(ghost) / "Start free" (primary)** buttons — they now **open the modal in place** instead of
+navigating (`<Link href="/sign-in">` → an on-click that opens the dialog). Panel 1 draws the topbar
+with both CTAs ringed. "Sign in" opens the sign-in modal; "Start free" opens the sign-up modal.
+
+**Behaviour specified.**
+
+- **Email + password authenticates IN PLACE**, then **closes the modal + `router.refresh()`** — the
+  visitor STAYS on the public project page, now able to upvote / comment / submit. No full-page
+  navigation. (Page-state: the public page is server-rendered; a `router.refresh()` re-reads it with
+  the new session so the sign-in-to-act prompts flip to the live controls — the CLAUDE.md
+  page-state-after-mutation contract, server-surface branch.)
+- **Google OAuth inherently REDIRECTS** (Better-Auth → Google consent → `/api/auth/callback/google`
+  → back). It **cannot be fully in-place**; the code sets **`callbackURL` to the CURRENT public path**
+  so the visitor lands back on the same public page. This caveat is stated in the notes, not hidden —
+  only the email/password path is truly in-place.
+- **Sign in ↔ Start free** swap the modal **content in place** (the cross-links inside the modal —
+  "Don't have an account? Sign up" / "Already have an account? Log in" — flip the dialog's mode, no
+  navigation).
+- **Mobile** (Panel 7): the **same centered Radix dialog**, near-full-width via the shipped Modal's
+  `w-[90vw]`, sitting low on the tall viewport. **Decision: a centered dialog, NOT a new bottom-sheet
+  variant** — the shipped `Modal` already caps at `max-h-[90vh]` and scrolls, so no new primitive is
+  needed; a bottom-sheet would fork the Modal for one call site.
+- **States** (Panel 6): (a) wrong password → `Input` danger + the inline **"That password isn't
+  right. Try again, or reset it."** (no account enumeration); (b) Google **"Connecting…"** / email
+  step **"Checking…"** → the `Button` `loading` spinner; a Google/OAuth failure surfaces as the
+  top-of-form `FormAlert`; (c) **already-signed-in** edge → the modal shows the identity + a single
+  Continue (no auth form).
+
+**Decisions I made (no design subtask asks the user — resolved from the ladder; flagged for review at
+the design-approval gate):**
+
+1. **The "Plan with AI" onboarding door is OMITTED from the modal.** The shipped `/sign-in` page
+   carries a "Have a project idea? → Plan with AI" secondary footer that navigates to `/onboarding`
+   (the start-fresh front door). In a modal whose entire purpose is **sign-in-to-act on THIS public
+   project**, a control that navigates AWAY to onboarding contradicts the in-place intent — so the
+   modal is scoped to authentication, and the onboarding front door stays on the full `/sign-in`
+   page. (Rung-1 mirror: GitHub / Canny / Linear in-context auth modals show only auth, never a
+   "start a new project" door.)
+2. **The full-page `/sign-in` + `/sign-up` routes REMAIN.** The modal is **additive** — deep links,
+   the onboarding front door, and Better-Auth's `?error=` OAuth bounce-back all still land on the
+   full pages. MOTIR-1558 adds the in-place path for the public page; it does not remove the routes.
+3. **Headline scale.** `AuthShell`'s headline is `text-4xl/5xl` on the full page; inside a compact
+   `md` dialog it renders at a modal-appropriate serif size (~27px desktop / ~23px mobile) — the one
+   deliberate adaptation from the full-page markup, so the headline doesn't dominate the 448px panel.
+
+**Panels (review EACH — mistake #31):** (1) the **access path** — `PublicTopBar` Sign in / Start
+free; (2) **sign-in · step 1** (email) over the dimmed page; (3) **sign-in · step 2** (password —
+recap + Forgot + show/hide); (4) **sign-up · step 1** (identity); (5) **sign-up · step 2** (create
+password); (6) **states** (wrong-password / connecting-submitting / already-signed-in); (7)
+**mobile** (centered dialog at phone width).
+
+**Copy (the real `messages/en.json` → `auth.*`; en + zh both already ship — MOTIR-1558 adds no new
+strings):** **"Welcome back!"** / **"Use Motir to turn any product idea into reality."** ·
+**"Continue with Google"** / **"Connecting…"** · **"OR"** · **"Email address"** / **"Continue"** /
+**"Checking…"** · **"Don't have an account?" "Sign up"** · **"Signing in as {email}"** / **"Use a
+different email"** · **"Forgot password?"** / **"Password"** / **"Show password" / "Hide password"** /
+**"Signing in…"** · wrong password **"That password isn't right. Try again, or reset it."** ·
+**"Welcome to Motir!"** / **"Sign up to turn any product idea into reality."** · **"We'll use this to
+sign you in."** · **"Create a password"** / **"At least 8 characters."** / **"Create account"** /
+**"Creating account…"** · **"Already have an account?" "Log in"** · **"An account with this email
+already exists." "Sign in instead →"** · Google failure (`FormAlert`) **"Google sign-in didn't
+complete. Try again, or use email."**
+
+**Colour + shape roles (all via `--el-*` / shape tokens — no Tier-0, no invented hue except the
+Google brand G):** the dialog panel = `--el-page-bg` + `--el-border` + `--shadow-modal` +
+`--radius-modal`; the Radix overlay scrim = **`--el-overlay-scrim`**; the serif headline `--el-text`,
+subhead `--el-text-muted`; the primary CTA = `--el-accent` / `--el-accent-text` (`--radius-btn`,
+`--height-btn-lg`); the Google button = `secondary` (`--el-button-border` border,
+`--el-text`); `Input` = `--el-input-border` + `--el-page-bg`, focus ring `--focus-ring-color`, addon
+icon `--el-icon-field`, danger `--el-danger`; the email recap box = `--el-surface`; `OrDivider` line
+`--el-border` / label `--el-text-muted`; `FormAlert` = `color-mix(--el-danger 12%, transparent)` bg +
+`--el-danger` text/glyph; cross-links `--el-link`; the close `×` = `--el-icon-muted`; the
+already-signed-in avatar = `--el-tint-lavender` + `--el-text-strong` (the AA recipe). **No new
+`--el-*` tokens** — the modal reuses the shipped auth + Modal tokens verbatim.
+
+**Primitives composed (no hand-rolling):** `Modal` (the shipped `components/ui/Modal.tsx`, size `md`)
+· `Button` (primary / secondary + the `loading` state) · `Input` (email / password, addon icons +
+show/hide eye + error) · the `AuthShell` header / `OrDivider` / `FormAlert` · `GoogleButton` · the
+initial-letter `Avatar` (signed-in state). The only NEW arrangement is the **composition** of these
+into a dialog — not a new primitive.
+
+---
+
 ## Colour roles (every colour via `--el-*` — no Tier-0 `--color-*`)
 
 | Element                                    | Token                                                                                                                        |
@@ -1045,3 +1173,10 @@ already seeded; this asset is its design gate. The owning subtasks:
   portal + share-link + status-roadmap shape.
 - `components/ui/*`, `app/globals.css` (the `--el-*` + `[data-display-style]`
   token layers), `motir-core/CLAUDE.md` § colour + shape tokens.
+- **In-place sign-in modal (MOTIR-1557):** `app/(auth)/sign-in/page.tsx` ·
+  `app/(auth)/sign-up/page.tsx` · `app/(auth)/_components/AuthShell.tsx`
+  (`OrDivider` / `FormAlert`) · `app/(auth)/_components/GoogleButton.tsx` ·
+  `components/ui/Modal.tsx` (`@motir/design-system`, Radix-portaled) ·
+  `app/(public)/_components/PublicTopBar.tsx` (the Sign in / Start free door) ·
+  `design/auth/` (the shipped full-page auth renders this modal reuses) —
+  the sources the modal composes 1:1. MOTIR-990 problem #2 is the origin.
