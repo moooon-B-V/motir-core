@@ -1441,9 +1441,11 @@ There is **no mode-chooser modal and no restructure of the shipped modal.** Ever
   `app/(authed)/_components/CreateProjectModal.tsx` (`Modal`; Name + live-keyed Identifier; the
   `isPending` spinner; the `IDENTIFIER_COLLISION` inline error) — 1.3.4 / MOTIR-40, design 1.3.3 /
   MOTIR-39. This card adds NOTHING to that modal.
-- **"Plan a new project with AI"** — the new affordance. On click it **navigates to `/onboarding`** —
-  the shipped fork screen (MOTIR-1461, `design/onboarding-entrance/`) via the router (MOTIR-1462).
-  No modal of its own; no project pre-created.
+- **"Plan a new project with AI"** — the new affordance. On click it submits `startNewAiProjectAction`,
+  which **mints a fresh draft project** (provisional "Untitled project" name), pins it active, then
+  routes to `/onboarding` — the shipped fork screen (MOTIR-1461, `design/onboarding-entrance/`). No
+  modal of its own; the draft is created **up front** (not downstream), so the door always plans a NEW
+  project.
 
 The two are siblings — neither is nested inside the other. (This replaces an earlier draft that folded
 both into a single choice modal; Yue's direction is to keep the shipped "Create project" untouched and
@@ -1453,9 +1455,20 @@ add the AI door alongside it.)
 
 **"Plan a new project with AI" ROUTES to `/onboarding`** — it does NOT redraw a second inline fork.
 The fresh-vs-import choice lives ONLY on that route (owned by MOTIR-1461). So **MOTIR-1486 wires the
-door; it does not build a fork.** No project row is created for the AI path — it is created downstream
-(start-fresh: at discovery/materialize, done 7.3; import: inside the 7.15 / MOTIR-815 · 7.17 /
-MOTIR-817 wizard). Nothing on this surface connects a repo or picks a Jira/Linear tracker.
+door; it does not build a fork.** For the start-fresh (AI) path the door **mints a fresh draft project
+up front** — `startNewAiProjectAction` calls `createProject` (provisional name) → `setActiveProject` →
+`redirect('/onboarding')` — so onboarding plans into that NEW draft, not the previously-active project.
+
+> **Correction (MOTIR-1552 / notes.html #130).** An earlier draft of this note claimed no project was
+> created for the AI path because it was "created downstream (at discovery/materialize, done 7.3)". That
+> premise was **false**: `/onboarding` → discovery → `plansService.materialize` writes into the
+> **already-active** project via `getActiveProject` and never calls `createProject`, so a bare route to
+> `/onboarding` planned into the existing project. MOTIR-1486 was re-scoped to create the draft up front
+> (above); naming it from the generated plan is the follow-up MOTIR-1551 (`renameProject` consumes a
+> suggested name the plan output does not carry yet).
+
+The import path still hands off to the 7.15 / MOTIR-815 · 7.17 / MOTIR-817 wizard. Nothing on this
+surface connects a repo or picks a Jira/Linear tracker.
 
 ## Access path — both doors drawn IN SITU on every host surface (notes.html #83)
 

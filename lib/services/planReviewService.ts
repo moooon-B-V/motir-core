@@ -55,6 +55,27 @@ function buildChanges(
   if (patch.type !== undefined && patch.type !== (target?.type ?? null)) {
     changes.push({ field: 'type', from: target?.type ?? null, to: patch.type ?? null });
   }
+  // Leaf sizing re-scope (MOTIR-1532) — surface it so the approver SEES the new
+  // points/estimate before approving. `storyPoints` is a Prisma Decimal on the
+  // target; compare + render it numerically (as a string, the change-cell shape).
+  const targetPoints = target?.storyPoints == null ? null : Number(target.storyPoints);
+  if (patch.storyPoints !== undefined && patch.storyPoints !== targetPoints) {
+    changes.push({
+      field: 'storyPoints',
+      from: targetPoints === null ? null : String(targetPoints),
+      to: patch.storyPoints === null ? null : String(patch.storyPoints),
+    });
+  }
+  if (
+    patch.estimateMinutes !== undefined &&
+    patch.estimateMinutes !== (target?.estimateMinutes ?? null)
+  ) {
+    changes.push({
+      field: 'estimateMinutes',
+      from: target?.estimateMinutes == null ? null : String(target.estimateMinutes),
+      to: patch.estimateMinutes === null ? null : String(patch.estimateMinutes),
+    });
+  }
   if (
     patch.descriptionMd !== undefined &&
     patch.descriptionMd !== (target?.descriptionMd ?? null)

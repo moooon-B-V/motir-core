@@ -10,6 +10,7 @@ import {
   DEFAULT_STYLE_ID,
   DEFAULT_PALETTE_ID,
   STYLE_DEFAULT_TYPE,
+  THEME_DEFAULTS,
   type AppliedAppearanceDto,
 } from '../src/index';
 
@@ -64,6 +65,43 @@ describe('theme-apply API', () => {
       type: null,
     });
     expect(applied).toBe(server); // server wins verbatim
+  });
+
+  it('resolveAppliedAppearance falls back to the localStorage snapshot when no server pref (anonymous)', () => {
+    // The other branch of the reconciliation: an anonymous visitor (server ===
+    // null) resolves the applied appearance FROM localStorage through the same
+    // registry mapping. This is the branch the pre-hydration init script runs;
+    // covering it keeps the registry→applied mapping fully branch-tested (the
+    // MOTIR-1530 coverage AC).
+    const applied = resolveAppliedAppearance(null, {
+      pattern: 'dark',
+      style: styleId,
+      palette: paletteId,
+      type: typeId,
+    });
+    expect(applied).toEqual<AppliedAppearanceDto>({
+      pattern: 'dark',
+      styleId,
+      paletteId,
+      typeId,
+      typePinned: true,
+    });
+  });
+
+  it('resolveAppliedAppearance collapses a stale anonymous snapshot to the defaults', () => {
+    // A localStorage snapshot from a previous app version (junk ids, no type)
+    // still resolves to a fully-valid applied set — never leaks an invalid id.
+    const applied = resolveAppliedAppearance(null, {
+      pattern: null,
+      style: 'gone',
+      palette: 'gone',
+      type: null,
+    });
+    expect(applied.pattern).toBe(THEME_DEFAULTS.pattern);
+    expect(applied.styleId).toBe(DEFAULT_STYLE_ID);
+    expect(applied.paletteId).toBe(DEFAULT_PALETTE_ID);
+    expect(applied.typePinned).toBe(false);
+    expect(applied.typeId).toBe(STYLE_DEFAULT_TYPE[DEFAULT_STYLE_ID]);
   });
 
   it('buildThemeInitScript embeds the applied choice and sets the four data-* attributes', () => {
