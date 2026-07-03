@@ -17,6 +17,7 @@ import {
   Settings,
   Sparkles,
 } from 'lucide-react';
+import { GithubMark } from '@/components/icons/GithubMark';
 import { Sidebar, type SidebarItem, type SidebarSection } from '@/components/ui/Sidebar';
 import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
 import { useOnboardingResume } from './OnboardingResumeProvider';
@@ -311,9 +312,12 @@ export function SidebarNav({
         // Deep-link to project settings when a project is active; otherwise
         // there's nothing project-scoped to configure, so go to workspace.
         href: hasProject ? '/settings/project' : '/settings/workspace',
-        // Stay un-highlighted when the more-specific Job runs sub-link is the
-        // active route, so only one row reads as current.
-        active: isActive(pathname, '/settings') && !isActive(pathname, '/settings/workspace/jobs'),
+        // Stay un-highlighted when a more-specific workspace-settings sub-link
+        // (Job runs / GitHub) is the active route, so only one row reads current.
+        active:
+          isActive(pathname, '/settings') &&
+          !isActive(pathname, '/settings/workspace/jobs') &&
+          !isActive(pathname, '/settings/workspace/github'),
       },
       {
         // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
@@ -322,6 +326,16 @@ export function SidebarNav({
         label: t('nav.jobRuns'),
         href: '/settings/workspace/jobs',
         active: isActive(pathname, '/settings/workspace/jobs'),
+      },
+      {
+        // GitHub integration settings (Story 7.10 · MOTIR-895) — connect the
+        // workspace's GitHub App + identity, and see the selected repos. A
+        // workspace-scoped settings sub-page reached the same way Job runs is (a
+        // bottom-nav deep link — there is no separate workspace-settings rail).
+        icon: <GithubMark />,
+        label: t('nav.github'),
+        href: '/settings/workspace/github',
+        active: isActive(pathname, '/settings/workspace/github'),
       },
       {
         icon: <BookOpen />,

@@ -412,6 +412,7 @@
       "reports": "Reports",
       "settings": "Settings",
       "jobRuns": "Job runs",
+      "github": "GitHub",
       "docs": "Docs",
       "backlog": "Backlog",
       "triage": "Triage",
@@ -4318,6 +4319,61 @@
         "validate": "Validate",
         "plan": "Plan"
       }
+    }
+  },
+  "github": {
+    "title": "GitHub",
+    "subtitle": "Connect this workspace to GitHub to sync pull-request and CI status onto your work items, feed the code graph, and drive the review loop.",
+    "noWorkspace": {
+      "title": "No workspace yet",
+      "description": "Create a workspace from the switcher in the top-left to connect GitHub."
+    },
+    "banner": {
+      "connected": "GitHub identity connected. Install the Motir GitHub App to grant repository access.",
+      "denied": "GitHub authorization was cancelled. Nothing was connected.",
+      "state_error": "The GitHub sign-in couldn't be verified. Please try connecting again.",
+      "error": "Something went wrong connecting to GitHub. Please try again.",
+      "not_configured": "GitHub isn't configured on this deployment yet."
+    },
+    "connect": {
+      "title": "Connect GitHub",
+      "subtitle": "Two quick grants — both happen on GitHub.",
+      "step1": {
+        "eyebrow": "Step 1 · Identity",
+        "title": "Verify your GitHub identity",
+        "body": "Authorize Motir to confirm who you are on GitHub — your username and avatar. This reads your public profile only. It grants no access to any code."
+      },
+      "step2": {
+        "eyebrow": "Step 2 · Repository access",
+        "title": "Install the Motir GitHub App",
+        "body": "Choose which repositories Motir may read — you pick the exact repos on GitHub's install screen. Motir never sees the rest, and you can change the selection any time."
+      },
+      "installLink": "Install the Motir GitHub App",
+      "cta": "Connect GitHub",
+      "foot": "You'll be sent to GitHub to authorize, then to pick repositories."
+    },
+    "identity": {
+      "connectedAs": "GitHub identity · connected as {name}",
+      "verified": "Verified",
+      "disconnect": "Disconnect"
+    },
+    "installation": {
+      "installedOn": "Motir App installed on {account} · {type}"
+    },
+    "manageOnGitHub": "Manage on GitHub",
+    "repos": {
+      "title": "Repositories",
+      "caption": "Only the repositories you selected on GitHub. Motir reads these — it can't see any others.",
+      "empty": "No repositories are selected yet. Choose repositories on GitHub to get started.",
+      "foot": "To add or remove repositories, update the Motir App's access on GitHub."
+    },
+    "needsAccess": {
+      "pill": "Action needed",
+      "calloutTitle": "Motir can't read any repositories yet.",
+      "calloutBody": "Install the Motir GitHub App and choose repositories to grant access. If the App was uninstalled on GitHub, your synced work items keep their last-known status until you reconnect.",
+      "reconnect": "Reconnect GitHub",
+      "install": "Install the Motir GitHub App",
+      "stillConnected": "Identity connected · repository access not granted"
     }
   },
   "aiPlanning": {

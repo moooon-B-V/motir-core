@@ -223,3 +223,39 @@ describe('githubIdentityService.getIdentityForUser', () => {
     expect(underAlice).not.toBeNull();
   });
 });
+
+describe('githubIdentityService.disconnect', () => {
+  it("unbinds the member's identity, leaving no row", async () => {
+    const user = await makeUser();
+    mockGithub({ token: 't', user: { id: 21, login: 'gone', avatar_url: null } });
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: user.id });
+    expect(await countIdentities()).toBe(1);
+
+    await githubIdentityService.disconnect(user.id);
+
+    expect(await countIdentities()).toBe(0);
+    expect(await githubIdentityService.getIdentityForUser(user.id)).toBeNull();
+  });
+
+  it('is idempotent — disconnecting an unbound member is a no-op', async () => {
+    const user = await makeUser();
+    await expect(githubIdentityService.disconnect(user.id)).resolves.toBeUndefined();
+    expect(await countIdentities()).toBe(0);
+  });
+
+  it("removes only the acting member's identity, not another member's", async () => {
+    const alice = await makeUser('alice@example.com');
+    const bob = await makeUser('bob@example.com');
+    mockGithub({ token: 't', user: { id: 1, login: 'alice-gh', avatar_url: null } });
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: alice.id });
+    mockGithub({ token: 't', user: { id: 2, login: 'bob-gh', avatar_url: null } });
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: bob.id });
+    expect(await countIdentities()).toBe(2);
+
+    await githubIdentityService.disconnect(alice.id);
+
+    expect(await countIdentities()).toBe(1);
+    expect(await githubIdentityService.getIdentityForUser(alice.id)).toBeNull();
+    expect(await githubIdentityService.getIdentityForUser(bob.id)).not.toBeNull();
+  });
+});
