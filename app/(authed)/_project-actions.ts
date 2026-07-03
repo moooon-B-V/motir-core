@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
@@ -42,6 +43,15 @@ async function requireContext(): Promise<ResolvedContext> {
 export async function setActiveProjectAction(projectId: string): Promise<void> {
   const { userId, workspaceId } = await requireContext();
   await projectsService.setActiveProject({ userId, workspaceId, projectId });
+  // The active project is DB-backed (WorkspaceMembership.activeProjectId), not a
+  // cookie — so, unlike the workspace/org switch, mutating it gives Next no
+  // signal to invalidate the client Router Cache. Without this, a caller that
+  // navigates after switching (the switchers push to /items — MOTIR-1559) would
+  // re-render the cached authed layout with the OLD active project (stale
+  // switcher / nav). revalidatePath invalidates the layout tree so the pushed
+  // route re-renders against the new active project, matching how the cookie
+  // write auto-invalidates for the workspace/org switch.
+  revalidatePath('/', 'layout');
 }
 
 export interface CreateProjectActionInput {
