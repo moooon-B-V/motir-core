@@ -6,13 +6,13 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { RoadmapView } from '@/components/planning/RoadmapView';
 
 // Story-level ASSEMBLED gate for MOTIR-1539 (roadmap usability): the TWO features
-// this story ships — URL-addressable scope (MOTIR-1541) and the manual refresh
-// control (MOTIR-1542) — COEXIST on the same RoadmapView header without
-// interfering. Where RoadmapView.test.tsx drives each feature in ISOLATION (the
-// per-subtask floor), this suite exercises the CROSS-FEATURE seams those unit
-// tests can't reach on their own:
+// this story ships — URL-addressable scope (MOTIR-1541, now URL-driven end to end
+// per MOTIR-1549) and the manual refresh control (MOTIR-1542) — COEXIST on the same
+// RoadmapView header without interfering. Where RoadmapView.test.tsx drives each
+// feature in ISOLATION (the per-subtask floor), this suite exercises the
+// CROSS-FEATURE seams those unit tests can't reach on their own:
 //   - a refresh must PRESERVE the URL-seeded scope (a refresh never drops/resets
-//     scope, and never rewrites the URL),
+//     scope, and never navigates / rewrites the URL),
 //   - a scope switch must not STRAND the refresh control's loading state,
 //   - the refresh contract holds against the CURRENT scope (a scoped refetch),
 //   - both controls resolve their copy from the REAL `roadmap` next-intl catalog.
@@ -20,12 +20,21 @@ import { RoadmapView } from '@/components/planning/RoadmapView';
 // the real `en` catalog via renderWithIntl, the real ProjectRoadmapCanvas +
 // WorkItemRoadmap under test (there is no DB seam in this frontend-only story).
 
-// next/navigation: `replace` is the spy we assert the URL contract through;
-// the pathname is the roadmap route. (Hoisted so the spy exists at factory time.)
-const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+// next/navigation: scope is DERIVED from `useSearchParams()` (MOTIR-1549) and a
+// toggle writes the URL with `push` (a distinct history entry). `push`/`replace`
+// are the spies we assert the URL contract through; the pathname is the roadmap
+// route; `useSearchParams` reads a mutable holder (`sp.current`) so a test can
+// simulate a URL-seed / a client navigation by setting the query + re-rendering.
+// (Hoisted so the spies + holder exist at factory time.)
+const { push, replace, sp } = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  sp: { current: '' },
+}));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push, replace, refresh: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => '/roadmap',
+  useSearchParams: () => new URLSearchParams(sp.current),
 }));
 
 // Per-scope roots so a scope switch (and a scoped refetch) is observable in the
@@ -102,6 +111,8 @@ function stubGatedFetch(): { release: () => void } {
 }
 
 beforeEach(() => {
+  sp.current = '';
+  push.mockClear();
   replace.mockClear();
   stubImmediateFetch();
 });
@@ -145,11 +156,14 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
   });
 
   it('a refresh in sprint scope PRESERVES the scope: the refetch stays scope=sprint and the URL is never rewritten', async () => {
-    render(<RoadmapView {...baseProps({ initialScope: 'sprint' })} />);
+    // Deep-linked into sprint scope via the URL (?scope=sprint).
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps()} />);
     await screen.findByText('In-sprint epic');
     await waitFor(() => expect(fetchUrls.some((u) => u.includes('scope=sprint'))).toBe(true));
 
-    // Seeding scope from the URL does not itself rewrite the URL (no toggle yet).
+    // Deriving scope from the URL does not itself navigate (no toggle yet).
+    expect(push).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
     const before = fetchUrls.length;
 
@@ -163,12 +177,13 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     expect(screen.getByRole('button', { name: 'Active sprint' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
-    // …and a refresh NEVER touches the URL, so the ?scope=sprint param survives.
+    // …and a refresh NEVER navigates, so the ?scope=sprint URL survives untouched.
+    expect(push).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
   });
 
   it('switching scope during an in-flight refresh clears the loading state (no stranded spinner)', async () => {
-    render(<RoadmapView {...baseProps()} />);
+    const { rerender } = render(<RoadmapView {...baseProps()} />);
     await screen.findByText('Whole-project epic');
 
     // Gate the refresh's refetch so its loading state is observable in flight.
@@ -179,9 +194,14 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     await waitFor(() => expect(refresh.getAttribute('aria-busy')).toBe('true'));
     expect(refresh.disabled).toBe(true);
 
-    // Switch scope while the refresh is still in flight — the scope switch
-    // supersedes the refresh (the canvas remounts), so the loading state clears.
+    // Switch scope while the refresh is still in flight. The scope switch supersedes
+    // the refresh (changeScope clears the loading state synchronously); the client
+    // navigation to ?scope=sprint then remounts the canvas (simulated by the URL +
+    // rerender of the SAME instance, as Next's router would after push).
     fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
+    expect(push).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
+    sp.current = 'scope=sprint';
+    rerender(<RoadmapView {...baseProps()} />);
 
     await waitFor(() => expect(refresh.getAttribute('aria-busy')).not.toBe('true'));
     expect(refresh.disabled).toBe(false);
@@ -194,15 +214,18 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
   });
 
   it('refresh operates on the ACTIVE scope: after toggling to sprint, a refresh refetches the sprint level and settles to idle', async () => {
-    render(<RoadmapView {...baseProps()} />);
+    const { rerender } = render(<RoadmapView {...baseProps()} />);
     await screen.findByText('Whole-project epic');
 
     fireEvent.click(screen.getByRole('button', { name: 'Active sprint' }));
+    // The toggle wrote the URL once (the scope contract) — a distinct history entry.
+    expect(push).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
+    expect(push).toHaveBeenCalledTimes(1);
+    // Simulate the resulting client navigation to sprint scope.
+    sp.current = 'scope=sprint';
+    rerender(<RoadmapView {...baseProps()} />);
     await screen.findByText('In-sprint epic');
     await waitFor(() => expect(fetchUrls.some((u) => u.includes('scope=sprint'))).toBe(true));
-    // The toggle wrote the URL once (the scope contract) — the baseline before refresh.
-    expect(replace).toHaveBeenCalledWith('/roadmap?scope=sprint', { scroll: false });
-    expect(replace).toHaveBeenCalledTimes(1);
     const before = fetchUrls.length;
 
     const refresh = screen.getByRole('button', { name: 'Refresh roadmap' }) as HTMLButtonElement;
@@ -213,22 +236,25 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
     expect(fetchUrls.at(-1)).toContain('scope=sprint');
     // …the control's loading→idle transition tracks the mocked fetch resolution…
     await waitFor(() => expect(refresh.getAttribute('aria-busy')).not.toBe('true'));
-    // …and the refresh did NOT rewrite the URL (only the earlier toggle did).
-    expect(replace).toHaveBeenCalledTimes(1);
+    // …and the refresh did NOT navigate (only the earlier toggle did).
+    expect(push).toHaveBeenCalledTimes(1);
   });
 
   it('toggling back to Whole project clears the ?scope= param and reloads the unscoped root — even after a refresh', async () => {
-    render(<RoadmapView {...baseProps({ initialScope: 'sprint' })} />);
+    sp.current = 'scope=sprint';
+    const { rerender } = render(<RoadmapView {...baseProps()} />);
     await screen.findByText('In-sprint epic');
 
     // A refresh in sprint scope first (the two features composed)…
     fireEvent.click(screen.getByRole('button', { name: 'Refresh roadmap' }));
     await waitFor(() => expect(refreshSettled()).toBe(true));
 
-    // …then return to Whole project: the URL param is cleared and the unscoped
-    // root reloads.
+    // …then return to Whole project: the toggle pushes a clean /roadmap, and the
+    // resulting navigation (URL cleared + rerender) reloads the unscoped root.
     fireEvent.click(screen.getByRole('button', { name: 'Whole project' }));
-    expect(replace).toHaveBeenCalledWith('/roadmap', { scroll: false });
+    expect(push).toHaveBeenCalledWith('/roadmap', { scroll: false });
+    sp.current = '';
+    rerender(<RoadmapView {...baseProps()} />);
     expect(await screen.findByText('Whole-project epic')).toBeTruthy();
 
     function refreshSettled() {
@@ -238,11 +264,8 @@ describe('RoadmapView — assembled header: URL-scope + refresh coexist (MOTIR-1
   });
 
   it('shows just the sprint name as the subtitle when the active sprint has no goal (coverage top-up)', async () => {
-    render(
-      <RoadmapView
-        {...baseProps({ initialScope: 'sprint', sprintName: 'Sprint 32', sprintGoal: null })}
-      />,
-    );
+    sp.current = 'scope=sprint';
+    render(<RoadmapView {...baseProps({ sprintName: 'Sprint 32', sprintGoal: null })} />);
     await screen.findByText('In-sprint epic');
 
     // sprintScopeActive && !sprintGoal → subtitle is the bare sprint name, no
