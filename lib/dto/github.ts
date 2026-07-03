@@ -11,3 +11,29 @@ export interface GithubIdentityDTO {
   avatarUrl: string | null;
   createdAt: string;
 }
+
+// The installation grant (MOTIR-891) — "Grant 2". What crosses the API boundary
+// for a workspace's GitHub App installation + its selected repos. Like the
+// identity DTO, it deliberately carries NO token: the installation access token
+// is minted on demand and never leaves the service layer.
+
+export interface GithubRepoDTO {
+  id: string;
+  /** GitHub's numeric repository id, as a string. */
+  repoId: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+}
+
+export interface GithubInstallationDTO {
+  id: string;
+  /** Provider discriminator — `'github'` for these rows. */
+  provider: string;
+  /** GitHub's numeric installation id, as a string. */
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+  repos: GithubRepoDTO[];
+  createdAt: string;
+}
