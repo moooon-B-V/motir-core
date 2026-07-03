@@ -680,10 +680,23 @@ export const plansService = {
   },
 
   /** Mark the generation frontier complete: `generating` → `planned`. */
-  async markPlanned(planId: string, ctx: ServiceContext): Promise<PlanDto> {
+  async markPlanned(
+    planId: string,
+    ctx: ServiceContext,
+    opts: { productName?: string | null } = {},
+  ): Promise<PlanDto> {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanEdit(plan.projectId, ctx);
+
+    // The AI-suggested project name (MOTIR-1554/1551) rides the final append and
+    // ONLY the onboarding generation. Persist it when present; a non-onboarding
+    // (reconciliation) run sends none, so the column stays null and no rename
+    // ever fires at approve. Trim + collapse to a clean value, else leave unset.
+    const productName =
+      typeof opts.productName === 'string' && opts.productName.trim().length > 0
+        ? opts.productName.trim()
+        : null;
 
     const { row, count } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -697,7 +710,11 @@ export const plansService = {
         }
         const updated = await planRepository.update(
           planId,
-          { status: 'planned', plannedAt: new Date() },
+          {
+            status: 'planned',
+            plannedAt: new Date(),
+            ...(productName != null ? { productName } : {}),
+          },
           tx,
         );
         const n = await planItemRepository.countByPlan(planId, tx);
@@ -791,7 +808,11 @@ export const plansService = {
    * materialize — the loser observes `approved` and throws
    * `PlanNotInExpectedStatusError` (the atomic one-shot guard).
    */
-  async approvePlan(planId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {
+  async approvePlan(
+    planId: string,
+    ctx: ServiceContext,
+    opts: { provisionalProjectName?: string | null } = {},
+  ): Promise<PlanWithItemsDto> {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanEdit(plan.projectId, ctx);
@@ -808,6 +829,31 @@ export const plansService = {
         }
         const proposals = await planItemRepository.findByPlan(planId, tx);
         await materialize(proposals, fresh, ctx, tx);
+        // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
+        // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
+        // apply it here — but ONLY on the FIRST onboarding approve of a draft the
+        // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
+        // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
+        // onboarding" gate; the `name === provisionalProjectName` check (the
+        // caller passes the current-locale "Untitled project" placeholder) means a
+        // user rename during review is never clobbered. A reconciliation re-plan
+        // carries no `productName`, so it never reaches here. Best-effort: rename
+        // failure would abort the tx, so keep it a plain guarded write. Done via
+        // the repo in-tx — `renameProject` opens its own workspace context.
+        if (
+          fresh.productName &&
+          fresh.productName.trim().length > 0 &&
+          opts.provisionalProjectName
+        ) {
+          const project = await projectRepository.findById(fresh.projectId, tx);
+          if (
+            project &&
+            project.onboardingRanAt == null &&
+            project.name === opts.provisionalProjectName
+          ) {
+            await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
+          }
+        }
         // Stamp the immutable onboarding-ran marker the FIRST time this project's
         // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
         // null-guarded write makes it set-once, so calling it on every approve is

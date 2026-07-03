@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getTranslations } from 'next-intl/server';
 
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { plansService } from '@/lib/services/plansService';
@@ -20,8 +21,15 @@ export async function POST(
   if (!ctx) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 
   const { id } = await params;
+  // The provisional name an AI-onboarding draft is minted with (MOTIR-1486,
+  // `startNewAiProjectAction`). Passed so approve can name the draft from the
+  // plan's `productName` (MOTIR-1551) ONLY while the name is still this
+  // placeholder — resolved here (i18n stays out of the service layer).
+  const t = await getTranslations('shell');
   try {
-    const plan = await plansService.approvePlan(id, ctx);
+    const plan = await plansService.approvePlan(id, ctx, {
+      provisionalProjectName: t('project.untitled'),
+    });
     return NextResponse.json(plan);
   } catch (err) {
     if (err instanceof PlanNotFoundError) {
