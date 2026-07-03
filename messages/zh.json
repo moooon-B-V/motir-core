@@ -416,7 +416,9 @@
       "backlog": "待办列表",
       "triage": "分流",
       "roadmap": "路线图",
-      "plans": "计划"
+      "plans": "计划",
+      "resumeOnboarding": "继续引导",
+      "resumeOnboardingInProgress": "继续引导，进行中"
     },
     "topNav": {
       "global": "全局"

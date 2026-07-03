@@ -416,7 +416,9 @@
       "backlog": "Backlog",
       "triage": "Triage",
       "roadmap": "Roadmap",
-      "plans": "Plans"
+      "plans": "Plans",
+      "resumeOnboarding": "Resume onboarding",
+      "resumeOnboardingInProgress": "Resume onboarding, in progress"
     },
     "topNav": {
       "global": "Global"

@@ -10,6 +10,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
+import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -23,6 +24,7 @@ import { CreateIssueProvider } from './_components/CreateIssueProvider';
 import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
 import { ReportProvider } from './_components/ReportProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
+import { OnboardingResumeProvider } from './_components/OnboardingResumeProvider';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
@@ -150,6 +152,18 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   const aiPlanningConfigured = isMotirAiConfigured();
   const showPlanWithAi = aiPlanningConfigured && Boolean(activeProject);
 
+  // The server-cheap gate for the labeled "Resume onboarding" door (MOTIR-1533;
+  // design MOTIR-1548): AI configured, an active project, and its onboarding
+  // never finished (`onboardingRanAt` still null). Only when this holds does the
+  // OnboardingResumeProvider do the client `/api/ai/pre-plan` read that reveals
+  // the sidebar row + ⌘K twin — so no motir-ai call is added to a page render
+  // that could never show the door.
+  const resumeOnboardingEnabled = resumeGateEnabled({
+    aiPlanningConfigured,
+    hasActiveProject: Boolean(activeProject),
+    onboardingRanAt: activeProject?.onboardingRanAt,
+  });
+
   // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
   // partial-index aggregate (5.7.4 getUnreadCount), resolved once here and
   // threaded into TopNav so the badge paints without a client round-trip; the
@@ -183,77 +197,82 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 6.11.4 intake for the active project; mounted only when there's a
                 project the actor can edit (the intake rejects a viewer 403). */}
             <ReportProvider projectKey={activeProject?.identifier ?? null} canEdit={canEdit}>
-              <AppLayout
-                topNav={
-                  <TopNav
-                    activeOrg={activeOrg}
-                    orgs={orgs}
-                    workspaces={workspaces}
-                    activeWorkspaceId={activeWorkspaceId}
-                    user={{ name: session.user.name, email: session.user.email }}
-                    initialUnreadCount={initialUnreadCount}
-                    buildInPublicProjectKey={buildInPublicProjectKey}
-                    buildingInPublic={buildingInPublic}
-                    cloudBilling={cloudBilling}
-                    showPlanWithAi={showPlanWithAi}
-                  />
-                }
-                sidebar={
-                  <SidebarNav
-                    activeProject={activeProject}
-                    projects={projects}
-                    variant="rail"
-                    settingsAccess={settingsAccess}
-                    user={{ name: session.user.name, email: session.user.email }}
-                  />
-                }
-              >
-                <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
-              </AppLayout>
+              {/* OnboardingResumeProvider (MOTIR-1533) resolves the in-progress
+                  onboarding signal ONCE and shares it with the SidebarNav rail
+                  row + the ⌘K twin below, so neither fetches on its own. */}
+              <OnboardingResumeProvider enabled={resumeOnboardingEnabled}>
+                <AppLayout
+                  topNav={
+                    <TopNav
+                      activeOrg={activeOrg}
+                      orgs={orgs}
+                      workspaces={workspaces}
+                      activeWorkspaceId={activeWorkspaceId}
+                      user={{ name: session.user.name, email: session.user.email }}
+                      initialUnreadCount={initialUnreadCount}
+                      buildInPublicProjectKey={buildInPublicProjectKey}
+                      buildingInPublic={buildingInPublic}
+                      cloudBilling={cloudBilling}
+                      showPlanWithAi={showPlanWithAi}
+                    />
+                  }
+                  sidebar={
+                    <SidebarNav
+                      activeProject={activeProject}
+                      projects={projects}
+                      variant="rail"
+                      settingsAccess={settingsAccess}
+                      user={{ name: session.user.name, email: session.user.email }}
+                    />
+                  }
+                >
+                  <div className="px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+                </AppLayout>
 
-              {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
+                {/* Mobile off-canvas nav — opened by the TopNav hamburger (<md). The
             drawer is portaled, so it lives at the layout root rather than in an
             AppLayout slot. Its header carries the same tenancy-tier cluster (org
             control + the workspace switcher at ≥2 workspaces) the top nav shows,
             since the drawer replaces the top nav on mobile. */}
-              <SidebarDrawer
-                header={
-                  <ShellTierNav
-                    activeOrg={activeOrg}
-                    orgs={orgs}
-                    workspaces={workspaces}
-                    activeWorkspaceId={activeWorkspaceId}
-                    cloudBilling={cloudBilling}
+                <SidebarDrawer
+                  header={
+                    <ShellTierNav
+                      activeOrg={activeOrg}
+                      orgs={orgs}
+                      workspaces={workspaces}
+                      activeWorkspaceId={activeWorkspaceId}
+                      cloudBilling={cloudBilling}
+                    />
+                  }
+                >
+                  <SidebarNav
+                    activeProject={activeProject}
+                    projects={projects}
+                    variant="drawer"
+                    settingsAccess={settingsAccess}
+                    user={{ name: session.user.name, email: session.user.email }}
                   />
-                }
-              >
-                <SidebarNav
-                  activeProject={activeProject}
-                  projects={projects}
-                  variant="drawer"
-                  settingsAccess={settingsAccess}
-                  user={{ name: session.user.name, email: session.user.email }}
-                />
-              </SidebarDrawer>
+                </SidebarDrawer>
 
-              {/* The ⌘K palette UI — fed the same workspace/project data the shell
+                {/* The ⌘K palette UI — fed the same workspace/project data the shell
             above already resolved, so navigation + switch actions stay in sync
             without a second fetch. */}
-              <AppCommandPalette
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                projects={projects}
-                activeProjectId={activeProject?.id ?? null}
-                hasProject={Boolean(activeProject)}
-                settingsAccess={settingsAccess}
-                aiPlanningConfigured={aiPlanningConfigured}
-              />
+                <AppCommandPalette
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  projects={projects}
+                  activeProjectId={activeProject?.id ?? null}
+                  hasProject={Boolean(activeProject)}
+                  settingsAccess={settingsAccess}
+                  aiPlanningConfigured={aiPlanningConfigured}
+                />
 
-              {/* The floating "M" entrance (MOTIR-1299) — the second of the two
+                {/* The floating "M" entrance (MOTIR-1299) — the second of the two
                   planning-workspace doors the design ships (alongside the
                   header pill). A fixed bottom-right orb, mounted once at the
                   layout root, under the same gate as the pill. */}
-              {showPlanWithAi ? <PlanWithAIFab /> : null}
+                {showPlanWithAi ? <PlanWithAIFab /> : null}
+              </OnboardingResumeProvider>
             </ReportProvider>
           </ProjectAccessProvider>
         </CreateIssueProvider>

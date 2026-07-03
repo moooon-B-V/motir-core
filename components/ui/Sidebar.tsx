@@ -64,6 +64,15 @@ export interface SidebarItem {
   /** Marks the current route — gets `aria-current="page"` + active styling. */
   active?: boolean;
   /**
+   * An ACCENT row — a stateful call-to-action that stands out from the plain
+   * destinations (an `--el-tint-lavender` fill + `--el-accent-on-surface` icon +
+   * `--el-text-strong` label), used for the "Resume onboarding" re-entry door
+   * (MOTIR-1533). It is NOT the hero-gradient treatment (that stays reserved for
+   * the `PlanWithAILauncher` pill). Only applies to an interactive, non-active
+   * row; the collapsed variant carries a small accent dot on the icon tile.
+   */
+  emphasis?: boolean;
+  /**
    * A designed-for, not-yet-built row (e.g. the settings area's Automation
    * "Soon" slot). Renders as a non-interactive `<span aria-disabled>` with faint
    * ink and no hover — its state is conveyed by the row's `badge`, not colour
@@ -104,6 +113,8 @@ export interface SidebarProps {
 function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boolean }) {
   const isActive = Boolean(item.active);
   const isDisabled = Boolean(item.disabled);
+  // The accent treatment only applies to an interactive, non-active row.
+  const isEmphasis = Boolean(item.emphasis) && !isDisabled && !isActive;
   const glyph = (
     <span aria-hidden className="inline-flex [&_svg]:h-[18px] [&_svg]:w-[18px]">
       {item.icon}
@@ -130,15 +141,25 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         aria-current={isActive ? 'page' : undefined}
         aria-label={item.label}
         className={cn(
-          'mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control)',
+          'relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control)',
           'text-(--el-icon-muted) transition-colors',
           'hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           isActive &&
             'bg-(--el-sidebar-item-bg-active) text-(--el-icon-active) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
+          isEmphasis &&
+            'border border-(--el-border-soft) bg-(--el-tint-lavender) text-(--el-accent-on-surface) hover:bg-(--el-tint-lavender) hover:border-(--el-border-strong)',
         )}
       >
         {glyph}
+        {/* In-progress marker — the chip has no room in the collapsed rail, so a
+            small accent dot stands in; the tooltip still surfaces the label. */}
+        {isEmphasis ? (
+          <span
+            aria-hidden
+            className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-(--el-accent) ring-2 ring-(--el-sidebar-bg)"
+          />
+        ) : null}
       </a>
     );
     return (
@@ -179,16 +200,24 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
         'flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x)',
         'font-sans text-sm transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
-        isActive
-          ? 'bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text) shadow-(--shadow-subtle) border border-(--el-sidebar-border)'
-          : 'text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
+        isActive &&
+          'bg-(--el-sidebar-item-bg-active) font-medium text-(--el-text) shadow-(--shadow-subtle) border border-(--el-sidebar-border)',
+        isEmphasis &&
+          'border border-(--el-border-soft) bg-(--el-tint-lavender) font-medium text-(--el-text-strong) hover:border-(--el-border-strong)',
+        !isActive &&
+          !isEmphasis &&
+          'text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)',
       )}
     >
       <span
         aria-hidden
         className={cn(
           'inline-flex shrink-0 [&_svg]:h-[18px] [&_svg]:w-[18px]',
-          isActive ? 'text-(--el-icon-active)' : 'text-(--el-icon-muted)',
+          isEmphasis
+            ? 'text-(--el-accent-on-surface)'
+            : isActive
+              ? 'text-(--el-icon-active)'
+              : 'text-(--el-icon-muted)',
         )}
       >
         {item.icon}

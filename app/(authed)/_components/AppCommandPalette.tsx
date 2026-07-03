@@ -9,6 +9,7 @@ import {
   Columns3,
   Filter,
   Folder,
+  History,
   LayoutDashboard,
   LayoutList,
   LogOut,
@@ -18,7 +19,7 @@ import {
   SunMoon,
   Users,
 } from 'lucide-react';
-import { planningWorkspaceHref } from '@/lib/planning/launcher';
+import { PLANNING_WORKSPACE_PATH, planningWorkspaceHref } from '@/lib/planning/launcher';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { signOut } from '@/lib/auth/client';
@@ -36,6 +37,7 @@ import { switchWorkspaceAction } from '../_actions';
 import { setActiveProjectAction } from '../_project-actions';
 import { useCommandPalette } from './CommandPaletteProvider';
 import { useCreateIssue } from './CreateIssueProvider';
+import { useOnboardingResume } from './OnboardingResumeProvider';
 
 /**
  * AppCommandPalette — the application composition over the generic
@@ -86,6 +88,8 @@ export function AppCommandPalette({
   const ts = useTranslations('settings');
   const { open, setOpen } = useCommandPalette();
   const { openCreateIssue, canCreate } = useCreateIssue();
+  // The "Resume onboarding" ⌘K twin (MOTIR-1533) — same signal the sidebar row reads.
+  const canResume = useOnboardingResume();
   const router = useRouter();
   const pathname = usePathname();
   const { pattern, setPattern } = useTheme();
@@ -140,16 +144,28 @@ export function AppCommandPalette({
   // is wired AND there's a project to plan into (mirrors the hero pill's mount
   // gate). Project-scoped context, like the header pill.
   if (aiPlanningConfigured && hasProject) {
+    const aiActions = [];
+    // The "Resume onboarding" twin (MOTIR-1533) — shown ABOVE "Plan with AI",
+    // and only when the active project has an in-progress onboarding session,
+    // so keyboard users get the same labeled re-entry the sidebar row offers.
+    // Routes to the plain workspace path, which resumes at the real step (1487).
+    if (canResume) {
+      aiActions.push({
+        id: 'resume-onboarding',
+        label: t('nav.resumeOnboarding'),
+        icon: <History />,
+        onSelect: () => go(PLANNING_WORKSPACE_PATH),
+      });
+    }
+    aiActions.push({
+      id: 'plan-with-ai',
+      label: t('planWithAI.label'),
+      icon: <Sparkles />,
+      onSelect: () => go(planningWorkspaceHref({ kind: 'project' })),
+    });
     groups.push({
       heading: t('commandPalette.aiHeading'),
-      actions: [
-        {
-          id: 'plan-with-ai',
-          label: t('planWithAI.label'),
-          icon: <Sparkles />,
-          onSelect: () => go(planningWorkspaceHref({ kind: 'project' })),
-        },
-      ],
+      actions: aiActions,
     });
   }
 
