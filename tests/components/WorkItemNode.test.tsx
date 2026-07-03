@@ -50,6 +50,14 @@ describe('WorkItemNode', () => {
     expect(flag.textContent).toContain('blocked elsewhere');
   });
 
+  it('SPRINT scope: the cross-blocked flag names the blocker ("blocker not in sprint"), not the card (MOTIR-1582)', () => {
+    render(<WorkItemNode item={item} crossBlocked crossBlockedSprint />);
+    const flag = screen.getByTestId('cross-blocked-flag');
+    // Names the out-of-sprint blocker — distinct from the neutral node-membership
+    // tag ("not in sprint"), which describes the card itself.
+    expect(flag.textContent).toContain('blocker not in sprint');
+  });
+
   // MOTIR-1362 — the card sits on the canvas's near-identical `--el-surface-soft`
   // background, so it MUST carry the crisp `--el-border` + a `--shadow-card` lift to
   // stay legible (the weak `border-soft` + `shadow-subtle` made cards vanish, esp. in

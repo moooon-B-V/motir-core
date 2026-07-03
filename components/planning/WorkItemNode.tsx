@@ -119,9 +119,12 @@ export function WorkItemNode({
   /** Blocked by an off-level dependency — flag it (MOTIR-1331). In project scope a
    *  bad-plan tangle; in sprint scope an out-of-sprint, not-done dependency. */
   crossBlocked?: boolean;
-  /** Sprint scope (MOTIR-1379): the cross-blocked flag reads "not in sprint"
-   *  instead of the project-scope "blocked elsewhere" (MOTIR-1568). The copy itself
-   *  is resolved from the `roadmap.canvas.node` i18n catalog, not passed in. */
+  /** Sprint scope (MOTIR-1379): the cross-blocked flag reads "blocker not in
+   *  sprint" instead of the project-scope "blocked elsewhere" (MOTIR-1568). The
+   *  copy names the out-of-sprint BLOCKER, not the card itself (which IS an
+   *  in-sprint member) — distinct from the neutral `notInSprint` membership tag
+   *  which reads "not in sprint" about the node (MOTIR-1582). The copy itself is
+   *  resolved from the `roadmap.canvas.node` i18n catalog, not passed in. */
   crossBlockedSprint?: boolean;
   /** NOT a member of the active sprint (MOTIR-1379 follow-up) — sprint scope only.
    *  A drilled-in node under a committed root that the sprint did not itself
@@ -265,7 +268,7 @@ export function WorkItemNode({
               className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-text)"
             >
               <Flag className="size-3" aria-hidden="true" />
-              {t(crossBlockedSprint ? 'node.notInSprint' : 'node.blockedElsewhere')}
+              {t(crossBlockedSprint ? 'node.blockerNotInSprint' : 'node.blockedElsewhere')}
             </span>
           ) : drillable ? (
             <ChevronRight

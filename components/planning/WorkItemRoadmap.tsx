@@ -155,7 +155,10 @@ export function WorkItemRoadmap({
         ariaLabel={ariaLabel ?? t('ariaWorkItem')}
         warningLegend={
           scope === 'sprint'
-            ? { label: t('legend.notInSprint'), meaning: t('legend.notInSprintMeaning') }
+            ? {
+                label: t('legend.blockerNotInSprint'),
+                meaning: t('legend.blockerNotInSprintMeaning'),
+              }
             : undefined
         }
       />

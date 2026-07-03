@@ -120,7 +120,8 @@ export function ProjectRoadmapCanvas({
   const t = useTranslations('roadmap.canvas');
   // The breadcrumb root, the canvas aria label, and the WARNING legend row default
   // to the localized project-scope copy; a caller (e.g. the sprint-scoped roadmap)
-  // overrides the warning row with its own "not in sprint" copy (MOTIR-1379).
+  // overrides the warning row with its own "blocker not in sprint" copy (MOTIR-1379,
+  // reworded MOTIR-1582 to name the blocker, not the card).
   const resolvedRootLabel = rootLabel ?? t('breadcrumbRoot');
   const resolvedAriaLabel = ariaLabel ?? t('ariaDefault');
   const resolvedWarningLegend = warningLegend ?? {
