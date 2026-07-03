@@ -30,3 +30,33 @@ export class GithubOAuthExchangeError extends Error {
     this.name = 'GithubOAuthExchangeError';
   }
 }
+
+/**
+ * The inbound-webhook shared secret (`GITHUB_WEBHOOK_SECRET`) is not configured
+ * on this deployment (Story 7.10 · MOTIR-892). Read at call time, so a
+ * self-hosted instance that never wires GitHub can't reach the webhook path
+ * rather than crashing on boot. A server MISCONFIG (→ 500), distinct from a bad
+ * signature (→ 401): without a secret we can neither trust nor reject a delivery.
+ */
+export class GithubWebhookNotConfiguredError extends Error {
+  readonly code = 'GITHUB_WEBHOOK_NOT_CONFIGURED' as const;
+  constructor() {
+    super('GitHub webhooks are not configured. Set GITHUB_WEBHOOK_SECRET.');
+    this.name = 'GithubWebhookNotConfiguredError';
+  }
+}
+
+/**
+ * A webhook delivery's `X-Hub-Signature-256` is missing or does not match the
+ * HMAC we recompute over the raw body with `GITHUB_WEBHOOK_SECRET` (Story 7.10 ·
+ * MOTIR-892). The route rejects it 401 BEFORE parsing the body — an unauthentic
+ * delivery is never processed. Carries no detail (nothing to leak to an attacker
+ * probing the endpoint).
+ */
+export class GithubWebhookSignatureError extends Error {
+  readonly code = 'GITHUB_WEBHOOK_INVALID_SIGNATURE' as const;
+  constructor() {
+    super('GitHub webhook signature verification failed.');
+    this.name = 'GithubWebhookSignatureError';
+  }
+}

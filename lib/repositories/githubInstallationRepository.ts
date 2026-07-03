@@ -48,4 +48,17 @@ export const githubInstallationRepository = {
       update: rest,
     });
   },
+
+  /** Remove an installation by its GitHub `installation_id` (the `installation
+   *  deleted` webhook — an uninstall). `deleteMany` (not `delete`) so a redelivery
+   *  of the uninstall event after the row is gone is an idempotent no-op (count 0)
+   *  rather than a `P2025` throw. The `github_repo` / `github_pull_request` rows
+   *  cascade with it (the FK `onDelete: Cascade`). Returns the delete count. */
+  async deleteByInstallationId(
+    installationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubInstallation.deleteMany({ where: { installationId } });
+    return result.count;
+  },
 };
