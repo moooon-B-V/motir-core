@@ -42,6 +42,7 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     submittedByUserId: null,
     publicChildrenHidden: false,
     sessionBranch: null,
+    ciState: null,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
     ...overrides,

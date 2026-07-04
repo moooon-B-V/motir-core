@@ -88,13 +88,44 @@ describe('github.parseCiStatusEvent', () => {
   it('normalizes a completed check_run conclusion', () => {
     const ev = github.parseCiStatusEvent({
       repository: { id: 9 },
-      check_run: { head_sha: 'abc123', status: 'completed', conclusion: 'success', name: 'ci' },
+      check_run: {
+        head_sha: 'abc123',
+        status: 'completed',
+        conclusion: 'success',
+        name: 'ci',
+        check_suite: { head_branch: 'feat/x' },
+        pull_requests: [{ number: 7 }],
+      },
     });
     expect(ev).toEqual({
       providerRepoId: '9',
       commitSha: 'abc123',
       conclusion: 'success',
       context: 'ci',
+      prNumbers: [7],
+      headBranch: 'feat/x',
+    });
+  });
+
+  it('normalizes a completed check_suite conclusion (aggregate; app slug as context)', () => {
+    const ev = github.parseCiStatusEvent({
+      repository: { id: 9 },
+      check_suite: {
+        head_sha: 'abc123',
+        head_branch: 'feat/x',
+        status: 'completed',
+        conclusion: 'failure',
+        app: { slug: 'github-actions' },
+        pull_requests: [{ number: 7 }, { number: 8 }],
+      },
+    });
+    expect(ev).toEqual({
+      providerRepoId: '9',
+      commitSha: 'abc123',
+      conclusion: 'failure',
+      context: 'github-actions',
+      prNumbers: [7, 8],
+      headBranch: 'feat/x',
     });
   });
 
@@ -126,6 +157,8 @@ describe('github.parseCiStatusEvent', () => {
       commitSha: 'deadbeef',
       conclusion: 'failure',
       context: 'continuous-integration/ci',
+      prNumbers: [],
+      headBranch: null,
     });
   });
 

@@ -1438,6 +1438,33 @@ export const workItemsService = {
   },
 
   /**
+   * Set the CI / verification signal on a work item (Subtask 7.10.6 / MOTIR-894)
+   * — the "ready/blocked" signal the CI feedback loop flips, DISTINCT from the
+   * workflow `status`: `'passing'` ⇔ the linked PR's latest checks succeeded (the
+   * item is verified; the Story roll-up counts it), `'failing'` ⇔ a terminal check
+   * failed (the item is visibly not-ready), `null` ⇔ no signal. Idempotent
+   * (setting the same value is a no-op write). Tenant-gated on `ctx.workspaceId`
+   * exactly like `updateStatus` — a cross-workspace id is a 404, never a leak.
+   * The write goes through the service + repository (no raw `work_item` update at
+   * the integration layer); no revision row (this is a signal, not a tracked
+   * field edit), and no event.
+   */
+  async setCiState(
+    workItemId: string,
+    ciState: 'passing' | 'failing' | null,
+    ctx: ServiceContext,
+  ): Promise<void> {
+    await db.$transaction(async (tx) => {
+      const current = await workItemRepository.findById(workItemId, tx);
+      if (!current || current.workspaceId !== ctx.workspaceId) {
+        throw new WorkItemNotFoundError(workItemId);
+      }
+      if (current.ciState === ciState) return; // idempotent no-op
+      await workItemRepository.update(workItemId, { ciState }, tx);
+    });
+  },
+
+  /**
    * The transactional CORE of updateStatus — the lock → tenant-gate → no-op →
    * unknown-status → legal-transition → write-status + revision sequence,
    * factored out of `updateStatus` so it can run INSIDE a caller-supplied
@@ -2137,7 +2164,7 @@ export const workItemsService = {
       ROADMAP_CANCELLED_KEY,
     );
     const progressById = new Map(
-      progressRows.map((p) => [p.rootId, { done: p.done, total: p.total }]),
+      progressRows.map((p) => [p.rootId, { done: p.done, total: p.total, verified: p.verified }]),
     );
 
     // READY-to-start (MOTIR-1417): a node is ready iff it is in a startable
@@ -2168,7 +2195,7 @@ export const workItemsService = {
       toRoadmapNodeDto(
         r,
         doneKeys.has(r.status),
-        r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0 }) : null,
+        r.hasChildren ? (progressById.get(r.id) ?? { done: 0, total: 0, verified: 0 }) : null,
         startableKeys.has(r.status) && (readyById.get(r.id) ?? true),
         sprintId != null && r.sprintId === sprintId,
       ),

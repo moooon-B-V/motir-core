@@ -24,6 +24,23 @@ export const githubPullRequestRepository = {
     return tx.githubPullRequest.findUnique({ where: { repoId_number: { repoId, number } } });
   },
 
+  /** The PR on a repo's head branch (`head_ref`), preferring the OPEN one — the
+   *  CI-event fallback when the check payload carries no PR number list. Stable
+   *  across a re-push (unlike a head SHA). Open-first, then newest, so a reused
+   *  branch resolves to the live PR. */
+  async findByRepoAndHeadRef(
+    repoId: string,
+    headRef: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubPullRequest | null> {
+    // `state` is 'open' | 'closed'; DESC puts 'open' before 'closed' so a reused
+    // branch resolves to the live PR, then newest first.
+    return tx.githubPullRequest.findFirst({
+      where: { repoId, headRef },
+      orderBy: [{ state: 'desc' }, { updatedAt: 'desc' }],
+    });
+  },
+
   /** Create-or-refresh a PR link, keyed on the unique `(repo_id, number)` pair. */
   async upsert(
     input: UpsertGithubPullRequestInput,

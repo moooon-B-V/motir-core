@@ -5,15 +5,18 @@ import type {
   ChangeRequestLifecycle,
   GitProviderId,
   NormalizedChangeRequest,
+  NormalizedStatusEvent,
 } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { githubInstallationService } from './githubInstallationService';
+import { commentsService } from './commentsService';
 import { enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
@@ -95,6 +98,21 @@ export type GithubWebhookResult =
         | 'malformed';
       workItemId?: string;
       toStatus?: string;
+    }
+  | {
+      event: 'ci';
+      outcome:
+        | 'verified' // a terminal SUCCESS → passing note + ciState 'passing'
+        | 'failed' // a terminal FAILURE → failure summary + ciState 'failing'
+        | 'noop' // a redelivery of an already-recorded conclusion
+        | 'ignored_pending' // a non-terminal (pending) or neutral conclusion
+        | 'no_pull_request' // no stored PR matches the check's PR list / branch
+        | 'no_work_item' // the PR carries no linked work item — a clean no-op
+        | 'unknown_installation'
+        | 'unknown_repo'
+        | 'malformed';
+      workItemId?: string;
+      ciState?: 'passing' | 'failing' | null;
     };
 
 export const githubWebhookService = {
@@ -117,6 +135,9 @@ export const githubWebhookService = {
         return this.handleInstallationRepositories(body);
       case 'pull_request':
         return this.handlePullRequest(body);
+      case 'check_suite':
+      case 'check_run':
+        return this.handleCiStatus(body);
       default:
         // `ping` and every event we don't sync land here — a fast 2xx no-op.
         return { event: 'ignored', reason: `unhandled_event:${eventType}` };
@@ -305,7 +326,199 @@ export const githubWebhookService = {
       toStatus: targetKey,
     };
   },
+
+  /**
+   * Handle a `check_suite` / `check_run` delivery — the CI feedback half of the
+   * closed loop (MOTIR-894). Resolve the check → its PR (by the payload's
+   * PR-number list, else the head branch) → the linked work item, then on a
+   * TERMINAL conclusion post (or, on a re-run, UPDATE in place) a single feedback
+   * comment and flip the item's `ciState` signal. The feedback is IDEMPOTENT on
+   * `(pr, headSha, checkName)`: a redelivery of an already-recorded conclusion is
+   * a no-op — no duplicate comment. A pending / neutral conclusion, a check for a
+   * PR we don't track, or a PR with NO linked work item are all clean no-ops
+   * (never a crash). Writes go through the shipped services — `commentsService`
+   * for the comment, `workItemsService.setCiState` for the signal — never a raw
+   * insert / update.
+   */
+  async handleCiStatus(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const event = provider.parseCiStatusEvent(body);
+    if (!event) return { event: 'ci', outcome: 'malformed' };
+
+    // Act only on a TERMINAL, meaningful conclusion. `pending` (still running) and
+    // `neutral` (skipped / stale) carry no verification signal — a logged no-op.
+    if (event.conclusion !== 'success' && event.conclusion !== 'failure') {
+      return { event: 'ci', outcome: 'ignored_pending' };
+    }
+
+    const installationId = readInstallationId(body);
+    if (!installationId) return { event: 'ci', outcome: 'unknown_installation' };
+
+    // Phase 1 — resolve under system context (one tx, no writes): installation →
+    // repo → PR (by PR-number list, else head branch) → linked work item, the
+    // prior check row (for idempotency), and the actor (workspace OWNER — a check
+    // event carries no author, so the CI feedback is attributed to the owner, the
+    // same fallback the status sync uses).
+    const resolved = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return { kind: 'unknown_installation' as const };
+
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        event.providerRepoId,
+        tx,
+      );
+      if (!repo) return { kind: 'unknown_repo' as const };
+
+      const pr = await resolvePullRequest(repo.id, event, tx);
+      if (!pr) return { kind: 'no_pull_request' as const };
+      if (!pr.workItemId) return { kind: 'no_work_item' as const };
+
+      const workItem = await workItemRepository.findById(pr.workItemId, tx);
+      if (!workItem) return { kind: 'no_work_item' as const };
+
+      const existing = await githubCheckRunRepository.findByKey(
+        pr.id,
+        event.commitSha,
+        event.context,
+        tx,
+      );
+      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(
+        installation.workspaceId,
+        tx,
+      );
+      return {
+        kind: 'resolved' as const,
+        workspaceId: installation.workspaceId,
+        workItemId: workItem.id,
+        prId: pr.id,
+        checksUrl: `https://github.com/${repo.owner}/${repo.name}/pull/${pr.number}/checks`,
+        existing: existing
+          ? { conclusion: existing.conclusion, feedbackCommentId: existing.feedbackCommentId }
+          : null,
+        actorUserId: owner?.userId ?? null,
+      };
+    });
+
+    if (resolved.kind === 'unknown_installation')
+      return { event: 'ci', outcome: 'unknown_installation' };
+    if (resolved.kind === 'unknown_repo') return { event: 'ci', outcome: 'unknown_repo' };
+    if (resolved.kind === 'no_pull_request') return { event: 'ci', outcome: 'no_pull_request' };
+    if (resolved.kind === 'no_work_item') return { event: 'ci', outcome: 'no_work_item' };
+    if (!resolved.actorUserId)
+      // No workspace owner to author the feedback comment — nothing to attribute.
+      return { event: 'ci', outcome: 'no_work_item', workItemId: resolved.workItemId };
+
+    // Idempotent: a redelivery of the SAME conclusion we already recorded (and
+    // commented) is a no-op — never a duplicate comment.
+    if (
+      resolved.existing &&
+      resolved.existing.conclusion === event.conclusion &&
+      resolved.existing.feedbackCommentId
+    ) {
+      return {
+        event: 'ci',
+        outcome: 'noop',
+        workItemId: resolved.workItemId,
+        ciState: event.conclusion === 'success' ? 'passing' : 'failing',
+      };
+    }
+
+    const actorCtx = { userId: resolved.actorUserId, workspaceId: resolved.workspaceId };
+
+    // Post the feedback (a NEW conclusion), or UPDATE the existing comment in
+    // place (a re-run whose conclusion changed) — through the shipped comment
+    // service, never a raw insert.
+    const bodyMd =
+      event.conclusion === 'success'
+        ? passingCommentBody(event.context)
+        : failingCommentBody(event.context, resolved.checksUrl);
+    let feedbackCommentId: string;
+    if (resolved.existing?.feedbackCommentId) {
+      const edited = await commentsService.editComment(
+        resolved.existing.feedbackCommentId,
+        { bodyMd },
+        actorCtx,
+      );
+      feedbackCommentId = edited.id;
+    } else {
+      const created = await commentsService.addComment(resolved.workItemId, { bodyMd }, actorCtx);
+      feedbackCommentId = created.id;
+    }
+
+    // Record the check row (idempotency key) + derive the item's aggregate
+    // `ciState` from ALL its terminal checks at this commit (any failure → failing).
+    const ciState = await withSystemContext(async (tx) => {
+      await githubCheckRunRepository.upsert(
+        {
+          pullRequestId: resolved.prId,
+          commitSha: event.commitSha,
+          checkName: event.context,
+          conclusion: event.conclusion,
+          feedbackCommentId,
+        },
+        tx,
+      );
+      const rows = await githubCheckRunRepository.listByPrAndSha(
+        resolved.prId,
+        event.commitSha,
+        tx,
+      );
+      return deriveCiState(rows.map((r) => r.conclusion));
+    });
+
+    // Flip the verification signal through the service (no raw work_item write).
+    await workItemsService.setCiState(resolved.workItemId, ciState, actorCtx);
+
+    return {
+      event: 'ci',
+      outcome: event.conclusion === 'success' ? 'verified' : 'failed',
+      workItemId: resolved.workItemId,
+      ciState,
+    };
+  },
 };
+
+/** Resolve the stored PR for a CI event — by the payload's PR-number list first
+ *  (the strongest link), else the head branch (stable across a re-push). Null
+ *  when neither resolves to a stored PR row. */
+async function resolvePullRequest(
+  repoId: string,
+  event: NormalizedStatusEvent,
+  tx: Prisma.TransactionClient,
+): Promise<{ id: string; number: number; workItemId: string | null } | null> {
+  for (const number of event.prNumbers) {
+    const pr = await githubPullRequestRepository.findByRepoAndNumber(repoId, number, tx);
+    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId };
+  }
+  if (event.headBranch) {
+    const pr = await githubPullRequestRepository.findByRepoAndHeadRef(repoId, event.headBranch, tx);
+    if (pr) return { id: pr.id, number: pr.number, workItemId: pr.workItemId };
+  }
+  return null;
+}
+
+/** The work item's aggregate CI signal from its terminal check conclusions at one
+ *  commit: any failure → 'failing'; else at least one success → 'passing'; else
+ *  null. Only success/failure rows are ever stored, so this is total over them. */
+function deriveCiState(conclusions: string[]): 'passing' | 'failing' | null {
+  if (conclusions.some((c) => c === 'failure')) return 'failing';
+  if (conclusions.some((c) => c === 'success')) return 'passing';
+  return null;
+}
+
+/** The passing-note body — a linked PR's checks succeeded (the work is verified). */
+function passingCommentBody(checkName: string): string {
+  return `✅ **CI passing** — checks (\`${checkName}\`) succeeded on the linked pull request. This work is verified.`;
+}
+
+/** The failure-summary body — which check failed + a link, and the not-ready flag. */
+function failingCommentBody(checkName: string, checksUrl: string): string {
+  return `❌ **CI failed** — \`${checkName}\` did not pass on the linked pull request ([view checks](${checksUrl})). This work item is marked **not-ready**; it needs another pass.`;
+}
 
 /** Reconcile an installation's selected repos from GitHub's authoritative set —
  *  the `installation` (non-delete) + `installation_repositories` path. Only an

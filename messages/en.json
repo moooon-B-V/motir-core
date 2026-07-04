@@ -4287,6 +4287,7 @@
       "emptyRootTitle": "Nothing on the roadmap yet",
       "emptyRootDescription": "Work items will appear here as the plan takes shape.",
       "subtreeProgress": "Subtree progress",
+      "verifiedCount": "{count} verified by CI",
       "node": {
         "here": "You are here",
         "ready": "Ready",

@@ -189,7 +189,9 @@ export const githubProvider: GitProvider = {
     const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
     if (!providerRepoId) return null;
 
-    // Modern `check_run` event: a not-yet-completed run is `pending`.
+    // Modern `check_run` event: a not-yet-completed run is `pending`. The
+    // associated PRs sit on `check_run.pull_requests`; the branch on the nested
+    // `check_run.check_suite.head_branch`.
     const checkRun = asRecord(payload['check_run']);
     if (checkRun) {
       const commitSha = typeof checkRun['head_sha'] === 'string' ? checkRun['head_sha'] : null;
@@ -201,10 +203,34 @@ export const githubProvider: GitProvider = {
         commitSha,
         conclusion: status !== 'completed' ? 'pending' : mapConclusion(conclusion ?? 'neutral'),
         context: typeof checkRun['name'] === 'string' ? checkRun['name'] : 'check',
+        prNumbers: readPrNumbers(checkRun['pull_requests']),
+        headBranch: readHeadBranch(asRecord(checkRun['check_suite'])),
       };
     }
 
-    // Legacy commit-`status` event: { sha, state, context }.
+    // `check_suite` event: the AGGREGATE conclusion GitHub rolls all a commit's
+    // check_runs into. A not-yet-completed suite is `pending`. The branch + the
+    // associated PRs sit directly on `check_suite`; `context` is the App slug so
+    // two Apps' suites keep distinct feedback.
+    const checkSuite = asRecord(payload['check_suite']);
+    if (checkSuite) {
+      const commitSha = typeof checkSuite['head_sha'] === 'string' ? checkSuite['head_sha'] : null;
+      if (!commitSha) return null;
+      const status = typeof checkSuite['status'] === 'string' ? checkSuite['status'] : null;
+      const conclusion =
+        typeof checkSuite['conclusion'] === 'string' ? checkSuite['conclusion'] : null;
+      const appSlug = asRecord(checkSuite['app'])?.['slug'];
+      return {
+        providerRepoId,
+        commitSha,
+        conclusion: status !== 'completed' ? 'pending' : mapConclusion(conclusion ?? 'neutral'),
+        context: typeof appSlug === 'string' && appSlug.length > 0 ? appSlug : 'check_suite',
+        prNumbers: readPrNumbers(checkSuite['pull_requests']),
+        headBranch: readHeadBranch(checkSuite),
+      };
+    }
+
+    // Legacy commit-`status` event: { sha, state, context } — no PR list / branch.
     const sha = typeof payload['sha'] === 'string' ? payload['sha'] : null;
     const state = typeof payload['state'] === 'string' ? payload['state'] : null;
     if (sha && state) {
@@ -213,12 +239,33 @@ export const githubProvider: GitProvider = {
         commitSha: sha,
         conclusion: mapConclusion(state),
         context: typeof payload['context'] === 'string' ? payload['context'] : 'status',
+        prNumbers: [],
+        headBranch: null,
       };
     }
 
     return null;
   },
 };
+
+/** Extract the associated PR/MR numbers from a check payload's `pull_requests`
+ *  array (each entry is `{ number, ... }`), deduped. Empty when absent. */
+function readPrNumbers(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const out = new Set<number>();
+  for (const entry of value) {
+    const number = asRecord(entry)?.['number'];
+    if (typeof number === 'number' && Number.isInteger(number)) out.add(number);
+  }
+  return [...out];
+}
+
+/** The `head_branch` off a `check_suite` object (present on both the `check_suite`
+ *  event and nested in a `check_run`), or null. */
+function readHeadBranch(checkSuite: Record<string, unknown> | null): string | null {
+  const branch = checkSuite?.['head_branch'];
+  return typeof branch === 'string' && branch.length > 0 ? branch : null;
+}
 
 // Register the GitHub provider on import. `lib/git/index.ts` imports this module
 // for exactly this side-effect, so any consumer that imports `@/lib/git` gets

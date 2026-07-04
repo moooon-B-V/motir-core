@@ -84,6 +84,26 @@ describe('WorkItemNode', () => {
     expect((bar.firstChild as HTMLElement).style.width).toBe('33%'); // 2/6 ≈ 33%
   });
 
+  // Subtask 7.10.6 / MOTIR-894 — the "N of M verified" CI roll-up beside the meter.
+  it('shows the CI-verified count beside the meter when > 0, and omits it otherwise', () => {
+    const { rerender } = render(
+      <WorkItemNode
+        item={{ ...item, assigneeName: null }}
+        progress={{ done: 2, total: 6, verified: 3 }}
+      />,
+    );
+    expect(screen.getByText('2 / 6')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy(); // the verified badge count
+    // Zero verified → no badge (only the done/total count renders).
+    rerender(
+      <WorkItemNode
+        item={{ ...item, assigneeName: null }}
+        progress={{ done: 2, total: 6, verified: 0 }}
+      />,
+    );
+    expect(screen.queryByText('3')).toBeNull();
+  });
+
   it('omits the meter for a leaf (no progress) or a zero-total container', () => {
     const { rerender } = render(<WorkItemNode item={{ ...item, assigneeName: null }} />);
     expect(screen.queryByTestId('progress-meter')).toBeNull();

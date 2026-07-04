@@ -143,6 +143,7 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     expect(roadmap.nodes.find((n) => n.id === t.storyA2.id)!.progress).toEqual({
       done: 1,
       total: 1,
+      verified: 0,
     });
     expect(roadmap.nodes.find((n) => n.id === t.a1.id)!.progress).toBeNull();
   });
