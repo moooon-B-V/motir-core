@@ -99,3 +99,34 @@ export function installGoogleTokenMock(agent: MockAgent): void {
     )
     .persist();
 }
+
+// GitHub identity-grant mock (Story 7.10 · MOTIR-897) — the same seam, two more
+// endpoints. githubIdentityService.completeOAuthCallback POSTs the code→token
+// exchange to github.com and reads the user from api.github.com; intercepting
+// both lets Playwright drive the REAL /api/github/oauth/start → authorize →
+// callback round-trip (the browser leg is intercepted by the spec via
+// page.route) without leaving localhost. The identity is a fixed synthetic
+// user — the spec asserts the settings panel binds to this login (the values
+// mirror tests/e2e/_helpers/github-const.ts's E2E_GITHUB_USER; kept literal
+// here so the lib/ seam never imports test helpers).
+export function installGithubOAuthMock(agent: MockAgent): void {
+  agent
+    .get('https://github.com')
+    .intercept({ path: '/login/oauth/access_token', method: 'POST' })
+    .reply(
+      200,
+      { access_token: 'gho_e2e_synthetic_token', token_type: 'bearer' },
+      { headers: { 'content-type': 'application/json' } },
+    )
+    .persist();
+
+  agent
+    .get('https://api.github.com')
+    .intercept({ path: '/user', method: 'GET' })
+    .reply(
+      200,
+      { id: 583231, login: 'e2e-octocat', avatar_url: null },
+      { headers: { 'content-type': 'application/json' } },
+    )
+    .persist();
+}
