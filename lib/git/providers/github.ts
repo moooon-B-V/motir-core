@@ -7,6 +7,7 @@ import type {
   InstallationToken,
   NormalizedChangeRequest,
   NormalizedInstallation,
+  NormalizedPushEvent,
   NormalizedRepo,
   NormalizedStatusEvent,
 } from '../types';
@@ -245,6 +246,28 @@ export const githubProvider: GitProvider = {
     }
 
     return null;
+  },
+
+  parsePushEvent(rawPayload: unknown): NormalizedPushEvent | null {
+    const payload = asRecord(rawPayload);
+    if (!payload) return null;
+    const providerRepoId = idToString(asRecord(payload['repository'])?.['id']);
+    if (!providerRepoId) return null;
+
+    // Only a BRANCH push refreshes the graph: `ref` is `refs/heads/<branch>` for
+    // a branch, `refs/tags/<tag>` for a tag; a branch DELETION carries
+    // `deleted: true` (nothing to index at a removed ref).
+    const ref = typeof payload['ref'] === 'string' ? payload['ref'] : null;
+    if (!ref || !ref.startsWith('refs/heads/') || payload['deleted'] === true) return null;
+    const branch = ref.slice('refs/heads/'.length);
+    if (branch.length === 0) return null;
+
+    const after = payload['after'];
+    return {
+      providerRepoId,
+      branch,
+      headSha: typeof after === 'string' && after.length > 0 ? after : null,
+    };
   },
 };
 

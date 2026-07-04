@@ -17,7 +17,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { commentsService } from './commentsService';
-import { enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
+import { enqueueCodeGraphRefresh, enqueueNewlyAddedRepos } from '@/lib/github/indexEnqueue';
 import { workflowsService } from './workflowsService';
 import { workItemsService } from './workItemsService';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -84,6 +84,14 @@ export type GithubWebhookResult =
   | { event: 'installation'; outcome: 'synced' | 'removed' | 'skipped_unbound' | 'malformed' }
   | { event: 'installation_repositories'; outcome: 'synced' | 'skipped_unbound' | 'malformed' }
   | {
+      event: 'push';
+      outcome:
+        | 'refresh_enqueued' // a default-branch push → the incremental refresh job is queued
+        | 'ignored_ref' // a non-branch push (tag / delete) or a non-default branch — no refresh
+        | 'unknown_installation'
+        | 'unknown_repo';
+    }
+  | {
       event: 'pull_request';
       outcome:
         | 'transitioned'
@@ -135,6 +143,8 @@ export const githubWebhookService = {
         return this.handleInstallationRepositories(body);
       case 'pull_request':
         return this.handlePullRequest(body);
+      case 'push':
+        return this.handlePush(body);
       case 'check_suite':
       case 'check_run':
         return this.handleCiStatus(body);
@@ -165,6 +175,68 @@ export const githubWebhookService = {
     if (!installationId) return { event: 'installation_repositories', outcome: 'malformed' };
     const synced = await reconcileInstallation(installationId, body);
     return { event: 'installation_repositories', outcome: synced ? 'synced' : 'skipped_unbound' };
+  },
+
+  /**
+   * Handle a `push` delivery — the incremental code-graph feed trigger
+   * (MOTIR-893). A push to a connected repo's DEFAULT branch enqueues the
+   * debounced `system.code-graph-refresh` job (best-effort, post-tx) and
+   * returns immediately — the fetch + re-index never run inline in the
+   * webhook, so the 2xx stays fast. Any other ref (a feature branch, a tag, a
+   * branch deletion) is a clean no-op: the graph tracks what SHIPPED, and
+   * merged PRs land on the default branch as a push, so this one trigger also
+   * covers "refresh on merge" without a second, coalescing-duplicate hook.
+   */
+  async handlePush(body: Record<string, unknown>): Promise<GithubWebhookResult> {
+    const provider = getGitProvider(PROVIDER);
+    const push = provider.parsePushEvent(body);
+    // Not a branch push we refresh on (tag / delete / malformed) — a fast no-op.
+    if (!push) return { event: 'push', outcome: 'ignored_ref' };
+
+    const installationId = readInstallationId(body);
+    if (!installationId) return { event: 'push', outcome: 'unknown_installation' };
+
+    // Resolve the stored installation + repo under system context (reads only).
+    const resolved = await withSystemContext(async (tx) => {
+      const installation = await githubInstallationRepository.findByInstallationId(
+        installationId,
+        tx,
+      );
+      if (!installation) return { kind: 'unknown_installation' as const };
+      const repo = await githubRepoRepository.findByInstallationAndRepoId(
+        installation.id,
+        push.providerRepoId,
+        tx,
+      );
+      if (!repo) return { kind: 'unknown_repo' as const };
+      return {
+        kind: 'resolved' as const,
+        workspaceId: installation.workspaceId,
+        repoOwner: repo.owner,
+        repoName: repo.name,
+        defaultBranch: repo.defaultBranch,
+      };
+    });
+
+    if (resolved.kind === 'unknown_installation')
+      return { event: 'push', outcome: 'unknown_installation' };
+    if (resolved.kind === 'unknown_repo') return { event: 'push', outcome: 'unknown_repo' };
+
+    // Only the STORED default branch feeds the graph — the graph mirrors the
+    // repo's shipped mainline, per tenant, per repo (the N-repo cardinality).
+    if (push.branch !== resolved.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
+
+    // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
+    // the default branch's CURRENT head at run time, so debounced/coalesced
+    // pushes index the newest state once.
+    await enqueueCodeGraphRefresh({
+      installationId,
+      workspaceId: resolved.workspaceId,
+      repoOwner: resolved.repoOwner,
+      repoName: resolved.repoName,
+      defaultBranch: resolved.defaultBranch,
+    });
+    return { event: 'push', outcome: 'refresh_enqueued' };
   },
 
   async handlePullRequest(body: Record<string, unknown>): Promise<GithubWebhookResult> {

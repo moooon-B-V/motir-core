@@ -498,6 +498,121 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
   });
 });
 
+describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-893)', () => {
+  /** A GitHub `push` delivery body. The makeScenario repo is id 555 / branch `main`. */
+  function pushPayload(
+    opts: {
+      ref?: string;
+      repoId?: number;
+      installationId?: string;
+      deleted?: boolean;
+    } = {},
+  ) {
+    return {
+      ref: opts.ref ?? 'refs/heads/main',
+      after: 'a'.repeat(40),
+      ...(opts.deleted !== undefined ? { deleted: opts.deleted } : {}),
+      repository: { id: opts.repoId ?? Number(REPO_PROVIDER_ID) },
+      installation: { id: opts.installationId ?? INSTALLATION_ID },
+    };
+  }
+
+  // `vi.spyOn` returns the SAME mock (with its accumulated history) when the
+  // method is already spied, and the file's afterEach doesn't restore mocks —
+  // so restore here to keep each push test's call history isolated.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** A fresh, history-clean spy on the enqueue transport. */
+  function spySend() {
+    const spy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    spy.mockClear();
+    return spy;
+  }
+
+  /** The spy's calls that enqueued the REFRESH event. */
+  function refreshCalls(sendSpy: { mock: { calls: unknown[][] } }) {
+    return sendSpy.mock.calls.filter(
+      (call) => (call[0] as { name?: string }).name === 'system.code-graph-refresh',
+    );
+  }
+
+  it('a default-branch push enqueues the incremental refresh job (async, not inline)', async () => {
+    const { workspace } = await makeScenario('push-default@example.com');
+    const sendSpy = spySend();
+
+    const res = await githubWebhookService.handleEvent('push', pushPayload());
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+
+    const calls = refreshCalls(sendSpy);
+    expect(calls).toHaveLength(1);
+    expect((calls[0]![0] as { data: Record<string, unknown> }).data).toEqual({
+      installationId: INSTALLATION_ID,
+      workspaceId: workspace.id,
+      repoOwner: 'moooon',
+      repoName: 'acme',
+      defaultBranch: 'main',
+    });
+  });
+
+  it('a push to a NON-default branch is ignored — no refresh enqueued', async () => {
+    await makeScenario('push-feature@example.com');
+    const sendSpy = spySend();
+
+    const res = await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ ref: 'refs/heads/subtask/MOTIR-893-feature' }),
+    );
+    expect(res).toEqual({ event: 'push', outcome: 'ignored_ref' });
+    expect(refreshCalls(sendSpy)).toHaveLength(0);
+  });
+
+  it('a tag push and a branch deletion are ignored (not branch pushes)', async () => {
+    await makeScenario('push-tag@example.com');
+    const sendSpy = spySend();
+
+    const tag = await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ ref: 'refs/tags/v1.0.0' }),
+    );
+    expect(tag).toEqual({ event: 'push', outcome: 'ignored_ref' });
+
+    const del = await githubWebhookService.handleEvent('push', pushPayload({ deleted: true }));
+    expect(del).toEqual({ event: 'push', outcome: 'ignored_ref' });
+
+    expect(refreshCalls(sendSpy)).toHaveLength(0);
+  });
+
+  it('a push to a repo we do not track (or an unknown installation) is a clean no-op', async () => {
+    await makeScenario('push-unknown@example.com');
+    const sendSpy = spySend();
+
+    const repo = await githubWebhookService.handleEvent('push', pushPayload({ repoId: 999 }));
+    expect(repo).toEqual({ event: 'push', outcome: 'unknown_repo' });
+
+    const inst = await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ installationId: 'inst-nope' }),
+    );
+    expect(inst).toEqual({ event: 'push', outcome: 'unknown_installation' });
+
+    expect(refreshCalls(sendSpy)).toHaveLength(0);
+  });
+
+  it('an enqueue transport failure never fails the ack (best-effort, fast 2xx)', async () => {
+    await makeScenario('push-enqueue-down@example.com');
+    vi.spyOn(inngest, 'send').mockRejectedValue(new Error('queue down'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await githubWebhookService.handleEvent('push', pushPayload());
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+    expect(errorSpy).toHaveBeenCalled(); // dropped refresh is logged, not thrown
+
+    errorSpy.mockRestore();
+  });
+});
+
 describe('githubWebhookService — dispatch', () => {
   it('ignores an unhandled event type (a fast no-op ack)', async () => {
     const res = await githubWebhookService.handleEvent('ping', { zen: 'Keep it simple' });

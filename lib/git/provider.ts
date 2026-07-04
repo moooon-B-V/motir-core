@@ -4,6 +4,7 @@ import type {
   InstallationToken,
   NormalizedChangeRequest,
   NormalizedInstallation,
+  NormalizedPushEvent,
   NormalizedRepo,
   NormalizedStatusEvent,
 } from './types';
@@ -79,4 +80,12 @@ export interface GitProvider {
    * status-event shape, or `null` when it is not one we handle.
    */
   parseCiStatusEvent(rawPayload: unknown): NormalizedStatusEvent | null;
+
+  /**
+   * Normalize a raw push webhook payload into the provider-agnostic push shape,
+   * or `null` when it is not a BRANCH push we handle (a tag push, a branch
+   * deletion, or a malformed body) — consumed by the code-graph feed
+   * (MOTIR-893). PURE.
+   */
+  parsePushEvent(rawPayload: unknown): NormalizedPushEvent | null;
 }

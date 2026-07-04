@@ -250,6 +250,20 @@ export interface CodeGraphIndexData {
 }
 
 /**
+ * The `system.code-graph-refresh` event payload (Story 7.10 · MOTIR-893) — one
+ * per default-branch PUSH to a connected repo, enqueued best-effort by the
+ * webhook (`enqueueCodeGraphRefresh`) after the push resolves to a stored repo.
+ * Same shape as the initial index: the consumer re-fetches the repo AT ITS
+ * DEFAULT BRANCH (so coalesced pushes index the latest head once) and re-drives
+ * the same fetch → bytes → motir-ai path; motir-ai's indexer refreshes the
+ * existing graph incrementally. The job is DEBOUNCED per repo (rapid pushes
+ * coalesce into one run with the latest event), which is why this is a separate
+ * event from `system.code-graph-index` — the initial index must run promptly on
+ * install, never sit out a debounce window.
+ */
+export type CodeGraphRefreshData = CodeGraphIndexData;
+
+/**
  * Map of event-name → payload. Each key is a job id and the event name that
  * triggers it; for an event's FIRST consumer the two are the same string (the
  * 1:1 convention). An event with MULTIPLE consumers (e.g.
@@ -268,6 +282,7 @@ export interface JobEventDataMap {
   'system.automation-retention-sweep': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   'system.code-graph-index': CodeGraphIndexData;
+  'system.code-graph-refresh': CodeGraphRefreshData;
   'filter-subscription/deliver': FilterSubscriptionDeliverData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;

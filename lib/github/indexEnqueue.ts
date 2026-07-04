@@ -1,5 +1,5 @@
 import { inngest } from '@/lib/jobs/client';
-import type { CodeGraphIndexData } from '@/lib/jobs/types';
+import type { CodeGraphIndexData, CodeGraphRefreshData } from '@/lib/jobs/types';
 import type { NormalizedRepo } from '@/lib/git/types';
 
 // Best-effort, POST-COMMIT enqueue of the `system.code-graph-index` job for a
@@ -23,6 +23,25 @@ export async function enqueueCodeGraphIndex(data: CodeGraphIndexData): Promise<v
     console.error(
       `enqueueCodeGraphIndex(${data.installationId} ${data.repoOwner}/${data.repoName}) failed ` +
         `to enqueue; the repos persisted but the code-graph index was dropped:`,
+      err,
+    );
+  }
+}
+
+/**
+ * Enqueue ONE repo's incremental REFRESH job (MOTIR-893) — a default-branch
+ * push landed and the graph should re-index. Best-effort like the index enqueue:
+ * the webhook 2xx must never hinge on the queue, so a transport failure is
+ * swallowed + logged (the debounced job is idempotent and the next push
+ * re-enqueues, so a dropped refresh self-heals).
+ */
+export async function enqueueCodeGraphRefresh(data: CodeGraphRefreshData): Promise<void> {
+  try {
+    await inngest.send({ name: 'system.code-graph-refresh', data });
+  } catch (err) {
+    console.error(
+      `enqueueCodeGraphRefresh(${data.installationId} ${data.repoOwner}/${data.repoName}) failed ` +
+        `to enqueue; the push was acked but the code-graph refresh was dropped:`,
       err,
     );
   }
