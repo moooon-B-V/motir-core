@@ -277,7 +277,15 @@ export default async function IssueDetailPage({
         <header className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
-            <span className="text-(--el-text-muted) font-mono text-sm">{item.identifier}</span>
+            {/* data-testid: the header identifier is asserted by several E2E
+              journeys; the bare text is no longer unique on the page (the
+              Development empty-state copy also names the key — MOTIR-1579). */}
+            <span
+              data-testid="item-identifier"
+              className="text-(--el-text-muted) font-mono text-sm"
+            >
+              {item.identifier}
+            </span>
             {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
               a `min-w-0 flex-1` cell so it has a BOUNDED track to truncate against
               — its inner `<span className="truncate">` (ParentBreadcrumb) only

@@ -187,7 +187,9 @@ test.describe('project-details — the editable Details + change-key journey', (
     await page.goto('/items/PROD-1');
     await page.waitForURL('**/items/NIF-1');
     expect(new URL(page.url()).pathname).toBe('/items/NIF-1');
-    await expect(page.getByText('NIF-1', { exact: true })).toBeVisible();
+    // Header identifier via testid (the Development empty-state copy also
+    // names the key on the detail page — MOTIR-1579).
+    await expect(page.getByTestId('item-identifier')).toHaveText('NIF-1');
 
     // ── 5. Reclaim the own previous key (revert): NIF → PROD ─────────────────
     // PROD goes live again and NIF becomes the retired key. (The reverse old-link
