@@ -83,14 +83,19 @@ function PullRequestRow({ pr }: { pr: LinkedPullRequestDto }) {
           </Pill>
         ) : null}
       </span>
+      {/* aria-label, NOT an sr-only span (the shipped icon-only convention —
+          RemoveLinkButton / QuickViewCloseButton): an sr-only span is
+          position:absolute, and with no positioned ancestor it escapes the
+          shell's overflow container and stretches the ROOT scroller — the
+          "empty space past the bottom of the page" bug. */}
       <a
         href={pr.url}
         target="_blank"
         rel="noopener noreferrer"
+        aria-label={t('development.openOnGithub')}
         className="shrink-0 rounded-(--radius-control) p-1 text-(--el-icon-muted) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         <ExternalLink className="h-4 w-4" aria-hidden />
-        <span className="sr-only">{t('development.openOnGithub')}</span>
       </a>
     </li>
   );
