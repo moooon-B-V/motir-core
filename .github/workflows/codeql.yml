@@ -1,0 +1,42 @@
+name: CodeQL
+
+# Advanced-setup code scanning (MOTIR-1603). GitHub's "default setup" must stay
+# OFF in the repo settings — a default-setup-enabled repo rejects the SARIF
+# uploads this workflow produces.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly sweep so alerts surface even in a quiet week (Mondays 05:30 UTC).
+    - cron: '30 5 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # build-mode: none — CodeQL scans the TS/JS sources directly; no
+          # install/build (and no generated Prisma client) is needed.
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v6
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:${{ matrix.language }}'
