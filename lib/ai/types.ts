@@ -91,6 +91,16 @@ export interface JobContextBag {
   prompt?: string | null;
   rootItemKey?: string | null;
   discovery?: unknown;
+  // The workspace's connected repo SET — the PLURAL cross-repo contract with
+  // motir-ai's multi-repo code-graph reads (7.10.15/MOTIR-1598 producer ↔
+  // 7.10.16/MOTIR-1599 consumer): `{ repos: [{ provider, repoRef,
+  // defaultBranch }] }` (`JobCodeContext`, lib/ai/codeContext.ts), one entry
+  // per repo granted on the workspace's installation (the 7.10.3 mirror — a
+  // workspace is ONE PRODUCT and connects MANY repos). Populated at
+  // planning-job submit by `resolveCodeContext`; ABSENT (not empty) when the
+  // workspace has no installation or no granted repos. Loosely typed here by
+  // design (the reserved-hole convention, like `discovery`) — each side
+  // declares its own types against the shared contract.
   code?: unknown;
   // The bug-analysis unit an `analyze_bug` job carries — the user bug + its
   // plan-tree neighborhood the OUTWARD classifier reasons over, assembled by the
