@@ -4,7 +4,9 @@
 every UI-touching subtask in the GitHub-integration Story — the connect/settings
 UI + repo selection (**MOTIR-895**) and the work-item PR/CI status surface. The
 GitLab sibling (**MOTIR-1472**) mirrors this layout against the `GitProvider`
-seam.
+seam. **Extended by MOTIR-1595 (Panel 5):** the explicit item→PR link affordance
+— the manual override of the MOTIR-892 auto-resolver — built by **MOTIR-1596**
+on top of the Development display surface **MOTIR-1579** ships.
 
 - **Asset of record:** [`github.mock.html`](./github.mock.html) — the source of
   truth (built from the real design system; the `--el-*` + shape tokens are
@@ -45,6 +47,10 @@ settings page).
 - **PR/CI surface (Panels 3–4a):** the **Development** section appears on the
   work-item detail (peek) automatically once a branch/PR references the item's
   `MOTIR-<n>` id — the door is the section itself materialising on the issue.
+- **Explicit link (Panel 5):** the door is the quiet **"+ Link pull request"**
+  control in the header of the **full detail page's** Development card (drawn
+  in 5a). The peek carries NO door — it stays read-only; its path to the
+  affordance is the existing **"Open full page"**.
 
 ---
 
@@ -135,6 +141,100 @@ icon) rather than faking in-app repo granting.
   shows with caption "Identity still connected · repository access revoked" — and
   a **`Button` primary** "Reconnect GitHub" restores the installation.
 
+### Panel 5 — the explicit item→PR link affordance (MOTIR-1595 → built by MOTIR-1596)
+
+The **manual override** of the MOTIR-892 auto-resolver: link an already-ingested
+`GithubPullRequest` whose branch/PR title never named the item's key (so the
+resolver skipped it) by setting `workItemId`. Grounded in the shipped link
+grammar — this panel invents NO new interaction: it is the relationships panel's
+**`AddLinkControl` + `LinkAddForm` + searchable `Combobox`** pattern
+(2.4.9 / 6.9.2, `design/work-items/links.mock.html`) applied to PRs.
+
+**Where the door is — the peek stays read-only (resolved, not assumed).** The
+shipped peek's contract is "Read-only — editing lives on the full page"
+(`IssueQuickViewPanel`; its ONE write path is _Open full page_). A link
+affordance on the peek would be a second write path — a per-surface interaction
+deviation of exactly the mistake-#139 class. So:
+
+- **Peek (Panels 3 / 4a): display only** — rows + pills, unchanged. A user in
+  the peek reaches the affordance the same way they reach every edit: **Open
+  full page**.
+- **Full detail page (`/items/[key]`): the Development section card** — a
+  `ContentSectionCard` ("Development" + gloss) in the left column, the same
+  card grammar as Description / Relationships / Activity. The rows are the
+  SAME pr-rows as Panel 3 (one shared component — MOTIR-1579's). The door is a
+  quiet **"+ Link pull request"** control in the card header's right slot —
+  `--el-link` text + plus glyph, the exact `AddLinkControl` entry-point
+  treatment ("+ Link issue"). _(5a draws the door; naming the route is not
+  enough.)_
+- **Detail-page empty state**: the Panel-4a `EmptyState` renders inside the
+  Development card (same copy), keeping the two Development surfaces visually
+  continuous.
+
+**The picker (5b) — `LinkAddForm` grammar, one field.** Clicking the door
+expands the surface-soft inline form (no modal — matching the shipped control;
+this also avoids the combobox-in-dialog clipping class entirely):
+
+- An eyebrow field label **"Pull request to link"**, then a **query-driven
+  searchable Combobox** (debounced server search, per-keystroke — the 6.9.2
+  pattern; the empty/short query fetches nothing). Reuse the shipped `Combobox`
+  including its empty-listbox a11y handling (`role="status"` swap — the
+  aria-required-children fix) and its option markup.
+- **Option rows in the pr-row grammar, condensed:** PR glyph (open/merge/closed,
+  `--el-icon-muted`) + title + `owner/repo · #<n>` meta (**`--el-text-identifier`**,
+  NOT `-muted` — the AA sidebar-caption lesson at 12px) + the PR-state `Pill`
+  (same tone table as Panel 3). Candidates = the workspace's ingested PRs
+  across its selected repos, searched by title / number / repo.
+- **Already-linked PRs are listed, annotated, and pickable — the explicit
+  takeover.** A PR linked elsewhere shows a neutral chip **"Linked to
+  MOTIR-<n>"** in place of its state pill; picking it MOVES the link (single
+  FK — `workItemId` points at one item). This IS the mis-link correction path:
+  there is deliberately **no per-row unlink** — an unlinked PR would just be
+  re-resolved by the next webhook event for it, so "unlink" would silently
+  fight the auto-resolver; moving the link from the RIGHT item is stable.
+  (MOTIR-1596 encodes: re-link allowed, no confirm dialog — the annotation makes
+  the move explicit before the pick.)
+- **Actions:** `Button` **sm primary "Link"** (disabled until a pick) +
+  **sm ghost "Cancel"** (collapses the form) — `LinkAddForm`'s exact button row.
+- **After Link:** the form collapses and the row appears in the card
+  (`router.refresh()` — the detail page's sections are server-rendered, the
+  same mechanism `AddLinkControl` uses). The manually-linked row carries a
+  quiet **"linked manually"** suffix in its `pr-meta` (provenance at a glance;
+  the section caption gains "— or linked by hand from here").
+
+**States (5c):**
+
+- **Type-to-search** — listbox shows the centered prompt "Type to search pull
+  requests" (`--el-text-secondary`).
+- **No matches** — "No matching pull requests" + the hint line "Repositories
+  sync in Settings → Workspace → GitHub." (`--el-text-identifier`) — the road
+  to the fix when the repo was never selected on GitHub.
+- **Typed error** — `LinkAddForm`'s rose banner (strong text on
+  `--el-tint-rose`, alert glyph `--el-danger` — finding #35): e.g. the
+  disconnected workspace ("GitHub isn't connected for this workspace. Connect
+  it in Settings → Workspace → GitHub."). Loading reuses the Combobox spinner.
+
+**Copy — the `github` i18n namespace (all locales, en+zh parity):**
+`development.title` "Development" · `development.gloss` "Linked pull requests ·
+live PR and CI status" · `development.linkPr` "Link pull request" ·
+`development.linkPrField` "Pull request to link" · `development.searchPlaceholder`
+"Search pull requests…" · `development.typeToSearch` "Type to search pull
+requests" · `development.noMatches` "No matching pull requests" ·
+`development.noMatchesHint` "Repositories sync in Settings → Workspace →
+GitHub." · `development.linkedTo` "Linked to {key}" · `development.linkedManually`
+"linked manually" · `development.linkAction` "Link" · `development.notConnected`
+"GitHub isn't connected for this workspace. Connect it in Settings → Workspace →
+GitHub." · `development.autoLinkCaption` "Linked automatically when a branch or
+PR mentions {key} — or linked by hand from here." (cancel = the shared
+`common.cancel`).
+
+**Build seam (for MOTIR-1596):** MOTIR-1579 ships the pr-row component + the
+peek read path; 1596 mounts the Development `ContentSectionCard` on the detail
+page (server-rendered, `router.refresh()` page-state) and adds the
+door + form + Server Action. The shipped `LinkAddForm` box uses a legacy raw
+`rounded-md` — the new form uses the element-semantic token (`--radius-card`,
+as mocked); do not copy the raw utility forward.
+
 ---
 
 ## Pill PR/CI tone mapping (why — the no-new-primitive constraint)
@@ -168,27 +268,33 @@ check) and label. Every tint carries the hue in the **background** with
 
 ## Per-element `--el-*` colour roles
 
-| Element                                     | Token(s)                                                                                                                               |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Page / body                                 | `--el-page-bg` · `--el-page-text`                                                                                                      |
-| Settings sidebar                            | `--el-sidebar-bg` · `--el-sidebar-border` · active row `--el-sidebar-item-bg-active`                                                   |
-| Nav icons                                   | `--el-icon-muted` (idle) · `--el-icon-active` (active row)                                                                             |
-| Card surface / border                       | `--el-card` · `--el-border` · `--el-border-soft` (dividers)                                                                            |
-| Primary text / secondary / muted / subtitle | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-subtitle`                                                         |
-| Eyebrow / section labels                    | `--el-text-eyebrow`                                                                                                                    |
-| Identifier (MOTIR-891)                      | `--el-text-identifier`                                                                                                                 |
-| Primary button ("Connect / Reconnect")      | fill `--el-accent` · ink `--el-accent-text`                                                                                            |
-| Secondary button ("Manage on GitHub")       | text `--el-text` · border `--el-button-border`                                                                                         |
-| Disconnect (danger-ghost)                   | text `--el-danger` · border `--el-border`                                                                                              |
-| Grant-row icon badge                        | `--el-card-icon-bg` / `--el-card-icon-fg`                                                                                              |
-| PR-state / CI-state / sync-state pills      | tints `--el-tint-{sky,mint,rose,peach}` + `--el-text-strong`; neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` |
-| Switch (repo sync)                          | track on `--el-switch-on` · off `--el-muted` + `--el-border-strong` · knob `--el-switch-knob`                                          |
-| Branch chip (`main`)                        | `--el-code-bg` / `--el-code-text`                                                                                                      |
-| PR row surface                              | `--el-surface` + `--el-border`                                                                                                         |
-| Danger callout (revoked)                    | bg `--el-danger-surface` · text `--el-danger-surface-text` · left rule + icon `--el-danger`                                            |
-| "Verified" pill                             | `--el-tint-mint` + `--el-text-strong`                                                                                                  |
-| Type pill (Subtask)                         | `color-mix(--el-type-subtask 16%, --el-surface)` + dot `--el-type-subtask` + `--el-text-strong`                                        |
-| GitHub avatar fallback                      | `--el-avatar-fallback`                                                                                                                 |
+| Element                                     | Token(s)                                                                                                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Page / body                                 | `--el-page-bg` · `--el-page-text`                                                                                                                                                          |
+| Settings sidebar                            | `--el-sidebar-bg` · `--el-sidebar-border` · active row `--el-sidebar-item-bg-active`                                                                                                       |
+| Nav icons                                   | `--el-icon-muted` (idle) · `--el-icon-active` (active row)                                                                                                                                 |
+| Card surface / border                       | `--el-card` · `--el-border` · `--el-border-soft` (dividers)                                                                                                                                |
+| Primary text / secondary / muted / subtitle | `--el-text` · `--el-text-secondary` · `--el-text-muted` · `--el-text-subtitle`                                                                                                             |
+| Eyebrow / section labels                    | `--el-text-eyebrow`                                                                                                                                                                        |
+| Identifier (MOTIR-891)                      | `--el-text-identifier`                                                                                                                                                                     |
+| Primary button ("Connect / Reconnect")      | fill `--el-accent` · ink `--el-accent-text`                                                                                                                                                |
+| Secondary button ("Manage on GitHub")       | text `--el-text` · border `--el-button-border`                                                                                                                                             |
+| Disconnect (danger-ghost)                   | text `--el-danger` · border `--el-border`                                                                                                                                                  |
+| Grant-row icon badge                        | `--el-card-icon-bg` / `--el-card-icon-fg`                                                                                                                                                  |
+| PR-state / CI-state / sync-state pills      | tints `--el-tint-{sky,mint,rose,peach}` + `--el-text-strong`; neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                     |
+| Switch (repo sync)                          | track on `--el-switch-on` · off `--el-muted` + `--el-border-strong` · knob `--el-switch-knob`                                                                                              |
+| Branch chip (`main`)                        | `--el-code-bg` / `--el-code-text`                                                                                                                                                          |
+| PR row surface                              | `--el-surface` + `--el-border`                                                                                                                                                             |
+| Danger callout (revoked)                    | bg `--el-danger-surface` · text `--el-danger-surface-text` · left rule + icon `--el-danger`                                                                                                |
+| "Verified" pill                             | `--el-tint-mint` + `--el-text-strong`                                                                                                                                                      |
+| Type pill (Subtask)                         | `color-mix(--el-type-subtask 16%, --el-surface)` + dot `--el-type-subtask` + `--el-text-strong`                                                                                            |
+| GitHub avatar fallback                      | `--el-avatar-fallback`                                                                                                                                                                     |
+| "+ Link pull request" door (Panel 5)        | text `--el-link` · radius `--radius-control`                                                                                                                                               |
+| Link form box (LinkAddForm)                 | bg `--el-surface-soft` · border `--el-border` · radius `--radius-card` · field eyebrow `--el-text-eyebrow`                                                                                 |
+| Combobox search input                       | bg `--el-page-bg` · border `--el-border` · radius `--radius-input` · height `--height-control` · placeholder `--el-text-muted`                                                             |
+| Combobox popover / option rows              | popover `--el-page-bg` + `--radius-card` + `--shadow-elevated`; option `--radius-control` + `--spacing-control-*`, active `--el-option-active-bg`; option meta `--el-text-identifier` (AA) |
+| "Linked to MOTIR-n" takeover chip           | neutral pill `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                                                                                                   |
+| Typed-error banner (form)                   | bg `--el-tint-rose` · text `--el-text-strong` · icon `--el-danger` (finding #35)                                                                                                           |
 
 Shape flows only through element-semantic tokens: `--radius-card` (cards/panels),
 `--radius-control` (repo/PR rows, nav rows, icon badges), `--radius-badge`
@@ -220,6 +326,12 @@ these, it does not build new ones:
   pattern (`MemberAvatar`) is the fallback. No new avatar component.
 - ✅ **Settings-area shell** — the shipped rail + content layout
   (`settings/*/layout.tsx` + `SidebarNav`).
+- ✅ **`ContentSectionCard`** — the detail-page Development card (Panel 5),
+  the same section-card grammar as Description / Relationships / Activity.
+- ✅ **`AddLinkControl` + `LinkAddForm` + `Combobox`** — the Panel-5 door +
+  inline form + query-driven picker are the shipped link-adding pattern
+  (2.4.9 / 6.9.2) applied to PRs, including the Combobox's empty-listbox a11y
+  handling. No new picker primitive.
 
 **No new design-system entry is required.** If MOTIR-895 finds it needs one
 (e.g. a distinct merged-PR colour), that is a NEW `design/` subtask — not a code

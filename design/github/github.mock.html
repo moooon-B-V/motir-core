@@ -62,6 +62,13 @@
         (4) Empty + error states — the issue with NO linked PR (EmptyState,
             quiet copy) and the settings REVOKED state (App uninstalled on
             GitHub out-of-band → danger callout via --el-danger + Reconnect).
+        (5) Explicit item→PR link (MOTIR-1595) — the manual override of the
+            MOTIR-892 auto-resolver, on the FULL DETAIL page's Development
+            section card (the peek stays read-only): the "+ Link pull request"
+            door (5a), the query-driven picker with the linked-elsewhere
+            takeover annotation (5b), and the type-to-search / no-matches /
+            disconnected-error states (5c). Mirrors the shipped relationships
+            panel's AddLinkControl + LinkAddForm + Combobox grammar.
       Toggle data-theme="dark" on <html> to confirm token parity. Full spec,
       copy strings, and per-element --el-* roles in design-notes.md.
     -->
@@ -983,6 +990,72 @@
             .sub-grid { display: flex; gap: 18px; flex-wrap: wrap; }
             .w360 { width: 360px; }
             .w440 { width: 440px; }
+
+            /* ── Panel 5 — the explicit item→PR link affordance (detail page, MOTIR-1595).
+                 Mirrors the shipped relationships-panel grammar: AddLinkControl's quiet
+                 "+ Link issue" entry point + LinkAddForm's surface-soft inline form +
+                 the shipped Combobox's popover / option / active-row styles. ────────── */
+            .detail-title {
+              font-family: var(--font-serif, Georgia, serif);
+              font-size: 21px; font-weight: 600; color: var(--el-text);
+              margin-bottom: 14px; line-height: 1.25;
+            }
+            .link-cta {
+              display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+              background: transparent; border: 0; cursor: pointer; font-family: inherit;
+              color: var(--el-link); font-size: 13px; font-weight: 600;
+              border-radius: var(--radius-control); padding: 3px 6px;
+            }
+            .link-cta svg { width: 15px; height: 15px; }
+            /* LinkAddForm's box (surface-soft inset; callout-box radius role) */
+            .link-form {
+              background: var(--el-surface-soft); border: 1px solid var(--el-border);
+              border-radius: var(--radius-card); padding: 12px;
+              display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;
+            }
+            .link-form .f-label {
+              font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+              text-transform: uppercase; color: var(--el-text-eyebrow);
+            }
+            /* the searchable combobox: the search input (page-bg fill, --radius-input,
+               control padding — the shipped Combobox's search-input styles) + anchored
+               popover (--radius-card + --shadow-elevated) + option rows
+               (--radius-control, control padding, --el-option-active-bg highlight) */
+            .combo-input {
+              display: flex; align-items: center; gap: 8px;
+              height: var(--height-control); padding: 0 var(--spacing-control-x);
+              background: var(--el-page-bg); border: 1px solid var(--el-border);
+              border-radius: var(--radius-input); font-size: 13.5px; color: var(--el-text);
+            }
+            .combo-input .ph { color: var(--el-text-muted); }
+            .combo-input .caret { width: 1px; height: 15px; background: var(--el-text); }
+            .combo-pop {
+              margin-top: 6px; padding: 4px;
+              background: var(--el-page-bg); border: 1px solid var(--el-border);
+              border-radius: var(--radius-card); box-shadow: var(--shadow-elevated);
+            }
+            .pr-opt {
+              display: flex; align-items: center; gap: 8px; min-width: 0;
+              padding: var(--spacing-control-y) var(--spacing-control-x);
+              border-radius: var(--radius-control); font-size: 13px; color: var(--el-text);
+            }
+            .pr-opt.active { background: var(--el-option-active-bg); }
+            .pr-opt > svg { width: 15px; height: 15px; flex: none; color: var(--el-icon-muted); }
+            .pr-opt .o-title { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            /* option meta: identifier weight, NOT muted — muted fails AA at this size
+               on the option surface (the sidebar-caption contrast lesson) */
+            .pr-opt .o-meta { flex: none; font-size: 12px; color: var(--el-text-identifier); }
+            .pr-opt .pill { flex: none; }
+            .combo-empty { padding: 14px 10px; text-align: center; font-size: 12.5px; color: var(--el-text-secondary); }
+            .combo-empty .hint { margin-top: 4px; font-size: 12px; color: var(--el-text-identifier); }
+            .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+            /* LinkAddForm's typed-error banner: strong text on the rose tint (finding #35) */
+            .form-error {
+              display: flex; align-items: flex-start; gap: 8px;
+              background: var(--el-tint-rose); border-radius: var(--radius-card);
+              padding: 8px 12px; font-size: 13px; color: var(--el-text-strong);
+            }
+            .form-error svg { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--el-danger); }
     </style>
   </head>
   <body>
@@ -1075,6 +1148,18 @@
         >
           <circle cx="12" cy="12" r="9" />
           <path d="m15 9-6 6M9 9l6 6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
         </symbol>
         <symbol
           viewBox="0 0 24 24"
@@ -1236,8 +1321,10 @@
         item. Placement is <b>Settings → Workspace → GitHub</b> (the installation is
         workspace-scoped). Composed only from shipped primitives — Card, Pill, Button, EmptyState,
         Switch, the settings-area shell — with colour via <span class="mono">--el-*</span> tokens
-        and shape via element-semantic tokens. Four panels: (1) not connected · (2) connected +
-        repos · (3) PR/CI on the issue · (4) empty + revoked-error states.
+        and shape via element-semantic tokens. Five panels: (1) not connected · (2) connected +
+        repos · (3) PR/CI on the issue · (4) empty + revoked-error states · (5) the explicit item→PR
+        link (MOTIR-1595) — the manual override of the auto-resolver, on the detail page's
+        Development card.
       </p>
     </div>
 
@@ -1678,6 +1765,202 @@
               <button class="btn btn-primary">
                 <svg><use href="#i-github" /></svg>Reconnect GitHub
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════ PANEL 5 — EXPLICIT ITEM→PR LINK (MOTIR-1595) ══════════════════ -->
+      <!-- The manual override of the MOTIR-892 auto-resolver. The door lives on the FULL
+           DETAIL page's Development section card — the peek (Panels 3/4a) stays read-only
+           (its one write path is "Open full page"), mirroring the shipped relationships
+           panel: AddLinkControl's quiet "+ Link …" entry point expanding LinkAddForm's
+           surface-soft inline form with the query-driven searchable Combobox. -->
+      <div>
+        <div class="panel-label">
+          Panel 5a · the door — the <b>full detail page&rsquo;s</b> Development section card:
+          &ldquo;+ Link pull request&rdquo; header-right (the peek stays read-only; it routes here
+          via &ldquo;Open full page&rdquo;)
+        </div>
+        <div class="panel" style="width: 620px">
+          <div class="card-body" style="padding-bottom: 0">
+            <div class="detail-title">Rate-limit the public API</div>
+          </div>
+          <div class="card" style="margin: 0 var(--spacing-card-padding) 18px">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Linked pull requests · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add per-route rate limiting</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Checks passing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-pr" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">
+                    moooon/motir-gateway · #57 · <span class="mono">linked manually</span>
+                  </div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-sky"
+                    ><svg><use href="#i-git-pr" /></svg>Open</span
+                  >
+                  <span class="pill pill-peach"
+                    ><svg><use href="#i-dots" /></svg>Checks running</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="muted" style="font-size: 12px; margin-top: 12px">
+                Linked automatically when a branch or PR mentions
+                <span class="mono">MOTIR-902</span> — or linked by hand from here.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">
+          Panel 5b · the picker OPEN — LinkAddForm grammar: query-driven Combobox over the
+          workspace&rsquo;s ingested PRs (pr-row option grammar; a PR already linked elsewhere is
+          annotated and picking it MOVES it — the explicit takeover), Link + Cancel
+        </div>
+        <div class="panel" style="width: 620px">
+          <div class="card" style="margin: 18px var(--spacing-card-padding)">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Linked pull requests · live PR and CI status</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="link-form">
+                <span class="f-label">Pull request to link</span>
+                <div class="combo-input"><span>thrott</span><span class="caret"></span></div>
+                <div class="combo-pop">
+                  <div class="pr-opt active">
+                    <svg><use href="#i-git-pr" /></svg>
+                    <span class="o-title">Throttle burst traffic on /v1</span>
+                    <span class="o-meta">moooon/motir-gateway · #57</span>
+                    <span class="pill pill-sky"
+                      ><svg><use href="#i-git-pr" /></svg>Open</span
+                    >
+                  </div>
+                  <div class="pr-opt">
+                    <svg><use href="#i-git-closed" /></svg>
+                    <span class="o-title">Spike: token-bucket throttling</span>
+                    <span class="o-meta">moooon/motir-core · #119</span>
+                    <span class="pill pill-rose"
+                      ><svg><use href="#i-git-closed" /></svg>Closed</span
+                    >
+                  </div>
+                  <div class="pr-opt">
+                    <svg><use href="#i-git-pr" /></svg>
+                    <span class="o-title">Throttle webhook fan-out</span>
+                    <span class="o-meta">moooon/motir-core · #127</span>
+                    <span class="pill pill-neutral">Linked to MOTIR-871</span>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm">Link</button>
+                  <button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add per-route rate limiting</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Checks passing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">
+          Panel 5c · picker states — type-to-search prompt · no matches (with the settings hint) ·
+          the typed-error banner (disconnected workspace)
+        </div>
+        <div class="sub-grid">
+          <div class="panel w360">
+            <div class="card-body">
+              <div class="link-form" style="margin-bottom: 0">
+                <span class="f-label">Pull request to link</span>
+                <div class="combo-input"><span class="ph">Search pull requests…</span></div>
+                <div class="combo-pop">
+                  <div class="combo-empty">Type to search pull requests</div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm" disabled style="opacity: 0.5">Link</button>
+                  <button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel w360">
+            <div class="card-body">
+              <div class="link-form" style="margin-bottom: 0">
+                <span class="f-label">Pull request to link</span>
+                <div class="combo-input"><span>billing</span><span class="caret"></span></div>
+                <div class="combo-pop">
+                  <div class="combo-empty">
+                    No matching pull requests
+                    <div class="hint">Repositories sync in Settings → Workspace → GitHub.</div>
+                  </div>
+                </div>
+                <div class="form-error">
+                  <svg><use href="#i-alert" /></svg>
+                  <span
+                    >GitHub isn&rsquo;t connected for this workspace. Connect it in Settings →
+                    Workspace → GitHub.</span
+                  >
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-primary btn-sm" disabled style="opacity: 0.5">Link</button>
+                  <button class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
