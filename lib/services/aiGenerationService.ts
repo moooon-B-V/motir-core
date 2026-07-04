@@ -1,4 +1,5 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
+import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
@@ -55,6 +56,15 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // The workspace's connected repo SET (7.10.15 · MOTIR-1598) — the code half
+    // of the context bag, resolved from the persisted 891 grant mirror (a DB
+    // read; no GitHub round-trip on the submit path). `undefined` (no
+    // installation / no grants) OMITS `context.code` entirely, so a start-fresh
+    // project's envelope is byte-identical to a code-less one.
+    const code = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const tenant = {
       organizationId,
       isMeta,
@@ -73,6 +83,7 @@ export const aiGenerationService = {
         // `ai_draft` `explanationMd` per proposal (MOTIR-1468). motir-ai never
         // reads motir-core config directly; the flag rides the envelope.
         generateExplanations: ctx.project.aiGenerateExplanations,
+        ...(code ? { code } : {}),
       },
       { userId: ctx.userId },
     );
