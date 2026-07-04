@@ -125,6 +125,17 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
   });
 
+  it('the ghost anchor is VIEWABLE so the off-level blocker is peekable (MOTIR-1586)', () => {
+    // The off-level blocker is a real, peekable work item — its anchor offers the
+    // View affordance (`viewable`), exactly like any other work-item node, so the
+    // roadmap can peek "blocked by something elsewhere". Opening is via the View
+    // button on select (not a bare click), consistent with every card.
+    const { nodes } = buildWorkItemLevel(levelWithOffBlocker({ isDone: false }));
+    const anchor = nodes.find((n) => n.id === 'X');
+    expect(anchor).toBeTruthy();
+    expect(anchor!.viewable).toBe(true);
+  });
+
   it('SPRINT scope: an out-of-sprint, NOT-done blocker is flagged "blocker not in sprint"', () => {
     const { nodes, deps } = buildWorkItemLevel(
       levelWithOffBlocker({ isDone: false, inActiveSprint: false }),

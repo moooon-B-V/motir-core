@@ -193,4 +193,60 @@ describe('WorkItemRoadmap', () => {
     expect(screen.getByText('in Auth hardening ↗')).toBeTruthy();
     expect(document.querySelector('[data-node-id="X9"]')).not.toBeNull();
   });
+
+  it('peeks the off-level blocker from its ghost anchor View button (MOTIR-1586)', async () => {
+    // T1 is blocked_by X9 (off-level). X9's ghost anchor is now a viewable,
+    // peekable card: selecting it shows the View button (a bare click only selects,
+    // like every card), and View opens the WorkItemQuickView for the BLOCKER,
+    // resolved by its identifier (MOTIR-42).
+    const crossLevel = {
+      nodes: [
+        {
+          id: 'T1',
+          parentId: null,
+          kind: 'subtask',
+          identifier: 'MOTIR-5',
+          title: 'Wire it',
+          status: 'todo',
+          isDone: false,
+          hasChildren: false,
+        },
+      ],
+      edges: [{ blockedId: 'T1', blockerId: 'X9' }],
+      offLevelBlockers: [
+        {
+          id: 'X9',
+          identifier: 'MOTIR-42',
+          title: 'Migrate tokens',
+          parentTitle: 'Auth hardening',
+        },
+      ],
+    };
+    // The peek read resolves the BLOCKER by its identifier (MOTIR-42), not T1.
+    const PEEK42 = { ...PEEK, identifier: 'MOTIR-42', title: 'Migrate tokens' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK42 };
+        return { ok: true, json: async () => crossLevel };
+      }),
+    );
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+    expect(await screen.findByText('MOTIR-42')).toBeTruthy(); // the ghost anchor
+    expect(screen.queryByRole('dialog')).toBeNull(); // nothing peeked yet
+    // Selecting the anchor surfaces the View affordance but does NOT open the peek
+    // (a bare click only selects, exactly like every other card — AC #1).
+    fireEvent.keyDown(el('X9')!, { key: 'Enter' });
+    expect(await screen.findByTestId('view-button')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Clicking View opens the peek and streams the BLOCKER in by its identifier.
+    fireEvent.click(screen.getByTestId('view-button'));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId('quick-view-open-full').getAttribute('href')).toBe(
+        '/items/MOTIR-42',
+      ),
+    );
+  });
 });
