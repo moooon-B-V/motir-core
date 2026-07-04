@@ -1,7 +1,11 @@
 import type { GithubIdentity, GithubInstallation, GithubRepo } from '@prisma/client';
-import type { GithubIdentityDTO, GithubInstallationDTO, GithubRepoDTO } from '@/lib/dto/github';
+import type {
+  GithubIdentityDTO,
+  GithubInstallationDTO,
+  GithubRepoDTO,
+  LinkedPullRequestDto,
+} from '@/lib/dto/github';
 import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
-import type { QuickViewPullRequestDto } from '@/lib/dto/quickView';
 import { derivePrCiState } from '@/lib/github/prCiState';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
@@ -52,9 +56,7 @@ export function toGithubInstallationDTO(
  * derives from the check rows at the latest recorded commit, and the link-out
  * URL is composed here so the client never string-builds it.
  */
-export function toQuickViewPullRequestDto(
-  row: GithubPullRequestWithContext,
-): QuickViewPullRequestDto {
+export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): LinkedPullRequestDto {
   return {
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,

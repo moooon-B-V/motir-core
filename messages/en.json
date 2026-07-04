@@ -4381,6 +4381,7 @@
     },
     "development": {
       "title": "Development",
+      "gloss": "Linked pull requests · live PR and CI status",
       "emptyTitle": "No linked pull request",
       "emptyDescription": "Open a PR from a branch that mentions <mono>{key}</mono> and it'll show up here with live PR and CI status.",
       "autoLinkCaption": "Linked automatically when a branch or PR mentions <mono>{key}</mono>.",

@@ -7,6 +7,7 @@ import type {
   WorkItemRefMap,
 } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
+import type { LinkedPullRequestDto } from '@/lib/dto/github';
 
 // The quick-view (peek) payload (Subtask 2.5.19; bug 8.8.2). A serializable,
 // already-shaped slice of the detail read that the /api/work-items/peek route
@@ -23,28 +24,6 @@ import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 // Still read-only (one write path: Open full page); the heavier sections
 // (Explanation, children, the full relationships panel, attachments, comments)
 // stay detail-only.
-
-/**
- * One linked pull request on the Development section (Story 7.10 ·
- * MOTIR-1579, design/github Panel 3) — display-ready: the title fallback,
- * merged/closed collapse, per-PR CI derivation, and link-out URL are all
- * resolved server-side so the panel stays purely presentational.
- */
-export interface QuickViewPullRequestDto {
-  /** The PR title, falling back to its head branch for rows ingested before
-   *  title capture (MOTIR-1579). */
-  title: string;
-  /** `owner/name` — the pr-meta line's repo half. */
-  repo: string;
-  number: number;
-  /** Display state: `merged` wins over the raw open/closed pair. */
-  state: 'open' | 'merged' | 'closed';
-  /** Per-PR CI at its latest recorded commit (lib/github/prCiState) — null
-   *  renders NO CI pill (absence of CI is not a state). */
-  ci: 'passing' | 'failing' | 'running' | null;
-  /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
-  url: string;
-}
 
 /** The serializable payload the peek renders (a condensed slice of the detail read). */
 export interface QuickViewData {
@@ -125,5 +104,5 @@ export interface QuickViewData {
    * newest-updated first. Empty → the section renders its EmptyState
    * (design/github Panel 4a).
    */
-  pullRequests: QuickViewPullRequestDto[];
+  pullRequests: LinkedPullRequestDto[];
 }

@@ -12,8 +12,9 @@ import { truncateAuthTables } from '../helpers/db';
 // Story 7.10 · MOTIR-1579 — the Development surface's READ PATH, as an
 // integration SEAM test: what the webhook ingestion WRITES (PR rows + title +
 // check rows, MOTIR-892/894 + this card's captures) is read BACK through the
-// next consumer's DTO (`getQuickView().pullRequests`), so a key/shape drift
-// between writer and reader fails here, not in the browser. Real Postgres.
+// next consumers' DTOs — `getQuickView().pullRequests` (the peek) and
+// `listLinkedPullRequests` (the detail page) — so a key/shape drift between
+// writer and reader fails here, not in the browser. Real Postgres.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-dev-surface';
@@ -165,6 +166,11 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         url: 'https://github.com/moooon/acme/pull/41',
       },
     ]);
+
+    // The detail page's read (same service method) returns the identical shape.
+    const itemRow = await db.workItem.findFirst({ where: { title: 'A tracked change' } });
+    const detailPrs = await workItemsService.listLinkedPullRequests(itemRow!.id);
+    expect(detailPrs).toEqual(peek.pullRequests);
   });
 
   it('a merged PR reads back state "merged", and a pre-capture row (null title) falls back to its head branch', async () => {
