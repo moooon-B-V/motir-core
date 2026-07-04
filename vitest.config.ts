@@ -243,6 +243,15 @@ export default defineConfig({
         'lib/mcp/tools/updateWorkItem.ts',
         'lib/mcp/tools/archiveWorkItem.ts',
         'lib/mcp/tools/deleteWorkItem.ts',
+        // Story 7.10 · Subtask 7.10.8 (MOTIR-896) — the GitHub integration's
+        // webhook state machine + installation grant mirror + code-graph feed
+        // dispatch + the planning-envelope repo-set producer join the gate.
+        'lib/services/githubWebhookService.ts',
+        'lib/services/githubInstallationService.ts',
+        'lib/services/codeGraphIndexService.ts',
+        'lib/github/indexEnqueue.ts',
+        'lib/github/webhookSignature.ts',
+        'lib/ai/codeContext.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -430,6 +439,18 @@ export default defineConfig({
         'lib/mcp/tools/transitionStatus.ts': { functions: 90, lines: 90 },
         'lib/mcp/tools/nextReady.ts': { functions: 90, lines: 90 },
         'lib/mcp/tools/completeSession.ts': { functions: 90, lines: 90 },
+        // Story 7.10 · Subtask 7.10.8 (MOTIR-896) — the GitHub integration gate:
+        // no untested branch in the webhook state machine or the feed dispatch.
+        'lib/services/githubWebhookService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/githubInstallationService.ts': { branches: 90, functions: 90, lines: 90 },
+        // codeGraphIndexService gates on functions + lines only: its
+        // `workspace_missing` arm is DEFENSIVE and unreachable under shipped
+        // invariants (GithubInstallation.workspace cascades on delete, so an
+        // installation row can never outlive its workspace).
+        'lib/services/codeGraphIndexService.ts': { functions: 90, lines: 90 },
+        'lib/github/indexEnqueue.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/webhookSignature.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ai/codeContext.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

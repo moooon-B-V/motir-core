@@ -192,6 +192,51 @@ describe('githubInstallationService.mintAccessTokenForWorkspace', () => {
     });
     expect(tok).toBeNull();
   });
+
+  it('a minted token is NEVER persisted — no github row carries it (negative DB read, MOTIR-896)', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    vi.stubEnv('GITHUB_APP_ID', '999');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async (): Promise<Response> =>
+          new Response(
+            JSON.stringify({
+              token: 'ghs_never_persist_me',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
+
+    const { user, workspace } = await makeWorkspace('f@example.com');
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-10', accountLogin: 'moooon', accountType: 'User' },
+      repos: [REPO_A, REPO_B],
+    });
+    const tok = await githubInstallationService.mintAccessTokenForWorkspace({
+      userId: user.id,
+      workspaceId: workspace.id,
+    });
+    expect(tok?.token).toBe('ghs_never_persist_me');
+
+    // The schema carries no token column (the appAuth cache is in-memory only);
+    // this negative read pins that — a future column/write that persists the
+    // minted token long-lived would surface it in a raw row dump and fail here.
+    const rows = await withSystemContext(async (tx) => ({
+      installations: await tx.githubInstallation.findMany(),
+      repos: await tx.githubRepo.findMany(),
+    }));
+    expect(rows.installations.length).toBeGreaterThan(0);
+    expect(JSON.stringify(rows)).not.toContain('ghs_never_persist_me');
+  });
 });
 
 describe('githubInstallationService.bindInstallationForWorkspace', () => {
@@ -231,6 +276,32 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
   }
+
+  it('a RE-bind of an already-persisted installation enqueues only the newly-granted repos (MOTIR-896)', async () => {
+    stubGithubFetch();
+    const { inngest } = await import('@/lib/jobs/client');
+    const send = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
+    const { workspace } = await makeWorkspace('rebind@example.com');
+    // Repo 111 is already mirrored; the seam returns 111 + 222 — only 222 is new.
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: { installationId: 'inst-bind', accountLogin: 'moooon', accountType: 'User' },
+      repos: [REPO_A],
+    });
+
+    const dto = await githubInstallationService.bindInstallationForWorkspace({
+      workspaceId: workspace.id,
+      installationId: 'inst-bind',
+    });
+
+    expect(dto.repos.map((r) => r.name).sort()).toEqual(['motir-ai', 'motir-core']);
+    const indexSends = send.mock.calls.filter(
+      (c) => (c[0] as { name: string }).name === 'system.code-graph-index',
+    );
+    expect(indexSends.map((c) => (c[0] as { data: { repoName: string } }).data.repoName)).toEqual([
+      'motir-ai',
+    ]);
+  });
 
   it('binds a fresh install: fetches account + repos through the seam and persists them', async () => {
     stubGithubFetch();
