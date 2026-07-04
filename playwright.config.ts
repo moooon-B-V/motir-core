@@ -1,6 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
+import {
+  E2E_GITHUB_APP_SLUG,
+  E2E_GITHUB_CLIENT_ID,
+  E2E_GITHUB_CLIENT_SECRET,
+  E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  E2E_GITHUB_WEBHOOK_SECRET,
+} from './tests/e2e/_helpers/github-const';
 
 // Playwright doesn't pick up .env automatically the way Next.js does. The
 // spec files import @/lib/db (via _helpers/db-reset) for DB assertions,
@@ -221,6 +228,17 @@ export default defineConfig({
         // Subtask 3.5.1: the board load-model overrides, forwarded from the run's
         // env only when set (empty by default — see BOARD_LOAD_SEAM_ENV above).
         ...BOARD_LOAD_SEAM_ENV,
+        // Story 7.10 · MOTIR-897: the GitHub-integration E2E lane. The webhook
+        // secret is the SAME value the spec's signWebhook uses (shared via
+        // tests/e2e/_helpers/github-const.ts), so the real 7.10.4 signature
+        // gate runs against the spec's signed POSTs. The OAuth app creds are
+        // synthetic — the code→token exchange + /user read never leave the
+        // process (E2E_TEST_OAUTH's MockAgent above intercepts GitHub too).
+        GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
+        GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
+        GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
+        GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+        GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
       },
     },
     {
