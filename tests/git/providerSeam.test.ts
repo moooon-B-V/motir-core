@@ -240,3 +240,51 @@ describe('github.fetchRepoTarball (MOTIR-1500)', () => {
     );
   });
 });
+
+describe('github.parsePushEvent (MOTIR-893)', () => {
+  const SHA = 'f'.repeat(40);
+
+  it('normalizes a branch push (short branch name + head sha)', () => {
+    expect(
+      github.parsePushEvent({
+        ref: 'refs/heads/main',
+        after: SHA,
+        repository: { id: 555 },
+      }),
+    ).toEqual({ providerRepoId: '555', branch: 'main', headSha: SHA });
+  });
+
+  it('keeps a slashed branch name intact', () => {
+    expect(
+      github.parsePushEvent({
+        ref: 'refs/heads/subtask/MOTIR-893-feed',
+        after: SHA,
+        repository: { id: 555 },
+      }),
+    ).toMatchObject({ branch: 'subtask/MOTIR-893-feed' });
+  });
+
+  it('returns null for a tag push, a branch deletion, and a malformed body', () => {
+    expect(
+      github.parsePushEvent({ ref: 'refs/tags/v1.0.0', after: SHA, repository: { id: 555 } }),
+    ).toBeNull();
+    expect(
+      github.parsePushEvent({
+        ref: 'refs/heads/main',
+        deleted: true,
+        after: '0'.repeat(40),
+        repository: { id: 555 },
+      }),
+    ).toBeNull();
+    expect(github.parsePushEvent({ ref: 'refs/heads/main', after: SHA })).toBeNull(); // no repo
+    expect(github.parsePushEvent('not an object')).toBeNull();
+  });
+
+  it('normalizes a missing/empty after to headSha null', () => {
+    expect(github.parsePushEvent({ ref: 'refs/heads/main', repository: { id: 555 } })).toEqual({
+      providerRepoId: '555',
+      branch: 'main',
+      headSha: null,
+    });
+  });
+});

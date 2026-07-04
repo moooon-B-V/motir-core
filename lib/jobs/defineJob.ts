@@ -114,6 +114,14 @@ export type DefineJobOptions<N extends JobEventName> = JobIdAndTrigger<N> & {
    */
   idempotency?: string;
   /**
+   * Optional debounce (MOTIR-893) — forwarded to Inngest, which delays the run
+   * until `period` has passed with no further same-`key` event, then runs ONCE
+   * with the LATEST event (rapid same-key events coalesce). `key` is an event
+   * expression (e.g. `"event.data.installationId"`); `timeout` optionally caps
+   * the total delay so a steady event stream can't defer the run forever.
+   */
+  debounce?: { key: string; period: string; timeout?: string };
+  /**
    * Optional cron expression (1.6.4). When set, the job is SCHEDULED rather
    * than event-triggered: Inngest invokes it on the cron, and the wrapper
    * records the ledger row's `event_name` as `scheduled.{id}` so the dashboard
@@ -138,7 +146,7 @@ export function defineJob<N extends JobEventName>(
   options: DefineJobOptions<N>,
   handler: JobHandler,
 ) {
-  const { id, concurrency, idempotency, cron } = options;
+  const { id, concurrency, idempotency, debounce, cron } = options;
   // The event this function subscribes to: the id itself (1:1 convention) or
   // the explicit `trigger` of an additional consumer.
   const triggerEvent = options.trigger ?? id;
@@ -195,6 +203,7 @@ export function defineJob<N extends JobEventName>(
     onFailure,
     ...(concurrency !== undefined ? { concurrency: { limit: concurrency } } : {}),
     ...(idempotency !== undefined ? { idempotency } : {}),
+    ...(debounce !== undefined ? { debounce } : {}),
   } as Parameters<typeof inngest.createFunction>[0];
 
   return inngest.createFunction(config, async (ctx: JobContext) => {

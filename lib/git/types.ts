@@ -77,6 +77,17 @@ export interface NormalizedStatusEvent {
   headBranch: string | null;
 }
 
+/** A push to a repository branch, normalized across providers — consumed by the
+ *  code-graph feed (MOTIR-893) to refresh a connected repo's graph when its
+ *  default branch moves. `branch` is the SHORT branch name (a tag / non-branch
+ *  push does not normalize — the parser returns null for it); `headSha` is the
+ *  post-push head commit when the payload carries one. */
+export interface NormalizedPushEvent {
+  providerRepoId: string;
+  branch: string;
+  headSha: string | null;
+}
+
 /** A short-lived installation access token, minted on demand and cached
  *  in-memory only — NEVER persisted (the card's hard requirement). */
 export interface InstallationToken {
