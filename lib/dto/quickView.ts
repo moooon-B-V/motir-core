@@ -24,6 +24,28 @@ import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 // (Explanation, children, the full relationships panel, attachments, comments)
 // stay detail-only.
 
+/**
+ * One linked pull request on the Development section (Story 7.10 ·
+ * MOTIR-1579, design/github Panel 3) — display-ready: the title fallback,
+ * merged/closed collapse, per-PR CI derivation, and link-out URL are all
+ * resolved server-side so the panel stays purely presentational.
+ */
+export interface QuickViewPullRequestDto {
+  /** The PR title, falling back to its head branch for rows ingested before
+   *  title capture (MOTIR-1579). */
+  title: string;
+  /** `owner/name` — the pr-meta line's repo half. */
+  repo: string;
+  number: number;
+  /** Display state: `merged` wins over the raw open/closed pair. */
+  state: 'open' | 'merged' | 'closed';
+  /** Per-PR CI at its latest recorded commit (lib/github/prCiState) — null
+   *  renders NO CI pill (absence of CI is not a state). */
+  ci: 'passing' | 'failing' | 'running' | null;
+  /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
+  url: string;
+}
+
 /** The serializable payload the peek renders (a condensed slice of the detail read). */
 export interface QuickViewData {
   identifier: string;
@@ -98,4 +120,10 @@ export interface QuickViewData {
     blockers: string[];
     blockedByAncestor: { identifier: string; title: string } | null;
   } | null;
+  /**
+   * The Development section's linked PRs (Story 7.10 · MOTIR-1579),
+   * newest-updated first. Empty → the section renders its EmptyState
+   * (design/github Panel 4a).
+   */
+  pullRequests: QuickViewPullRequestDto[];
 }

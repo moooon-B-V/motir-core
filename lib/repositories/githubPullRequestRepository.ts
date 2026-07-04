@@ -1,4 +1,10 @@
-import { type GithubPullRequest, type Prisma } from '@prisma/client';
+import {
+  type GithubCheckRun,
+  type GithubPullRequest,
+  type GithubRepo,
+  type Prisma,
+} from '@prisma/client';
+import { db } from '@/lib/db';
 
 // GitHub pull-request repository — single Prisma operations on the
 // `github_pull_request` table (Story 7.10 · MOTIR-891). `repoId` is the INTERNAL
@@ -11,8 +17,17 @@ export interface UpsertGithubPullRequestInput {
   state: string;
   merged: boolean;
   headRef: string;
+  title: string | null;
   workItemId: string | null;
 }
+
+/** A PR row with the context the Development surface renders (MOTIR-1579):
+ *  its repo (owner/name for the meta line + link-out) and its check rows
+ *  (the per-PR CI state derivation). */
+export type GithubPullRequestWithContext = GithubPullRequest & {
+  repo: GithubRepo;
+  checkRuns: GithubCheckRun[];
+};
 
 export const githubPullRequestRepository = {
   /** One PR by its `(repo, number)` identity, or null. */
@@ -38,6 +53,16 @@ export const githubPullRequestRepository = {
     return tx.githubPullRequest.findFirst({
       where: { repoId, headRef },
       orderBy: [{ state: 'desc' }, { updatedAt: 'desc' }],
+    });
+  },
+
+  /** A work item's linked PRs, newest-updated first, with the repo + check rows
+   *  the Development surface renders (MOTIR-1579). Read-only path → `db`. */
+  async listByWorkItemWithContext(workItemId: string): Promise<GithubPullRequestWithContext[]> {
+    return db.githubPullRequest.findMany({
+      where: { workItemId },
+      include: { repo: true, checkRuns: true },
+      orderBy: { updatedAt: 'desc' },
     });
   },
 

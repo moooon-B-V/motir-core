@@ -4378,6 +4378,23 @@
       "reconnect": "Reconnect GitHub",
       "install": "Install the Motir GitHub App",
       "stillConnected": "Identity connected · repository access not granted"
+    },
+    "development": {
+      "title": "Development",
+      "emptyTitle": "No linked pull request",
+      "emptyDescription": "Open a PR from a branch that mentions <mono>{key}</mono> and it'll show up here with live PR and CI status.",
+      "autoLinkCaption": "Linked automatically when a branch or PR mentions <mono>{key}</mono>.",
+      "openOnGithub": "Open on GitHub",
+      "prState": {
+        "open": "Open",
+        "merged": "Merged",
+        "closed": "Closed"
+      },
+      "ciState": {
+        "passing": "Checks passing",
+        "failing": "Checks failing",
+        "running": "Checks running"
+      }
     }
   },
   "aiPlanning": {

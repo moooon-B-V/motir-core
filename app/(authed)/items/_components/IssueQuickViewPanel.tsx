@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { DevelopmentSection } from '@/components/github/DevelopmentSection';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
@@ -314,6 +315,15 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           ) : (
             <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
           )}
+          {/* Development — linked PRs + PR/CI state (Story 7.10 · MOTIR-1579,
+              design/github Panels 3 + 4a). Display-only here (the peek's one
+              write path stays "Open full page"); the explicit-link affordance
+              lives on the detail page (MOTIR-1596, design Panel 5). */}
+          <DevelopmentSection
+            className="mt-6"
+            pullRequests={data.pullRequests}
+            itemIdentifier={data.identifier}
+          />
           <p className="mt-6 flex items-center gap-1.5 border-t border-(--el-border-soft) pt-4 text-[13px] text-(--el-text-muted)">
             {t.rich('quickViewMore', {
               link: (chunks) => (

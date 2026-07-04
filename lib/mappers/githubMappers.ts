@@ -1,5 +1,8 @@
 import type { GithubIdentity, GithubInstallation, GithubRepo } from '@prisma/client';
 import type { GithubIdentityDTO, GithubInstallationDTO, GithubRepoDTO } from '@/lib/dto/github';
+import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
+import type { QuickViewPullRequestDto } from '@/lib/dto/quickView';
+import { derivePrCiState } from '@/lib/github/prCiState';
 
 // Prisma → DTO conversion for the GitHub integration (Story 7.10 · MOTIR-1498 /
 // MOTIR-891). The mapper is the enforcement point for "no secret crosses the API
@@ -39,5 +42,25 @@ export function toGithubInstallationDTO(
     accountType: installation.accountType,
     repos: repos.map(toGithubRepoDTO),
     createdAt: installation.createdAt.toISOString(),
+  };
+}
+
+/**
+ * A linked PR row → the Development surface's display-ready shape (Story 7.10
+ * · MOTIR-1579): title falls back to the head branch (pre-capture rows carry
+ * no title), `merged` collapses the raw open/closed pair, the per-PR CI state
+ * derives from the check rows at the latest recorded commit, and the link-out
+ * URL is composed here so the client never string-builds it.
+ */
+export function toQuickViewPullRequestDto(
+  row: GithubPullRequestWithContext,
+): QuickViewPullRequestDto {
+  return {
+    title: row.title ?? row.headRef,
+    repo: `${row.repo.owner}/${row.repo.name}`,
+    number: row.number,
+    state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
+    ci: derivePrCiState(row.checkRuns),
+    url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
   };
 }

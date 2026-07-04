@@ -1,6 +1,6 @@
 import type { IssueDetailDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import type { QuickViewData } from '@/lib/dto/quickView';
+import type { QuickViewData, QuickViewPullRequestDto } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -31,6 +31,7 @@ export function toQuickViewData(
   sprintName: string | null,
   workItemRefs: WorkItemRefMap,
   projectIdentifier: string,
+  pullRequests: QuickViewPullRequestDto[],
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -73,5 +74,6 @@ export function toQuickViewData(
           }
         : null,
     },
+    pullRequests,
   };
 }

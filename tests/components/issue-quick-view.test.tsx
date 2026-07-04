@@ -62,6 +62,7 @@ const DATA: QuickViewData = {
   updatedAt: '2026-06-10T00:00:00.000Z',
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
   readiness: null,
+  pullRequests: [],
 };
 
 // The /items row peek-on-click (the per-row eye `QuickViewTrigger` was removed
@@ -70,6 +71,69 @@ const DATA: QuickViewData = {
 // `RelationshipPeekLink` in relationships-panel.test.tsx, and the row-link wiring
 // (List + Tree: plain click → peek, ⌘/ctrl-click → detail page) is covered
 // end-to-end by issue-list-flow.spec.ts.
+
+describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
+  it('renders the EmptyState when the item has no linked PR (design Panel 4a)', () => {
+    render(<IssueQuickViewPanel state="ready" data={DATA} />);
+    const section = screen.getByTestId('development-section');
+    expect(section.textContent).toContain('Development');
+    expect(section.textContent).toContain('No linked pull request');
+    // The quiet copy names the item's key.
+    expect(section.textContent).toContain('PROD-7');
+  });
+
+  it('renders pr-rows with the PR-state + CI-state pills, meta, and the external link-out (design Panel 3)', () => {
+    const data: QuickViewData = {
+      ...DATA,
+      pullRequests: [
+        {
+          title: 'Add per-route rate limiting',
+          repo: 'moooon/motir-core',
+          number: 131,
+          state: 'merged',
+          ci: 'passing',
+          url: 'https://github.com/moooon/motir-core/pull/131',
+        },
+        {
+          title: 'Throttle burst traffic on /v1',
+          repo: 'moooon/motir-gateway',
+          number: 57,
+          state: 'open',
+          ci: 'running',
+          url: 'https://github.com/moooon/motir-gateway/pull/57',
+        },
+        {
+          title: 'Spike: webhook signatures',
+          repo: 'moooon/motir-core',
+          number: 119,
+          state: 'closed',
+          ci: null, // no CI recorded → NO CI pill
+          url: 'https://github.com/moooon/motir-core/pull/119',
+        },
+      ],
+    };
+    render(<IssueQuickViewPanel state="ready" data={data} />);
+    const section = screen.getByTestId('development-section');
+    // State is conveyed by TEXT (pill labels), not colour alone (AA).
+    expect(section.textContent).toContain('Add per-route rate limiting');
+    expect(section.textContent).toContain('moooon/motir-core · #131');
+    expect(section.textContent).toContain('Merged');
+    expect(section.textContent).toContain('Checks passing');
+    expect(section.textContent).toContain('Open');
+    expect(section.textContent).toContain('Checks running');
+    expect(section.textContent).toContain('Closed');
+    // The null-CI row renders NO CI pill: exactly two "Checks …" pills total.
+    expect(section.textContent!.match(/Checks /g)).toHaveLength(2);
+    // Each row links out to the PR in a new tab.
+    const out = screen.getAllByRole('link', { name: 'Open on GitHub' });
+    expect(out).toHaveLength(3);
+    expect(out[0]!.getAttribute('href')).toBe('https://github.com/moooon/motir-core/pull/131');
+    expect(out[0]!.getAttribute('target')).toBe('_blank');
+    expect(out[0]!.getAttribute('rel')).toContain('noopener');
+    // The auto-link caption names the item's key.
+    expect(section.textContent).toContain('Linked automatically');
+  });
+});
 
 describe('IssueQuickViewPanel — populated (ready)', () => {
   it('renders the item title + status + assignee', () => {

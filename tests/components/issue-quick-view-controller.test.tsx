@@ -56,6 +56,7 @@ const DATA: QuickViewData = {
   updatedAt: '2026-06-10T00:00:00.000Z',
   parent: { identifier: 'PROD-1', title: 'Q3 launch', kind: 'epic' },
   readiness: null,
+  pullRequests: [],
 };
 
 afterEach(() => {

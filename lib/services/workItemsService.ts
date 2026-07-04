@@ -78,6 +78,8 @@ import {
 } from '@/lib/mappers/workItemMappers';
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
+import { toQuickViewPullRequestDto } from '@/lib/mappers/githubMappers';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { Locale } from '@/lib/i18n/locales';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
@@ -3073,7 +3075,14 @@ export const workItemsService = {
       projectId,
       ctx,
     );
-    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix);
+    // The Development section's linked PRs (MOTIR-1579) — repo + check rows in
+    // one read; the mapper derives the display state + per-PR CI. Tenancy rides
+    // the detail read above: the PR link is keyed by the item's internal id,
+    // which getIssueDetail already gated to the caller's workspace.
+    const pullRequests = (
+      await githubPullRequestRepository.listByWorkItemWithContext(detail.item.id)
+    ).map(toQuickViewPullRequestDto);
+    return toQuickViewData(detail, members, locale, sprintName, workItemRefs, prefix, pullRequests);
   },
 
   /**

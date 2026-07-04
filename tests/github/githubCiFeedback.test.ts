@@ -15,7 +15,8 @@ import { truncateAuthTables } from '../helpers/db';
 // the item's `ciState` verification signal; idempotency on (pr, headSha,
 // checkName) under redelivery AND a re-run that changes conclusion (comment
 // updated in place, never duplicated); the clean no-op paths (a PR with no linked
-// work item, a non-terminal/pending conclusion); PR resolution by the payload's
+// work item; a NEUTRAL conclusion), the pending-RECORDED path (MOTIR-1579 —
+// a pending row for the Development surface, with no terminal side-effects); PR resolution by the payload's
 // PR-number list AND the head-branch fallback; and the Story-level "N of M
 // verified" roll-up computed via the EXISTING `getProjectRoadmap` progress
 // aggregation (not a parallel path).
@@ -262,7 +263,7 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(await ciStateOf(item.id)).toBeNull();
   });
 
-  it('a non-terminal (pending) conclusion is ignored — no comment, no signal', async () => {
+  it('an in-flight (pending) conclusion is RECORDED as a pending row — still no comment, no signal (MOTIR-1579)', async () => {
     const s = await makeScenario('pending@example.com');
     const item = await workItemsService.createWorkItem(
       { projectId: s.project.id, kind: 'task', title: 'A change' },
@@ -279,9 +280,82 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
         prNumbers: [7],
       }),
     );
-    expect(res).toMatchObject({ event: 'ci', outcome: 'ignored_pending' });
+    // The row exists (the Development surface derives "Checks running" from
+    // it) but the TERMINAL side-effects stay terminal-only (MOTIR-894): no
+    // feedback comment, no ciState flip.
+    expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
+    const rows = await db.githubCheckRun.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!).toMatchObject({ conclusion: 'pending', feedbackCommentId: null });
     expect(await commentsOn(item.id)).toHaveLength(0);
     expect(await ciStateOf(item.id)).toBeNull();
+  });
+
+  it('a NEUTRAL (skipped / stale) conclusion stays a full no-op — nothing recorded', async () => {
+    const s = await makeScenario('neutral@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    const res = await githubWebhookService.handleEvent(
+      'check_suite',
+      checkSuitePayload({ conclusion: 'neutral', headSha: 'sha1', prNumbers: [7] }),
+    );
+    expect(res).toMatchObject({ event: 'ci', outcome: 'ignored_pending' });
+    expect(await db.githubCheckRun.count()).toBe(0);
+    expect(await commentsOn(item.id)).toHaveLength(0);
+    expect(await ciStateOf(item.id)).toBeNull();
+  });
+
+  it('a pending RE-RUN preserves the feedback-comment link, and the later terminal conclusion updates that SAME comment', async () => {
+    const s = await makeScenario('pending-rerun@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+
+    // 1. Terminal success → the passing note + ciState 'passing'.
+    await githubWebhookService.handleEvent(
+      'check_suite',
+      checkSuitePayload({ conclusion: 'success', headSha: 'sha1', prNumbers: [7] }),
+    );
+    const afterSuccess = await commentsOn(item.id);
+    expect(afterSuccess).toHaveLength(1);
+    expect(await ciStateOf(item.id)).toBe('passing');
+
+    // 2. A re-run starts (pending at the SAME pr/sha/check): the row converges
+    //    to 'pending' but KEEPS the comment link, and the item's terminal-only
+    //    signal is untouched.
+    const pendingRes = await githubWebhookService.handleEvent(
+      'check_suite',
+      checkSuitePayload({
+        conclusion: null,
+        status: 'in_progress',
+        headSha: 'sha1',
+        prNumbers: [7],
+      }),
+    );
+    expect(pendingRes).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
+    const rows = await db.githubCheckRun.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.conclusion).toBe('pending');
+    expect(rows[0]!.feedbackCommentId).toBe(afterSuccess[0]!.id);
+    expect(await ciStateOf(item.id)).toBe('passing'); // terminal-only signal untouched
+
+    // 3. The re-run concludes FAILURE → the SAME comment updates in place
+    //    (never a duplicate) and the signal flips.
+    await githubWebhookService.handleEvent(
+      'check_suite',
+      checkSuitePayload({ conclusion: 'failure', headSha: 'sha1', prNumbers: [7] }),
+    );
+    const afterFailure = await commentsOn(item.id);
+    expect(afterFailure).toHaveLength(1);
+    expect(afterFailure[0]!.id).toBe(afterSuccess[0]!.id);
+    expect(afterFailure[0]!.bodyMd).toContain('CI failed');
+    expect(await ciStateOf(item.id)).toBe('failing');
   });
 
   it('resolves the PR by HEAD BRANCH when the payload carries no PR-number list', async () => {

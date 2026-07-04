@@ -105,7 +105,8 @@ export type GithubWebhookResult =
         | 'verified' // a terminal SUCCESS → passing note + ciState 'passing'
         | 'failed' // a terminal FAILURE → failure summary + ciState 'failing'
         | 'noop' // a redelivery of an already-recorded conclusion
-        | 'ignored_pending' // a non-terminal (pending) or neutral conclusion
+        | 'pending_recorded' // an in-flight check RECORDED as a pending row (MOTIR-1579) — no comment, no ciState
+        | 'ignored_pending' // a neutral (skipped / stale) conclusion — a clean no-op
         | 'no_pull_request' // no stored PR matches the check's PR list / branch
         | 'no_work_item' // the PR carries no linked work item — a clean no-op
         | 'unknown_installation'
@@ -209,6 +210,7 @@ export const githubWebhookService = {
             state: cr.state,
             merged: cr.merged,
             headRef: cr.headRef,
+            title: cr.title,
             workItemId: workItem?.id ?? null,
           },
           tx,
@@ -224,6 +226,7 @@ export const githubWebhookService = {
             state: cr.state,
             merged: cr.merged,
             headRef: cr.headRef,
+            title: cr.title,
             workItemId: workItem?.id ?? null,
           },
           tx,
@@ -345,9 +348,12 @@ export const githubWebhookService = {
     const event = provider.parseCiStatusEvent(body);
     if (!event) return { event: 'ci', outcome: 'malformed' };
 
-    // Act only on a TERMINAL, meaningful conclusion. `pending` (still running) and
-    // `neutral` (skipped / stale) carry no verification signal — a logged no-op.
-    if (event.conclusion !== 'success' && event.conclusion !== 'failure') {
+    // `neutral` (skipped / stale) carries no signal at all — a logged no-op.
+    // `pending` (still running) carries no VERIFICATION signal (no comment, no
+    // ciState flip — those stay terminal-only, MOTIR-894) but IS recorded as a
+    // check row below, so the Development surface can derive "Checks running"
+    // (MOTIR-1579).
+    if (event.conclusion === 'neutral') {
       return { event: 'ci', outcome: 'ignored_pending' };
     }
 
@@ -408,6 +414,29 @@ export const githubWebhookService = {
     if (resolved.kind === 'unknown_repo') return { event: 'ci', outcome: 'unknown_repo' };
     if (resolved.kind === 'no_pull_request') return { event: 'ci', outcome: 'no_pull_request' };
     if (resolved.kind === 'no_work_item') return { event: 'ci', outcome: 'no_work_item' };
+
+    // An in-flight check: RECORD the row (conclusion 'pending') so the per-PR
+    // "Checks running" state is derivable (MOTIR-1579), but with NONE of the
+    // terminal side-effects — no feedback comment, no `WorkItem.ciState` flip
+    // (both stay terminal-only, the MOTIR-894 contract). The upsert PRESERVES an
+    // existing feedback-comment link so a re-run's later terminal conclusion
+    // still updates the same comment in place.
+    if (event.conclusion === 'pending') {
+      await withSystemContext(async (tx) => {
+        await githubCheckRunRepository.upsert(
+          {
+            pullRequestId: resolved.prId,
+            commitSha: event.commitSha,
+            checkName: event.context,
+            conclusion: 'pending',
+            feedbackCommentId: resolved.existing?.feedbackCommentId ?? null,
+          },
+          tx,
+        );
+      });
+      return { event: 'ci', outcome: 'pending_recorded', workItemId: resolved.workItemId };
+    }
+
     if (!resolved.actorUserId)
       // No workspace owner to author the feedback comment — nothing to attribute.
       return { event: 'ci', outcome: 'no_work_item', workItemId: resolved.workItemId };
@@ -468,6 +497,8 @@ export const githubWebhookService = {
         tx,
       );
       return deriveCiState(rows.map((r) => r.conclusion));
+      // (deriveCiState ignores non-terminal conclusions — pending rows at this
+      // sha, recorded for the Development surface, never gate the verdict.)
     });
 
     // Flip the verification signal through the service (no raw work_item write).
@@ -501,9 +532,11 @@ async function resolvePullRequest(
   return null;
 }
 
-/** The work item's aggregate CI signal from its terminal check conclusions at one
- *  commit: any failure → 'failing'; else at least one success → 'passing'; else
- *  null. Only success/failure rows are ever stored, so this is total over them. */
+/** The work item's aggregate CI signal from its TERMINAL check conclusions at
+ *  one commit: any failure → 'failing'; else at least one success → 'passing';
+ *  else null. Non-terminal rows ('pending', recorded for the Development
+ *  surface since MOTIR-1579) match neither predicate, so they never gate the
+ *  verdict — a commit with only pending rows stays null. */
 function deriveCiState(conclusions: string[]): 'passing' | 'failing' | null {
   if (conclusions.some((c) => c === 'failure')) return 'failing';
   if (conclusions.some((c) => c === 'success')) return 'passing';
