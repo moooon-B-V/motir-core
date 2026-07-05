@@ -116,6 +116,8 @@ CSV carries **only what its columns provide**; the resolver treats a missing col
 
 ### 3 · Idempotent re-run — the explicit external-id map
 
+**Lifecycle: a one-shot MIGRATION that is re-runnable on demand — NOT a continuous/live sync, and one-directional (source → Motir, never write-back).** The import is a discrete run (connect → map → dry-run → confirm → execute), even when connected over a live API — the API is queried per-run, not held open to stream changes. There is **no background polling, no webhook-driven mirroring, and no bidirectional sync**: Motir is the destination the project is _moving into_, not a mirror kept in lockstep with the old tracker. This matches every mirror (Linear's `packages/import`, Plane's importer, Jira's CSV import are all one-time migrations, not daemons). What idempotency buys is a safe **manual catch-up**: the user can re-run the same import later — the external-id map below means a re-run UPSERTs (picks up issues created since, re-syncs changed source-owned fields, preserves Motir-local edits per the update policy) instead of duplicating. **Continuous live/two-way sync is explicitly OUT OF SCOPE** here — it is a materially larger, separate capability (webhooks, conflict resolution, field-level ownership, write-back) that would be its own story, not a mode of this importer; we do not half-build it.
+
 Every imported issue carries its source's **stable id** (Jira `PROJ-123`, Linear identifier, GitHub `owner/repo#42`, a CSV id column). The importer persists an explicit map:
 
 ```
