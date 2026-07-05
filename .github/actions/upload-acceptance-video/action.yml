@@ -1,0 +1,38 @@
+name: Upload acceptance video
+description: >
+  Publish a green acceptance E2E's recorded video (+ trace + chapters) to a Motir
+  story as pending acceptance evidence (Story MOTIR-1627, BYOK). Run it AFTER the
+  acceptance E2E step and only on success — a red run records no video, so this is
+  a no-op.
+
+inputs:
+  story-key:
+    description: The story key to attach the evidence to (e.g. MOTIR-1627).
+    required: true
+  token:
+    description: A Motir API token with the `integration` scope (store as a secret).
+    required: true
+  base-url:
+    description: The Motir base URL.
+    required: false
+    default: https://app.motir.co
+  output-dir:
+    description: The Playwright acceptance lane's output dir.
+    required: false
+    default: out/playwright-output-acceptance
+  produced-by:
+    description: The E2E subtask key that produced the video (e.g. MOTIR-1638).
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MOTIR_UPLOAD_TOKEN: ${{ inputs.token }}
+        MOTIR_BASE_URL: ${{ inputs.base-url }}
+        ACCEPTANCE_STORY_KEY: ${{ inputs.story-key }}
+        ACCEPTANCE_OUTPUT_DIR: ${{ inputs.output-dir }}
+        ACCEPTANCE_PRODUCED_BY: ${{ inputs.produced-by }}
+      run: node scripts/upload-acceptance-video.mjs
