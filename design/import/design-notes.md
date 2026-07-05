@@ -19,15 +19,15 @@ This is a `type: design` card that DRAWS a flow, so per the design-content depen
 grounded in the sibling **decision card 7.16.2 (MOTIR-938)**, which locks the durable shape the
 code cards build. Everything drawn here traces to a decision the card records:
 
-| Decision (MOTIR-938) | Where it shows in this design |
-| --- | --- |
-| Four sources behind a connector interface (Jira / Linear / GitHub Issues / CSV); a fifth source is a new connector, not a wizard change | Panel 1 source picker (4 cards) + the "one shape whichever you pick" copy |
-| Live source = OAuth/token + paginated fetch; CSV = uploaded-file parse, no credentials | Panel 1 branch A (site URL + token + source project) / branch B (dropzone + id-column) |
-| Field map: type→kind, status→workflow_status, priority, users-by-email, labels (+ comments/attachments/links/history) | Panel 2 mapping table rows |
-| Unmatched value = a user CHOICE, never a silent drop (status → pick/ default, user → leave unassigned / invite) | Panel 2 "unmatched" / "no match" rows with a required select; the "2 values still need a decision" callout |
+| Decision (MOTIR-938)                                                                                                                                           | Where it shows in this design                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Four sources behind a connector interface (Jira / Linear / GitHub Issues / CSV); a fifth source is a new connector, not a wizard change                        | Panel 1 source picker (4 cards) + the "one shape whichever you pick" copy                                  |
+| Live source = OAuth/token + paginated fetch; CSV = uploaded-file parse, no credentials                                                                         | Panel 1 branch A (site URL + token + source project) / branch B (dropzone + id-column)                     |
+| Field map: type→kind, status→workflow_status, priority, users-by-email, labels (+ comments/attachments/links/history)                                          | Panel 2 mapping table rows                                                                                 |
+| Unmatched value = a user CHOICE, never a silent drop (status → pick/ default, user → leave unassigned / invite)                                                | Panel 2 "unmatched" / "no match" rows with a required select; the "2 values still need a decision" callout |
 | Idempotent re-run via an `(source, external_id) → work_item_id` map; re-run = UPSERT, no duplicate CREATE; re-sync source-owned fields, keep Motir-local edits | Panel 5A re-run preview (0 create · 339 update) + "already imported… your Motir-local edits are kept" copy |
-| Dry-run shares the SAME engine as the real run (preview = run minus writes) | Panel 3 copy "computed with the exact engine the real import uses" |
-| Every persist goes through `workItemsService` (one write authority) | Panel 4 footer "Writing through the normal work-item engine" |
+| Dry-run shares the SAME engine as the real run (preview = run minus writes)                                                                                    | Panel 3 copy "computed with the exact engine the real import uses"                                         |
+| Every persist goes through `workItemsService` (one write authority)                                                                                            | Panel 4 footer "Writing through the normal work-item engine"                                               |
 
 A step the decision does not name is NOT drawn. (If a code card later needs UI the decision didn't
 cover, that is a new `design/` subtask, not an improvisation here.)
@@ -131,7 +131,7 @@ token block is copied 1:1 from `app/globals.css` (Tier-0 → Tier-3 wiring), no 
   `--el-accent-text` glyph).
 - **Branch A (live source):** site URL (mono input), API token (masked, an "Authorized"
   `--el-tint-mint` pill + `--el-success` dot), hint "Stored encrypted, used only for this import."
-  + "How to create a token ↗" link (`--el-link`), source-project combobox.
+  - "How to create a token ↗" link (`--el-link`), source-project combobox.
 - **Branch B (CSV):** dropzone (dashed `--el-border-strong`, `--el-surface-soft`) "Drop a .csv file,
   or click to browse" / "One row per issue · UTF-8 · up to 10 MB"; uploaded file-row with a
   `--el-success` file icon; **"Which column is the issue ID?"** combobox with hint "Used to skip
@@ -173,7 +173,7 @@ token block is copied 1:1 from `app/globals.css` (Tier-0 → Tier-3 wiring), no 
   - **To create** — `--el-tint-mint` bg, `--el-success` dot: "318 · new work items".
   - **To update** — `--el-tint-sky` bg, `--el-info` dot: "21 · already imported before".
   - **To skip** — `--el-surface` bg, `--el-text-faint` dot: "3 · unchanged / no id".
-  Numbers in `--el-text-strong`, serif.
+    Numbers in `--el-text-strong`, serif.
 - **Warnings callout** (`--el-tint-peach` warn): "**7 warnings** — 4 issues have a status you left at
   the default, 3 reference a user who will be left unassigned. They will still import. Review
   warnings" (link `--el-link`).
