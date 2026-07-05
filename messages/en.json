@@ -2,6 +2,16 @@
   "acceptance": {
     "title": "Acceptance",
     "gloss": "review the E2E video",
+    "card": {
+      "title": "Acceptance video",
+      "desc": "Record a short video when a story's E2E passes and attach it to the story for review & approval.",
+      "on": "On",
+      "off": "Off",
+      "requiresPlan": "Requires a paid Motir AI plan",
+      "upgrade": "Upgrade",
+      "saved": "Saved",
+      "saveError": "Couldn't save — try again."
+    },
     "pending": {
       "title": "Waiting for the acceptance video",
       "body": "The story's E2E publishes its recording here on the next green run."

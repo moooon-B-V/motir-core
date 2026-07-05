@@ -11,7 +11,9 @@ import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
+import { billingService } from '@/lib/services/billingService';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
+import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
 import { BillingCard } from './_components/BillingCard';
 import { WorkspaceConfigCard } from './_components/WorkspaceConfigCard';
 import { DangerZoneCard } from './_components/DangerZoneCard';
@@ -77,6 +79,13 @@ export default async function OrganizationSettingsPage() {
     limit: 1,
   });
 
+  // Acceptance-video card (MOTIR-1635): the toggle is only effective with a paid
+  // AI plan (cloud); off-cloud the feature is ungated, so treat it as planned.
+  const hasAcceptancePlan = isCloudBilling()
+    ? (await billingService.getAiAccess({ actorUserId: session.user.id, organizationId: org.id }))
+        .hasPaidAiPlan
+    : true;
+
   return (
     <div className="mx-auto flex max-w-[45rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
@@ -101,6 +110,13 @@ export default async function OrganizationSettingsPage() {
           passive placeholder — cloud-only (ADR §6): off-cloud there is no
           billing surface at all, so the card simply doesn't render. */}
       {isCloudBilling() ? <BillingCard /> : null}
+
+      <AcceptanceVideoCard
+        orgId={org.id}
+        initialEnabled={org.acceptanceVideoEnabled}
+        hasPlan={hasAcceptancePlan}
+        canManage={isAdmin}
+      />
 
       {orgWorkspaces.length <= 1 ? (
         <WorkspaceConfigCard workspaceCount={orgWorkspaces.length} />
