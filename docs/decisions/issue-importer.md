@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-07-05) — drafted by the planner from the decision-authority ladder (mirror products → shipped code → card) and the verified mirrors below; ratified on PR merge.
 - **Story / Subtask:** 7.16 · Issue importer (MOTIR-816) · Subtask 7.16.2 (MOTIR-938)
 - **Supersedes / superseded by:** none. (Supersedes the archived exploratory Story 7.17 / MOTIR-627, which this journey-ordered 7.16 tree replaced.)
-- **Consumed by:** MOTIR-937 (7.16.1 wizard design), MOTIR-939 (7.16.3 `Import` model + external-id map + migration), MOTIR-1501 (7.16.4a connector interface + `SourceIssue` + CSV + GitHub), MOTIR-940 (7.16.4 Jira + Linear connectors), MOTIR-1504 (7.16.5a mapping resolver + idempotency lookup + dry-run classify), MOTIR-941 (7.16.5 persist engine + import routes), MOTIR-942 (7.16.6 wizard UI), MOTIR-943 (7.16.7 source OAuth apps / API tokens), MOTIR-944 (7.16.8 vitest), MOTIR-945 (7.16.9 Playwright E2E).
+- **Consumed by:** MOTIR-937 (7.16.1 wizard design), MOTIR-939 (7.16.3 `Import` model + external-id map + migration), MOTIR-1501 (7.16.4a connector interface + `SourceIssue` + CSV + GitHub), MOTIR-940 (7.16.4 Jira + Linear connectors), MOTIR-1639 (7.16.4b Plane connector), MOTIR-1504 (7.16.5a mapping resolver + idempotency lookup + dry-run classify), MOTIR-941 (7.16.5 persist engine + import routes), MOTIR-942 (7.16.6 wizard UI), MOTIR-943 (7.16.7 source OAuth apps / API tokens), MOTIR-944 (7.16.8 vitest), MOTIR-945 (7.16.9 Playwright E2E).
 
 > This record follows the house ADR convention set by `docs/decisions/work-item-type-taxonomy.md`: a markdown file under `docs/decisions/`, named for the thing it fixes, structured **Status → Context → Decision → Consequences → References**, with the load-bearing facts pinned in explicit tables. It is the durable SHAPE of the importer, fixed BEFORE the code cards build it (the no-shortcuts rule — pick the durable shape, not the demoable happy path).
 
@@ -11,7 +11,7 @@
 
 ## Context
 
-Journey A ("onboard an existing project") needs to pull an existing project's **entire issue history** from another tracker into Motir work items. The sources are **Jira, Linear, GitHub Issues** (live REST/GraphQL) and **CSV** (uploaded-file parse — the universal, credential-free fallback). Every imported issue must land as a first-class Motir work item through the **Epic-2 write authority** (`lib/services/workItemsService.ts`), honouring the same grammar (kind-parent matrix, per-project workflow statuses, priority scale, links) that the rest of the app enforces — an import is not a side-door around the schema.
+Journey A ("onboard an existing project") needs to pull an existing project's **entire issue history** from another tracker into Motir work items. The sources are **Jira, Linear, GitHub Issues, and Plane** (live REST/GraphQL) and **CSV** (uploaded-file parse — the universal, credential-free fallback). Every imported issue must land as a first-class Motir work item through the **Epic-2 write authority** (`lib/services/workItemsService.ts`), honouring the same grammar (kind-parent matrix, per-project workflow statuses, priority scale, links) that the rest of the app enforces — an import is not a side-door around the schema.
 
 **Scope: import ALL issues regardless of state — open AND closed/done alike — not just the open backlog.** Closed issues are not noise to be filtered out; they are load-bearing project context. Motir is AI-native and the work-item tree IS the project's execution and context history, so an imported project needs its _completed_ work — what shipped, the bugs that were fixed, the decisions that were closed — as much as its open items: that history is exactly what grounds AI planning, code-context retrieval, and "what has this project already done" reasoning. The default import is the whole history, end to end; a done issue maps to a **done-category** `workflow_status`, not dropped. (Where the wizard offers a scope filter — by project, by date, by state — the DEFAULT includes closed/done; narrowing is an explicit opt-out, never the default.) The connectors must request every state accordingly — in particular the **GitHub list-issues API defaults to `state=open`**, so its connector MUST pass `state=all` or it would silently drop every closed issue (see the connector table).
 
@@ -45,26 +45,27 @@ There is **no existing importer, `Import` model, or external-id map** in the rep
 
 ### 1 · Sources + the connector interface
 
-The connector layer is an **interface, not a per-source wizard branch**. A fifth source is a new connector class, not a change to the mapping/preview/persist pipeline.
+The connector layer is an **interface, not a per-source wizard branch**. A further source (a sixth, a seventh) is a new connector class, not a change to the mapping/preview/persist pipeline — Plane, added to the original four, is exactly this: a new implementation, no pipeline change.
 
 ```ts
 interface IssueSourceConnector {
-  readonly source: 'jira' | 'linear' | 'github' | 'csv';
+  readonly source: 'jira' | 'linear' | 'github' | 'plane' | 'csv';
   // Pages the source and YIELDS normalised issues — never returns "all at once".
   fetchIssues(cfg, cursor?): AsyncIterable<SourceIssue>; // or a paged { issues, nextCursor }
 }
 ```
 
-Every connector normalises its source into ONE internal shape — the **normalised `SourceIssue`** (MOTIR-1501 owns the type) — before any mapping runs. The mapping/dry-run/persist stages are **source-agnostic**: they see only `SourceIssue`, never a Jira/Linear/GitHub payload. This is the **verified Linear precedent** (`packages/import`): a single `Importer` interface + a shared `ImportResult` normalised model, with one implementation per source (`jiraCsv`, `github`, `trelloJson`, …).
+Every connector normalises its source into ONE internal shape — the **normalised `SourceIssue`** (MOTIR-1501 owns the type) — before any mapping runs. The mapping/dry-run/persist stages are **source-agnostic**: they see only `SourceIssue`, never a Jira/Linear/GitHub/Plane payload. This is the **verified Linear precedent** (`packages/import`): a single `Importer` interface + a shared `ImportResult` normalised model, with one implementation per source (`jiraCsv`, `github`, `trelloJson`, …).
 
 | Source            | Access shape          | Pagination (VERIFIED — a paging loop is mandatory)                                          | Credentials                                                                          |
 | ----------------- | --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | **Jira**          | REST issue search     | `startAt` + `maxResults` offset paging (default page 50) — loop incrementing `startAt`      | OAuth / API token (MOTIR-943)                                                        |
 | **Linear**        | GraphQL               | Relay cursor paging: `first` + `after`; page until `pageInfo.hasNextPage` is false (def 50) | OAuth / API key (MOTIR-943)                                                          |
 | **GitHub Issues** | REST list-repo-issues | `per_page` (max 100) + `page`, Link headers                                                 | Reuse `GithubIdentity.accessTokenEncrypted` (per-user OAuth) where present; else 943 |
+| **Plane**         | REST work-items       | Cursor paging: `per_page` (≤100) + `cursor`; loop while `next_page_results`                 | `X-API-Key` PAT + base URL (Cloud / self-hosted) (MOTIR-943)                         |
 | **CSV**           | Uploaded-file parse   | n/a (whole file, streamed rows)                                                             | **none** — the universal fallback                                                    |
 
-Connectors carry paginate + retry scaffolding (MOTIR-1501); Jira + Linear live-field-mapping into `SourceIssue` is MOTIR-940; the interface + `SourceIssue` + CSV + GitHub connector is MOTIR-1501.
+Connectors carry paginate + retry scaffolding (MOTIR-1501); Jira + Linear live-field-mapping into `SourceIssue` is MOTIR-940; the **Plane** connector is MOTIR-1639; the interface + `SourceIssue` + CSV + GitHub connector is MOTIR-1501.
 
 **How the data actually leaves each source — a LIVE API is the primary path, a FILE EXPORT is the credential-free alternative.** Every live source has a first-class read API we connect to directly; every source that can produce a file export routes that export through the ONE CSV/file connector — so a user who can't or won't grant API access can still import. The two paths converge on the same `SourceIssue` and the same mapping/dry-run/persist pipeline.
 
@@ -73,11 +74,12 @@ Connectors carry paginate + retry scaffolding (MOTIR-1501); Jira + Linear live-f
 | **Jira**   | REST issue-search (JQL), offset-paginated           | OAuth 2.0 (3LO) or API token (MOTIR-943)           | ✅ Jira's native CSV export (Issues → Export → CSV)                         |
 | **Linear** | GraphQL `issues` query, cursor-paginated            | OAuth 2.0 or personal API key (MOTIR-943)          | ✅ Linear's CSV export                                                      |
 | **GitHub** | REST list-repo-issues (`state=all`), page-paginated | Reuse `GithubIdentity` OAuth token; else MOTIR-943 | ⚠️ no first-party issues CSV export — API is the path (or a hand-built CSV) |
+| **Plane**  | REST work-items API, cursor-paginated               | `X-API-Key` PAT + base URL (Cloud/self-hosted)     | ✅ Plane's CSV/Excel export (Workspace Settings → Exports, admin)           |
 | **CSV**    | — (this IS the file path)                           | **none**                                           | ✅ the universal target: any of the above exports, or a hand-made sheet     |
 
-**Deliberate altitude:** this ADR fixes the access _model_ per source (API type, auth model, pagination, the export alternative) — it does NOT pin exact endpoint URLs, OAuth scopes, or the JQL string. Those are connector-implementation detail owned by **MOTIR-940** (Jira + Linear), **MOTIR-1501** (GitHub + CSV), and **MOTIR-943** (OAuth-app / token provisioning), which read the vendor's _current_ API docs at build time — deliberately, because vendor endpoints move (e.g. Jira Cloud is mid-migration from `/rest/api/3/search` to a token-paginated `/search/jql`), and a durable decision doc must not hard-code a moving endpoint.
+**Deliberate altitude:** this ADR fixes the access _model_ per source (API type, auth model, pagination, the export alternative) — it does NOT pin exact endpoint URLs, OAuth scopes, or the JQL string. Those are connector-implementation detail owned by **MOTIR-940** (Jira + Linear), **MOTIR-1639** (Plane), **MOTIR-1501** (GitHub + CSV), and **MOTIR-943** (OAuth-app / token provisioning), which read the vendor's _current_ API docs at build time — deliberately, because vendor endpoints move (e.g. Jira Cloud is mid-migration from `/rest/api/3/search` to a token-paginated `/search/jql`, and Plane has deprecated `/issues/` in favour of `/work-items/`), and a durable decision doc must not hard-code a moving endpoint.
 
-**Every connector fetches ALL states (open + closed/done), per the whole-history scope above.** No connector applies an open-only filter. Concretely: **GitHub** must pass `state=all` (its list-issues API defaults to `state=open` — omitting this silently drops closed issues); **Jira** uses a JQL with no `status`/`resolution` clause (an unfiltered JQL returns every state, resolved and unresolved); **Linear** fetches without a state filter (all workflow states, including completed/cancelled); **CSV** carries whatever rows the export contains. A closed source issue therefore reaches the resolver with its real closed status, which maps to a done-category `workflow_status` (§2, status).
+**Every connector fetches ALL states (open + closed/done), per the whole-history scope above.** No connector applies an open-only filter. Concretely: **GitHub** must pass `state=all` (its list-issues API defaults to `state=open` — omitting this silently drops closed issues); **Jira** uses a JQL with no `status`/`resolution` clause (an unfiltered JQL returns every state, resolved and unresolved); **Linear** fetches without a state filter (all workflow states, including completed/cancelled); **Plane** fetches every state GROUP (`backlog`/`unstarted`/`started`/`completed`/`cancelled`) — `completed`/`cancelled` are done-category; **CSV** carries whatever rows the export contains. A closed source issue therefore reaches the resolver with its real closed status, which maps to a done-category `workflow_status` (§2, status).
 
 ### 2 · Field mapping (`SourceIssue` → Motir work item)
 
@@ -98,17 +100,17 @@ Every mapped issue is persisted through `workItemsService.createWorkItem` / `upd
 
 **Per-source field availability** (the mapping degrades gracefully — not every source has every field):
 
-| Field               | Jira    | Linear          | GitHub Issues          | CSV             |
-| ------------------- | ------- | --------------- | ---------------------- | --------------- |
-| type / kind         | ✅      | ✅ (team/label) | ⚠️ label-derived       | ⚠️ column-dep   |
-| status              | ✅      | ✅              | ✅ (open/closed + lbl) | ⚠️ column-dep   |
-| priority            | ✅      | ✅              | ⚠️ label-derived       | ⚠️ column-dep   |
-| assignee / reporter | ✅ / ✅ | ✅ / ⚠️         | ✅ / ✅ (author)       | ⚠️ column-dep   |
-| labels              | ✅      | ✅              | ✅                     | ⚠️ column-dep   |
-| comments            | ✅      | ✅              | ✅                     | ❌              |
-| attachments         | ✅      | ✅              | ✅                     | ❌              |
-| links / parent      | ✅      | ✅ (parent)     | ⚠️ task-list/refs      | ⚠️ id column    |
-| history             | ✅      | ✅              | ⚠️ (events API)        | ⚠️ created only |
+| Field               | Jira    | Linear          | GitHub Issues          | Plane                   | CSV             |
+| ------------------- | ------- | --------------- | ---------------------- | ----------------------- | --------------- |
+| type / kind         | ✅      | ✅ (team/label) | ⚠️ label-derived       | ⚠️ label/module-derived | ⚠️ column-dep   |
+| status              | ✅      | ✅              | ✅ (open/closed + lbl) | ✅ (5 state groups)     | ⚠️ column-dep   |
+| priority            | ✅      | ✅              | ⚠️ label-derived       | ✅ (urgent…none)        | ⚠️ column-dep   |
+| assignee / reporter | ✅ / ✅ | ✅ / ⚠️         | ✅ / ✅ (author)       | ✅ / ⚠️ (created_by)    | ⚠️ column-dep   |
+| labels              | ✅      | ✅              | ✅                     | ✅                      | ⚠️ column-dep   |
+| comments            | ✅      | ✅              | ✅                     | ✅                      | ❌              |
+| attachments         | ✅      | ✅              | ✅                     | ✅                      | ❌              |
+| links / parent      | ✅      | ✅ (parent)     | ⚠️ task-list/refs      | ✅ (sub-issues)         | ⚠️ id column    |
+| history             | ✅      | ✅              | ⚠️ (events API)        | ⚠️ created/updated      | ⚠️ created only |
 
 CSV carries **only what its columns provide**; the resolver treats a missing column as "unmapped," never as an error.
 
@@ -118,7 +120,7 @@ CSV carries **only what its columns provide**; the resolver treats a missing col
 
 **Lifecycle: a one-shot MIGRATION that is re-runnable on demand — NOT a continuous/live sync, and one-directional (source → Motir, never write-back).** The import is a discrete run (connect → map → dry-run → confirm → execute), even when connected over a live API — the API is queried per-run, not held open to stream changes. There is **no background polling, no webhook-driven mirroring, and no bidirectional sync**: Motir is the destination the project is _moving into_, not a mirror kept in lockstep with the old tracker. This matches every mirror (Linear's `packages/import`, Plane's importer, Jira's CSV import are all one-time migrations, not daemons). What idempotency buys is a safe **manual catch-up**: the user can re-run the same import later — the external-id map below means a re-run UPSERTs (picks up issues created since, re-syncs changed source-owned fields, preserves Motir-local edits per the update policy) instead of duplicating. **Continuous live/two-way sync is explicitly OUT OF SCOPE** here — it is a materially larger, separate capability (webhooks, conflict resolution, field-level ownership, write-back) that would be its own story, not a mode of this importer; we do not half-build it.
 
-Every imported issue carries its source's **stable id** (Jira `PROJ-123`, Linear identifier, GitHub `owner/repo#42`, a CSV id column). The importer persists an explicit map:
+Every imported issue carries its source's **stable id** (Jira `PROJ-123`, Linear identifier, GitHub `owner/repo#42`, the Plane work-item **UUID** `id` — not its renameable `{project}-{sequence_id}` display ref, a CSV id column). The importer persists an explicit map:
 
 ```
 (import_source, external_id) → work_item_id
@@ -164,10 +166,11 @@ None of these introduce a write path around `workItemsService` / its sibling ent
 - **MOTIR-939** — the `Import` row (source, config, mapping, status) + the `(import_source, external_id) → work_item_id` map; schema + migration.
 - **MOTIR-1501** — `IssueSourceConnector` interface + normalised `SourceIssue` + CSV parse + GitHub Issues connector (paginate + retry scaffolding).
 - **MOTIR-940** — Jira + Linear connectors: paginated fetch + field-mapping into `SourceIssue`.
+- **MOTIR-1639** — Plane connector: paginated `work-items` REST fetch (`X-API-Key` PAT + base URL) + field-mapping into `SourceIssue`.
 - **MOTIR-1504** — mapping resolver + idempotency lookup + dry-run classify (no writes).
 - **MOTIR-941** — persist engine (batched tx, parent 2nd pass, the three extensions above) + import API routes.
 - **MOTIR-942** — the wizard UI (connect → map → dry-run preview → run → progress); **MOTIR-937** is its design.
-- **MOTIR-943** — provisions the Jira / Linear / GitHub OAuth apps / tokens.
+- **MOTIR-943** — provisions the Jira / Linear / GitHub OAuth apps / tokens + the Plane API key & base URL.
 - **MOTIR-944 / MOTIR-945** — vitest (mapping correctness + idempotency no-dupe + dry-run) and Playwright E2E (import a Jira export + a CSV → mapped work items; re-run doesn't dupe).
 
 ### Assumptions to verify (flagged per the "cite verified or flag" rule)
@@ -184,7 +187,7 @@ None of these introduce a write path around `workItemsService` / its sibling ent
 - Plane Jira importer — mapping-review → Confirm gate before migration: <https://docs.plane.so/importers/jira> (VERIFIED: confirm gate; A-1 count detail unverified).
 - Linear multi-source model — `Importer` interface + shared `ImportResult`, one implementation per source: <https://github.com/linear/linear/tree/master/packages/import/src/importers> and <https://github.com/linear/linear/blob/master/packages/import/src/types.ts> (VERIFIED).
 - Atlassian external-id idempotent skip — "External issue ID" + skip-existing: <https://confluence.atlassian.com/adminjiraserver/importing-data-from-csv-938847533.html> and <https://support.atlassian.com/jira/kb/csv-import-error-issues-have-been-skipped-because-they-already-exist-in-destination-projects/>; Cloud inconsistency caveat noted; context ticket <https://jira.atlassian.com/browse/JRASERVER-64477> (behaviour VERIFIED; A-2 exact-string unverified).
-- Pagination — GitHub REST issues (`per_page`/`page`): <https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28>; Jira search (`startAt`/`maxResults`): <https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/>; Linear GraphQL (`first`/`after` cursor): <https://linear.app/developers/pagination> (all VERIFIED).
+- Pagination — GitHub REST issues (`per_page`/`page`): <https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28>; Jira search (`startAt`/`maxResults`): <https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/>; Linear GraphQL (`first`/`after` cursor): <https://linear.app/developers/pagination>; Plane REST work-items (`X-API-Key`, cursor `per_page`/`cursor`, `/work-items/` supersedes deprecated `/issues/`): <https://developers.plane.so/api-reference/introduction> (all VERIFIED).
 
 **Shipped code (rung 2 — grounding facts)**
 
