@@ -64,6 +64,23 @@ export const acceptanceEvidenceService = {
     if (!story) throw new AcceptanceEvidenceNotFoundError(input.workItemId);
     if (story.kind !== 'story') throw new AcceptanceEvidenceNotAStoryError(story.kind);
 
+    // 1b. Idempotency — a CI redelivery of the SAME commit+producer is a no-op:
+    //     the current evidence already records it, so return it without a second
+    //     blob upload or a duplicate history row.
+    if (input.commitSha) {
+      const existing = await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        (tx) => acceptanceEvidenceRepository.findCurrentByWorkItem(story.id, tx),
+      );
+      if (
+        existing &&
+        existing.commitSha === input.commitSha &&
+        existing.producedByKey === (input.producedByKey ?? null)
+      ) {
+        return toAcceptanceEvidenceDto(existing);
+      }
+    }
+
     // 2. MIME gate — the acceptance-scoped allowlist (video is 415 elsewhere).
     if (!isAllowedAcceptanceVideoType(input.video.type)) {
       throw new UnsupportedFileTypeError(input.video.type);
