@@ -9,20 +9,26 @@
     </title>
     <!--
       DESIGN ASSET (HTML mockup) for the ISSUE-IMPORT WIZARD (Story MOTIR-816) —
-      bring an existing backlog (Jira / Linear / GitHub Issues / CSV) into Motir
+      bring an existing backlog (Jira / Linear / GitHub Issues / Plane / CSV) into Motir
       work items. No design/import/ asset existed; the 7.16.1 design gate
       (MOTIR-937) produces this. It is the layout source of truth for the UI
       code subtask that carries 937 in blocks:
         - 7.16.6 (MOTIR-942) — the import wizard UI (connect → map → preview → run).
 
-      GROUNDED in the sibling DECISION card 7.16.2 (MOTIR-938): the four sources
-      + connector-interface shape, the field mapping (type/status/priority/
-      users/labels + comments/attachments/links/history), the unmatched-value
-      policy (choice, never a silent drop), the external-id-map idempotency
-      (re-run = UPSERT), and the dry-run-shares-the-engine gate. This design
-      draws THAT decided flow — it invents no step the decision does not name.
+      GROUNDED in the ACCEPTED ADR docs/decisions/issue-importer.md (7.16.2 /
+      MOTIR-938, accepted 2026-07-05): FIVE sources — Jira, Linear, GitHub
+      Issues, PLANE (added to the original four; MOTIR-1639 owns the connector),
+      and CSV — behind one connector interface; the field mapping (type/status/
+      priority/users/labels + comments/attachments/links/history); the
+      unmatched-value policy (choice, never a silent drop); the external-id-map
+      idempotency (re-run = UPSERT, one-shot migration, not a live sync); the
+      dry-run-shares-the-engine gate; and the WHOLE-HISTORY scope — import ALL
+      states, open AND closed/done (closed work is project context), narrowing
+      is an explicit opt-out. This design draws THAT decided flow — it invents
+      no step the ADR does not name.
 
-      VERIFIED mirrors (cited in design-notes.md):
+      VERIFIED mirrors (cited in design-notes.md). NOTE Plane is BOTH a mirror we
+      studied AND now an import source:
         · Plane Jira import — connect → map statuses → map priorities → a
           Summary step that REVIEWS the mappings + "Confirm to start the
           migration" (Back to adjust), then progress. (docs.plane.so/importers/jira)
@@ -681,7 +687,7 @@
       /* Source picker cards */
       .src-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 12px;
       }
       .src-card {
@@ -1456,8 +1462,8 @@
       <div>
         <h1>Import wizard — connect → map → dry-run preview → import</h1>
         <p>
-          The guided importer that brings an existing backlog (Jira · Linear · GitHub Issues · CSV)
-          into Motir work items. Four gated steps;
+          The guided importer that brings an existing backlog (Jira · Linear · GitHub Issues · Plane
+          · CSV) into Motir work items. Four gated steps;
           <b>nothing is written to the PM core until the user confirms the dry-run preview</b>.
           Grounded in the 7.16.2 decision (MOTIR-938): the connector-interface source set, the full
           field mapping, the unmatched-value policy, the external-id-map idempotency (re-run =
@@ -1469,7 +1475,8 @@
         <div class="refs">
           <span class="ref">MOTIR-937 · 7.16.1</span>
           <span class="ref muted">Story MOTIR-816</span>
-          <span class="ref muted">grounds in MOTIR-938 (decision)</span>
+          <span class="ref muted">ADR docs/decisions/issue-importer.md</span>
+          <span class="ref muted">Plane connector → MOTIR-1639</span>
           <span class="ref muted">renders in MOTIR-942 (UI)</span>
           <span class="ref muted">entry → design/onboarding-entrance</span>
         </div>
@@ -1555,7 +1562,7 @@
               <span class="b">
                 <span class="t">I have an existing project — import it</span>
                 <span class="d"
-                  >Bring over existing work items from Jira, Linear, GitHub or a CSV.</span
+                  >Bring over existing work items from Jira, Linear, GitHub, Plane or a CSV.</span
                 >
               </span>
               <span class="go">
@@ -1683,7 +1690,7 @@
             <div class="set-body">
               <h4>Import work items</h4>
               <p>
-                Bring an existing backlog from Jira, Linear, GitHub Issues or a CSV into this
+                Bring an existing backlog from Jira, Linear, GitHub Issues, Plane or a CSV into this
                 project. You’ll review a preview before anything is written.
               </p>
               <button class="btn btn-primary cursor">
@@ -1962,8 +1969,8 @@
         <div class="wiz-body">
           <h3 class="h-step">Where are your issues coming from?</h3>
           <p class="p-step">
-            Motir normalises Jira, Linear, GitHub Issues and CSV into one shape, so mapping and
-            preview work the same whichever you pick. A fifth source is a new connector, not a
+            Motir normalises Jira, Linear, GitHub Issues, Plane and CSV into one shape, so mapping
+            and preview work the same whichever you pick. A fifth source is a new connector, not a
             different wizard.
           </p>
           <div class="src-grid">
@@ -2033,6 +2040,24 @@
               <div class="meta">OAuth · owner/repo</div>
             </div>
             <div class="src-card">
+              <span class="glyph" style="background: var(--el-tint-rose)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  style="width: 22px; height: 22px"
+                >
+                  <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                  <path d="m2 17 10 5 10-5" />
+                  <path d="m2 12 10 5 10-5" />
+                </svg>
+              </span>
+              <div class="nm">Plane</div>
+              <div class="meta">API key · Cloud / self-host</div>
+            </div>
+            <div class="src-card">
               <span class="glyph" style="background: var(--el-tint-peach)">
                 <svg
                   viewBox="0 0 24 24"
@@ -2058,10 +2083,13 @@
           <div class="cols" style="margin-top: 20px">
             <!-- live-source branch -->
             <div class="mini">
-              <div class="state-cap">A · Live source (Jira / Linear / GitHub)</div>
+              <div class="state-cap">A · Live source (Jira / Linear / GitHub / Plane)</div>
               <div class="field">
-                <label>Jira site URL</label>
+                <label>Site / base URL</label>
                 <div class="input mono">https://acme.atlassian.net</div>
+                <div class="hint">
+                  Plane and self-hosted sources take a base URL (Cloud or your own host).
+                </div>
               </div>
               <div class="field">
                 <label>API token</label>
@@ -2079,7 +2107,7 @@
                   <a style="color: var(--el-link)">How to create a token ↗</a>
                 </div>
               </div>
-              <div class="field" style="margin-bottom: 0">
+              <div class="field">
                 <label>Source project</label>
                 <div class="select">
                   <span>PAY — Payments Platform</span
@@ -2094,6 +2122,27 @@
                     >
                       <path d="m6 9 6 6 6-6" /></svg
                   ></span>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom: 0">
+                <label>Import scope</label>
+                <div class="select">
+                  <span>All issues — open <b>and</b> closed / done</span
+                  ><span class="chev"
+                    ><svg
+                      class="ic"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="m6 9 6 6 6-6" /></svg
+                  ></span>
+                </div>
+                <div class="hint">
+                  Default imports the whole history — closed work is project context. Narrowing (by
+                  state / date) is an explicit opt-out.
                 </div>
               </div>
             </div>
@@ -2173,8 +2222,8 @@
                 <path d="m9 11 3 3L22 4" /></svg
             ></span>
             <span
-              ><b>Source reachable — 342 issues found</b> in PAY. Motir will page through them;
-              nothing is fetched all at once.</span
+              ><b>Source reachable — 342 issues found</b> in PAY (all states — 261 open, 81 closed /
+              done). Motir will page through them; nothing is fetched all at once.</span
             >
           </div>
         </div>

@@ -3,7 +3,8 @@
 **Surface:** the issue-import wizard — connect a source → map fields/values → dry-run
 preview → import + progress.
 **Card:** MOTIR-937 (7.16.1 Design). **Story:** MOTIR-816 (Issue importer — Jira / Linear /
-GitHub / CSV → Motir work items). **Renders in:** MOTIR-942 (7.16.6, the import wizard UI).
+GitHub / Plane / CSV → Motir work items). **Renders in:** MOTIR-942 (7.16.6, the import wizard UI).
+**ADR:** `docs/decisions/issue-importer.md` (accepted 2026-07-05).
 **Asset:** `import-wizard.mock.html` (source of truth) + `import-wizard.png` (full-page export) +
 this file.
 
@@ -13,24 +14,26 @@ core until the user confirms the preview.
 
 ---
 
-## Grounded in the decision (MOTIR-938) — the flow is not invented
+## Grounded in the ADR (`docs/decisions/issue-importer.md`) — the flow is not invented
 
 This is a `type: design` card that DRAWS a flow, so per the design-content dependency rule it is
-grounded in the sibling **decision card 7.16.2 (MOTIR-938)**, which locks the durable shape the
-code cards build. Everything drawn here traces to a decision the card records:
+grounded in the **accepted ADR `docs/decisions/issue-importer.md`** (7.16.2 / MOTIR-938, accepted
+2026-07-05), which locks the durable shape the code cards build. Everything drawn here traces to a
+decision the ADR records:
 
-| Decision (MOTIR-938)                                                                                                                                           | Where it shows in this design                                                                              |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Four sources behind a connector interface (Jira / Linear / GitHub Issues / CSV); a fifth source is a new connector, not a wizard change                        | Panel 1 source picker (4 cards) + the "one shape whichever you pick" copy                                  |
-| Live source = OAuth/token + paginated fetch; CSV = uploaded-file parse, no credentials                                                                         | Panel 1 branch A (site URL + token + source project) / branch B (dropzone + id-column)                     |
-| Field map: type→kind, status→workflow_status, priority, users-by-email, labels (+ comments/attachments/links/history)                                          | Panel 2 mapping table rows                                                                                 |
-| Unmatched value = a user CHOICE, never a silent drop (status → pick/ default, user → leave unassigned / invite)                                                | Panel 2 "unmatched" / "no match" rows with a required select; the "2 values still need a decision" callout |
-| Idempotent re-run via an `(source, external_id) → work_item_id` map; re-run = UPSERT, no duplicate CREATE; re-sync source-owned fields, keep Motir-local edits | Panel 5A re-run preview (0 create · 339 update) + "already imported… your Motir-local edits are kept" copy |
-| Dry-run shares the SAME engine as the real run (preview = run minus writes)                                                                                    | Panel 3 copy "computed with the exact engine the real import uses"                                         |
-| Every persist goes through `workItemsService` (one write authority)                                                                                            | Panel 4 footer "Writing through the normal work-item engine"                                               |
+| ADR decision                                                                                                                                                                                                             | Where it shows in this design                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| FIVE sources behind one connector interface — Jira / Linear / GitHub Issues / **Plane** / CSV; a further source is a new connector, not a wizard change (Plane connector = MOTIR-1639)                                   | Panel 1 source picker (**5 cards**, Plane added) + the "one shape whichever you pick" copy                                    |
+| Live source = OAuth/token (Plane: `X-API-Key` PAT + base URL, Cloud or self-hosted) + paginated fetch; CSV = uploaded-file parse, no credentials                                                                         | Panel 1 branch A (site/base URL + token + source project + scope) / branch B (dropzone + id-column)                           |
+| **Whole-history scope** — import ALL states, open AND closed/done (closed work is project context); the default is the whole history, narrowing is an explicit opt-out; a done issue → a done-category `workflow_status` | Panel 1 "Import scope = All issues (open **and** closed/done)" control + the "342 found — 261 open, 81 closed" reachable note |
+| Field map: type→kind, status→workflow_status, priority, users-by-email, labels (+ comments/attachments/links/history)                                                                                                    | Panel 2 mapping table rows                                                                                                    |
+| Unmatched value = a user CHOICE, never a silent drop (status → pick/default, user → leave unassigned / invite; **priority → `medium`**, the column default — the ADR's rung-2 fix of the card's "none")                  | Panel 2 "unmatched" / "no match" rows with a required select; the "2 values still need a decision" callout                    |
+| Idempotent re-run via an `(source, external_id) → work_item_id` map; re-run = UPSERT, no duplicate CREATE; one-shot migration (not a live/two-way sync); re-sync source-owned fields, keep Motir-local edits             | Panel 5A re-run preview (0 create · 339 update) + "already imported… your Motir-local edits are kept" copy                    |
+| Dry-run shares the SAME engine as the real run (preview = run minus writes)                                                                                                                                              | Panel 3 copy "computed with the exact engine the real import uses"                                                            |
+| Every persist goes through `workItemsService` (one write authority)                                                                                                                                                      | Panel 4 footer "Writing through the normal work-item engine"                                                                  |
 
-A step the decision does not name is NOT drawn. (If a code card later needs UI the decision didn't
-cover, that is a new `design/` subtask, not an improvisation here.)
+A step the ADR does not name is NOT drawn. (If a code card later needs UI the ADR didn't cover, that
+is a new `design/` subtask, not an improvisation here.)
 
 ---
 
@@ -39,6 +42,8 @@ cover, that is a new `design/` subtask, not an improvisation here.)
 - **Plane — Jira import wizard.** connect → map statuses → map priorities → a **Summary** step that
   REVIEWS the mappings with **"Confirm to start the migration"** (and **Back** to adjust), then a
   progress phase. This is the Confirm gate, made visible as our Preview step. `docs.plane.so/importers/jira`
+  _(Note: Plane is BOTH this verified mirror AND, per the ADR, now an import **source** — its
+  connector is MOTIR-1639; REST work-items API, `X-API-Key` PAT + base URL, Cloud or self-hosted.)_
 - **Linear — multi-source importer.** Jira / GitHub / Asana / CSV normalised into ONE model,
   mapping title / description / labels / priority / assignee / state / comments — the precedent for
   "one shape whichever source." `github.com/linear/linear/tree/master/packages/import`
@@ -57,10 +62,10 @@ named in prose — the reader sees the door they click):
    (mirrors `design/onboarding-entrance/onboarding-entrance.mock.html`, panel 1), shown inside a
    compact onboarding card below the idea box + "OR" divider. Its **Import →** affordance
    (`--el-accent` border + halo, `--el-tint-sky` icon) opens the wizard at step 1 (Connect). Copy:
-   "Bring over existing work items from Jira, Linear, GitHub or a CSV."
+   "Bring over existing work items from Jira, Linear, GitHub, Plane or a CSV."
 2. **Door 2 — Settings › Project › Import.** An in-app settings shell (left nav with the **Import**
    item active in `--el-page-bg` + `--el-accent` icon) and a content pane: heading **"Import work
-   items"**, body "Bring an existing backlog from Jira, Linear, GitHub Issues or a CSV into this
+   items"**, body "Bring an existing backlog from Jira, Linear, GitHub Issues, Plane or a CSV into this
    project. You'll review a preview before anything is written.", and a primary **"Start an import"**
    button that opens the wizard at step 1, scoped to this project. The wizard chrome then reads
    "Import work items · into <project>".
@@ -129,21 +134,25 @@ token block is copied 1:1 from `app/globals.css` (Tier-0 → Tier-3 wiring), no 
 ### Panel 1 — Connect the source (step 1)
 
 - Heading **"Where are your issues coming from?"**; body names the one-shape normalisation.
-- **Source cards** — Jira / Linear / GitHub Issues / CSV, each a glyph in a distinct `--el-tint-*`
-  slot (sky / lavender / mint / peach — tint slots kept mutually distinct, never invented hues),
-  name, and a one-line meta ("Cloud · REST API", "API key", "OAuth · owner/repo", "Upload · no
-  credentials"). Selected card: `--el-accent` border + halo + a check badge (`--el-accent` fill,
-  `--el-accent-text` glyph).
-- **Branch A (live source):** site URL (mono input), API token (masked, an "Authorized"
-  `--el-tint-mint` pill + `--el-success` dot), hint "Stored encrypted, used only for this import."
-  - "How to create a token ↗" link (`--el-link`), source-project combobox.
+- **Source cards** — Jira / Linear / GitHub Issues / **Plane** / CSV (5 cards), each a glyph in a
+  distinct `--el-tint-*` slot (sky / lavender / mint / **rose** / peach — tint slots kept mutually
+  distinct, never invented hues), name, and a one-line meta ("Cloud · REST API", "API key", "OAuth ·
+  owner/repo", **"API key · Cloud / self-host"**, "Upload · no credentials"). Selected card:
+  `--el-accent` border + halo + a check badge (`--el-accent` fill, `--el-accent-text` glyph).
+- **Branch A (live source):** site/base URL (mono input) with hint "Plane and self-hosted sources
+  take a base URL (Cloud or your own host)", API token (masked, an "Authorized" `--el-tint-mint`
+  pill + `--el-success` dot), hint "Stored encrypted, used only for this import." + "How to create a
+  token ↗" link (`--el-link`), source-project combobox, and an **Import scope** select defaulting to
+  **"All issues — open and closed / done"** (the whole-history scope; hint frames narrowing as an
+  explicit opt-out).
 - **Branch B (CSV):** dropzone (dashed `--el-border-strong`, `--el-surface-soft`) "Drop a .csv file,
   or click to browse" / "One row per issue · UTF-8 · up to 10 MB"; uploaded file-row with a
   `--el-success` file icon; **"Which column is the issue ID?"** combobox with hint "Used to skip
   re-imports and update instead of duplicating on a re-run." (the idempotency seam, surfaced at
   connect time for CSV).
-- **Confirmation callout** (`--el-tint-sky` info): "**Source reachable — 342 issues found** in PAY.
-  Motir will page through them; nothing is fetched all at once." (pagination made visible).
+- **Confirmation callout** (`--el-tint-sky` info): "**Source reachable — 342 issues found** in PAY
+  (all states — 261 open, 81 closed / done). Motir will page through them; nothing is fetched all at
+  once." (pagination + the whole-history scope made visible — closed work is imported, not filtered).
 
 ### Panel 2 — Field mapping (step 2)
 
