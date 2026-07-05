@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { AlertTriangle, ShieldCheck, Pencil, Check, FileSearch } from 'lucide-react';
+import { renderMarkdown } from '@/lib/markdown/render';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
@@ -96,7 +95,7 @@ function ProvenanceList({ convention }: { convention: CodingConventionDTO }) {
 function ConventionDocument({ contentMd }: { contentMd: string }) {
   return (
     <div className="flex flex-col gap-2 text-sm leading-relaxed text-(--el-text) [&_h1]:font-serif [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-(--el-text-strong) [&_h2]:mt-3 [&_h2]:font-serif [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-(--el-text-strong) [&_h3]:mt-2 [&_h3]:font-medium [&_h3]:text-(--el-text-strong) [&_ul]:list-disc [&_ul]:pl-5 [&_code]:text-(--el-text-identifier) [&_a]:text-(--el-link)">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{contentMd}</ReactMarkdown>
+      {renderMarkdown(contentMd)}
     </div>
   );
 }
