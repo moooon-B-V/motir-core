@@ -46,6 +46,9 @@ const CANONICAL_JOB_KINDS = [
   // `analyze_bug` (Story 7.6 — MOTIR-967 handler / MOTIR-1481 trigger); already
   // in motir-ai's canonical set (motir-ai/tests/contract.test.ts, contract.md §2.3).
   'analyze_bug',
+  // `propose_convention` (Story 7.14 — MOTIR-1601 handler / MOTIR-839 fresh trigger);
+  // live in motir-ai's canonical set (motir-ai/tests/contract.test.ts, contract.md §2.3).
+  'propose_convention',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

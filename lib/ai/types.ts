@@ -26,6 +26,15 @@ export const JOB_KINDS = [
   // of the closed enum in motir-ai/src/envelope.ts — each side declares its own
   // types against the shared contract (the open-core boundary).
   'analyze_bug',
+  // `propose_convention` (Story 7.14 — MOTIR-1601 handler) — the coding-convention
+  // engine. The FRESH establish-only path this trigger (7.3.10 · MOTIR-839) fires
+  // at onboarding completion: motir-ai derives a convention FROM THE CHOSEN STACK
+  // ALONE (no repo, no audit) and records it `status: proposed` via the 7.14.3
+  // store, so a fresh project reaches the 7.14.5 adopt→standard surface with a
+  // proposal to adopt. The stack hint rides `context.code.stack`; the motir-ai
+  // handler auto-selects fresh-vs-migrate off the project's indexed code graph.
+  // Mirror of the closed motir-ai enum (the open-core boundary).
+  'propose_convention',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 

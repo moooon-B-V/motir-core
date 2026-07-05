@@ -817,7 +817,7 @@ export const plansService = {
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanEdit(plan.projectId, ctx);
 
-    const { row, items } = await withWorkspaceContext(
+    const { row, items, firstOnboarding, projectKey } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
         const locked = await planRepository.lockById(planId, tx);
@@ -829,6 +829,11 @@ export const plansService = {
         }
         const proposals = await planItemRepository.findByPlan(planId, tx);
         await materialize(proposals, fresh, ctx, tx);
+        // Read the project ONCE, before `markOnboardingRan` writes: its
+        // pre-write `onboardingRanAt` gates the rename below, and its
+        // `identifier` (the tenant projectKey) + the first-onboarding signal both
+        // feed the fresh-establish convention trigger fired after the tx commits.
+        const project = await projectRepository.findById(fresh.projectId, tx);
         // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
         // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
         // apply it here — but ONLY on the FIRST onboarding approve of a draft the
@@ -845,7 +850,6 @@ export const plansService = {
           fresh.productName.trim().length > 0 &&
           opts.provisionalProjectName
         ) {
-          const project = await projectRepository.findById(fresh.projectId, tx);
           if (
             project &&
             project.onboardingRanAt == null &&
@@ -859,8 +863,10 @@ export const plansService = {
         // null-guarded write makes it set-once, so calling it on every approve is
         // safe — only the first materialized tree writes it. This is the single
         // source of truth the /onboarding redirect AND the roadmap planning-origin
-        // cluster (MOTIR-1013) read.
-        await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx);
+        // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
+        // after) IS the onboarding-completion signal the convention trigger fires on.
+        const firstOnboarding =
+          (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
         const updated = await planRepository.update(
           planId,
           { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
@@ -868,9 +874,46 @@ export const plansService = {
         );
         // Re-read so the returned items carry the written-back work-item ids.
         const finalItems = await planItemRepository.findByPlan(planId, tx);
-        return { row: updated, items: finalItems };
+        return {
+          row: updated,
+          items: finalItems,
+          firstOnboarding,
+          projectKey: project?.identifier ?? null,
+        };
       },
     );
+
+    // Fresh-establish the coding convention at onboarding completion (7.3.10 ·
+    // MOTIR-839). The FIRST time a project's onboarding plan is approved +
+    // materialized, trigger the fresh `propose_convention` job so a `proposed`
+    // convention exists for the user to adopt (the 7.14.5/MOTIR-926 surface). The
+    // service applies the FRESH gate itself (a repo-backed project's convention is
+    // the migrate/audit path's job, MOTIR-931) and reads the pinned stack over the
+    // 7.1 boundary. Fired BEST-EFFORT and AFTER the tx commits: the `server-only`
+    // client call cannot run inside the DB transaction, and a motir-ai hiccup must
+    // never fail an approve that already materialized the tree (the convention can
+    // be re-established later; the approve is the durable, user-visible effect).
+    // Imported LAZILY (dynamic import) so the `server-only` motir-ai client stays
+    // OUT of plansService's static import graph — the E2E plan seeds import
+    // plansService in the Playwright Node process, where `server-only` does not
+    // resolve; the client loads only when the trigger actually fires on the server.
+    if (firstOnboarding && projectKey) {
+      await import('@/lib/services/conventionEstablishService')
+        .then(({ conventionEstablishService }) =>
+          conventionEstablishService.establishForFreshProject({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            projectId: plan.projectId,
+            projectKey,
+          }),
+        )
+        .catch((err: unknown) => {
+          console.warn(
+            `[plansService.approvePlan] fresh-establish convention trigger failed for project ${plan.projectId}; skipping (a proposal can be re-established later)`,
+            err,
+          );
+        });
+    }
     return toPlanWithItemsDto(row, items);
   },
 
