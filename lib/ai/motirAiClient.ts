@@ -414,11 +414,29 @@ export interface RawCodeAuditSummary {
   createdAt: string;
 }
 
+// The §10.3 external-scanner state motir-ai stamps on the latest audit and hoists
+// onto the read-back surface (MOTIR-1610). Loosely mirrored here (like
+// `healthSummary`); the service maps it defensively into the DTO.
+export interface RawExternalScannerState {
+  detected: string[];
+  ingested: {
+    source: string;
+    analyses: number;
+    tools: string[];
+    findingCount: number;
+  } | null;
+  noExternalScanner: boolean;
+  suggestion: 'github_code_scanning' | 'sonarqube' | null;
+}
+
 export interface RawCodeAuditSurface {
   audit: RawCodeAuditSummary | null;
   findings: unknown[];
   total: number;
   nextOffset: number | null;
+  // The latest audit's §10.3 scanner state (MOTIR-1610), or null for the empty
+  // surface / an audit recorded before the column existed.
+  scanner?: RawExternalScannerState | null;
 }
 
 export interface CodeAuditQuery {
@@ -448,6 +466,49 @@ export async function getCodeAudit(query: CodeAuditQuery): Promise<RawCodeAuditS
   }
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawCodeAuditSurface;
+}
+
+export interface RefreshCodeAuditResult {
+  auditJobId: string;
+  conventionJobId: string;
+}
+
+// POST /v1/code-context/refresh — the 7.14.7 RE-AUDIT / REFRESH trigger (MOTIR-928).
+// Re-submits `code_audit` + `propose_convention` for the project so a freshly
+// configured external scanner is detected + ingested and the report refreshes (the
+// "Deepen this audit" → "Re-audit now" action, MOTIR-1592). Mints the §4b read-back
+// token the same way `submitJob` does (the audit job reads private-repo code
+// scanning through motir-core's proxy, MOTIR-1605). motir-ai queues both jobs and
+// returns their ids (202); the durable effect is the new CodeAudit + proposed
+// version the worker writes.
+export async function refreshCodeAudit(
+  tenant: Tenant,
+  context: JobContextBag,
+  actor: RequestActor,
+): Promise<RefreshCodeAuditResult> {
+  const { url, serviceToken } = config();
+  const readBackToken = mintJobToken({
+    userId: actor.userId,
+    workspaceId: tenant.workspaceId,
+    projectId: tenant.projectId,
+  });
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/code-context/refresh`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify({ envelopeVersion: 'v1', tenant, context, readBackToken }),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+
+  const body = (await res.json()) as Partial<RefreshCodeAuditResult>;
+  if (typeof body.auditJobId !== 'string' || typeof body.conventionJobId !== 'string') {
+    throw new MotirAiUnavailableError('refresh response missing a job id');
+  }
+  return { auditJobId: body.auditJobId, conventionJobId: body.conventionJobId };
 }
 
 export interface ConventionQuery {

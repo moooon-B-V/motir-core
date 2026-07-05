@@ -69,6 +69,35 @@ export interface CodeHealthSummaryDTO {
   byCategory?: CodeHealthCategoryDTO[];
 }
 
+// ── §10.3 external-scanner state (MOTIR-1591 producer → MOTIR-1610 read-back) ──
+// The state the "Deepen this audit" affordance (MOTIR-1592) gates on. The audit
+// report is always complete without a scanner (§10.2 zero-setup); this only says
+// whether an EXTERNAL scanner was detected/ingested and, when none was, the
+// best-fit suggestion to deepen it.
+export type ExternalScannerSource =
+  | 'github_code_scanning'
+  | 'sonarqube_config'
+  | 'ci_scan_workflow'
+  | 'eslint_config';
+
+export interface IngestedScannerFindingsDTO {
+  source: 'github_code_scanning';
+  analyses: number;
+  tools: string[];
+  findingCount: number;
+}
+
+export interface ExternalScannerStateDTO {
+  detected: ExternalScannerSource[];
+  ingested: IngestedScannerFindingsDTO | null;
+  // True exactly when NO external scanner source was detected — the ONLY state
+  // that shows the "Deepen this audit" card.
+  noExternalScanner: boolean;
+  // Best-fit guidance when noExternalScanner: GitHub code scanning / CodeQL is the
+  // GH-native default; SonarQube is the ecosystem branch. Null once detected.
+  suggestion: 'github_code_scanning' | 'sonarqube' | null;
+}
+
 export interface CodeAuditSurfaceDTO {
   audit: {
     id: string;
@@ -79,4 +108,15 @@ export interface CodeAuditSurfaceDTO {
   findings: CodeAuditFindingDTO[];
   total: number;
   nextOffset: number | null;
+  // The §10.3 external-scanner state stamped on the latest audit (MOTIR-1610),
+  // or null for the empty/fresh surface. Drives the "Deepen this audit" card.
+  scanner: ExternalScannerStateDTO | null;
+}
+
+// The re-audit trigger result (MOTIR-928 · POST /v1/code-context/refresh): the two
+// queued job ids (a fresh code_audit + propose_convention). The UI uses it only to
+// enter the "re-auditing" state and poll the surface until the new audit lands.
+export interface ReauditResultDTO {
+  auditJobId: string;
+  conventionJobId: string;
 }

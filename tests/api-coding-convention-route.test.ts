@@ -33,11 +33,16 @@ const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
 const getConventionMock = vi.fn<(q: unknown) => Promise<RawConventionSurface>>();
 const editConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
 const approveConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
+const refreshCodeAuditMock =
+  vi.fn<
+    (t: unknown, c: unknown, a: unknown) => Promise<{ auditJobId: string; conventionJobId: string }>
+  >();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getCodeAudit: (q: unknown) => getCodeAuditMock(q),
   getConvention: (q: unknown) => getConventionMock(q),
   editConvention: (i: unknown) => editConventionMock(i),
   approveConvention: (i: unknown) => approveConventionMock(i),
+  refreshCodeAudit: (t: unknown, c: unknown, a: unknown) => refreshCodeAuditMock(t, c, a),
 }));
 
 const { GET: auditGET } = await import('@/app/api/ai/coding-convention/audit/route');
@@ -46,6 +51,7 @@ const { PATCH: conventionPATCH } =
   await import('@/app/api/ai/coding-convention/convention/[conventionId]/route');
 const { POST: approvePOST } =
   await import('@/app/api/ai/coding-convention/convention/[conventionId]/approve/route');
+const { POST: refreshPOST } = await import('@/app/api/ai/coding-convention/refresh/route');
 const { createTestWorkspace, createTestProject } = await import('./fixtures');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
@@ -88,6 +94,7 @@ beforeEach(async () => {
   getConventionMock.mockReset();
   editConventionMock.mockReset();
   approveConventionMock.mockReset();
+  refreshCodeAuditMock.mockReset();
 });
 
 afterAll(async () => {
@@ -128,6 +135,31 @@ describe('GET /api/ai/coding-convention/audit', () => {
     await signInAtProject();
     getCodeAuditMock.mockRejectedValue(new MotirAiUnavailableError('down'));
     const res = await auditGET(new Request(`${BASE}/audit`));
+    expect(res.status).toBe(502);
+  });
+});
+
+describe('POST /api/ai/coding-convention/refresh', () => {
+  it('401s with no session', async () => {
+    const res = await refreshPOST();
+    expect(res.status).toBe(401);
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('triggers a re-audit for an admin and returns the queued job ids (202)', async () => {
+    await signInAtProject();
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+    const res = await refreshPOST();
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body).toEqual({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps a motir-ai outage to 502', async () => {
+    await signInAtProject();
+    refreshCodeAuditMock.mockRejectedValue(new MotirAiUnavailableError('down'));
+    const res = await refreshPOST();
     expect(res.status).toBe(502);
   });
 });

@@ -3,10 +3,14 @@ import {
   getConvention,
   editConvention,
   approveConvention,
+  refreshCodeAudit,
   type RawConvention,
   type RawConventionSurface,
   type RawCodeAuditSurface,
+  type RawExternalScannerState,
 } from '@/lib/ai/motirAiClient';
+import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import type {
   CodingConventionDTO,
@@ -14,6 +18,9 @@ import type {
   CodeAuditSurfaceDTO,
   CodeAuditFindingDTO,
   CodeHealthSummaryDTO,
+  ExternalScannerStateDTO,
+  ExternalScannerSource,
+  ReauditResultDTO,
 } from '@/lib/dto/codeHealth';
 
 // The Code-health surface service (Subtask 7.14.5 / MOTIR-926). The ONLY thing the
@@ -100,6 +107,47 @@ function toFindingDTO(raw: unknown): CodeAuditFindingDTO {
   };
 }
 
+const SCANNER_SOURCES: ExternalScannerSource[] = [
+  'github_code_scanning',
+  'sonarqube_config',
+  'ci_scan_workflow',
+  'eslint_config',
+];
+
+// Map the §10.3 scanner state defensively (it crosses the boundary loosely, like
+// healthSummary): an absent/malformed value → null (the affordance simply doesn't
+// render), an unknown `detected` source is dropped, `noExternalScanner` is only
+// trusted when a real boolean.
+function toScannerState(
+  raw: RawExternalScannerState | null | undefined,
+): ExternalScannerStateDTO | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const detected = Array.isArray(raw.detected)
+    ? raw.detected.filter((s): s is ExternalScannerSource =>
+        SCANNER_SOURCES.includes(s as ExternalScannerSource),
+      )
+    : [];
+  const suggestion =
+    raw.suggestion === 'github_code_scanning' || raw.suggestion === 'sonarqube'
+      ? raw.suggestion
+      : null;
+  const ingested =
+    raw.ingested && raw.ingested.source === 'github_code_scanning'
+      ? {
+          source: 'github_code_scanning' as const,
+          analyses: Number(raw.ingested.analyses) || 0,
+          tools: Array.isArray(raw.ingested.tools) ? raw.ingested.tools.map(String) : [],
+          findingCount: Number(raw.ingested.findingCount) || 0,
+        }
+      : null;
+  return {
+    detected,
+    ingested,
+    noExternalScanner: raw.noExternalScanner === true,
+    suggestion,
+  };
+}
+
 function toCodeAuditSurfaceDTO(raw: RawCodeAuditSurface): CodeAuditSurfaceDTO {
   return {
     audit: raw.audit
@@ -113,6 +161,7 @@ function toCodeAuditSurfaceDTO(raw: RawCodeAuditSurface): CodeAuditSurfaceDTO {
     findings: (raw.findings ?? []).map(toFindingDTO),
     total: raw.total,
     nextOffset: raw.nextOffset,
+    scanner: toScannerState(raw.scanner),
   };
 }
 
@@ -183,5 +232,38 @@ export const aiConventionService = {
       userId: ctx.userId,
     });
     return toConventionDTO(raw);
+  },
+
+  // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →
+  // "Re-audit now" action, MOTIR-1592 over the MOTIR-928 refresh seam). Same
+  // project-admin gate as the reads; resolves the connected-repo context + org
+  // tenant exactly like a planning-job submit (conventionEstablishService), then
+  // re-submits over the boundary. Returns the queued job ids — the durable effect
+  // (a new CodeAudit + proposed version) lands async, so the UI polls the surface.
+  async reaudit(
+    projectId: string,
+    ctx: AccessActorContext,
+    projectKey: string,
+  ): Promise<ReauditResultDTO> {
+    await projectAccessService.assertCanManage(projectId, ctx);
+    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const { organizationId, isMeta } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    const { auditJobId, conventionJobId } = await refreshCodeAudit(
+      {
+        organizationId,
+        isMeta,
+        workspaceId: ctx.workspaceId,
+        projectId,
+        projectKey,
+      },
+      // The `code` hole both refreshed jobs read; absent repo ⇒ the jobs gate on
+      // the code-graph index and skip cleanly (motir-ai ADR §7).
+      { code: code ?? {} },
+      { userId: ctx.userId },
+    );
+    return { auditJobId, conventionJobId };
   },
 };

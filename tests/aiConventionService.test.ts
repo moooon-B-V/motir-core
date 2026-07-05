@@ -17,11 +17,16 @@ const getCodeAuditMock = vi.fn<(q: unknown) => Promise<RawCodeAuditSurface>>();
 const getConventionMock = vi.fn<(q: unknown) => Promise<RawConventionSurface>>();
 const editConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
 const approveConventionMock = vi.fn<(i: unknown) => Promise<RawConvention>>();
+const refreshCodeAuditMock =
+  vi.fn<
+    (t: unknown, c: unknown, a: unknown) => Promise<{ auditJobId: string; conventionJobId: string }>
+  >();
 vi.mock('@/lib/ai/motirAiClient', () => ({
   getCodeAudit: (q: unknown) => getCodeAuditMock(q),
   getConvention: (q: unknown) => getConventionMock(q),
   editConvention: (i: unknown) => editConventionMock(i),
   approveConvention: (i: unknown) => approveConventionMock(i),
+  refreshCodeAudit: (t: unknown, c: unknown, a: unknown) => refreshCodeAuditMock(t, c, a),
 }));
 
 const { aiConventionService } = await import('@/lib/services/aiConventionService');
@@ -102,6 +107,7 @@ beforeEach(async () => {
   getConventionMock.mockReset();
   editConventionMock.mockReset();
   approveConventionMock.mockReset();
+  refreshCodeAuditMock.mockReset();
 });
 
 afterAll(async () => {
@@ -154,6 +160,110 @@ describe('aiConventionService — project-admin gate', () => {
     expect(dto.findings[0]?.conventionRuleRef).toBe('Layering — no upward imports');
     expect(dto.total).toBe(2);
     expect(dto.nextOffset).toBe(1);
+  });
+
+  it('maps the §10.3 scanner state onto the audit DTO (MOTIR-1592) when present', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getCodeAuditMock.mockResolvedValue(
+      rawAuditSurface({
+        scanner: {
+          detected: [],
+          ingested: null,
+          noExternalScanner: true,
+          suggestion: 'github_code_scanning',
+        },
+      }),
+    );
+
+    const dto = await aiConventionService.getAudit(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+
+    expect(dto.scanner).toEqual({
+      detected: [],
+      ingested: null,
+      noExternalScanner: true,
+      suggestion: 'github_code_scanning',
+    });
+  });
+
+  it('drops an unknown scanner source + defaults scanner to null when absent', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+
+    // Absent scanner → null (an audit recorded before the column existed).
+    getCodeAuditMock.mockResolvedValueOnce(rawAuditSurface());
+    const noScanner = await aiConventionService.getAudit(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+    expect(noScanner.scanner).toBeNull();
+
+    // A detected+ingested state with an UNKNOWN source is dropped defensively.
+    getCodeAuditMock.mockResolvedValueOnce(
+      rawAuditSurface({
+        scanner: {
+          detected: ['github_code_scanning', 'bogus_source'],
+          ingested: {
+            source: 'github_code_scanning',
+            analyses: 2,
+            tools: ['CodeQL'],
+            findingCount: 8,
+          },
+          noExternalScanner: false,
+          suggestion: null,
+        },
+      }),
+    );
+    const detected = await aiConventionService.getAudit(project.id, {
+      userId: owner.id,
+      workspaceId: workspace.id,
+    });
+    expect(detected.scanner?.detected).toEqual(['github_code_scanning']);
+    expect(detected.scanner?.noExternalScanner).toBe(false);
+    expect(detected.scanner?.ingested?.tools).toEqual(['CodeQL']);
+  });
+
+  it('reaudit triggers the refresh over the boundary with the project tenant + returns job ids', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+
+    const result = await aiConventionService.reaudit(
+      project.id,
+      { userId: owner.id, workspaceId: workspace.id },
+      project.identifier,
+    );
+
+    expect(result).toEqual({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+    expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+    const [tenant, context, actor] = refreshCodeAuditMock.mock.calls[0]!;
+    expect(tenant).toMatchObject({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      projectKey: project.identifier,
+    });
+    // No connected repo in the fixture → the `code` hole is an empty object.
+    expect(context).toEqual({ code: {} });
+    expect(actor).toEqual({ userId: owner.id });
+  });
+
+  it('reaudit is blocked for a non-admin (403) without hitting the boundary', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    const outsider = await createTestUser();
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
+
+    await expect(
+      aiConventionService.reaudit(
+        project.id,
+        { userId: outsider.id, workspaceId: workspace.id },
+        project.identifier,
+      ),
+    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
   it('blocks a non-admin workspace member (403) without calling the boundary', async () => {

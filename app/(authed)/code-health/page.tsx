@@ -76,6 +76,7 @@ export default async function CodeHealthPage() {
     <div className="flex flex-col gap-6">
       <Header title={t('title')} subtitle={t('subtitle')} />
       <CodeHealthClient
+        projectId={ctx.projectId}
         initialAudit={initialAudit}
         initialConvention={initialConvention}
         loadError={loadError}

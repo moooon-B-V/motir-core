@@ -4469,6 +4469,7 @@
     "errorLoadMore": "无法加载更多问题。",
     "errorSave": "无法保存草稿。",
     "errorApprove": "无法批准该规范。",
+    "errorReaudit": "无法启动重新审计。",
     "audit": {
       "emptyTitle": "暂无可分析的代码库",
       "emptyDescription": "你的规范由所选技术栈确立——代码健康度审计将在有代码可读之后再运行。",
@@ -4526,6 +4527,35 @@
         "standard": "标准",
         "proposed": "待批准",
         "superseded": "已被取代"
+      }
+    },
+    "deepen": {
+      "eyebrow": "可选 · 非阻塞",
+      "dismiss": "忽略",
+      "title": "用外部扫描器深化此审计",
+      "subtitle": "此报告已经完整——尚未连接外部扫描器。连接后可在其之上叠加更多发现。",
+      "bestFit": "最适合你仓库的选择",
+      "recommended": "推荐",
+      "reauditNow": "立即重新审计",
+      "reauditing": "正在重新审计你的代码……",
+      "reauditPending": "重新审计已开始——完成后会显示在此处。",
+      "copy": "复制",
+      "copied": "已复制",
+      "useSonarInstead": "改用 SonarQube",
+      "useCodeqlInstead": "改用 GitHub CodeQL",
+      "footerHint": "配置好扫描器后，重新审计即可，Motir 会自动检测——其发现会并入此报告。",
+      "reopen": "用外部扫描器深化此审计",
+      "codeql": {
+        "name": "GitHub 代码扫描（CodeQL）",
+        "action": "设置 CodeQL",
+        "blurb": "GitHub 仓库最轻量的原生方式——结果以 SARIF 形式上传到 Motir 已读取的代码扫描 API。",
+        "setupHint": "把此工作流添加到你的仓库。下次审计时 Motir 会自动检测到上传——无需单独的连接步骤。"
+      },
+      "sonar": {
+        "name": "SonarQube / SonarCloud",
+        "action": "连接 Sonar",
+        "blurb": "适合已在 Sonar 生态中的团队——通过同一个 SARIF 适配器摄取。",
+        "setupHint": "在仓库中添加 sonar-project.properties 并运行 Sonar 分析。下次审计时 Motir 会摄取其 SARIF。"
       }
     }
   }
