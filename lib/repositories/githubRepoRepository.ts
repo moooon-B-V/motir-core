@@ -1,4 +1,4 @@
-import { type GithubRepo, type Prisma } from '@prisma/client';
+import { type GithubInstallation, type GithubRepo, type Prisma } from '@prisma/client';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table
 // (Story 7.10 · MOTIR-891). `installationId` here is the INTERNAL
@@ -47,6 +47,32 @@ export const githubRepoRepository = {
       where: { installationId_repoId: { installationId, repoId } },
       create: { installationId, repoId, ...rest },
       update: rest,
+    });
+  },
+
+  /** One connected repo by `(owner, name)` within a WORKSPACE — the code-scanning
+   *  proxy's resolution (MOTIR-1605) from an audit `repoRef` to the tenant's
+   *  installation. Owner/name match case-insensitively (GitHub coordinates are
+   *  case-insensitive). The `installation.workspaceId` filter scopes the lookup
+   *  to the caller's own workspace (defense-in-depth alongside the withWorkspaceContext
+   *  RLS gate on `github_installation`) — a repo connected under another tenant's
+   *  installation can never resolve. Includes the parent installation (its
+   *  provider + numeric `installationId` drive the token mint). Null when the
+   *  repo isn't connected in this workspace. Read inside a context transaction, so
+   *  it takes `tx`. */
+  async findConnectedByWorkspaceAndName(
+    workspaceId: string,
+    owner: string,
+    name: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<(GithubRepo & { installation: GithubInstallation }) | null> {
+    return tx.githubRepo.findFirst({
+      where: {
+        owner: { equals: owner, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
+        installation: { is: { workspaceId } },
+      },
+      include: { installation: true },
     });
   },
 
