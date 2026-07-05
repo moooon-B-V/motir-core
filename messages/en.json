@@ -410,6 +410,7 @@
       "ready": "Ready",
       "boards": "Boards",
       "reports": "Reports",
+      "codeHealth": "Code health",
       "settings": "Settings",
       "jobRuns": "Job runs",
       "github": "GitHub",
@@ -4423,6 +4424,83 @@
       "creditsTitle": "You’re out of planning credits",
       "creditsBody": "Generating a plan is metered. Top up to keep planning with Motir AI.",
       "topUpCta": "Top up credits"
+    }
+  },
+  "codeHealth": {
+    "title": "Code health",
+    "subtitle": "The code-health audit and the coding convention Motir injects into every prompt.",
+    "noProjectTitle": "No active project",
+    "noProjectDescription": "Select or create a project to see its code health.",
+    "adminOnlyTitle": "Project admins only",
+    "adminOnlyDescription": "The coding standard drives every prompt Motir dispatches, so only a project admin can review and approve it. Ask a project admin for access.",
+    "tabsLabel": "Code health views",
+    "tabs": {
+      "audit": "Audit",
+      "convention": "Convention"
+    },
+    "retry": "Retry",
+    "errorLoad": "Couldn’t load code health. Motir AI may be unavailable.",
+    "errorLoadMore": "Couldn’t load more findings.",
+    "errorSave": "Couldn’t save the draft.",
+    "errorApprove": "Couldn’t approve the convention.",
+    "audit": {
+      "emptyTitle": "No codebase to analyze yet",
+      "emptyDescription": "Your convention is established from your chosen stack — the code-health audit runs later, once there’s code to read.",
+      "measuredAgainst": "Measured against your convention — the standard for new code",
+      "conventionVersion": "§ Convention v{version}",
+      "percentConform": "{pct}% conform",
+      "summaryExplainer": "A conformance score across categories, each graded against the matching convention section; where the convention is silent it falls back to clean-code defaults.",
+      "categoryStatus": {
+        "conforms": "conforms",
+        "watch": "watch",
+        "gap": "gap"
+      },
+      "findingsTotal": "{count, plural, =0 {No findings} one {# finding} other {# findings}}",
+      "findingsHeader": "Not up to your convention · worst first",
+      "findingsCount": "{count, plural, one {# finding} other {# findings}}",
+      "noFindings": "No findings — your code meets the convention.",
+      "loadMore": "Load more findings",
+      "severity": {
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "conventionRuleRef": "§ Convention · {rule}",
+      "cleanCodeBaseline": "Clean-code baseline"
+    },
+    "convention": {
+      "emptyTitle": "No convention yet",
+      "emptyDescription": "Once Motir proposes a coding convention for this project, review and approve it here.",
+      "title": "Coding convention",
+      "versionProposed": "v{version} · proposed",
+      "versionStandard": "v{version} · standard",
+      "edit": "Edit",
+      "approve": "Approve as standard",
+      "saveDraft": "Save draft",
+      "cancel": "Cancel",
+      "bannerProposedTitle": "PROPOSED — review & approve",
+      "bannerProposedBody": "This draft is not yet used. Nothing is injected into prompts until you approve it as the standard. Tweak it first with Edit.",
+      "bannerStandardTitle": "STANDARD — injected into every prompt for new code",
+      "bannerStandardBody": "The active standard governs the code Motir generates. It is not a linter for existing code — the audit measures how far existing code is from this standard.",
+      "editorLabel": "Convention (Markdown)",
+      "editorHelper": "The convention is always editable — curate the AI draft before approving it. Approving makes it the standard injected into every prompt.",
+      "confirmTitle": "Approve as the coding standard?",
+      "confirmBody": "v{version} becomes the active standard, injected into every coding-agent prompt for the new code Motir generates. The prior standard is retained in history.",
+      "confirmApprove": "Approve as standard",
+      "provenanceTitle": "Rule provenance",
+      "provenanceLegend": "Adopted — your code already does this, we documented it. Proposed — your code was silent or inconsistent, a clean-code default to review.",
+      "provenance": {
+        "adopted": "Adopted",
+        "proposed": "Proposed"
+      },
+      "historyTitle": "Version history",
+      "activeStandard": "active standard",
+      "status": {
+        "standard": "Standard",
+        "proposed": "Proposed",
+        "superseded": "Superseded"
+      }
     }
   }
 }

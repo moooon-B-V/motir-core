@@ -364,6 +364,171 @@ export async function saveDesignChoice(input: SaveDesignChoiceInput): Promise<Ra
   return (await res.json()) as RawPreplanSession;
 }
 
+// ── Coding convention + code-health audit (Story 7.14 / MOTIR-926) ───────────
+// The read/write seam the Code-health page reads/writes over the boundary. Reads
+// are keyed by (coreWorkspaceId, coreProjectId) query params like /v1/preplan —
+// motir-ai resolves its AiProject READ-ONLY and returns the empty surface for a
+// project with no audit/convention yet (the fresh/establish-only state), never a
+// 404. Writes carry the core ids + the approving/editing user in the body; the
+// convention id is a path param. Dates arrive as ISO strings (JSON) — the caller
+// service keeps them as strings in its DTO.
+
+export interface RawConventionProvenance {
+  ruleId: string;
+  category: string;
+  source: 'adopted' | 'proposed';
+  evidence?: Record<string, unknown>;
+  confidence?: number;
+}
+
+export interface RawConvention {
+  id: string;
+  aiProjectId: string;
+  status: 'proposed' | 'standard' | 'superseded';
+  version: number;
+  contentMd: string;
+  provenance: RawConventionProvenance[];
+  sourceAuditId: string | null;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  supersededByVersion: number | null;
+  editedByUserId: string | null;
+  editedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RawConventionSurface {
+  proposed: RawConvention | null;
+  standard: RawConvention | null;
+  versions: RawConvention[];
+  nextCursor: string | null;
+}
+
+export interface RawCodeAuditSummary {
+  id: string;
+  aiProjectId: string;
+  healthSummary: unknown;
+  codeGraphRef: string | null;
+  jobId: string | null;
+  createdAt: string;
+}
+
+export interface RawCodeAuditSurface {
+  audit: RawCodeAuditSummary | null;
+  findings: unknown[];
+  total: number;
+  nextOffset: number | null;
+}
+
+export interface CodeAuditQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  findingsOffset?: number;
+  findingsLimit?: number;
+}
+
+// GET /v1/code-audit — latest audit summary + its first findings page.
+export async function getCodeAudit(query: CodeAuditQuery): Promise<RawCodeAuditSurface> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreWorkspaceId: query.coreWorkspaceId,
+    coreProjectId: query.coreProjectId,
+  });
+  if (query.findingsOffset !== undefined)
+    params.set('findingsOffset', String(query.findingsOffset));
+  if (query.findingsLimit !== undefined) params.set('findingsLimit', String(query.findingsLimit));
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/code-audit?${params.toString()}`, {
+      headers: authHeaders(serviceToken),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawCodeAuditSurface;
+}
+
+export interface ConventionQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  versionsCursor?: string;
+  versionsLimit?: number;
+}
+
+// GET /v1/convention — latest proposed + standard convention + version history.
+export async function getConvention(query: ConventionQuery): Promise<RawConventionSurface> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreWorkspaceId: query.coreWorkspaceId,
+    coreProjectId: query.coreProjectId,
+  });
+  if (query.versionsCursor) params.set('versionsCursor', query.versionsCursor);
+  if (query.versionsLimit !== undefined) params.set('versionsLimit', String(query.versionsLimit));
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/convention?${params.toString()}`, {
+      headers: authHeaders(serviceToken),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawConventionSurface;
+}
+
+export interface EditConventionInput {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  conventionId: string;
+  contentMd: string;
+  userId: string;
+}
+
+// PATCH /v1/convention/:id — edit a proposed draft's contentMd before approval.
+export async function editConvention(input: EditConventionInput): Promise<RawConvention> {
+  const { url, serviceToken } = config();
+  const { conventionId, ...body } = input;
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/convention/${encodeURIComponent(conventionId)}`, {
+      method: 'PATCH',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawConvention;
+}
+
+export interface ApproveConventionInput {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  conventionId: string;
+  userId: string;
+}
+
+// POST /v1/convention/:id/approve — flip a proposed convention to the standard.
+export async function approveConvention(input: ApproveConventionInput): Promise<RawConvention> {
+  const { url, serviceToken } = config();
+  const { conventionId, ...body } = input;
+  let res: Response;
+  try {
+    res = await fetch(`${url}/v1/convention/${encodeURIComponent(conventionId)}/approve`, {
+      method: 'POST',
+      headers: authHeaders(serviceToken),
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new MotirAiUnavailableError(describe(err));
+  }
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawConvention;
+}
+
 // The motir-ai code-graph index response (MOTIR-1500) — a summary of what the
 // index run produced for one project's code-graph store. Read only for the
 // job-run ledger / logging; the durable effect is on the motir-ai side.
