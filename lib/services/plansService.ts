@@ -16,7 +16,6 @@ import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { conventionEstablishService } from '@/lib/services/conventionEstablishService';
 
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
@@ -894,14 +893,20 @@ export const plansService = {
     // client call cannot run inside the DB transaction, and a motir-ai hiccup must
     // never fail an approve that already materialized the tree (the convention can
     // be re-established later; the approve is the durable, user-visible effect).
+    // Imported LAZILY (dynamic import) so the `server-only` motir-ai client stays
+    // OUT of plansService's static import graph — the E2E plan seeds import
+    // plansService in the Playwright Node process, where `server-only` does not
+    // resolve; the client loads only when the trigger actually fires on the server.
     if (firstOnboarding && projectKey) {
-      await conventionEstablishService
-        .establishForFreshProject({
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-          projectId: plan.projectId,
-          projectKey,
-        })
+      await import('@/lib/services/conventionEstablishService')
+        .then(({ conventionEstablishService }) =>
+          conventionEstablishService.establishForFreshProject({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            projectId: plan.projectId,
+            projectKey,
+          }),
+        )
         .catch((err: unknown) => {
           console.warn(
             `[plansService.approvePlan] fresh-establish convention trigger failed for project ${plan.projectId}; skipping (a proposal can be re-established later)`,
