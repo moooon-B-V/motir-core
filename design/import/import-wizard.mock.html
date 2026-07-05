@@ -1,0 +1,1909 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Import wizard — connect → map → dry-run preview → import (Story MOTIR-816 · 7.16.1
+      / MOTIR-937)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the ISSUE-IMPORT WIZARD (Story MOTIR-816) —
+      bring an existing backlog (Jira / Linear / GitHub Issues / CSV) into Motir
+      work items. No design/import/ asset existed; the 7.16.1 design gate
+      (MOTIR-937) produces this. It is the layout source of truth for the UI
+      code subtask that carries 937 in blocks:
+        - 7.16.6 (MOTIR-942) — the import wizard UI (connect → map → preview → run).
+
+      GROUNDED in the sibling DECISION card 7.16.2 (MOTIR-938): the four sources
+      + connector-interface shape, the field mapping (type/status/priority/
+      users/labels + comments/attachments/links/history), the unmatched-value
+      policy (choice, never a silent drop), the external-id-map idempotency
+      (re-run = UPSERT), and the dry-run-shares-the-engine gate. This design
+      draws THAT decided flow — it invents no step the decision does not name.
+
+      VERIFIED mirrors (cited in design-notes.md):
+        · Plane Jira import — connect → map statuses → map priorities → a
+          Summary step that REVIEWS the mappings + "Confirm to start the
+          migration" (Back to adjust), then progress. (docs.plane.so/importers/jira)
+        · Linear multi-source importer — Jira/GitHub/Asana/CSV normalised into
+          ONE model, mapping title/description/labels/priority/assignee/state/
+          comments. (github.com/linear/linear/tree/master/packages/import)
+        · Atlassian CSV importer external-issue-id SKIP — "already exists as
+          PROJ-1, not importing" = the idempotency the dry-run surfaces.
+          (jira.atlassian.com/browse/JRASERVER-64477)
+
+      Built FROM the real design system: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*),
+      and the markup mirrors the SHIPPED primitives — Card, Button (primary /
+      ghost / outline / danger-tinted), Pill (neutral + tint tones), the
+      IssueTypeIcon kind hue (lucide glyph in --el-type-*), the initial-letter
+      Avatar, Combobox / select trigger, FormField + Input, Segmented, the
+      Spinner, EmptyState, ErrorState, Toast, and a Progress bar. Every surface
+      is a NEW ARRANGEMENT of these primitives — no new vocabulary.
+
+      Covers (multi-panel — review EACH, notes.html #31):
+        (0)  wizard chrome — the stepped frame + step rail (done/current/locked)
+             + Back/Next footer, with IMPORT gated behind PREVIEW.
+        (1)  Connect the source — the source picker; the live-source branch
+             (authorize / token + pick project) AND the CSV branch (dropzone +
+             id-column); the "reachable, N found" confirmation.
+        (2)  Field mapping — the mapping table (type→kind, status→workflow_status,
+             priority, user-by-email, labels); an auto-proposed + an edited row;
+             the unmatched-value treatment.
+        (3)  Dry-run PREVIEW (★ the gate) — CREATE / UPDATE / SKIP summary, the
+             per-issue paginated list, warnings, "Confirm & import" + Back, and
+             the "nothing is written until Confirm" banner.
+        (4)  Import RUN — in-flight progress (aria-live counts + per-issue log)
+             AND the complete/done state (view imported backlog).
+        (5)  states — the idempotent RE-RUN preview (all UPDATE, 0 duplicate
+             CREATE), connect-failed, CSV-parse-error, partial-failure, and the
+             nothing-to-import empty state.
+      Toggle dark mode to confirm token parity. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        /* Tier 0 — colour (light defaults) */
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Tier 0 — shape (default display style) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 14px;
+        --spacing-btn-y: 8px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-destructive: #f06565;
+        --color-info: #4aa3ff;
+        --color-success: #3fbf5a;
+        --color-warning: #f0842a;
+      }
+
+      /* ── Review-page chrome (NOT the design — just the annotation sheet) ──── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1000px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.55;
+        max-width: 74ch;
+      }
+      .refs {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--el-accent) 22%, transparent);
+        border-radius: var(--radius-badge);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 46px auto 12px;
+        max-width: 1000px;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .panel-label .n {
+        font-weight: 700;
+        color: var(--el-accent-text);
+        background: var(--el-accent);
+        border-radius: var(--radius-control);
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-label .note {
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--el-text-muted);
+        font-family: var(--font-sans);
+        font-weight: 400;
+        font-size: 12.5px;
+      }
+      .panel {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* ── Icons ─────────────────────────────────────────────────────────────── */
+      .ic {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke-width: 2;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         PRODUCT SURFACE — the import wizard. Reached from the onboarding
+         entrance "I have an existing project — import it" door (design/
+         onboarding-entrance) and from Settings › Project › Import. Rendered as
+         a centred wizard panel (the app shell dims behind it), like a routed
+         full-page Modal. Composes Card / Button / Pill / FormField / Combobox /
+         Segmented / Spinner / EmptyState / ErrorState / Toast / Progress.
+      ══════════════════════════════════════════════════════════════════════ */
+      .wiz {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .wiz-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .wiz-bar .logo {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .wiz-bar .ttl {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .wiz-bar .sub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-left: 2px;
+      }
+      .wiz-bar .x {
+        margin-left: auto;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        display: grid;
+        place-items: center;
+        color: var(--el-text-muted);
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .wiz-bar .x:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+
+      /* Step rail (Connect · Map · Preview · Import) */
+      .rail {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-page-bg);
+      }
+      .rail-step {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex: none;
+      }
+      .rail-step .dot {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-badge);
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        flex: none;
+        border: 1.5px solid var(--el-border-strong);
+        color: var(--el-text-muted);
+        background: var(--el-page-bg);
+      }
+      .rail-step .lbl {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+        white-space: nowrap;
+      }
+      .rail-step .sub {
+        display: block;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-faint);
+      }
+      .rail-step.done .dot {
+        background: var(--el-success);
+        border-color: var(--el-success);
+        color: var(--el-text-inverted);
+      }
+      .rail-step.done .lbl {
+        color: var(--el-text-strong);
+      }
+      .rail-step.current .dot {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-accent) 18%, transparent);
+      }
+      .rail-step.current .lbl {
+        color: var(--el-text);
+      }
+      .rail-step.locked .dot {
+        border-style: dashed;
+      }
+      .rail-step.locked .lbl {
+        color: var(--el-text-faint);
+      }
+      .rail-line {
+        flex: 1 1 auto;
+        height: 1.5px;
+        min-width: 22px;
+        margin: 0 12px;
+        background: var(--el-border);
+      }
+      .rail-line.done {
+        background: var(--el-success);
+      }
+
+      .wiz-body {
+        padding: 24px;
+      }
+      .wiz-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 22px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .wiz-foot .spacer {
+        flex: 1;
+      }
+      .foot-note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      /* Buttons (mirror components/ui/Button.tsx variants) */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid transparent;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .btn.sm {
+        height: var(--height-btn-sm);
+        font-size: 13px;
+        padding: 0 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn-ghost:hover {
+        background: var(--el-surface);
+        color: var(--el-text);
+      }
+      .btn-outline {
+        background: var(--el-page-bg);
+        border-color: var(--el-border);
+        color: var(--el-text);
+      }
+      .btn-danger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .btn-danger .ic {
+        color: var(--el-danger);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .btn-primary.is-disabled {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+      }
+
+      /* Pills / chips (mirror Pill.tsx) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .pill.create {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill.update {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill.skip {
+        background: var(--el-muted);
+        color: var(--el-text-muted);
+      }
+      .pill.warn {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill.err {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .pill .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: var(--radius-badge);
+      }
+      .pill.create .dot {
+        background: var(--el-success);
+      }
+      .pill.update .dot {
+        background: var(--el-info);
+      }
+      .pill.skip .dot {
+        background: var(--el-text-faint);
+      }
+
+      /* Type icon (mirror IssueTypeIcon — kind hue on --el-type-*) */
+      .ti {
+        width: 15px;
+        height: 15px;
+        flex: none;
+      }
+      .ti.epic {
+        color: var(--el-type-epic);
+      }
+      .ti.story {
+        color: var(--el-type-story);
+      }
+      .ti.task {
+        color: var(--el-type-task);
+      }
+      .ti.bug {
+        color: var(--el-type-bug);
+      }
+      .ti.subtask {
+        color: var(--el-type-subtask);
+      }
+
+      .section-label {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin: 0 0 10px;
+      }
+      .h-step {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .p-step {
+        margin: 0 0 18px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 68ch;
+      }
+
+      /* Callouts (mirror the ErrorState / inline notice pattern) */
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        padding: 11px 13px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .callout .cic {
+        flex: none;
+        margin-top: 1px;
+      }
+      .callout.info {
+        background: var(--el-tint-sky);
+        border-color: color-mix(in srgb, var(--el-info) 30%, transparent);
+      }
+      .callout.info .cic {
+        color: var(--el-info);
+      }
+      .callout.gate {
+        background: var(--el-tint-lavender);
+        border-color: color-mix(in srgb, var(--el-accent) 30%, transparent);
+        color: var(--el-text-strong);
+      }
+      .callout.gate .cic {
+        color: var(--el-accent);
+      }
+      .callout.warn {
+        background: var(--el-tint-peach);
+        border-color: color-mix(in srgb, var(--el-warning) 32%, transparent);
+        color: var(--el-text-strong);
+      }
+      .callout.warn .cic {
+        color: var(--el-warning);
+      }
+      .callout.danger {
+        background: var(--el-tint-rose);
+        border-color: color-mix(in srgb, var(--el-danger) 32%, transparent);
+        color: var(--el-text-strong);
+      }
+      .callout.danger .cic {
+        color: var(--el-danger);
+      }
+      .callout b {
+        color: var(--el-text-strong);
+      }
+
+      /* Source picker cards */
+      .src-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+      .src-card {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 16px 14px;
+        cursor: pointer;
+        text-align: center;
+        position: relative;
+      }
+      .src-card:hover {
+        border-color: var(--el-border-strong);
+      }
+      .src-card.selected {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 16%, transparent);
+      }
+      .src-card .glyph {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-input);
+        display: grid;
+        place-items: center;
+        margin: 0 auto 10px;
+        color: var(--el-text-strong);
+      }
+      .src-card .nm {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .src-card .meta {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+      }
+      .src-card .check {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: grid;
+        place-items: center;
+      }
+
+      /* FormField + Input + Combobox trigger (mirror the primitives) */
+      .field {
+        margin-bottom: 14px;
+      }
+      .field > label {
+        display: block;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin-bottom: 6px;
+      }
+      .field .hint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+      }
+      .input {
+        height: var(--height-input);
+        width: 100%;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 var(--spacing-input-x);
+        font-size: 13.5px;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .input.mono {
+        font-family: var(--font-mono);
+        color: var(--el-text-secondary);
+      }
+      .select {
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text);
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        width: 100%;
+        justify-content: space-between;
+        cursor: pointer;
+      }
+      .select .chev {
+        color: var(--el-text-faint);
+      }
+      .select.warn {
+        border-color: color-mix(in srgb, var(--el-warning) 55%, transparent);
+        background: var(--el-tint-peach);
+      }
+
+      /* CSV dropzone */
+      .dropzone {
+        border: 1.5px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 26px 20px;
+        text-align: center;
+      }
+      .dropzone .z-ic {
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+      .dropzone .z-t {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .dropzone .z-d {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 3px;
+      }
+      .file-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        padding: 10px 12px;
+        margin-top: 12px;
+      }
+      .file-row .fi {
+        color: var(--el-success);
+      }
+      .file-row .fn {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .file-row .fm {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+      }
+
+      /* Mapping table */
+      .card-surface {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .map-row {
+        display: grid;
+        grid-template-columns: 190px 26px 1fr;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .map-row:last-child {
+        border-bottom: 0;
+      }
+      .map-row .src {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .map-row .src .f {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .map-row .src .v {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        font-family: var(--font-mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .map-row .arrow {
+        color: var(--el-text-faint);
+        display: grid;
+        place-items: center;
+      }
+      .map-values {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .mv-line {
+        display: grid;
+        grid-template-columns: 1fr 20px 1fr;
+        align-items: center;
+        gap: 10px;
+      }
+      .mv-src {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+      }
+      .mv-src .swatch {
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .mini-arrow {
+        color: var(--el-text-faint);
+        display: grid;
+        place-items: center;
+      }
+      .auto-tag {
+        font-size: 10.5px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+        color: var(--el-text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .auto-tag.edited {
+        color: var(--el-accent);
+      }
+
+      /* Summary tiles */
+      .sum-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .sum-tile {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 16px;
+        background: var(--el-page-bg);
+      }
+      .sum-tile.create {
+        background: var(--el-tint-mint);
+        border-color: color-mix(in srgb, var(--el-success) 26%, transparent);
+      }
+      .sum-tile.update {
+        background: var(--el-tint-sky);
+        border-color: color-mix(in srgb, var(--el-info) 26%, transparent);
+      }
+      .sum-tile.skip {
+        background: var(--el-surface);
+      }
+      .sum-tile .num {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        line-height: 1;
+        font-family: var(--font-serif);
+      }
+      .sum-tile .k {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        margin-top: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .sum-tile .k .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: var(--radius-badge);
+      }
+      .sum-tile.create .dot {
+        background: var(--el-success);
+      }
+      .sum-tile.update .dot {
+        background: var(--el-info);
+      }
+      .sum-tile.skip .dot {
+        background: var(--el-text-faint);
+      }
+      .sum-tile .d {
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+      }
+
+      /* Preview / issue list table */
+      .list-head,
+      .list-row {
+        display: grid;
+        grid-template-columns: 96px 1fr 132px 108px;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+      }
+      .list-head {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-faint);
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .list-row {
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13px;
+      }
+      .list-row:last-child {
+        border-bottom: 0;
+      }
+      .list-row .eid {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .list-row .title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: var(--el-text);
+      }
+      .list-row .title span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .list-row .mapinfo {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .list-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 16px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+      }
+      .list-foot .cnt {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pager {
+        display: inline-flex;
+        gap: 4px;
+      }
+      .pager button {
+        min-width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .pager button.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+
+      /* Progress */
+      .prog-wrap {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 18px;
+      }
+      .prog-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .prog-top .lead {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .prog-top .pct {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .prog-bar {
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        overflow: hidden;
+      }
+      .prog-bar > i {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+      .prog-bar.done > i {
+        background: var(--el-success);
+      }
+      .prog-counts {
+        display: flex;
+        gap: 18px;
+        margin-top: 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .prog-counts b {
+        color: var(--el-text-strong);
+        font-variant-numeric: tabular-nums;
+      }
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border-radius: var(--radius-badge);
+        border: 2px solid color-mix(in srgb, var(--el-accent) 30%, transparent);
+        border-top-color: var(--el-accent);
+        display: inline-block;
+      }
+
+      /* Live log */
+      .log {
+        margin-top: 14px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+        max-height: 190px;
+        overflow: hidden;
+      }
+      .log-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 8px 13px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .log-row:last-child {
+        border-bottom: 0;
+      }
+      .log-row .eid {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-muted);
+        margin-left: auto;
+      }
+      .log-row .verb {
+        font-weight: 600;
+      }
+      .log-row.created .verb {
+        color: var(--el-success);
+      }
+      .log-row.updated .verb {
+        color: var(--el-info);
+      }
+      .log-row.err .verb {
+        color: var(--el-danger);
+      }
+
+      /* Empty / done states */
+      .empty {
+        text-align: center;
+        padding: 40px 24px;
+      }
+      .empty .e-ic {
+        width: 46px;
+        height: 46px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        color: var(--el-text-faint);
+        display: grid;
+        place-items: center;
+        margin: 0 auto 14px;
+      }
+      .empty.ok .e-ic {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .empty h4 {
+        margin: 0 0 5px;
+        font-size: 16px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0 auto;
+        max-width: 46ch;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .empty .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      .state-cap {
+        font: 600 11px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-faint);
+        margin-bottom: 10px;
+      }
+      .mini {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 18px;
+      }
+      .legend {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+        padding: 12px 14px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-surface-soft);
+      }
+      .legend .li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .legend .li .dot {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        border: 1.5px solid var(--el-border-strong);
+        color: var(--el-text-muted);
+      }
+      .legend .li.done .dot {
+        background: var(--el-success);
+        border-color: var(--el-success);
+        color: var(--el-text-inverted);
+      }
+      .legend .li.current .dot {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .legend .li.locked .dot {
+        border-style: dashed;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Import wizard — connect → map → dry-run preview → import</h1>
+        <p>
+          The guided importer that brings an existing backlog (Jira · Linear · GitHub Issues · CSV)
+          into Motir work items. Four gated steps; <b>nothing is written to the PM core until the
+          user confirms the dry-run preview</b>. Grounded in the 7.16.2 decision (MOTIR-938): the
+          connector-interface source set, the full field mapping, the unmatched-value policy, the
+          external-id-map idempotency (re-run = upsert), and the dry-run-shares-the-engine gate.
+          Mirrors Plane (Summary→Confirm gate), Linear (multi-source→one model), and Atlassian's CSV
+          external-id skip. Reached from the onboarding entrance "I have an existing project — import
+          it" door and Settings › Project › Import.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-937 · 7.16.1</span>
+          <span class="ref muted">Story MOTIR-816</span>
+          <span class="ref muted">grounds in MOTIR-938 (decision)</span>
+          <span class="ref muted">renders in MOTIR-942 (UI)</span>
+          <span class="ref muted">entry → design/onboarding-entrance</span>
+        </div>
+      </div>
+      <button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">
+        Toggle theme
+      </button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 0 — wizard chrome + the step rail
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      <span class="n">0</span> Wizard chrome + step rail
+      <span class="note">— the four-step frame; Import GATED behind Preview (done / current / locked)</span>
+    </div>
+    <div class="panel">
+      <div class="wiz">
+        <div class="wiz-bar">
+          <span class="logo" aria-hidden="true">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" />
+            </svg>
+          </span>
+          <span class="ttl">Import work items</span>
+          <span class="sub">· into “Payments Platform”</span>
+          <span class="x" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </span>
+        </div>
+        <div class="rail">
+          <div class="rail-step done">
+            <span class="dot"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span>
+            <span class="lbl">Connect<span class="sub">Jira · 342 issues</span></span>
+          </div>
+          <div class="rail-line done"></div>
+          <div class="rail-step current">
+            <span class="dot">2</span>
+            <span class="lbl">Map<span class="sub">fields &amp; values</span></span>
+          </div>
+          <div class="rail-line"></div>
+          <div class="rail-step">
+            <span class="dot">3</span>
+            <span class="lbl">Preview<span class="sub">dry run</span></span>
+          </div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked">
+            <span class="dot" aria-label="locked">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+            </span>
+            <span class="lbl">Import<span class="sub">locked until preview</span></span>
+          </div>
+        </div>
+        <div class="wiz-body">
+          <div class="callout gate">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg></span>
+            <span>
+              <b>The Import step stays locked until the dry-run Preview is reviewed.</b> Every import
+              is previewed before it writes — you always see exactly what will be created, updated,
+              or skipped, then click Confirm. Back is available at every step to revise a mapping.
+            </span>
+          </div>
+          <div class="legend" aria-hidden="true">
+            <span class="li done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M20 6 9 17l-5-5" /></svg></span> Done — step completed (<code style="font-family:var(--font-mono)">--el-success</code>)</span>
+            <span class="li current"><span class="dot">2</span> Current — active step (<code style="font-family:var(--font-mono)">--el-accent</code>)</span>
+            <span class="li locked"><span class="dot" style="border-style:dashed">4</span> Locked — not yet reachable (<code style="font-family:var(--font-mono)">--el-border-strong</code> dashed)</span>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-ghost">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+            Back
+          </button>
+          <span class="spacer"></span>
+          <span class="foot-note">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
+            Step 2 of 4
+          </span>
+          <button class="btn btn-primary">
+            Next: Preview
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 1 — Connect the source (step 1)
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      <span class="n">1</span> Connect the source (step 1)
+      <span class="note">— source picker; the live-source branch AND the CSV branch; the “reachable, N found” confirmation</span>
+    </div>
+    <div class="panel stack">
+      <div class="wiz">
+        <div class="wiz-bar">
+          <span class="logo" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" /></svg></span>
+          <span class="ttl">Import work items</span>
+          <span class="x" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></span>
+        </div>
+        <div class="rail">
+          <div class="rail-step current"><span class="dot">1</span><span class="lbl">Connect<span class="sub">choose a source</span></span></div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked"><span class="dot">2</span><span class="lbl">Map</span></div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked"><span class="dot">3</span><span class="lbl">Preview</span></div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked"><span class="dot" aria-label="locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span><span class="lbl">Import</span></div>
+        </div>
+        <div class="wiz-body">
+          <h3 class="h-step">Where are your issues coming from?</h3>
+          <p class="p-step">
+            Motir normalises Jira, Linear, GitHub Issues and CSV into one shape, so mapping and
+            preview work the same whichever you pick. A fifth source is a new connector, not a
+            different wizard.
+          </p>
+          <div class="src-grid">
+            <div class="src-card selected">
+              <span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><path d="M20 6 9 17l-5-5" /></svg></span>
+              <span class="glyph" style="background:var(--el-tint-sky)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="m21 16-9 5-9-5V8l9-5 9 5z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" /></svg>
+              </span>
+              <div class="nm">Jira</div>
+              <div class="meta">Cloud · REST API</div>
+            </div>
+            <div class="src-card">
+              <span class="glyph" style="background:var(--el-tint-lavender)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M8 12h8" /><path d="M12 8v8" /></svg>
+              </span>
+              <div class="nm">Linear</div>
+              <div class="meta">API key</div>
+            </div>
+            <div class="src-card">
+              <span class="glyph" style="background:var(--el-tint-mint)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 1 5 1 5 1c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 8c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /></svg>
+              </span>
+              <div class="nm">GitHub Issues</div>
+              <div class="meta">OAuth · owner/repo</div>
+            </div>
+            <div class="src-card">
+              <span class="glyph" style="background:var(--el-tint-peach)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M8 13h2" /><path d="M8 17h2" /><path d="M14 13h2" /><path d="M14 17h2" /></svg>
+              </span>
+              <div class="nm">CSV</div>
+              <div class="meta">Upload · no credentials</div>
+            </div>
+          </div>
+
+          <div class="cols" style="margin-top:20px">
+            <!-- live-source branch -->
+            <div class="mini">
+              <div class="state-cap">A · Live source (Jira / Linear / GitHub)</div>
+              <div class="field">
+                <label>Jira site URL</label>
+                <div class="input mono">https://acme.atlassian.net</div>
+              </div>
+              <div class="field">
+                <label>API token</label>
+                <div class="input mono" style="justify-content:space-between">
+                  ••••••••••••••••••••
+                  <span class="pill" style="background:var(--el-tint-mint);color:var(--el-text-strong)"><span class="dot" style="background:var(--el-success)"></span> Authorized</span>
+                </div>
+                <div class="hint">Stored encrypted, used only for this import. <a style="color:var(--el-link)">How to create a token ↗</a></div>
+              </div>
+              <div class="field" style="margin-bottom:0">
+                <label>Source project</label>
+                <div class="select"><span>PAY — Payments Platform</span><span class="chev"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg></span></div>
+              </div>
+            </div>
+            <!-- CSV branch -->
+            <div class="mini">
+              <div class="state-cap">B · CSV upload</div>
+              <div class="dropzone">
+                <div class="z-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" /></svg></div>
+                <div class="z-t">Drop a .csv file, or click to browse</div>
+                <div class="z-d">One row per issue · UTF-8 · up to 10&nbsp;MB</div>
+              </div>
+              <div class="file-row">
+                <span class="fi"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></svg></span>
+                <span><span class="fn">acme-backlog.csv</span> <span class="fm">· 512 rows · 14 columns</span></span>
+              </div>
+              <div class="field" style="margin:12px 0 0">
+                <label>Which column is the issue ID?</label>
+                <div class="select"><span>Issue key</span><span class="chev"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg></span></div>
+                <div class="hint">Used to skip re-imports and update instead of duplicating on a re-run.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout info" style="margin-top:16px">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="m9 11 3 3L22 4" /></svg></span>
+            <span><b>Source reachable — 342 issues found</b> in PAY. Motir will page through them; nothing is fetched all at once.</span>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-ghost"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg> Cancel</button>
+          <span class="spacer"></span>
+          <button class="btn btn-primary">Next: Map fields <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 2 — Field mapping (step 2)
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      <span class="n">2</span> Field mapping (step 2)
+      <span class="note">— source field → Motir control; auto-proposed + edited rows; the unmatched-value treatment (choice, never a silent drop)</span>
+    </div>
+    <div class="panel">
+      <div class="wiz">
+        <div class="wiz-bar">
+          <span class="logo" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" /></svg></span>
+          <span class="ttl">Import work items</span>
+          <span class="sub">· Jira PAY → Payments Platform</span>
+          <span class="x" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></span>
+        </div>
+        <div class="rail">
+          <div class="rail-step done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span><span class="lbl">Connect</span></div>
+          <div class="rail-line done"></div>
+          <div class="rail-step current"><span class="dot">2</span><span class="lbl">Map<span class="sub">fields &amp; values</span></span></div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked"><span class="dot">3</span><span class="lbl">Preview</span></div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked"><span class="dot" aria-label="locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span><span class="lbl">Import</span></div>
+        </div>
+        <div class="wiz-body">
+          <h3 class="h-step">Map source fields to Motir</h3>
+          <p class="p-step">
+            Motir proposed a mapping from what it found. Review each row — edit any control, and
+            resolve the unmatched values (a status, priority, label or person with no Motir match)
+            before continuing. Unmatched values are never dropped silently.
+          </p>
+          <div class="card-surface">
+            <!-- issue type -> kind -->
+            <div class="map-row">
+              <div class="src">
+                <span class="f">Issue type</span>
+                <span class="v">Epic · Story · Task · Bug · Sub-task</span>
+              </div>
+              <div class="arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></div>
+              <div class="map-values">
+                <div class="mv-line">
+                  <span class="mv-src">Story</span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="mv-src"><svg class="ti story" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H4z" /><path d="M4 9h16" /></svg> Story <span class="auto-tag">auto</span></span>
+                </div>
+                <div class="mv-line">
+                  <span class="mv-src">Sub-task</span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="mv-src"><svg class="ti subtask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg> Subtask <span class="auto-tag">auto</span></span>
+                </div>
+              </div>
+            </div>
+            <!-- status -> workflow_status, one UNMATCHED -->
+            <div class="map-row">
+              <div class="src">
+                <span class="f">Status</span>
+                <span class="v">To Do · In Progress · In Review · Done · Blocked</span>
+              </div>
+              <div class="arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></div>
+              <div class="map-values">
+                <div class="mv-line">
+                  <span class="mv-src"><span class="swatch" style="background:var(--el-text-faint)"></span> In Progress</span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="select"><span>In Progress</span><span class="chev"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg></span></span>
+                </div>
+                <div class="mv-line">
+                  <span class="mv-src"><span class="swatch" style="background:var(--el-warning)"></span> Blocked <span class="pill warn" style="padding:1px 7px">unmatched</span></span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="select warn"><span>Choose a status…</span><span class="chev"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg></span></span>
+                </div>
+              </div>
+            </div>
+            <!-- priority -->
+            <div class="map-row">
+              <div class="src">
+                <span class="f">Priority</span>
+                <span class="v">Highest · High · Medium · Low · Lowest</span>
+              </div>
+              <div class="arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></div>
+              <div class="map-values">
+                <div class="mv-line">
+                  <span class="mv-src">Highest</span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="mv-src"><span class="pill" style="background:var(--el-tint-rose);color:var(--el-text-strong)">Highest</span> <span class="auto-tag edited">edited</span></span>
+                </div>
+              </div>
+            </div>
+            <!-- assignee by email, one UNMATCHED with create/leave choice -->
+            <div class="map-row">
+              <div class="src">
+                <span class="f">Assignee &amp; reporter</span>
+                <span class="v">matched by email</span>
+              </div>
+              <div class="arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></div>
+              <div class="map-values">
+                <div class="mv-line">
+                  <span class="mv-src">maya@acme.com</span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="mv-src"><span class="pill" style="background:var(--el-tint-mint);color:var(--el-text-strong)"><span class="dot" style="background:var(--el-accent);width:14px;height:14px;color:var(--el-accent-text);display:grid;place-items:center;font-size:8px;border-radius:999px">M</span> Maya O.</span> <span class="auto-tag">matched</span></span>
+                </div>
+                <div class="mv-line">
+                  <span class="mv-src">rob@acme.com <span class="pill warn" style="padding:1px 7px">no match</span></span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="select warn"><span>Leave unassigned</span><span class="chev"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg></span></span>
+                </div>
+              </div>
+            </div>
+            <!-- labels -->
+            <div class="map-row">
+              <div class="src">
+                <span class="f">Labels</span>
+                <span class="v">14 distinct</span>
+              </div>
+              <div class="arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></div>
+              <div class="map-values">
+                <div class="mv-line">
+                  <span class="mv-src"><span class="pill" style="padding:1px 8px">backend</span> <span class="pill" style="padding:1px 8px">tech-debt</span></span>
+                  <span class="mini-arrow"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></span>
+                  <span class="mv-src">Create as Motir labels <span class="auto-tag">auto</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="callout warn" style="margin-top:16px">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg></span>
+            <span><b>2 values still need a decision</b> — 1 unmatched status, 1 unmatched user. Resolve them to continue; comments, attachments and issue links carry over automatically where the source provides them.</span>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-ghost"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg> Back</button>
+          <span class="spacer"></span>
+          <span class="foot-note">2 unresolved</span>
+          <button class="btn btn-primary is-disabled">Next: Preview <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 3 — Dry-run PREVIEW (step 3 · the ★ gate)
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      <span class="n">3</span> Dry-run PREVIEW (step 3 · ★ the gate)
+      <span class="note">— CREATE / UPDATE / SKIP summary; per-issue paginated list; warnings; Confirm &amp; import + Back; nothing written until Confirm</span>
+    </div>
+    <div class="panel">
+      <div class="wiz">
+        <div class="wiz-bar">
+          <span class="logo" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" /></svg></span>
+          <span class="ttl">Import work items</span>
+          <span class="sub">· dry run — nothing written yet</span>
+          <span class="x" aria-label="Close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></span>
+        </div>
+        <div class="rail">
+          <div class="rail-step done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span><span class="lbl">Connect</span></div>
+          <div class="rail-line done"></div>
+          <div class="rail-step done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span><span class="lbl">Map</span></div>
+          <div class="rail-line done"></div>
+          <div class="rail-step current"><span class="dot">3</span><span class="lbl">Preview<span class="sub">review the plan</span></span></div>
+          <div class="rail-line"></div>
+          <div class="rail-step locked"><span class="dot" aria-label="locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg></span><span class="lbl">Import</span></div>
+        </div>
+        <div class="wiz-body">
+          <h3 class="h-step">Review what will be imported</h3>
+          <p class="p-step">
+            This is a dry run computed with the exact engine the real import uses — the preview is
+            the run minus the writes. Check the plan below, then Confirm.
+          </p>
+          <div class="sum-grid">
+            <div class="sum-tile create">
+              <div class="num">318</div>
+              <div class="k"><span class="dot"></span> To create</div>
+              <div class="d">new work items</div>
+            </div>
+            <div class="sum-tile update">
+              <div class="num">21</div>
+              <div class="k"><span class="dot"></span> To update</div>
+              <div class="d">already imported before</div>
+            </div>
+            <div class="sum-tile skip">
+              <div class="num">3</div>
+              <div class="k"><span class="dot"></span> To skip</div>
+              <div class="d">unchanged / no id</div>
+            </div>
+          </div>
+
+          <div class="callout warn" style="margin-bottom:16px">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg></span>
+            <span><b>7 warnings</b> — 4 issues have a status you left at the default, 3 reference a user who will be left unassigned. They will still import. <a style="color:var(--el-link);font-weight:600">Review warnings</a></span>
+          </div>
+
+          <div class="section-label">Per-issue plan</div>
+          <div class="card-surface">
+            <div class="list-head">
+              <span>Source</span><span>Title → Motir</span><span>Mapping</span><span>Action</span>
+            </div>
+            <div class="list-row">
+              <span class="eid">PAY-1042</span>
+              <span class="title"><svg class="ti story" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H4z" /><path d="M4 9h16" /></svg><span>Checkout — split tender</span></span>
+              <span class="mapinfo">In Progress · High</span>
+              <span><span class="pill create"><span class="dot"></span> Create</span></span>
+            </div>
+            <div class="list-row">
+              <span class="eid">PAY-1041</span>
+              <span class="title"><svg class="ti bug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5" /><path d="M12 2v3M12 19v3M5 12H2M22 12h-3" /></svg><span>Refund webhook retries twice</span></span>
+              <span class="mapinfo">To Do · Highest</span>
+              <span><span class="pill create"><span class="dot"></span> Create</span></span>
+            </div>
+            <div class="list-row">
+              <span class="eid">PAY-0980</span>
+              <span class="title"><svg class="ti task" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12H3M16 6H3M21 18H3" /></svg><span>Rotate Stripe keys</span></span>
+              <span class="mapinfo">Done · Medium</span>
+              <span><span class="pill update"><span class="dot"></span> Update</span></span>
+            </div>
+            <div class="list-row">
+              <span class="eid">PAY-0975</span>
+              <span class="title"><svg class="ti story" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H4z" /><path d="M4 9h16" /></svg><span>Apple Pay on mobile web</span></span>
+              <span class="mapinfo"><span class="pill warn" style="padding:1px 7px">status → default</span></span>
+              <span><span class="pill create"><span class="dot"></span> Create</span></span>
+            </div>
+            <div class="list-row">
+              <span class="eid">PAY-0961</span>
+              <span class="title"><svg class="ti subtask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg><span>Add idempotency key</span></span>
+              <span class="mapinfo">unchanged</span>
+              <span><span class="pill skip"><span class="dot"></span> Skip</span></span>
+            </div>
+            <div class="list-foot">
+              <span class="cnt">Showing 1–25 of 342</span>
+              <span class="pager"><button class="on">1</button><button>2</button><button>3</button><button>…</button><button>14</button></span>
+            </div>
+          </div>
+
+          <div class="callout gate" style="margin-top:16px">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" /></svg></span>
+            <span><b>Nothing has been written to Motir yet.</b> The import runs only when you click Confirm — until then this project is untouched, and you can go Back to change any mapping.</span>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-ghost"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6" /></svg> Back to mapping</button>
+          <span class="spacer"></span>
+          <button class="btn btn-primary">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+            Confirm &amp; import 339 issues
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 4 — Import RUN + progress (step 4)
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      <span class="n">4</span> Import RUN + progress (step 4)
+      <span class="note">— in-flight (aria-live counts + per-issue log) and the complete/done state</span>
+    </div>
+    <div class="panel stack">
+      <!-- in-flight -->
+      <div class="wiz">
+        <div class="wiz-bar">
+          <span class="logo" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" /></svg></span>
+          <span class="ttl">Importing…</span>
+          <span class="sub">· do not close this tab</span>
+        </div>
+        <div class="rail">
+          <div class="rail-step done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span><span class="lbl">Connect</span></div>
+          <div class="rail-line done"></div>
+          <div class="rail-step done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span><span class="lbl">Map</span></div>
+          <div class="rail-line done"></div>
+          <div class="rail-step done"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M20 6 9 17l-5-5" /></svg></span><span class="lbl">Preview</span></div>
+          <div class="rail-line done"></div>
+          <div class="rail-step current"><span class="dot">4</span><span class="lbl">Import<span class="sub">running</span></span></div>
+        </div>
+        <div class="wiz-body">
+          <div class="prog-wrap">
+            <div class="prog-top">
+              <span class="lead"><span class="spinner"></span> Importing issues from Jira PAY…</span>
+              <span class="pct">198 / 339</span>
+            </div>
+            <div class="prog-bar"><i style="width:58%"></i></div>
+            <div class="prog-counts" role="status" aria-live="polite">
+              <span><b>184</b> created</span>
+              <span><b>14</b> updated</span>
+              <span><b>0</b> failed</span>
+              <span style="margin-left:auto;color:var(--el-text-muted)">~40s remaining</span>
+            </div>
+            <div class="log" aria-hidden="true">
+              <div class="log-row created"><span class="verb">Created</span> Checkout — split tender <span class="eid">PAY-1042</span></div>
+              <div class="log-row created"><span class="verb">Created</span> Refund webhook retries twice <span class="eid">PAY-1041</span></div>
+              <div class="log-row updated"><span class="verb">Updated</span> Rotate Stripe keys <span class="eid">PAY-0980</span></div>
+              <div class="log-row created"><span class="verb">Created</span> Apple Pay on mobile web <span class="eid">PAY-0975</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="wiz-foot">
+          <button class="btn btn-outline">Stop after current batch</button>
+          <span class="spacer"></span>
+          <span class="foot-note"><span class="spinner" style="width:13px;height:13px"></span> Writing through the normal work-item engine — safe to leave running</span>
+        </div>
+      </div>
+
+      <!-- complete -->
+      <div class="wiz">
+        <div class="wiz-bar">
+          <span class="logo" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" /></svg></span>
+          <span class="ttl">Import complete</span>
+        </div>
+        <div class="wiz-body">
+          <div class="empty ok">
+            <span class="e-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M21.801 10A10 10 0 1 1 17 3.335" /><path d="m9 11 3 3L22 4" /></svg></span>
+            <h4>Imported 339 issues into Payments Platform</h4>
+            <p><b>325 created</b>, <b>14 updated</b>, 3 skipped. Comments, labels and issue links came across; 3 users had no Motir match and were left unassigned.</p>
+            <div class="actions">
+              <button class="btn btn-primary">View imported backlog <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg></button>
+              <button class="btn btn-outline">Download report (CSV)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 5 — re-run / empty / error states
+    ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      <span class="n">5</span> Re-run / empty / error states
+      <span class="note">— idempotent re-run (all UPDATE, 0 duplicate CREATE); connect-failed; CSV-parse-error; partial-failure; nothing-to-import</span>
+    </div>
+    <div class="panel stack">
+      <!-- idempotent re-run preview -->
+      <div class="mini">
+        <div class="state-cap">A · Re-run the same import — idempotent (the ★ idempotency, made visible)</div>
+        <div class="sum-grid" style="margin-bottom:14px">
+          <div class="sum-tile create" style="opacity:.6">
+            <div class="num">0</div>
+            <div class="k"><span class="dot"></span> To create</div>
+            <div class="d">no duplicates</div>
+          </div>
+          <div class="sum-tile update">
+            <div class="num">339</div>
+            <div class="k"><span class="dot"></span> To update</div>
+            <div class="d">already imported</div>
+          </div>
+          <div class="sum-tile skip">
+            <div class="num">0</div>
+            <div class="k"><span class="dot"></span> To skip</div>
+            <div class="d">—</div>
+          </div>
+        </div>
+        <div class="callout info">
+          <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></span>
+          <span><b>Every issue is already imported — they’ll be updated, not duplicated.</b> Motir matches each source ID to the work item it created last time and re-syncs source-owned fields; your Motir-local edits are kept.</span>
+        </div>
+        <div class="card-surface" style="margin-top:12px">
+          <div class="list-row" style="grid-template-columns:96px 1fr 132px 108px">
+            <span class="eid">PAY-1042</span>
+            <span class="title"><svg class="ti story" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14H4z" /><path d="M4 9h16" /></svg><span>Checkout — split tender</span></span>
+            <span class="mapinfo">→ MOTIR-2231</span>
+            <span><span class="pill update"><span class="dot"></span> Update</span></span>
+          </div>
+          <div class="list-row" style="grid-template-columns:96px 1fr 132px 108px">
+            <span class="eid">PAY-1041</span>
+            <span class="title"><svg class="ti bug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5" /><path d="M12 2v3M12 19v3M5 12H2M22 12h-3" /></svg><span>Refund webhook retries twice</span></span>
+            <span class="mapinfo">→ MOTIR-2230</span>
+            <span><span class="pill update"><span class="dot"></span> Update</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cols">
+        <!-- connect failed -->
+        <div class="mini">
+          <div class="state-cap">B · Connect failed (bad token / unreachable)</div>
+          <div class="empty">
+            <span class="e-ic" style="background:var(--el-tint-rose);color:var(--el-danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" /></svg></span>
+            <h4>Couldn’t reach Jira</h4>
+            <p>The token was rejected (401). Check the site URL and that the token has read access to PAY, then try again.</p>
+            <div class="actions"><button class="btn btn-outline">Edit connection</button><button class="btn btn-primary">Retry</button></div>
+          </div>
+        </div>
+        <!-- CSV parse error -->
+        <div class="mini">
+          <div class="state-cap">C · CSV parse error</div>
+          <div class="callout danger">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></span>
+            <span><b>Couldn’t read acme-backlog.csv</b> — row 47 has 11 columns but the header has 14. Fix the row or re-export, then upload again.</span>
+          </div>
+          <div class="callout warn" style="margin-top:10px">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg></span>
+            <span><b>No ID column selected</b> — pick which column holds the issue ID so re-runs update instead of duplicating.</span>
+          </div>
+          <div class="actions" style="margin-top:14px;justify-content:flex-end;display:flex;gap:10px"><button class="btn btn-outline sm">Choose another file</button></div>
+        </div>
+      </div>
+
+      <div class="cols">
+        <!-- partial failure -->
+        <div class="mini">
+          <div class="state-cap">D · Partial failure (some errored, rest imported)</div>
+          <div class="callout warn">
+            <span class="cic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg></span>
+            <span><b>Imported 336 of 339 — 3 issues failed.</b> The rest came through. Failed issues weren’t partially written; re-run to retry only the 3.</span>
+          </div>
+          <div class="card-surface" style="margin-top:12px">
+            <div class="list-row" style="grid-template-columns:96px 1fr 108px">
+              <span class="eid">PAY-0804</span>
+              <span class="title"><span>Parent PAY-9999 not found</span></span>
+              <span><span class="pill err"><span class="dot" style="background:var(--el-danger)"></span> Failed</span></span>
+            </div>
+            <div class="list-row" style="grid-template-columns:96px 1fr 108px">
+              <span class="eid">PAY-0777</span>
+              <span class="title"><span>Title exceeds 512 chars</span></span>
+              <span><span class="pill err"><span class="dot" style="background:var(--el-danger)"></span> Failed</span></span>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:14px;justify-content:flex-end;display:flex;gap:10px"><button class="btn btn-outline sm">Download error report</button><button class="btn btn-primary sm">Retry 3 failed</button></div>
+        </div>
+        <!-- nothing to import -->
+        <div class="mini">
+          <div class="state-cap">E · Nothing to import (empty source)</div>
+          <div class="empty">
+            <span class="e-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg></span>
+            <h4>No issues found</h4>
+            <p>The selected Jira project has no issues matching the import scope. Pick a different project or adjust the filter.</p>
+            <div class="actions"><button class="btn btn-outline">Change source</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
