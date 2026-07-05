@@ -69,8 +69,9 @@
          [data-theme='dark'] overrides. A mock.html can't @import the package CSS,
          so the used subset is inlined verbatim (the design/coding-convention +
          design/ready convention). Product UI references --el-* + the shape tokens
-         ONLY — never a Tier-0 --color-* and never a raw rounded-*/
-      p-*/h-*. ══════════════════════════════════════════════════════════════════════ */ :root {
+         ONLY — never a Tier-0 --color-* and never a raw rounded / p / h utility.
+         ══════════════════════════════════════════════════════════════════════ */
+      :root {
         /* Tier 0 — colour (light base) */
         --color-primary: #5645d4;
         --color-primary-foreground: #ffffff;
