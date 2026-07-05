@@ -96,6 +96,7 @@ export type GithubWebhookResult =
       outcome:
         | 'transitioned'
         | 'noop'
+        | 'deferred_open_pr' // a merge that is NOT the item's last open linked PR — item stays In Review (MOTIR-1604)
         | 'no_work_item'
         | 'no_matching_status'
         | 'illegal_transition'
@@ -247,6 +248,10 @@ export const githubWebhookService = {
     const provider = getGitProvider(PROVIDER);
     const cr = provider.parseChangeRequestEvent(body);
     if (!cr) return { event: 'pull_request', outcome: 'malformed' };
+    // The canonical lifecycle this delivery maps to (opened → in_review, merged →
+    // done, closed-unmerged → todo). Computed up front — phase 1 needs it to gate
+    // the multi-PR completion guard (MOTIR-1604), phase 2 to resolve the target.
+    const lifecycle = provider.changeRequestLifecycle(cr);
 
     const installationId = readInstallationId(body);
     if (!installationId) return { event: 'pull_request', outcome: 'unknown_installation' };
@@ -309,16 +314,28 @@ export const githubWebhookService = {
         workItemId: workItem?.id ?? null,
         linkedManually,
       };
+      let prId: string;
       try {
-        await githubPullRequestRepository.upsert(prRow, tx);
+        prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
       } catch (err) {
         if (!isUniqueViolation(err)) throw err;
         // Converge: the concurrent winner wrote the same (repo, number); update
         // to reflect this delivery's state so the row is never left stale.
-        await githubPullRequestRepository.upsert(prRow, tx);
+        prId = (await githubPullRequestRepository.upsert(prRow, tx)).id;
       }
 
       if (!workItem) return { kind: 'no_work_item' as const };
+
+      // MOTIR-1604 — a merge only COMPLETES the item when it is the item's LAST
+      // open linked PR. A cross-repo (two-PR) card has >1 linked PR; the first
+      // merge must NOT flip Done while a sibling PR is still open. This PR's row
+      // was just upserted (closed, on a merge), so we count the item's OTHER open
+      // linked PRs — non-zero means DEFER (leave the item where it is). Only a
+      // `done` delivery can complete, so skip the read for any other lifecycle.
+      const hasOtherOpenLinkedPr =
+        lifecycle === 'done'
+          ? (await githubPullRequestRepository.countOtherOpenByWorkItem(workItem.id, prId, tx)) > 0
+          : false;
 
       const boundUserId = await resolveBoundMember(
         authorGithubUserId,
@@ -335,6 +352,7 @@ export const githubWebhookService = {
         projectId: workItem.projectId,
         workItemId: workItem.id,
         currentStatus: workItem.status,
+        hasOtherOpenLinkedPr,
         actorUserId: boundUserId ?? owner?.userId ?? null,
         ownerUserId: owner?.userId ?? null,
       };
@@ -348,9 +366,20 @@ export const githubWebhookService = {
       // No workspace owner and no bound author — nothing can author the move.
       return { event: 'pull_request', outcome: 'access_denied', workItemId: resolved.workItemId };
 
+    // A merged PR that is NOT the item's last open linked PR leaves the item In
+    // Review — a cross-repo (two-PR) card completes only when its LAST linked PR
+    // merges (MOTIR-1604). Decided on the committed PR rows read in phase 1; a
+    // later delivery for the sibling's own merge completes the item.
+    if (lifecycle === 'done' && resolved.hasOtherOpenLinkedPr) {
+      return {
+        event: 'pull_request',
+        outcome: 'deferred_open_pr',
+        workItemId: resolved.workItemId,
+      };
+    }
+
     // Phase 2 — the status transition through the SHIPPED authority. Resolve the
     // concrete target status key by category against the project's live workflow.
-    const lifecycle = provider.changeRequestLifecycle(cr);
     const targetKey = await resolveTargetStatusKey(
       resolved.projectId,
       resolved.workspaceId,

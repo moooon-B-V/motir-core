@@ -320,6 +320,121 @@ describe('githubWebhookService — pull_request → status sync', () => {
   });
 });
 
+describe('githubWebhookService — cross-repo (two-PR) card completes on the LAST merge (MOTIR-1604)', () => {
+  const REPO_B_PROVIDER_ID = '556';
+
+  /** makeScenario, plus a SECOND connected repo in the same installation — the
+   *  two-repo shape of a cross-repo contract card (a producer PR in one repo +
+   *  a consumer PR in the other, BOTH linked to ONE work item). */
+  async function makeTwoRepoScenario(email: string) {
+    const { user, workspace } = await makeWorkspace(email);
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      name: 'Acme',
+      identifier: 'ACME',
+    });
+    const ctx = { userId: user.id, workspaceId: workspace.id };
+    const item = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: 'A cross-repo change' },
+      ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', ctx);
+    await githubInstallationService.persistInstallation({
+      workspaceId: workspace.id,
+      installation: {
+        installationId: INSTALLATION_ID,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: [
+        { providerRepoId: REPO_PROVIDER_ID, owner: 'moooon', name: 'acme', defaultBranch: 'main' },
+        {
+          providerRepoId: REPO_B_PROVIDER_ID,
+          owner: 'moooon',
+          name: 'acme-ai',
+          defaultBranch: 'main',
+        },
+      ],
+    });
+    return { user, workspace, project, item, ctx };
+  }
+
+  it('a merge does NOT complete the item while a sibling linked PR is still open; the LAST merge does', async () => {
+    const s = await makeTwoRepoScenario('twopr@example.com');
+
+    // Two OPEN PRs — one per repo — both linked to the SAME work item.
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'opened', identifier: s.item.identifier, number: 7 }),
+    );
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'opened',
+        identifier: s.item.identifier,
+        number: 8,
+        repoId: Number(REPO_B_PROVIDER_ID),
+      }),
+    );
+    expect(await statusOf(s.item.id)).toBe('in_review');
+
+    // Merge the FIRST PR while its sibling (#8) is still open — the item MUST
+    // stay In Review, not flip to Done (the MOTIR-1604 cardinality guard).
+    const firstMerge = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'closed',
+        identifier: s.item.identifier,
+        number: 7,
+        state: 'closed',
+        merged: true,
+      }),
+    );
+    expect(firstMerge).toMatchObject({
+      event: 'pull_request',
+      outcome: 'deferred_open_pr',
+      workItemId: s.item.id,
+    });
+    expect(await statusOf(s.item.id)).toBe('in_review');
+
+    // Merge the SECOND (now LAST open) PR — the item completes.
+    const lastMerge = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'closed',
+        identifier: s.item.identifier,
+        number: 8,
+        state: 'closed',
+        merged: true,
+        repoId: Number(REPO_B_PROVIDER_ID),
+      }),
+    );
+    expect(lastMerge).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    expect(await statusOf(s.item.id)).toBe('done');
+  });
+
+  it('a single-PR card still completes on its one merge (no regression from the guard)', async () => {
+    const s = await makeTwoRepoScenario('single@example.com');
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({ action: 'opened', identifier: s.item.identifier, number: 7 }),
+    );
+    const merged = await githubWebhookService.handleEvent(
+      'pull_request',
+      prPayload({
+        action: 'closed',
+        identifier: s.item.identifier,
+        number: 7,
+        state: 'closed',
+        merged: true,
+      }),
+    );
+    expect(merged).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    expect(await statusOf(s.item.id)).toBe('done');
+  });
+});
+
 describe('githubWebhookService — installation grant mirror', () => {
   it('installation deleted removes the installation (idempotent)', async () => {
     const { workspace } = await makeWorkspace('del@example.com');

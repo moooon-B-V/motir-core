@@ -90,6 +90,21 @@ export const githubPullRequestRepository = {
     });
   },
 
+  /** Count a work item's OTHER linked PRs (excluding `excludePrId`) that are
+   *  still OPEN (`state = 'open'`). The status sync uses this so a merge only
+   *  COMPLETES the item when it is the item's LAST open linked PR: a cross-repo
+   *  (two-PR) card must not flip Done while a sibling PR is still open
+   *  (MOTIR-1604). A read guarding the transition write → takes `tx`. */
+  async countOtherOpenByWorkItem(
+    workItemId: string,
+    excludePrId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.githubPullRequest.count({
+      where: { workItemId, state: 'open', id: { not: excludePrId } },
+    });
+  },
+
   /** A work item's linked PRs, newest-updated first, with the repo + check rows
    *  the Development surface renders (MOTIR-1579). Read-only path → `db`. */
   async listByWorkItemWithContext(workItemId: string): Promise<GithubPullRequestWithContext[]> {
